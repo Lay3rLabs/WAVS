@@ -1,0 +1,30 @@
+[package]
+name = "wasmatic"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = [
+  "component-model",
+  "pooling-allocator"
+]
+pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
+component-model = [
+  "wasmtime/component-model",
+  "wasmtime-cli-flags/component-model"
+]
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.3.12", default-features = false, features = ["std", "derive"] }
+clap_derive = "4.5.13"
+humantime = "2.1.0"
+tokio = { version = "1.29.0", features = [ "rt", "time", "signal", "macros", "rt-multi-thread" ] }
+wasmtime = "23.0.2"
+wasmtime-cli-flags = "23.0.2"
+wasmtime-wasi-http = "23.0.2"
+wasmtime-wasi = { version = "23.0.2", default-features = false }
+wasmparser = "0.215.0"
+hyper = "1.4.1"
+bytes = "1.7.1"
+async-trait = "0.1.81"
+log = "0.4.22"
