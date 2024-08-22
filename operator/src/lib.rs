@@ -38,6 +38,7 @@ impl Guest for Component {
                         }
                     }
                 }
+                dbg!("WROTE TO FILE");
             }
             _ => {}
         }

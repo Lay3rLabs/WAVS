@@ -19,12 +19,17 @@ clap = { version = "4.3.12", default-features = false, features = ["std", "deriv
 clap_derive = "4.5.13"
 humantime = "2.1.0"
 tokio = { version = "1.29.0", features = [ "rt", "time", "signal", "macros", "rt-multi-thread" ] }
-wasmtime = "23.0.2"
-wasmtime-cli-flags = "23.0.2"
-wasmtime-wasi-http = "23.0.2"
-wasmtime-wasi = { version = "23.0.2", default-features = false }
+wasmtime-cli-flags = "23.0.1"
+wasmtime-wasi-http = "23.0.1"
+wasmtime = { version = "23.0.1", features = ["component-model", "async", "runtime", "std"] }
+wasmtime-wasi = { version = "23.0.1", default-features = true }
 wasmparser = "0.215.0"
 hyper = "1.4.1"
 bytes = "1.7.1"
 async-trait = "0.1.81"
 log = "0.4.22"
+tokio-cron-scheduler = "0.11.0"
+axum = "0.7.5"
+tower = "0.5.0"
+serde = { version = "1.0.208", features = ["derive"] }
+axum-macros = "0.4.1"

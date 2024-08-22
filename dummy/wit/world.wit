@@ -1,0 +1,6 @@
+package component:dummy;
+
+/// An example world for the component to target.
+world example {
+    export handler: func(input: string) -> string;
+}

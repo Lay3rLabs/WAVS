@@ -1,0 +1,7 @@
+package component:gecko;
+
+/// An example world for the component to target.
+world example {
+    import wasi:http/outgoing-handler@0.2.0;
+    export handler: func(input: string) -> string;
+}

@@ -2,9 +2,19 @@
 //! https://github.com/bytecodealliance/wasmtime/blob/main/src/commands/serve.rs
 mod common;
 use crate::common::{RunCommon, RunTarget};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
+use axum::{
+    extract::{DefaultBodyLimit, Query, State},
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
+use axum_macros::debug_handler;
+use bytes::Bytes;
 use clap::Parser;
+use serde::Deserialize;
 use std::{
+    collections::HashMap,
     env,
     net::SocketAddr,
     path::PathBuf,
@@ -13,7 +23,13 @@ use std::{
         Arc,
     },
 };
-use wasmtime::{component::Linker, Config, Engine, Memory, MemoryType, Store, StoreLimits};
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
+use tokio_cron_scheduler::{Job, JobScheduler};
+use wasmtime::{
+    component::{Component, Linker},
+    Config, Engine, Memory, MemoryType, Store, StoreLimits,
+};
 use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::body::HyperOutgoingBody;
@@ -32,7 +48,7 @@ struct Host {
 }
 
 impl WasiView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
         &mut self.table
     }
 
@@ -67,6 +83,7 @@ impl Wasmatic {
     fn execute(self) -> Result<()> {
         let subcommand = self.subcommand;
         match subcommand {
+            Subcommand::Wasm(c) => c.execute(),
             Subcommand::Up(c) => c.execute(),
         }
     }
@@ -75,12 +92,174 @@ impl Wasmatic {
 #[derive(Parser, PartialEq)]
 enum Subcommand {
     /// Serves requests for the operator API
+    Wasm(WasmCommand),
     Up(UpCommand),
+}
+
+#[derive(Parser, PartialEq)]
+pub struct UpCommand {
+    #[command(flatten)]
+    run: RunCommon,
+    /// Socket address for the web server to bind to.
+    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
+    addr: SocketAddr,
+}
+
+impl UpCommand {
+    pub fn execute(self) -> Result<()> {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_time()
+            .enable_io()
+            .build()?;
+        runtime.block_on(async move {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    Ok::<_, anyhow::Error>(())
+                }
+
+                res = self.serve() => {
+                    res
+                }
+            }
+        })?;
+        Ok(())
+    }
+
+    async fn serve(&self) -> Result<()> {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.async_support(true);
+        let engine = Engine::new(&config).unwrap();
+        let mut builder = WasiCtxBuilder::new();
+        let ctx = builder.build();
+        let host = Host {
+            table: wasmtime::component::ResourceTable::new(),
+            ctx,
+            http: WasiHttpCtx::new(),
+
+            limits: StoreLimits::default(),
+        };
+        let mut linker = Linker::new(&engine);
+        wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
+        wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+        let store = wasmtime::Store::new(&engine, host);
+        let store = Arc::new(Mutex::new(store));
+        let scheduled = HashMap::new();
+        let scheduled = Arc::new(Mutex::new(scheduled));
+        let sched = JobScheduler::new().await?;
+        sched.start().await.unwrap();
+        let addr = match env::var("WASMATIC_PORT") {
+            Ok(p) => std::net::SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+                p.parse()?,
+            ),
+            Err(_) => self.addr,
+        };
+        let listener = TcpListener::bind(addr)
+            .await
+            .with_context(|| format!("failed to bind to address `{addr}`"))?;
+        let router = Router::new()
+            .route("/", get(root))
+            .route("/sched", post(sched_handler))
+            .route("/register", post(reg_handler))
+            .layer(DefaultBodyLimit::max(1000000000000))
+            .with_state((sched, engine, linker, store, scheduled));
+        println!("Listening on {}", addr);
+        let server = axum::serve::serve(listener, router.into_make_service());
+        server.await?;
+
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+struct Upload {
+    name: String,
+}
+// async fn reg_handler(name: Query<Upload>, Json(bytes): Json<Vec<u8>>) -> String {
+async fn reg_handler(name: Query<Upload>, bytes: Bytes) -> String {
+    dbg!(&name.name);
+    std::fs::write(format!("./registered/{}.wasm", name.name), bytes).unwrap();
+    "Registered".to_string()
+}
+
+#[debug_handler]
+async fn sched_handler(
+    State((sched, engine, linker, store, scheduled)): State<(
+        JobScheduler,
+        Engine,
+        Linker<Host>,
+        Arc<Mutex<Store<Host>>>,
+        Arc<Mutex<HashMap<String, Component>>>,
+    )>,
+    Json(payload): Json<CronJob>,
+) -> String {
+    println!(
+        "Scheduling handler `{}` to run with schedule {}",
+        payload.name, payload.cron
+    );
+    let wasm = std::fs::read(format!("./registered/{}.wasm", payload.name)).unwrap();
+    let component = wasmtime::component::Component::new(&engine, wasm).unwrap();
+    {
+        let locked = &mut scheduled.lock().await;
+        locked.insert(payload.name.clone(), component.clone());
+        locked
+    };
+
+    sched
+        .add(
+            Job::new_async(payload.cron.as_str(), move |_uuid, _l| {
+                Box::pin({
+                    let linker = linker.clone();
+                    let store = store.clone();
+                    let scheduled = scheduled.clone();
+                    let name = payload.name.clone();
+                    async move {
+                        println!("Running `{}`", &name);
+
+                        let mut guard = store.lock().await;
+                        let scheduled = scheduled.lock().await;
+                        let component = scheduled.get(&name).unwrap();
+
+                        let instance = linker
+                            .instantiate_async(&mut *guard, &component)
+                            .await
+                            .unwrap();
+                        let func = instance
+                            .get_func(&mut *guard, "handler")
+                            .expect("no export named `handler` exists");
+                        let mut result = [wasmtime::component::Val::String("".into())];
+                        func.call_async(
+                            &mut *guard,
+                            &[wasmtime::component::Val::String("foobar".into())],
+                            &mut result,
+                        )
+                        .await
+                        .unwrap();
+                        println!("The result of running was: {:?}", result);
+                    }
+                })
+            })
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    "Scheduled!".to_string()
+}
+
+async fn root() -> &'static str {
+    "Hello, World!"
+}
+
+#[derive(Deserialize)]
+struct CronJob {
+    name: String,
+    cron: String,
 }
 
 /// Runs a WebAssembly module
 #[derive(Parser, PartialEq)]
-pub struct UpCommand {
+pub struct WasmCommand {
     #[command(flatten)]
     run: RunCommon,
     /// Socket address for the web server to bind to.
@@ -90,7 +269,7 @@ pub struct UpCommand {
     component: Option<PathBuf>,
 }
 
-impl UpCommand {
+impl WasmCommand {
     pub fn execute(self) -> Result<()> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_time()
@@ -133,26 +312,7 @@ impl UpCommand {
             http: WasiHttpCtx::new(),
 
             limits: StoreLimits::default(),
-
-            #[cfg(feature = "wasi-nn")]
-            nn: None,
         };
-
-        if self.run.common.wasi.nn == Some(true) {
-            #[cfg(feature = "wasi-nn")]
-            {
-                let graphs = self
-                    .run
-                    .common
-                    .wasi
-                    .nn_graph
-                    .iter()
-                    .map(|g| (g.format.clone(), g.dir.clone()))
-                    .collect::<Vec<_>>();
-                let (backends, registry) = wasmtime_wasi_nn::preload(&graphs)?;
-                host.nn.replace(WasiNnCtx::new(backends, registry));
-            }
-        }
 
         let mut store = Store::new(engine, host);
 
@@ -184,6 +344,8 @@ impl UpCommand {
         let mut linker = Linker::new(&engine);
 
         self.add_to_linker(&mut linker)?;
+        // wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
+        // wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
 
         let component = if let Some(ref component) = self.component {
             match self.run.load_module(&engine, &component)? {
@@ -192,9 +354,9 @@ impl UpCommand {
             }
         } else {
             let path = match env::var("WASMATIC") {
-                Ok(p) => p,
-                Err(_) => bail!("Must either provide path to wasm component or set WASMATIC environment variable"),
-            };
+              Ok(p) => p,
+              Err(_) => bail!("Must either provide path to wasm component or set WASMATIC environment variable"),
+          };
             let component = PathBuf::from(path);
             match self.run.load_module(&engine, &component)? {
                 RunTarget::Core(_) => bail!("The serve command currently requires a component"),
@@ -203,6 +365,7 @@ impl UpCommand {
         };
 
         let instance = linker.instantiate_pre(&component)?;
+        dbg!("DID PRE");
         let instance = ProxyPre::new(instance)?;
 
         let socket = match &self.addr {
@@ -308,9 +471,11 @@ impl UpCommand {
             bail!("support for wasi-http must be enabled for `serve` subcommand");
         }
 
+        dbg!("ADDED TO LINKER");
         Ok(())
     }
 }
+
 fn main() -> Result<()> {
     return Wasmatic::parse().execute();
 }
@@ -371,7 +536,7 @@ impl Drop for EpochThread {
 }
 
 struct ProxyHandlerInner {
-    cmd: UpCommand,
+    cmd: WasmCommand,
     engine: Engine,
     instance_pre: ProxyPre<Host>,
     next_id: AtomicU64,
@@ -387,7 +552,7 @@ impl ProxyHandlerInner {
 struct ProxyHandler(Arc<ProxyHandlerInner>);
 
 impl ProxyHandler {
-    fn new(cmd: UpCommand, engine: Engine, instance_pre: ProxyPre<Host>) -> Self {
+    fn new(cmd: WasmCommand, engine: Engine, instance_pre: ProxyPre<Host>) -> Self {
         Self(Arc::new(ProxyHandlerInner {
             cmd,
             engine,
