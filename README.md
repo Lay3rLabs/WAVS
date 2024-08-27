@@ -110,3 +110,34 @@ well as a binary to be included in the request body which is the wasm containing
 example:
 `curl -X POST "localhost:8080/register?name=foobar" --data-binary "@./path/to/foobar.wasm"`
 This request writes foobar.wasm in the "registered" folder on the operator filesystem
+
+## Guest Authoring Tips
+cargo-component is the best tool at the moment for authoring component wasm.
+
+Currently wasmatic expects a library component to be registered (rather than a command component).
+
+The easiest way to get started iterating is by running
+`cargo component new --lib` and then modifying the wit that is there.
+
+The `--target` flag can also be really useful for wit packages that have been
+published to wa.dev.
+
+`cargo componenent new --lib --target <namespace>:<name>/<world> path/to/new/project`
+
+As an example you can check out https://wa.dev/macovedj:shapes.
+A component can meet the contract specified by any of the worlds on that page (green labels).
+
+So you can try `cargo component new --lib --target macovedj:shapes/local-hashimap hashimap` and you'll get a new rust project with all the function signatures you need to implement scaffolded out with `unimplemented!()` statements in them.
+
+This can really come in handy if you have multiple separately published wit packages that reference each other in complex ways.
+
+For examples of complex workflows that are achievable with these tools and wac, I recommend [my talk](https://www.youtube.com/watch?v=2_-10mRN30s)
+
+## Outbound http requests
+You can check out the source for `gecko` which hits coingecko for btc price.
+You can access the host provided (configured in wasmatic) http wasi types you need if you add the import statement in the gecko wit.
+`import wasi:http/outgoing-handler@0.2.0;`
+
+The wasi http primitives available are a little low level today.  With async support coming in the 0.3.0 wasi release, these should feel like better abstractions, and if desired we could explore interim solutions like macros or something to take the burden off of authors.  You can find auto-docs for the 0.2.0 release of [wasi:http](https://wa.dev/wasi:http) on wa.dev.
+
+The while loop I have wouldn't be needed for smaller response bodies.  For thoughts about async rust and using it for http, I recommend [Yosh's blog](https://blog.yoshuawuyts.com/building-an-async-runtime-for-wasi/.)
