@@ -27,13 +27,16 @@ pub trait Storage: Send + Sync {
         bytes: &[u8],
         engine: &Engine,
     ) -> Result<(), StorageError>;
-    //async fn remove_wasm(&mut self, digest: &Digest) -> Result<bool, StorageError>;
     async fn list_wasm(&self) -> Result<Vec<Digest>, StorageError>;
+    //async fn remove_wasm(&mut self, digest: &Digest) -> Result<(), StorageError>;
 
     //async fn has_application(&self, name: &str) -> Result<bool, StorageError>;
     //async fn get_application(&self, name: &str) -> Result<App, StorageError>;
     async fn add_application(&mut self, app: App) -> Result<(), StorageError>;
-    //async fn remove_application(&mut self, name: &str) -> Result<bool, StorageError>;
+    async fn remove_applications<'a>(
+        &mut self,
+        names: impl Iterator<Item = &'a str> + Send,
+    ) -> Result<(), StorageError>;
     //async fn update_application(&mut self, app: App) -> Result<(), StorageError>;
     async fn list_applications(&self) -> Result<Vec<App>, StorageError>;
 }
@@ -45,10 +48,17 @@ pub enum StorageError {
     #[error("app name `{0}` is already in use")]
     AppNameConflict(String),
 
+    /// App name not found.
+    #[error("app name `{0}` not found")]
+    AppNameNotFound(String),
+
     /// Missing Wasm digest.
     #[error("missing Wasm digest `{0}`")]
     MissingWasmDigest(Digest),
 
+    ///// Wasm in use with application.
+    //#[error("Wasm is in use with application `{0}`")]
+    //WasmInUse(String),
     /// Digest mismatches.
     #[error("incorrect digest, expected `{expected}` but computed `{computed}`")]
     IncorrectDigest { expected: Digest, computed: Digest },

@@ -79,37 +79,12 @@ pub async fn add<S: Storage + 'static>(
         .await
         .map_err(AddAppError::Storage)?;
 
-    //// check if the app name already exists
-    //if op.apps.contains_key(&req.app.name) {
-    //    return Err(StatusCode::CONFLICT);
-    //}
-
-    //// if missing Wasm download URL and not previously fetched, then return 404 status
-    //if req.wasm_url.is_none() && !op.components.contains_key(&req.app.digest) {
-    //    return Err(StatusCode::NOT_FOUND);
-    //} else if let Some(url) = req.wasm_url {
-    //    let wasm = match reqwest::get(url).await {
-    //        Ok(res) => match res.bytes().await {
-    //            Ok(bytes) => bytes,
-    //            Err(_) => return Err(StatusCode::NOT_ACCEPTABLE),
-    //        },
-    //        Err(_) => return Err(StatusCode::NOT_FOUND),
-    //    };
-
-    //    let component = wasmtime::component::Component::new(&op.engine, wasm)
-    //        .or(Err(StatusCode::NOT_ACCEPTABLE))?;
-    //    op.components.insert(req.app.digest.clone(), component);
-    //}
-
-    //op.apps.insert(req.app.name.clone(), req.app);
-
     Ok(Json(RegisterAppResponse {
         name,
         status: app::Status::Active,
     }))
 }
 
-/// Represents an error returned by storage implementation.
 #[derive(Debug, Error)]
 pub enum AddAppError {
     #[error("internal error: `{0}`")]
