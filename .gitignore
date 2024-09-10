@@ -1,3 +1,5 @@
 *.vim
 *.swo
 *.swp
+target
+storage
