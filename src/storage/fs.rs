@@ -33,7 +33,7 @@ impl FileSystemStorage {
     /// The base directory will be created if it does not exist.
     ///
     /// If the lock cannot be acquired, `Ok(None)` is returned.
-    pub fn try_lock(base_dir: impl Into<PathBuf>) -> Result<Option<Self>> {
+    pub async fn try_lock(base_dir: impl Into<PathBuf>) -> Result<Option<Self>> {
         let base_dir = base_dir.into();
         match FileLock::try_open_rw(base_dir.join(LOCK_FILE_NAME))? {
             Some(lock) => {
@@ -43,12 +43,14 @@ impl FileSystemStorage {
                     std::fs::create_dir(wasm_dir)?;
                 }
 
-                Ok(Some(Self {
+                let mut storage = Self {
                     _lock: lock,
                     base_dir,
                     wasm_in_memory: IndexMap::new(),
                     stored: Default::default(),
-                }))
+                };
+                storage.load().await?;
+                Ok(Some(storage))
             }
             None => Ok(None),
         }

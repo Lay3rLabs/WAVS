@@ -76,7 +76,7 @@ pub type FileSystemOperator = Operator<FileSystemStorage>;
 impl FileSystemOperator {
     /// Attempts to create an operator with the base file path for file system storage.
     pub async fn try_new(base_dir: PathBuf) -> Result<Self> {
-        let storage = match FileSystemStorage::try_lock(&base_dir)? {
+        let storage = match FileSystemStorage::try_lock(&base_dir).await? {
             Some(storage) => storage,
             None => {
                 return Err(anyhow::anyhow!(
