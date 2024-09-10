@@ -18,12 +18,6 @@ pub struct FileLock {
     path: PathBuf,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum Access {
-    Shared,
-    Exclusive,
-}
-
 impl FileLock {
     /// Attempts to acquire exclusive access to a file, returning the locked
     /// version of a file.
@@ -40,87 +34,17 @@ impl FileLock {
         Self::open(
             path.into(),
             OpenOptions::new().read(true).write(true).create(true),
-            Access::Exclusive,
-            true,
         )
     }
 
-    /// Opens exclusive access to a file, returning the locked version of a
-    /// file.
-    ///
-    /// This function will create a file at `path` if it doesn't already exist
-    /// (including intermediate directories), and then it will acquire an
-    /// exclusive lock on `path`.
-    ///
-    /// If the lock cannot be acquired, this function will block until it is
-    /// acquired.
-    ///
-    /// The returned file can be accessed to look at the path and also has
-    /// read/write access to the underlying file.
-    pub fn open_rw(path: impl Into<PathBuf>) -> Result<Self> {
-        Ok(Self::open(
-            path.into(),
-            OpenOptions::new().read(true).write(true).create(true),
-            Access::Exclusive,
-            false,
-        )?
-        .unwrap())
-    }
-
-    /// Attempts to acquire shared access to a file, returning the locked version
-    /// of a file.
-    ///
-    /// This function will fail if `path` doesn't already exist, but if it does
-    /// then it will acquire a shared lock on `path`.
-    ///
-    /// If the lock cannot be immediately acquired, `Ok(None)` is returned.
-    ///
-    /// The returned file can be accessed to look at the path and also has read
-    /// access to the underlying file. Any writes to the file will return an
-    /// error.
-    pub fn try_open_ro(path: impl Into<PathBuf>) -> Result<Option<Self>> {
-        Self::open(
-            path.into(),
-            OpenOptions::new().read(true),
-            Access::Shared,
-            true,
-        )
-    }
-
-    /// Opens shared access to a file, returning the locked version of a file.
-    ///
-    /// This function will fail if `path` doesn't already exist, but if it does
-    /// then it will acquire a shared lock on `path`.
-    ///
-    /// If the lock cannot be acquired, this function will block until it is
-    /// acquired.
-    ///
-    /// The returned file can be accessed to look at the path and also has read
-    /// access to the underlying file. Any writes to the file will return an
-    /// error.
-    pub fn open_ro(path: impl Into<PathBuf>) -> Result<Self> {
-        Ok(Self::open(
-            path.into(),
-            OpenOptions::new().read(true),
-            Access::Shared,
-            false,
-        )?
-        .unwrap())
-    }
-
-    fn open(
-        path: PathBuf,
-        opts: &OpenOptions,
-        access: Access,
-        try_lock: bool,
-    ) -> Result<Option<Self>> {
+    fn open(path: PathBuf, opts: &OpenOptions) -> Result<Option<Self>> {
         // If we want an exclusive lock then if we fail because of NotFound it's
         // likely because an intermediate directory didn't exist, so try to
         // create the directory and then continue.
         let file = opts
             .open(&path)
             .or_else(|e| {
-                if e.kind() == io::ErrorKind::NotFound && access == Access::Exclusive {
+                if e.kind() == io::ErrorKind::NotFound {
                     std::fs::create_dir_all(path.parent().unwrap())?;
                     Ok(opts.open(&path)?)
                 } else {
@@ -145,12 +69,7 @@ impl FileLock {
             return Ok(Some(lock));
         }
 
-        let res = match (access, try_lock) {
-            (Access::Shared, true) => try_lock_shared(&lock.file),
-            (Access::Exclusive, true) => try_lock_exclusive(&lock.file),
-            (Access::Shared, false) => lock_shared(&lock.file),
-            (Access::Exclusive, false) => lock_exclusive(&lock.file),
-        };
+        let res = try_lock_exclusive(&lock.file);
 
         return match res {
             Ok(_) => Ok(Some(lock)),
@@ -161,7 +80,7 @@ impl FileLock {
             Err(e) if error_unsupported(&e) => Ok(Some(lock)),
 
             // Check to see if it was a contention error
-            Err(e) if try_lock && error_contended(&e) => Ok(None),
+            Err(e) if error_contended(&e) => Ok(None),
 
             Err(e) => Err(anyhow!(e).context(format!(
                 "failed to lock file `{path}`",
@@ -198,19 +117,6 @@ impl FileLock {
     pub fn file(&self) -> &File {
         &self.file
     }
-
-    /// Returns the underlying path that this lock points to.
-    ///
-    /// Note that special care must be taken to ensure that the path is not
-    /// referenced outside the lifetime of this lock.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// Returns the parent path containing this file.
-    pub fn parent(&self) -> &Path {
-        self.path.parent().unwrap()
-    }
 }
 
 impl Read for FileLock {
@@ -246,18 +152,6 @@ mod sys {
     use std::fs::File;
     use std::io::{Error, Result};
     use std::os::unix::io::AsRawFd;
-
-    pub(super) fn lock_shared(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_SH)
-    }
-
-    pub(super) fn lock_exclusive(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_EX)
-    }
-
-    pub(super) fn try_lock_shared(file: &File) -> Result<()> {
-        flock(file, libc::LOCK_SH | libc::LOCK_NB)
-    }
 
     pub(super) fn try_lock_exclusive(file: &File) -> Result<()> {
         flock(file, libc::LOCK_EX | libc::LOCK_NB)
@@ -341,18 +235,6 @@ mod sys {
     use windows_sys::Win32::Storage::FileSystem::{
         LockFileEx, UnlockFile, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
     };
-
-    pub(super) fn lock_shared(file: &File) -> Result<()> {
-        lock_file(file, 0)
-    }
-
-    pub(super) fn lock_exclusive(file: &File) -> Result<()> {
-        lock_file(file, LOCKFILE_EXCLUSIVE_LOCK)
-    }
-
-    pub(super) fn try_lock_shared(file: &File) -> Result<()> {
-        lock_file(file, LOCKFILE_FAIL_IMMEDIATELY)
-    }
 
     pub(super) fn try_lock_exclusive(file: &File) -> Result<()> {
         lock_file(file, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY)

@@ -74,8 +74,11 @@ impl FileSystemStorage {
         Ok(())
     }
     async fn load(&mut self) -> Result<()> {
-        let serialized = tokio::fs::read(self.path_for_app_data()).await?;
-        self.stored = serde_json::from_slice(&serialized)?;
+        let path = self.path_for_app_data();
+        if path.is_file() {
+            let serialized = tokio::fs::read(path).await?;
+            self.stored = serde_json::from_slice(&serialized)?;
+        }
         Ok(())
     }
 }

@@ -85,6 +85,6 @@ impl FileSystemOperator {
                 ))
             }
         };
-        Ok(Operator::new(storage).await?)
+        Operator::new(storage).await
     }
 }

@@ -69,7 +69,7 @@ pub async fn add<S: Storage + 'static>(
             storage
                 .add_wasm(&req.app.digest, &bytes, &engine)
                 .await
-                .map_err(|err| AddAppError::Storage(err))?;
+                .map_err(AddAppError::Storage)?;
         }
     }
 
@@ -77,7 +77,7 @@ pub async fn add<S: Storage + 'static>(
     storage
         .add_application(req.app)
         .await
-        .map_err(|err| AddAppError::Storage(err))?;
+        .map_err(AddAppError::Storage)?;
 
     //// check if the app name already exists
     //if op.apps.contains_key(&req.app.name) {
