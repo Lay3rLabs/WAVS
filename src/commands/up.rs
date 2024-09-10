@@ -17,7 +17,7 @@ pub struct UpCommand {
     pub bind_addr: SocketAddr,
 
     /// The path to the parent storage directory to use.
-    #[clap(long, value_name = "STORAGE_DIR", default_value = "storage")]
+    #[clap(long, value_name = "STORAGE_DIR", default_value = "data")]
     pub storage_dir: PathBuf,
 }
 

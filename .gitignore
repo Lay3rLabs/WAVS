@@ -2,4 +2,4 @@
 *.swo
 *.swp
 target
-storage
+data
