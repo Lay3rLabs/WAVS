@@ -4,21 +4,21 @@ use axum::{
     Router,
 };
 use indexmap::IndexMap;
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use wasmtime::{
-    component::{Component, Linker},
-    Config, Engine, Memory, MemoryType, Store, StoreLimits,
+    component::{bindgen, Linker},
+    Config, Engine,
 };
-use wasmtime_wasi::{
-    DirPerms, FilePerms, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView,
-};
-use wasmtime_wasi_http::bindings::http::types::Scheme;
-use wasmtime_wasi_http::body::HyperOutgoingBody;
-use wasmtime_wasi_http::io::TokioIo;
-use wasmtime_wasi_http::{bindings::ProxyPre, WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::app;
 use crate::storage::{FileSystemStorage, Storage};
@@ -26,6 +26,14 @@ mod add_application;
 mod delete_application;
 mod list_applications;
 mod update_application;
+
+bindgen!({
+    async: true,
+    with: {
+        "wasi": wasmtime_wasi::bindings,
+        "wasi:http@0.2.0": wasmtime_wasi_http::bindings::http,
+    },
+});
 
 pub struct Operator<S>
 where
@@ -50,13 +58,18 @@ impl<S: Storage + 'static> Operator<S> {
 
         let active_cron_apps = IndexMap::new();
 
-        Ok(Operator {
+        let mut operator = Operator {
             engine,
             scheduler,
             active_cron_apps,
             envs,
             storage,
-        })
+        };
+        for app_name in operator.storage.list_application_names().await? {
+            operator.activate_app(&app_name).await?;
+        }
+
+        Ok(operator)
     }
 
     pub async fn serve(self, bind_addr: SocketAddr) -> Result<()> {
@@ -133,27 +146,42 @@ impl<S: Storage + 'static> Operator<S> {
                                 if !envs.is_empty() {
                                     builder.envs(&envs);
                                 }
-                                builder.preopened_dir(
-                                    app_cache_path,
-                                    ".",
-                                    DirPerms::all(),
-                                    FilePerms::all(),
-                                );
+                                builder
+                                    .preopened_dir(
+                                        app_cache_path,
+                                        ".",
+                                        DirPerms::all(),
+                                        FilePerms::all(),
+                                    )
+                                    .expect("preopen failed");
                                 let ctx = builder.build();
 
                                 let host = Host {
                                     table: wasmtime::component::ResourceTable::new(),
                                     ctx,
                                     http: WasiHttpCtx::new(),
-
-                                    limits: StoreLimits::default(),
                                 };
                                 let mut store = wasmtime::Store::new(&engine, host);
 
-                                let instance = linker
-                                    .instantiate_async(&mut store, &component)
+                                let bindings =
+                                    TaskQueue::instantiate_async(&mut store, &component, &linker)
+                                        .await
+                                        .expect("Wasm instantiate failed");
+
+                                let input = lay3r::avs::task_queue_types::Input {
+                                    timestamp: SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .expect("failed to get current time")
+                                        .as_secs(),
+                                    request: "".to_string(),
+                                };
+
+                                let output = bindings
+                                    .call_run_task(&mut store, &input)
                                     .await
-                                    .unwrap();
+                                    .expect("Wasm panic");
+
+                                dbg!(output);
                             }
                         })
                     })?)
@@ -175,6 +203,7 @@ impl<S: Storage + 'static> Operator<S> {
             .get(name)
             .ok_or(anyhow::anyhow!("app not active"))?;
         self.scheduler.remove(id).await?;
+        self.active_cron_apps.swap_remove(name);
         Ok(())
     }
 }
@@ -201,8 +230,6 @@ struct Host {
     table: wasmtime::component::ResourceTable,
     ctx: WasiCtx,
     http: WasiHttpCtx,
-
-    limits: StoreLimits,
 }
 
 impl WasiView for Host {

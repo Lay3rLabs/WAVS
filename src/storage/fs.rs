@@ -234,4 +234,8 @@ impl Storage for FileSystemStorage {
     async fn list_applications(&self) -> Result<Vec<App>, StorageError> {
         Ok(self.stored.apps.values().cloned().collect())
     }
+
+    async fn list_application_names(&self) -> Result<Vec<String>, StorageError> {
+        Ok(self.stored.apps.keys().cloned().collect())
+    }
 }

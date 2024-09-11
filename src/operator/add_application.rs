@@ -47,6 +47,8 @@ pub async fn add<S: Storage + 'static>(
         ));
     }
 
+    // TODO add validation wasm
+
     // validate app
     req.app.validate().map_err(AddAppError::AppError)?;
 
@@ -81,6 +83,8 @@ pub async fn add<S: Storage + 'static>(
         .add_application(req.app)
         .await
         .map_err(AddAppError::Storage)?;
+
+    op.activate_app(&name).await?;
 
     Ok(Json(RegisterAppResponse {
         name,

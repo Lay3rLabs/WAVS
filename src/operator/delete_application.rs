@@ -26,9 +26,15 @@ pub async fn delete<S: Storage + 'static>(
     let mut op = op.try_lock().or(Err(DeleteAppError::InternalServerError(
         "please retry".to_string(),
     )))?;
-    let storage = op.storage_mut();
     let DeleteApps { apps } = req;
 
+    // deactivate apps
+    for name in apps.iter() {
+        op.deactivate_app(name).await?;
+    }
+
+    // remove from storage
+    let storage = op.storage_mut();
     storage
         .remove_applications(apps.iter().map(|name| name.as_str()))
         .await?;

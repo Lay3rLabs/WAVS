@@ -42,6 +42,7 @@ pub trait Storage: Send + Sync {
     ) -> Result<(), StorageError>;
     //async fn update_application(&mut self, app: App) -> Result<(), StorageError>;
     async fn list_applications(&self) -> Result<Vec<App>, StorageError>;
+    async fn list_application_names(&self) -> Result<Vec<String>, StorageError>;
 }
 
 /// Represents an error returned by storage implementation.
