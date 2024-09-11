@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use std::path::PathBuf;
 use thiserror::Error;
 use wasmtime::{component::Component, Engine};
 mod fs;
@@ -14,6 +15,8 @@ pub use fs::*;
 pub trait Storage: Send + Sync {
     /// Reset and remove storage data.
     async fn reset(&self) -> Result<(), StorageError>;
+
+    fn path_for_app_cache(&self, name: &str) -> PathBuf;
 
     async fn has_wasm(&self, digest: &Digest) -> Result<bool, StorageError>;
     async fn get_wasm(
@@ -31,7 +34,7 @@ pub trait Storage: Send + Sync {
     //async fn remove_wasm(&mut self, digest: &Digest) -> Result<(), StorageError>;
 
     //async fn has_application(&self, name: &str) -> Result<bool, StorageError>;
-    //async fn get_application(&self, name: &str) -> Result<App, StorageError>;
+    async fn get_application(&self, name: &str) -> Result<Option<App>, StorageError>;
     async fn add_application(&mut self, app: App) -> Result<(), StorageError>;
     async fn remove_applications<'a>(
         &mut self,

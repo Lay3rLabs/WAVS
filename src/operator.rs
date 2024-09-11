@@ -3,12 +3,24 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+use indexmap::IndexMap;
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use tokio_cron_scheduler::JobScheduler;
-use wasmtime::{Config, Engine};
+use tokio_cron_scheduler::{Job, JobScheduler};
+use wasmtime::{
+    component::{Component, Linker},
+    Config, Engine, Memory, MemoryType, Store, StoreLimits,
+};
+use wasmtime_wasi::{
+    DirPerms, FilePerms, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView,
+};
+use wasmtime_wasi_http::bindings::http::types::Scheme;
+use wasmtime_wasi_http::body::HyperOutgoingBody;
+use wasmtime_wasi_http::io::TokioIo;
+use wasmtime_wasi_http::{bindings::ProxyPre, WasiHttpCtx, WasiHttpView};
 
+use crate::app;
 use crate::storage::{FileSystemStorage, Storage};
 mod add_application;
 mod delete_application;
@@ -21,21 +33,28 @@ where
 {
     engine: Engine,
     scheduler: JobScheduler,
+    active_cron_apps: IndexMap<String, uuid::Uuid>,
+    envs: Vec<(String, String)>,
     storage: S,
 }
 
 impl<S: Storage + 'static> Operator<S> {
-    pub async fn new(storage: S) -> Result<Self> {
+    pub async fn new(storage: S, envs: Vec<(String, String)>) -> Result<Self> {
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.async_support(true);
         let engine = Engine::new(&config).unwrap();
 
         let scheduler = JobScheduler::new().await?;
+        scheduler.start().await?;
+
+        let active_cron_apps = IndexMap::new();
 
         Ok(Operator {
             engine,
             scheduler,
+            active_cron_apps,
+            envs,
             storage,
         })
     }
@@ -69,13 +88,102 @@ impl<S: Storage + 'static> Operator<S> {
     pub fn storage_mut(&mut self) -> &mut S {
         &mut self.storage
     }
+
+    pub async fn activate_app(&mut self, name: &str) -> Result<()> {
+        if self.active_cron_apps.contains_key(name) {
+            return Err(anyhow::anyhow!("app already scheduled and active"));
+        }
+        let app = self
+            .storage
+            .get_application(name)
+            .await?
+            .ok_or(anyhow::anyhow!("app not found"))?;
+
+        match app.trigger {
+            app::Trigger::Cron { schedule } => {
+                let component = self.storage.get_wasm(&app.digest, &self.engine).await?;
+
+                let mut linker = Linker::new(self.engine());
+                wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
+                wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+
+                // setup app cache directory
+                let app_cache_path = self.storage.path_for_app_cache(name);
+                if !app_cache_path.is_dir() {
+                    std::fs::create_dir(&app_cache_path)?;
+                }
+
+                let mut envs = self.envs.clone();
+                envs.extend_from_slice(&app.envs);
+
+                let engine = self.engine.clone();
+
+                let id = self
+                    .scheduler
+                    .add(Job::new_async(schedule.as_str(), move |_, _| {
+                        Box::pin({
+                            let envs = envs.clone();
+                            let app_cache_path = app_cache_path.clone();
+                            let engine = engine.clone();
+                            let component = component.clone();
+                            let linker = linker.clone();
+
+                            async move {
+                                let mut builder = WasiCtxBuilder::new();
+                                if !envs.is_empty() {
+                                    builder.envs(&envs);
+                                }
+                                builder.preopened_dir(
+                                    app_cache_path,
+                                    ".",
+                                    DirPerms::all(),
+                                    FilePerms::all(),
+                                );
+                                let ctx = builder.build();
+
+                                let host = Host {
+                                    table: wasmtime::component::ResourceTable::new(),
+                                    ctx,
+                                    http: WasiHttpCtx::new(),
+
+                                    limits: StoreLimits::default(),
+                                };
+                                let mut store = wasmtime::Store::new(&engine, host);
+
+                                let instance = linker
+                                    .instantiate_async(&mut store, &component)
+                                    .await
+                                    .unwrap();
+                            }
+                        })
+                    })?)
+                    .await?;
+
+                // TODO handle possible race condition on adding job
+
+                // save the job ID in the active CRON jobs
+                self.active_cron_apps.insert(name.to_string(), id);
+            }
+            _ => return Err(anyhow::anyhow!("unimplemented application trigger")),
+        }
+
+        Ok(())
+    }
+    pub async fn deactivate_app(&mut self, name: &str) -> Result<()> {
+        let id = self
+            .active_cron_apps
+            .get(name)
+            .ok_or(anyhow::anyhow!("app not active"))?;
+        self.scheduler.remove(id).await?;
+        Ok(())
+    }
 }
 
 pub type FileSystemOperator = Operator<FileSystemStorage>;
 
 impl FileSystemOperator {
     /// Attempts to create an operator with the base file path for file system storage.
-    pub async fn try_new(base_dir: PathBuf) -> Result<Self> {
+    pub async fn try_new(base_dir: PathBuf, envs: Vec<(String, String)>) -> Result<Self> {
         let storage = match FileSystemStorage::try_lock(&base_dir).await? {
             Some(storage) => storage,
             None => {
@@ -85,6 +193,34 @@ impl FileSystemOperator {
                 ))
             }
         };
-        Operator::new(storage).await
+        Operator::new(storage, envs).await
+    }
+}
+
+struct Host {
+    table: wasmtime::component::ResourceTable,
+    ctx: WasiCtx,
+    http: WasiHttpCtx,
+
+    limits: StoreLimits,
+}
+
+impl WasiView for Host {
+    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
+        &mut self.table
+    }
+
+    fn ctx(&mut self) -> &mut WasiCtx {
+        &mut self.ctx
+    }
+}
+
+impl WasiHttpView for Host {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        &mut self.table
+    }
+
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        &mut self.http
     }
 }

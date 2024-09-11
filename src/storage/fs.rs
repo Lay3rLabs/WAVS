@@ -43,6 +43,12 @@ impl FileSystemStorage {
                     std::fs::create_dir(wasm_dir)?;
                 }
 
+                // check if need to create "app/" directory
+                let app_dir = base_dir.join("app");
+                if !app_dir.is_dir() {
+                    std::fs::create_dir(app_dir)?;
+                }
+
                 let mut storage = Self {
                     _lock: lock,
                     base_dir,
@@ -64,17 +70,17 @@ impl FileSystemStorage {
         self.base_dir
             .join(format!("wasm/{digest}.wasm", digest = digest.hex_encoded()))
     }
-    fn path_for_app_data(&self) -> PathBuf {
+    fn path_for_global_app_data(&self) -> PathBuf {
         self.base_dir.join("apps.json")
     }
 
     async fn save(&self) -> Result<()> {
         let serialized = serde_json::to_vec(&self.stored)?;
-        tokio::fs::write(self.path_for_app_data(), serialized).await?;
+        tokio::fs::write(self.path_for_global_app_data(), serialized).await?;
         Ok(())
     }
     async fn load(&mut self) -> Result<()> {
-        let path = self.path_for_app_data();
+        let path = self.path_for_global_app_data();
         if path.is_file() {
             let serialized = tokio::fs::read(path).await?;
             self.stored = serde_json::from_slice(&serialized)?;
@@ -95,6 +101,12 @@ impl Storage for FileSystemStorage {
                 )
             })?;
         Ok(())
+    }
+    fn path_for_app_cache(&self, name: &str) -> PathBuf {
+        self.base_dir.join(format!(
+            "app/{name_hash}",
+            name_hash = Digest::new_sha_256(name.as_bytes())
+        ))
     }
 
     async fn has_wasm(&self, digest: &Digest) -> Result<bool, StorageError> {
@@ -166,6 +178,10 @@ impl Storage for FileSystemStorage {
     //    self.save().await?;
     //    Ok(())
     //}
+
+    async fn get_application(&self, name: &str) -> Result<Option<App>, StorageError> {
+        Ok(self.stored.apps.get(name).cloned())
+    }
 
     async fn add_application(&mut self, app: App) -> Result<(), StorageError> {
         // check if the app name already exists

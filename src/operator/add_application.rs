@@ -47,6 +47,9 @@ pub async fn add<S: Storage + 'static>(
         ));
     }
 
+    // validate app
+    req.app.validate().map_err(AddAppError::AppError)?;
+
     let op = operator.clone();
     let mut op = op.try_lock().or(Err(AddAppError::InternalServerError(
         "please retry".to_string(),
@@ -99,6 +102,9 @@ pub enum AddAppError {
     #[error("bad request: `{0}`")]
     BadRequest(String),
 
+    #[error("{0:?}")]
+    AppError(app::AppError),
+
     /// An error occurred while performing a storage operation.
     #[error("{0:?}")]
     Storage(#[from] StorageError),
@@ -116,6 +122,13 @@ impl IntoResponse for AddAppError {
     fn into_response(self) -> Response {
         match self {
             AddAppError::Storage(_) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorMessage {
+                    message: self.to_string(),
+                }),
+            )
+                .into_response(),
+            AddAppError::AppError(_) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorMessage {
                     message: self.to_string(),

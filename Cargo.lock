@@ -2635,6 +2635,7 @@ dependencies = [
  "tokio-cron-scheduler",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "wasmparser 0.216.0",
  "wasmtime",
  "wasmtime-cli-flags",

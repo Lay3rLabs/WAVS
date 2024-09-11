@@ -1,5 +1,6 @@
 use crate::digest::Digest;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -10,6 +11,14 @@ pub struct App {
     pub digest: Digest,
     pub trigger: Trigger,
     pub permissions: Permissions,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub envs: Vec<(String, String)>,
+}
+
+impl App {
+    pub fn validate(&self) -> Result<(), AppError> {
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -39,4 +48,10 @@ pub struct Permissions {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_url_authorities: Vec<String>,
     // TODO more permissions
+}
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("invalid CRON frequency")]
+    InvalidCronFrequency,
 }

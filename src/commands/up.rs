@@ -19,12 +19,29 @@ pub struct UpCommand {
     /// The path to the parent storage directory to use.
     #[clap(long, value_name = "STORAGE_DIR", default_value = "data")]
     pub storage_dir: PathBuf,
+
+    /// Global environment variables.
+    #[clap(short, long, value_parser, num_args = 1.., value_delimiter = ' ')]
+    pub envs: Vec<String>,
 }
+
+// TODO add path for config file option
 
 impl UpCommand {
     /// Executes the command.
     pub async fn exec(self) -> Result<()> {
-        let operator = FileSystemOperator::try_new(self.storage_dir).await?;
+        let envs = self
+            .envs
+            .into_iter()
+            .map(|s| {
+                s.split_once('=')
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .ok_or(anyhow::anyhow!(
+                        "invalid environment variable format: `{s}`"
+                    ))
+            })
+            .collect::<Result<Vec<(String, String)>, _>>()?;
+        let operator = FileSystemOperator::try_new(self.storage_dir, envs).await?;
         operator.serve(self.bind_addr).await?;
         Ok(())
     }
