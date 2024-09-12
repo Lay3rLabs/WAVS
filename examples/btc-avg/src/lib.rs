@@ -72,8 +72,15 @@ struct Response {
 #[serde(rename_all = "camelCase")]
 struct Price {
     pub price: f32,
-    pub avg_last_minute: (f32, usize),
-    pub avg_last_hour: (f32, usize),
+    pub avg_last_minute: AveragePrice,
+    pub avg_last_hour: AveragePrice,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct AveragePrice {
+    pub price: f32,
+    pub count: usize,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -83,7 +90,7 @@ struct PriceHistory {
 }
 
 impl PriceHistory {
-    fn average(&self, since_time_secs: u64) -> (f32, usize) {
+    fn average(&self, since_time_secs: u64) -> AveragePrice {
         let mut sum = 0f64;
         let mut count = 0;
         for (t, p) in self.btcusd_prices.iter() {
@@ -94,7 +101,10 @@ impl PriceHistory {
                 break;
             }
         }
-        ((sum / (count as f64)) as f32, count)
+        AveragePrice {
+            price: (sum / (count as f64)) as f32,
+            count,
+        }
     }
 }
 
