@@ -7,7 +7,7 @@ authors = { workspace = true }
 rust-version = { workspace = true }
 #license = { workspace = true }
 #homepage = { workspace = true }
-repository = { workspace = true}
+repository = { workspace = true }
 
 [workspace.package]
 version = "0.0.1"
@@ -46,33 +46,33 @@ hex = "0.4.3"
 reqwest = "0.12.7"
 thiserror = "1.0.63"
 uuid = "1.4.1"
-
-#[features]
+toml = "0.8.19"
 
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-thiserror = { workspace = true }
-log = { workspace = true }
 axum = { workspace = true }
+axum-macros = { workspace = true }
 bytes = { workspace = true }
+clap = { workspace = true }
+hex = { workspace = true }
+hyper = { workspace = true }
+indexmap = { workspace = true }
+libc = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-axum-macros = { workspace = true }
-clap = { workspace = true }
-hyper = { workspace = true }
-wasmparser = { workspace = true }
-wasmtime = { workspace = true }
-wasmtime-wasi = { workspace = true }
-wasmtime-wasi-http = { workspace = true }
-wasmtime-cli-flags = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
 tokio-cron-scheduler = { workspace = true }
-indexmap = { workspace = true }
-sha2 = { workspace = true }
-hex = { workspace = true }
-reqwest = { workspace = true }
+toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-libc = { workspace = true }
 uuid = { workspace = true }
+wasmparser = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-cli-flags = { workspace = true }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-http = { workspace = true }

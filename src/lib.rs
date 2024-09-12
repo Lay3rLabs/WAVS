@@ -4,6 +4,7 @@
 
 mod app;
 pub mod commands;
+mod config;
 mod digest;
 mod lock;
 mod operator;

@@ -2633,6 +2633,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-cron-scheduler",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "uuid",
