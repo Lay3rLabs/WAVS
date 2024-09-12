@@ -22,23 +22,26 @@ with `Content-Type: application/json` request header and a body of the form:
 
 ```json
 {
-  "name": "test1",
-  "digest": "sha256:ecb1551aa0c4e07082a4fff711f397a68a7ca9ea38b9596ffa0f544310f2704b",
+  "name": "test-btc",
+  "digest": "sha256:ef6d59d19b678f36c887fd4734fae827b343368de8df08faeb25c4b7fd4d4d00",
   "trigger": {
     "cron": {
-      "schedule": "1/1 * * * * *"
+      "schedule": "1/15 * * * * *"
     }
   },
   "permissions": {},
-  "wasmUrl": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/lay3r_gecko%400.1.0.wasm"
+  "envs": [
+    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
+  ],
+  "wasmUrl": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/btc_avg4.wasm"
 }
 ```
 
 This example will register a new application with name of `test1` that uses a CRON trigger that
-executes once every second. The `wasmUrl` is the download URL for the Wasm component. In this case,
+executes once every 15 seconds. The `wasmUrl` is the download URL for the Wasm component. In this case,
 the provided Wasm will query for the current `BTCUSD` by making an outbound HTTP request and returning
-the result. Currently, it is logged out in debug to the console.
-
+the result. Also, computes the average price over past minute and past hour. It uses the app file system
+cache for state. Currently, the response is logged out in debug to the console.
 
 #### Remove an application
 
