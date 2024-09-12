@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use axum::{
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
     Router,
 };
 use indexmap::IndexMap;
@@ -25,7 +25,7 @@ use crate::storage::{FileSystemStorage, Storage};
 mod add_application;
 mod delete_application;
 mod list_applications;
-mod update_application;
+//mod update_application;
 
 bindgen!({
     async: true,
@@ -76,7 +76,7 @@ impl<S: Storage + 'static> Operator<S> {
         let router = Router::new()
             .route("/app", get(list_applications::list))
             .route("/app", post(add_application::add))
-            .route("/app", put(update_application::update))
+            //.route("/app", put(update_application::update))
             .route("/app", delete(delete_application::delete))
             .with_state(Arc::new(Mutex::new(self)));
 
