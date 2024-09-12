@@ -123,7 +123,7 @@ impl<S: Storage + 'static> Operator<S> {
                 // setup app cache directory
                 let app_cache_path = self.storage.path_for_app_cache(name);
                 if !app_cache_path.is_dir() {
-                    std::fs::create_dir(&app_cache_path)?;
+                    tokio::fs::create_dir(&app_cache_path).await?;
                 }
 
                 let mut envs = self.envs.clone();
@@ -202,8 +202,19 @@ impl<S: Storage + 'static> Operator<S> {
             .active_cron_apps
             .get(name)
             .ok_or(anyhow::anyhow!("app not active"))?;
+
+        // cancel CRON
         self.scheduler.remove(id).await?;
+
+        // remove app cache directory
+        let app_cache_path = self.storage.path_for_app_cache(name);
+        if !app_cache_path.is_dir() {
+            tokio::fs::remove_dir_all(&app_cache_path).await?;
+        }
+
+        // remove from list of active apps
         self.active_cron_apps.swap_remove(name);
+
         Ok(())
     }
 }

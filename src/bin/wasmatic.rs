@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::process::exit;
 use tracing_subscriber::EnvFilter;
+use wasmatic::commands::ResetCommand;
 use wasmatic::commands::UpCommand;
 
 fn version() -> &'static str {
@@ -19,6 +20,7 @@ fn version() -> &'static str {
 #[command(version = version())]
 enum WasmaticCli {
     Up(UpCommand),
+    Reset(ResetCommand),
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -29,6 +31,7 @@ async fn main() -> Result<()> {
 
     if let Err(e) = match WasmaticCli::parse() {
         WasmaticCli::Up(cmd) => cmd.exec().await,
+        WasmaticCli::Reset(cmd) => cmd.exec().await,
     } {
         eprintln!("error: {e:?}");
         exit(1);
