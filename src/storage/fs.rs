@@ -105,7 +105,7 @@ impl Storage for FileSystemStorage {
     fn path_for_app_cache(&self, name: &str) -> PathBuf {
         self.base_dir.join(format!(
             "app/{name_hash}",
-            name_hash = Digest::new_sha_256(name.as_bytes())
+            name_hash = Digest::new_sha_256(name.as_bytes()).hex_encoded(),
         ))
     }
 
