@@ -50,7 +50,7 @@ cache for state. Currently, the response is logged out in debug to the console.
 with `Content-Type: application/json` request header and a body of the form:
 
 ```json
-{"apps": ["test1"]}
+{"apps": ["test-btc"]}
 ```
 
 This will deregister the application and remove the application and associated data.
