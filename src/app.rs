@@ -45,9 +45,9 @@ pub enum Status {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Permissions {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub allowed_url_authorities: Vec<String>,
-    // TODO more permissions
+    // TODO
+    //#[serde(default, skip_serializing_if = "Vec::is_empty")]
+    //pub allowed_url_authorities: Vec<String>,
 }
 
 #[derive(Debug, Error)]
