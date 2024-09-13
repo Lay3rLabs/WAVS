@@ -1,0 +1,29 @@
+[package]
+name = "btc-avg"
+version = "0.0.1"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+debug = false
+strip = true
+lto = true
+
+[package.metadata.component]
+package = "lay3r:btc-avg"
+target = "lay3r:avs/task-queue@0.0.2"
+
+[package.metadata.component.dependencies]

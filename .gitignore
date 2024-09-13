@@ -1,3 +1,6 @@
 *.vim
 *.swo
 *.swp
+target
+data
+.DS_Store

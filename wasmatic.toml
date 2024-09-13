@@ -1,0 +1,5 @@
+bind = "0.0.0.0:8080"
+dir = "data"
+envs = [
+  ["VERSION", "0.0.1"]
+]
