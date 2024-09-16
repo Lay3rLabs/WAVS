@@ -38,7 +38,7 @@ bindgen!({
     },
 });
 
-enum App {
+enum AppTrigger {
     Cron(uuid::Uuid),
     Queue(JoinHandle<()>),
     _Event,
@@ -50,7 +50,7 @@ where
     engine: Engine,
     scheduler: JobScheduler,
     queue_executor: QueueExecutor,
-    active_apps: IndexMap<String, App>,
+    active_apps: IndexMap<String, AppTrigger>,
     envs: Vec<(String, String)>,
     storage: S,
 }
@@ -200,7 +200,8 @@ impl<S: Storage + 'static> Operator<S> {
                 // TODO handle possible race condition on adding job
 
                 // save the job ID in the active CRON jobs
-                self.active_apps.insert(name.to_string(), App::Cron(id));
+                self.active_apps
+                    .insert(name.to_string(), AppTrigger::Cron(id));
             }
             app::Trigger::Queue {
                 task_queue_addr,
@@ -253,7 +254,7 @@ impl<S: Storage + 'static> Operator<S> {
                     store,
                 )?;
                 self.active_apps
-                    .insert(name.to_string(), App::Queue(handle));
+                    .insert(name.to_string(), AppTrigger::Queue(handle));
             }
             _ => return Err(anyhow::anyhow!("unimplemented application trigger")),
         }
@@ -266,14 +267,14 @@ impl<S: Storage + 'static> Operator<S> {
             .get(name)
             .ok_or(anyhow::anyhow!("app not active"))?;
         match app {
-            App::Cron(id) => {
+            AppTrigger::Cron(id) => {
                 // cancel CRON
                 self.scheduler.remove(id).await?;
             }
-            App::Queue(handle) => {
+            AppTrigger::Queue(handle) => {
                 handle.abort();
             }
-            App::_Event => todo!(),
+            AppTrigger::_Event => todo!(),
         }
         // remove app cache directory
         let app_cache_path = self.storage.path_for_app_cache(name);
