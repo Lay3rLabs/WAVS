@@ -8,4 +8,5 @@ mod config;
 mod digest;
 mod lock;
 mod operator;
+mod queue;
 mod storage;

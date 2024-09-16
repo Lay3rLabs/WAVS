@@ -10,7 +10,7 @@ rust-version = { workspace = true }
 repository = { workspace = true }
 
 [workspace]
-members = ["examples/btc-avg"]
+members = ["examples/btc-avg", "examples/square"]
 
 [workspace.package]
 version = "0.0.1"
@@ -24,6 +24,9 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 [workspace.dependencies]
 anyhow = "1.0.86"
 clap = { version = "4.5.16", features = ["derive", "env"] }
+cw-orch = { version = "0.22.0", features = ["daemon"] }
+derivative = "2.2.0"
+lch-apis = { git = "ssh://git@github.com/Lay3rLabs/lay3r-contracts.git", rev = "ba25710b5847c2c3adf187c9a59a93e08fa4b1b9" }
 tokio = { version = "1.39.3", features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
 wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
 wasmtime-wasi-http = "24.0.0"
@@ -58,9 +61,12 @@ axum = { workspace = true }
 axum-macros = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
+cw-orch = { workspace = true }
+derivative = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
 indexmap = { workspace = true }
+lch-apis = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true }

@@ -3,6 +3,7 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
+use cw_orch::prelude::Addr;
 use indexmap::IndexMap;
 use std::{
     net::SocketAddr,
@@ -12,6 +13,7 @@ use std::{
 };
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use wasmtime::{
     component::{bindgen, Linker},
@@ -20,8 +22,9 @@ use wasmtime::{
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use crate::app;
+use crate::queue::QueueExecutor;
 use crate::storage::{FileSystemStorage, Storage};
+use crate::{app, queue::AppData};
 mod add_application;
 mod delete_application;
 mod list_applications;
@@ -35,13 +38,19 @@ bindgen!({
     },
 });
 
+enum App {
+    Cron(uuid::Uuid),
+    Queue(JoinHandle<()>),
+    _Event,
+}
 pub struct Operator<S>
 where
     S: Storage,
 {
     engine: Engine,
     scheduler: JobScheduler,
-    active_cron_apps: IndexMap<String, uuid::Uuid>,
+    queue_executor: QueueExecutor,
+    active_apps: IndexMap<String, App>,
     envs: Vec<(String, String)>,
     storage: S,
 }
@@ -56,12 +65,13 @@ impl<S: Storage + 'static> Operator<S> {
         let scheduler = JobScheduler::new().await?;
         scheduler.start().await?;
 
-        let active_cron_apps = IndexMap::new();
+        let active_apps = IndexMap::new();
 
         let mut operator = Operator {
             engine,
             scheduler,
-            active_cron_apps,
+            queue_executor: QueueExecutor::new(),
+            active_apps,
             envs,
             storage,
         };
@@ -103,7 +113,7 @@ impl<S: Storage + 'static> Operator<S> {
     }
 
     pub async fn activate_app(&mut self, name: &str) -> Result<()> {
-        if self.active_cron_apps.contains_key(name) {
+        if self.active_apps.contains_key(name) {
             return Err(anyhow::anyhow!("app already scheduled and active"));
         }
         let app = self
@@ -190,7 +200,60 @@ impl<S: Storage + 'static> Operator<S> {
                 // TODO handle possible race condition on adding job
 
                 // save the job ID in the active CRON jobs
-                self.active_cron_apps.insert(name.to_string(), id);
+                self.active_apps.insert(name.to_string(), App::Cron(id));
+            }
+            app::Trigger::Queue {
+                task_queue_addr,
+                hd_index,
+                poll_interval,
+            } => {
+                let component = self.storage.get_wasm(&app.digest, &self.engine).await?;
+                let lay3r = self
+                    .queue_executor
+                    .builder
+                    .hd_index(hd_index)
+                    .build()
+                    .await?;
+
+                let app_cache_path = self.storage.path_for_app_cache(name);
+                if !app_cache_path.is_dir() {
+                    tokio::fs::create_dir(&app_cache_path).await?;
+                }
+                let mut linker = Linker::new(self.engine());
+                wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
+                wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+
+                let mut envs = self.envs.clone();
+                envs.extend_from_slice(&app.envs);
+                let mut builder = WasiCtxBuilder::new();
+                builder
+                    .preopened_dir(app_cache_path, ".", DirPerms::all(), FilePerms::all())
+                    .expect("preopen failed");
+                let ctx = builder.build();
+                let host = Host {
+                    table: wasmtime::component::ResourceTable::new(),
+                    ctx,
+                    http: WasiHttpCtx::new(),
+                };
+                let store = wasmtime::Store::new(&self.engine(), host);
+
+                let query = lch_apis::tasks::CustomQueryMsg::Config {};
+                let config: lch_apis::tasks::ConfigResponse =
+                    lay3r.query(&query, &task_queue_addr).await.unwrap();
+                let handle = self.queue_executor.add_app(
+                    name.to_string(),
+                    AppData {
+                        task_queue_addr: task_queue_addr.clone(),
+                        lay3r,
+                        verifier_addr: Addr::unchecked(config.verifier),
+                        component,
+                        poll_interval,
+                    },
+                    linker,
+                    store,
+                )?;
+                self.active_apps
+                    .insert(name.to_string(), App::Queue(handle));
             }
             _ => return Err(anyhow::anyhow!("unimplemented application trigger")),
         }
@@ -198,14 +261,20 @@ impl<S: Storage + 'static> Operator<S> {
         Ok(())
     }
     pub async fn deactivate_app(&mut self, name: &str) -> Result<()> {
-        let id = self
-            .active_cron_apps
+        let app = self
+            .active_apps
             .get(name)
             .ok_or(anyhow::anyhow!("app not active"))?;
-
-        // cancel CRON
-        self.scheduler.remove(id).await?;
-
+        match app {
+            App::Cron(id) => {
+                // cancel CRON
+                self.scheduler.remove(id).await?;
+            }
+            App::Queue(handle) => {
+                handle.abort();
+            }
+            App::_Event => todo!(),
+        }
         // remove app cache directory
         let app_cache_path = self.storage.path_for_app_cache(name);
         if !app_cache_path.is_dir() {
@@ -213,7 +282,7 @@ impl<S: Storage + 'static> Operator<S> {
         }
 
         // remove from list of active apps
-        self.active_cron_apps.swap_remove(name);
+        self.active_apps.swap_remove(name);
 
         Ok(())
     }
@@ -237,10 +306,10 @@ impl FileSystemOperator {
     }
 }
 
-struct Host {
-    table: wasmtime::component::ResourceTable,
-    ctx: WasiCtx,
-    http: WasiHttpCtx,
+pub(crate) struct Host {
+    pub(crate) table: wasmtime::component::ResourceTable,
+    pub(crate) ctx: WasiCtx,
+    pub(crate) http: WasiHttpCtx,
 }
 
 impl WasiView for Host {
