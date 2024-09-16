@@ -1,9 +1,10 @@
 use anyhow::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
-
-use crate::bindings::wasi::http;
-use crate::bindings::wasi::http::types::{Headers, OutgoingRequest, Scheme};
+use wstd::{
+    http::{Client, StatusCode},
+    runtime::Reactor,
+};
 
 #[derive(Deserialize, Debug)]
 pub struct CoinInfo {
@@ -25,37 +26,20 @@ impl CoinGeckoResponse {
     }
 }
 
-pub fn get_btc_usd_price(api_key: &str) -> Result<Option<f32>> {
-    let req = OutgoingRequest::new(Headers::new());
-    let _ = req.set_scheme(Some(&Scheme::Https));
-    let _ = req.set_authority(Some("api.coingecko.com"));
-    let _ = req.set_path_with_query(Some(&format!("/api/v3/exchange_rates?{api_key}")));
+pub async fn get_btc_usd_price(reactor: &Reactor, api_key: &str) -> Result<Option<f32>> {
+    let client = Client::new(reactor);
+    let mut res = client
+        .get(format!(
+            "https://api.coingecko.com/api/v3/exchange_rates?{api_key}"
+        ))
+        .await?;
 
-    let future_res = http::outgoing_handler::handle(req, None)
-        .map_err(|err| anyhow::anyhow!("outgoing error code: {err}"))?;
-    let future_res_pollable = future_res.subscribe();
-    future_res_pollable.block();
-
-    let res = future_res
-        .get()
-        .unwrap()
-        .map_err(|err| anyhow::anyhow!("outgoing response error code: {err:?}"))?
-        .unwrap();
-
-    match res.status() {
-        200 => {}
-        429 => return Err(anyhow::anyhow!("rate limited, price unavailable")),
+    match res.status_code() {
+        StatusCode::Ok => {}
+        StatusCode::Other(429) => return Err(anyhow::anyhow!("rate limited, price unavailable")),
         status => return Err(anyhow::anyhow!("unexpected status code: {status}")),
     }
 
-    let body = res.consume().unwrap();
-    let stream = body.stream().unwrap();
-
-    let mut buf = Vec::with_capacity(1024 * 10); // 10KB buf; response seems to be ~6KB
-    while let Ok(mut bytes) = stream.blocking_read(1024 * 10) {
-        buf.append(&mut bytes);
-    }
-
-    let coin_gecko: CoinGeckoResponse = serde_json::from_slice(&buf)?;
+    let coin_gecko: CoinGeckoResponse = serde_json::from_slice(&res.body().read_all().await?)?;
     Ok(coin_gecko.btc_usd())
 }

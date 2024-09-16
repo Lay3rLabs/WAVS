@@ -50,6 +50,10 @@ reqwest = "0.12.7"
 thiserror = "1.0.63"
 uuid = "1.4.1"
 toml = "0.8.19"
+url = "2.5.2"
+slab = "0.4.9"
+wasi = "0.13.1"
+wstd = { git = "https://github.com/calvinrp/wstd.git", branch= "updates" }
 
 [dependencies]
 anyhow = { workspace = true }
