@@ -68,6 +68,25 @@ the provided Wasm will query for the current `BTCUSD` by making an outbound HTTP
 the result. Also, computes the average price over past minute and past hour. It uses the app file system
 cache for state. Currently, the response is logged out in debug to the console.
 
+As another example, the request body below will register a new application with name `square-queue` that uses a `QUEUE` trigger that polls the lay3r sdk for tasks every 5 seconds.
+
+```json
+{
+  "name": "square-queue",
+  "digest": "sha256:5dbb1d48a1b88bf2c9700404215d0e20bb6330a67a684c96eb8b83e47f8464e8",
+  "trigger": {
+    "queue": {
+      "taskQueueAddr": "slay3r1amrsg6pjpfveu6ww5k60t2pr3cqgq7mtx6tgp6lvq48pm7u8ulcss7nzdw",
+      "hdIndex": 1,
+      "pollInterval": 5
+    }
+  },
+  "permissions": {},
+  "envs": [],
+  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/square/square.wasm"
+}
+```
+
 #### Remove an application
 
 `DELETE http://0.0.0.0:8080/app`
