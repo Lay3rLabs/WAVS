@@ -87,6 +87,9 @@ As another example, the request body below will register a new application with 
 }
 ```
 
+If the wasm binary that you'd like to register is not behind a url, you can upload it via the `/upload` endpoint before you register, and then omit the `wasmUrl` field in your request body, as exemplified below.
+
+`curl -X POST "localhost:8080/upload" --data-binary "@./path/to/binary.wasm"`
 #### Remove an application
 
 `DELETE http://0.0.0.0:8080/app`
