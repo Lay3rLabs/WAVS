@@ -1,9 +1,4 @@
-use crate::operator::{Input, TaskQueue};
 use anyhow::Result;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::task::JoinHandle;
-use wasmtime::component::{Component, Linker};
-use wasmtime::Store;
 
 use cw_orch::daemon::{DaemonAsync, DaemonAsyncBuilder};
 use cw_orch::environment::{ChainInfoOwned, ChainKind, NetworkInfo};
@@ -13,7 +8,6 @@ use lch_apis::verifier_simple::{
     ExecuteMsg, OperatorVoteInfoResponse, QueryMsg as VerifierQueryMsg,
 };
 
-use crate::operator::Host;
 pub const SLAY3R_NETWORK: NetworkInfo = NetworkInfo {
     chain_name: "slay3r",
     pub_address_prefix: "slay3r",
@@ -91,8 +85,6 @@ pub struct AppData {
     pub task_queue_addr: Addr,
     pub verifier_addr: Addr,
     pub lay3r: DaemonAsync,
-    pub component: Component,
-    pub poll_interval: u64,
 }
 
 impl AppData {
@@ -116,7 +108,7 @@ impl AppData {
         Ok(tasks)
     }
 
-    async fn submit_result(&self, task_id: u64, result: String) -> Result<()> {
+    pub async fn submit_result(&self, task_id: u64, result: String) -> Result<()> {
         let msg = ExecuteMsg::ExecutedTask {
             task_queue_contract: self.task_queue_addr.to_string(),
             task_id,
@@ -147,56 +139,4 @@ impl QueueExecutor {
 
         Self { builder }
     }
-
-    pub fn add_app(
-        &mut self,
-        name: String,
-        app_data: AppData,
-        linker: Linker<Host>,
-        store: Store<Host>,
-    ) -> Result<JoinHandle<()>> {
-        let name = name.clone();
-        let handle = tokio::spawn(async move {
-            runtime_loop(&name, app_data, linker, store).await;
-        });
-
-        Ok(handle)
-    }
-}
-
-async fn runtime_loop(name: &str, app: AppData, linker: Linker<Host>, mut store: Store<Host>) {
-    loop {
-        println!("Polling for tasks for application: {}...", name);
-        let tasks = app.get_tasks().await.unwrap();
-        for t in tasks {
-            println!("Task: {:?}", t);
-            let request = serde_json::to_string(&t).unwrap();
-
-            let bindings = TaskQueue::instantiate_async(&mut store, &app.component, &linker)
-                .await
-                .expect("Wasm instantiate failed");
-            let input = Input {
-                timestamp: get_time(),
-                request: request.into(),
-            };
-            let output = bindings
-                .call_run_task(&mut store, &input)
-                .await
-                .expect("Wasm panic");
-
-            dbg!(&output);
-
-            app.submit_result(t.id, output.unwrap().response)
-                .await
-                .unwrap();
-        }
-        tokio::time::sleep(tokio::time::Duration::from_secs(app.poll_interval)).await;
-    }
-}
-
-fn get_time() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
 }
