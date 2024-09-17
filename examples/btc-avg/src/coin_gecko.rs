@@ -35,7 +35,10 @@ pub async fn get_btc_usd_price(reactor: &Reactor, api_key: &str) -> Result<Optio
         .await?;
 
     match res.status_code() {
-        StatusCode::Ok => Ok(res.body().json::<CoinGeckoResponse>().await?.btc_usd()),
+        StatusCode::Ok => Ok(serde_json::from_slice::<CoinGeckoResponse>(
+            &res.body().read_all().await?,
+        )?
+        .btc_usd()),
         StatusCode::Other(429) => Err(anyhow::anyhow!("rate limited, price unavailable")),
         status => Err(anyhow::anyhow!("unexpected status code: {status}")),
     }

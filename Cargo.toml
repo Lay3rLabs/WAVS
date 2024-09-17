@@ -54,6 +54,7 @@ url = "2.5.2"
 slab = "0.4.9"
 wasi = "0.13.1"
 wstd = { git = "https://github.com/calvinrp/wstd.git", branch= "updates" }
+#wstd = { path = "../../calvinrp/wstd" }
 
 [dependencies]
 anyhow = { workspace = true }
