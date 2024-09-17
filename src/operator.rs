@@ -85,7 +85,7 @@ impl<S: Storage + 'static> Operator<S> {
             //.route("/app", put(update_application::update))
             .route("/app", delete(delete_application::delete))
             .route("/upload", post(upload::upload))
-            .layer(DefaultBodyLimit::max(10 * 1000 * 1000))
+            .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
             .with_state(Arc::new(Mutex::new(self)));
 
         let listener = TcpListener::bind(bind_addr)
@@ -146,10 +146,10 @@ impl<S: Storage + 'static> Operator<S> {
                             let linker = linker.clone();
 
                             async move {
-                                let mut store = create_store(envs, app_cache_path, engine);
-
                                 let output = instantiate_and_invoke(
-                                    &mut store,
+                                    &envs,
+                                    &app_cache_path,
+                                    &engine,
                                     &linker,
                                     &component,
                                     "".to_string(),
@@ -193,8 +193,6 @@ impl<S: Storage + 'static> Operator<S> {
                             let lay3r = lay3r.clone();
                             let name = name.clone();
                             async move {
-                                let mut store = create_store(envs, app_cache_path, engine);
-
                                 let query = lch_apis::tasks::CustomQueryMsg::Config {};
                                 let config: lch_apis::tasks::ConfigResponse =
                                     lay3r.query(&query, &task_queue_addr).await.unwrap();
@@ -210,7 +208,12 @@ impl<S: Storage + 'static> Operator<S> {
                                     let request = serde_json::to_string(&t).unwrap();
 
                                     let output = instantiate_and_invoke(
-                                        &mut store, &linker, &component, request,
+                                        &envs,
+                                        &app_cache_path,
+                                        &engine,
+                                        &linker,
+                                        &component,
+                                        request,
                                     )
                                     .await;
                                     dbg!(&output);
@@ -249,11 +252,14 @@ impl<S: Storage + 'static> Operator<S> {
     }
 }
 
-fn create_store(
-    envs: Vec<(String, String)>,
-    app_cache_path: PathBuf,
-    engine: Engine,
-) -> Store<Host> {
+async fn instantiate_and_invoke(
+    envs: &Vec<(String, String)>,
+    app_cache_path: &PathBuf,
+    engine: &Engine,
+    linker: &Linker<Host>,
+    component: &Component,
+    request: String,
+) -> Result<Output, String> {
     let mut builder = WasiCtxBuilder::new();
     if !envs.is_empty() {
         builder.envs(&envs);
@@ -268,15 +274,7 @@ fn create_store(
         ctx,
         http: WasiHttpCtx::new(),
     };
-    wasmtime::Store::new(&engine, host)
-}
-
-async fn instantiate_and_invoke(
-    mut store: &mut Store<Host>,
-    linker: &Linker<Host>,
-    component: &Component,
-    request: String,
-) -> Result<Output, String> {
+    let mut store = wasmtime::Store::new(&engine, host);
     let bindings = TaskQueue::instantiate_async(&mut store, &component, &linker)
         .await
         .expect("Wasm instantiate failed");
