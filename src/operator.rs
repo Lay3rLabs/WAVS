@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use wasmtime::{
     component::{bindgen, Component, Linker},
-    Config, Engine, Store,
+    Config, Engine,
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
@@ -189,7 +189,7 @@ impl<S: Storage + 'static> Operator<S> {
                             let engine = engine.clone();
                             let component = component.clone();
                             let linker = linker.clone();
-                            let task_queue_addr = task_queue_addr.clone();
+                            let task_queue_addr = Addr::unchecked(&task_queue_addr);
                             let lay3r = lay3r.clone();
                             let name = name.clone();
                             async move {

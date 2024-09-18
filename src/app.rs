@@ -1,5 +1,4 @@
 use crate::digest::Digest;
-use cw_orch::prelude::Addr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -33,7 +32,7 @@ pub enum Trigger {
 
     #[serde(rename_all = "camelCase")]
     Queue {
-        task_queue_addr: Addr,
+        task_queue_addr: String,
         hd_index: u32,
         poll_interval: u64,
     },
