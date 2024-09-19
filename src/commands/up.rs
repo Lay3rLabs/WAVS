@@ -7,7 +7,7 @@ use crate::operator::FileSystemOperator;
 
 const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
     std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
-    8080,
+    8081,
 );
 
 /// Start up the Wasmatic server.
