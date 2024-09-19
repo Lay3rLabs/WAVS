@@ -31,7 +31,11 @@ pub enum Trigger {
     Event {},
 
     #[serde(rename_all = "camelCase")]
-    Queue {},
+    Queue {
+        task_queue_addr: String,
+        hd_index: u32,
+        poll_interval: u64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone)]
