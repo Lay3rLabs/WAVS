@@ -1,6 +1,6 @@
 [package]
 name = "btc-avg"
-version = "0.0.1"
+version = "0.2.0"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -24,6 +24,6 @@ lto = true
 
 [package.metadata.component]
 package = "lay3r:btc-avg"
-target = "lay3r:avs/task-queue@0.0.2"
+target = "lay3r:avs/cron-job@0.2.0"
 
 [package.metadata.component.dependencies]

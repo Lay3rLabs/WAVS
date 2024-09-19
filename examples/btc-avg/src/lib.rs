@@ -2,7 +2,7 @@
 mod bindings;
 
 mod coin_gecko;
-use bindings::{Error, Guest, Input, Output};
+use bindings::{Guest, Output};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -12,7 +12,7 @@ const PRICE_HISTORY_FILE_PATH: &str = "price_history.json";
 struct Component;
 
 impl Guest for Component {
-    fn run_task(_request: Input) -> Result<Output, Error> {
+    fn run_cron() -> Output {
         let api_key = std::env::var("API_KEY").or(Err("missing env var `API_KEY`".to_string()))?;
         let price = coin_gecko::get_btc_usd_price(&api_key)
             .map_err(|err| err.to_string())?
@@ -49,16 +49,14 @@ impl Guest for Component {
         let avg_last_hour = history.average(now - 3600);
 
         // serialize JSON response
-        let response = serde_json::to_string(&Response {
+        Ok(serde_json::to_vec(&Response {
             btcusd: Price {
                 price,
                 avg_last_minute,
                 avg_last_hour,
             },
         })
-        .map_err(|err| err.to_string())?;
-
-        Ok(Output { response })
+        .map_err(|err| err.to_string())?)
     }
 }
 

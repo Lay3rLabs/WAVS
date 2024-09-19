@@ -2,25 +2,12 @@
 mod bindings;
 
 use anyhow::anyhow;
-use bindings::{Error, Guest, Input, Output};
+use bindings::{Guest, Output, TaskQueueInput};
 use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, Debug)]
-pub struct RequestData {
-    pub payload: TaskRequestData,
-    pub id: u64,
-    pub expires: u64,
-}
 
 #[derive(Deserialize, Debug)]
 pub struct TaskRequestData {
     pub x: u64,
-}
-
-#[derive(Serialize, Debug)]
-pub struct ResponseData {
-    pub id: u64,
-    pub response: TaskResponseData,
 }
 
 #[derive(Serialize, Debug)]
@@ -30,22 +17,16 @@ pub struct TaskResponseData {
 struct Component;
 
 impl Guest for Component {
-    fn run_task(request: Input) -> Result<Output, Error> {
-        let RequestData { id, payload, .. } = serde_json::from_str(&request.request)
+    fn run_task(request: TaskQueueInput) -> Output {
+        let TaskRequestData { x } = serde_json::from_str(&request.request)
             .map_err(|e| anyhow!("Could not deserialize input request from JSON: {}", e))
             .unwrap();
-        let y = payload.x * payload.x;
-        println!("{}^2 = {}", payload.x, y);
+        let y = x * x;
+        println!("{}^2 = {}", x, y);
 
-        let response_data = ResponseData {
-            id,
-            response: TaskResponseData { y },
-        };
-        let response = serde_json::to_string(&response_data)
-            .map_err(|e| anyhow!("Could not serialize response JSON: {}", e))
-            .unwrap();
-
-        Ok(Output { response })
+        Ok(serde_json::to_vec(&TaskResponseData { y })
+            .map_err(|e| anyhow!("Could not serialize output data into JSON: {}", e))
+            .unwrap())
     }
 }
 

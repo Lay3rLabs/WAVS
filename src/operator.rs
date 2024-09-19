@@ -16,7 +16,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use wasmtime::{
-    component::{bindgen, Component, Linker},
+    component::{Component, Linker},
     Config, Engine,
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
@@ -28,16 +28,10 @@ use crate::{app, queue::AppData};
 mod add_application;
 mod delete_application;
 mod list_applications;
+use crate::cron_bindings;
+use crate::task_bindings;
 mod upload;
 //mod update_application;
-
-bindgen!({
-    async: true,
-    with: {
-        "wasi": wasmtime_wasi::bindings,
-        "wasi:http@0.2.0": wasmtime_wasi_http::bindings::http,
-    },
-});
 
 pub struct Operator<S>
 where
@@ -152,10 +146,13 @@ impl<S: Storage + 'static> Operator<S> {
                                     &engine,
                                     &linker,
                                     &component,
-                                    "".to_string(),
+                                    TriggerRequest::Cron,
                                 )
-                                .await;
-                                dbg!(output);
+                                .await
+                                .expect("Failed to instantiate component");
+                                let output_string =
+                                    std::str::from_utf8(&output).expect("Output is invalid utf8");
+                                println!("Cron Job output was: {output_string}");
                             }
                         })
                     })?)
@@ -205,7 +202,7 @@ impl<S: Storage + 'static> Operator<S> {
                                 let tasks = app.get_tasks().await.unwrap();
                                 for t in tasks {
                                     println!("Task: {:?}", t);
-                                    let request = serde_json::to_string(&t).unwrap();
+                                    let request = serde_json::to_string(&t.payload).unwrap();
 
                                     let output = instantiate_and_invoke(
                                         &envs,
@@ -213,12 +210,15 @@ impl<S: Storage + 'static> Operator<S> {
                                         &engine,
                                         &linker,
                                         &component,
-                                        request,
+                                        TriggerRequest::Queue(request),
                                     )
-                                    .await;
-                                    dbg!(&output);
+                                    .await
+                                    .expect("Failed to instantiate component");
+                                    let output_string = std::str::from_utf8(&output)
+                                        .expect("Output is invalid utf8");
+                                    println!("Task output was: {output_string}");
 
-                                    app.submit_result(t.id, output.unwrap().response)
+                                    app.submit_result(t.id, output_string.to_string())
                                         .await
                                         .unwrap();
                                 }
@@ -252,14 +252,20 @@ impl<S: Storage + 'static> Operator<S> {
     }
 }
 
+enum TriggerRequest {
+    Cron,
+    Queue(String),
+    _Event,
+}
+
 async fn instantiate_and_invoke(
     envs: &Vec<(String, String)>,
     app_cache_path: &PathBuf,
     engine: &Engine,
     linker: &Linker<Host>,
     component: &Component,
-    request: String,
-) -> Result<Output, String> {
+    trigger: TriggerRequest,
+) -> Result<Vec<u8>, String> {
     let mut builder = WasiCtxBuilder::new();
     if !envs.is_empty() {
         builder.envs(&envs);
@@ -275,16 +281,35 @@ async fn instantiate_and_invoke(
         http: WasiHttpCtx::new(),
     };
     let mut store = wasmtime::Store::new(&engine, host);
-    let bindings = TaskQueue::instantiate_async(&mut store, &component, &linker)
-        .await
-        .expect("Wasm instantiate failed");
+    match trigger {
+        TriggerRequest::Cron => {
+            let bindings =
+                cron_bindings::CronJob::instantiate_async(&mut store, &component, &linker)
+                    .await
+                    .expect("Wasm instantiate failed");
 
-    let input = lay3r::avs::task_queue_types::Input {
-        timestamp: get_time(),
-        request,
-    };
+            bindings
+                .call_run_cron(&mut store)
+                .await
+                .expect("Failed to call invoke cron job")
+        }
+        TriggerRequest::Queue(request) => {
+            let bindings =
+                task_bindings::TaskQueue::instantiate_async(&mut store, &component, &linker)
+                    .await
+                    .expect("Wasm instantiate failed");
 
-    bindings.call_run_task(&mut store, &input).await.unwrap()
+            let input = task_bindings::lay3r::avs::types::TaskQueueInput {
+                timestamp: get_time(),
+                request,
+            };
+            bindings
+                .call_run_task(&mut store, &input)
+                .await
+                .expect("Failed to run task")
+        }
+        TriggerRequest::_Event => todo!(),
+    }
 }
 
 fn get_time() -> u64 {

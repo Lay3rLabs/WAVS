@@ -33,10 +33,7 @@ pub async fn upload<S: Storage + 'static>(
     let engine = op.engine().clone();
     let storage = op.storage_mut();
     if !storage.has_wasm(&digest).await? {
-        storage
-            .add_wasm(&digest, &bytes, &engine)
-            .await
-            .map_err(UploadError::Storage)?;
+        storage.add_wasm(&digest, &bytes, &engine).await?;
     }
 
     Ok(format!("Stored wasm with digest: {}", digest.hex_encoded()))

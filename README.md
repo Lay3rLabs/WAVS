@@ -27,7 +27,7 @@ with `Content-Type: application/json` request header and a body of the form:
 ```json
 {
   "name": "test-btc",
-  "digest": "sha256:ef6d59d19b678f36c887fd4734fae827b343368de8df08faeb25c4b7fd4d4d00",
+  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
   "trigger": {
     "cron": {
       "schedule": "1/15 * * * * *"
@@ -37,7 +37,7 @@ with `Content-Type: application/json` request header and a body of the form:
   "envs": [
     ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
-  "wasmUrl": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/btc_avg4.wasm"
+  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
 }
 ```
 
@@ -45,7 +45,7 @@ with `Content-Type: application/json` request header and a body of the form:
 read -d '' BODY << "EOF"
 {
   "name": "test-btc",
-  "digest": "sha256:ef6d59d19b678f36c887fd4734fae827b343368de8df08faeb25c4b7fd4d4d00",
+  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
   "trigger": {
     "cron": {
       "schedule": "1/15 * * * * *"
@@ -55,7 +55,7 @@ read -d '' BODY << "EOF"
   "envs": [
     ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
-  "wasmUrl": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/btc_avg4.wasm"
+  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
 }
 EOF
 
@@ -73,10 +73,10 @@ As another example, the request body below will register a new application with 
 ```json
 {
   "name": "square-queue",
-  "digest": "sha256:5dbb1d48a1b88bf2c9700404215d0e20bb6330a67a684c96eb8b83e47f8464e8",
+  "digest": "sha256:143368e0a7b9331c3df5c74c84e4ae36922a7e2950144af983858b2183934c93",
   "trigger": {
     "queue": {
-      "taskQueueAddr": "slay3r1amrsg6pjpfveu6ww5k60t2pr3cqgq7mtx6tgp6lvq48pm7u8ulcss7nzdw",
+      "taskQueueAddr": "slay3r1t9pkt8r25yml6cmhfelx8j9reelthwgml2mqdf53wkvp0wca6systd9gfn",
       "hdIndex": 1,
       "pollInterval": 5
     }
@@ -87,9 +87,32 @@ As another example, the request body below will register a new application with 
 }
 ```
 
+```bash
+read -d '' BODY << "EOF"
+{
+  "name": "test-btc",
+  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
+  "trigger": {
+    "cron": {
+      "schedule": "1/15 * * * * *"
+    }
+  },
+  "permissions": {},
+  "envs": [
+    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
+  ],
+  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
+}
+EOF
+
+curl -X POST -H "Content-Type: application/json" http://0.0.0.0:8080/app -d "$BODY"
+```
+
+#### Upload a wasm endpoint
+
 If the wasm binary that you'd like to register is not behind a url, you can upload it via the `/upload` endpoint before you register, and then omit the `wasmUrl` field in your request body, as exemplified below.
 
-`curl -X POST "localhost:8080/upload" --data-binary "@./path/to/binary.wasm"`
+```curl -X POST "localhost:8080/upload" --data-binary "@./path/to/binary.wasm"```
 #### Remove an application
 
 `DELETE http://0.0.0.0:8080/app`
