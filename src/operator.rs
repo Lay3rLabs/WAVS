@@ -202,7 +202,7 @@ impl<S: Storage + 'static> Operator<S> {
                                 let tasks = app.get_tasks().await.unwrap();
                                 for t in tasks {
                                     println!("Task: {:?}", t);
-                                    let request = serde_json::to_string(&t.payload).unwrap();
+                                    let request = serde_json::to_vec(&t.payload).unwrap();
 
                                     let output = instantiate_and_invoke(
                                         &envs,
@@ -254,7 +254,7 @@ impl<S: Storage + 'static> Operator<S> {
 
 enum TriggerRequest {
     Cron,
-    Queue(String),
+    Queue(Vec<u8>),
     _Event,
 }
 
