@@ -24,6 +24,6 @@ lto = true
 
 [package.metadata.component]
 package = "lay3r:square"
-target = "lay3r:avs/task-queue@0.2.0"
+target = "lay3r:avs/task-queue@0.3.0"
 
 [package.metadata.component.dependencies]

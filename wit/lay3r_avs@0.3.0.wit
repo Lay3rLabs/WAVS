@@ -1,18 +1,17 @@
-package lay3r:avs@0.2.0;
+package lay3r:avs@0.3.0;
 
 interface types {
+  /// serialized json, avs wasi and lay3r contract must agree on the types
+  /// the runner is agnostic to the data format
+  type serialized-json = list<u8>;
+
   record task-queue-input {
     timestamp: u64,
-    /// serialized json, avs wasi and lay3r contract must agree on the types
-    /// the runner is agnostic to the data format
-    request: string,
+    request: serialized-json,
   }
 
   type error = string;
-
-  /// serialized json, avs wasi and lay3r contract must agree on the types
-  /// the runner is agnostic to the data format
-  type output = result<list<u8>, error>;
+  type output = result<serialized-json, error>;
 }
 
 world task-queue {

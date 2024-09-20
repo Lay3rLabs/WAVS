@@ -8,10 +8,9 @@ pub unsafe fn _export_run_task_cabi<T: Guest>(arg0: i64, arg1: *mut u8, arg2: us
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
     let len0 = arg2;
-    let bytes0 = _rt::Vec::from_raw_parts(arg1.cast(), len0, len0);
     let result1 = T::run_task(lay3r::avs::types::TaskQueueInput {
         timestamp: arg0 as u64,
-        request: _rt::string_lift(bytes0),
+        request: _rt::Vec::from_raw_parts(arg1.cast(), len0, len0),
     });
     let ptr2 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
     match result1 {
@@ -90,12 +89,13 @@ pub mod lay3r {
             static __FORCE_SECTION_REF: fn() =
                 super::super::super::__link_custom_section_describing_imports;
             use super::super::super::_rt;
+            /// serialized json, avs wasi and lay3r contract must agree on the types
+            /// the runner is agnostic to the data format
+            pub type SerializedJson = _rt::Vec<u8>;
             #[derive(Clone)]
             pub struct TaskQueueInput {
                 pub timestamp: u64,
-                /// serialized json, avs wasi and lay3r contract must agree on the types
-                /// the runner is agnostic to the data format
-                pub request: _rt::String,
+                pub request: SerializedJson,
             }
             impl ::core::fmt::Debug for TaskQueueInput {
                 fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
@@ -106,9 +106,7 @@ pub mod lay3r {
                 }
             }
             pub type Error = _rt::String;
-            /// serialized json, avs wasi and lay3r contract must agree on the types
-            /// the runner is agnostic to the data format
-            pub type Output = Result<_rt::Vec<u8>, Error>;
+            pub type Output = Result<SerializedJson, Error>;
         }
     }
 }
@@ -7567,8 +7565,8 @@ pub(crate) use __export_task_queue_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[link_section = "component-type:wit-bindgen:0.25.0:task-queue:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 6634] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xe92\x01A\x02\x01A\x1d\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 6655] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xfe2\x01A\x02\x01A\x1d\
 \x01B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[\
 method]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollab\
 le.block\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04poll\x01\x06\x03\
@@ -7693,14 +7691,14 @@ equest\x03\0\0\x02\x03\x02\x01\x0b\x04\0\x0frequest-options\x03\0\x02\x02\x03\x0
 \x01\x0c\x04\0\x18future-incoming-response\x03\0\x04\x02\x03\x02\x01\x0d\x04\0\x0a\
 error-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\x01\x07\x01\
 @\x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x03\x01\x20was\
-i:http/outgoing-handler@0.2.0\x05\x0e\x01B\x07\x01r\x02\x09timestampw\x07request\
-s\x04\0\x10task-queue-input\x03\0\0\x01s\x04\0\x05error\x03\0\x02\x01p}\x01j\x01\
-\x04\x01\x03\x04\0\x06output\x03\0\x05\x03\x01\x15lay3r:avs/types@0.2.0\x05\x0f\x02\
-\x03\0\x06\x10task-queue-input\x03\0\x10task-queue-input\x03\0\x10\x02\x03\0\x06\
-\x06output\x03\0\x06output\x03\0\x12\x01@\x01\x07request\x11\0\x13\x04\0\x08run-\
-task\x01\x14\x04\x01\x1alay3r:avs/task-queue@0.2.0\x04\0\x0b\x10\x01\0\x0atask-q\
-ueue\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.208.1\
-\x10wit-bindgen-rust\x060.25.0";
+i:http/outgoing-handler@0.2.0\x05\x0e\x01B\x08\x01p}\x04\0\x0fserialized-json\x03\
+\0\0\x01r\x02\x09timestampw\x07request\x01\x04\0\x10task-queue-input\x03\0\x02\x01\
+s\x04\0\x05error\x03\0\x04\x01j\x01\x01\x01\x05\x04\0\x06output\x03\0\x06\x03\x01\
+\x15lay3r:avs/types@0.3.0\x05\x0f\x02\x03\0\x06\x10task-queue-input\x03\0\x10tas\
+k-queue-input\x03\0\x10\x02\x03\0\x06\x06output\x03\0\x06output\x03\0\x12\x01@\x01\
+\x07request\x11\0\x13\x04\0\x08run-task\x01\x14\x04\x01\x1alay3r:avs/task-queue@\
+0.3.0\x04\0\x0b\x10\x01\0\x0atask-queue\x03\0\0\0G\x09producers\x01\x0cprocessed\
+-by\x02\x0dwit-component\x070.208.1\x10wit-bindgen-rust\x060.25.0";
 
 #[inline(never)]
 #[doc(hidden)]

@@ -18,7 +18,7 @@ struct Component;
 
 impl Guest for Component {
     fn run_task(request: TaskQueueInput) -> Output {
-        let TaskRequestData { x } = serde_json::from_str(&request.request)
+        let TaskRequestData { x } = serde_json::from_slice(&request.request)
             .map_err(|e| anyhow!("Could not deserialize input request from JSON: {}", e))
             .unwrap();
         let y = x * x;

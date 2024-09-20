@@ -84,12 +84,13 @@ pub mod lay3r {
             static __FORCE_SECTION_REF: fn() =
                 super::super::super::__link_custom_section_describing_imports;
             use super::super::super::_rt;
+            /// serialized json, avs wasi and lay3r contract must agree on the types
+            /// the runner is agnostic to the data format
+            pub type SerializedJson = _rt::Vec<u8>;
             #[derive(Clone)]
             pub struct TaskQueueInput {
                 pub timestamp: u64,
-                /// serialized json, avs wasi and lay3r contract must agree on the types
-                /// the runner is agnostic to the data format
-                pub request: _rt::String,
+                pub request: SerializedJson,
             }
             impl ::core::fmt::Debug for TaskQueueInput {
                 fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
@@ -100,9 +101,7 @@ pub mod lay3r {
                 }
             }
             pub type Error = _rt::String;
-            /// serialized json, avs wasi and lay3r contract must agree on the types
-            /// the runner is agnostic to the data format
-            pub type Output = Result<_rt::Vec<u8>, Error>;
+            pub type Output = Result<SerializedJson, Error>;
         }
     }
 }
@@ -7561,8 +7560,8 @@ pub(crate) use __export_cron_job_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[link_section = "component-type:wit-bindgen:0.25.0:cron-job:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 6578] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb32\x01A\x02\x01A\x1b\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 6599] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xc82\x01A\x02\x01A\x1b\
 \x01B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[\
 method]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollab\
 le.block\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04poll\x01\x06\x03\
@@ -7687,13 +7686,13 @@ equest\x03\0\0\x02\x03\x02\x01\x0b\x04\0\x0frequest-options\x03\0\x02\x02\x03\x0
 \x01\x0c\x04\0\x18future-incoming-response\x03\0\x04\x02\x03\x02\x01\x0d\x04\0\x0a\
 error-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\x01\x07\x01\
 @\x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x03\x01\x20was\
-i:http/outgoing-handler@0.2.0\x05\x0e\x01B\x07\x01r\x02\x09timestampw\x07request\
-s\x04\0\x10task-queue-input\x03\0\0\x01s\x04\0\x05error\x03\0\x02\x01p}\x01j\x01\
-\x04\x01\x03\x04\0\x06output\x03\0\x05\x03\x01\x15lay3r:avs/types@0.2.0\x05\x0f\x02\
-\x03\0\x06\x06output\x03\0\x06output\x03\0\x10\x01@\0\0\x11\x04\0\x08run-cron\x01\
-\x12\x04\x01\x18lay3r:avs/cron-job@0.2.0\x04\0\x0b\x0e\x01\0\x08cron-job\x03\0\0\
-\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.208.1\x10wit-bind\
-gen-rust\x060.25.0";
+i:http/outgoing-handler@0.2.0\x05\x0e\x01B\x08\x01p}\x04\0\x0fserialized-json\x03\
+\0\0\x01r\x02\x09timestampw\x07request\x01\x04\0\x10task-queue-input\x03\0\x02\x01\
+s\x04\0\x05error\x03\0\x04\x01j\x01\x01\x01\x05\x04\0\x06output\x03\0\x06\x03\x01\
+\x15lay3r:avs/types@0.3.0\x05\x0f\x02\x03\0\x06\x06output\x03\0\x06output\x03\0\x10\
+\x01@\0\0\x11\x04\0\x08run-cron\x01\x12\x04\x01\x18lay3r:avs/cron-job@0.3.0\x04\0\
+\x0b\x0e\x01\0\x08cron-job\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwi\
+t-component\x070.208.1\x10wit-bindgen-rust\x060.25.0";
 
 #[inline(never)]
 #[doc(hidden)]
