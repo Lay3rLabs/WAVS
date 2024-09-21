@@ -1,16 +1,17 @@
 [package]
 name = "btc-avg"
 version = "0.2.0"
-authors.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-repository.workspace = true
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-anyhow = { workspace = true }
 wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
+wstd = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

@@ -28,11 +28,11 @@ cw-orch = { version = "0.22.0", features = ["daemon"] }
 derivative = "2.2.0"
 lch-apis = { git = "ssh://git@github.com/Lay3rLabs/lay3r-contracts.git", rev = "ba25710b5847c2c3adf187c9a59a93e08fa4b1b9" }
 tokio = { version = "1.39.3", features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
-wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
-wasmtime-wasi-http = "24.0.0"
-wasmtime-wasi = { version = "24.0.0", default-features = true }
-wasmtime-cli-flags = "24.0.0"
-wasmparser = "0.216.0"
+wasmtime = { version = "25.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
+wasmtime-wasi-http = "25.0.0"
+wasmtime-wasi = { version = "25.0.0", default-features = true }
+wasmtime-cli-flags = "25.0.0"
+wasmparser = "0.217.0"
 hyper = "1.4.1"
 async-trait = "0.1.82"
 tokio-cron-scheduler = "0.11.0"
@@ -53,6 +53,8 @@ reqwest = "0.12.7"
 thiserror = "1.0.63"
 uuid = "1.4.1"
 toml = "0.8.19"
+wstd = { git = "https://github.com/calvinrp/wstd.git", branch = "refactor" }
+#wstd = { path = "../../calvinrp/wstd" }
 
 [dependencies]
 anyhow = { workspace = true }

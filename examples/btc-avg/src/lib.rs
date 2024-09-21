@@ -6,6 +6,7 @@ use bindings::{Guest, Output};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
+use wstd::runtime::block_on;
 
 const PRICE_HISTORY_FILE_PATH: &str = "price_history.json";
 
@@ -13,50 +14,54 @@ struct Component;
 
 impl Guest for Component {
     fn run_cron() -> Output {
-        let api_key = std::env::var("API_KEY").or(Err("missing env var `API_KEY`".to_string()))?;
-        let price = coin_gecko::get_btc_usd_price(&api_key)
-            .map_err(|err| err.to_string())?
-            .ok_or("invalid response from coin gecko API")?;
+        block_on(|reactor| async move {
+            let api_key =
+                std::env::var("API_KEY").or(Err("missing env var `API_KEY`".to_string()))?;
+            let price = coin_gecko::get_btc_usd_price(&reactor, &api_key)
+                .await
+                .map_err(|err| err.to_string())?
+                .ok_or("invalid response from coin gecko API")?;
 
-        // read previous price history
-        let mut history = match std::fs::read(PRICE_HISTORY_FILE_PATH) {
-            Ok(bytes) => {
-                serde_json::from_slice::<PriceHistory>(&bytes).map_err(|err| err.to_string())?
-            }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Default::default(),
-            Err(err) => return Err(err.to_string()),
-        };
+            // read previous price history
+            let mut history = match std::fs::read(PRICE_HISTORY_FILE_PATH) {
+                Ok(bytes) => {
+                    serde_json::from_slice::<PriceHistory>(&bytes).map_err(|err| err.to_string())?
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Default::default(),
+                Err(err) => return Err(err.to_string()),
+            };
 
-        // get current time in secs
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("failed to get current time")
-            .as_secs();
+            // get current time in secs
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("failed to get current time")
+                .as_secs();
 
-        // add latest price to front of the list and truncate to max of 1000
-        history.btcusd_prices.push_front((now, price));
-        history.btcusd_prices.truncate(1000);
+            // add latest price to front of the list and truncate to max of 1000
+            history.btcusd_prices.push_front((now, price));
+            history.btcusd_prices.truncate(1000);
 
-        // write price history
-        std::fs::write(
-            PRICE_HISTORY_FILE_PATH,
-            serde_json::to_vec(&history).map_err(|err| err.to_string())?,
-        )
-        .map_err(|err| err.to_string())?;
+            // write price history
+            std::fs::write(
+                PRICE_HISTORY_FILE_PATH,
+                serde_json::to_vec(&history).map_err(|err| err.to_string())?,
+            )
+            .map_err(|err| err.to_string())?;
 
-        // calculate average prices
-        let avg_last_minute = history.average(now - 60);
-        let avg_last_hour = history.average(now - 3600);
+            // calculate average prices
+            let avg_last_minute = history.average(now - 60);
+            let avg_last_hour = history.average(now - 3600);
 
-        // serialize JSON response
-        Ok(serde_json::to_vec(&Response {
-            btcusd: Price {
-                price,
-                avg_last_minute,
-                avg_last_hour,
-            },
+            // serialize JSON response
+            serde_json::to_vec(&Response {
+                btcusd: Price {
+                    price,
+                    avg_last_minute,
+                    avg_last_hour,
+                },
+            })
+            .map_err(|err| err.to_string())
         })
-        .map_err(|err| err.to_string())?)
     }
 }
 

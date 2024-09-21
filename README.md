@@ -27,7 +27,7 @@ with `Content-Type: application/json` request header and a body of the form:
 ```json
 {
   "name": "test-btc",
-  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
+  "digest": "sha256:e4653e2657b9ff7779943a2cbc3c8928cbdfa4f7214f9807fd3bc60e04afebea",
   "trigger": {
     "cron": {
       "schedule": "1/15 * * * * *"
@@ -35,9 +35,9 @@ with `Content-Type: application/json` request header and a body of the form:
   },
   "permissions": {},
   "envs": [
-    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
+    ["API_KEY", "CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
-  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
+  "wasmUrl": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/btc_avg29.wasm"
 }
 ```
 
@@ -45,7 +45,7 @@ with `Content-Type: application/json` request header and a body of the form:
 read -d '' BODY << "EOF"
 {
   "name": "test-btc",
-  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
+  "digest": "sha256:e4653e2657b9ff7779943a2cbc3c8928cbdfa4f7214f9807fd3bc60e04afebea",
   "trigger": {
     "cron": {
       "schedule": "1/15 * * * * *"
@@ -53,9 +53,9 @@ read -d '' BODY << "EOF"
   },
   "permissions": {},
   "envs": [
-    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
+    ["API_KEY", "CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
-  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
+  "wasmUrl": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/btc_avg29.wasm"
 }
 EOF
 
@@ -90,18 +90,18 @@ As another example, the request body below will register a new application with 
 ```bash
 read -d '' BODY << "EOF"
 {
-  "name": "test-btc",
-  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
+  "name": "square-queue",
+  "digest": "sha256:143368e0a7b9331c3df5c74c84e4ae36922a7e2950144af983858b2183934c93",
   "trigger": {
-    "cron": {
-      "schedule": "1/15 * * * * *"
+    "queue": {
+      "taskQueueAddr": "slay3r1t9pkt8r25yml6cmhfelx8j9reelthwgml2mqdf53wkvp0wca6systd9gfn",
+      "hdIndex": 1,
+      "pollInterval": 5
     }
   },
   "permissions": {},
-  "envs": [
-    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
-  ],
-  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
+  "envs": [],
+  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/square/square.wasm"
 }
 EOF
 
