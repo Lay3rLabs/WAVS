@@ -190,8 +190,8 @@ impl<S: Storage + 'static> Operator<S> {
                             let lay3r = lay3r.clone();
                             let name = name.clone();
                             async move {
-                                let query = lch_apis::tasks::CustomQueryMsg::Config {};
-                                let config: lch_apis::tasks::ConfigResponse =
+                                let query = lavs_apis::tasks::CustomQueryMsg::Config {};
+                                let config: lavs_apis::tasks::ConfigResponse =
                                     lay3r.query(&query, &task_queue_addr).await.unwrap();
                                 let app = AppData {
                                     task_queue_addr: task_queue_addr.clone(),
@@ -259,7 +259,7 @@ enum TriggerRequest {
 }
 
 async fn instantiate_and_invoke(
-    envs: &Vec<(String, String)>,
+    envs: &[(String, String)],
     app_cache_path: &PathBuf,
     engine: &Engine,
     linker: &Linker<Host>,
@@ -268,7 +268,7 @@ async fn instantiate_and_invoke(
 ) -> Result<Vec<u8>, String> {
     let mut builder = WasiCtxBuilder::new();
     if !envs.is_empty() {
-        builder.envs(&envs);
+        builder.envs(envs);
     }
     builder
         .preopened_dir(app_cache_path, ".", DirPerms::all(), FilePerms::all())
@@ -280,13 +280,12 @@ async fn instantiate_and_invoke(
         ctx,
         http: WasiHttpCtx::new(),
     };
-    let mut store = wasmtime::Store::new(&engine, host);
+    let mut store = wasmtime::Store::new(engine, host);
     match trigger {
         TriggerRequest::Cron => {
-            let bindings =
-                cron_bindings::CronJob::instantiate_async(&mut store, &component, &linker)
-                    .await
-                    .expect("Wasm instantiate failed");
+            let bindings = cron_bindings::CronJob::instantiate_async(&mut store, component, linker)
+                .await
+                .expect("Wasm instantiate failed");
 
             bindings
                 .call_run_cron(&mut store)
@@ -295,7 +294,7 @@ async fn instantiate_and_invoke(
         }
         TriggerRequest::Queue(request) => {
             let bindings =
-                task_bindings::TaskQueue::instantiate_async(&mut store, &component, &linker)
+                task_bindings::TaskQueue::instantiate_async(&mut store, component, linker)
                     .await
                     .expect("Wasm instantiate failed");
 

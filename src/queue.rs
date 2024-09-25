@@ -3,8 +3,9 @@ use anyhow::Result;
 use cw_orch::daemon::{DaemonAsync, DaemonAsyncBuilder};
 use cw_orch::environment::{ChainInfoOwned, ChainKind, NetworkInfo};
 use cw_orch::prelude::{Addr, ChainInfo};
-use lch_apis::tasks::{CustomQueryMsg, ListOpenResponse, OpenTaskOverview, QueryMsg};
-use lch_apis::verifier_simple::{
+use lavs_apis::id::TaskId;
+use lavs_apis::tasks::{CustomQueryMsg, ListOpenResponse, OpenTaskOverview, QueryMsg};
+use lavs_apis::verifier_simple::{
     ExecuteMsg, OperatorVoteInfoResponse, QueryMsg as VerifierQueryMsg,
 };
 
@@ -108,7 +109,7 @@ impl AppData {
         Ok(tasks)
     }
 
-    pub async fn submit_result(&self, task_id: u64, result: String) -> Result<()> {
+    pub async fn submit_result(&self, task_id: TaskId, result: String) -> Result<()> {
         let msg = ExecuteMsg::ExecutedTask {
             task_queue_contract: self.task_queue_addr.to_string(),
             task_id,
