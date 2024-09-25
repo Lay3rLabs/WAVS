@@ -16,7 +16,9 @@ members = ["examples/btc-avg", "examples/square"]
 version = "0.0.1"
 authors = ["Lay3r Labs Team"]
 edition = "2021"
-rust-version = "1.81.0"
+# Policy that this number can be no larger than the
+# current stable release of Rust minus 2.
+rust-version = "1.78.0"
 #license = ""
 #homepage = ""
 repository = "https://github.com/Lay3rLabs/wasmatic"
