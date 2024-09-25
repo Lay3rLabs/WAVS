@@ -37,8 +37,8 @@ with `Content-Type: application/json` request header and a body of the form:
     ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
   "url": {
-    "url": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm",
-    "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_btc-avg%400.6.0.wasm",
+    "digest": "sha256:60c28bba3b74e102eb66970fadb80f982d45971e944a615343ece29758172f8e"
   }
 }
 ```
@@ -57,8 +57,8 @@ read -d '' BODY << "EOF"
     ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
   "url": {
-    "url": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm",
-    "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_btc-avg%400.6.0.wasm",
+    "digest": "sha256:60c28bba3b74e102eb66970fadb80f982d45971e944a615343ece29758172f8e"
   }
 }
 EOF
@@ -87,8 +87,8 @@ As another example, the request body below will register a new application with 
   "permissions": {},
   "envs": [],
   "url": {
-    "url": "https://raw.githubusercontent.com/macovedj/test/main/square/square.wasm",
-    "digest": "sha256:143368e0a7b9331c3df5c74c84e4ae36922a7e2950144af983858b2183934c93"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_square%400.6.0.wasm",
+    "digest": "sha256:97ca799dd6e4e0b4088e02cc2de5fc72a6cec636ea1fad98789a0b44bc3fe75a"
   }
 }
 ```
@@ -107,14 +107,64 @@ read -d '' BODY << "EOF"
   "permissions": {},
   "envs": [],
   "url": {
-    "url": "https://raw.githubusercontent.com/macovedj/test/main/square/square.wasm",
-    "digest": "sha256:143368e0a7b9331c3df5c74c84e4ae36922a7e2950144af983858b2183934c93"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_square%400.6.0.wasm",
+    "digest": "sha256:97ca799dd6e4e0b4088e02cc2de5fc72a6cec636ea1fad98789a0b44bc3fe75a"
   }
 }
 EOF
 
 curl -X POST -H "Content-Type: application/json" http://0.0.0.0:8081/app -d "$BODY"
 ```
+
+
+#### Adding an application published to a registry
+
+`POST http://0.0.0.0:8081/app`
+
+with `Content-Type: application/json` request header and a body of the form:
+
+```json
+{
+  "name": "test-btc",
+  "trigger": {
+    "cron": {
+      "schedule": "1/15 * * * * *"
+    }
+  },
+  "permissions": {},
+  "envs": [
+    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
+  ],
+  "registry": {
+    "package": "lay3r:btc-avg",
+    "registry": "lay3r.preview.wa.dev"
+  }
+}
+```
+
+```bash
+read -d '' BODY << "EOF"
+{
+  "name": "test-btc",
+  "trigger": {
+    "cron": {
+      "schedule": "1/15 * * * * *"
+    }
+  },
+  "permissions": {},
+  "envs": [
+    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
+  ],
+  "registry": {
+    "package": "lay3r:btc-avg",
+    "registry": "lay3r.preview.wa.dev"
+  }
+}
+EOF
+
+curl -X POST -H "Content-Type: application/json" http://0.0.0.0:8081/app -d "$BODY"
+```
+
 
 #### Upload a wasm endpoint
 

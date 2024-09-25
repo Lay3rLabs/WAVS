@@ -1,0 +1,48 @@
+package lay3r:avs@0.6.0;
+
+world task-queue {
+  import wasi:cli/environment@0.2.0;
+  import wasi:cli/stderr@0.2.0;
+  import wasi:cli/stdout@0.2.0;
+  import wasi:clocks/monotonic-clock@0.2.0;
+  import wasi:clocks/wall-clock@0.2.0;
+  import wasi:filesystem/preopens@0.2.0;
+  import wasi:filesystem/types@0.2.0;
+  import wasi:http/outgoing-handler@0.2.0;
+  import wasi:http/types@0.2.0;
+  import wasi:io/error@0.2.0;
+  import wasi:io/poll@0.2.0;
+  import wasi:io/streams@0.2.0;
+  import wasi:random/insecure-seed@0.2.0;
+  import wasi:random/insecure@0.2.0;
+  import wasi:random/random@0.2.0;
+
+  record input {
+    timestamp: u64,
+    bytes: list<u8>,
+  }
+
+  export handle-upgrade: func() -> result<_, string>;
+  export run-task: func(input: input) -> result<list<u8>, string>;
+}
+
+world cron-job {
+  import wasi:cli/environment@0.2.0;
+  import wasi:cli/stderr@0.2.0;
+  import wasi:cli/stdout@0.2.0;
+  import wasi:clocks/monotonic-clock@0.2.0;
+  import wasi:clocks/wall-clock@0.2.0;
+  import wasi:filesystem/preopens@0.2.0;
+  import wasi:filesystem/types@0.2.0;
+  import wasi:http/outgoing-handler@0.2.0;
+  import wasi:http/types@0.2.0;
+  import wasi:io/error@0.2.0;
+  import wasi:io/poll@0.2.0;
+  import wasi:io/streams@0.2.0;
+  import wasi:random/insecure-seed@0.2.0;
+  import wasi:random/insecure@0.2.0;
+  import wasi:random/random@0.2.0;
+
+  export handle-upgrade: func() -> result<_, string>;
+  export run-cron: func() -> result<list<u8>, string>;
+}

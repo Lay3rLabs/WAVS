@@ -303,15 +303,15 @@ async fn instantiate_and_invoke(
                 .await
                 .expect("Failed to call invoke cron job")
         }
-        TriggerRequest::Queue(request) => {
+        TriggerRequest::Queue(bytes) => {
             let bindings =
                 task_bindings::TaskQueue::instantiate_async(&mut store, component, linker)
                     .await
                     .expect("Wasm instantiate failed");
 
-            let input = task_bindings::lay3r::avs::types::TaskQueueInput {
+            let input = task_bindings::Input {
                 timestamp: get_time(),
-                request,
+                bytes,
             };
             bindings
                 .call_run_task(&mut store, &input)

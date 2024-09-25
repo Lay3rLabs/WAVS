@@ -89,9 +89,8 @@ pub struct Permissions {
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("invalid CRON frequency")]
-    InvalidCronFrequency,
-
+    //#[error("invalid CRON frequency")]
+    //InvalidCronFrequency,
     #[error("missing digest")]
     MissingDigest,
 }

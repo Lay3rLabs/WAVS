@@ -40,4 +40,12 @@ name = "wasi:io"
 [[package.version]]
 requirement = "^0.2.0"
 version = "0.2.0"
-digest = "sha256:704a0d7360e4577af94ccb6c2b11df914cc63539861d3f3b72225cb1b669a4a2"
+digest = "sha256:c33b1dbf050f64229ff4decbf9a3d3420e0643a86f5f0cea29f81054820020a6"
+
+[[package]]
+name = "wasi:random"
+
+[[package.version]]
+requirement = "^0.2.0"
+version = "0.2.0"
+digest = "sha256:5d535edc544d06719cf337861b7917c3d565360295e5dc424046dceddb0a0e42"
