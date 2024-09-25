@@ -1,3 +1,4 @@
+use anyhow::Context;
 use axum::{
     extract::State,
     http::StatusCode,
@@ -5,6 +6,7 @@ use axum::{
     Json,
 };
 
+use futures::stream::TryStreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -12,6 +14,7 @@ use tokio::sync::Mutex;
 
 use super::Operator;
 use crate::app;
+use crate::digest::Digest;
 use crate::storage::{Storage, StorageError};
 
 #[derive(Serialize, Deserialize)]
@@ -58,6 +61,7 @@ pub async fn add<S: Storage + 'static>(
     )))?;
 
     let engine = op.engine().clone();
+    let default_registry = op.registry().cloned();
     let storage = op.storage_mut();
 
     // check if Wasm is already downloaded
@@ -73,6 +77,77 @@ pub async fn add<S: Storage + 'static>(
 
             storage
                 .add_wasm(&req.app.digest, &bytes, &engine)
+                .await
+                .map_err(AddAppError::Storage)?;
+        } else if let Some(ref pkg) = req.app.package {
+            let package = &pkg.name;
+
+            let mut config = wasm_pkg_client::Config::empty();
+
+            // set default registry from the operator config, if defined
+            config.set_default_registry(default_registry);
+
+            // set package namespace registry, if defined for the app
+            if let Some(registry) = &pkg.registry {
+                config.set_namespace_registry(package.namespace().clone(), registry.clone());
+            }
+
+            // create client
+            let client = wasm_pkg_client::Client::new(config);
+
+            // get latest package version, if not specified
+            let version = match &pkg.version {
+                Some(ver) => ver.clone(),
+                None => {
+                    let versions = client
+                        .list_all_versions(package)
+                        .await
+                        .context("listing release versions in registry")?;
+                    versions
+                        .into_iter()
+                        .filter_map(|vi| (!vi.yanked).then_some(vi.version))
+                        .max()
+                        .context("No package releases found in registry")?
+                }
+            };
+
+            // get package release
+            let release = client
+                .get_release(package, &version)
+                .await
+                .context("get package release info from registry")?;
+
+            // verify digest matches the app request
+            let content_digest: Digest = release
+                .content_digest
+                .to_string()
+                .parse()
+                .context("parsing registry package content digest")?;
+            if content_digest != req.app.digest {
+                return Err(AddAppError::DigestMismatchWithRegistry {
+                    found: content_digest,
+                    expected: req.app.digest,
+                });
+            }
+
+            // download release
+            let mut content_stream = client
+                .stream_content(package, &release)
+                .await
+                .context("download package content stream from registry")?;
+
+            let mut buf = Vec::new();
+            while let Some(chunk) = content_stream
+                .try_next()
+                .await
+                .context("downloading package content from registry")?
+            {
+                buf.extend_from_slice(&chunk);
+            }
+
+            // store the download
+            storage
+                .add_wasm(&req.app.digest, &buf, &engine)
                 .await
                 .map_err(AddAppError::Storage)?;
         }
@@ -105,6 +180,9 @@ pub enum AddAppError {
 
     #[error("bad request: `{0}`")]
     BadRequest(String),
+
+    #[error("digest `{expected}` does not match the digest from the registry `{found}`")]
+    DigestMismatchWithRegistry { expected: Digest, found: Digest },
 
     #[error("{0:?}")]
     AppError(app::AppError),

@@ -31,11 +31,13 @@ derivative = "2.2.0"
 
 lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.1.0" }
 tokio = { version = "1.39.3", features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
+futures = "0.3.30"
 wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
 wasmtime-wasi-http = "24.0.0"
 wasmtime-wasi = { version = "24.0.0", default-features = true }
 wasmtime-cli-flags = "24.0.0"
 wasmparser = "0.216.0"
+wasm-pkg-client = "0.5.1"
 hyper = "1.4.1"
 async-trait = "0.1.82"
 tokio-cron-scheduler = "0.11.0"
@@ -66,6 +68,7 @@ bytes = { workspace = true }
 clap = { workspace = true }
 cw-orch = { workspace = true }
 derivative = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
 indexmap = { workspace = true }
@@ -83,6 +86,7 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uuid = { workspace = true }
+wasm-pkg-client = { workspace = true }
 wasmparser = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-cli-flags = { workspace = true }

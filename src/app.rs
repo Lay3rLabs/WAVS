@@ -1,6 +1,7 @@
 use crate::digest::Digest;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use wasm_pkg_client::{PackageRef, Registry, Version};
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -9,6 +10,8 @@ pub struct App {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<Status>,
     pub digest: Digest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package: Option<Package>,
     pub trigger: Trigger,
     pub permissions: Permissions,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -19,6 +22,16 @@ impl App {
     pub fn validate(&self) -> Result<(), AppError> {
         Ok(())
     }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Package {
+    pub name: PackageRef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<Version>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registry: Option<Registry>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

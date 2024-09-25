@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Args;
 use std::{fs, net::SocketAddr, path::PathBuf};
+use wasm_pkg_client::Registry;
 
 use crate::config::Config;
 use crate::operator::FileSystemOperator;
@@ -28,6 +29,10 @@ pub struct UpCommand {
     /// Global environment variables.
     #[clap(short, long, value_parser, num_args = 1.., value_delimiter = ' ')]
     pub envs: Vec<String>,
+
+    /// The default registry.
+    #[clap(long, value_name = "REGISTRY")]
+    pub registry: Option<Registry>,
 }
 
 impl UpCommand {
@@ -61,7 +66,10 @@ impl UpCommand {
             }))
             .collect::<Result<Vec<(String, String)>, _>>()?;
 
-        let operator = FileSystemOperator::try_new(dir, envs).await?;
+        // use CLI (if provided) or provided in the `wasmatic.toml`
+        let registry = self.registry.or(config.registry);
+
+        let operator = FileSystemOperator::try_new(dir, envs, registry).await?;
         operator.serve(bind).await?;
         Ok(())
     }

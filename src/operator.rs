@@ -15,6 +15,7 @@ use std::{
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
+use wasm_pkg_client::Registry;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine,
@@ -42,11 +43,16 @@ where
     queue_executor: QueueExecutor,
     active_apps: IndexMap<String, uuid::Uuid>,
     envs: Vec<(String, String)>,
+    registry: Option<Registry>,
     storage: S,
 }
 
 impl<S: Storage + 'static> Operator<S> {
-    pub async fn new(storage: S, envs: Vec<(String, String)>) -> Result<Self> {
+    pub async fn new(
+        storage: S,
+        envs: Vec<(String, String)>,
+        registry: Option<Registry>,
+    ) -> Result<Self> {
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.async_support(true);
@@ -63,6 +69,7 @@ impl<S: Storage + 'static> Operator<S> {
             queue_executor: QueueExecutor::new(),
             active_apps,
             envs,
+            registry,
             storage,
         };
         for app_name in operator.storage.list_application_names().await? {
@@ -90,6 +97,10 @@ impl<S: Storage + 'static> Operator<S> {
 
         axum::serve::serve(listener, router.into_make_service()).await?;
         Ok(())
+    }
+
+    pub fn registry(&self) -> Option<&Registry> {
+        self.registry.as_ref()
     }
 
     pub fn engine(&self) -> &Engine {
@@ -322,7 +333,11 @@ pub type FileSystemOperator = Operator<FileSystemStorage>;
 
 impl FileSystemOperator {
     /// Attempts to create an operator with the base file path for file system storage.
-    pub async fn try_new(base_dir: PathBuf, envs: Vec<(String, String)>) -> Result<Self> {
+    pub async fn try_new(
+        base_dir: PathBuf,
+        envs: Vec<(String, String)>,
+        registry: Option<Registry>,
+    ) -> Result<Self> {
         let storage = match FileSystemStorage::try_lock(&base_dir).await? {
             Some(storage) => storage,
             None => {
@@ -332,7 +347,7 @@ impl FileSystemOperator {
                 ))
             }
         };
-        Operator::new(storage, envs).await
+        Operator::new(storage, envs, registry).await
     }
 }
 
