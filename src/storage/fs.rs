@@ -190,8 +190,9 @@ impl Storage for FileSystemStorage {
         }
 
         // check if has Wasm digest
-        if !self.stored.wasm_on_disk.contains(&app.digest) {
-            return Err(StorageError::MissingWasmDigest(app.digest.clone()));
+        let digest = app.digest()?;
+        if !self.stored.wasm_on_disk.contains(digest) {
+            return Err(StorageError::MissingWasmDigest(digest.clone()));
         }
 
         self.stored.apps.insert(app.name.clone(), app);
@@ -211,14 +212,18 @@ impl Storage for FileSystemStorage {
         let mut digests_used = IndexSet::new();
         for name in names {
             if let Some(app) = self.stored.apps.swap_remove(name) {
-                digests_used.insert(app.digest);
+                digests_used.insert(app.digest()?.clone());
             } else {
                 return Err(StorageError::AppNameNotFound(name.to_string()));
             }
         }
 
         for digest in digests_used.iter() {
-            if !self.stored.apps.values().any(|app| &app.digest == digest) {
+            if !self.stored.apps.values().any(|app| {
+                app.digest()
+                    .ok()
+                    .is_some_and(|app_digest| app_digest == digest)
+            }) {
                 // no longer in use, safe to remove
                 tokio::fs::remove_file(self.path_for_precompiled_wasm(digest)).await?;
                 tokio::fs::remove_file(self.path_for_wasm(digest)).await?;

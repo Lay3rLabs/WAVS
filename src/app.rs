@@ -9,9 +9,8 @@ pub struct App {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<Status>,
-    pub digest: Digest,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub package: Option<Package>,
+    #[serde(flatten)]
+    pub source: Source,
     pub trigger: Trigger,
     pub permissions: Permissions,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -22,16 +21,37 @@ impl App {
     pub fn validate(&self) -> Result<(), AppError> {
         Ok(())
     }
+
+    pub fn digest(&self) -> Result<&Digest, AppError> {
+        match &self.source {
+            Source::Registry { digest, .. } => digest.as_ref().ok_or(AppError::MissingDigest),
+            Source::Url { digest, .. } | Source::Uploaded { digest } => Ok(digest),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct Package {
-    pub name: PackageRef,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub version: Option<Version>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub registry: Option<Registry>,
+pub enum Source {
+    #[serde(rename_all = "camelCase")]
+    Registry {
+        package: PackageRef,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<Version>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        registry: Option<Registry>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        digest: Option<Digest>,
+    },
+
+    Url {
+        url: String,
+        digest: Digest,
+    },
+
+    Uploaded {
+        digest: Digest,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -71,4 +91,7 @@ pub struct Permissions {
 pub enum AppError {
     #[error("invalid CRON frequency")]
     InvalidCronFrequency,
+
+    #[error("missing digest")]
+    MissingDigest,
 }

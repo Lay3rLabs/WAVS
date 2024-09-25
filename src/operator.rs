@@ -125,7 +125,7 @@ impl<S: Storage + 'static> Operator<S> {
             .await?
             .ok_or(anyhow::anyhow!("app not found"))?;
 
-        let component = self.storage.get_wasm(&app.digest, &self.engine).await?;
+        let component = self.storage.get_wasm(app.digest()?, &self.engine).await?;
         let mut linker = Linker::new(self.engine());
         wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
         wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();

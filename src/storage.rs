@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 use wasmtime::{component::Component, Engine};
 mod fs;
-use crate::app::App;
+use crate::app::{self, App};
 use crate::digest::Digest;
 pub use fs::*;
 
@@ -66,6 +66,10 @@ pub enum StorageError {
     /// Digest mismatches.
     #[error("incorrect digest, expected `{expected}` but computed `{computed}`")]
     IncorrectDigest { expected: Digest, computed: Digest },
+
+    /// An error in app info validation.
+    #[error("{0:?}")]
+    App(#[from] app::AppError),
 
     ///// Missing download URL.
     //#[error("missing download URL")]

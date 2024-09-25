@@ -22,9 +22,6 @@ use crate::storage::{Storage, StorageError};
 pub struct RegisterAppRequest {
     #[serde(flatten)]
     pub app: app::App,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wasm_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,7 +37,7 @@ pub struct RegisterAppResponse {
 /// fetched, compiled and stored.
 pub async fn add<S: Storage + 'static>(
     State(operator): State<Arc<Mutex<Operator<S>>>>,
-    Json(req): Json<RegisterAppRequest>,
+    Json(mut req): Json<RegisterAppRequest>,
 ) -> Result<Json<RegisterAppResponse>, AddAppError> {
     // reject if app status is defined in the request
     // TODO
@@ -64,9 +61,15 @@ pub async fn add<S: Storage + 'static>(
     let default_registry = op.registry().cloned();
     let storage = op.storage_mut();
 
-    // check if Wasm is already downloaded
-    if !storage.has_wasm(&req.app.digest).await? {
-        if let Some(url) = req.wasm_url {
+    // check package source
+    match req.app.source {
+        app::Source::Uploaded { ref digest } if !storage.has_wasm(digest).await? => {
+            return Err(AddAppError::DigestNotFound(digest.clone()))
+        }
+        app::Source::Url {
+            ref url,
+            ref digest,
+        } if !storage.has_wasm(digest).await? => {
             let bytes = match reqwest::get(url).await {
                 Ok(res) => match res.bytes().await {
                     Ok(bytes) => bytes.to_vec(),
@@ -76,27 +79,36 @@ pub async fn add<S: Storage + 'static>(
             };
 
             storage
-                .add_wasm(&req.app.digest, &bytes, &engine)
+                .add_wasm(digest, &bytes, &engine)
                 .await
                 .map_err(AddAppError::Storage)?;
-        } else if let Some(ref pkg) = req.app.package {
-            let package = &pkg.name;
-
+        }
+        app::Source::Registry {
+            ref package,
+            ref mut version,
+            ref mut registry,
+            ref mut digest,
+        } => {
             let mut config = wasm_pkg_client::Config::empty();
 
             // set default registry from the operator config, if defined
             config.set_default_registry(default_registry);
 
             // set package namespace registry, if defined for the app
-            if let Some(registry) = &pkg.registry {
-                config.set_namespace_registry(package.namespace().clone(), registry.clone());
+            if let Some(reg) = &registry {
+                config.set_namespace_registry(package.namespace().clone(), reg.clone());
+            }
+
+            // set resolved registry in app info
+            if let Some(reg) = config.resolve_registry(package) {
+                registry.replace(reg.clone());
             }
 
             // create client
             let client = wasm_pkg_client::Client::new(config);
 
             // get latest package version, if not specified
-            let version = match &pkg.version {
+            let resolved_version = match &version {
                 Some(ver) => ver.clone(),
                 None => {
                     let versions = client
@@ -111,23 +123,35 @@ pub async fn add<S: Storage + 'static>(
                 }
             };
 
+            // set resolved version in app info
+            version.replace(resolved_version.clone());
+
             // get package release
             let release = client
-                .get_release(package, &version)
+                .get_release(package, &resolved_version)
                 .await
                 .context("get package release info from registry")?;
 
-            // verify digest matches the app request
-            let content_digest: Digest = release
+            // check digest
+            let release_digest: Digest = release
                 .content_digest
                 .to_string()
                 .parse()
                 .context("parsing registry package content digest")?;
-            if content_digest != req.app.digest {
-                return Err(AddAppError::DigestMismatchWithRegistry {
-                    found: content_digest,
-                    expected: req.app.digest,
-                });
+            // if digest is provided, verify digest matches the app request
+            match digest {
+                None => {
+                    // use the registry digest
+                    digest.replace(release_digest);
+                }
+                Some(digest) if digest != &release_digest => {
+                    // return error if digest does not match expected
+                    return Err(AddAppError::DigestMismatchWithRegistry {
+                        found: release_digest,
+                        expected: digest.clone(),
+                    });
+                }
+                _ => {}
             }
 
             // download release
@@ -147,10 +171,11 @@ pub async fn add<S: Storage + 'static>(
 
             // store the download
             storage
-                .add_wasm(&req.app.digest, &buf, &engine)
+                .add_wasm(digest.as_ref().unwrap(), &buf, &engine)
                 .await
                 .map_err(AddAppError::Storage)?;
         }
+        _ => {} // already has the digest available
     }
 
     let name = req.app.name.clone();
@@ -171,6 +196,9 @@ pub async fn add<S: Storage + 'static>(
 pub enum AddAppError {
     #[error("internal error: `{0}`")]
     InternalServerError(String),
+
+    #[error("package digest `{0}` is not available")]
+    DigestNotFound(Digest),
 
     #[error("Wasm URL was not found")]
     WasmNotFound,
