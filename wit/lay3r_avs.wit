@@ -1,7 +1,7 @@
-package lay3r:avs@0.9.0;
+package lay3r:avs@0.10.0;
 
-/// The base platform interfaces.
-world base-platform {
+/// The platform interfaces shared for different application types.
+world platform {
   import wasi:cli/environment@0.2.0;
   import wasi:cli/stderr@0.2.0;
   import wasi:cli/stdout@0.2.0;
@@ -30,7 +30,7 @@ world base-platform {
 
 // Task queue processing applications.
 world task-queue {
-  include base-platform;
+  include platform;
 
   /// The handler method called with the task data as a serialized
   /// JSON string. The return `Ok()` response is also a serialized
@@ -40,7 +40,7 @@ world task-queue {
 
 /// CRON scheduled applications.
 world cron-job {
-  include base-platform;
+  include platform;
 
   /// The handler method called as a CRON scheduled job.
   /// The return `Ok()` response is a serialized JSON
