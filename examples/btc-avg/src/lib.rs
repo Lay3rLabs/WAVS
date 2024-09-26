@@ -12,11 +12,11 @@ const PRICE_HISTORY_FILE_PATH: &str = "price_history.json";
 struct Component;
 
 impl Guest for Component {
-    fn handle_upgrade() -> Result<(), String> {
+    fn handle_update() -> Result<(), String> {
         Ok(())
     }
 
-    fn run_cron() -> Result<Vec<u8>, String> {
+    fn run() -> Result<String, String> {
         let api_key = std::env::var("API_KEY").or(Err("missing env var `API_KEY`".to_string()))?;
         let price = coin_gecko::get_btc_usd_price(&api_key)
             .map_err(|err| err.to_string())?
@@ -53,14 +53,14 @@ impl Guest for Component {
         let avg_last_hour = history.average(now - 3600);
 
         // serialize JSON response
-        Ok(serde_json::to_vec(&Response {
+        serde_json::to_string(&Response {
             btcusd: Price {
                 price,
                 avg_last_minute,
                 avg_last_hour,
             },
         })
-        .map_err(|err| err.to_string())?)
+        .map_err(|err| err.to_string())
     }
 }
 

@@ -37,8 +37,8 @@ with `Content-Type: application/json` request header and a body of the form:
     ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
   "url": {
-    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_btc-avg%400.6.0.wasm",
-    "digest": "sha256:60c28bba3b74e102eb66970fadb80f982d45971e944a615343ece29758172f8e"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_btc-avg%400.7.0.wasm",
+    "digest": "sha256:0dad01b29e1fe90b6981d74ed4f54f521f3debdafc4dc453a52a02552dee0fb9"
   }
 }
 ```
@@ -57,8 +57,8 @@ read -d '' BODY << "EOF"
     ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
   ],
   "url": {
-    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_btc-avg%400.6.0.wasm",
-    "digest": "sha256:60c28bba3b74e102eb66970fadb80f982d45971e944a615343ece29758172f8e"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_btc-avg%400.7.0.wasm",
+    "digest": "sha256:0dad01b29e1fe90b6981d74ed4f54f521f3debdafc4dc453a52a02552dee0fb9"
   }
 }
 EOF
@@ -87,8 +87,8 @@ As another example, the request body below will register a new application with 
   "permissions": {},
   "envs": [],
   "url": {
-    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_square%400.6.0.wasm",
-    "digest": "sha256:97ca799dd6e4e0b4088e02cc2de5fc72a6cec636ea1fad98789a0b44bc3fe75a"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_square%400.7.0.wasm",
+    "digest": "sha256:ccf68a7bef51b05f4338e9baa765210464f38910b6781ee927d2bb3bec2375d9"
   }
 }
 ```
@@ -107,8 +107,8 @@ read -d '' BODY << "EOF"
   "permissions": {},
   "envs": [],
   "url": {
-    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_square%400.6.0.wasm",
-    "digest": "sha256:97ca799dd6e4e0b4088e02cc2de5fc72a6cec636ea1fad98789a0b44bc3fe75a"
+    "url": "https://storage.googleapis.com/tmp-bucket-12/wasm/layer/examples/lay3r_square%400.7.0.wasm",
+    "digest": "sha256:ccf68a7bef51b05f4338e9baa765210464f38910b6781ee927d2bb3bec2375d9"
   }
 }
 EOF

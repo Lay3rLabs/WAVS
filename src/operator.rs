@@ -161,9 +161,8 @@ impl<S: Storage + 'static> Operator<S> {
                                 )
                                 .await
                                 .expect("Failed to instantiate component");
-                                let output_string =
-                                    std::str::from_utf8(&output).expect("Output is invalid utf8");
-                                println!("Cron Job output was: {output_string}");
+
+                                println!("Cron Job output was: {output}");
                             }
                         })
                     })?)
@@ -213,7 +212,7 @@ impl<S: Storage + 'static> Operator<S> {
                                 let tasks = app.get_tasks().await.unwrap();
                                 for t in tasks {
                                     println!("Task: {:?}", t);
-                                    let request = serde_json::to_vec(&t.payload).unwrap();
+                                    let request = serde_json::to_string(&t.payload).unwrap();
 
                                     let output = instantiate_and_invoke(
                                         &envs,
@@ -225,13 +224,10 @@ impl<S: Storage + 'static> Operator<S> {
                                     )
                                     .await
                                     .expect("Failed to instantiate component");
-                                    let output_string = std::str::from_utf8(&output)
-                                        .expect("Output is invalid utf8");
-                                    println!("Task output was: {output_string}");
 
-                                    app.submit_result(t.id, output_string.to_string())
-                                        .await
-                                        .unwrap();
+                                    println!("Task output was: {output}");
+
+                                    app.submit_result(t.id, output).await.unwrap();
                                 }
                             }
                         })
@@ -265,7 +261,7 @@ impl<S: Storage + 'static> Operator<S> {
 
 enum TriggerRequest {
     Cron,
-    Queue(Vec<u8>),
+    Queue(String),
     _Event,
 }
 
@@ -276,7 +272,7 @@ async fn instantiate_and_invoke(
     linker: &Linker<Host>,
     component: &Component,
     trigger: TriggerRequest,
-) -> Result<Vec<u8>, String> {
+) -> Result<String, String> {
     let mut builder = WasiCtxBuilder::new();
     if !envs.is_empty() {
         builder.envs(envs);
@@ -299,22 +295,18 @@ async fn instantiate_and_invoke(
                 .expect("Wasm instantiate failed");
 
             bindings
-                .call_run_cron(&mut store)
+                .call_run(&mut store)
                 .await
                 .expect("Failed to call invoke cron job")
         }
-        TriggerRequest::Queue(bytes) => {
+        TriggerRequest::Queue(json_data) => {
             let bindings =
                 task_bindings::TaskQueue::instantiate_async(&mut store, component, linker)
                     .await
                     .expect("Wasm instantiate failed");
 
-            let input = task_bindings::Input {
-                timestamp: get_time(),
-                bytes,
-            };
             bindings
-                .call_run_task(&mut store, &input)
+                .call_run(&mut store, get_time(), &json_data)
                 .await
                 .expect("Failed to run task")
         }

@@ -1,22 +1,9 @@
-#[derive(Clone)]
-pub struct Input {
-    pub timestamp: u64,
-    pub bytes: _rt::Vec<u8>,
-}
-impl ::core::fmt::Debug for Input {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        f.debug_struct("Input")
-            .field("timestamp", &self.timestamp)
-            .field("bytes", &self.bytes)
-            .finish()
-    }
-}
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn _export_handle_upgrade_cabi<T: Guest>() -> *mut u8 {
+pub unsafe fn _export_handle_update_cabi<T: Guest>() -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
-    let result0 = T::handle_upgrade();
+    let result0 = T::handle_update();
     let ptr1 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
     match result0 {
         Ok(_) => {
@@ -36,7 +23,7 @@ pub unsafe fn _export_handle_upgrade_cabi<T: Guest>() -> *mut u8 {
 }
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn __post_return_handle_upgrade<T: Guest>(arg0: *mut u8) {
+pub unsafe fn __post_return_handle_update<T: Guest>(arg0: *mut u8) {
     let l0 = i32::from(*arg0.add(0).cast::<u8>());
     match l0 {
         0 => {}
@@ -49,19 +36,17 @@ pub unsafe fn __post_return_handle_upgrade<T: Guest>(arg0: *mut u8) {
 }
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn _export_run_task_cabi<T: Guest>(arg0: i64, arg1: *mut u8, arg2: usize) -> *mut u8 {
+pub unsafe fn _export_run_cabi<T: Guest>(arg0: i64, arg1: *mut u8, arg2: usize) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
     let len0 = arg2;
-    let result1 = T::run_task(Input {
-        timestamp: arg0 as u64,
-        bytes: _rt::Vec::from_raw_parts(arg1.cast(), len0, len0),
-    });
+    let bytes0 = _rt::Vec::from_raw_parts(arg1.cast(), len0, len0);
+    let result1 = T::run(arg0 as u64, _rt::string_lift(bytes0));
     let ptr2 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
     match result1 {
         Ok(e) => {
             *ptr2.add(0).cast::<u8>() = (0i32) as u8;
-            let vec3 = (e).into_boxed_slice();
+            let vec3 = (e.into_bytes()).into_boxed_slice();
             let ptr3 = vec3.as_ptr().cast::<u8>();
             let len3 = vec3.len();
             ::core::mem::forget(vec3);
@@ -82,40 +67,48 @@ pub unsafe fn _export_run_task_cabi<T: Guest>(arg0: i64, arg1: *mut u8, arg2: us
 }
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn __post_return_run_task<T: Guest>(arg0: *mut u8) {
+pub unsafe fn __post_return_run<T: Guest>(arg0: *mut u8) {
     let l0 = i32::from(*arg0.add(0).cast::<u8>());
     match l0 {
         0 => {
             let l1 = *arg0.add(4).cast::<*mut u8>();
             let l2 = *arg0.add(8).cast::<usize>();
-            let base3 = l1;
-            let len3 = l2;
-            _rt::cabi_dealloc(base3, len3 * 1, 1);
+            _rt::cabi_dealloc(l1, l2, 1);
         }
         _ => {
-            let l4 = *arg0.add(4).cast::<*mut u8>();
-            let l5 = *arg0.add(8).cast::<usize>();
-            _rt::cabi_dealloc(l4, l5, 1);
+            let l3 = *arg0.add(4).cast::<*mut u8>();
+            let l4 = *arg0.add(8).cast::<usize>();
+            _rt::cabi_dealloc(l3, l4, 1);
         }
     }
 }
 pub trait Guest {
-    fn handle_upgrade() -> Result<(), _rt::String>;
-    fn run_task(input: Input) -> Result<_rt::Vec<u8>, _rt::String>;
+    /// To handle lifecycle management of updating a stateful application,
+    /// this interface provides a function hook that allows migration and
+    /// clean up work to be done before the updated application is active.
+    ///
+    /// When updating an app, this method is called before the updated
+    /// app is activated. Any state migration logic should be handled
+    /// in this function.
+    fn handle_update() -> Result<(), _rt::String>;
+    /// The handler method called with the task data as a serialized
+    /// JSON string. The return `Ok()` response is also a serialized
+    /// JSON string.
+    fn run(timestamp: u64, json_input: _rt::String) -> Result<_rt::String, _rt::String>;
 }
 #[doc(hidden)]
 macro_rules! __export_world_task_queue_cabi {
     ($ty:ident with_types_in $($path_to_types:tt)*) => {
-        const _ : () = { #[export_name = "handle-upgrade"] unsafe extern "C" fn
-        export_handle_upgrade() -> * mut u8 { $($path_to_types)*::
-        _export_handle_upgrade_cabi::<$ty > () } #[export_name =
-        "cabi_post_handle-upgrade"] unsafe extern "C" fn _post_return_handle_upgrade(arg0
-        : * mut u8,) { $($path_to_types)*:: __post_return_handle_upgrade::<$ty > (arg0) }
-        #[export_name = "run-task"] unsafe extern "C" fn export_run_task(arg0 : i64, arg1
-        : * mut u8, arg2 : usize,) -> * mut u8 { $($path_to_types)*::
-        _export_run_task_cabi::<$ty > (arg0, arg1, arg2) } #[export_name =
-        "cabi_post_run-task"] unsafe extern "C" fn _post_return_run_task(arg0 : * mut
-        u8,) { $($path_to_types)*:: __post_return_run_task::<$ty > (arg0) } };
+        const _ : () = { #[export_name = "handle-update"] unsafe extern "C" fn
+        export_handle_update() -> * mut u8 { $($path_to_types)*::
+        _export_handle_update_cabi::<$ty > () } #[export_name =
+        "cabi_post_handle-update"] unsafe extern "C" fn _post_return_handle_update(arg0 :
+        * mut u8,) { $($path_to_types)*:: __post_return_handle_update::<$ty > (arg0) }
+        #[export_name = "run"] unsafe extern "C" fn export_run(arg0 : i64, arg1 : * mut
+        u8, arg2 : usize,) -> * mut u8 { $($path_to_types)*:: _export_run_cabi::<$ty >
+        (arg0, arg1, arg2) } #[export_name = "cabi_post_run"] unsafe extern "C" fn
+        _post_return_run(arg0 : * mut u8,) { $($path_to_types)*:: __post_return_run::<$ty
+        > (arg0) } };
     };
 }
 #[doc(hidden)]
@@ -9585,8 +9578,8 @@ pub(crate) use __export_task_queue_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[link_section = "component-type:wit-bindgen:0.30.0:task-queue:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 10396] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x9bP\x01A\x02\x01A3\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 10371] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x82P\x01A\x02\x01A0\x01\
 B\x0a\x01o\x02ss\x01p\0\x01@\0\0\x01\x04\0\x0fget-environment\x01\x02\x01ps\x01@\
 \0\0\x03\x04\0\x0dget-arguments\x01\x04\x01ks\x01@\0\0\x05\x04\0\x0binitial-cwd\x01\
 \x06\x03\x01\x1awasi:cli/environment@0.2.0\x05\0\x01B\x04\x04\0\x05error\x03\x01\
@@ -9787,11 +9780,10 @@ p}\x01@\x01\x03lenw\0\0\x04\0\x19get-insecure-random-bytes\x01\x01\x01@\0\0w\x04
 \0\x17get-insecure-random-u64\x01\x02\x03\x01\x1awasi:random/insecure@0.2.0\x05\x19\
 \x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10get-random-bytes\x01\x01\x01@\0\0w\
 \x04\0\x0eget-random-u64\x01\x02\x03\x01\x18wasi:random/random@0.2.0\x05\x1a\x01\
-p}\x01r\x02\x09timestampw\x05bytes\x1b\x03\0\x05input\x03\0\x1c\x01j\0\x01s\x01@\
-\0\0\x1e\x04\0\x0ehandle-upgrade\x01\x1f\x01j\x01\x1b\x01s\x01@\x01\x05input\x1d\
-\0\x20\x04\0\x08run-task\x01!\x04\x01\x1alay3r:avs/task-queue@0.6.0\x04\0\x0b\x10\
-\x01\0\x0atask-queue\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-comp\
-onent\x070.215.0\x10wit-bindgen-rust\x060.30.0";
+j\0\x01s\x01@\0\0\x1b\x04\0\x0dhandle-update\x01\x1c\x01j\x01s\x01s\x01@\x02\x09\
+timestampw\x0ajson-inputs\0\x1d\x04\0\x03run\x01\x1e\x04\x01\x1alay3r:avs/task-q\
+ueue@0.9.0\x04\0\x0b\x10\x01\0\x0atask-queue\x03\0\0\0G\x09producers\x01\x0cproc\
+essed-by\x02\x0dwit-component\x070.215.0\x10wit-bindgen-rust\x060.30.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

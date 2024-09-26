@@ -1,0 +1,49 @@
+package lay3r:avs@0.9.0;
+
+/// The base platform interfaces.
+world base-platform {
+  import wasi:cli/environment@0.2.0;
+  import wasi:cli/stderr@0.2.0;
+  import wasi:cli/stdout@0.2.0;
+  import wasi:clocks/monotonic-clock@0.2.0;
+  import wasi:clocks/wall-clock@0.2.0;
+  import wasi:filesystem/preopens@0.2.0;
+  import wasi:filesystem/types@0.2.0;
+  import wasi:http/outgoing-handler@0.2.0;
+  import wasi:http/types@0.2.0;
+  import wasi:io/error@0.2.0;
+  import wasi:io/poll@0.2.0;
+  import wasi:io/streams@0.2.0;
+  import wasi:random/insecure-seed@0.2.0;
+  import wasi:random/insecure@0.2.0;
+  import wasi:random/random@0.2.0;
+
+  /// To handle lifecycle management of updating a stateful application,
+  /// this interface provides a function hook that allows migration and
+  /// clean up work to be done before the updated application is active.
+  ///
+  /// When updating an app, this method is called before the updated
+  /// app is activated. Any state migration logic should be handled
+  /// in this function.
+  export handle-update: func() -> result<_, string>;
+}
+
+// Task queue processing applications.
+world task-queue {
+  include base-platform;
+
+  /// The handler method called with the task data as a serialized
+  /// JSON string. The return `Ok()` response is also a serialized
+  /// JSON string.
+  export run: func(timestamp: u64, json-input: string) -> result<string, string>;
+}
+
+/// CRON scheduled applications.
+world cron-job {
+  include base-platform;
+
+  /// The handler method called as a CRON scheduled job.
+  /// The return `Ok()` response is a serialized JSON
+  /// string.
+  export run: func() -> result<string, string>;
+}

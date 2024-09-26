@@ -2,7 +2,7 @@
 mod bindings;
 
 use anyhow::anyhow;
-use bindings::{Guest, Input};
+use bindings::Guest;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
@@ -17,20 +17,19 @@ pub struct TaskResponseData {
 struct Component;
 
 impl Guest for Component {
-    fn handle_upgrade() -> Result<(), String> {
+    fn handle_update() -> Result<(), String> {
         Ok(())
     }
 
-    fn run_task(input: Input) -> Result<Vec<u8>, String> {
-        let TaskRequestData { x } = serde_json::from_slice(&input.bytes)
+    fn run(_timestamp: u64, json_input: String) -> Result<String, String> {
+        let TaskRequestData { x } = serde_json::from_str(&json_input)
             .map_err(|e| anyhow!("Could not deserialize input request from JSON: {}", e))
             .unwrap();
         let y = x * x;
         println!("{}^2 = {}", x, y);
 
-        Ok(serde_json::to_vec(&TaskResponseData { y })
-            .map_err(|e| anyhow!("Could not serialize output data into JSON: {}", e))
-            .unwrap())
+        serde_json::to_string(&TaskResponseData { y })
+            .map_err(|e| format!("Could not serialize output data into JSON: {e}"))
     }
 }
 
