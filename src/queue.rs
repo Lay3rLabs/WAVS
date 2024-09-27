@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use cw_orch::daemon::{DaemonAsync, DaemonAsyncBuilder};
 use cw_orch::environment::{ChainInfoOwned, ChainKind, NetworkInfo};
-use cw_orch::prelude::{Addr, ChainInfo};
+use cw_orch::prelude::Addr;
 use lavs_apis::id::TaskId;
 use lavs_apis::tasks::{CustomQueryMsg, ListOpenResponse, OpenTaskOverview, QueryMsg};
 use lavs_apis::verifier_simple::{
@@ -15,70 +15,26 @@ pub const SLAY3R_NETWORK: NetworkInfo = NetworkInfo {
     coin_type: 118u32,
 };
 
-pub const SLAY3R_LOCAL: ChainInfo = ChainInfo {
-    chain_id: "slay3r-local",
-    gas_denom: "uslay",
-    gas_price: 0.025,
-    grpc_urls: &["http://localhost:9090"],
-    lcd_url: None,
-    fcd_url: None,
-    network_info: SLAY3R_NETWORK,
-    kind: ChainKind::Local,
-};
-
-pub const SLAY3R_DEV: ChainInfo = ChainInfo {
-    chain_id: "slay3r-dev",
-    gas_denom: "uslay",
-    gas_price: 0.025,
-    grpc_urls: &["https://grpc.dev-cav3.net"],
-    lcd_url: None,
-    fcd_url: None,
-    network_info: SLAY3R_NETWORK,
-    kind: ChainKind::Testnet,
-};
-
-pub fn chain_info(
-    kind: ChainKind,
-    grpc_url: Option<String>,
-    chain_id: Option<String>,
-) -> ChainInfoOwned {
-    let mut base: ChainInfoOwned = match kind {
-        ChainKind::Local => SLAY3R_LOCAL,
-        ChainKind::Testnet => SLAY3R_DEV,
-        ChainKind::Mainnet => panic!("Mainnet not supported"),
-    }
-    .into();
-    if let Some(grpc) = grpc_url {
-        base.grpc_urls = vec![grpc];
-    }
-    if let Some(chain_id) = chain_id {
-        base.chain_id = chain_id;
-    }
-    base
-}
-
 pub fn daemon_builder(
     kind: ChainKind,
-    grpc_url: Option<String>,
-    chain_id: Option<String>,
+    grpc_url: String,
+    chain_id: String,
+    gas_denom: String,
+    gas_price: f64,
 ) -> DaemonAsyncBuilder {
-    let chain_info = chain_info(kind, grpc_url, chain_id);
     let mut builder = DaemonAsyncBuilder::default();
+    let chain_info = ChainInfoOwned {
+        chain_id,
+        gas_denom,
+        gas_price,
+        grpc_urls: vec![grpc_url],
+        lcd_url: None,
+        fcd_url: None,
+        network_info: SLAY3R_NETWORK.into(),
+        kind,
+    };
     builder.chain(chain_info);
     builder
-}
-
-#[derive(derivative::Derivative)]
-#[derivative(Default)]
-struct QueueingMetadata {
-    /// "local", "testnet", "mainnet" provides default settings
-    #[derivative(Default(value = "ChainKind::Local"))]
-    pub chain_kind: ChainKind,
-
-    /// Override default: location of the gRPC server for lay3r chain
-    pub grpc_url: Option<String>,
-    /// Override default: chain id of the lay3r chain
-    pub chain_id: Option<String>,
 }
 
 #[derive(Clone)]
@@ -126,16 +82,19 @@ pub(crate) struct QueueExecutor {
 }
 
 impl QueueExecutor {
-    pub fn new() -> Self {
-        let QueueingMetadata {
-            chain_kind: kind,
-            grpc_url,
-            chain_id,
-        } = QueueingMetadata::default();
+    pub fn new(
+        kind: Option<ChainKind>,
+        grpc_url: Option<String>,
+        chain_id: Option<String>,
+        gas_denom: Option<String>,
+        gas_price: Option<f64>,
+    ) -> Self {
         let builder = daemon_builder(
-            kind,
-            grpc_url.or(Some("http://localhost:9090".to_string())),
-            chain_id,
+            kind.unwrap_or(ChainKind::Local),
+            grpc_url.unwrap_or("http://localhost:9090".to_string()),
+            chain_id.unwrap_or("slay3r-local".to_string()),
+            gas_denom.unwrap_or("uslay".to_string()),
+            gas_price.unwrap_or(0.025),
         );
 
         Self { builder }
