@@ -6,6 +6,6 @@ version = 1
 name = "lay3r:avs"
 
 [[package.version]]
-requirement = "^0.10.0"
-version = "0.10.0"
-digest = "sha256:d9fd6aad69d4da96bf31e9d662d504738561b253c4edd17cadae53f955fc46db"
+requirement = "^0.13.0"
+version = "0.13.0"
+digest = "sha256:575d5b2a1bbbaf3b04664e5d3a472a9ef3b78927438455a926089de281838ccb"
