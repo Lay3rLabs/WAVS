@@ -295,7 +295,7 @@ async fn instantiate_and_invoke(
                 .expect("Wasm instantiate failed");
 
             bindings
-                .call_run(&mut store)
+                .call_run_cron(&mut store)
                 .await
                 .expect("Failed to call invoke cron job")
         }
@@ -306,7 +306,7 @@ async fn instantiate_and_invoke(
                     .expect("Wasm instantiate failed");
 
             bindings
-                .call_run(&mut store, get_time(), &json_data)
+                .call_run_task(&mut store, get_time(), &json_data)
                 .await
                 .expect("Failed to run task")
         }

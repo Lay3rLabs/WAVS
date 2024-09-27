@@ -1,4 +1,4 @@
-package lay3r:avs@0.13.0;
+package lay3r:avs@0.14.0;
 
 /// The platform interfaces shared for different application types.
 world platform {
@@ -35,7 +35,7 @@ world task-queue {
   /// The handler method called with the task data as a serialized
   /// JSON string. The return `Ok()` response is also a serialized
   /// JSON string.
-  export run: func(timestamp: u64, json-input: string) -> result<string, string>;
+  export run-task: func(timestamp: u64, json-input: string) -> result<string, string>;
 }
 
 /// CRON scheduled applications.
@@ -45,5 +45,5 @@ world cron-job {
   /// The handler method called as a CRON scheduled job.
   /// The return `Ok()` response is a serialized JSON
   /// string.
-  export run: func() -> result<string, string>;
+  export run-cron: func() -> result<string, string>;
 }
