@@ -129,3 +129,44 @@ This will deregister the application and remove the application and associated d
 BODY='{"apps": ["test-btc"]}'
 curl -X DELETE -H "Content-Type: application/json" http://0.0.0.0:8081/app -d "$BODY"
 ```
+
+#### Test an application
+
+`POST http://0.0.0.0:8081/test`
+
+After registering a component, you can manually trigger it with this endpoint with the name it was registered with and an optional input
+
+bitcoin avarage price example
+```json
+{
+  "name": "test-btc"
+}
+```
+
+```
+curl --request POST \
+  --url http://localhost:8081/test \
+  --header 'Content-Type: application/json' \
+  --data '{
+  "name": "test-btc",
+  "input": "foo"
+}'
+```
+
+square example
+```json
+{
+  "name": "square-queue",
+  "input": {"x": 9 }
+}
+```
+
+```
+curl --request POST \
+  --url http://localhost:8081/test \
+  --header 'Content-Type: application/json' \
+  --data '{
+  "name": "square-queue",
+  "input": {"x": 9 }
+}'
+```
