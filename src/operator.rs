@@ -28,10 +28,10 @@ use crate::{app, queue::AppData};
 mod add_application;
 mod delete_application;
 mod list_applications;
+mod test_application;
+mod upload;
 use crate::cron_bindings;
 use crate::task_bindings;
-mod upload;
-//mod update_application;
 
 pub struct Operator<S>
 where
@@ -78,6 +78,7 @@ impl<S: Storage + 'static> Operator<S> {
             .route("/app", post(add_application::add))
             //.route("/app", put(update_application::update))
             .route("/app", delete(delete_application::delete))
+            .route("/test", post(test_application::test))
             .route("/upload", post(upload::upload))
             .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
             .with_state(Arc::new(Mutex::new(self)));
@@ -252,13 +253,13 @@ impl<S: Storage + 'static> Operator<S> {
     }
 }
 
-enum TriggerRequest {
+pub(crate) enum TriggerRequest {
     Cron,
     Queue(Vec<u8>),
     _Event,
 }
 
-async fn instantiate_and_invoke(
+pub(crate) async fn instantiate_and_invoke(
     envs: &Vec<(String, String)>,
     app_cache_path: &PathBuf,
     engine: &Engine,
