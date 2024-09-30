@@ -22,9 +22,9 @@ use wasmtime::{
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use crate::queue::QueueExecutor;
 use crate::storage::{FileSystemStorage, Storage};
 use crate::{app, queue::AppData};
+use crate::{config::WasmaticConfig, queue::QueueExecutor};
 mod add_application;
 mod delete_application;
 mod list_applications;
@@ -46,7 +46,11 @@ where
 }
 
 impl<S: Storage + 'static> Operator<S> {
-    pub async fn new(storage: S, envs: Vec<(String, String)>) -> Result<Self> {
+    pub async fn new(
+        storage: S,
+        envs: Vec<(String, String)>,
+        wasmatic_config: WasmaticConfig,
+    ) -> Result<Self> {
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.async_support(true);
@@ -60,7 +64,13 @@ impl<S: Storage + 'static> Operator<S> {
         let mut operator = Operator {
             engine,
             scheduler,
-            queue_executor: QueueExecutor::new(),
+            queue_executor: QueueExecutor::new(
+                wasmatic_config.chain_kind,
+                wasmatic_config.grpc_url,
+                wasmatic_config.chain_id,
+                wasmatic_config.gas_denom,
+                wasmatic_config.gas_price,
+            ),
             active_apps,
             envs,
             storage,
@@ -322,7 +332,11 @@ pub type FileSystemOperator = Operator<FileSystemStorage>;
 
 impl FileSystemOperator {
     /// Attempts to create an operator with the base file path for file system storage.
-    pub async fn try_new(base_dir: PathBuf, envs: Vec<(String, String)>) -> Result<Self> {
+    pub async fn try_new(
+        base_dir: PathBuf,
+        envs: Vec<(String, String)>,
+        config: WasmaticConfig,
+    ) -> Result<Self> {
         let storage = match FileSystemStorage::try_lock(&base_dir).await? {
             Some(storage) => storage,
             None => {
@@ -332,7 +346,7 @@ impl FileSystemOperator {
                 ))
             }
         };
-        Operator::new(storage, envs).await
+        Operator::new(storage, envs, config).await
     }
 }
 

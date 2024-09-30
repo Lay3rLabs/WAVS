@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Args;
 use std::{fs, net::SocketAddr, path::PathBuf};
 
-use crate::config::Config;
+use crate::config::WasmaticConfig;
 use crate::operator::FileSystemOperator;
 
 const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
@@ -33,7 +33,7 @@ pub struct UpCommand {
 impl UpCommand {
     /// Executes the command.
     pub async fn exec(self) -> Result<()> {
-        let config: Config = toml::from_str(&fs::read_to_string(&self.config).or_else(
+        let config: WasmaticConfig = toml::from_str(&fs::read_to_string(&self.config).or_else(
             |_| -> Result<String> {
                 fs::write(&self.config, "").unwrap();
                 Ok("".to_string())
@@ -44,11 +44,15 @@ impl UpCommand {
         let bind = self.bind.or(config.bind).unwrap_or(DEFAULT_ADDR);
 
         // use CLI (if provided) or provided in the `wasmatic.toml` or the `./data` dir
-        let dir = self.dir.or(config.dir).unwrap_or(PathBuf::from("data"));
+        let dir = self
+            .dir
+            .or(config.dir.clone())
+            .unwrap_or(PathBuf::from("data"));
 
         // join CLI env vars with those provided in the `wasmatic.toml`
         let envs = config
             .envs
+            .clone()
             .unwrap_or_default()
             .into_iter()
             .map(|[k, v]| Ok((k, v)))
@@ -61,7 +65,7 @@ impl UpCommand {
             }))
             .collect::<Result<Vec<(String, String)>, _>>()?;
 
-        let operator = FileSystemOperator::try_new(dir, envs).await?;
+        let operator = FileSystemOperator::try_new(dir, envs, config).await?;
         operator.serve(bind).await?;
         Ok(())
     }
