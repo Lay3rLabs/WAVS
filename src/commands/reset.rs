@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Args;
 use std::{fs, path::PathBuf};
 
-use crate::config::Config;
+use crate::config::WasmaticConfig;
 use crate::storage::{FileSystemStorage, Storage};
 
 /// Reset Wasmatic server data.
@@ -22,7 +22,7 @@ pub struct ResetCommand {
 impl ResetCommand {
     /// Executes the command.
     pub async fn exec(self) -> Result<()> {
-        let config: Config = toml::from_str(&fs::read_to_string(&self.config).or_else(
+        let config: WasmaticConfig = toml::from_str(&fs::read_to_string(&self.config).or_else(
             |_| -> Result<String> {
                 fs::write(&self.config, "").unwrap();
                 Ok("".to_string())

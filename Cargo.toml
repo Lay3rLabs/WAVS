@@ -16,7 +16,9 @@ members = ["examples/btc-avg", "examples/square"]
 version = "0.0.1"
 authors = ["Lay3r Labs Team"]
 edition = "2021"
-rust-version = "1.81.0"
+# Policy that this number can be no larger than the
+# current stable release of Rust minus 2.
+rust-version = "1.78.0"
 #license = ""
 #homepage = ""
 repository = "https://github.com/Lay3rLabs/wasmatic"
@@ -26,7 +28,8 @@ anyhow = "1.0.86"
 clap = { version = "4.5.16", features = ["derive", "env"] }
 cw-orch = { version = "0.22.0", features = ["daemon"] }
 derivative = "2.2.0"
-lch-apis = { git = "ssh://git@github.com/Lay3rLabs/lay3r-contracts.git", rev = "ba25710b5847c2c3adf187c9a59a93e08fa4b1b9" }
+
+lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.1.0" }
 tokio = { version = "1.39.3", features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
 wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
 wasmtime-wasi-http = "24.0.0"
@@ -66,7 +69,7 @@ derivative = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
 indexmap = { workspace = true }
-lch-apis = { workspace = true }
+lavs-apis = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true }
