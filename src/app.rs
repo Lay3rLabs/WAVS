@@ -13,6 +13,7 @@ pub struct App {
     pub permissions: Permissions,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub envs: Vec<(String, String)>,
+    pub testable: Option<bool>,
 }
 
 impl App {

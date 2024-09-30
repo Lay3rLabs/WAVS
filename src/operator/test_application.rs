@@ -1,4 +1,5 @@
-use crate::{digest::Digest, storage::StorageError};
+use crate::storage::StorageError;
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -24,10 +25,7 @@ use super::{Host, Operator};
 #[serde(rename_all = "camelCase")]
 pub struct TestAppRequest {
     name: String,
-    digest: Digest,
-    envs: Vec<(String, String)>,
     input: Option<Value>,
-    wasm_url: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +46,9 @@ pub enum TestAppError {
 
     #[error("Wasm URL download failed")]
     DownloadFailed,
+
+    #[error("App was not registered as testable, reregister app with testable field")]
+    AppNotTestable,
 }
 pub async fn test<S: Storage + 'static>(
     State(operator): State<Arc<Mutex<Operator<S>>>>,
@@ -61,53 +62,68 @@ pub async fn test<S: Storage + 'static>(
     let engine = op.engine().clone();
     let storage = op.storage_mut();
 
-    // check if Wasm is already downloaded
-    if !storage.has_wasm(&req.digest).await? {
-        if let Some(url) = req.wasm_url {
-            let bytes = match reqwest::get(url).await {
-                Ok(res) => match res.bytes().await {
-                    Ok(bytes) => bytes.to_vec(),
-                    Err(_) => return Err(TestAppError::DownloadFailed),
-                },
-                Err(_) => return Err(TestAppError::WasmNotFound),
-            };
+    let app = storage.get_application(&req.name).await?;
+    if let Some(app) = app {
+        if let Some(testable) = app.testable {
+            if testable {
+                // check if Wasm is already downloaded
+                if !storage.has_wasm(&app.digest).await? {
+                    if let Some(url) = req.wasm_url {
+                        let bytes = match reqwest::get(url).await {
+                            Ok(res) => match res.bytes().await {
+                                Ok(bytes) => bytes.to_vec(),
+                                Err(_) => return Err(TestAppError::DownloadFailed),
+                            },
+                            Err(_) => return Err(TestAppError::WasmNotFound),
+                        };
 
-            storage
-                .add_wasm(&req.digest, &bytes, &engine)
+                        storage
+                            .add_wasm(&app.digest, &bytes, &engine)
+                            .await
+                            .map_err(TestAppError::Storage)?;
+                    }
+                }
+                let component = op.storage.get_wasm(&app.digest, &engine).await?;
+                let mut linker: Linker<Host> = Linker::new(&engine);
+                wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
+                wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+                // setup app cache directory
+                let app_cache_path = op.storage.path_for_app_cache(&req.name);
+                if !app_cache_path.is_dir() {
+                    tokio::fs::create_dir(&app_cache_path).await.unwrap();
+                }
+                let envs = op.envs.clone();
+                let trigger = if let Some(i) = &req.input {
+                    TriggerRequest::Queue(serde_json::to_vec(&i).unwrap())
+                } else {
+                    TriggerRequest::Cron
+                };
+
+                let output = instantiate_and_invoke(
+                    &envs,
+                    &app_cache_path,
+                    &engine,
+                    &linker,
+                    &component,
+                    trigger,
+                )
                 .await
-                .map_err(TestAppError::Storage)?;
+                .expect("Failed to instantiate component");
+                Ok(Json(TestAppResponse {
+                    output: serde_json::from_slice(&output).unwrap(),
+                }))
+            } else {
+                Err(TestAppError::AppNotTestable)
+            }
+        } else {
+            Err(TestAppError::AppNotTestable)
         }
-    }
-    let component = op.storage.get_wasm(&req.digest, &engine).await?;
-    let mut linker: Linker<Host> = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
-    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
-    // setup app cache directory
-    let app_cache_path = op.storage.path_for_app_cache(&req.name);
-    if !app_cache_path.is_dir() {
-        tokio::fs::create_dir(&app_cache_path).await.unwrap();
-    }
-    let mut envs = op.envs.clone();
-    envs.extend_from_slice(&req.envs);
-    let trigger = if let Some(i) = &req.input {
-        TriggerRequest::Queue(serde_json::to_vec(&i).unwrap())
     } else {
-        TriggerRequest::Cron
-    };
-
-    let output = instantiate_and_invoke(
-        &envs,
-        &app_cache_path,
-        &engine,
-        &linker,
-        &component,
-        trigger,
-    )
-    .await
-    .expect("Failed to instantiate component");
-    Ok(Json(TestAppResponse {
-        output: serde_json::from_slice(&output).unwrap(),
-    }))
+        Err(TestAppError::Storage(StorageError::Other(anyhow!(
+            "Error retrieving app with name `{}`, perhaps it wasn't registered",
+            req.name
+        ))))
+    }
 }
 
 impl IntoResponse for TestAppError {
@@ -136,6 +152,13 @@ impl IntoResponse for TestAppError {
                 .into_response(),
             TestAppError::DownloadFailed => (
                 StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorMessage {
+                    message: self.to_string(),
+                }),
+            )
+                .into_response(),
+            TestAppError::AppNotTestable => (
+                StatusCode::FORBIDDEN,
                 Json(ErrorMessage {
                     message: self.to_string(),
                 }),
