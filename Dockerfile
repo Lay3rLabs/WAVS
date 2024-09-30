@@ -27,6 +27,8 @@ RUN cargo build --release
 
 # Now, pack up that binary in a nice small image
 FROM debian:bookworm-slim
+WORKDIR /wasmatic
+
 RUN apt-get update && apt-get upgrade -y
 RUN apt install -y libcurl4
 COPY --from=builder /myapp/target/release/wasmatic /usr/local/bin/wasmatic

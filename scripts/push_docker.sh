@@ -11,6 +11,7 @@ fi
 
 $SUDO docker push ghcr.io/lay3rlabs/wasmatic:latest
 
+TAG=${TAG:-}
 if [ -n "$TAG" ]; then
   $SUDO docker tag ghcr.io/lay3rlabs/wasmatic:latest ghcr.io/lay3rlabs/wasmatic:$TAG
   $SUDO docker push ghcr.io/lay3rlabs/wasmatic:$TAG
