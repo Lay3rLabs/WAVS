@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Args;
 use std::{fs, net::SocketAddr, path::PathBuf};
 
@@ -28,17 +28,36 @@ pub struct UpCommand {
     /// Global environment variables.
     #[clap(short, long, value_parser, num_args = 1.., value_delimiter = ' ')]
     pub envs: Vec<String>,
+
+    /// Optionally a chain id may be provided here instead of in wasmatic.toml
+    #[clap(long, value_name = "CHAIN_ID", env)]
+    pub chain_id: Option<String>,
+
+    /// Optionally a grpc url may be provided here instead of in wasmatic.toml
+    #[clap(long, value_name = "GRPC_URL")]
+    pub grpc_url: Option<String>,
 }
 
 impl UpCommand {
     /// Executes the command.
     pub async fn exec(self) -> Result<()> {
-        let config: WasmaticConfig = toml::from_str(&fs::read_to_string(&self.config).or_else(
-            |_| -> Result<String> {
+        let mut config: WasmaticConfig = toml::from_str(
+            &fs::read_to_string(&self.config).or_else(|_| -> Result<String> {
                 fs::write(&self.config, "").unwrap();
                 Ok("".to_string())
-            },
-        )?)?;
+            })?,
+        )?;
+
+        if self.chain_id.is_some() {
+            config.chain_id = self.chain_id;
+        } else if config.chain_id.is_none() {
+            bail!("Must set `chain_id` in wasmatic.toml or provide as command line argument")
+        }
+        if self.grpc_url.is_some() {
+            config.grpc_url = self.grpc_url;
+        } else if config.grpc_url.is_none() {
+            bail!("Must set `grpc_url` in wasmatic.toml or provide as command line argument")
+        }
 
         // use CLI (if provided) or provided in the `wasmatic.toml` or the `DEFAULT_ADDR`
         let bind = self.bind.or(config.bind).unwrap_or(DEFAULT_ADDR);

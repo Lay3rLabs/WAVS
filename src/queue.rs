@@ -84,15 +84,15 @@ pub(crate) struct QueueExecutor {
 impl QueueExecutor {
     pub fn new(
         kind: Option<ChainKind>,
-        grpc_url: Option<String>,
-        chain_id: Option<String>,
+        grpc_url: String,
+        chain_id: String,
         gas_denom: Option<String>,
         gas_price: Option<f64>,
     ) -> Self {
         let builder = daemon_builder(
             kind.unwrap_or(ChainKind::Local),
-            grpc_url.unwrap_or("http://localhost:9090".to_string()),
-            chain_id.unwrap_or("slay3r-local".to_string()),
+            grpc_url,
+            chain_id,
             gas_denom.unwrap_or("uslay".to_string()),
             gas_price.unwrap_or(0.025),
         );
