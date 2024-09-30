@@ -41,12 +41,6 @@ pub enum TestAppError {
     #[error("{0:?}")]
     Storage(#[from] StorageError),
 
-    #[error("Wasm URL was not found")]
-    WasmNotFound,
-
-    #[error("Wasm URL download failed")]
-    DownloadFailed,
-
     #[error("App was not registered as testable, reregister app with testable field")]
     AppNotTestable,
 }
@@ -67,22 +61,6 @@ pub async fn test<S: Storage + 'static>(
         if let Some(testable) = app.testable {
             if testable {
                 // check if Wasm is already downloaded
-                if !storage.has_wasm(&app.digest).await? {
-                    if let Some(url) = req.wasm_url {
-                        let bytes = match reqwest::get(url).await {
-                            Ok(res) => match res.bytes().await {
-                                Ok(bytes) => bytes.to_vec(),
-                                Err(_) => return Err(TestAppError::DownloadFailed),
-                            },
-                            Err(_) => return Err(TestAppError::WasmNotFound),
-                        };
-
-                        storage
-                            .add_wasm(&app.digest, &bytes, &engine)
-                            .await
-                            .map_err(TestAppError::Storage)?;
-                    }
-                }
                 let component = op.storage.get_wasm(&app.digest, &engine).await?;
                 let mut linker: Linker<Host> = Linker::new(&engine);
                 wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
@@ -92,7 +70,7 @@ pub async fn test<S: Storage + 'static>(
                 if !app_cache_path.is_dir() {
                     tokio::fs::create_dir(&app_cache_path).await.unwrap();
                 }
-                let envs = op.envs.clone();
+                let envs = app.envs.clone();
                 let trigger = if let Some(i) = &req.input {
                     TriggerRequest::Queue(serde_json::to_vec(&i).unwrap())
                 } else {
@@ -138,20 +116,6 @@ impl IntoResponse for TestAppError {
                 .into_response(),
             TestAppError::Storage(_) => (
                 StatusCode::BAD_REQUEST,
-                Json(ErrorMessage {
-                    message: self.to_string(),
-                }),
-            )
-                .into_response(),
-            TestAppError::WasmNotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorMessage {
-                    message: self.to_string(),
-                }),
-            )
-                .into_response(),
-            TestAppError::DownloadFailed => (
-                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorMessage {
                     message: self.to_string(),
                 }),

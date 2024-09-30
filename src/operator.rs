@@ -263,7 +263,7 @@ impl<S: Storage + 'static> Operator<S> {
     }
 }
 
-pub(crate) enum TriggerRequest {
+enum TriggerRequest {
     Cron,
     Queue(Vec<u8>),
     _Event,
