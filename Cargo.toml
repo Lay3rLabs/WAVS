@@ -29,7 +29,7 @@ clap = { version = "4.5.16", features = ["derive", "env"] }
 cw-orch = { version = "0.22.0", features = ["daemon"] }
 derivative = "2.2.0"
 
-lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.1.0" }
+lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", rev = "c636e36" }
 tokio = { version = "1.39.3", features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
 wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
 wasmtime-wasi-http = "24.0.0"
