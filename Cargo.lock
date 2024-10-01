@@ -2775,7 +2775,7 @@ dependencies = [
 [[package]]
 name = "lavs-apis"
 version = "0.1.0"
-source = "git+https://github.com/Lay3rLabs/avs-toolkit?rev=c636e36#c636e36b3020e193aea834562276341b2102e231"
+source = "git+https://github.com/Lay3rLabs/avs-toolkit?rev=5e088b4#5e088b40764a9b36f1e6ef041b2f27c569497924"
 dependencies = [
  "cosmwasm-schema 2.1.4",
  "cosmwasm-std 2.1.4",
