@@ -11,7 +11,7 @@ use lavs_apis::verifier_simple::{
 
 pub const SLAY3R_NETWORK: NetworkInfo = NetworkInfo {
     chain_name: "slay3r",
-    pub_address_prefix: "slay3r",
+    pub_address_prefix: "layer",
     coin_type: 118u32,
 };
 

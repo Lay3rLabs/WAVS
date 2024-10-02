@@ -76,7 +76,7 @@ As another example, the request body below will register a new application with 
   "digest": "sha256:143368e0a7b9331c3df5c74c84e4ae36922a7e2950144af983858b2183934c93",
   "trigger": {
     "queue": {
-      "taskQueueAddr": "slay3r1t9pkt8r25yml6cmhfelx8j9reelthwgml2mqdf53wkvp0wca6systd9gfn",
+      "taskQueueAddr": "layer1t9pkt8r25yml6cmhfelx8j9reelthwgml2mqdf53wkvp0wca6sys4vtlv3",
       "hdIndex": 1,
       "pollInterval": 5
     }
