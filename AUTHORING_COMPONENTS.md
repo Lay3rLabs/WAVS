@@ -78,7 +78,7 @@ cargo component build --release
 
 Upload the compiled Wasm component to the Wasmatic node.
 ```bash
-curl -X POST --data-binary @../target/wasm32-wasip1/release/my_task.wasm http://localhost:8081/upload
+curl -X POST --data-binary @./target/wasm32-wasip1/release/my_task.wasm http://localhost:8081/upload
 ```
 
 Copy the digest SHA returned.
