@@ -6,6 +6,7 @@ use axum::{
 };
 use cw_orch::prelude::Addr;
 use indexmap::IndexMap;
+use layer_climb::prelude::*;
 use std::{
     net::SocketAddr,
     path::PathBuf,
@@ -208,6 +209,7 @@ impl<S: Storage + 'static> Operator<S> {
                                     task_queue_addr: task_queue_addr.clone(),
                                     lay3r,
                                     verifier_addr: Addr::unchecked(config.verifier),
+                                    query_client: make_query_client().await.unwrap(), 
                                 };
                                 println!("Polling for tasks for application: {}...", &name);
                                 let tasks = app.get_tasks().await.unwrap();
@@ -375,4 +377,15 @@ impl WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
     }
+}
+
+async fn make_query_client() -> Result<QueryClient> {
+    QueryClient::new(ChainConfig{
+        chain_id: "slay3r-local".parse().unwrap(),
+        rpc_endpoint: "http://localhost:26657".to_string(),
+        grpc_endpoint: "http://localhost:9090".to_string(),
+        gas_amount: "0.025".to_string(),
+        gas_denom: "uslay".to_string(),
+        address_kind: AddrKind::Cosmos { prefix: "slay3r".to_string() },
+    }).await
 }

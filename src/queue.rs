@@ -8,6 +8,7 @@ use lavs_apis::tasks::{CustomQueryMsg, ListOpenResponse, OpenTaskOverview, Query
 use lavs_apis::verifier_simple::{
     ExecuteMsg, OperatorVoteInfoResponse, QueryMsg as VerifierQueryMsg,
 };
+use layer_climb::prelude::*;
 
 pub const SLAY3R_NETWORK: NetworkInfo = NetworkInfo {
     chain_name: "slay3r",
@@ -42,12 +43,18 @@ pub struct AppData {
     pub task_queue_addr: Addr,
     pub verifier_addr: Addr,
     pub lay3r: DaemonAsync,
+    pub query_client: QueryClient,
 }
 
 impl AppData {
     pub async fn get_tasks(&self) -> anyhow::Result<Vec<OpenTaskOverview>> {
         let query: QueryMsg = CustomQueryMsg::ListOpen {}.into();
-        let res: ListOpenResponse = self.lay3r.query(&query, &self.task_queue_addr).await?;
+        let raw = self.query_client.contract_smart_raw(&self.query_client.chain_config.parse_address(self.task_queue_addr.as_str())?, &query).await?; 
+        let raw_str = std::str::from_utf8(&raw)?;
+        eprintln!("raw decoded: {}", raw_str);
+        let res: ListOpenResponse = self.query_client.contract_smart(&self.query_client.chain_config.parse_address(self.task_queue_addr.as_str())?, &query).await?; 
+        eprintln!("got response!");
+        //let res: ListOpenResponse = self.lay3r.query(&query, &self.task_queue_addr).await?;
         let operator = self.lay3r.sender().into_string();
         let mut tasks = Vec::with_capacity(res.tasks.len());
         for t in res.tasks {
