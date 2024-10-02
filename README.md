@@ -8,6 +8,10 @@ Run `cargo run up` to start the Wasmatic server node with the default configurat
 By default, the operator API will be listen on `http://0.0.0.0:8081`.
 
 
+### Authoring new applicatons
+
+See [authoring components doc](AUTHORING_COMPONENTS.md).
+
 ### Using the Operator API
 
 #### List active applications
