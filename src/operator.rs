@@ -66,8 +66,12 @@ impl<S: Storage + 'static> Operator<S> {
             scheduler,
             queue_executor: QueueExecutor::new(
                 wasmatic_config.chain_kind,
-                wasmatic_config.grpc_url,
-                wasmatic_config.chain_id,
+                wasmatic_config
+                    .grpc_url
+                    .expect("grpc url required when creating queue executor"),
+                wasmatic_config
+                    .chain_id
+                    .expect("chain id required when creating queue executor"),
                 wasmatic_config.gas_denom,
                 wasmatic_config.gas_price,
             ),
