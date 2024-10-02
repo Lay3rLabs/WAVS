@@ -60,7 +60,7 @@ the [oracle example](https://github.com/Lay3rLabs/example-avs-oracle/tree/main/o
 and [square example](https://github.com/Lay3rLabs/avs-toolkit/tree/main/wasi/square).
 
 
-## Testing
+## Unit Testing
 
 For running unit tests, the familiar commands will work.
 
@@ -78,7 +78,7 @@ cargo component build --release
 
 Upload the compiled Wasm component to the Wasmatic node.
 ```bash
-curl -X POST --data-binary @../target/wasm32-wasip1/release/oracle_example.wasm http://0.0.0.0:8081/upload
+curl -X POST --data-binary @../target/wasm32-wasip1/release/my_task.wasm http://localhost:8081/upload
 ```
 
 Copy the digest SHA returned.
@@ -97,9 +97,26 @@ read -d '' BODY << "EOF"
     }
   },
   "permissions": {},
-  "envs": []
+  "envs": [],
+  "testable": true
 }
 EOF
 
-curl -X POST -H "Content-Type: application/json" http://0.0.0.0:8081/app -d "$BODY"
+curl -X POST -H "Content-Type: application/json" http://localhost:8081/app -d "$BODY"
+```
+
+## Testing Deployment
+
+To test the deployed application on the Wasmatic node, you can provide `input` test data
+that your application expects. The server responds with the output of the applicaton without
+sending the result to the chain.
+
+```bash
+curl --request POST \
+  --url http://localhost:8081/test \
+  --header 'Content-Type: application/json' \
+  --data '{
+  "name": "{PLACEHOLDER-UNIQUE-NAME}",
+  "input": {}
+}'
 ```
