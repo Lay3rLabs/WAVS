@@ -205,7 +205,9 @@ impl Storage for FileSystemStorage {
         names: impl Iterator<Item = &'a str> + Send,
     ) -> Result<(), StorageError> {
         for name in names {
-            self.stored.apps.swap_remove(name);
+            if self.stored.apps.swap_remove(name).is_none() {
+                return Err(StorageError::AppNameNotFound(name.to_string()));
+            }
         }
 
         // TODO bring back garbage collection of unused wasm files
