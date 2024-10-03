@@ -92,7 +92,7 @@ read -d '' BODY << "EOF"
   "trigger": {
     "queue": {
       "taskQueueAddr": "{TASK-QUEUE-ADDR}",
-      "hdIndex": 1,
+      "hdIndex": 0,
       "pollInterval": 5
     }
   },

@@ -81,7 +81,7 @@ As another example, the request body below will register a new application with 
   "trigger": {
     "queue": {
       "taskQueueAddr": "layer1t9pkt8r25yml6cmhfelx8j9reelthwgml2mqdf53wkvp0wca6sys4vtlv3",
-      "hdIndex": 1,
+      "hdIndex": 0,
       "pollInterval": 5
     }
   },
