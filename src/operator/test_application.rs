@@ -14,6 +14,7 @@ use axum::{
 };
 
 use crate::{
+    app::Trigger,
     operator::{instantiate_and_invoke, TriggerRequest},
     storage::Storage,
 };
@@ -60,6 +61,7 @@ pub async fn test<S: Storage + 'static>(
         testable: Some(true),
         digest,
         envs,
+        trigger,
         ..
     }) = app
     {
@@ -74,10 +76,16 @@ pub async fn test<S: Storage + 'static>(
             tokio::fs::create_dir(&app_cache_path).await.unwrap();
         }
         let envs = envs.clone();
-        let trigger = if let Some(i) = &req.input {
-            TriggerRequest::Queue(serde_json::to_vec(&i).unwrap())
-        } else {
-            TriggerRequest::Cron
+        let trigger_request = match trigger {
+            Trigger::Cron { .. } => TriggerRequest::Cron,
+            Trigger::Queue { .. } => {
+                if let Some(i) = &req.input {
+                    TriggerRequest::Queue(serde_json::to_vec(&i).unwrap())
+                } else {
+                    TriggerRequest::Queue(vec![])
+                }
+            }
+            _ => return Err(TestAppError::AppNotTestable),
         };
 
         let output = instantiate_and_invoke(
@@ -86,7 +94,7 @@ pub async fn test<S: Storage + 'static>(
             &engine,
             &linker,
             &component,
-            trigger,
+            trigger_request,
         )
         .await
         .expect("Failed to instantiate component");
