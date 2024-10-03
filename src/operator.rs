@@ -22,16 +22,18 @@ use wasmtime::{
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
+use crate::cron_bindings;
 use crate::storage::{FileSystemStorage, Storage};
+use crate::task_bindings;
 use crate::{app, queue::AppData};
 use crate::{config::WasmaticConfig, queue::QueueExecutor};
+
 mod add_application;
 mod delete_application;
+mod info;
 mod list_applications;
 mod test_application;
 mod upload;
-use crate::cron_bindings;
-use crate::task_bindings;
 
 pub struct Operator<S>
 where
@@ -91,6 +93,7 @@ impl<S: Storage + 'static> Operator<S> {
             .route("/app", get(list_applications::list))
             .route("/app", post(add_application::add))
             //.route("/app", put(update_application::update))
+            .route("/info", get(info::get))
             .route("/app", delete(delete_application::delete))
             .route("/test", post(test_application::test))
             .route("/upload", post(upload::upload))
