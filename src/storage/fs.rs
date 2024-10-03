@@ -204,28 +204,32 @@ impl Storage for FileSystemStorage {
         &mut self,
         names: impl Iterator<Item = &'a str> + Send,
     ) -> Result<(), StorageError> {
-        // TODO unregister listeners for events and scheduled CRON jobs
-
-        // remove app and keep track of Wasm digests that may be removed,
-        // if not in use by other apps
-        let mut digests_used = IndexSet::new();
         for name in names {
-            if let Some(app) = self.stored.apps.swap_remove(name) {
-                digests_used.insert(app.digest);
-            } else {
-                return Err(StorageError::AppNameNotFound(name.to_string()));
-            }
+            self.stored.apps.swap_remove(name);
         }
 
-        for digest in digests_used.iter() {
-            if !self.stored.apps.values().any(|app| &app.digest == digest) {
-                // no longer in use, safe to remove
-                tokio::fs::remove_file(self.path_for_precompiled_wasm(digest)).await?;
-                tokio::fs::remove_file(self.path_for_wasm(digest)).await?;
-                self.stored.wasm_on_disk.swap_remove(digest);
-                self.wasm_in_memory.swap_remove(digest);
-            }
-        }
+        // TODO bring back garbage collection of unused wasm files
+
+        //// remove app and keep track of Wasm digests that may be removed,
+        //// if not in use by other apps
+        //let mut digests_maybe_remove = IndexSet::new();
+        //for name in names {
+        //    if let Some(app) = self.stored.apps.swap_remove(name) {
+        //        digests_maybe_remove.insert(app.digest);
+        //    } else {
+        //        return Err(StorageError::AppNameNotFound(name.to_string()));
+        //    }
+        //}
+
+        //for digest in digests_maybe_remove.iter() {
+        //    if !self.stored.apps.values().any(|app| &app.digest == digest) {
+        //        // no longer in use, safe to remove
+        //        tokio::fs::remove_file(self.path_for_precompiled_wasm(digest)).await?;
+        //        tokio::fs::remove_file(self.path_for_wasm(digest)).await?;
+        //        self.stored.wasm_on_disk.swap_remove(digest);
+        //        self.wasm_in_memory.swap_remove(digest);
+        //    }
+        //}
 
         self.save().await?;
         Ok(())
