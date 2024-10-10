@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
 use axum::{
-    extract::DefaultBodyLimit,
-    routing::{delete, get, post},
-    Router,
+    extract::DefaultBodyLimit, routing::{delete, get, post}, Router
 };
+use tower_http::cors::CorsLayer;
 use cw_orch::prelude::Addr;
 use indexmap::IndexMap;
 use std::{
@@ -44,6 +43,7 @@ where
     queue_executor: QueueExecutor,
     active_apps: IndexMap<String, uuid::Uuid>,
     envs: Vec<(String, String)>,
+    cors_allowed_origins: Option<Vec<String>>,
     storage: S,
 }
 
@@ -80,6 +80,7 @@ impl<S: Storage + 'static> Operator<S> {
             active_apps,
             envs,
             storage,
+            cors_allowed_origins: wasmatic_config.cors_allowed_origins,
         };
         for app_name in operator.storage.list_application_names().await? {
             operator.activate_app(&app_name).await?;
@@ -88,8 +89,26 @@ impl<S: Storage + 'static> Operator<S> {
         Ok(operator)
     }
 
-    pub async fn serve(self, bind_addr: SocketAddr) -> Result<()> {
-        let router = Router::new()
+    pub async fn serve(mut self, bind_addr: SocketAddr) -> Result<()> {
+
+        let cors = match self.cors_allowed_origins.take() {
+            None => None,
+            Some(allowed_origins) => {
+                Some(CorsLayer::new()
+                    .allow_origin(tower_http::cors::AllowOrigin::predicate(move |origin, _parts| {
+                        // using a predicate so we can handle any port
+                        origin
+                            .to_str()
+                            .map(|s| allowed_origins.iter().any(|allowed_origin| s.starts_with(allowed_origin))) 
+                            .unwrap_or(false)
+                    }))
+                    .allow_methods(tower_http::cors::Any)
+                    //.allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                    .allow_headers(tower_http::cors::Any))
+            }
+        };
+
+        let mut router = Router::new()
             .route("/app", get(list_applications::list))
             .route("/app", post(add_application::add))
             //.route("/app", put(update_application::update))
@@ -99,6 +118,10 @@ impl<S: Storage + 'static> Operator<S> {
             .route("/upload", post(upload::upload))
             .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
             .with_state(Arc::new(Mutex::new(self)));
+
+        if let Some(cors) = cors {
+            router = router.layer(cors);
+        }
 
         let listener = TcpListener::bind(bind_addr)
             .await

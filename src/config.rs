@@ -12,4 +12,5 @@ pub struct WasmaticConfig {
     pub chain_id: Option<String>,
     pub gas_denom: Option<String>,
     pub gas_price: Option<f64>,
+    pub cors_allowed_origins: Option<Vec<String>>,
 }
