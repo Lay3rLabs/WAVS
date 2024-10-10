@@ -159,3 +159,28 @@ You should see a recent BTCUSD price printed to the terminal like:
 ```bash
 {"price":"58955.1"}
 ```
+
+## Deploying to Wasmatic
+
+Upload the compiled Wasm component to the Wasmatic node using the `avs-toolkit-cli` CLI tool.
+Assign a unique name, as it is how your application is going to be distinguished. The examples below assume
+the assigned name is `acl-oracle-example`.
+
+You'll also need to use the task address that was created when you deployed your contract.
+
+This example integrates with the CoinGecko API to retrieve the latest BTCUSD price.
+
+```bash
+avs-toolkit-cli wasmatic deploy --name acl-oracle-example \
+    --wasm-source ./should-allow.wasm  \
+    --testable \
+    --envs "API_KEY=CG-PsTvxDqXZP3RD4TWNxPFamcW" \
+    --task <TASK-ADDRESS>
+```
+
+To test the deployed application on the Wasmatic node, you can use the test endpoint.
+The server responds with the output of the applicaton without sending the result to the chain.
+
+```bash
+avs-toolkit-cli wasmatic test --name acl-oracle-example
+```
