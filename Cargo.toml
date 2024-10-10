@@ -10,7 +10,7 @@ rust-version = { workspace = true }
 repository = { workspace = true }
 
 [workspace]
-members = ["examples/btc-avg", "examples/square"]
+members = ["examples/btc-avg", "examples/composition/http-allow-list/http-allowed-coingecko", "examples/square"]
 
 [workspace.package]
 version = "0.0.1"
