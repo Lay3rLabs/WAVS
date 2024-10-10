@@ -9,3 +9,4 @@ grpc_url = "http://localhost:9090"
 chain_id = "slay3r-local"
 gas_denom = "uslay"
 gas_price = 0.01
+cors_allowed_origins = ["http://127.0.0.1", "http://localhost"]
