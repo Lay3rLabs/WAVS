@@ -120,3 +120,31 @@ curl --request POST \
   "input": {}
 }'
 ```
+
+## Publishing to a Registry
+
+If you would like to publish packages, setup an account on [wa.dev](https://wa.dev/setup).
+
+Author a new `.wit` package in a `wit/` subdirectory, for example `wit/package-name.wit`.
+In your WIT file, be sure to include a version in the `package namspace:package-name@0.1.0;`.
+
+From the parent directory of the `wit/` subdir:
+
+```bash
+wkg wit build
+```
+
+This produces a `.wasm` binary representation of the WIT types in your WIT package. You can now
+publish that binary:
+
+```bash
+wkg publish <path-to-binary.wasm>
+```
+
+By default, the package namespace, name and version are all inferred from the information in the compiled `.wasm` binary.
+
+
+
+
+
+

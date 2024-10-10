@@ -1,0 +1,6 @@
+package lay3r-examples:http-allow-list@0.1.0;
+
+world http-allow-list {
+  import wasi:http/outgoing-handler@0.2.0;
+  export wasi:http/outgoing-handler@0.2.0;
+}

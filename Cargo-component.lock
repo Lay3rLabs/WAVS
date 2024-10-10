@@ -8,4 +8,4 @@ name = "lay3r:avs"
 [[package.version]]
 requirement = "^0.3.0"
 version = "0.3.0"
-digest = "sha256:5ca2842d9fbc411429870dfe3b69cb6f787f7cea30598518849cf2edf03c7ce2"
+digest = "sha256:891753e8eab23c067ef8095359c28e4296a65faf416103e797f468dcb5f6b4a5"
