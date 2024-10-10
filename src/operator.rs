@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use axum::{
-    extract::DefaultBodyLimit, routing::{delete, get, post}, Router
+    extract::DefaultBodyLimit,
+    routing::{delete, get, post},
+    Router,
 };
-use tower_http::cors::CorsLayer;
 use cw_orch::prelude::Addr;
 use indexmap::IndexMap;
 use std::{
@@ -14,6 +15,7 @@ use std::{
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
+use tower_http::cors::CorsLayer;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine,
@@ -90,23 +92,25 @@ impl<S: Storage + 'static> Operator<S> {
     }
 
     pub async fn serve(mut self, bind_addr: SocketAddr) -> Result<()> {
-
-        let cors = match self.cors_allowed_origins.take() {
-            None => None,
-            Some(allowed_origins) => {
-                Some(CorsLayer::new()
-                    .allow_origin(tower_http::cors::AllowOrigin::predicate(move |origin, _parts| {
+        let cors = self.cors_allowed_origins.take().map(|allowed_origins| {
+            CorsLayer::new()
+                .allow_origin(tower_http::cors::AllowOrigin::predicate(
+                    move |origin, _parts| {
                         // using a predicate so we can handle any port
                         origin
                             .to_str()
-                            .map(|s| allowed_origins.iter().any(|allowed_origin| s.starts_with(allowed_origin))) 
+                            .map(|s| {
+                                allowed_origins
+                                    .iter()
+                                    .any(|allowed_origin| s.starts_with(allowed_origin))
+                            })
                             .unwrap_or(false)
-                    }))
-                    .allow_methods(tower_http::cors::Any)
-                    //.allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-                    .allow_headers(tower_http::cors::Any))
-            }
-        };
+                    },
+                ))
+                .allow_methods(tower_http::cors::Any)
+                //.allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_headers(tower_http::cors::Any)
+        });
 
         let mut router = Router::new()
             .route("/app", get(list_applications::list))

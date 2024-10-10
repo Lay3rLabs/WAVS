@@ -49,14 +49,14 @@ impl Guest for Component {
         let avg_last_hour = history.average(now - 3600);
 
         // serialize JSON response
-        Ok(serde_json::to_vec(&Response {
+        serde_json::to_vec(&Response {
             btcusd: Price {
                 price,
                 avg_last_minute,
                 avg_last_hour,
             },
         })
-        .map_err(|err| err.to_string())?)
+        .map_err(|err| err.to_string())
     }
 }
 
