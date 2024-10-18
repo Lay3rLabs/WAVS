@@ -76,7 +76,7 @@ wkg publish <file-name>
 
 These two commands are likely to be combined soon into a single command.
 
-If you need to `yank` a previous version, you can use the `warg` CLI, but do this careful as it is irreversible:
+If you need to `yank` a previous version, you can use the `warg` CLI, but do this carefully as it is irreversible:
 
 ```bash
 warg publish yank --name <package-name> --version <version-to-yank>
