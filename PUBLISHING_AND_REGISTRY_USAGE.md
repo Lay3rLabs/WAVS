@@ -22,7 +22,7 @@ by just specifying a registry-published WIT package and the target world name (w
 imports / exports of a component). This makes it really easy to iterate on WIT and implementations.
 
 ```bash
-cargo component new --lib --target <published-package-name>/<target-world-name> <new-project-dir>`
+cargo component new --lib --target <published-package-name>/<target-world-name> <new-project-dir>
 ```
 
 To download a WIT or Component published to a registry:
