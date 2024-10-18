@@ -81,3 +81,19 @@ If you need to `yank` a previous version, you can use the `warg` CLI, but do thi
 ```bash
 warg publish yank --name <package-name> --version <version-to-yank>
 ```
+
+Also, if you'd like to easily publish with `cargo-component`, there's a command for that:
+
+```bash
+cargo component publish
+```
+
+But you may want to double check your `Cargo.toml` file and set the package name and namespace that you would like to
+publish on the registry. Modify:
+```toml
+[package.metadata.component]
+package = "my-namespace:my-package-name"
+```
+
+The `cargo component new` command generates the `Cargo.toml` with the default namespace of `component`, but you can
+specify a different namespace with `cargo component new --namespace <my-namespace>` arg.
