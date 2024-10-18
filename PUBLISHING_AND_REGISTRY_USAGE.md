@@ -82,7 +82,7 @@ If you need to `yank` a previous version, you can use the `warg` CLI, but do thi
 warg publish yank --name <package-name> --version <version-to-yank>
 ```
 
-Also, if you'd like to easily publish with `cargo-component`, there's a command for that:
+Also, if you'd like to easily do a release build and publish with `cargo-component`, there's a command for that:
 
 ```bash
 cargo component publish
