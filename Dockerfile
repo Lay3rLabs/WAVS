@@ -12,6 +12,8 @@ COPY examples/btc-avg/Cargo.toml /myapp/examples/btc-avg/Cargo.toml
 COPY dummy.rs /myapp/examples/btc-avg/src/lib.rs
 COPY examples/square/Cargo.toml /myapp/examples/square/Cargo.toml
 COPY dummy.rs /myapp/examples/square/src/lib.rs
+COPY examples/composition/http-allow-list/http-allowed-coingecko/Cargo.toml /myapp/examples/composition/http-allow-list/http-allowed-coingecko/Cargo.toml
+COPY dummy.rs /myapp/examples/composition/http-allow-list/http-allowed-coingecko/src/lib.rs
 
 RUN cargo build --release
 

@@ -46,7 +46,11 @@ pub struct AppData {
 
 impl AppData {
     pub async fn get_tasks(&self) -> anyhow::Result<Vec<OpenTaskOverview>> {
-        let query: QueryMsg = CustomQueryMsg::ListOpen {}.into();
+        let query: QueryMsg = CustomQueryMsg::ListOpen {
+            limit: None,
+            start_after: None,
+        }
+        .into();
         let res: ListOpenResponse = self.lay3r.query(&query, &self.task_queue_addr).await?;
         let operator = self.lay3r.sender().into_string();
         let mut tasks = Vec::with_capacity(res.tasks.len());
