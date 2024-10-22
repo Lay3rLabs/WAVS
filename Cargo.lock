@@ -2835,7 +2835,7 @@ dependencies = [
 [[package]]
 name = "lavs-apis"
 version = "0.2.0-alpha.1"
-source = "git+https://github.com/Lay3rLabs/avs-toolkit?tag=v0.2.0-alpha.1#7bdacdfb348a3b21486239736362e75ea506f4b0"
+source = "git+https://github.com/Lay3rLabs/avs-toolkit?tag=v0.2.0-rc1#29f1b708c98d201a16123d3026f8fff9642539f6"
 dependencies = [
  "cosmwasm-schema 2.1.4",
  "cosmwasm-std 2.1.4",
@@ -4187,7 +4187,7 @@ checksum = "3b9b39299b249ad65f3b7e96443bad61c02ca5cd3589f46cb6d610a0fd6c0d6a"
 
 [[package]]
 name = "square"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc2"
 dependencies = [
  "anyhow",
  "serde",
@@ -5088,7 +5088,7 @@ dependencies = [
 
 [[package]]
 name = "wasmatic"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc2"
 dependencies = [
  "anyhow",
  "async-trait",
