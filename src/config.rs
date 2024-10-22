@@ -1,0 +1,138 @@
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+use crate::args::CliArgs;
+
+#[derive(Debug)]
+pub struct ConfigBuilder {
+    pub filepath: PathBuf,
+}
+
+impl ConfigBuilder {
+    pub const FILENAME: &str = "wasmatic.toml";
+    pub const DIRNAME: &str = ".wasmatic";
+    pub const ENV_VAR_PREFIX: &str = "MATIC";
+
+    pub fn new(args: CliArgs) -> Result<Self> {
+        let dotenv_path = args.dotenv.unwrap_or(std::env::current_dir()?.join(".env"));
+        if dotenv_path.exists() {
+            match dotenvy::from_path(dotenv_path) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Error loading dotenv file: {}, continuing anyway", e);
+                }
+            }
+        }
+
+        let filepaths = Self::config_filepaths_to_try(args.home_dir);
+
+        let filepath = filepaths
+            .iter()
+            .find(|filename| filename.exists())
+            .with_context(|| {
+                format!(
+                    "No config file found, try creating one of these: {:?}",
+                    filepaths
+                )
+            })?
+            .clone();
+
+        Ok(Self { filepath })
+    }
+
+    pub fn env_var(name: &str) -> Option<String> {
+        std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
+    }
+
+    pub fn config_filepaths_to_try(args_home_dir: Option<PathBuf>) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+
+        if let Some(dir) = args_home_dir {
+            dirs.push(dir);
+        }
+
+        if let Some(dir) = Self::env_var("HOME").map(PathBuf::from) {
+            dirs.push(dir);
+        }
+
+        if let Some(dir) = dirs::config_dir().map(|dir| dir.join(Self::DIRNAME)) {
+            dirs.push(dir);
+        }
+
+        if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
+            .ok()
+            .map(PathBuf::from)
+            .map(|dir| dir.join(Self::DIRNAME))
+        {
+            dirs.push(dir);
+        }
+
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(Self::DIRNAME)) {
+            dirs.push(dir);
+        }
+
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(Self::DIRNAME)) {
+            dirs.push(dir);
+        }
+
+        if let Some(dir) = std::env::current_dir()
+            .ok()
+            .map(|dir| dir.join(Self::DIRNAME))
+        {
+            dirs.push(dir);
+        }
+
+        dirs.into_iter()
+            .map(|dir| dir.join(Self::FILENAME))
+            .collect()
+    }
+
+    pub async fn build(&self) -> Result<Config> {
+        let config = tokio::fs::read_to_string(&self.filepath).await?;
+        let mut config: ConfigFile = toml::from_str(&config)?;
+
+        if let Some(port) = Self::env_var("PORT")
+            .map(|port| port.parse::<u16>())
+            .transpose()?
+        {
+            config.port = Some(port);
+        }
+
+        if let Some(tracing_filter) = Self::env_var("TRACING_FILTER")
+            .map(|filter| filter.split(',').map(|x| x.trim().to_string()).collect())
+        {
+            config.tracing_filter = Some(tracing_filter);
+        }
+
+        Ok(Config {
+            port: config.port.unwrap_or(8000),
+            tracing_filter: config.tracing_filter.unwrap_or(vec!["info".to_string()]),
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ConfigFile {
+    pub port: Option<u16>,
+    pub tracing_filter: Option<Vec<String>>,
+}
+
+#[derive(Debug)]
+pub struct Config {
+    /// The port to bind the server to. If unspecified, will be 8000
+    pub port: u16,
+    /// The tracing filter to use. If unspecified, will be ["info"]
+    pub tracing_filter: Vec<String>,
+}
+
+impl Config {
+    pub fn build_tracing_filter(&self) -> Result<tracing_subscriber::EnvFilter> {
+        let mut filter = tracing_subscriber::EnvFilter::from_default_env();
+        for directive in &self.tracing_filter {
+            filter = filter.add_directive(directive.parse()?);
+        }
+
+        Ok(filter)
+    }
+}
