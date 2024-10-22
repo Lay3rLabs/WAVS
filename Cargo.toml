@@ -13,7 +13,7 @@ repository = { workspace = true }
 members = ["examples/btc-avg", "examples/composition/http-allow-list/http-allowed-coingecko", "examples/square"]
 
 [workspace.package]
-version = "0.1.0-rc2"
+version = "0.1.0"
 authors = ["Lay3r Labs Team"]
 edition = "2021"
 # Policy that this number can be no larger than the
@@ -29,7 +29,7 @@ clap = { version = "4.5.16", features = ["derive", "env"] }
 cw-orch = { version = "0.22.0", features = ["daemon"] }
 derivative = "2.2.0"
 
-lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.0-rc1" }
+lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.0" }
 tokio = { version = "1.39.3", features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
 wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
 wasmtime-wasi-http = "24.0.0"
