@@ -4,9 +4,33 @@ use std::path::PathBuf;
 
 use crate::args::CliArgs;
 
+/// The config struct we use in the application
+#[derive(Debug)]
+pub struct Config {
+    /// The port to bind the server to. If unspecified, will be 8000
+    pub port: u16,
+    /// The tracing filter to use. If unspecified, will be ["info"]
+    pub tracing_filter: Vec<String>,
+}
+
+/// The builder we use to build Config
 #[derive(Debug)]
 pub struct ConfigBuilder {
     pub filepath: PathBuf,
+}
+
+/// No need for this to be public, it's an intermediate struct
+/// for config file which may have optional values
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ConfigFile {
+    pub port: Option<u16>,
+    pub tracing_filter: Option<Vec<String>>,
+}
+
+/// Defaults for config values that are optional
+pub mod defaults {
+    pub const PORT: u16 = 8000;
+    pub const TRACING_FILTER: [&str; 1] = ["info"];
 }
 
 impl ConfigBuilder {
@@ -106,24 +130,15 @@ impl ConfigBuilder {
         }
 
         Ok(Config {
-            port: config.port.unwrap_or(8000),
-            tracing_filter: config.tracing_filter.unwrap_or(vec!["info".to_string()]),
+            port: config.port.unwrap_or(defaults::PORT),
+            tracing_filter: config.tracing_filter.unwrap_or(
+                defaults::TRACING_FILTER
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect(),
+            ),
         })
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ConfigFile {
-    pub port: Option<u16>,
-    pub tracing_filter: Option<Vec<String>>,
-}
-
-#[derive(Debug)]
-pub struct Config {
-    /// The port to bind the server to. If unspecified, will be 8000
-    pub port: u16,
-    /// The tracing filter to use. If unspecified, will be ["info"]
-    pub tracing_filter: Vec<String>,
 }
 
 impl Config {

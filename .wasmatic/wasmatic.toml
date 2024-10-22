@@ -1,0 +1,8 @@
+# these values can be overriden by environment variables
+# by following the pattern MATIC_<UPPERCASE_KEY>
+# so for example, the key `port` can be overriden by setting the environment variable `MATIC_PORT`
+
+# the port on which the server will listen. Default is 8000
+# port = 9000
+
+tracing_filter = ["info", "wasmatic=debug"]

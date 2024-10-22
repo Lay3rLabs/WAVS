@@ -1,1 +1,3 @@
 # wasmatic toml for tests
+
+tracing_filter = ["info", "wasmatic=debug", "just_to_confirm_test=debug"]

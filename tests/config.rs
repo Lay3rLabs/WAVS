@@ -94,3 +94,13 @@ async fn override_with_env_var() {
     )
     .await;
 }
+
+#[tokio::test]
+// just tests that we can override defaults with file settings
+async fn file_default() {
+    let config = TestApp::new().await.config;
+    assert_eq!(
+        config.tracing_filter,
+        ["info", "wasmatic=debug", "just_to_confirm_test=debug"]
+    );
+}
