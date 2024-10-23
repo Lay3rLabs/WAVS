@@ -10,8 +10,6 @@ use wasmatic::{
     config::{Config, ConfigBuilder},
 };
 
-static INIT: LazyLock<tokio::sync::Mutex<bool>> = LazyLock::new(|| tokio::sync::Mutex::new(false));
-
 #[derive(Clone)]
 pub struct TestApp {
     pub config: Arc<Config>,
@@ -31,12 +29,28 @@ impl TestApp {
         };
         let config = ConfigBuilder::new(cli_args).unwrap().build().await.unwrap();
 
-        // gate the initialization to only run one time
+        init(&config).await;
+
+        Self {
+            config: Arc::new(config),
+        }
+    }
+}
+
+async fn init(config: &Config) {
+    // gate this initialization section to only run one time globally
+    {
+        static INIT: LazyLock<tokio::sync::Mutex<bool>> =
+            LazyLock::new(|| tokio::sync::Mutex::new(false));
+
         let mut init = INIT.lock().await;
+
         if !*init {
             *init = true;
 
             // we want to be able to see tracing info in tests
+            // also, although we could technically just store a separte tracing handle in each app
+            // this serves as a good sanity check that we're only initializing once
             tracing_subscriber::registry()
                 .with(
                     tracing_subscriber::fmt::layer()
@@ -46,10 +60,6 @@ impl TestApp {
                 .with(config.build_tracing_filter().unwrap())
                 .try_init()
                 .unwrap();
-        }
-
-        Self {
-            config: Arc::new(config),
         }
     }
 }
