@@ -104,27 +104,22 @@ async fn override_with_env_var() {
     }
 }
 
-// tests that we load a dotenv file correctly
+// tests that we load a dotenv file correctly, if specified in cli args
 #[tokio::test]
 async fn loads_dotenv() {
-    let env_var_key = format!("{}_PORT", ConfigBuilder::ENV_VAR_PREFIX);
-    let original_env_var = std::env::var(&env_var_key);
-
-    let original_port = TestApp::new().await.config.port;
-    // sanity check that we haven't already loaded it
-    assert_ne!(original_port, 1234567);
-
     // careful! once we load the dotenv file, that's it, other tests may see it
-    // which is why the ONLY place in tests where we load the testdotenv is here
-    // we do try to remove_var below, but there's no absolute guarantee that we won't hit a race condition
-    // see docs on std::env::remove_var for more info
-    let config = TestApp::new_with_dotenv().await.config;
-    assert_eq!(config.port, 1234567);
+    let _ = TestApp::new_with_dotenv().await;
 
-    match original_env_var {
-        Ok(val) => std::env::set_var(env_var_key, val),
-        Err(_) => std::env::remove_var(env_var_key),
-    }
+    // if we try to check against meaningful env vars, we may conflict with user settings
+    // so just check for a dummy value
+    assert_eq!(
+        std::env::var(format!(
+            "{}_RANDOM_TEST_VALUE",
+            ConfigBuilder::ENV_VAR_PREFIX
+        ))
+        .unwrap(),
+        "hello world"
+    );
 }
 
 // tests that we can override defaults with config-file vars
