@@ -7,7 +7,7 @@ pub mod castorage {
         let digest = store.set_data(data).unwrap();
         let loaded = store.get_data(&digest).unwrap();
         assert_eq!(data, loaded.as_slice());
-    } 
+    }
 
     pub fn test_reset<S: CAStorage>(mut store: S) {
         let data = b"hello world";
@@ -15,5 +15,5 @@ pub mod castorage {
         store.reset().unwrap();
         let err = store.get_data(&digest).unwrap_err();
         assert!(matches!(err, CAStorageError::NotFound(_)));
-    } 
+    }
 }
