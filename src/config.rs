@@ -19,7 +19,6 @@ pub struct Config {
 #[derive(Debug)]
 pub struct ConfigBuilder {
     pub args: CliArgs,
-    pub ignore_dotenv_file: bool,
 }
 
 /// No need for this to be public, it's an intermediate struct
@@ -42,10 +41,7 @@ impl ConfigBuilder {
     pub const ENV_VAR_PREFIX: &str = "MATIC";
 
     pub fn new(args: CliArgs) -> Self {
-        Self {
-            args,
-            ignore_dotenv_file: false,
-        }
+        Self { args }
     }
 
     pub async fn build(&self) -> Result<Config> {
@@ -76,22 +72,16 @@ impl ConfigBuilder {
     }
 
     fn load_env(&self) -> Result<()> {
-        if !self.ignore_dotenv_file {
-            // try to load dotenv first, since it may affect env vars for filepaths
-            let dotenv_path = match &self.args.dotenv {
-                Some(path) => {
-                    if !path.exists() {
-                        bail!("dotenv file at {} does not exist", path.display());
-                    }
-                    path.clone()
-                }
-                None => std::env::current_dir()?.join(".env"),
-            };
+        // try to load dotenv first, since it may affect env vars for filepaths
+        let dotenv_path = self
+            .args
+            .dotenv
+            .clone()
+            .unwrap_or(std::env::current_dir()?.join(".env"));
 
-            if dotenv_path.exists() {
-                if let Err(e) = dotenvy::from_path(dotenv_path) {
-                    bail!("Error loading dotenv file: {}", e);
-                }
+        if dotenv_path.exists() {
+            if let Err(e) = dotenvy::from_path(dotenv_path) {
+                bail!("Error loading dotenv file: {}", e);
             }
         }
 

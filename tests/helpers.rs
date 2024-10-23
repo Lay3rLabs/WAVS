@@ -25,7 +25,15 @@ impl TestApp {
                     .unwrap()
                     .join(ConfigBuilder::DIRNAME),
             ),
-            dotenv: None,
+            // this purposefully points at a non-existing file
+            // so that we don't load a real .env in tests
+            dotenv: Some(
+                PathBuf::from(file!())
+                    .parent()
+                    .unwrap()
+                    .join(ConfigBuilder::DIRNAME)
+                    .join("non-existing-testdotenv"),
+            ),
         })
         .await
     }
@@ -51,12 +59,7 @@ impl TestApp {
     }
 
     async fn inner_new(cli_args: CliArgs) -> Self {
-        let ignore_dotenv_file = cli_args.dotenv.is_none();
-
-        let mut builder = ConfigBuilder::new(cli_args);
-        builder.ignore_dotenv_file = ignore_dotenv_file;
-
-        let config = builder.build().await.unwrap();
+        let config = ConfigBuilder::new(cli_args).build().await.unwrap();
 
         init(&config).await;
 
@@ -78,7 +81,7 @@ async fn init(config: &Config) {
             *init = true;
 
             // we want to be able to see tracing info in tests
-            // also, although we could technically just store a separte tracing handle in each app
+            // also, although we could technically just store a separate tracing handle in each app
             // this serves as a good sanity check that we're only initializing once
             tracing_subscriber::registry()
                 .with(
