@@ -86,7 +86,7 @@ async fn init(config: &Config) {
                         .without_time()
                         .with_target(false),
                 )
-                .with(config.build_tracing_filter().unwrap())
+                .with(config.tracing_env_filter().unwrap())
                 .try_init()
                 .unwrap();
         }

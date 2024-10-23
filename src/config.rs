@@ -7,10 +7,12 @@ use crate::args::CliArgs;
 /// The config struct we use in the application
 #[derive(Debug)]
 pub struct Config {
-    /// The port to bind the server to. If unspecified, will be 8000
+    /// The port to bind the server to.
+    /// Default is [`defaults::PORT`]
     pub port: u32,
-    /// The tracing filter to use. If unspecified, will be ["info"]
-    pub tracing_filter: Vec<String>,
+    /// The log-level to use, in the format of [tracing directives](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives).
+    /// Default is [`defaults::LOG_LEVEL`]
+    pub log_level: Vec<String>,
 }
 
 /// The builder we use to build Config
@@ -25,13 +27,13 @@ pub struct ConfigBuilder {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct ConfigFile {
     pub port: Option<u32>,
-    pub tracing_filter: Option<Vec<String>>,
+    pub log_level: Option<Vec<String>>,
 }
 
 /// Defaults for config values that are optional
 pub mod defaults {
     pub const PORT: u32 = 8000;
-    pub const TRACING_FILTER: [&str; 1] = ["info"];
+    pub const LOG_LEVEL: [&str; 1] = ["info"];
 }
 
 impl ConfigBuilder {
@@ -76,20 +78,17 @@ impl ConfigBuilder {
             config.port = Some(port);
         }
 
-        if let Some(tracing_filter) = Self::env_var("TRACING_FILTER")
+        if let Some(log_level) = Self::env_var("LOG_LEVEL")
             .map(|filter| filter.split(',').map(|x| x.trim().to_string()).collect())
         {
-            config.tracing_filter = Some(tracing_filter);
+            config.log_level = Some(log_level);
         }
 
         Ok(Config {
             port: config.port.unwrap_or(defaults::PORT),
-            tracing_filter: config.tracing_filter.unwrap_or(
-                defaults::TRACING_FILTER
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect(),
-            ),
+            log_level: config
+                .log_level
+                .unwrap_or(defaults::LOG_LEVEL.iter().map(|x| x.to_string()).collect()),
         })
     }
 
@@ -157,9 +156,9 @@ impl ConfigBuilder {
 }
 
 impl Config {
-    pub fn build_tracing_filter(&self) -> Result<tracing_subscriber::EnvFilter> {
+    pub fn tracing_env_filter(&self) -> Result<tracing_subscriber::EnvFilter> {
         let mut filter = tracing_subscriber::EnvFilter::from_default_env();
-        for directive in &self.tracing_filter {
+        for directive in &self.log_level {
             filter = filter.add_directive(directive.parse()?);
         }
 

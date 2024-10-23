@@ -68,7 +68,7 @@ async fn config_filepath() {
 // and that env filter with comma-delimited values and spaces works
 #[tokio::test]
 async fn override_with_env_var() {
-    static TRACING_FILTER: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
+    static TRACING_ENV_FILTER: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
         tracing_subscriber::EnvFilter::from_default_env()
             .add_directive("debug".parse().unwrap())
             .add_directive("foo=trace".parse().unwrap())
@@ -78,8 +78,8 @@ async fn override_with_env_var() {
 
     // sanity check that our made-up filter is not the same as the real one
     assert_ne!(
-        config.build_tracing_filter().unwrap().to_string(),
-        TRACING_FILTER.to_string()
+        config.tracing_env_filter().unwrap().to_string(),
+        TRACING_ENV_FILTER.to_string()
     );
 
     // replace the var and check that it is now what we expect
@@ -87,7 +87,7 @@ async fn override_with_env_var() {
     {
         temp_env::async_with_vars(
             [(
-                format!("{}_{}", ConfigBuilder::ENV_VAR_PREFIX, "TRACING_FILTER"),
+                format!("{}_{}", ConfigBuilder::ENV_VAR_PREFIX, "LOG_LEVEL"),
                 Some("debug, foo=trace"),
             )],
             check(),
@@ -97,8 +97,8 @@ async fn override_with_env_var() {
         async fn check() {
             let config = TestApp::new().await.config;
             assert_eq!(
-                config.build_tracing_filter().unwrap().to_string(),
-                TRACING_FILTER.to_string()
+                config.tracing_env_filter().unwrap().to_string(),
+                TRACING_ENV_FILTER.to_string()
             );
         }
     }
@@ -134,7 +134,7 @@ async fn loads_dotenv() {
 async fn file_default() {
     let config = TestApp::new().await.config;
     assert_eq!(
-        config.tracing_filter,
+        config.log_level,
         ["info", "wasmatic=debug", "just_to_confirm_test=debug"]
     );
 }

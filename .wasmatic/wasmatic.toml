@@ -5,4 +5,7 @@
 # the port on which the server will listen. Default is 8000
 # port = 9000
 
-tracing_filter = ["info", "wasmatic=debug"]
+# The log level, in the format of tracing directives.
+# See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives for more information
+# When overriding this in the environment, use a comma-separated list in a single string, e.g. "info, wasmatic=debug"
+log_level = ["info", "wasmatic=debug"]
