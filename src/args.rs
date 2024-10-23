@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::path::PathBuf;
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 pub struct CliArgs {
     /// The home directory of the application, where the wasmatic.toml configuration file is stored

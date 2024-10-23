@@ -6,7 +6,7 @@ use wasmatic::{args::CliArgs, config::ConfigBuilder};
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CliArgs::parse();
-    let config = ConfigBuilder::new(args)?.build().await?;
+    let config = ConfigBuilder::new(args).build().await?;
 
     // setup tracing
     tracing_subscriber::registry()
