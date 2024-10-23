@@ -8,10 +8,10 @@ use crate::args::CliArgs;
 #[derive(Debug)]
 pub struct Config {
     /// The port to bind the server to.
-    /// Default is [`defaults::PORT`]
+    /// Default is `8000`
     pub port: u32,
     /// The log-level to use, in the format of [tracing directives](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives).
-    /// Default is [`defaults::LOG_LEVEL`]
+    /// Default is `["info"]`
     pub log_level: Vec<String>,
 }
 
