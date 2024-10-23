@@ -111,7 +111,8 @@ async fn loads_dotenv() {
     let _ = TestApp::new_with_dotenv().await;
 
     // if we try to check against meaningful env vars, we may conflict with user settings
-    // so just check for a dummy value
+    // so just check for a dummy value since this test only cares about the dotenv file itself
+    // coverage of environment var overrides is in other tests with temp_env scopes
     assert_eq!(
         std::env::var(format!(
             "{}_RANDOM_TEST_VALUE",
@@ -120,6 +121,12 @@ async fn loads_dotenv() {
         .unwrap(),
         "hello world"
     );
+
+    // unset the value, just to play nice, though this could be a race condition (see docs on remove_var)
+    std::env::remove_var(format!(
+        "{}_RANDOM_TEST_VALUE",
+        ConfigBuilder::ENV_VAR_PREFIX
+    ))
 }
 
 // tests that we can override defaults with config-file vars

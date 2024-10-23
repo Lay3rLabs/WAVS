@@ -51,7 +51,12 @@ impl TestApp {
     }
 
     async fn inner_new(cli_args: CliArgs) -> Self {
-        let config = ConfigBuilder::new(cli_args).build().await.unwrap();
+        let ignore_dotenv_file = cli_args.dotenv.is_none();
+
+        let mut builder = ConfigBuilder::new(cli_args);
+        builder.ignore_dotenv_file = ignore_dotenv_file;
+
+        let config = builder.build().await.unwrap();
 
         init(&config).await;
 
