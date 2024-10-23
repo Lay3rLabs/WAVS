@@ -54,11 +54,6 @@ impl ConfigBuilder {
             None => std::env::current_dir()?.join(".env"),
         };
 
-        println!(
-            "dotenv_path: {:?}, exists: {}",
-            dotenv_path,
-            dotenv_path.exists()
-        );
         if dotenv_path.exists() {
             if let Err(e) = dotenvy::from_path(dotenv_path) {
                 bail!("Error loading dotenv file: {}", e);
