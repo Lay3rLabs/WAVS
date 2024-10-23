@@ -55,11 +55,11 @@ impl CAStorage for FileStorage {
             // Question: do we need file locks?
             std::fs::write(&path, data)?;
         }
-        return Ok(digest);
+        Ok(digest)
     }
 
     fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError> {
-        let path = self.digest_to_path(&digest)?;
+        let path = self.digest_to_path(digest)?;
         if !path.exists() {
             return Err(CAStorageError::NotFound(digest.clone()));
         }

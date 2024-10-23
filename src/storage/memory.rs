@@ -32,7 +32,7 @@ impl CAStorage for MemoryStorage {
         if !self.data.contains_key(&digest) {
             self.data.insert(digest.clone(), data.to_vec());
         }
-        return Ok(digest);
+        Ok(digest)
     }
 
     fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError> {

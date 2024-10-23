@@ -1,2 +1,4 @@
 mod digest;
-mod storage;
+pub mod storage;
+
+pub use digest::Digest;
