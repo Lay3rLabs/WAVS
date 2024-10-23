@@ -44,7 +44,7 @@ impl ConfigBuilder {
         Self { args }
     }
 
-    pub async fn build(&self) -> Result<Config> {
+    pub async fn build(self) -> Result<Config> {
         self.load_env()?;
 
         let config = tokio::fs::read_to_string(&self.filepath()?).await?;
