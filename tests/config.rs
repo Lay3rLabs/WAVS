@@ -3,9 +3,10 @@ use helpers::TestApp;
 use std::{path::PathBuf, sync::LazyLock};
 use wasmatic::{args::CliArgs, config::ConfigBuilder};
 
+// this test is confiming the user overrides for filepath work as expected
+// but it does not test the complete list of fallbacks past those first few common cases
+// because the complete list will change depending on the platform, global env vars, etc.
 #[tokio::test]
-// this test is essentially confiming the user overrides work as expected
-// there are additional fallback directories to try in the list depending on the platform, global env vars, etc.
 async fn config_filepath() {
     fn filepaths(home_dir: Option<PathBuf>) -> Vec<PathBuf> {
         ConfigBuilder::new(CliArgs {
@@ -63,9 +64,9 @@ async fn config_filepath() {
     );
 }
 
-#[tokio::test]
 // tests that we can override file settings with env vars
 // and that env filter with comma-delimited values and spaces works
+#[tokio::test]
 async fn override_with_env_var() {
     static TRACING_FILTER: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
         tracing_subscriber::EnvFilter::from_default_env()
@@ -75,32 +76,36 @@ async fn override_with_env_var() {
 
     let config = TestApp::new().await.config;
 
-    // sanity check
+    // sanity check that our made-up filter is not the same as the real one
     assert_ne!(
         config.build_tracing_filter().unwrap().to_string(),
         TRACING_FILTER.to_string()
     );
 
-    async fn check() {
-        let config = TestApp::new().await.config;
-        assert_eq!(
-            config.build_tracing_filter().unwrap().to_string(),
-            TRACING_FILTER.to_string()
-        );
-    }
+    // replace the var and check that it is now what we expect
+    // needs to be in an async function
+    {
+        temp_env::async_with_vars(
+            [(
+                format!("{}_{}", ConfigBuilder::ENV_VAR_PREFIX, "TRACING_FILTER"),
+                Some("debug, foo=trace"),
+            )],
+            check(),
+        )
+        .await;
 
-    temp_env::async_with_vars(
-        [(
-            format!("{}_{}", ConfigBuilder::ENV_VAR_PREFIX, "TRACING_FILTER"),
-            Some("debug, foo=trace"),
-        )],
-        check(),
-    )
-    .await;
+        async fn check() {
+            let config = TestApp::new().await.config;
+            assert_eq!(
+                config.build_tracing_filter().unwrap().to_string(),
+                TRACING_FILTER.to_string()
+            );
+        }
+    }
 }
 
-#[tokio::test]
 // tests that we load a dotenv file correctly
+#[tokio::test]
 async fn loads_dotenv() {
     let original_port = TestApp::new().await.config.port;
     // sanity check
@@ -114,8 +119,8 @@ async fn loads_dotenv() {
     assert_eq!(config.port, 1234567);
 }
 
+// tests that we can override defaults with config-file vars
 #[tokio::test]
-// just tests that we can override defaults with file settings
 async fn file_default() {
     let config = TestApp::new().await.config;
     assert_eq!(
