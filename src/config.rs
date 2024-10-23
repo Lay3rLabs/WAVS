@@ -60,15 +60,15 @@ impl ConfigBuilder {
             pub log_level: Option<Vec<String>>,
         }
 
-        fn parse_array_str(s: impl AsRef<str>) -> Vec<String> {
-            s.as_ref()
-                .split(',')
-                .map(|x| x.trim().to_string())
-                .collect()
-        }
-
         impl From<&CliArgs> for OptionalConfig {
             fn from(args: &CliArgs) -> Self {
+                fn parse_array_str(s: impl AsRef<str>) -> Vec<String> {
+                    s.as_ref()
+                        .split(',')
+                        .map(|x| x.trim().to_string())
+                        .collect()
+                }
+
                 Self {
                     port: args.port,
                     log_level: args.log_level.as_ref().map(parse_array_str),
