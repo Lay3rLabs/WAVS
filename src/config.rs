@@ -4,7 +4,12 @@ use std::path::PathBuf;
 
 use crate::args::CliArgs;
 
-/// The config struct we use in the application
+/// The fully parsed and validated config struct we use in the application
+/// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
+///
+/// 1. cli args
+/// 2. environment variables
+/// 3. config file
 #[derive(Debug)]
 pub struct Config {
     /// The port to bind the server to.
