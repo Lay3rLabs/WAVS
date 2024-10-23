@@ -4,6 +4,9 @@ use sha2::{Digest as Sha2Digest, Sha256};
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
+// TODO: make this only one algorithm, so it is clear.
+// Otherwise we have multiple digests for the same data
+
 /// Computed content digest.
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Digest {
