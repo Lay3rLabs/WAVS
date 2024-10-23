@@ -41,7 +41,11 @@ pub enum CAStorageError {
 
     /// An error occurred doing IO in the storage implementation
     #[error("IO error: {0}")]
-    IO(String),
+    IO(#[from] std::io::Error),
+
+    /// Other lower-level storage error specific to the storage implementation
+    #[error("Storage error: {0}")]
+    Other(String),
 }
 
 /// Trait for normal KV-Storage. Each key can be updated and store any data.
