@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -44,19 +44,31 @@ impl ConfigBuilder {
 
     pub async fn build(&self) -> Result<Config> {
         // try to load dotenv first, since it may affect env vars for filepaths
-        let dotenv_path = self
-            .args
-            .dotenv
-            .clone()
-            .unwrap_or(std::env::current_dir()?.join(".env"));
-        if dotenv_path.exists() {
-            match dotenvy::from_path(dotenv_path) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Error loading dotenv file: {}, continuing anyway", e);
+        let dotenv_path = match &self.args.dotenv {
+            Some(path) => {
+                if !path.exists() {
+                    bail!("dotenv file at {} does not exist", path.display());
                 }
+                path.clone()
+            }
+            None => std::env::current_dir()?.join(".env"),
+        };
+
+        println!(
+            "dotenv_path: {:?}, exists: {}",
+            dotenv_path,
+            dotenv_path.exists()
+        );
+        if dotenv_path.exists() {
+            if let Err(e) = dotenvy::from_path(dotenv_path) {
+                bail!("Error loading dotenv file: {}", e);
             }
         }
+
+        println!(
+            "dotenv loaded: {}",
+            std::env::var("MATIC_PORT").unwrap_or_else(|_| "not set".to_string())
+        );
 
         let config = tokio::fs::read_to_string(&self.filepath()?).await?;
         let mut config: ConfigFile = toml::from_str(&config)?;

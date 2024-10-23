@@ -25,18 +25,12 @@ impl TestApp {
                     .unwrap()
                     .join(ConfigBuilder::DIRNAME),
             ),
-            dotenv: Some(
-                PathBuf::from(file!())
-                    .parent()
-                    .unwrap()
-                    .join(ConfigBuilder::DIRNAME)
-                    .join("testdotenv"),
-            ),
+            dotenv: None,
         })
         .await
     }
 
-    pub async fn new_no_dotenv() -> Self {
+    pub async fn new_with_dotenv() -> Self {
         // get the path relative from this source file, regardless of where we run the test from
         Self::inner_new(CliArgs {
             home_dir: Some(
@@ -45,7 +39,13 @@ impl TestApp {
                     .unwrap()
                     .join(ConfigBuilder::DIRNAME),
             ),
-            dotenv: None,
+            dotenv: Some(
+                PathBuf::from(file!())
+                    .parent()
+                    .unwrap()
+                    .join(ConfigBuilder::DIRNAME)
+                    .join("testdotenv"),
+            ),
         })
         .await
     }
