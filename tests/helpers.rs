@@ -16,9 +16,9 @@ pub struct TestApp {
 }
 
 impl TestApp {
-    pub async fn new() -> Self {
+    pub fn default_cli_args() -> CliArgs {
         // get the path relative from this source file, regardless of where we run the test from
-        Self::inner_new(CliArgs {
+        CliArgs {
             home_dir: Some(
                 PathBuf::from(file!())
                     .parent()
@@ -34,31 +34,16 @@ impl TestApp {
                     .join(ConfigBuilder::DIRNAME)
                     .join("non-existing-testdotenv"),
             ),
-        })
-        .await
+            port: None,
+            log_level: None,
+        }
     }
 
-    pub async fn new_with_dotenv() -> Self {
-        // get the path relative from this source file, regardless of where we run the test from
-        Self::inner_new(CliArgs {
-            home_dir: Some(
-                PathBuf::from(file!())
-                    .parent()
-                    .unwrap()
-                    .join(ConfigBuilder::DIRNAME),
-            ),
-            dotenv: Some(
-                PathBuf::from(file!())
-                    .parent()
-                    .unwrap()
-                    .join(ConfigBuilder::DIRNAME)
-                    .join("testdotenv"),
-            ),
-        })
-        .await
+    pub async fn new() -> Self {
+        Self::new_with_args(Self::default_cli_args()).await
     }
 
-    async fn inner_new(cli_args: CliArgs) -> Self {
+    pub async fn new_with_args(cli_args: CliArgs) -> Self {
         let config = ConfigBuilder::new(cli_args).build().await.unwrap();
 
         init(&config).await;

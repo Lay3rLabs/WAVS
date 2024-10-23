@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use figment::{providers::Format, Figment};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -10,7 +11,7 @@ use crate::args::CliArgs;
 /// 1. cli args
 /// 2. environment variables
 /// 3. config file
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     /// The port to bind the server to.
     /// Default is `8000`
@@ -20,24 +21,21 @@ pub struct Config {
     pub log_level: Vec<String>,
 }
 
+/// Default values for the config struct
+/// these are only used to fill in holes after all the parsing and loading is done
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            port: 8000,
+            log_level: vec!["info".to_string()],
+        }
+    }
+}
+
 /// The builder we use to build Config
 #[derive(Debug)]
 pub struct ConfigBuilder {
     pub args: CliArgs,
-}
-
-/// No need for this to be public, it's an intermediate struct
-/// for config file which may have optional values
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct ConfigFile {
-    pub port: Option<u32>,
-    pub log_level: Option<Vec<String>>,
-}
-
-/// Defaults for config values that are optional
-pub mod defaults {
-    pub const PORT: u32 = 8000;
-    pub const LOG_LEVEL: [&str; 1] = ["info"];
 }
 
 impl ConfigBuilder {
@@ -52,28 +50,51 @@ impl ConfigBuilder {
     pub async fn build(self) -> Result<Config> {
         self.load_env()?;
 
-        let config = tokio::fs::read_to_string(&self.filepath()?).await?;
-        let mut config: ConfigFile = toml::from_str(&config)?;
-
-        if let Some(port) = Self::env_var("PORT")
-            .map(|port| port.parse::<u32>())
-            .transpose()?
-        {
-            config.port = Some(port);
+        // internal-only optional config struct used to hold values
+        // for converting from cli/env vars to full config
+        #[derive(Debug, Serialize, Deserialize)]
+        struct OptionalConfig {
+            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+            pub port: Option<u32>,
+            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+            pub log_level: Option<Vec<String>>,
         }
 
-        if let Some(log_level) = Self::env_var("LOG_LEVEL")
-            .map(|filter| filter.split(',').map(|x| x.trim().to_string()).collect())
-        {
-            config.log_level = Some(log_level);
+        fn parse_array_str(s: impl AsRef<str>) -> Vec<String> {
+            s.as_ref()
+                .split(',')
+                .map(|x| x.trim().to_string())
+                .collect()
         }
 
-        Ok(Config {
-            port: config.port.unwrap_or(defaults::PORT),
-            log_level: config
-                .log_level
-                .unwrap_or(defaults::LOG_LEVEL.iter().map(|x| x.to_string()).collect()),
-        })
+        impl From<&CliArgs> for OptionalConfig {
+            fn from(args: &CliArgs) -> Self {
+                Self {
+                    port: args.port,
+                    log_level: args.log_level.as_ref().map(parse_array_str),
+                }
+            }
+        }
+
+        // first parse env_config into cli_args (they use the same primitive types)
+        // then convert to OptionalConfig so we can merge it into our real config
+        let env_config = OptionalConfig::from(
+            &Figment::new()
+                .merge(figment::providers::Env::prefixed("MATIC_"))
+                .extract()?,
+        );
+
+        // load cli args into a struct we can merge into the config
+        let cli_config = OptionalConfig::from(&self.args);
+
+        let config: Config = Figment::new()
+            .merge(figment::providers::Toml::file(self.filepath()?))
+            .merge(figment::providers::Serialized::defaults(env_config))
+            .merge(figment::providers::Serialized::defaults(cli_config))
+            .join(figment::providers::Serialized::defaults(Config::default()))
+            .extract()?;
+
+        Ok(config)
     }
 
     fn load_env(&self) -> Result<()> {

@@ -1,7 +1,10 @@
 mod helpers;
 use helpers::TestApp;
 use std::{path::PathBuf, sync::LazyLock};
-use wasmatic::{args::CliArgs, config::ConfigBuilder};
+use wasmatic::{
+    args::CliArgs,
+    config::{Config, ConfigBuilder},
+};
 
 // this test is confiming the user overrides for filepath work as expected
 // but it does not test the complete list of fallbacks past those first few common cases
@@ -12,6 +15,7 @@ async fn config_filepath() {
         ConfigBuilder::new(CliArgs {
             home_dir,
             dotenv: None,
+            ..TestApp::default_cli_args()
         })
         .filepaths_to_try()
     }
@@ -64,22 +68,33 @@ async fn config_filepath() {
     );
 }
 
-// tests that we can override file settings with env vars
-// and that env filter with comma-delimited values and spaces works
+// tests that default values are set correctly
 #[tokio::test]
-async fn override_with_env_var() {
-    static TRACING_ENV_FILTER: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
+async fn config_default() {
+    // port is *not* set in the test toml file
+    assert_eq!(TestApp::new().await.config.port, Config::default().port);
+}
+
+// tests that we can configure array-strings, and it overrides as expected
+#[tokio::test]
+async fn config_array_string() {
+    static TRACING_ENV_FILTER_ENV: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
         tracing_subscriber::EnvFilter::from_default_env()
             .add_directive("debug".parse().unwrap())
             .add_directive("foo=trace".parse().unwrap())
     });
+    static TRACING_ENV_FILTER_CLI: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
+        tracing_subscriber::EnvFilter::from_default_env()
+            .add_directive("trace".parse().unwrap())
+            .add_directive("bar=debug".parse().unwrap())
+    });
 
     let config = TestApp::new().await.config;
 
-    // sanity check that our made-up filter is not the same as the real one
-    assert_ne!(
-        config.tracing_env_filter().unwrap().to_string(),
-        TRACING_ENV_FILTER.to_string()
+    // sanity check that our log_level was correctly loaded from file
+    assert_eq!(
+        config.log_level,
+        ["info", "wasmatic=debug", "just_to_confirm_test=debug"]
     );
 
     // replace the var and check that it is now what we expect
@@ -98,7 +113,17 @@ async fn override_with_env_var() {
             let config = TestApp::new().await.config;
             assert_eq!(
                 config.tracing_env_filter().unwrap().to_string(),
-                TRACING_ENV_FILTER.to_string()
+                TRACING_ENV_FILTER_ENV.to_string()
+            );
+
+            let mut cli_args = TestApp::default_cli_args();
+            cli_args.log_level = Some(TRACING_ENV_FILTER_CLI.to_string());
+
+            let config = TestApp::new_with_args(cli_args).await.config;
+
+            assert_eq!(
+                config.tracing_env_filter().unwrap().to_string(),
+                TRACING_ENV_FILTER_CLI.to_string()
             );
         }
     }
@@ -106,11 +131,20 @@ async fn override_with_env_var() {
 
 // tests that we load a dotenv file correctly, if specified in cli args
 #[tokio::test]
-async fn loads_dotenv() {
-    // careful! once we load the dotenv file, that's it, other tests may see it
-    let _ = TestApp::new_with_dotenv().await;
+async fn config_dotenv() {
+    let mut cli_args = TestApp::default_cli_args();
+    // this points to a real file
+    cli_args.dotenv = Some(
+        PathBuf::from(file!())
+            .parent()
+            .unwrap()
+            .join(ConfigBuilder::DIRNAME)
+            .join("testdotenv"),
+    );
 
-    // if we try to check against meaningful env vars, we may conflict with user settings
+    let _ = TestApp::new_with_args(cli_args).await;
+
+    // if we try to check against meaningful env vars, we may conflict with other tests and/or user settings
     // so just check for a dummy value since this test only cares about the dotenv file itself
     // coverage of environment var overrides is in other tests with temp_env scopes
     assert_eq!(
@@ -127,14 +161,4 @@ async fn loads_dotenv() {
         "{}_RANDOM_TEST_VALUE",
         ConfigBuilder::ENV_VAR_PREFIX
     ))
-}
-
-// tests that we can override defaults with config-file vars
-#[tokio::test]
-async fn file_default() {
-    let config = TestApp::new().await.config;
-    assert_eq!(
-        config.log_level,
-        ["info", "wasmatic=debug", "just_to_confirm_test=debug"]
-    );
 }
