@@ -1,176 +1,27 @@
-# wasmatic
+# Wasmatic
 
-**PRE-PRODUCTION PROTOTYPE, USE WITH CARE**
+This is an AVS operator node, that is quickly configurable to easily serve
+logic for many AVSes, each one sandboxed from each other and the node's
+operating system.
 
-### Build and run instructions
+To acheive this sandboxing, we use WASI components, with limited access to system resources.
 
-Run `cargo run up` to start the Wasmatic server node with the default configuration options.
-By default, the operator API will be listen on `http://0.0.0.0:8081`.
+## Persona
 
+This node should be run by an "Operator". This is very much like a "validator" on a PoS chain.
+It receives commitments (stake) on the chain, which provide it with voting power, and it performs
+some off-chain actions, which are submitted on-chain and verified.
 
-### Authoring new applicatons
+For demo purposes, we expose the HTTP API to anyone hacking on applications. However, in any
+realistic scenario, each node is managed by an operator, which must explicitly opt-in to running
+the AVS software, and then register their intention on-chain, in order to collect commitments.
 
-See [authoring components doc](AUTHORING_COMPONENTS.md).
+The AVS team, which will code all the WASI components, and deploy (and write?) the AVS contracts
+on-chain should be completely independent of the operators for a clean separation of concerns,
+and thus have no access to their system.
 
-### Using the Operator API
+## Architecture
 
-#### List active applications
+Start by looking at this overview diagram of the various components of the system
 
-`GET http://0.0.0.0:8081/app`
-
-```bash
-curl http://0.0.0.0:8081/app | jq .
-```
-
-#### Add an application
-
-`POST http://0.0.0.0:8081/app`
-
-with `Content-Type: application/json` request header and a body of the form:
-
-```json
-{
-  "name": "test-btc",
-  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
-  "trigger": {
-    "cron": {
-      "schedule": "1/15 * * * * *"
-    }
-  },
-  "permissions": {},
-  "envs": [
-    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
-  ],
-  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
-}
-```
-
-```bash
-read -d '' BODY << "EOF"
-{
-  "name": "test-btc",
-  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
-  "trigger": {
-    "cron": {
-      "schedule": "1/15 * * * * *"
-    }
-  },
-  "permissions": {},
-  "envs": [
-    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
-  ],
-  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
-}
-EOF
-
-curl -X POST -H "Content-Type: application/json" http://0.0.0.0:8081/app -d "$BODY"
-```
-
-This example will register a new application with name of `test1` that uses a CRON trigger that
-executes once every 15 seconds. The `wasmUrl` is the download URL for the Wasm component. In this case,
-the provided Wasm will query for the current `BTCUSD` by making an outbound HTTP request and returning
-the result. Also, computes the average price over past minute and past hour. It uses the app file system
-cache for state. Currently, the response is logged out in debug to the console.
-
-As another example, the request body below will register a new application with name `square-queue` that uses a `QUEUE` trigger that polls the lay3r sdk for tasks every 5 seconds.
-
-```json
-{
-  "name": "square-queue",
-  "digest": "sha256:143368e0a7b9331c3df5c74c84e4ae36922a7e2950144af983858b2183934c93",
-  "trigger": {
-    "queue": {
-      "taskQueueAddr": "layer1t9pkt8r25yml6cmhfelx8j9reelthwgml2mqdf53wkvp0wca6sys4vtlv3",
-      "hdIndex": 0,
-      "pollInterval": 5
-    }
-  },
-  "permissions": {},
-  "envs": [],
-  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/square/square.wasm"
-}
-```
-
-```bash
-read -d '' BODY << "EOF"
-{
-  "name": "test-btc",
-  "digest": "sha256:486e42639144dbd48364fb0ec68846bfc0b45de5777e5e377f5496d91b9abec3",
-  "trigger": {
-    "cron": {
-      "schedule": "1/15 * * * * *"
-    }
-  },
-  "permissions": {},
-  "envs": [
-    ["API_KEY", "x-cg-demo-api-key=CG-PsTvxDqXZP3RD4TWNxPFamcW"]
-  ],
-  "wasmUrl": "https://raw.githubusercontent.com/macovedj/test/main/btc-avg/btc_avg.wasm"
-}
-EOF
-
-curl -X POST -H "Content-Type: application/json" http://0.0.0.0:8081/app -d "$BODY"
-```
-
-#### Upload a wasm endpoint
-
-If the wasm binary that you'd like to register is not behind a url, you can upload it via the `/upload` endpoint before you register, and then omit the `wasmUrl` field in your request body, as exemplified below.
-
-```curl -X POST "localhost:8081/upload" --data-binary "@./path/to/binary.wasm"```
-#### Remove an application
-
-`DELETE http://0.0.0.0:8081/app`
-
-with `Content-Type: application/json` request header and a body of the form:
-
-```json
-{"apps": ["test-btc"]}
-```
-
-This will deregister the application and remove the application and associated data.
-
-```bash
-BODY='{"apps": ["test-btc"]}'
-curl -X DELETE -H "Content-Type: application/json" http://0.0.0.0:8081/app -d "$BODY"
-```
-
-#### Test an application
-
-`POST http://0.0.0.0:8081/test`
-
-After registering a component, you can manually trigger it with this endpoint with the name it was registered with and an optional input
-
-bitcoin avarage price example
-```json
-{
-  "name": "test-btc"
-}
-```
-
-```
-curl --request POST \
-  --url http://localhost:8081/test \
-  --header 'Content-Type: application/json' \
-  --data '{
-  "name": "test-btc",
-  "input": "foo"
-}'
-```
-
-square example
-```json
-{
-  "name": "square-queue",
-  "input": {"x": 9 }
-}
-```
-
-```
-curl --request POST \
-  --url http://localhost:8081/test \
-  --header 'Content-Type: application/json' \
-  --data '{
-  "name": "square-queue",
-  "input": {"x": 9 }
-}'
-```
+![Architecture Overview](./docs/images/ArchOverview.svg)
