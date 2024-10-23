@@ -108,11 +108,12 @@ async fn override_with_env_var() {
 #[tokio::test]
 async fn loads_dotenv() {
     let original_port = TestApp::new().await.config.port;
-    // sanity check
+    // sanity check that we haven't already loaded it
     assert_ne!(original_port, 1234567);
 
     // careful! once we load the dotenv file, that's it, other tests may see it
     // which is why the ONLY place in tests where we load the testdotenv is here
+    // and no other tests care about the change in port
     // we could try to remove_var but there's no guarantee that we won't hit a race condition
     // see docs on std::env::remove_var for more info
     let config = TestApp::new_with_dotenv().await.config;
