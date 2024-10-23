@@ -24,4 +24,16 @@ pub struct CliArgs {
     /// See example config file for more info
     #[arg(long)]
     pub log_level: Option<String>,
+
+    /// The host to bind the server to
+    /// See example config file for more info
+    pub host: Option<String>,
+
+    /// The directory to store all internal data files
+    /// See example config file for more info
+    pub data: Option<PathBuf>,
+
+    /// The allowed cors origins
+    /// See example config file for more info
+    pub cors_allowed_origins: Option<String>,
 }

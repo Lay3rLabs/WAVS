@@ -36,6 +36,9 @@ impl TestApp {
             ),
             port: None,
             log_level: None,
+            host: None,
+            data: None,
+            cors_allowed_origins: None,
         }
     }
 

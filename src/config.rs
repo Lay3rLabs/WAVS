@@ -19,6 +19,15 @@ pub struct Config {
     /// The log-level to use, in the format of [tracing directives](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives).
     /// Default is `["info"]`
     pub log_level: Vec<String>,
+    /// The host to bind the server to
+    /// Default is `localhost`
+    pub host: String,
+    /// The directory to store all internal data files
+    /// Default is `/var/wasmatic`
+    pub data: PathBuf,
+    /// The allowed cors origins
+    /// Default is empty
+    pub cors_allowed_origins: Vec<String>,
 }
 
 /// Default values for the config struct
@@ -28,6 +37,9 @@ impl Default for Config {
         Self {
             port: 8000,
             log_level: vec!["info".to_string()],
+            host: "localhost".to_string(),
+            data: PathBuf::from("/var/wasmatic"),
+            cors_allowed_origins: Vec::new(),
         }
     }
 }
@@ -58,6 +70,12 @@ impl ConfigBuilder {
             pub port: Option<u32>,
             #[serde(skip_serializing_if = "::std::option::Option::is_none")]
             pub log_level: Option<Vec<String>>,
+            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+            pub host: Option<String>,
+            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+            pub data: Option<PathBuf>,
+            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+            pub cors_allowed_origins: Option<Vec<String>>,
         }
 
         impl From<&CliArgs> for OptionalConfig {
@@ -72,6 +90,22 @@ impl ConfigBuilder {
                 Self {
                     port: args.port,
                     log_level: args.log_level.as_ref().map(parse_array_str),
+                    host: args.host.clone(),
+                    data: args.data.clone(),
+                    cors_allowed_origins: args.cors_allowed_origins.as_ref().map(parse_array_str),
+                }
+            }
+        }
+
+        // not used directly, but rather to ensure we add all possible values
+        impl From<&OptionalConfig> for Config {
+            fn from(optional: &OptionalConfig) -> Self {
+                Self {
+                    port: optional.port.unwrap_or_default(),
+                    log_level: optional.log_level.clone().unwrap_or_default(),
+                    host: optional.host.clone().unwrap_or_default(),
+                    data: optional.data.clone().unwrap_or_default(),
+                    cors_allowed_origins: optional.cors_allowed_origins.clone().unwrap_or_default(),
                 }
             }
         }

@@ -18,7 +18,8 @@ async fn main() -> Result<()> {
         .with(config.tracing_env_filter()?)
         .try_init()?;
 
-    tracing::info!("starting wasmatic on port {}", config.port);
+    tracing::info!("starting wasmatic");
+    tracing::info!("{:#?}", config);
 
     Ok(())
 }
