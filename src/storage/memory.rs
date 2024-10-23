@@ -28,7 +28,7 @@ impl CAStorage for MemoryStorage {
     }
 
     fn set_data(&mut self, data: &[u8]) -> Result<Digest, CAStorageError> {
-        let digest = Digest::new_sha_256(data);
+        let digest = Digest::new(data);
         if !self.data.contains_key(&digest) {
             self.data.insert(digest.clone(), data.to_vec());
         }

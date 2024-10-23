@@ -30,7 +30,7 @@ impl CAStorage for FileStorage {
 
     /// look for file by key and only write if not present
     fn set_data(&mut self, data: &[u8]) -> Result<Digest, CAStorageError> {
-        let digest = Digest::new_sha_256(data);
+        let digest = Digest::new(data);
         let path = self.data_dir.join(digest.to_string());
         if !path.exists() {
             // Question: do we need file locks?
