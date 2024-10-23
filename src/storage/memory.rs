@@ -60,4 +60,10 @@ mod tests {
         let store = MemoryStorage::new();
         castorage::test_reset(store);
     }
+
+    #[test]
+    fn test_multiple_keys() {
+        let store = MemoryStorage::new();
+        castorage::test_multiple_keys(store);
+    }
 }

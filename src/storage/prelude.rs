@@ -42,14 +42,9 @@ pub enum CAStorageError {
     /// An error occurred doing IO in the storage implementation
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
-
-    /// Other lower-level storage error specific to the storage implementation
-    #[error("Storage error: {0}")]
-    Other(String),
 }
 
-/// Trait for normal KV-Storage. Each key can be updated and store any data.
-/// You can wrap this higher level for type-safe access.
-/// Question: should we just use or extend https://docs.rs/cosmwasm-std/latest/cosmwasm_std/trait.Storage.html
-/// So we can use storage-plus wrappers?
-pub trait KVStorage: Send + Sync {}
+// TODO
+// Trait for normal KV-Storage. Each key can be updated and store any data.
+// You can wrap this higher level for type-safe access.
+// pub trait KVStorage: Send + Sync {}
