@@ -49,24 +49,7 @@ impl ConfigBuilder {
     }
 
     pub async fn build(&self) -> Result<Config> {
-        if !self.ignore_dotenv_file {
-            // try to load dotenv first, since it may affect env vars for filepaths
-            let dotenv_path = match &self.args.dotenv {
-                Some(path) => {
-                    if !path.exists() {
-                        bail!("dotenv file at {} does not exist", path.display());
-                    }
-                    path.clone()
-                }
-                None => std::env::current_dir()?.join(".env"),
-            };
-
-            if dotenv_path.exists() {
-                if let Err(e) = dotenvy::from_path(dotenv_path) {
-                    bail!("Error loading dotenv file: {}", e);
-                }
-            }
-        }
+        self.load_env()?;
 
         let config = tokio::fs::read_to_string(&self.filepath()?).await?;
         let mut config: ConfigFile = toml::from_str(&config)?;
@@ -90,6 +73,29 @@ impl ConfigBuilder {
                 .log_level
                 .unwrap_or(defaults::LOG_LEVEL.iter().map(|x| x.to_string()).collect()),
         })
+    }
+
+    fn load_env(&self) -> Result<()> {
+        if !self.ignore_dotenv_file {
+            // try to load dotenv first, since it may affect env vars for filepaths
+            let dotenv_path = match &self.args.dotenv {
+                Some(path) => {
+                    if !path.exists() {
+                        bail!("dotenv file at {} does not exist", path.display());
+                    }
+                    path.clone()
+                }
+                None => std::env::current_dir()?.join(".env"),
+            };
+
+            if dotenv_path.exists() {
+                if let Err(e) = dotenvy::from_path(dotenv_path) {
+                    bail!("Error loading dotenv file: {}", e);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn env_var(name: &str) -> Option<String> {
