@@ -60,11 +60,6 @@ impl ConfigBuilder {
             }
         }
 
-        println!(
-            "dotenv loaded: {}",
-            std::env::var("MATIC_PORT").unwrap_or_else(|_| "not set".to_string())
-        );
-
         let config = tokio::fs::read_to_string(&self.filepath()?).await?;
         let mut config: ConfigFile = toml::from_str(&config)?;
 
