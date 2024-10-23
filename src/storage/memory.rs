@@ -42,3 +42,22 @@ impl CAStorage for MemoryStorage {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::storage::tests::castorage;
+
+    #[test]
+    fn test_set_and_get() {
+        let store = MemoryStorage::new();
+        castorage::test_set_and_get(store);
+    }
+
+    #[test]
+    fn test_reset() {
+        let store = MemoryStorage::new();
+        castorage::test_reset(store);
+    }
+}
