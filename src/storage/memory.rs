@@ -1,16 +1,17 @@
 use std::collections::BTreeMap;
+use std::sync::RwLock;
 
 use super::prelude::*;
 use crate::digest::Digest;
 
 pub struct MemoryStorage {
-    data: BTreeMap<Digest, Vec<u8>>,
+    data: RwLock<BTreeMap<Digest, Vec<u8>>>,
 }
 
 impl MemoryStorage {
     pub fn new() -> Self {
         MemoryStorage {
-            data: BTreeMap::new(),
+            data: RwLock::new(BTreeMap::new()),
         }
     }
 }
@@ -22,21 +23,24 @@ impl Default for MemoryStorage {
 }
 
 impl CAStorage for MemoryStorage {
-    fn reset(&mut self) -> Result<(), CAStorageError> {
-        self.data = BTreeMap::new();
+    fn reset(&self) -> Result<(), CAStorageError> {
+        let mut tree = self.data.write()?;
+        tree.clear();
         Ok(())
     }
 
-    fn set_data(&mut self, data: &[u8]) -> Result<Digest, CAStorageError> {
+    fn set_data(&self, data: &[u8]) -> Result<Digest, CAStorageError> {
         let digest = Digest::new(data);
-        if !self.data.contains_key(&digest) {
-            self.data.insert(digest.clone(), data.to_vec());
+        let mut tree = self.data.write()?;
+        if !tree.contains_key(&digest) {
+            tree.insert(digest.clone(), data.to_vec());
         }
         Ok(digest)
     }
 
     fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError> {
-        match self.data.get(digest) {
+        let tree = self.data.read()?;
+        match tree.get(digest) {
             Some(data) => Ok(data.to_owned()),
             None => Err(CAStorageError::NotFound(digest.clone())),
         }

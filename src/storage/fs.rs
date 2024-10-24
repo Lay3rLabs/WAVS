@@ -40,7 +40,7 @@ impl FileStorage {
 }
 
 impl CAStorage for FileStorage {
-    fn reset(&mut self) -> Result<(), CAStorageError> {
+    fn reset(&self) -> Result<(), CAStorageError> {
         // wipe out and re-create the entire directory
         std::fs::remove_dir_all(&self.data_dir)?;
         std::fs::create_dir_all(&self.data_dir)?;
@@ -48,7 +48,7 @@ impl CAStorage for FileStorage {
     }
 
     /// look for file by key and only write if not present
-    fn set_data(&mut self, data: &[u8]) -> Result<Digest, CAStorageError> {
+    fn set_data(&self, data: &[u8]) -> Result<Digest, CAStorageError> {
         let digest = Digest::new(data);
         let path = self.digest_to_path(&digest)?;
         if !path.exists() {

@@ -23,11 +23,11 @@ use thiserror::Error;
 /// This is what is used for WASM code, stored by hash digest.
 pub trait CAStorage: Send + Sync {
     /// Reset and remove storage data.
-    fn reset(&mut self) -> Result<(), CAStorageError>;
+    fn reset(&self) -> Result<(), CAStorageError>;
 
     /// Stores the given data and returns the digest to look it up later.
     /// If the data was already stored, this is a no-op but still returns the digest with no error.
-    fn set_data(&mut self, data: &[u8]) -> Result<Digest, CAStorageError>;
+    fn set_data(&self, data: &[u8]) -> Result<Digest, CAStorageError>;
 
     /// Looks up the data for a given digest and returns it. If data not present, returns CAStorageError::NotFound(_)
     fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError>;
@@ -42,6 +42,16 @@ pub enum CAStorageError {
     /// An error occurred doing IO in the storage implementation
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
+
+    /// An error occurred doing locking in the storage implementation
+    #[error("Poisoned Lock error")]
+    PoisonedLock,
+}
+
+impl<T> From<std::sync::PoisonError<T>> for CAStorageError {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        CAStorageError::PoisonedLock
+    }
 }
 
 // TODO
