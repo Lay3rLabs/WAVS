@@ -1,4 +1,5 @@
 use crate::digest::Digest;
+use redb::AccessGuard;
 use thiserror::Error;
 
 /*
@@ -61,22 +62,30 @@ pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
 
 // Trait for normal KV-Storage. Each key can be updated and store any data.
 // You can wrap this higher level for type-safe access.
+// This is kind of ugly now, fighting with ReDB types, so only works for ReDB now.
+// It would be nice to extend this to be valid for other storage backends later.
 pub trait KVStorage: Send + Sync {
     /// Stores the given data and returns the digest to look it up later.
     /// If the data was already stored, this is a no-op but still returns the digest with no error.
     fn set<K: Key, V: Value>(
-        &mut self,
+        &self,
         table: Table<K, V>,
-        key: K,
-        value: V,
+        key: K::SelfType<'_>,
+        value: &V::SelfType<'_>,
     ) -> Result<(), KVStorageError>;
 
     /// Looks up the data for a given digest and returns it. If data not present, returns CAStorageError::NotFound(_)
-    fn get<K: Key, V: Value>(
-        &mut self,
+    fn get<K: Key, V: Value + 'static>(
+        &self,
         table: Table<K, V>,
-        key: K,
-    ) -> Result<Option<V::SelfType<'_>>, KVStorageError>;
+        key: K::SelfType<'_>,
+    ) -> Result<Option<AccessGuard<'static, V>>, KVStorageError>;
+
+    fn remove<K: Key, V: Value + 'static>(
+        &self,
+        table: Table<K, V>,
+        key: K::SelfType<'_>,
+    ) -> Result<(), KVStorageError>;
 
     // TODO: add remove, range, etc
 }
