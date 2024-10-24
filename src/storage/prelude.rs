@@ -1,6 +1,10 @@
-use crate::digest::Digest;
-use redb::AccessGuard;
+use redb::{AccessGuard, TypeName};
+use serde::{de::Deserialize, Serialize};
+use std::any::type_name;
+use std::fmt::Debug;
 use thiserror::Error;
+
+use crate::digest::Digest;
 
 /*
   Documenting a design decisions here:
@@ -103,5 +107,45 @@ where
 {
     fn from(e: T) -> Self {
         KVStorageError::ReDB(e.into())
+    }
+}
+
+/// Wrapper type to handle keys and values using bincode serialization
+#[derive(Debug, Clone)]
+pub struct JSON<T>(pub T);
+
+impl<T> Value for JSON<T>
+where
+    T: Debug + Serialize + for<'a> Deserialize<'a>,
+{
+    type SelfType<'a> = T
+    where
+        Self: 'a;
+
+    type AsBytes<'a> = Vec<u8>
+    where
+        Self: 'a;
+
+    fn fixed_width() -> Option<usize> {
+        None
+    }
+
+    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
+    where
+        Self: 'a,
+    {
+        serde_json::from_slice(data).unwrap()
+    }
+
+    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+    where
+        Self: 'a,
+        Self: 'b,
+    {
+        serde_json::to_vec(value).unwrap()
+    }
+
+    fn type_name() -> TypeName {
+        TypeName::new(&format!("JSON<{}>", type_name::<T>()))
     }
 }
