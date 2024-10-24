@@ -21,6 +21,7 @@ figment = { version = "0.10.19", features = ["toml", "env"] }
 sha2 = "0.10.8"
 hex = "0.4.3"
 thiserror = "1.0.42"
+redb = { version = "2.1" }
 
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }

@@ -19,6 +19,8 @@ use thiserror::Error;
   stuff sync and wrap it at a higher-level, where we enter the engine (from http request or triggers).
 */
 
+// TODO: make multi-thread safe - remove &mut by wrapping internally with Arc / RwLock
+
 /// Trait for content-addressable storage. With immutible data on one key.
 /// This is what is used for WASM code, stored by hash digest.
 pub trait CAStorage: Send + Sync {
@@ -54,7 +56,43 @@ impl<T> From<std::sync::PoisonError<T>> for CAStorageError {
     }
 }
 
-// TODO
+pub use redb::{Key, Value};
+pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
+
 // Trait for normal KV-Storage. Each key can be updated and store any data.
 // You can wrap this higher level for type-safe access.
-// pub trait KVStorage: Send + Sync {}
+pub trait KVStorage: Send + Sync {
+    /// Stores the given data and returns the digest to look it up later.
+    /// If the data was already stored, this is a no-op but still returns the digest with no error.
+    fn set<K: Key, V: Value>(
+        &mut self,
+        table: Table<K, V>,
+        key: K,
+        value: V,
+    ) -> Result<(), KVStorageError>;
+
+    /// Looks up the data for a given digest and returns it. If data not present, returns CAStorageError::NotFound(_)
+    fn get<K: Key, V: Value>(
+        &mut self,
+        table: Table<K, V>,
+        key: K,
+    ) -> Result<Option<V::SelfType<'_>>, KVStorageError>;
+
+    // TODO: add remove, range, etc
+}
+
+#[derive(Debug, Error)]
+pub enum KVStorageError {
+    // TODO: remove this later, make more generic
+    #[error("ReDB error: {0}")]
+    ReDB(redb::Error),
+}
+
+impl<T> From<T> for KVStorageError
+where
+    T: Into<redb::Error>,
+{
+    fn from(e: T) -> Self {
+        KVStorageError::ReDB(e.into())
+    }
+}
