@@ -58,6 +58,7 @@ uuid = "1.4.1"
 toml = "0.8.19"
 tower-http = {version = "0.6.1", features = ["cors"] }
 dotenvy = {version = "0.15.7", features = ["cli"]}
+tempfile = "3.13"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -92,3 +93,6 @@ wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
 tower-http = { workspace = true }
 dotenvy = {workspace = true}
+
+[dev-dependencies]
+tempfile = {workspace = true}

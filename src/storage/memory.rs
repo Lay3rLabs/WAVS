@@ -1,0 +1,69 @@
+use std::collections::BTreeMap;
+
+use super::prelude::*;
+use crate::digest::Digest;
+
+pub struct MemoryStorage {
+    data: BTreeMap<Digest, Vec<u8>>,
+}
+
+impl MemoryStorage {
+    pub fn new() -> Self {
+        MemoryStorage {
+            data: BTreeMap::new(),
+        }
+    }
+}
+
+impl Default for MemoryStorage {
+    fn default() -> Self {
+        MemoryStorage::new()
+    }
+}
+
+impl CAStorage for MemoryStorage {
+    fn reset(&mut self) -> Result<(), CAStorageError> {
+        self.data = BTreeMap::new();
+        Ok(())
+    }
+
+    fn set_data(&mut self, data: &[u8]) -> Result<Digest, CAStorageError> {
+        let digest = Digest::new(data);
+        if !self.data.contains_key(&digest) {
+            self.data.insert(digest.clone(), data.to_vec());
+        }
+        Ok(digest)
+    }
+
+    fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError> {
+        match self.data.get(digest) {
+            Some(data) => Ok(data.to_owned()),
+            None => Err(CAStorageError::NotFound(digest.clone())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::storage::tests::castorage;
+
+    #[test]
+    fn test_set_and_get() {
+        let store = MemoryStorage::new();
+        castorage::test_set_and_get(store);
+    }
+
+    #[test]
+    fn test_reset() {
+        let store = MemoryStorage::new();
+        castorage::test_reset(store);
+    }
+
+    #[test]
+    fn test_multiple_keys() {
+        let store = MemoryStorage::new();
+        castorage::test_multiple_keys(store);
+    }
+}

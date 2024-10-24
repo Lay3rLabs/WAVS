@@ -4,41 +4,33 @@ use sha2::{Digest as Sha2Digest, Sha256};
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
-/// Computed content digest.
+/// Computed content digest. Set to Sha256, but we can change globally in this file
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Digest {
-    Sha256([u8; 32]),
-}
+pub struct Digest([u8; 32]);
 
 impl Digest {
     pub fn hex_encoded(&self) -> String {
-        match self {
-            Digest::Sha256(digest) => hex::encode(digest.as_slice()),
-        }
+        hex::encode(self.0.as_slice())
     }
 
-    pub fn new_sha_256(bytes: &[u8]) -> Self {
+    pub fn new(bytes: &[u8]) -> Self {
         let mut digest = [0u8; 32];
         let mut hasher = Sha256::new();
         hasher.update(bytes);
         hasher.finalize_into((&mut digest).into());
-        Digest::Sha256(digest)
+        Digest(digest)
     }
 }
 
 impl fmt::Display for Digest {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Digest::Sha256(digest) => write!(f, "sha256:{}", hex::encode(digest.as_slice())),
-        }
+        write!(f, "{}", self.hex_encoded())
     }
 }
 
 impl fmt::Debug for Digest {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Digest::Sha256(digest) => write!(f, "sha256:{}", hex::encode(digest.as_slice())),
-        }
+        write!(f, "{}", self.hex_encoded())
     }
 }
 
@@ -46,18 +38,9 @@ impl FromStr for Digest {
     type Err = DigestError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (algo_part, bytes_part) = s
-            .split_once(':')
-            .ok_or_else(|| DigestError::IncorrectStructure(s.matches(':').count() + 1))?;
-
-        match algo_part {
-            "sha256" => {
-                let mut bytes = [0u8; 32];
-                hex::decode_to_slice(bytes_part, &mut bytes)?;
-                Ok(Digest::Sha256(bytes))
-            }
-            _ => Err(DigestError::InvalidHashAlgorithm(algo_part.to_string())),
-        }
+        let mut bytes = [0u8; 32];
+        hex::decode_to_slice(s, &mut bytes)?;
+        Ok(Digest(bytes))
     }
 }
 
@@ -99,12 +82,6 @@ impl<'de> Deserialize<'de> for Digest {
 /// Parsing errors from the string-encoded digest.
 #[derive(Error, Debug)]
 pub enum DigestError {
-    #[error("expected two parts for hash; found {0}")]
-    IncorrectStructure(usize),
-
-    #[error("unable to parse hash algorithm: {0}")]
-    InvalidHashAlgorithm(String),
-
     #[error("hexadecimal decode failed: {0}")]
     InvalidHex(#[from] hex::FromHexError),
 }

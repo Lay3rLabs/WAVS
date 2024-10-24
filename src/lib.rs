@@ -1,4 +1,4 @@
-// placeholder to compile
-pub fn add(a: u64, b: u64) -> u64 {
-    a + b
-}
+mod digest;
+pub mod storage;
+
+pub use digest::Digest;
