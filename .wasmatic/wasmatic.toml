@@ -1,0 +1,22 @@
+# these values can be overriden by environment variables
+# by following the pattern MATIC_<UPPERCASE_KEY>
+# so for example, the key `port` can be overriden by setting the environment variable `MATIC_PORT`
+# for arrays use a comma-separated list in a single string
+# e.g. MATIC_LOG_LEVEL="info, wasmatic=debug" or MATIC_CORS_ALLOWED_ORIGINS="https://example.com, https://example2.com"
+
+# the port on which the server will listen. Default is 8000
+# port = 9000
+
+# The log level, in the format of tracing directives. Default is ["info"]
+# See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives for more information
+# e.g. MATIC_LOG_LEVEL="info, wasmatic=debug"
+log_level = ["info", "wasmatic=debug"]
+
+# the allowed cors origins. Default is empty list.
+# cors_allowed_origins = ["https://lay3rlabs.github.io"]
+
+# the host to serve on. Default is localhost
+# host = "localhost"
+
+# the directory to store the data. Default is "/var/wasmatic"
+# data = "~/wasmatic/data"

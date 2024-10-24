@@ -1,0 +1,3 @@
+# wasmatic toml for tests
+
+log_level = ["info", "wasmatic=debug", "just_to_confirm_test=debug"]
