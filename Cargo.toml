@@ -1,24 +1,11 @@
 [package]
 name = "wasmatic"
 description = "Lay3r Labs Wasmatic Node Server"
-version = { workspace = true }
-edition = { workspace = true }
-authors = { workspace = true }
-rust-version = { workspace = true }
-repository = { workspace = true }
-
-[workspace]
-members = []
-# old 
-# members = ["examples/btc-avg", "examples/composition/http-allow-list/http-allowed-coingecko", "examples/square"]
-
-[workspace.package]
+edition = "2021"
 version = "0.1.0"
 authors = ["Lay3r Labs Team"]
-edition = "2021"
 rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
-
 
 [dependencies]
 clap = { version = "4.5.20", features = ["derive", "env"] }
