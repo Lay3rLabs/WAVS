@@ -91,7 +91,7 @@ pub trait KVStorage: Send + Sync {
         key: K::SelfType<'_>,
     ) -> Result<(), KVStorageError>;
 
-    // TODO: add remove, range, etc
+    // TODO: add range
 }
 
 #[derive(Debug, Error)]

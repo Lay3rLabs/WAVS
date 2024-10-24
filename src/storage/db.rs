@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use redb::{AccessGuard, Database};
+use redb::{AccessGuard, Database, TableError};
 
 use super::prelude::*;
 
@@ -37,9 +37,13 @@ impl KVStorage for RedbStorage {
         key: K::SelfType<'_>,
     ) -> Result<Option<AccessGuard<'static, V>>, KVStorageError> {
         let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(table)?;
-        let value = table.get(key)?;
-        Ok(value)
+        match read_txn.open_table(table) {
+            Ok(table) => Ok(table.get(key)?),
+            // If we read before the first write, we get this error.
+            // Just act like get returned None (cuz key surely doesn't exist)
+            Err(TableError::TableDoesNotExist(_)) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn remove<K: Key, V: Value + 'static>(
@@ -81,11 +85,6 @@ mod tests {
         let file = tempfile::NamedTempFile::new().unwrap();
         let store = RedbStorage::new(file.path()).unwrap();
 
-        // Note, currently need to set one value in the table to create it, before it can be queried
-        // We should add some init functions for this
-        store.set(T1, 0, &"".to_string()).unwrap();
-        store.remove(T1, 0).unwrap();
-
         let empty = store.get(T1, 17).unwrap();
         assert!(empty.is_none());
 
@@ -99,11 +98,6 @@ mod tests {
     fn test_json_storage() {
         let file = tempfile::NamedTempFile::new().unwrap();
         let store = RedbStorage::new(file.path()).unwrap();
-
-        // Note, currently need to set one value in the table to create it, before it can be queried
-        // We should add some init functions for this
-        store.set(TJ, "", &Demo::default()).unwrap();
-        store.remove(TJ, "").unwrap();
 
         let empty = store.get(TJ, "john").unwrap();
         assert!(empty.is_none());
