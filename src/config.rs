@@ -51,9 +51,9 @@ pub struct ConfigBuilder {
 }
 
 impl ConfigBuilder {
-    pub const FILENAME: &str = "wasmatic.toml";
-    pub const DIRNAME: &str = ".wasmatic";
-    pub const ENV_VAR_PREFIX: &str = "MATIC";
+    pub const FILENAME: &'static str = "wasmatic.toml";
+    pub const DIRNAME: &'static str = ".wasmatic";
+    pub const ENV_VAR_PREFIX: &'static str = "MATIC";
 
     pub fn new(args: CliArgs) -> Self {
         Self { args }
