@@ -174,6 +174,8 @@ impl ConfigBuilder {
             dirs.push(dir);
         }
 
+        // Lastly, try /etc/wasmatic/wasmatic.toml
+        dirs.push(PathBuf::from("/etc").join(Self::DIRNAME));
 
         // now we have a list of directories to check, we need to add the filename to each
         dirs.into_iter()
