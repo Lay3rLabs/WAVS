@@ -11,9 +11,9 @@ use wasmatic::{
 // because the complete list will change depending on the platform, global env vars, etc.
 #[tokio::test]
 async fn config_filepath() {
-    fn filepaths(home_dir: Option<PathBuf>) -> Vec<PathBuf> {
+    fn filepaths(home: Option<PathBuf>) -> Vec<PathBuf> {
         ConfigBuilder::new(CliArgs {
-            home_dir,
+            home,
             dotenv: None,
             ..TestApp::default_cli_args()
         })
@@ -33,10 +33,11 @@ async fn config_filepath() {
         &PathBuf::from("/tmp1").join(ConfigBuilder::FILENAME)
     );
 
-    // if we provide a specific home directory, and env var, then they are tried in that order
+    // even if we also provide it in an env var, it still takes precedence
+    // but we see both in the list of filepaths to try
     temp_env::with_vars(
         [(
-            format!("{}_{}", ConfigBuilder::ENV_VAR_PREFIX, "HOME"),
+            format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "HOME"),
             Some("/tmp2"),
         )],
         || {
@@ -44,19 +45,19 @@ async fn config_filepath() {
                 filepaths(Some("/tmp1".into()))
                     .into_iter()
                     .take(2)
-                    .collect::<Vec<PathBuf>>(),
+                    .collect::<Vec<_>>(),
                 vec![
                     PathBuf::from("/tmp1").join(ConfigBuilder::FILENAME),
-                    PathBuf::from("/tmp2").join(ConfigBuilder::FILENAME),
+                    PathBuf::from("/tmp2").join(ConfigBuilder::FILENAME)
                 ]
             );
         },
     );
 
-    // if we provide an env var, but not a specific home directory, then env var becomes the first
+    // but if we provide an env var, and not a specific home directory, then env var becomes the first
     temp_env::with_vars(
         [(
-            format!("{}_{}", ConfigBuilder::ENV_VAR_PREFIX, "HOME"),
+            format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "HOME"),
             Some("/tmp2"),
         )],
         || {
@@ -102,7 +103,7 @@ async fn config_array_string() {
     {
         temp_env::async_with_vars(
             [(
-                format!("{}_{}", ConfigBuilder::ENV_VAR_PREFIX, "LOG_LEVEL"),
+                format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
                 Some("debug, foo=trace"),
             )],
             check(),
@@ -117,7 +118,11 @@ async fn config_array_string() {
             );
 
             let mut cli_args = TestApp::default_cli_args();
-            cli_args.log_level = TRACING_ENV_FILTER_CLI.to_string().split(",").map(|s| s.to_string()).collect();
+            cli_args.log_level = TRACING_ENV_FILTER_CLI
+                .to_string()
+                .split(",")
+                .map(|s| s.to_string())
+                .collect();
 
             let config = TestApp::new_with_args(cli_args).await.config;
 
@@ -148,17 +153,10 @@ async fn config_dotenv() {
     // so just check for a dummy value since this test only cares about the dotenv file itself
     // coverage of environment var overrides is in other tests with temp_env scopes
     assert_eq!(
-        std::env::var(format!(
-            "{}_RANDOM_TEST_VALUE",
-            ConfigBuilder::ENV_VAR_PREFIX
-        ))
-        .unwrap(),
+        std::env::var(format!("{}_RANDOM_TEST_VALUE", CliArgs::ENV_VAR_PREFIX)).unwrap(),
         "hello world"
     );
 
     // unset the value, just to play nice, though this could be a race condition (see docs on remove_var)
-    std::env::remove_var(format!(
-        "{}_RANDOM_TEST_VALUE",
-        ConfigBuilder::ENV_VAR_PREFIX
-    ))
+    std::env::remove_var(format!("{}_RANDOM_TEST_VALUE", CliArgs::ENV_VAR_PREFIX))
 }

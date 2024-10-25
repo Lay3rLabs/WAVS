@@ -3,6 +3,9 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use std::path::PathBuf;
 
 /// This struct is used for both CliArgs and Environment variables
+/// Every Cli Arg can be overridden by an environment variable
+/// following the pattern of MATIC_{UPPERCASE_ARG_NAME}
+/// where "MATIC" is configured in the CliArgs::ENV_VAR_PREFIX constant
 #[derive(Debug, Parser, Serialize, Deserialize, Default)]
 #[command(version, about, long_about = None)]
 #[serde(default)]
@@ -11,7 +14,7 @@ pub struct CliArgs {
     /// if not provided, a series of default directories will be tried
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub home_dir: Option<PathBuf>,
+    pub home: Option<PathBuf>,
 
     /// The path to an optional dotenv file to try and load
     /// if not set, will be the current working directory's .env
@@ -52,6 +55,14 @@ pub struct CliArgs {
     pub cors_allowed_origins: Vec<String>,
 }
 
+impl CliArgs {
+    pub const ENV_VAR_PREFIX: &'static str = "MATIC";
+
+    pub fn env_var(name: &str) -> Option<String> {
+        std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
+    }
+}
+
 use std::fmt;
 
 fn deserialize_vec_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
@@ -71,10 +82,7 @@ where
         where
             E: de::Error,
         {
-            Ok(value
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect())
+            Ok(value.split(',').map(|s| s.trim().to_string()).collect())
         }
 
         fn visit_seq<A>(self, mut seq: A) -> Result<Vec<String>, A::Error>

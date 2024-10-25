@@ -53,7 +53,6 @@ pub struct ConfigBuilder {
 impl ConfigBuilder {
     pub const FILENAME: &'static str = "wasmatic.toml";
     pub const DIRNAME: &'static str = ".wasmatic";
-    pub const ENV_VAR_PREFIX: &'static str = "MATIC";
 
     pub fn new(args: CliArgs) -> Self {
         Self { args }
@@ -62,10 +61,14 @@ impl ConfigBuilder {
     pub async fn build(self) -> Result<Config> {
         self.load_env()?;
 
-        let config: Config = Figment::new()
-            .merge(figment::providers::Toml::file(self.filepath()?))
+        let cli_args: CliArgs = Figment::new()
             .merge(figment::providers::Env::prefixed("MATIC_"))
             .merge(figment::providers::Serialized::defaults(&self.args))
+            .extract()?;
+
+        let config: Config = Figment::new()
+            .merge(figment::providers::Toml::file(self.filepath()?))
+            .merge(figment::providers::Serialized::defaults(cli_args))
             .join(figment::providers::Serialized::defaults(Config::default()))
             .extract()?;
 
@@ -89,10 +92,6 @@ impl ConfigBuilder {
         Ok(())
     }
 
-    pub fn env_var(name: &str) -> Option<String> {
-        std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
-    }
-
     pub fn filepath(&self) -> Result<PathBuf> {
         let filepaths_to_try = self.filepaths_to_try();
 
@@ -111,12 +110,14 @@ impl ConfigBuilder {
     pub fn filepaths_to_try(&self) -> Vec<PathBuf> {
         let mut dirs = Vec::new();
 
-        if let Some(dir) = self.args.home_dir.clone() {
+        if let Some(dir) = self.args.home.clone() {
             dirs.push(dir);
         }
 
-        if let Some(dir) = Self::env_var("HOME").map(PathBuf::from) {
-            dirs.push(dir);
+        // this must be added explicitly, because filepaths is derived
+        // before we merge the cli and env vars
+        if let Some(dir) = CliArgs::env_var("HOME") {
+            dirs.push(dir.into());
         }
 
         if let Some(dir) = dirs::config_dir().map(|dir| dir.join(Self::DIRNAME)) {

@@ -19,7 +19,7 @@ impl TestApp {
     pub fn default_cli_args() -> CliArgs {
         // get the path relative from this source file, regardless of where we run the test from
         CliArgs {
-            home_dir: Some(
+            home: Some(
                 PathBuf::from(file!())
                     .parent()
                     .unwrap()
