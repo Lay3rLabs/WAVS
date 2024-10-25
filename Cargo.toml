@@ -23,6 +23,11 @@ sha2 = "0.10.8"
 hex = "0.4.3"
 thiserror = "1.0.42"
 redb = { version = "2.1" }
+axum = {version = "0.7.7", features = ["macros"]}
+tower-http = {version = "0.6.1", features = ["cors", "trace"] }
+tower = { version = "0.5.1", features = ["util"] }
+http-body-util = "0.1.2"
+wildmatch = "2.4.0"
 
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }

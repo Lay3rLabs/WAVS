@@ -1,12 +1,12 @@
-use anyhow::Result;
+use std::sync::Arc;
+
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wasmatic::{args::CliArgs, config::ConfigBuilder};
+use wasmatic::{args::CliArgs, config::ConfigBuilder, http};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() {
     let args = CliArgs::parse();
-    let config = ConfigBuilder::new(args).build().await?;
+    let config = Arc::new(ConfigBuilder::new(args).build().unwrap());
 
     // setup tracing
     tracing_subscriber::registry()
@@ -15,11 +15,20 @@ async fn main() -> Result<()> {
                 .without_time()
                 .with_target(false),
         )
-        .with(config.tracing_env_filter()?)
-        .try_init()?;
+        .with(config.tracing_env_filter().unwrap())
+        .try_init()
+        .unwrap();
 
-    tracing::info!("starting wasmatic");
-    tracing::info!("{:#?}", config);
+    // start the http server in its own thread
+    let server_handle = std::thread::spawn({
+        let config = config.clone();
+        move || {
+            http::server::start(config).unwrap();
+        }
+    });
 
-    Ok(())
+    // wait for the server to finish
+    // TODO: add more thread handles here to wait on
+
+    server_handle.join().unwrap();
 }

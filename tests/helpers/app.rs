@@ -1,4 +1,3 @@
-// no tests in this file, just helpers to assist the actual tests
 use std::{
     path::PathBuf,
     sync::{Arc, LazyLock},
@@ -23,12 +22,16 @@ impl TestApp {
                 PathBuf::from(file!())
                     .parent()
                     .unwrap()
+                    .parent()
+                    .unwrap()
                     .join(ConfigBuilder::DIRNAME),
             ),
             // this purposefully points at a non-existing file
             // so that we don't load a real .env in tests
             dotenv: Some(
                 PathBuf::from(file!())
+                    .parent()
+                    .unwrap()
                     .parent()
                     .unwrap()
                     .join(ConfigBuilder::DIRNAME)
@@ -47,13 +50,11 @@ impl TestApp {
     }
 
     pub async fn new_with_args(cli_args: CliArgs) -> Self {
-        let config = ConfigBuilder::new(cli_args).build().await.unwrap();
+        let config = Arc::new(ConfigBuilder::new(cli_args).build().unwrap());
 
         init(&config).await;
 
-        Self {
-            config: Arc::new(config),
-        }
+        Self { config }
     }
 }
 

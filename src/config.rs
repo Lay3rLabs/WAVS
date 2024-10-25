@@ -73,7 +73,7 @@ impl ConfigBuilder {
         Ok(cli_args)
     }
 
-    pub async fn build(self) -> Result<Config> {
+    pub fn build(self) -> Result<Config> {
         // try to load dotenv first, since it may affect env vars for filepaths
         let dotenv_path = self
             .cli_args
