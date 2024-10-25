@@ -19,7 +19,7 @@ impl TestApp {
     pub fn default_cli_args() -> CliArgs {
         // get the path relative from this source file, regardless of where we run the test from
         CliArgs {
-            home_dir: Some(
+            home: Some(
                 PathBuf::from(file!())
                     .parent()
                     .unwrap()
@@ -35,10 +35,10 @@ impl TestApp {
                     .join("non-existing-testdotenv"),
             ),
             port: None,
-            log_level: None,
+            log_level: Vec::new(),
             host: None,
             data: None,
-            cors_allowed_origins: None,
+            cors_allowed_origins: Vec::new(),
         }
     }
 
