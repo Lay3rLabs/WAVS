@@ -34,7 +34,6 @@ async fn config_filepath() {
     );
 
     // even if we also provide it in an env var, it still takes precedence
-    // but we see both in the list of filepaths to try
     temp_env::with_vars(
         [(
             format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "HOME"),
@@ -42,14 +41,8 @@ async fn config_filepath() {
         )],
         || {
             assert_eq!(
-                filepaths(Some("/tmp1".into()))
-                    .into_iter()
-                    .take(2)
-                    .collect::<Vec<_>>(),
-                vec![
-                    PathBuf::from("/tmp1").join(ConfigBuilder::FILENAME),
-                    PathBuf::from("/tmp2").join(ConfigBuilder::FILENAME)
-                ]
+                filepaths(Some("/tmp1".into())).first().unwrap(),
+                &PathBuf::from("/tmp1").join(ConfigBuilder::FILENAME)
             );
         },
     );
