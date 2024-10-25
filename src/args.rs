@@ -1,6 +1,6 @@
 use clap::Parser;
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::path::PathBuf;
+use std::{fmt, path::PathBuf};
 
 /// This struct is used for both CliArgs and Environment variables
 /// Every Cli Arg can be overridden by an environment variable
@@ -62,8 +62,6 @@ impl CliArgs {
         std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
     }
 }
-
-use std::fmt;
 
 fn deserialize_vec_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
