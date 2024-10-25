@@ -1,5 +1,7 @@
-use crate::digest::Digest;
+use std::fmt::Debug;
 use thiserror::Error;
+
+use crate::digest::Digest;
 
 /*
   Documenting a design decisions here:
@@ -18,6 +20,8 @@ use thiserror::Error;
   Rather than hope and just end up calling blocking calls in our async code, I would make all the engine
   stuff sync and wrap it at a higher-level, where we enter the engine (from http request or triggers).
 */
+
+// TODO: make multi-thread safe - remove &mut by wrapping internally with Arc / RwLock
 
 /// Trait for content-addressable storage. With immutible data on one key.
 /// This is what is used for WASM code, stored by hash digest.
@@ -53,8 +57,3 @@ impl<T> From<std::sync::PoisonError<T>> for CAStorageError {
         CAStorageError::PoisonedLock
     }
 }
-
-// TODO
-// Trait for normal KV-Storage. Each key can be updated and store any data.
-// You can wrap this higher level for type-safe access.
-// pub trait KVStorage: Send + Sync {}

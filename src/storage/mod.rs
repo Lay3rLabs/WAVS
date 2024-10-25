@@ -1,6 +1,7 @@
 mod prelude;
 pub use prelude::*;
 
+pub mod db;
 pub mod fs;
 pub mod memory;
 
