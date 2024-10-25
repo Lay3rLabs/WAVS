@@ -35,10 +35,10 @@ impl TestApp {
                     .join("non-existing-testdotenv"),
             ),
             port: None,
-            log_level: None,
+            log_level: Vec::new(),
             host: None,
             data: None,
-            cors_allowed_origins: None,
+            cors_allowed_origins: Vec::new(),
         }
     }
 

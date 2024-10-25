@@ -62,69 +62,10 @@ impl ConfigBuilder {
     pub async fn build(self) -> Result<Config> {
         self.load_env()?;
 
-        // internal-only optional config struct used to hold values
-        // for converting from cli/env vars to full config
-        #[derive(Debug, Serialize, Deserialize)]
-        struct OptionalConfig {
-            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-            pub port: Option<u32>,
-            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-            pub log_level: Option<Vec<String>>,
-            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-            pub host: Option<String>,
-            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-            pub data: Option<PathBuf>,
-            #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-            pub cors_allowed_origins: Option<Vec<String>>,
-        }
-
-        impl From<&CliArgs> for OptionalConfig {
-            fn from(args: &CliArgs) -> Self {
-                fn parse_array_str(s: impl AsRef<str>) -> Vec<String> {
-                    s.as_ref()
-                        .split(',')
-                        .map(|x| x.trim().to_string())
-                        .collect()
-                }
-
-                Self {
-                    port: args.port,
-                    log_level: args.log_level.as_ref().map(parse_array_str),
-                    host: args.host.clone(),
-                    data: args.data.clone(),
-                    cors_allowed_origins: args.cors_allowed_origins.as_ref().map(parse_array_str),
-                }
-            }
-        }
-
-        // not used directly, but rather to ensure we add all possible values
-        impl From<&OptionalConfig> for Config {
-            fn from(optional: &OptionalConfig) -> Self {
-                Self {
-                    port: optional.port.unwrap_or_default(),
-                    log_level: optional.log_level.clone().unwrap_or_default(),
-                    host: optional.host.clone().unwrap_or_default(),
-                    data: optional.data.clone().unwrap_or_default(),
-                    cors_allowed_origins: optional.cors_allowed_origins.clone().unwrap_or_default(),
-                }
-            }
-        }
-
-        // first parse env_config into cli_args (they use the same primitive types)
-        // then convert to OptionalConfig so we can merge it into our real config
-        let env_config = OptionalConfig::from(
-            &Figment::new()
-                .merge(figment::providers::Env::prefixed("MATIC_"))
-                .extract()?,
-        );
-
-        // load cli args into a struct we can merge into the config
-        let cli_config = OptionalConfig::from(&self.args);
-
         let config: Config = Figment::new()
             .merge(figment::providers::Toml::file(self.filepath()?))
-            .merge(figment::providers::Serialized::defaults(env_config))
-            .merge(figment::providers::Serialized::defaults(cli_config))
+            .merge(figment::providers::Env::prefixed("MATIC_"))
+            .merge(figment::providers::Serialized::defaults(&self.args))
             .join(figment::providers::Serialized::defaults(Config::default()))
             .extract()?;
 

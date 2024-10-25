@@ -117,7 +117,7 @@ async fn config_array_string() {
             );
 
             let mut cli_args = TestApp::default_cli_args();
-            cli_args.log_level = Some(TRACING_ENV_FILTER_CLI.to_string());
+            cli_args.log_level = TRACING_ENV_FILTER_CLI.to_string().split(",").map(|s| s.to_string()).collect();
 
             let config = TestApp::new_with_args(cli_args).await.config;
 
