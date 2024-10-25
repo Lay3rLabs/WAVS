@@ -170,10 +170,7 @@ impl ConfigBuilder {
 
         // finally, check the current working directory, wherever the command is run from
         // i.e. ./wasmatic.toml
-        if let Some(dir) = std::env::current_dir()
-            .ok()
-            .map(|dir| dir.join(Self::DIRNAME))
-        {
+        if let Ok(dir) = std::env::current_dir() {
             dirs.push(dir);
         }
 
