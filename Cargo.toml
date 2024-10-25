@@ -29,6 +29,7 @@ tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
 layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.1.1" }
+uuid = { version = "1.11", features = ["v4", "serde"] }
 
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }

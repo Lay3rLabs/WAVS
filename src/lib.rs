@@ -1,3 +1,4 @@
+pub mod apis;
 pub mod args;
 pub mod config;
 mod digest;
