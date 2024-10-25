@@ -28,6 +28,14 @@ impl Operator {
     pub fn add_service(&self, _service: ServiceDefinition) -> Result<(), OperatorError> {
         todo!();
     }
+
+    pub fn remove_service(&self, _name: String) -> Result<(), OperatorError> {
+        todo!();
+    }
+
+    pub fn list_services(&self) -> Result<Vec<Service>, OperatorError> {
+        todo!();
+    }
 }
 
 #[derive(Serialize, Deserialize)]
