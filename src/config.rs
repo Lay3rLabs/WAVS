@@ -125,9 +125,9 @@ impl ConfigBuilder {
         let mut dirs = Vec::new();
 
         // explicit arg passed to the cli, e.g. --home /foo, or env var HOME="/foo"
-        // this does not append the default ".wasmatic" subdirectory
+        // this does not append the default "wasmatic" subdirectory
         // instead, it is used as the direct home directory
-        // the final path will then be /foo/wasmatic.toml
+        // i.e. the path in this case will be /foo/wasmatic.toml
         if let Some(dir) = cli_env_args.home.clone() {
             dirs.push(dir);
         }
