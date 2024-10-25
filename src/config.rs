@@ -87,21 +87,25 @@ impl ConfigBuilder {
             }
         }
 
+        let cli_env_args = self.merge_cli_env_args()?;
+
         // then, our final config, which can have more complex types with easier TOML-like syntax
         // and also fills in defaults for required values at the end
         let config: Config = Figment::new()
-            .merge(figment::providers::Toml::file(self.filepath()?))
-            .merge(figment::providers::Serialized::defaults(
-                self.merge_cli_env_args()?,
-            ))
+            .merge(figment::providers::Toml::file(Self::filepath(
+                &cli_env_args,
+            )?))
+            .merge(figment::providers::Serialized::defaults(cli_env_args))
             .join(figment::providers::Serialized::defaults(Config::default()))
             .extract()?;
 
         Ok(config)
     }
 
-    pub fn filepath(&self) -> Result<PathBuf> {
-        let filepaths_to_try = self.filepaths_to_try();
+    /// finds the filepath through a series of fallbacks
+    /// the argument is internally derived cli + env args
+    pub fn filepath(cli_env_args: &CliArgs) -> Result<PathBuf> {
+        let filepaths_to_try = Self::filepaths_to_try(cli_env_args);
 
         filepaths_to_try
             .iter()
@@ -116,19 +120,15 @@ impl ConfigBuilder {
     }
 
     /// provides the list of filepaths to try for the config file
-    pub fn filepaths_to_try(&self) -> Vec<PathBuf> {
+    /// the argument is internally from cli + env args
+    pub fn filepaths_to_try(cli_env_args: &CliArgs) -> Vec<PathBuf> {
         let mut dirs = Vec::new();
 
         // explicit arg passed to the cli, e.g. --home /foo, or env var HOME="/foo"
         // this does not append the default ".wasmatic" subdirectory
         // instead, it is used as the direct home directory
         // the final path will then be /foo/wasmatic.toml
-        if let Some(dir) = self
-            .merge_cli_env_args()
-            .ok()
-            .and_then(|args| args.home)
-            .clone()
-        {
+        if let Some(dir) = cli_env_args.home.clone() {
             dirs.push(dir);
         }
 

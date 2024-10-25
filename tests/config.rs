@@ -12,12 +12,15 @@ use wasmatic::{
 #[tokio::test]
 async fn config_filepath() {
     fn filepaths(home: Option<PathBuf>) -> Vec<PathBuf> {
-        ConfigBuilder::new(CliArgs {
+        let config_builder = ConfigBuilder::new(CliArgs {
             home,
             dotenv: None,
             ..TestApp::default_cli_args()
-        })
-        .filepaths_to_try()
+        });
+
+        let cli_env_args = config_builder.merge_cli_env_args().unwrap();
+
+        ConfigBuilder::filepaths_to_try(&cli_env_args)
     }
 
     // make sure all the test directories are not there by default
