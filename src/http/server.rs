@@ -1,5 +1,8 @@
 use crate::config::Config;
-use axum::routing::{delete, get, post};
+use axum::{
+    extract::DefaultBodyLimit,
+    routing::{delete, get, post},
+};
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use wildmatch::WildMatch;
@@ -49,7 +52,10 @@ pub async fn make_router(config: Arc<Config>) -> anyhow::Result<axum::Router> {
         .route("/app", delete(handle_delete_service))
         .route("/info", get(handle_info))
         .route("/test", post(handle_test_service))
-        .route("/upload", post(handle_upload_service))
+        .route(
+            "/upload",
+            post(handle_upload_service).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
+        ) // 50MB limit
         .fallback(handle_not_found)
         .with_state(state);
 
