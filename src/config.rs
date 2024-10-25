@@ -52,7 +52,8 @@ pub struct ConfigBuilder {
 
 impl ConfigBuilder {
     pub const FILENAME: &'static str = "wasmatic.toml";
-    pub const DIRNAME: &'static str = ".wasmatic";
+    pub const DIRNAME: &'static str = "wasmatic";
+    pub const HIDDEN_DIRNAME: &'static str = ".wasmatic";
 
     pub fn new(cli_args: CliArgs) -> Self {
         Self { cli_args }
@@ -133,9 +134,9 @@ impl ConfigBuilder {
 
         // checks the `.wasmatic/wasmatic.toml` file in the system config directory
         // this will vary, but the final path with then be something like:
-        // Linux: ~/.config/.wasmatic/wasmatic.toml
-        // macOS: ~/Library/Application Support/.wasmatic/wasmatic.toml
-        // Windows: C:\Users\MyUserName\AppData\Roaming\.wasmatic\wasmatic.toml
+        // Linux: ~/.config/wasmatic/wasmatic.toml
+        // macOS: ~/Library/Application Support/wasmatic/wasmatic.toml
+        // Windows: C:\Users\MyUserName\AppData\Roaming\wasmatic\wasmatic.toml
         if let Some(dir) = dirs::config_dir().map(|dir| dir.join(Self::DIRNAME)) {
             dirs.push(dir);
         }
@@ -143,7 +144,7 @@ impl ConfigBuilder {
         // On linux, this may already be added via config_dir above
         // but on macOS and windows, and maybe unix-like environments (msys, wsl, etc)
         // it's helpful to add it explicitly
-        // the final path here typically becomes something like ~/.config/.wasmatic/wasmatic.toml
+        // the final path here typically becomes something like ~/.config/wasmatic/wasmatic.toml
         if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
             .ok()
             .map(PathBuf::from)
@@ -156,14 +157,14 @@ impl ConfigBuilder {
         // but on systems like Windows, it's helpful to add it explicitly
         // since the system may place the config dir in AppData/Roaming
         // but we want to check the user's home dir first
-        // this will definitively become something like ~/.config/.wasmatic/wasmatic.toml
+        // this will definitively become something like ~/.config/wasmatic/wasmatic.toml
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(Self::DIRNAME)) {
             dirs.push(dir);
         }
 
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
-        // the final path will be something like ~/.wasmatic/wasmatic.toml
-        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(Self::DIRNAME)) {
+        // in this case, to not pollute the home directory, it looks for ~/.wasmatic/wasmatic.toml
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(Self::HIDDEN_DIRNAME)) {
             dirs.push(dir);
         }
 
