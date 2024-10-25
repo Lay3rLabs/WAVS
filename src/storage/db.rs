@@ -1,27 +1,30 @@
 use std::path::Path;
 
-use redb::{AccessGuard, Database, TableError};
-
-use super::prelude::*;
+use redb::{AccessGuard, Database, Key, TableError, TypeName, Value};
+use serde::{de::Deserialize, Serialize};
+use std::any::type_name;
 
 pub struct RedbStorage {
     db: Database,
 }
 
+pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
+pub type DBError = redb::Error;
+
 impl RedbStorage {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self, KVStorageError> {
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, DBError> {
         let db = redb::Database::create(path)?;
         Ok(RedbStorage { db })
     }
 }
 
-impl KVStorage for RedbStorage {
-    fn set<K: Key, V: Value + 'static>(
+impl RedbStorage {
+    pub fn set<K: Key, V: Value + 'static>(
         &self,
         table: Table<K, V>,
         key: K::SelfType<'_>,
         value: &V::SelfType<'_>,
-    ) -> Result<(), KVStorageError> {
+    ) -> Result<(), DBError> {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(table)?;
@@ -31,11 +34,11 @@ impl KVStorage for RedbStorage {
         Ok(())
     }
 
-    fn get<K: Key, V: Value + 'static>(
+    pub fn get<K: Key, V: Value + 'static>(
         &self,
         table: Table<K, V>,
         key: K::SelfType<'_>,
-    ) -> Result<Option<AccessGuard<'static, V>>, KVStorageError> {
+    ) -> Result<Option<AccessGuard<'static, V>>, DBError> {
         let read_txn = self.db.begin_read()?;
         match read_txn.open_table(table) {
             Ok(table) => Ok(table.get(key)?),
@@ -46,11 +49,11 @@ impl KVStorage for RedbStorage {
         }
     }
 
-    fn remove<K: Key, V: Value + 'static>(
+    pub fn remove<K: Key, V: Value + 'static>(
         &self,
         table: Table<K, V>,
         key: K::SelfType<'_>,
-    ) -> Result<(), KVStorageError> {
+    ) -> Result<(), DBError> {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(table)?;
@@ -58,6 +61,46 @@ impl KVStorage for RedbStorage {
         }
         write_txn.commit()?;
         Ok(())
+    }
+}
+
+/// Wrapper type to handle keys and values using bincode serialization
+#[derive(Debug, Clone)]
+pub struct JSON<T>(pub T);
+
+impl<T> Value for JSON<T>
+where
+    T: std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
+{
+    type SelfType<'a> = T
+    where
+        Self: 'a;
+
+    type AsBytes<'a> = Vec<u8>
+    where
+        Self: 'a;
+
+    fn fixed_width() -> Option<usize> {
+        None
+    }
+
+    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
+    where
+        Self: 'a,
+    {
+        serde_json::from_slice(data).unwrap()
+    }
+
+    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+    where
+        Self: 'a,
+        Self: 'b,
+    {
+        serde_json::to_vec(value).unwrap()
+    }
+
+    fn type_name() -> TypeName {
+        TypeName::new(&format!("JSON<{}>", type_name::<T>()))
     }
 }
 
