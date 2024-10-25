@@ -3,7 +3,7 @@ pub mod castorage {
     use crate::digest::Digest;
     use crate::storage::{CAStorage, CAStorageError};
 
-    pub fn test_set_and_get<S: CAStorage>(mut store: S) {
+    pub fn test_set_and_get<S: CAStorage>(store: S) {
         let data = b"hello world";
         let digest = store.set_data(data).unwrap();
         let loaded = store.get_data(&digest).unwrap();
@@ -14,7 +14,7 @@ pub mod castorage {
         assert!(matches!(err, CAStorageError::NotFound(_)));
     }
 
-    pub fn test_reset<S: CAStorage>(mut store: S) {
+    pub fn test_reset<S: CAStorage>(store: S) {
         let data = b"hello world";
         let digest = store.set_data(data).unwrap();
         store.reset().unwrap();
@@ -22,7 +22,7 @@ pub mod castorage {
         assert!(matches!(err, CAStorageError::NotFound(_)));
     }
 
-    pub fn test_multiple_keys<S: CAStorage>(mut store: S) {
+    pub fn test_multiple_keys<S: CAStorage>(store: S) {
         let data1 = b"hello world";
         let data2 = b"hello mom";
 
