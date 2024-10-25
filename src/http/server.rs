@@ -1,11 +1,14 @@
 use crate::config::Config;
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use wildmatch::WildMatch;
 
 use super::{
-    handlers::{handle_config, handle_not_found},
+    handlers::{
+        handle_add_service, handle_config, handle_delete_service, handle_info,
+        handle_list_services, handle_not_found, handle_test_service, handle_upload_service,
+    },
     state::HttpState,
 };
 
@@ -41,6 +44,12 @@ pub async fn make_router(config: Arc<Config>) -> anyhow::Result<axum::Router> {
     let mut router = axum::Router::new()
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
+        .route("/app", get(handle_list_services))
+        .route("/app", post(handle_add_service))
+        .route("/app", delete(handle_delete_service))
+        .route("/info", get(handle_info))
+        .route("/test", post(handle_test_service))
+        .route("/upload", post(handle_upload_service))
         .fallback(handle_not_found)
         .with_state(state);
 
