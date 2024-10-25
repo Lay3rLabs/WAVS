@@ -122,6 +122,7 @@ impl ConfigBuilder {
     /// provides the list of filepaths to try for the config file
     /// the argument is internally from cli + env args
     pub fn filepaths_to_try(cli_env_args: &CliArgs) -> Vec<PathBuf> {
+        // the paths returned will be tried in order of pushing
         let mut dirs = Vec::new();
 
         // explicit arg passed to the cli, e.g. --home /foo, or env var HOME="/foo"
@@ -132,7 +133,7 @@ impl ConfigBuilder {
             dirs.push(dir);
         }
 
-        // finally, check the current working directory, wherever the command is run from
+        // next, check the current working directory, wherever the command is run from
         // i.e. ./wasmatic.toml
         if let Ok(dir) = std::env::current_dir() {
             dirs.push(dir);
