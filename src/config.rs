@@ -132,6 +132,12 @@ impl ConfigBuilder {
             dirs.push(dir);
         }
 
+        // finally, check the current working directory, wherever the command is run from
+        // i.e. ./wasmatic.toml
+        if let Ok(dir) = std::env::current_dir() {
+            dirs.push(dir);
+        }
+
         // checks the `.wasmatic/wasmatic.toml` file in the system config directory
         // this will vary, but the final path with then be something like:
         // Linux: ~/.config/wasmatic/wasmatic.toml
@@ -165,12 +171,6 @@ impl ConfigBuilder {
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
         // in this case, to not pollute the home directory, it looks for ~/.wasmatic/wasmatic.toml
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(Self::HIDDEN_DIRNAME)) {
-            dirs.push(dir);
-        }
-
-        // finally, check the current working directory, wherever the command is run from
-        // i.e. ./wasmatic.toml
-        if let Ok(dir) = std::env::current_dir() {
             dirs.push(dir);
         }
 
