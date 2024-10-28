@@ -12,30 +12,32 @@ use crate::Digest;
 ///
 /// It uses internal mutability pattern, so we can have multiple references to it.
 /// It should implement Send and Sync so it can be used in async code.
-pub struct Dispatcher {}
-
-// "management interface"
-impl Dispatcher {
+///
+/// These types should not be raw from the user, but parsed from the JSON structs, validated,
+/// and converted into our internal structs
+pub trait DispatchManager {
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
-    pub fn store_component(&self, _source: WasmSource) -> Result<Digest, DispatcherError> {
-        todo!();
-    }
+    fn store_component(&self, source: WasmSource) -> Result<Digest, DispatcherError>;
 
-    pub fn add_service(&self, _service: ServiceDefinition) -> Result<(), DispatcherError> {
-        todo!();
-    }
+    fn add_service(&self, service: Service) -> Result<(), DispatcherError>;
 
-    pub fn remove_service(&self, _name: String) -> Result<(), DispatcherError> {
-        todo!();
-    }
+    fn remove_service(&self, id: ID) -> Result<(), DispatcherError>;
 
-    pub fn list_services(&self) -> Result<Vec<Service>, DispatcherError> {
-        todo!();
-    }
+    fn list_services(&self) -> Result<Vec<Service>, DispatcherError>;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Error, Debug)]
+pub enum DispatcherError {
+    // TODO: fill this with something better
+    #[error("WASM code failed to compile")]
+    InvalidWasmCode,
+
+    #[error("Invalid ID: {0}")]
+    ID(#[from] IDError),
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum WasmSource {
     /// The wasm bytecode is provided directly.
@@ -51,22 +53,62 @@ pub enum WasmSource {
     },
 }
 
-/// Information the user provides for the service they want to install.
-/// Note: this is similar to the App struct in the old codebase
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct ServiceDefinition {
-    /// This is a limited set of characters, to ensure it can be used in filesystem paths and URLs.
+pub struct Service {
+    // Public identifier. Must be unique for all services
     pub id: ID,
+
     /// This is any utf-8 string, for human-readable display.
     pub name: String,
-    pub component: ComponentDefinition,
-    pub workflow: WorkflowDefintion,
-    pub testable: Option<bool>,
+
+    /// We will supoort multiple components in one service with unique service-scoped IDs. For now, just add one called "default".
+    /// This allows clean mapping from backwards-compatible API endpoints.
+    pub components: BTreeMap<ID, Component>,
+
+    /// We will support multiple workflows in one service with unique service-scoped IDs. For now, only one called "default".
+    /// The workflows reference components by name (for now, always "default").
+    pub workflows: BTreeMap<ID, Workflow>,
+
+    pub status: ServiceStatus,
+
+    pub testable: bool,
 }
 
-// Question: should we make different public format than internal format?
-pub type ComponentDefinition = Component;
+// FIXME: happy for a better name.
+/// This captures the triggers we listen to, the components we run, and how we submit the result
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Workflow {
+    pub trigger: Trigger,
+    /// A reference to which component to run with this data - for now, always "default"
+    pub component: ID,
+    /// How to submit the result of the component.
+    /// May be unset for eg cron jobs that just update internal state and don't submit anything
+    pub submit: Option<Submit>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum Submit {
+    /// Writing a transaction directly to the verifier contract on the main chain
+    /// the node is configured for.
+    VerifierTx {
+        /// The hd index of the mnemonic to sign with
+        hd_index: u32,
+        // The address of the verifier contract to submit to
+        // Note: To keep the same axum API, the http server can query this from the task queue contract (which is provided)
+        // I want to break these hard dependencies internally, so Dispatcher doesn't assume those connections between contracts
+        verifier_addr: String,
+    }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum ServiceStatus {
+    Active,
+    Stopped,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -94,71 +136,4 @@ pub enum AllowedHostPermission {
     Only(Vec<String>),
     #[default]
     None,
-}
-
-// FIXME: evaluate if we want a different public vs internal type here
-pub type WorkflowDefintion = Workflow;
-
-// FIXME: happy for a better name.
-/// This captures the triggers we listen to, the components we run, and how we submit the result
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Workflow {
-    pub trigger: Trigger,
-    /// A reference to which component to run with this data - for now, always "default"
-    pub component: ID,
-    /// How to submit the result of the component.
-    /// May be unset for eg cron jobs that just update internal state and don't submit anything
-    pub submit: Option<Submit>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Submit {
-    /// The hd index of the mnemonic to sign with
-    pub hd_index: u32,
-    // The address of the verifier contract to submit to
-    // Note: To keep the same axum API, the http server can query this from the task queue contract (which is provided)
-    // I want to break these hard dependencies internally, so Dispatcher doesn't assume those connections between contracts
-    pub verifier_addr: String,
-}
-
-/// How we store the service internally.
-///
-pub struct Service {
-    // Public identifier. Must be unique for all services
-    pub id: ID,
-
-    /// This is any utf-8 string, for human-readable display.
-    pub name: String,
-
-    /// We will supoort multiple components in one service with unique service-scoped IDs. For now, just add one called "default".
-    /// This allows clean mapping from backwards-compatible API endpoints.
-    pub components: BTreeMap<ID, Component>,
-
-    /// We will support multiple workflows in one service with unique service-scoped IDs. For now, only one called "default".
-    /// The workflows reference components by name (for now, always "default").
-    pub workflows: BTreeMap<ID, Workflow>,
-
-    pub status: ServiceStatus,
-    pub testable: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub enum ServiceStatus {
-    Active,
-    Stopped,
-}
-
-// we use UUID internally to store services, but the name is exposed on the management interface
-
-#[derive(Error, Debug)]
-pub enum DispatcherError {
-    // TODO: fill this with something better
-    #[error("WASM code failed to compile")]
-    InvalidWasmCode,
-
-    #[error("Invalid ID: {0}")]
-    ID(#[from] IDError),
 }
