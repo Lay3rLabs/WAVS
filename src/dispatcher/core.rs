@@ -5,7 +5,9 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
+use crate::apis::trigger::{
+    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
+};
 use crate::apis::{IDError, ID};
 
 use crate::storage::db::{DBError, RedbStorage, Table, JSON};
@@ -32,14 +34,37 @@ impl<T: TriggerManager, E: Engine> Dispatcher<T, E> {
 
     /// This will run forever, taking the triggers and
     pub fn start(&self) -> Result<(), DispatcherError> {
-        while let Some(_action) = self.actions_in.write().unwrap().blocking_recv() {
-            // TODO: look up the proper workflow
+        while let Some(action) = self.actions_in.write().unwrap().blocking_recv() {
+            // look up the proper workflow
+            let service = self
+                .storage
+                .get(SERVICE_TABLE, action.service_id.as_ref())?
+                .ok_or_else(|| DispatcherError::UnknownService(action.service_id.clone()))?
+                .value();
+            let workflow = service.workflows.get(&action.workflow_id).ok_or_else(|| {
+                DispatcherError::UnknownWorkflow(
+                    action.service_id.clone(),
+                    action.workflow_id.clone(),
+                )
+            })?;
+            let component = service
+                .components
+                .get(&workflow.component)
+                .ok_or_else(|| DispatcherError::UnknownComponent(workflow.component.clone()))?;
 
-            // TODO: get the timestamp from trigger, don't invent it
-            let _timestamp = 1234567890;
+            // TODO: we actually get other info, like permissions and apply in the execution
+            let digest = component.wasm.clone();
 
-            // TODO: call the engine
-            // self.engine.execute_queue(digest, request, timestamp)
+            match action.result {
+                TriggerResult::Queue { task_id, payload } => {
+                    // TODO: add the timestamp to the trigger, don't invent it
+                    let timestamp = 1234567890;
+                    let wasm_result = self.engine.execute_queue(digest, payload, timestamp)?;
+
+                    // TODO: we need to sent these off to the submission engine
+                    let _ = (task_id, wasm_result);
+                }
+            }
         }
         println!("Trigger channel closed, shutting down");
         Ok(())
@@ -101,6 +126,15 @@ impl<T: TriggerManager, E: Engine> DispatchManager for Dispatcher<T, E> {
 pub enum DispatcherError {
     #[error("Service {0} already registered")]
     ServiceRegistered(ID),
+
+    #[error("Unknown Service {0}")]
+    UnknownService(ID),
+
+    #[error("Unknown Workflow {0} / {1}")]
+    UnknownWorkflow(ID, ID),
+
+    #[error("Unknown Component {0}")]
+    UnknownComponent(ID),
 
     #[error("Invalid ID: {0}")]
     ID(#[from] IDError),
