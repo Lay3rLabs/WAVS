@@ -1,4 +1,4 @@
-mod engine;
+mod core;
 pub mod mock;
 
-pub use engine::WasmEngine;
+pub use core::WasmEngine;

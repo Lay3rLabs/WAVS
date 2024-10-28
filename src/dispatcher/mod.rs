@@ -1,3 +1,4 @@
-mod dispatcher;
+mod core;
+pub mod mock;
 
-pub use dispatcher::Dispatcher;
+pub use core::Dispatcher;
