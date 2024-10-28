@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use super::{IDError, Trigger, ID};
+use super::{Trigger, ID};
 use crate::Digest;
 
 /// This is the highest-level container for the system.
@@ -16,28 +15,20 @@ use crate::Digest;
 /// These types should not be raw from the user, but parsed from the JSON structs, validated,
 /// and converted into our internal structs
 pub trait DispatchManager {
+    type Error;
+
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
-    fn store_component(&self, source: WasmSource) -> Result<Digest, DispatcherError>;
+    fn store_component(&self, source: WasmSource) -> Result<Digest, Self::Error>;
 
-    fn add_service(&self, service: Service) -> Result<(), DispatcherError>;
+    fn add_service(&self, service: Service) -> Result<(), Self::Error>;
 
-    fn remove_service(&self, id: ID) -> Result<(), DispatcherError>;
+    fn remove_service(&self, id: ID) -> Result<(), Self::Error>;
 
-    fn list_services(&self) -> Result<Vec<Service>, DispatcherError>;
+    fn list_services(&self) -> Result<Vec<Service>, Self::Error>;
 }
 
-#[derive(Error, Debug)]
-pub enum DispatcherError {
-    // TODO: fill this with something better
-    #[error("WASM code failed to compile")]
-    InvalidWasmCode,
-
-    #[error("Invalid ID: {0}")]
-    ID(#[from] IDError),
-}
-
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum WasmSource {
     /// The wasm bytecode is provided directly.
@@ -53,7 +44,7 @@ pub enum WasmSource {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Service {
     // Public identifier. Must be unique for all services
@@ -77,7 +68,7 @@ pub struct Service {
 
 // FIXME: happy for a better name.
 /// This captures the triggers we listen to, the components we run, and how we submit the result
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Workflow {
     pub trigger: Trigger,
@@ -88,7 +79,7 @@ pub struct Workflow {
     pub submit: Option<Submit>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum Submit {
     /// Writing a transaction directly to the verifier contract on the main chain
@@ -103,14 +94,14 @@ pub enum Submit {
     }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum ServiceStatus {
     Active,
     Stopped,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Component {
     pub wasm: Digest,
@@ -120,7 +111,7 @@ pub struct Component {
     pub env: Vec<[String; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Permissions {
     /// If it can talk to http hosts on the network
@@ -129,7 +120,7 @@ pub struct Permissions {
     pub file_system: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum AllowedHostPermission {
     All,
