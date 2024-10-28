@@ -2,9 +2,11 @@
 // It probably should be pulled into multiple files before merging, but I think easier to visualize and review all together first.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::mpsc;
 
 use crate::Digest;
 
@@ -124,7 +126,8 @@ pub enum Trigger {
     Queue {
         // FIXME: add some chain name. right now all triggers are on one chain
         task_queue_addr: String,
-        poll_interval: u64,
+        /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
+        poll_interval: u32,
     },
 }
 
@@ -182,7 +185,7 @@ pub enum OperatorError {
 // TODO: custom Deserialize that enforces validation rules
 /// ID is meant to identify a component or a service (I don't think we need to enforce the distinction there, do we?)
 /// It is a string, but with some strict validation rules. It must be lowecase alphanumeric: `[a-z0-9-_]{3,32}`
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ID(String);
 
 impl ID {
@@ -200,6 +203,18 @@ impl ID {
     }
 }
 
+impl AsRef<str> for ID {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum IDError {
     #[error("ID must be between 3 and 32 characters")]
@@ -207,3 +222,81 @@ pub enum IDError {
     #[error("ID must be lowercase alphanumeric")]
     CharError,
 }
+
+/***** Trigger subsystem *****/
+
+pub struct TriggerManager {
+    // TODO: implement this
+}
+
+impl TriggerManager {
+    /// Create a new trigger manager.
+    /// This returns the manager and a receiver for the trigger actions.
+    /// Internally, all triggers may run in an async runtime and send results to the receiver.
+    /// Externally, the operator can read the incoming tasks either sync or async
+    pub fn create() -> (Self, mpsc::Receiver<TriggerAction>) {
+        todo!();
+    }
+
+    pub fn add_trigger(&self, _trigger: TriggerData) -> Result<(), TriggerError> {
+        todo!();
+    }
+
+    /// Remove one particular workflow
+    pub fn remove_workflow(&self, _service_id: ID, _workflow_id: ID) -> Result<(), TriggerError> {
+        todo!();
+    }
+
+    /// Remove all workflows for one service
+    pub fn remove_service(&self, _service_id: ID) -> Result<(), TriggerError> {
+        todo!();
+    }
+
+    /// List all registered triggers, by service ID
+    pub fn list_triggers(&self, _service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
+        todo!();
+    }
+}
+
+/// Internal description of a registered trigger, to be indexed by associated IDs
+pub struct TriggerData {
+    pub service_id: ID,
+    pub workflow_id: ID,
+    pub trigger: Trigger,
+}
+
+/// The data returned from a trigger action
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TriggerAction {
+    /// Identify which service and workflow this came from
+    pub service_id: ID,
+    pub workflow_id: ID,
+
+    /// The data we got from the trigger
+    pub result: TriggerResult,
+}
+
+/// This is the actual data we got from the trigger, used to feed into the component
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum TriggerResult {
+    Queue {
+        /// The id from the task queue
+        task_id: String,
+        /// The input data associated with that task
+        payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
+    },
+}
+
+#[derive(Error, Debug)]
+pub enum TriggerError {
+    #[error("Cannot find service: {0}")]
+    NoSuchService(ID),
+    #[error("Cannot find workflow: {0} / {1}")]
+    NoSuchWorkflow(ID, ID),
+    #[error("Service exists, cannot register again: {0}")]
+    ServiceAlreadyExists(ID),
+    #[error("Workflow exists, cannot register again: {0} / {1}")]
+    WorkflowAlreadyExists(ID, ID),
+}
+
+/***** Wasm Engine subsystem *****/
