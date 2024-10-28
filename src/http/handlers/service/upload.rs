@@ -1,11 +1,20 @@
 use axum::{body::Bytes, extract::State, response::IntoResponse, Json};
+use serde::{Deserialize, Serialize};
 
-use crate::http::state::HttpState;
+use crate::{http::state::HttpState, Digest};
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadServiceResponse {
+    pub digest: Digest,
+}
 
 #[axum::debug_handler]
 pub async fn handle_upload_service(
     State(_state): State<HttpState>,
-    _bytes: Bytes,
+    bytes: Bytes,
 ) -> impl IntoResponse {
-    Json::<[(); 0]>([]).into_response()
+    let digest = Digest::new(&bytes);
+
+    Json(UploadServiceResponse { digest }).into_response()
 }

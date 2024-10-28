@@ -15,9 +15,11 @@ use wasmatic::{
             delete::DeleteApps,
             list::ListAppsResponse,
             test::{TestAppRequest, TestAppResponse},
+            upload::UploadServiceResponse,
         },
         types::app::Status,
     },
+    Digest,
 };
 
 #[tokio::test]
@@ -155,6 +157,31 @@ async fn http_test_service() {
     let response: TestAppResponse = map_response(response).await;
 
     assert_eq!(response.output, serde_json::json!({ "y": 9.0 }));
+}
+
+#[tokio::test]
+async fn http_upload_service() {
+    let bytes = vec![1, 2, 3];
+    let digest = Digest::new(&bytes);
+
+    let mut app = TestHttpApp::new().await;
+
+    let body = Body::from(bytes);
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .header("Content-Type", "application/json")
+        .uri("/upload")
+        .body(body)
+        .unwrap();
+
+    let response = app.http_router().await.call(req).await.unwrap();
+
+    assert!(response.status().is_success());
+
+    let response: UploadServiceResponse = map_response(response).await;
+
+    assert_eq!(response.digest, digest);
 }
 
 async fn map_response<T: DeserializeOwned>(response: axum::http::Response<Body>) -> T {
