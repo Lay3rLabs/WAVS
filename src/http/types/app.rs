@@ -16,12 +16,6 @@ pub struct App {
     pub testable: Option<bool>,
 }
 
-impl App {
-    pub fn _validate(&self) -> Result<(), AppError> {
-        Ok(())
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum Trigger {
