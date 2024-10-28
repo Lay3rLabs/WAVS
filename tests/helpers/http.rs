@@ -1,3 +1,5 @@
+use wasmatic::dispatcher::Dispatcher;
+
 use super::app::TestApp;
 
 #[derive(Clone)]
@@ -10,7 +12,9 @@ impl TestHttpApp {
     pub async fn new() -> Self {
         let inner = TestApp::new().await;
 
-        let http_router = wasmatic::http::server::make_router(inner.config.clone())
+        let dispatcher = Dispatcher::new_without_runtime(inner.config.as_ref().clone());
+
+        let http_router = wasmatic::http::server::make_router(dispatcher)
             .await
             .unwrap();
 

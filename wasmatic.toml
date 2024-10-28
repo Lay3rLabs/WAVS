@@ -20,3 +20,13 @@ log_level = ["info", "wasmatic=debug"]
 
 # the directory to store the data. Default is "/var/wasmatic"
 # data = "~/wasmatic/data"
+
+# chosen chain name 
+chain = "local"
+
+# chain config
+[chains.local]
+chain_id = "slay3r-local"
+rpc_endpoint = "http://localhost:26657"
+grpc_endpoint = "http://localhost:9090"
+gas_price = 0.025

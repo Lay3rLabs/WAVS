@@ -1,9 +1,10 @@
 use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
-use crate::args::CliArgs;
+use crate::args::{CliArgs, OptionalWasmaticChainConfig};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -11,7 +12,7 @@ use crate::args::CliArgs;
 /// 1. cli args
 /// 2. environment variables
 /// 3. config file
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     /// The port to bind the server to.
     /// Default is `8000`
@@ -28,6 +29,15 @@ pub struct Config {
     /// The allowed cors origins
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
+
+    /// The chosen chain name
+    pub chain: String,
+
+    /// A lookup of chain configs, keyed by a "chain name"
+    pub chains: HashMap<String, WasmaticChainConfig>,
+
+    #[serde(flatten)]
+    pub chain_config_override: OptionalWasmaticChainConfig,
 }
 
 /// Default values for the config struct
@@ -40,7 +50,70 @@ impl Default for Config {
             host: "localhost".to_string(),
             data: PathBuf::from("/var/wasmatic"),
             cors_allowed_origins: Vec::new(),
+            chain: String::new(),
+            chains: HashMap::new(),
+            chain_config_override: OptionalWasmaticChainConfig::default(),
         }
+    }
+}
+
+impl Config {
+    pub fn chain_config(&self) -> Result<ChainConfig> {
+        let config: WasmaticChainConfig = Figment::new()
+            .merge(figment::providers::Serialized::defaults(
+                self.chains
+                    .get(&self.chain)
+                    .context(format!("No chain config found for \"{}\"", self.chain))?,
+            ))
+            .merge(figment::providers::Serialized::defaults(
+                &self.chain_config_override,
+            ))
+            .extract()?;
+
+        Ok(ChainConfig {
+            chain_id: config.chain_id,
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            grpc_web_endpoint: None,
+            gas_price: config.gas_price,
+            gas_denom: config.gas_denom,
+            address_kind: AddrKind::Cosmos {
+                prefix: config.bech32_prefix,
+            },
+        })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WasmaticChainConfig {
+    pub chain_id: ChainId,
+    pub rpc_endpoint: String,
+    pub grpc_endpoint: String,
+    /// not micro-units, e.g. 0.025 would be a typical value
+    /// if not specified, defaults to 0.025
+    #[serde(default = "WasmaticChainConfig::default_gas_price")]
+    pub gas_price: f32,
+    /// if not specified, defaults to "uslay"
+    #[serde(default = "WasmaticChainConfig::default_gas_denom")]
+    pub gas_denom: String,
+    /// if not specified, defaults to "layer"
+    #[serde(default = "WasmaticChainConfig::default_bech32_prefix")]
+    pub bech32_prefix: String,
+    /// optional faucet endpoint for this chain
+    pub faucet_endpoint: Option<String>,
+}
+
+impl WasmaticChainConfig {
+    const fn default_gas_price() -> f32 {
+        0.025
+    }
+
+    fn default_gas_denom() -> String {
+        "uslay".to_string()
+    }
+
+    fn default_bech32_prefix() -> String {
+        "layer".to_string()
     }
 }
 

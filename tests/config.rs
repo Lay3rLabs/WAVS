@@ -96,7 +96,7 @@ async fn config_array_string() {
     );
 
     // replace the var and check that it is now what we expect
-    // needs to be in an async function
+    // env replacement needs to be in an async function
     {
         temp_env::async_with_vars(
             [(
@@ -108,12 +108,14 @@ async fn config_array_string() {
         .await;
 
         async fn check() {
+            // first - if we don't set a CLI var, it should use the env var
             let config = TestApp::new().await.config;
             assert_eq!(
                 config.tracing_env_filter().unwrap().to_string(),
                 TRACING_ENV_FILTER_ENV.to_string()
             );
 
+            // but then, even when the env var is available, if we set a CLI var, it should override
             let mut cli_args = TestApp::default_cli_args();
             cli_args.log_level = TRACING_ENV_FILTER_CLI
                 .to_string()
@@ -156,4 +158,30 @@ async fn config_dotenv() {
 
     // unset the value, just to play nice, though this could be a race condition (see docs on remove_var)
     std::env::remove_var(format!("{}_RANDOM_TEST_VALUE", CliArgs::ENV_VAR_PREFIX))
+}
+
+// tests that we load chain config section correctly
+#[tokio::test]
+async fn config_chains() {
+    let config = TestApp::new().await.config;
+
+    let chain_config = config.chain_config().unwrap();
+    assert_eq!(chain_config.chain_id, "slay3r-local".parse().unwrap());
+
+    // change the target chain via cli
+    let mut cli_args = TestApp::default_cli_args();
+    cli_args.chain = Some("testnet".to_string());
+    let config = TestApp::new_with_args(cli_args).await.config;
+    let chain_config = config.chain_config().unwrap();
+    assert_eq!(
+        chain_config.chain_id,
+        "layer-permissionless-3".parse().unwrap()
+    );
+
+    // change the grpc endpoint
+    let mut cli_args = TestApp::default_cli_args();
+    cli_args.chain_config.grpc_endpoint = Some("http://example.com:1234".to_string());
+    let config = TestApp::new_with_args(cli_args).await.config;
+    let chain_config = config.chain_config().unwrap();
+    assert_eq!(chain_config.grpc_endpoint, "http://example.com:1234");
 }
