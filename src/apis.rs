@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use uuid::Uuid;
 
 use crate::Digest;
 
@@ -59,6 +58,9 @@ pub enum WasmSource {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceDefinition {
+    /// This is a limited set of characters, to ensure it can be used in filesystem paths and URLs.
+    pub id: ID,
+    /// This is any utf-8 string, for human-readable display.
     pub name: String,
     pub component: ComponentDefinition,
     pub workflow: WorkflowDefintion,
@@ -106,7 +108,7 @@ pub type WorkflowDefintion = Workflow;
 pub struct Workflow {
     pub trigger: Trigger,
     /// A reference to which component to run with this data - for now, always "default"
-    pub component: String,
+    pub component: ID,
     /// How to submit the result of the component.
     /// May be unset for eg cron jobs that just update internal state and don't submit anything
     pub submit: Option<Submit>,
@@ -140,19 +142,19 @@ pub struct Submit {
 /// How we store the service internally.
 ///
 pub struct Service {
-    // Public identifier
-    pub name: String,
-    // Internal identifier, for safe internal identifier (may be different on each node).
-    // This can be used to construct filesystem paths, without opening up to path traversal attacks.
-    pub uuid: Uuid,
-    /// We will supoort multiple names components in one service. For now, just add one called "default".
-    /// This allows clean mapping from backwards-compatible API endpoints.
-    pub components: BTreeMap<String, Component>,
+    // Public identifier. Must be unique for all services
+    pub id: ID,
 
-    /// We will support multiple workflows in one service. For now, only one.
-    /// These probably don't need to be named (externally), but we can add an identifier if it makes it easier to track.
+    /// This is any utf-8 string, for human-readable display.
+    pub name: String,
+
+    /// We will supoort multiple components in one service with unique service-scoped IDs. For now, just add one called "default".
+    /// This allows clean mapping from backwards-compatible API endpoints.
+    pub components: BTreeMap<ID, Component>,
+
+    /// We will support multiple workflows in one service with unique service-scoped IDs. For now, only one called "default".
     /// The workflows reference components by name (for now, always "default").
-    pub workflows: Vec<Workflow>,
+    pub workflows: BTreeMap<ID, Workflow>,
 
     pub status: ServiceStatus,
     pub testable: bool,
@@ -172,4 +174,36 @@ pub enum OperatorError {
     // TODO: fill this with something better
     #[error("WASM code failed to compile")]
     InvalidWasmCode,
+
+    #[error("Invalid ID: {0}")]
+    ID(#[from] IDError),
+}
+
+// TODO: custom Deserialize that enforces validation rules
+/// ID is meant to identify a component or a service (I don't think we need to enforce the distinction there, do we?)
+/// It is a string, but with some strict validation rules. It must be lowecase alphanumeric: `[a-z0-9-_]{3,32}`
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ID(String);
+
+impl ID {
+    pub fn new(id: &str) -> Result<Self, IDError> {
+        if id.len() < 3 || id.len() > 32 {
+            return Err(IDError::LengthError);
+        }
+        if !id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() && c.is_alphanumeric())
+        {
+            return Err(IDError::CharError);
+        }
+        Ok(Self(id.to_string()))
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum IDError {
+    #[error("ID must be between 3 and 32 characters")]
+    LengthError,
+    #[error("ID must be lowercase alphanumeric")]
+    CharError,
 }
