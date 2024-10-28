@@ -14,6 +14,7 @@ use wasmatic::{
             add::{RegisterAppRequest, RegisterAppResponse},
             delete::DeleteApps,
             list::ListAppsResponse,
+            test::{TestAppRequest, TestAppResponse},
         },
         types::app::Status,
     },
@@ -126,6 +127,34 @@ async fn http_list_services() {
             .collect::<Vec<String>>(),
         vec!["mock-service-1", "mock-service-2"]
     );
+}
+
+#[tokio::test]
+async fn http_test_service() {
+    let mut app = TestHttpApp::new().await;
+
+    let body = serde_json::to_string(&TestAppRequest {
+        name: "mock-service".to_string(),
+        input: Some(serde_json::json!({
+            "x": 3
+        })),
+    })
+    .unwrap();
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .header("Content-Type", "application/json")
+        .uri("/test")
+        .body(body)
+        .unwrap();
+
+    let response = app.http_router().await.call(req).await.unwrap();
+
+    assert!(response.status().is_success());
+
+    let response: TestAppResponse = map_response(response).await;
+
+    assert_eq!(response.output, serde_json::json!({ "y": 9.0 }));
 }
 
 async fn map_response<T: DeserializeOwned>(response: axum::http::Response<Body>) -> T {
