@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::{config::Config, dispatcher::Dispatcher};
 use axum::{
     extract::DefaultBodyLimit,
     routing::{delete, get, post},
@@ -15,20 +15,14 @@ use super::{
     state::HttpState,
 };
 
-pub fn start(config: Arc<Config>) -> anyhow::Result<()> {
-    // Start a new tokio runtime to run our server
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4) // Configure as needed
-        .enable_all()
-        .build()
-        .unwrap();
-
+pub fn start(dispatcher: Dispatcher) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
-    rt.block_on(async move {
-        let router = make_router(config.clone()).await?;
+    dispatcher.async_handle().block_on(async move {
+        let (host, port) = (dispatcher.config.host.clone(), dispatcher.config.port);
 
-        let listener =
-            tokio::net::TcpListener::bind(&format!("{}:{}", config.host, config.port)).await?;
+        let router = make_router(dispatcher).await?;
+
+        let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
         tracing::info!("Http server starting on: {}", listener.local_addr()?);
 
@@ -40,8 +34,8 @@ pub fn start(config: Arc<Config>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn make_router(config: Arc<Config>) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone()).await?;
+pub async fn make_router(dispatcher: Dispatcher) -> anyhow::Result<axum::Router> {
+    let state = HttpState::new(dispatcher.clone()).await?;
 
     // build our application with a single route
     let mut router = axum::Router::new()
@@ -59,7 +53,7 @@ pub async fn make_router(config: Arc<Config>) -> anyhow::Result<axum::Router> {
         .fallback(handle_not_found)
         .with_state(state);
 
-    if let Some(cors) = cors_layer(config.clone()) {
+    if let Some(cors) = cors_layer(dispatcher.config.clone()) {
         router = router.layer(cors);
     }
 

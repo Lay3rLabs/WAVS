@@ -1,12 +1,11 @@
-use std::sync::Arc;
-
 use clap::Parser;
+use layer_climb::prelude::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wasmatic::{args::CliArgs, config::ConfigBuilder, http};
+use wasmatic::{args::CliArgs, config::ConfigBuilder, dispatcher::Dispatcher, http};
 
 fn main() {
     let args = CliArgs::parse();
-    let config = Arc::new(ConfigBuilder::new(args).build().unwrap());
+    let config = ConfigBuilder::new(args).build().unwrap();
 
     // setup tracing
     tracing_subscriber::registry()
@@ -19,11 +18,23 @@ fn main() {
         .try_init()
         .unwrap();
 
+    let dispatcher = Dispatcher::new(config);
+
+    // get a chain query client
+    let chain_query_client = dispatcher
+        .async_handle()
+        .block_on(QueryClient::new(dispatcher.config.chain_config().unwrap()))
+        .unwrap();
+    tracing::info!(
+        "Connected to chain: {}",
+        chain_query_client.chain_config.chain_id
+    );
+
     // start the http server in its own thread
     let server_handle = std::thread::spawn({
-        let config = config.clone();
+        let dispatcher = dispatcher.clone();
         move || {
-            http::server::start(config).unwrap();
+            http::server::start(dispatcher).unwrap();
         }
     });
 

@@ -1,14 +1,12 @@
-use std::sync::Arc;
-
-use crate::config::Config;
+use crate::dispatcher::Dispatcher;
 
 #[derive(Clone)]
 pub struct HttpState {
-    pub config: Arc<Config>,
+    pub dispatcher: Dispatcher,
 }
 
 impl HttpState {
-    pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
-        Ok(Self { config })
+    pub async fn new(dispatcher: Dispatcher) -> anyhow::Result<Self> {
+        Ok(Self { dispatcher })
     }
 }

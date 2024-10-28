@@ -42,6 +42,8 @@ impl TestApp {
             host: None,
             data: None,
             cors_allowed_origins: Vec::new(),
+            chain: None,
+            chain_config: Default::default(),
         }
     }
 
