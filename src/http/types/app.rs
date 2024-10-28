@@ -6,6 +6,8 @@ use crate::Digest;
 #[serde(rename_all = "camelCase")]
 pub struct App {
     pub name: String,
+    // TODO - probably make a different struct for request vs. response
+    // i.e. the request shouldn't contain this field at all
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<Status>,
     pub digest: Digest,
@@ -27,7 +29,7 @@ pub enum Trigger {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Copy)]
 #[serde(rename_all = "camelCase")]
 pub enum Status {
     Active,

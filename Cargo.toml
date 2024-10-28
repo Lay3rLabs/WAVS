@@ -28,6 +28,7 @@ tower-http = {version = "0.6.1", features = ["cors", "trace"] }
 tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
+layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.1.1" }
 
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }

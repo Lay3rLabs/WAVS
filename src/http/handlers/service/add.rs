@@ -19,14 +19,19 @@ pub struct RegisterAppRequest {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterAppResponse {
-    name: String,
-    status: Status,
+    pub name: String,
+    pub status: Status,
 }
 
 #[axum::debug_handler]
 pub async fn handle_add_service(
     State(_state): State<HttpState>,
-    Json(_req): Json<RegisterAppRequest>,
+    Json(req): Json<RegisterAppRequest>,
 ) -> impl IntoResponse {
-    Json::<[(); 0]>([]).into_response()
+    let resp = RegisterAppResponse {
+        name: req.app.name,
+        status: Status::Active,
+    };
+
+    Json(resp).into_response()
 }

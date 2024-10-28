@@ -3,11 +3,17 @@ use axum::{
     body::Body,
     http::{Method, Request},
 };
-use helpers::http::TestHttpApp;
+use helpers::{http::TestHttpApp, service::MockServiceBuilder};
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use tower::Service;
-use wasmatic::config::Config;
+use wasmatic::{
+    config::Config,
+    http::{
+        handlers::service::add::{RegisterAppRequest, RegisterAppResponse},
+        types::app::Status,
+    },
+};
 
 #[tokio::test]
 async fn http_not_found() {
@@ -41,6 +47,33 @@ async fn http_config() {
     let config: Config = map_response(response).await;
 
     assert_eq!(config.port, app.inner.config.port);
+}
+
+#[tokio::test]
+async fn http_add_service() {
+    let mut app = TestHttpApp::new().await;
+
+    let body = serde_json::to_string(&RegisterAppRequest {
+        app: MockServiceBuilder::new("mock-service").build(),
+        wasm_url: None,
+    })
+    .unwrap();
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .header("Content-Type", "application/json")
+        .uri("/app")
+        .body(body)
+        .unwrap();
+
+    let response = app.http_router().await.call(req).await.unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let response: RegisterAppResponse = map_response(response).await;
+
+    assert_eq!(response.name, "mock-service");
+    assert_eq!(response.status, Status::Active);
 }
 
 async fn map_response<T: DeserializeOwned>(response: axum::http::Response<Body>) -> T {

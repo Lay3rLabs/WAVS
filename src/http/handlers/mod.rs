@@ -1,7 +1,7 @@
 mod config;
 mod info;
 mod not_found;
-mod service;
+pub mod service;
 
 pub use config::handle_config;
 pub use info::handle_info;
