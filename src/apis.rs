@@ -15,11 +15,11 @@ use crate::Digest;
  *
  * High-level system design
  *
- * The main component is the Operator, which can receive "management" calls via the http server
+ * The main component is the Dispatcher, which can receive "management" calls via the http server
  * to determine its configuration. It works at the level of "Services" which are independent
  * collections of code and triggers that serve one AVS.
  *
- * Principally the Operator manages workflows by the following system:
+ * Principally the Dispatcher manages workflows by the following system:
  *
  * * When the workflow is created, it adds all relevant triggers to the TriggerManager
  * * It continually listens to new results from the TriggerManager, and executes them on the WasmEngine.
@@ -50,11 +50,124 @@ use crate::Digest;
  * * TriggerManager
  * * HTTP Server
  *
- * I think the internal operation of the Operator is my biggest question.
+ * I think the internal operation of the Dispatcher is my biggest question.
  * Along with how to organize the submission of results.
  * And then how to somehow throttle concurrent access to the WasmEngine.
  *
  ***/
+
+/*
+
+General execution workflow:
+
+<Triggers> --Action--> <WasmEngine> --Result--> <Submission>
+
+           mpsc channel               mpsc channel
+
+Implementation: Actual pipeline is orchestrated by Dispatcher.
+"Dispatcher" is like "event dispatcher" but also stores state and can reconstruct the other ones
+Dispatcher should be quick, it has high-level system overview, just needs to delegate work to subsystems.
+
+
+Idea 1
+
+<Triggers> --TriggerAction-->     Dispatcher        --ChainMessage-->  <Submission>
+                        - call WasmEngine
+                        (call/response interface)
+
+
+Idea 2
+
+<Triggers> --TriggerAction-->  Dispatcher  --WasmRequest--> WasmEngine --WasmResult--> Dispatcher --ChainMessage-->  <Submission>
+  async       (buffer?)      sync (select)                                         sync (select)
+ 
+Trigger Action:
+- (service, workflow) id
+- task id (from queue)
+- payload data
+
+WasmRequest:
+- (service, workflow id)
+- task id
+- payload data
+- wasm digest
+
+WasmResult:
+- (service, workflow id)
+- task id
+- wasm result data
+
+ChainMessage:
+- (service, workflow id) ?? Do we need this anymore?
+- task id
+- wasm result data
+- submit (hd_index, verifier_addr)
+
+Dispatcher Thread 1 and 2 maintain some mapping by querying the workflow for the next step to execute.
+
+HD Index must not be shared between different services.
+For now assume all Submit in one service use the same HD Index.
+
+Notes:
+
+Dispatcher should allow multiple trigger actions to be run at the same time (some limit).
+
+- WasmEngine can manage internal threadpool / concurrency limits
+- Dispatcher has channel to WasmEngine, sends onshot channel with request to get result
+
+* Look at backpressure
+* Tracing, logging, metrics are important to monitor this pipeline
+
+*/
+
+/*
+
+General management workflow
+Sync calls on Dispatcher.
+
+On load:
+- Dispatcher loads all current state (list of registered services - workflows + triggers)
+- Triggers wasm to refresh state if needed??
+- Initializes all channels and subsystems (trigger, wasm engine, submission)
+- Adds all triggers to trigger manager
+
+On HTTP Request (local, from authorized agent):
+- Update Dispatcher state
+  - May store new wasm -> wasm engine (internal persistence)
+  - May add/update triggers in trigger subsystem
+  - Stores new services locally to manage workflows when triggers send actions
+
+Management interface of Dispatcher may be somewhat slow, unlike the execution pipeline.
+We also don't expect high-throughput here and could even limit to one management
+operation at a time to simplify code for now.
+
+HTTP server should call in `spawn_blocking` to avoid blocking the async runtime.
+We can even use a mutex internally to ensure only one management call processed at a time.
+
+Idea: HTTP server is outside of the Dispatcher and contains it as state once the Dispatcher
+is properly initialized. It can then call into the Dispatcher to adjust running services.
+
+- Management - set up workflows, add components
+- Execution - run workflows, triggers -> wasm -> submit
+
+*/
+
+/*
+Thoughts:
+
+- Testability
+  - do we need traits for some of these objects?
+  - do we fake at the level of channels?
+  - where do we allow different configurations?
+  - focus on testing components of the system without needing a full chain
+  - mocking out wasm engine to run some closure not full wasmtime
+- Traceability
+  - how do we log and trace the execution of a workflow?
+  - how do we monitor the system?
+  - important for end-to-end testing and real production
+
+*/
+
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -62,25 +175,25 @@ use crate::Digest;
 ///
 /// It uses internal mutability pattern, so we can have multiple references to it.
 /// It should implement Send and Sync so it can be used in async code.
-pub struct Operator {}
+pub struct Dispatcher {}
 
 // "management interface"
-impl Operator {
+impl Dispatcher {
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
-    pub fn add_wasm(&self, _source: WasmSource) -> Result<Digest, OperatorError> {
+    pub fn store_component(&self, _source: WasmSource) -> Result<Digest, DispatcherError> {
         todo!();
     }
 
-    pub fn add_service(&self, _service: ServiceDefinition) -> Result<(), OperatorError> {
+    pub fn add_service(&self, _service: ServiceDefinition) -> Result<(), DispatcherError> {
         todo!();
     }
 
-    pub fn remove_service(&self, _name: String) -> Result<(), OperatorError> {
+    pub fn remove_service(&self, _name: String) -> Result<(), DispatcherError> {
         todo!();
     }
 
-    pub fn list_services(&self) -> Result<Vec<Service>, OperatorError> {
+    pub fn list_services(&self) -> Result<Vec<Service>, DispatcherError> {
         todo!();
     }
 }
@@ -184,7 +297,7 @@ pub struct Submit {
     pub hd_index: u32,
     // The address of the verifier contract to submit to
     // Note: To keep the same axum API, the http server can query this from the task queue contract (which is provided)
-    // I want to break these hard dependencies internally, so Operator doesn't assume those connections between contracts
+    // I want to break these hard dependencies internally, so Dispatcher doesn't assume those connections between contracts
     pub verifier_addr: String,
 }
 
@@ -219,7 +332,7 @@ pub enum ServiceStatus {
 // we use UUID internally to store services, but the name is exposed on the management interface
 
 #[derive(Error, Debug)]
-pub enum OperatorError {
+pub enum DispatcherError {
     // TODO: fill this with something better
     #[error("WASM code failed to compile")]
     InvalidWasmCode,
@@ -280,7 +393,7 @@ impl TriggerManager {
     /// Create a new trigger manager.
     /// This returns the manager and a receiver for the trigger actions.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
-    /// Externally, the operator can read the incoming tasks either sync or async
+    /// Externally, the Dispatcher can read the incoming tasks either sync or async
     pub fn create() -> (Self, mpsc::Receiver<TriggerAction>) {
         todo!();
     }
@@ -358,7 +471,7 @@ impl<S: CAStorage> WasmEngine<S> {
     /// Create a new trigger manager.
     /// This returns the manager and a receiver for the trigger actions.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
-    /// Externally, the operator can read the incoming tasks either sync or async
+    /// Externally, the Dispatcher can read the incoming tasks either sync or async
     pub fn new(wasm_storage: S) -> Self {
         Self { wasm_storage }
     }
