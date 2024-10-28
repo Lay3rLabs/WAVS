@@ -20,12 +20,6 @@ pub struct App {
 #[serde(rename_all = "camelCase")]
 pub enum Trigger {
     #[serde(rename_all = "camelCase")]
-    Cron { schedule: String },
-
-    #[serde(rename_all = "camelCase")]
-    Event {},
-
-    #[serde(rename_all = "camelCase")]
     Queue {
         task_queue_addr: String,
         hd_index: u32,
