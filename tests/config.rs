@@ -1,5 +1,6 @@
 mod helpers;
-use helpers::TestApp;
+use helpers::app::TestApp;
+
 use std::{path::PathBuf, sync::LazyLock};
 use wasmatic::{
     args::CliArgs,
