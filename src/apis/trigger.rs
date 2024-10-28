@@ -4,37 +4,26 @@ use tokio::sync::mpsc;
 
 use super::{Trigger, ID};
 
-pub struct TriggerManager {
-    // TODO: implement this
-}
-
-impl TriggerManager {
+pub trait TriggerManager {
     /// Create a new trigger manager.
     /// This returns the manager and a receiver for the trigger actions.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
     /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    pub fn create() -> (Self, mpsc::Receiver<TriggerAction>) {
-        todo!();
-    }
+    fn create() -> (Self, mpsc::Receiver<TriggerAction>)
+    where
+        Self: Sized;
+    // TODO: is this in the trait or just the implementation?
 
-    pub fn add_trigger(&self, _trigger: TriggerData) -> Result<(), TriggerError> {
-        todo!();
-    }
+    fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 
-    /// Remove one particular workflow
-    pub fn remove_workflow(&self, _service_id: ID, _workflow_id: ID) -> Result<(), TriggerError> {
-        todo!();
-    }
+    /// Remove one particular trigger
+    fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError>;
 
     /// Remove all workflows for one service
-    pub fn remove_service(&self, _service_id: ID) -> Result<(), TriggerError> {
-        todo!();
-    }
+    fn remove_service(&self, service_id: ID) -> Result<(), TriggerError>;
 
     /// List all registered triggers, by service ID
-    pub fn list_triggers(&self, _service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
-        todo!();
-    }
+    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError>;
 }
 
 /// Internal description of a registered trigger, to be indexed by associated IDs

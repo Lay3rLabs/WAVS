@@ -2,9 +2,9 @@
 // It probably should be pulled into multiple files before merging, but I think easier to visualize and review all together first.
 
 pub mod dispatcher;
+pub mod engine;
 pub mod trigger;
 mod types;
-pub mod wasm;
 
 pub use types::*;
 

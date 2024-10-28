@@ -1,3 +1,5 @@
+pub use crate::apis::engine::Engine;
+
 use thiserror::Error;
 
 use crate::storage::{CAStorage, CAStorageError};
@@ -8,7 +10,6 @@ pub struct WasmEngine<S: CAStorage> {
     // TODO: implement actual wasmtime engine here
 }
 
-// TODO: should we make some trait for quicker tasks where you just register closures for the digests?
 impl<S: CAStorage> WasmEngine<S> {
     /// Create a new trigger manager.
     /// This returns the manager and a receiver for the trigger actions.
@@ -17,21 +18,26 @@ impl<S: CAStorage> WasmEngine<S> {
     pub fn new(wasm_storage: S) -> Self {
         Self { wasm_storage }
     }
+}
 
-    pub fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, WasmEngineError> {
+// TODO: should we make some trait for quicker tasks where you just register closures for the digests?
+impl<S: CAStorage> Engine for WasmEngine<S> {
+    type Error = WasmEngineError;
+
+    fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, WasmEngineError> {
         // TODO: validate bytecode is proper wasm with some wit interface
         let digest = self.wasm_storage.set_data(bytecode)?;
         Ok(digest)
     }
 
     // TODO: paginate this
-    pub fn list_digests(&self) -> Result<Vec<Digest>, WasmEngineError> {
+    fn list_digests(&self) -> Result<Vec<Digest>, WasmEngineError> {
         // TODO: requires a range query on the castorage (.keys())
         todo!();
     }
 
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
-    pub fn execute_queue(
+    fn execute_queue(
         &self,
         _digest: Digest,
         _request: Vec<u8>,
