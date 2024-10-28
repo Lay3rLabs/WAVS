@@ -11,6 +11,51 @@ use tokio::sync::mpsc;
 use crate::storage::{CAStorage, CAStorageError};
 use crate::Digest;
 
+/***
+ *
+ * High-level system design
+ *
+ * The main component is the Operator, which can receive "management" calls via the http server
+ * to determine its configuration. It works at the level of "Services" which are independent
+ * collections of code and triggers that serve one AVS.
+ *
+ * Principally the Operator manages workflows by the following system:
+ *
+ * * When the workflow is created, it adds all relevant triggers to the TriggerManager
+ * * It continually listens to new results from the TriggerManager, and executes them on the WasmEngine.
+ * * When the WasmEngine has produced the result, it submits it to the verifier contract.
+ *
+ * The TriggerManager has it's own internal runtime and is meant to be able to handle a large number of
+ * async network requests. These may be polling or event-driven (websockets), but there are expected to be quite
+ * a few network calls and relatively little computation.
+ *
+ * The WasmEngine stores a large number of wasm components, indexed by their digest.
+ * It should be able to quickly execute any of them, via a number of predefined wit component interfaces.
+ * We do want to limit the number of wasmtime instances at once. For testing, a simple Mutex around the WasmEngine
+ * should demo this. For real usage, we should use some internal threadpool like rayon at set a max number of
+ * engines running at once. We may want to make this an async interface?
+ *
+ * Once the results are calculated, they need to be signed and submitted to the chain (or later to the aggregator).
+ * We can do this in the operatator itself, or design a new subsystem for that. (Open to suggestions).
+ *
+ * I think the biggest question in my head is how to handle all these different runtimes and sync/async assumptions.
+ * * Tokio channels is one way (which triggers use as it really matches this fan-in element well) - which allow each side to be either sync or async.
+ * * Async code can call sync via `tokio::spawn_blocking`, but we may need some limit on how many such threads can be active at once
+ *
+ * Currently, I have a strong inclination to use sync code for:
+ * * WasmEngine (it seems more stable)
+ * * ReDB / KVStore (official recommendation is to wrap it with `tokio::block_in_place` or such if you need it async)
+ *
+ * And use async code for:
+ * * TriggerManager
+ * * HTTP Server
+ *
+ * I think the internal operation of the Operator is my biggest question.
+ * Along with how to organize the submission of results.
+ * And then how to somehow throttle concurrent access to the WasmEngine.
+ *
+ ***/
+
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
 /// The other components route to each other via this one.
