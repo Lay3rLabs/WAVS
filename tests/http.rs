@@ -13,6 +13,7 @@ use wasmatic::{
         handlers::service::{
             add::{RegisterAppRequest, RegisterAppResponse},
             delete::DeleteApps,
+            list::ListAppsResponse,
         },
         types::app::Status,
     },
@@ -98,6 +99,33 @@ async fn http_delete_service() {
     let response = app.http_router().await.call(req).await.unwrap();
 
     assert!(response.status().is_success());
+}
+
+#[tokio::test]
+async fn http_list_services() {
+    let mut app = TestHttpApp::new().await;
+
+    let req = Request::builder()
+        .method(Method::GET)
+        .header("Content-Type", "application/json")
+        .uri("/app")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.http_router().await.call(req).await.unwrap();
+
+    assert!(response.status().is_success());
+
+    let response: ListAppsResponse = map_response(response).await;
+
+    assert_eq!(
+        response
+            .apps
+            .into_iter()
+            .map(|app| app.name)
+            .collect::<Vec<String>>(),
+        vec!["mock-service-1", "mock-service-2"]
+    );
 }
 
 async fn map_response<T: DeserializeOwned>(response: axum::http::Response<Body>) -> T {
