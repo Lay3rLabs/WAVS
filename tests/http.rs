@@ -10,7 +10,10 @@ use tower::Service;
 use wasmatic::{
     config::Config,
     http::{
-        handlers::service::add::{RegisterAppRequest, RegisterAppResponse},
+        handlers::service::{
+            add::{RegisterAppRequest, RegisterAppResponse},
+            delete::DeleteApps,
+        },
         types::app::Status,
     },
 };
@@ -42,7 +45,7 @@ async fn http_config() {
 
     let response = app.http_router().await.call(req).await.unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert!(response.status().is_success());
 
     let config: Config = map_response(response).await;
 
@@ -68,12 +71,33 @@ async fn http_add_service() {
 
     let response = app.http_router().await.call(req).await.unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert!(response.status().is_success());
 
     let response: RegisterAppResponse = map_response(response).await;
 
     assert_eq!(response.name, "mock-service");
     assert_eq!(response.status, Status::Active);
+}
+
+#[tokio::test]
+async fn http_delete_service() {
+    let mut app = TestHttpApp::new().await;
+
+    let body = serde_json::to_string(&DeleteApps {
+        apps: vec!["mock-service".to_string()],
+    })
+    .unwrap();
+
+    let req = Request::builder()
+        .method(Method::DELETE)
+        .header("Content-Type", "application/json")
+        .uri("/app")
+        .body(body)
+        .unwrap();
+
+    let response = app.http_router().await.call(req).await.unwrap();
+
+    assert!(response.status().is_success());
 }
 
 async fn map_response<T: DeserializeOwned>(response: axum::http::Response<Body>) -> T {
