@@ -16,10 +16,6 @@ impl MockDispatcher {
 impl DispatchManager for MockDispatcher {
     type Error = DispatcherError;
 
-    fn async_runtime_handle(&self) -> tokio::runtime::Handle {
-        tokio::runtime::Handle::current()
-    }
-
     fn config(&self) -> &Config {
         &self.config
     }
