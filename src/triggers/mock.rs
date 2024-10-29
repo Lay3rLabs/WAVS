@@ -10,7 +10,7 @@ impl MockTriggerManager {
 }
 
 impl TriggerManager for MockTriggerManager {
-    fn start(&self) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+    fn start(&self) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError> {
         todo!()
     }
 
