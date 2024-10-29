@@ -60,7 +60,7 @@ impl DispatchManager for CoreDispatcher {
             async move {
                 tokio::select! {
                     _ = kill_receiver.recv() => {
-                        tracing::info!("Trigger Manager shutting down");
+                        tracing::info!("Dispatcher shutting down");
                     },
                     _ = async move {
                         while let Some(action) = actions_in.recv().await {
