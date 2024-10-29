@@ -42,6 +42,8 @@ impl Submission for MockSubmission {
 
 #[cfg(test)]
 mod test {
+    use std::{thread::sleep, time::Duration};
+
     use crate::apis::ID;
 
     use super::*;
@@ -70,10 +72,14 @@ mod test {
         let msg3 = dummy_message("serv1", 3, "baz");
 
         send.blocking_send(msg1.clone()).unwrap();
+        // try waiting a bit. is there a way to block somehow?
+        sleep(Duration::from_millis(100));
         assert_eq!(submission.received(), vec![msg1.clone()]);
 
         send.blocking_send(msg2.clone()).unwrap();
         send.blocking_send(msg3.clone()).unwrap();
+        // try waiting a bit. is there a way to block somehow?
+        sleep(Duration::from_millis(100));
         assert_eq!(submission.received(), vec![msg1, msg2, msg3]);
     }
 }
