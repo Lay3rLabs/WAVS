@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wasmatic::{args::CliArgs, config::ConfigBuilder, dispatcher::core::CoreDispatcher};
+use wasmatic::{
+    args::CliArgs, config::ConfigBuilder, context::AppContext, dispatcher::CoreDispatcher,
+};
 
 fn main() {
     let args = CliArgs::parse();
@@ -19,7 +21,9 @@ fn main() {
         .try_init()
         .unwrap();
 
-    let dispatcher = Arc::new(CoreDispatcher::new(config).unwrap());
+    let ctx = AppContext::new(config);
 
-    wasmatic::start(dispatcher);
+    let dispatcher = Arc::new(CoreDispatcher::new_core(ctx.clone()).unwrap());
+
+    wasmatic::start(ctx, dispatcher);
 }

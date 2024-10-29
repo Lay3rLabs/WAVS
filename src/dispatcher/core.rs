@@ -1,168 +1,85 @@
-use std::path::Path;
-use std::sync::Arc;
-use thiserror::Error;
-use tokio::{runtime::Runtime, sync::mpsc};
-use std::sync::Arc;
-
-use thiserror::Error;
-use tokio::runtime::Runtime;
-
-use crate::apis::dispatcher::{DispatchManager, Service, Submit, WasmSource};
-use crate::apis::engine::{Engine, EngineError};
+use crate::apis::dispatcher::{Service, Submit, WasmSource};
+use crate::apis::engine::Engine;
 use crate::apis::submission::{ChainMessage, Submission};
-use crate::apis::trigger::{TriggerData, TriggerError, TriggerManager, TriggerResult};
-use crate::apis::trigger::{
-    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
-};
-use crate::apis::{IDError, ID};
-
-use crate::config::Config;
+use crate::apis::trigger::{TriggerAction, TriggerData, TriggerManager, TriggerResult};
+use crate::apis::ID;
 use crate::engine::WasmEngine;
-use crate::storage::db::{DBError, RedbStorage, Table, JSON};
+use crate::storage::db::{Table, JSON};
 use crate::storage::fs::FileStorage;
-use crate::storage::CAStorageError;
+use crate::submission::core::CoreSubmission;
 use crate::triggers::core::CoreTriggerManager;
+use crate::{apis::dispatcher::DispatchManager, context::AppContext};
 
-pub type CoreDispatcher = Dispatcher<CoreTriggerManager, WasmEngine<FileStorage>, Submission>;
+use super::generic::{Dispatcher, DispatcherError};
 
-pub struct Dispatcher<T: TriggerManager, E: Engine, S: Submission> {
-    triggers: T,
-    engine: E,
-    submission: S,
-    storage: RedbStorage,
-pub struct CoreDispatcher {
-    triggers: CoreTriggerManager,
-    engine: WasmEngine<FileStorage>,
-    db_storage: RedbStorage,
-    kill_sender: tokio::sync::broadcast::Sender<()>,
-    pub async_runtime: Arc<Runtime>,
-    pub config: Config,
-}
-
-impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
-    pub fn new(
-        triggers: T,
-        engine: E,
-        submission: S,
-        db_storage_path: impl AsRef<Path>,
-    ) -> Result<Self, DispatcherError> {
-        let storage = RedbStorage::new(db_storage_path)?;
-        Ok(Dispatcher {
-            triggers,
-            engine,
-            submission,
-            storage
-        })
-    }
-
-impl CoreDispatcher {
-    pub fn new(config: Config) -> Result<Self, DispatcherError> {
-        println!(
-            "{} -> {}",
-            config.data.join("db").display(),
-            config.data.join("db").exists()
-        );
-
-        let db_storage = RedbStorage::new(config.data.join("db"))?;
-        let file_storage = FileStorage::new(config.data.join("ca"))?;
-
-        let engine = WasmEngine::new(file_storage);
-
-        let async_runtime = Arc::new(
-            tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(4) // TODO: make configurable?
-                .enable_all()
-                .build()
-                .unwrap(),
-        );
-
-        let (kill_sender, kill_receiver) = tokio::sync::broadcast::channel(1);
-
-        let triggers =
-            CoreTriggerManager::new(config.clone(), async_runtime.clone(), kill_receiver)?;
-
-        Ok(Self {
-            triggers,
-            engine,
-            db_storage,
-            async_runtime,
-            config,
-            kill_sender,
-        })
-    }
-}
+pub type CoreDispatcher = Dispatcher<CoreTriggerManager, WasmEngine<FileStorage>, CoreSubmission>;
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
-impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher<T, E, S> {
+impl CoreDispatcher {
+    pub fn new_core(ctx: AppContext) -> Result<CoreDispatcher, DispatcherError> {
+        let file_storage = FileStorage::new(ctx.config.data.join("ca"))?;
+
+        let triggers = CoreTriggerManager::new();
+
+        let engine = WasmEngine::new(file_storage);
+
+        let submission = CoreSubmission::new();
+
+        Self::new(triggers, engine, submission, ctx.config.data.join("db"))
+    }
+}
+
+impl DispatchManager for CoreDispatcher {
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
     /// If it is given a `rt` it will pass that runtime to triggers and submission, otherwise they will each create a new one.
-    fn start(&self, rt: Option<Arc<Runtime>>) -> Result<(), DispatcherError> {
-        let mut actions_in = self.triggers.start(rt.clone());
-        let (msg_out, msg_in) = mpsc::channel::<ChainMessage>(1);
-        self.submission.start(rt, msg_in);
+    fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
+        let mut actions_in = self.triggers.start(ctx.clone())?;
+        let msgs_out = self.submission.start(ctx.clone())?;
 
-        while let Some(action) = actions_in.blocking_recv() {
-    /// This will run forever, taking the triggers and
-    pub fn kill(&self) {
-        let _ = self.kill_sender.send(());
-    }
-
-    /// This will run forever until killed
-    /// taking the trigger actions and processing them as needed
-    pub fn start(&self) -> Result<(), DispatcherError> {
-        self.async_runtime.clone().block_on(async move {
-            let mut kill_receiver = self.kill_receiver();
-            let mut trigger_actions_receiver = self.triggers.start()?;
-
-            tokio::select! {
-                _ = async move {
-                    while let Some(action) = trigger_actions_receiver.recv().await {
-                        if let Err(e) = self.run_trigger(action) {
-                            tracing::error!("Error running trigger: {:?}", e);
-                        }
-                    }
-                } => {
-
-                },
-                _ = kill_receiver.recv() => {
-                    tracing::info!("Dispatcher shutting down");
-                },
-            }
-
-                    if let Some(submit) = workflow.submit.as_ref() {
-                        match submit {
-                                hd_index,
-                                verifier_addr,
-                            } => {
-                                let chain_msg = ChainMessage {
-                                    service_id: action.service_id.clone(),
-                                    workflow_id: action.workflow_id.clone(),
-                                    task_id,
-                                    wasm_result,
-                                    hd_index: *hd_index,
-                                    verifier_addr: verifier_addr.clone(),
-                                };
-                                msg_out.blocking_send(chain_msg).unwrap();
+        ctx.rt.clone().spawn({
+            let mut kill_receiver = ctx.get_kill_receiver();
+            let _self = self.clone();
+            async move {
+                tokio::select! {
+                    _ = kill_receiver.recv() => {
+                        tracing::info!("Trigger Manager shutting down");
+                    },
+                    _ = async move {
+                        while let Some(action) = actions_in.recv().await {
+                            match _self.run_trigger(action) {
+                                Err(e) => {
+                                    tracing::error!("Error running trigger: {:?}", e);
+                                },
+                                Ok(Some(msg)) => {
+                                    msgs_out.send(msg).unwrap();
+                                },
+                                Ok(None) => {
+                                },
                             }
                         }
+                    } => {
                     }
                 }
-            Ok(())
-        })
+            }
+        });
+        Ok(())
+    }
 
-    fn run_trigger(&self, action: TriggerAction) -> Result<(), DispatcherError> {
+    fn run_trigger(&self, action: TriggerAction) -> Result<Option<ChainMessage>, DispatcherError> {
         // look up the proper workflow
         let service = self
-            .db_storage
+            .storage
             .get(SERVICE_TABLE, action.service_id.as_ref())?
             .ok_or_else(|| DispatcherError::UnknownService(action.service_id.clone()))?
             .value();
+
         let workflow = service.workflows.get(&action.workflow_id).ok_or_else(|| {
             DispatcherError::UnknownWorkflow(action.service_id.clone(), action.workflow_id.clone())
         })?;
+
         let component = service
             .components
             .get(&workflow.component)
@@ -178,24 +95,24 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
                 let wasm_result = self.engine.execute_queue(digest, payload, timestamp)?;
 
                 // TODO: we need to sent these off to the submission engine
-                let _ = (task_id, wasm_result);
+                if let Some(Submit::VerifierTx {
+                    hd_index,
+                    verifier_addr,
+                }) = workflow.submit.as_ref()
+                {
+                    Ok(Some(ChainMessage {
+                        service_id: action.service_id.clone(),
+                        workflow_id: action.workflow_id.clone(),
+                        task_id,
+                        wasm_result,
+                        hd_index: *hd_index,
+                        verifier_addr: verifier_addr.clone(),
+                    }))
+                } else {
+                    Ok(None)
+                }
             }
         }
-        Ok(())
-    }
-}
-
-const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
-
-impl DispatchManager for CoreDispatcher {
-    type Error = DispatcherError;
-
-    fn config(&self) -> &Config {
-        &self.config
-    }
-
-    fn kill_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
-        self.kill_sender.subscribe()
     }
 
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
@@ -210,13 +127,13 @@ impl DispatchManager for CoreDispatcher {
     fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
-            .db_storage
+            .storage
             .get(SERVICE_TABLE, service.id.as_ref())?
             .is_some()
         {
             return Err(DispatcherError::ServiceRegistered(service.id));
         }
-        self.db_storage
+        self.storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
         // go through and add the triggers to the table
@@ -242,34 +159,4 @@ impl DispatchManager for CoreDispatcher {
         // TODO: we need to list all keys of the storage (range and range_keys)
         todo!()
     }
-}
-
-#[derive(Error, Debug)]
-pub enum DispatcherError {
-    #[error("Service {0} already registered")]
-    ServiceRegistered(ID),
-
-    #[error("Unknown Service {0}")]
-    UnknownService(ID),
-
-    #[error("Unknown Workflow {0} / {1}")]
-    UnknownWorkflow(ID, ID),
-
-    #[error("Unknown Component {0}")]
-    UnknownComponent(ID),
-
-    #[error("Invalid ID: {0}")]
-    ID(#[from] IDError),
-
-    #[error("DB: {0}")]
-    DB(#[from] DBError),
-
-    #[error("DB: {0}")]
-    CA(#[from] CAStorageError),
-
-    #[error("Engine: {0}")]
-    Engine(#[from] EngineError),
-
-    #[error("Trigger: {0}")]
-    Trigger(#[from] TriggerError),
 }

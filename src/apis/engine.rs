@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{storage::CAStorageError, Digest};
 
-pub trait Engine {
+pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
 
     // TODO: paginate this

@@ -1,38 +1,39 @@
-use std::sync::Arc;
-
 use crate::{
     apis::trigger::{TriggerAction, TriggerError, TriggerManager},
-    config::Config,
+    context::AppContext,
 };
 use anyhow::Result;
 use layer_climb::prelude::*;
-use tokio::{runtime::Runtime, sync::mpsc};
+use tokio::sync::mpsc;
 
 #[derive(Clone)]
-pub struct CoreTriggerManager {
-    pub config: Config,
-    pub runtime: Arc<Runtime>,
-    pub kill_receiver: Arc<std::sync::Mutex<Option<tokio::sync::broadcast::Receiver<()>>>>,
-}
+pub struct CoreTriggerManager {}
 
 impl CoreTriggerManager {
-    pub fn new(
-        config: Config,
-        runtime: Arc<Runtime>,
-        kill_receiver: tokio::sync::broadcast::Receiver<()>,
-    ) -> Result<Self, TriggerError> {
-        Ok(Self {
-            config,
-            runtime,
-            kill_receiver: Arc::new(std::sync::Mutex::new(Some(kill_receiver))),
-        })
+    pub fn new() -> Self {
+        Self {}
     }
 
-    async fn start_producer(
+    async fn start_watcher(
         &self,
-        _query_client: QueryClient,
+        ctx: AppContext,
         _action_sender: mpsc::UnboundedSender<TriggerAction>,
     ) -> Result<(), TriggerError> {
+        // get a chain query client
+        let chain_config = ctx
+            .config
+            .chain_config()
+            .map_err(TriggerError::QueryClient)?;
+        let query_client = QueryClient::new(chain_config)
+            .await
+            .map_err(TriggerError::QueryClient)
+            .unwrap();
+
+        tracing::info!(
+            "Trigger Manager started on {}",
+            query_client.chain_config.chain_id
+        );
+        // TODO: start watching
         std::future::pending::<()>().await;
 
         Ok(())
@@ -40,44 +41,30 @@ impl CoreTriggerManager {
 }
 
 impl TriggerManager for CoreTriggerManager {
-    fn start(&self) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError> {
-        let chain_config = self
-            .config
-            .chain_config()
-            .map_err(TriggerError::QueryClient)?;
-
+    fn start(
+        &self,
+        ctx: AppContext,
+    ) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError> {
         // The trigger manager should be free to quickly fire off triggers
         // so that it can continue to monitor the chain
-        // if there are any backpressure issues, it should be dealt with on the dispatcher side
-        // e.g. holding a limited local queue of triggers to be processed, after being recieved from the channel
-        let (tx, rx) = mpsc::unbounded_channel();
+        // it's up to the dispatcher to handle the backpressure
+        let (action_sender, action_receiver) = mpsc::unbounded_channel();
 
-        let mut kill_receiver = self.kill_receiver.lock().unwrap().take().unwrap();
-
-        let _self = self.clone();
-
-        self.runtime.spawn(async move {
-            // get a chain query client
-            let query_client = QueryClient::new(chain_config)
-                .await
-                .map_err(TriggerError::QueryClient)
-                .unwrap();
-
-            tracing::info!(
-                "Trigger Manager started on {}",
-                query_client.chain_config.chain_id
-            );
-
-            tokio::select! {
-                _ = kill_receiver.recv() => {
-                    tracing::info!("Trigger Manager shutting down");
-                },
-                _ = _self.start_producer(query_client, tx) => {
+        ctx.rt.clone().spawn({
+            let _self = self.clone();
+            let mut kill_receiver = ctx.get_kill_receiver();
+            async move {
+                tokio::select! {
+                    _ = kill_receiver.recv() => {
+                        tracing::info!("Trigger Manager shutting down");
+                    },
+                    _ = _self.start_watcher(ctx, action_sender) => {
+                    }
                 }
             }
         });
 
-        Ok(rx)
+        Ok(action_receiver)
     }
 
     fn add_trigger(&self, _trigger: crate::apis::trigger::TriggerData) -> Result<(), TriggerError> {

@@ -4,5 +4,5 @@ use crate::http::state::HttpState;
 
 #[axum::debug_handler]
 pub async fn handle_config(State(state): State<HttpState>) -> impl IntoResponse {
-    Json(state.dispatcher.config()).into_response()
+    Json(state.ctx.config.as_ref()).into_response()
 }

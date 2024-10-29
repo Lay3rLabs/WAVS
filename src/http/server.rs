@@ -1,7 +1,8 @@
 use crate::{
     apis::dispatcher::DispatchManager,
     config::Config,
-    dispatcher::core::{CoreDispatcher, DispatcherError},
+    context::AppContext,
+    dispatcher::{CoreDispatcher, DispatcherError},
 };
 use axum::{
     extract::DefaultBodyLimit,
@@ -20,14 +21,14 @@ use super::{
 };
 
 // this is called from main, takes a real CoreDispatcher
-pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
+pub fn start(ctx: AppContext, dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
-    dispatcher.async_runtime.clone().block_on(async move {
-        let (host, port) = (dispatcher.config.host.clone(), dispatcher.config.port);
+    ctx.rt.clone().block_on(async move {
+        let (host, port) = (ctx.config.host.clone(), ctx.config.port);
 
-        let mut shutdown_signal = dispatcher.kill_receiver();
+        let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(dispatcher).await?;
+        let router = make_router(ctx, dispatcher).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -49,11 +50,12 @@ pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
 
 // this is called from main and tests
 pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
+    ctx: AppContext,
     dispatcher: Arc<D>,
 ) -> anyhow::Result<axum::Router> {
-    let config = dispatcher.config().clone();
+    let config = ctx.config.clone();
 
-    let state = HttpState::new(dispatcher).await?;
+    let state = HttpState::new(ctx, dispatcher).await?;
 
     // build our application with a single route
     let mut router = axum::Router::new()

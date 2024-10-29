@@ -1,19 +1,18 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{runtime::Runtime, sync::mpsc};
+use tokio::sync::mpsc;
+
+use crate::context::AppContext;
 
 use super::{Trigger, ID};
 
-pub trait TriggerManager {
+pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
     /// This should only be called once in the lifetime of the object
-    fn start(&self, rt: Arc<Runtime>) -> mpsc::Receiver<TriggerAction>;
-    /// start the trigger manager, get an action receiver.
-    /// Internally, all triggers may run in an async runtime and send results to the receiver.
-    /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    fn start(&self) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError>;
+    fn start(
+        &self,
+        ctx: AppContext,
+    ) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 
