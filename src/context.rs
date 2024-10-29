@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use tokio::runtime::Runtime;
 
-use crate::config::Config;
-
 #[derive(Clone)]
 pub struct AppContext {
     pub rt: Arc<Runtime>,
@@ -12,8 +10,14 @@ pub struct AppContext {
     _kill_receiver: Arc<tokio::sync::broadcast::Receiver<()>>,
 }
 
+impl Default for AppContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppContext {
-    pub fn new(_config: &Config) -> Self {
+    pub fn new() -> Self {
         let rt = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(4) // TODO: make configurable?
