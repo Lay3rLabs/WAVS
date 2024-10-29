@@ -28,6 +28,8 @@ pub trait DispatchManager: Send + Sync {
     fn remove_service(&self, id: ID) -> Result<(), Self::Error>;
 
     fn list_services(&self) -> Result<Vec<Service>, Self::Error>;
+
+    fn kill_receiver(&self) -> tokio::sync::broadcast::Receiver<()>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

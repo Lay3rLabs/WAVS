@@ -25,13 +25,21 @@ pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
     dispatcher.async_runtime.clone().block_on(async move {
         let (host, port) = (dispatcher.config.host.clone(), dispatcher.config.port);
 
+        let mut shutdown_signal = dispatcher.kill_receiver();
+
         let router = make_router(dispatcher).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
         tracing::info!("Http server starting on: {}", listener.local_addr()?);
 
-        axum::serve(listener, router).await?;
+        axum::serve(listener, router)
+            .with_graceful_shutdown(async move {
+                shutdown_signal.recv().await.ok();
+
+                tracing::info!("Http server shutting down");
+            })
+            .await?;
 
         anyhow::Ok(())
     })?;
