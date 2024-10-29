@@ -5,6 +5,7 @@ use crate::apis::engine::Engine;
 use crate::apis::submission::{ChainMessage, Submission};
 use crate::apis::trigger::{TriggerAction, TriggerData, TriggerManager, TriggerResult};
 use crate::apis::ID;
+use crate::config::Config;
 use crate::engine::WasmEngine;
 use crate::storage::db::{Table, JSON};
 use crate::storage::fs::FileStorage;
@@ -20,16 +21,16 @@ pub type CoreDispatcher =
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
 impl CoreDispatcher {
-    pub fn new_core(ctx: AppContext) -> Result<CoreDispatcher, DispatcherError> {
-        let file_storage = FileStorage::new(ctx.config.data.join("ca"))?;
+    pub fn new_core(config: &Config) -> Result<CoreDispatcher, DispatcherError> {
+        let file_storage = FileStorage::new(config.data.join("ca"))?;
 
-        let triggers = CoreTriggerManager::new();
+        let triggers = CoreTriggerManager::new(config)?;
 
         let engine = Arc::new(WasmEngine::new(file_storage));
 
-        let submission = CoreSubmission::new();
+        let submission = CoreSubmission::new(config)?;
 
-        Self::new(triggers, engine, submission, ctx.config.data.join("db"))
+        Self::new(triggers, engine, submission, config.data.join("db"))
     }
 }
 

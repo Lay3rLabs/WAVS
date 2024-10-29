@@ -10,6 +10,7 @@ pub mod storage;
 pub mod submission; // where we submit the results to the chain
 pub mod triggers; // where we handle the trigger runtime
 use apis::dispatcher::DispatchManager;
+use config::Config;
 use context::AppContext;
 pub use digest::Digest;
 
@@ -17,7 +18,7 @@ pub use digest::Digest;
 use dispatcher::CoreDispatcher;
 use std::sync::Arc;
 
-pub fn start(ctx: AppContext, dispatcher: Arc<CoreDispatcher>) {
+pub fn start(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatcher>) {
     ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {
@@ -31,7 +32,7 @@ pub fn start(ctx: AppContext, dispatcher: Arc<CoreDispatcher>) {
         let dispatcher = dispatcher.clone();
         let ctx = ctx.clone();
         move || {
-            http::server::start(ctx, dispatcher).unwrap();
+            http::server::start(ctx, config, dispatcher).unwrap();
         }
     });
 

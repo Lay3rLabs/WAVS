@@ -1,5 +1,6 @@
 use crate::{
     apis::trigger::{TriggerAction, TriggerError, TriggerManager},
+    config::Config,
     context::AppContext,
 };
 use anyhow::Result;
@@ -7,25 +8,23 @@ use layer_climb::prelude::*;
 use tokio::sync::mpsc;
 
 #[derive(Clone)]
-pub struct CoreTriggerManager {}
+pub struct CoreTriggerManager {
+    pub chain_config: ChainConfig,
+}
 
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(config: &Config) -> Result<Self, TriggerError> {
+        let chain_config = config.chain_config().map_err(TriggerError::QueryClient)?;
+
+        Ok(Self { chain_config })
     }
 
     async fn start_watcher(
         &self,
-        ctx: AppContext,
         _action_sender: mpsc::UnboundedSender<TriggerAction>,
     ) -> Result<(), TriggerError> {
-        // get a chain query client
-        let chain_config = ctx
-            .config
-            .chain_config()
-            .map_err(TriggerError::QueryClient)?;
-        let query_client = QueryClient::new(chain_config)
+        let query_client = QueryClient::new(self.chain_config.clone())
             .await
             .map_err(TriggerError::QueryClient)
             .unwrap();
@@ -59,7 +58,7 @@ impl TriggerManager for CoreTriggerManager {
                     _ = kill_receiver.recv() => {
                         tracing::info!("Trigger Manager shutting down");
                     },
-                    _ = _self.start_watcher(ctx, action_sender) => {
+                    _ = _self.start_watcher(action_sender) => {
                     }
                 }
             }

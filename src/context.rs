@@ -6,7 +6,6 @@ use crate::config::Config;
 
 #[derive(Clone)]
 pub struct AppContext {
-    pub config: Arc<Config>,
     pub rt: Arc<Runtime>,
     kill_sender: tokio::sync::broadcast::Sender<()>,
     // keep the first receiver alive as long as context is alive
@@ -15,7 +14,7 @@ pub struct AppContext {
 }
 
 impl AppContext {
-    pub fn new(config: Config) -> Self {
+    pub fn new(_config: &Config) -> Self {
         let rt = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(4) // TODO: make configurable?
@@ -27,7 +26,6 @@ impl AppContext {
         let (kill_sender, kill_receiver) = tokio::sync::broadcast::channel(1);
 
         Self {
-            config: Arc::new(config),
             rt,
             kill_sender,
             kill_receiver: Arc::new(Mutex::new(Some(kill_receiver))),

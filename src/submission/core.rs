@@ -2,6 +2,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     apis::submission::{ChainMessage, Submission, SubmissionError},
+    config::Config,
     context::AppContext,
 };
 
@@ -10,8 +11,8 @@ pub struct CoreSubmission {}
 
 impl CoreSubmission {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(_config: &Config) -> Result<Self, SubmissionError> {
+        Ok(Self {})
     }
 }
 

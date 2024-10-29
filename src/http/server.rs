@@ -21,14 +21,18 @@ use super::{
 };
 
 // this is called from main, takes a real CoreDispatcher
-pub fn start(ctx: AppContext, dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
+pub fn start(
+    ctx: AppContext,
+    config: Config,
+    dispatcher: Arc<CoreDispatcher>,
+) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
-        let (host, port) = (ctx.config.host.clone(), ctx.config.port);
+        let (host, port) = (config.host.clone(), config.port);
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(ctx.config.as_ref().clone(), dispatcher).await?;
+        let router = make_router(config, dispatcher).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 

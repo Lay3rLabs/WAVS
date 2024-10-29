@@ -21,9 +21,9 @@ fn main() {
         .try_init()
         .unwrap();
 
-    let ctx = AppContext::new(config);
+    let ctx = AppContext::new(&config);
 
-    let dispatcher = Arc::new(CoreDispatcher::new_core(ctx.clone()).unwrap());
+    let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 
-    wasmatic::start(ctx, dispatcher);
+    wasmatic::start(ctx, config, dispatcher);
 }
