@@ -19,6 +19,7 @@ use super::{
     state::HttpState,
 };
 
+// this is called from main, takes a real CoreDispatcher
 pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     dispatcher.async_runtime.clone().block_on(async move {
@@ -38,6 +39,7 @@ pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
     Ok(())
 }
 
+// this is called from main and tests
 pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
     dispatcher: Arc<D>,
 ) -> anyhow::Result<axum::Router> {
