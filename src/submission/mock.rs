@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
+use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
@@ -10,6 +13,9 @@ pub struct MockSubmission {
 }
 
 impl MockSubmission {
+    const TIMEOUT: Duration = Duration::from_secs(10);
+    const POLL: Duration = Duration::from_millis(50);
+
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
@@ -20,6 +26,29 @@ impl MockSubmission {
     pub fn received(&self) -> Vec<ChainMessage> {
         self.inbox.blocking_read().clone()
     }
+
+    /// This will block until n messages arrive in the inbox, or until 10 seconds passes
+    pub fn wait_for_messages(&self, n: usize) -> Result<(), WaitError> {
+        self.wait_for_messages_timeout(n, Self::TIMEOUT)
+    }
+
+    /// This will block until n messages arrive in the inbox, or until custom Duration passes
+    pub fn wait_for_messages_timeout(&self, n: usize, timeout: Duration) -> Result<(), WaitError> {
+        let end = Instant::now() + timeout;
+        while Instant::now() < end {
+            if self.inbox.blocking_read().len() >= n {
+                return Ok(());
+            }
+            sleep(Self::POLL);
+        }
+        Err(WaitError::Timeout)
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Clone)]
+pub enum WaitError {
+    #[error("Waiting timed out")]
+    Timeout,
 }
 
 impl Submission for MockSubmission {
@@ -68,7 +97,7 @@ mod test {
     }
 
     #[test]
-    fn collect_messages() {
+    fn collect_messages_with_sleep() {
         let submission = MockSubmission::new();
         assert_eq!(submission.received(), vec![]);
 
@@ -92,6 +121,34 @@ mod test {
     }
 
     #[test]
+    fn collect_messages_with_wait() {
+        let submission = MockSubmission::new();
+        assert_eq!(submission.received(), vec![]);
+
+        let ctx = AppContext::new();
+        let send = submission.start(ctx.clone()).unwrap();
+
+        let msg1 = dummy_message("serv1", 1, "foo");
+        let msg2 = dummy_message("serv1", 2, "bar");
+        let msg3 = dummy_message("serv1", 3, "baz");
+
+        send.blocking_send(msg1.clone()).unwrap();
+        submission.wait_for_messages(1).unwrap();
+        assert_eq!(submission.received(), vec![msg1.clone()]);
+
+        send.blocking_send(msg2.clone()).unwrap();
+        send.blocking_send(msg3.clone()).unwrap();
+        submission.wait_for_messages(3).unwrap();
+        assert_eq!(submission.received(), vec![msg1, msg2, msg3]);
+
+        // show this doesn't loop forever if the 4th never appears
+        let err = submission
+            .wait_for_messages_timeout(4, Duration::from_millis(300))
+            .unwrap_err();
+        assert_eq!(err, WaitError::Timeout);
+    }
+
+    #[test]
     fn kill_stops_collection() {
         let submission = MockSubmission::new();
         assert_eq!(submission.received(), vec![]);
@@ -103,8 +160,7 @@ mod test {
         let msg2 = dummy_message("serv3", 12, "bar");
 
         send.blocking_send(msg1.clone()).unwrap();
-        // try waiting a bit. is there a way to block somehow?
-        sleep(Duration::from_millis(100));
+        submission.wait_for_messages(1).unwrap();
         assert_eq!(submission.received(), vec![msg1.clone()]);
 
         // now hit the kill switch
