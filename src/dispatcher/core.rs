@@ -53,13 +53,6 @@ impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
 
 impl CoreDispatcher {
     pub fn new(config: Config) -> Result<Self, DispatcherError> {
-        // TODO: get the proper storage paths
-        println!(
-            "{} exists: {}",
-            config.data.join("db").display(),
-            config.data.join("db").exists()
-        );
-
         let db_storage = RedbStorage::new(config.data.join("db"))?;
         let file_storage = FileStorage::new(config.data.join("ca"))?;
 
@@ -148,7 +141,7 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
                 }
             }
         }
-        println!("Trigger channel closed, shutting down");
+        tracing::info!("Trigger channel closed, shutting down");
         Ok(())
     }
 }
