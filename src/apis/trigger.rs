@@ -47,7 +47,7 @@ pub struct TriggerAction {
 pub enum TriggerResult {
     Queue {
         /// The id from the task queue
-        task_id: String,
+        task_id: u64,
         /// The input data associated with that task
         payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
     },
