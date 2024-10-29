@@ -5,14 +5,10 @@ use tokio::sync::mpsc;
 use super::{Trigger, ID};
 
 pub trait TriggerManager {
-    /// Create a new trigger manager.
-    /// This returns the manager and a receiver for the trigger actions.
+    /// get the action receiver.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
     /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    fn create() -> (Self, mpsc::Receiver<TriggerAction>)
-    where
-        Self: Sized;
-    // TODO: is this in the trait or just the implementation?
+    fn receiver(&self) -> mpsc::Receiver<TriggerAction>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 
@@ -57,6 +53,8 @@ pub enum TriggerResult {
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
+    #[error("Cannot create query client: {0}")]
+    QueryClient(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

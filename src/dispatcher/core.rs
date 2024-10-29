@@ -1,43 +1,69 @@
-use std::path::Path;
-use std::sync::RwLock;
 use thiserror::Error;
-use tokio::sync::mpsc::Receiver;
+use tokio::runtime::Runtime;
 
 use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::trigger::{
-    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
-};
+use crate::apis::trigger::{TriggerData, TriggerError, TriggerManager, TriggerResult};
 use crate::apis::{IDError, ID};
 
+use crate::config::Config;
+use crate::engine::WasmEngine;
 use crate::storage::db::{DBError, RedbStorage, Table, JSON};
+use crate::storage::fs::FileStorage;
+use crate::storage::CAStorageError;
+use crate::triggers::core::CoreTriggerManager;
 
-pub struct Dispatcher<T: TriggerManager, E: Engine> {
-    triggers: T,
-    engine: E,
-    storage: RedbStorage,
-    actions_in: RwLock<Receiver<TriggerAction>>,
+pub struct CoreDispatcher {
+    triggers: CoreTriggerManager,
+    engine: WasmEngine<FileStorage>,
+    db_storage: RedbStorage,
+    pub async_runtime: Runtime,
+    pub config: Config,
 }
 
-impl<T: TriggerManager, E: Engine> Dispatcher<T, E> {
-    pub fn new(engine: E, file: impl AsRef<Path>) -> Result<Self, DispatcherError> {
-        let storage = RedbStorage::new(file)?;
-        let (triggers, channel) = T::create();
-        let actions_in = RwLock::new(channel);
-        Ok(Dispatcher {
+impl CoreDispatcher {
+    pub fn new(config: Config) -> Result<Self, DispatcherError> {
+        // TODO: get the proper storage paths
+        println!(
+            "{} exists: {}",
+            config.data.join("db").display(),
+            config.data.join("db").exists()
+        );
+
+        let db_storage = RedbStorage::new(config.data.join("db"))?;
+        let file_storage = FileStorage::new(config.data.join("ca"))?;
+
+        let engine = WasmEngine::new(file_storage);
+
+        let async_runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4) // TODO: make configurable?
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let triggers = async_runtime.block_on({
+            let config = config.clone();
+            async move {
+                let chain_config = config.chain_config().map_err(TriggerError::QueryClient)?;
+                CoreTriggerManager::new(chain_config).await
+            }
+        })?;
+
+        Ok(Self {
             triggers,
             engine,
-            storage,
-            actions_in,
+            db_storage,
+            async_runtime,
+            config,
         })
     }
 
     /// This will run forever, taking the triggers and
     pub fn start(&self) -> Result<(), DispatcherError> {
-        while let Some(action) = self.actions_in.write().unwrap().blocking_recv() {
+        while let Some(action) = self.triggers.receiver().blocking_recv() {
             // look up the proper workflow
             let service = self
-                .storage
+                .db_storage
                 .get(SERVICE_TABLE, action.service_id.as_ref())?
                 .ok_or_else(|| DispatcherError::UnknownService(action.service_id.clone()))?
                 .value();
@@ -73,8 +99,16 @@ impl<T: TriggerManager, E: Engine> Dispatcher<T, E> {
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
-impl<T: TriggerManager, E: Engine> DispatchManager for Dispatcher<T, E> {
+impl DispatchManager for CoreDispatcher {
     type Error = DispatcherError;
+
+    fn async_runtime_handle(&self) -> tokio::runtime::Handle {
+        self.async_runtime.handle().clone()
+    }
+
+    fn config(&self) -> &Config {
+        &self.config
+    }
 
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
         let bytecode = match source {
@@ -88,13 +122,13 @@ impl<T: TriggerManager, E: Engine> DispatchManager for Dispatcher<T, E> {
     fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
-            .storage
+            .db_storage
             .get(SERVICE_TABLE, service.id.as_ref())?
             .is_some()
         {
             return Err(DispatcherError::ServiceRegistered(service.id));
         }
-        self.storage
+        self.db_storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
         // go through and add the triggers to the table
@@ -141,6 +175,9 @@ pub enum DispatcherError {
 
     #[error("DB: {0}")]
     DB(#[from] DBError),
+
+    #[error("DB: {0}")]
+    CA(#[from] CAStorageError),
 
     #[error("Engine: {0}")]
     Engine(#[from] EngineError),
