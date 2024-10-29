@@ -18,7 +18,9 @@ pub use digest::Digest;
 use dispatcher::CoreDispatcher;
 use std::sync::Arc;
 
-pub fn start(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatcher>) {
+/// Entry point to start up the whole server
+/// Called from main and end-to-end tests
+pub fn run_server(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatcher>) {
     ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {

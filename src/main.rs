@@ -25,5 +25,5 @@ fn main() {
 
     let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 
-    wasmatic::start(ctx, config, dispatcher);
+    wasmatic::run_server(ctx, config, dispatcher);
 }

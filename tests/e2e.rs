@@ -41,7 +41,7 @@ mod e2e {
             let ctx = ctx.clone();
             let config = config.clone();
             move || {
-                wasmatic::start(ctx, config, dispatcher);
+                wasmatic::run_server(ctx, config, dispatcher);
             }
         });
 
