@@ -1,15 +1,15 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
-use tokio::{runtime::Runtime, sync::mpsc};
+use thiserror::Error;
+use tokio::sync::mpsc;
+
+use crate::context::AppContext;
 
 use super::ID;
 
-pub trait Submission {
-    /// Start running the trigger manager.
-    /// This can create it's own default runtime or use the runtime passed in.
+pub trait Submission: Send + Sync {
+    /// Start running the submission manager
     /// This should only be called once in the lifetime of the object.
-    fn start(&self, rt: Option<Arc<Runtime>>, input: mpsc::Receiver<ChainMessage>);
+    fn start(&self, ctx: AppContext) -> Result<mpsc::Sender<ChainMessage>, SubmissionError>;
 }
 
 /// The data returned from a trigger action
@@ -23,4 +23,10 @@ pub struct ChainMessage {
     pub wasm_result: Vec<u8>,
     pub hd_index: u32,
     pub verifier_addr: String,
+}
+
+#[derive(Error, Debug)]
+pub enum SubmissionError {
+    #[error("chain error: {0}")]
+    ChainError(anyhow::Error),
 }

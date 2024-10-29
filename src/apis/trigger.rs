@@ -1,16 +1,15 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{runtime::Runtime, sync::mpsc};
+use tokio::sync::mpsc;
+
+use crate::context::AppContext;
 
 use super::{Trigger, ID};
 
-pub trait TriggerManager {
+pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
-    /// This can create it's own default runtime or use the runtime passed in.
-    /// This should only be called once in the lifetime of the object.
-    fn start(&self, rt: Option<Arc<Runtime>>) -> mpsc::Receiver<TriggerAction>;
+    /// This should only be called once in the lifetime of the object
+    fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 
@@ -55,6 +54,8 @@ pub enum TriggerResult {
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
+    #[error("Cannot create query client: {0}")]
+    QueryClient(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

@@ -1,10 +1,9 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use tokio::runtime::Runtime;
 
-use super::{Trigger, ID};
-use crate::Digest;
+use super::{submission::ChainMessage, trigger::TriggerAction, Trigger, ID};
+use crate::{context::AppContext, Digest};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -15,8 +14,12 @@ use crate::Digest;
 ///
 /// These types should not be raw from the user, but parsed from the JSON structs, validated,
 /// and converted into our internal structs
-pub trait DispatchManager {
+pub trait DispatchManager: Send + Sync {
     type Error;
+
+    fn start(&self, ctx: AppContext) -> Result<(), Self::Error>;
+
+    fn run_trigger(&self, action: TriggerAction) -> Result<Option<ChainMessage>, Self::Error>;
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
@@ -27,8 +30,6 @@ pub trait DispatchManager {
     fn remove_service(&self, id: ID) -> Result<(), Self::Error>;
 
     fn list_services(&self) -> Result<Vec<Service>, Self::Error>;
-
-    fn start(&self, rt: Option<Arc<Runtime>>) -> Result<(), Self::Error>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

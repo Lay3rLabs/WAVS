@@ -1,8 +1,7 @@
-pub mod core;
-pub mod mock;
-// I just leave this for the older version to not break anything,
-// this should go away and use core instead
-mod placeholder;
+mod core;
+mod generic;
+mod mock;
 
-// pub use core::Dispatcher;
-pub use placeholder::Dispatcher;
+pub use core::*;
+pub use generic::*;
+pub use mock::*;
