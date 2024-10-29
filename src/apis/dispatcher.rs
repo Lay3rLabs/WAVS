@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
 use super::{Trigger, ID};
-use crate::Digest;
+use crate::{config::Config, Digest};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -15,8 +15,12 @@ use crate::Digest;
 ///
 /// These types should not be raw from the user, but parsed from the JSON structs, validated,
 /// and converted into our internal structs
-pub trait DispatchManager {
+pub trait DispatchManager: Send + Sync {
     type Error;
+
+    fn async_runtime_handle(&self) -> tokio::runtime::Handle;
+
+    fn config(&self) -> &Config;
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.

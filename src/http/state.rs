@@ -1,12 +1,16 @@
-use crate::dispatcher::Dispatcher;
+use std::sync::Arc;
+
+use crate::{apis::dispatcher::DispatchManager, dispatcher::core::DispatcherError};
 
 #[derive(Clone)]
 pub struct HttpState {
-    pub dispatcher: Dispatcher,
+    pub dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
 }
 
 impl HttpState {
-    pub async fn new(dispatcher: Dispatcher) -> anyhow::Result<Self> {
+    pub async fn new(
+        dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
+    ) -> anyhow::Result<Self> {
         Ok(Self { dispatcher })
     }
 }

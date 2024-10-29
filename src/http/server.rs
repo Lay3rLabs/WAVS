@@ -1,4 +1,8 @@
-use crate::{config::Config, dispatcher::Dispatcher};
+use crate::{
+    apis::dispatcher::DispatchManager,
+    config::Config,
+    dispatcher::core::{CoreDispatcher, DispatcherError},
+};
 use axum::{
     extract::DefaultBodyLimit,
     routing::{delete, get, post},
@@ -15,9 +19,9 @@ use super::{
     state::HttpState,
 };
 
-pub fn start(dispatcher: Dispatcher) -> anyhow::Result<()> {
+pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
-    dispatcher.async_handle().block_on(async move {
+    dispatcher.clone().async_runtime.block_on(async move {
         let (host, port) = (dispatcher.config.host.clone(), dispatcher.config.port);
 
         let router = make_router(dispatcher).await?;
@@ -34,7 +38,9 @@ pub fn start(dispatcher: Dispatcher) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn make_router(dispatcher: Dispatcher) -> anyhow::Result<axum::Router> {
+pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
+    dispatcher: Arc<D>,
+) -> anyhow::Result<axum::Router> {
     let state = HttpState::new(dispatcher.clone()).await?;
 
     // build our application with a single route
@@ -53,14 +59,14 @@ pub async fn make_router(dispatcher: Dispatcher) -> anyhow::Result<axum::Router>
         .fallback(handle_not_found)
         .with_state(state);
 
-    if let Some(cors) = cors_layer(dispatcher.config.clone()) {
+    if let Some(cors) = cors_layer(dispatcher.config()) {
         router = router.layer(cors);
     }
 
     Ok(router)
 }
 
-fn cors_layer(config: Arc<Config>) -> Option<CorsLayer> {
+fn cors_layer(config: &Config) -> Option<CorsLayer> {
     if config.cors_allowed_origins.is_empty() {
         None
     } else {
