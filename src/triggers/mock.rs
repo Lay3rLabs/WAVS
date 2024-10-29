@@ -18,7 +18,7 @@ impl TriggerManager for MockTriggerManager {
     fn start(
         &self,
         _ctx: AppContext,
-    ) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError> {
+    ) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         todo!()
     }
 

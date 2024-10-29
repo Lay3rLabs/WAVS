@@ -12,7 +12,7 @@ pub trait Submission: Send + Sync {
     fn start(
         &self,
         ctx: AppContext,
-    ) -> Result<mpsc::UnboundedSender<ChainMessage>, SubmissionError>;
+    ) -> Result<mpsc::Sender<ChainMessage>, SubmissionError>;
 }
 
 /// The data returned from a trigger action

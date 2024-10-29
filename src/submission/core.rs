@@ -7,12 +7,16 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct CoreSubmission {}
+pub struct CoreSubmission {
+    channel_bound: usize,
+}
 
 impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     pub fn new(_config: &Config) -> Result<Self, SubmissionError> {
-        Ok(Self {})
+        Ok(Self {
+            channel_bound: 100, // TODO: get from config
+        })
     }
 }
 
@@ -20,8 +24,8 @@ impl Submission for CoreSubmission {
     fn start(
         &self,
         ctx: AppContext,
-    ) -> Result<mpsc::UnboundedSender<ChainMessage>, SubmissionError> {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+    ) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
+        let (tx, mut rx) = mpsc::channel(self.channel_bound);
 
         ctx.rt.clone().spawn({
             let mut kill_receiver = ctx.get_kill_receiver();

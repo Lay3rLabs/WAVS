@@ -12,7 +12,7 @@ pub trait TriggerManager: Send + Sync {
     fn start(
         &self,
         ctx: AppContext,
-    ) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError>;
+    ) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 

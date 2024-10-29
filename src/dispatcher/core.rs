@@ -69,7 +69,7 @@ impl DispatchManager for CoreDispatcher {
                                     tracing::error!("Error running trigger: {:?}", e);
                                 },
                                 Ok(Some(msg)) => {
-                                    msgs_out.send(msg).unwrap();
+                                    msgs_out.send(msg).await.unwrap();
                                 },
                                 Ok(None) => {
                                 },
