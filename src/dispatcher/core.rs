@@ -102,10 +102,6 @@ const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 impl DispatchManager for CoreDispatcher {
     type Error = DispatcherError;
 
-    fn async_runtime_handle(&self) -> tokio::runtime::Handle {
-        self.async_runtime.handle().clone()
-    }
-
     fn config(&self) -> &Config {
         &self.config
     }

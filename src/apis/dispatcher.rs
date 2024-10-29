@@ -17,8 +17,6 @@ use crate::{config::Config, Digest};
 pub trait DispatchManager: Send + Sync {
     type Error;
 
-    fn async_runtime_handle(&self) -> tokio::runtime::Handle;
-
     fn config(&self) -> &Config;
 
     /// Used to install new wasm bytecode into the system.
