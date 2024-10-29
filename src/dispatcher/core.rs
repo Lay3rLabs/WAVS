@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::apis::dispatcher::{Service, Submit, WasmSource};
 use crate::apis::engine::Engine;
 use crate::apis::submission::{ChainMessage, Submission};
@@ -12,7 +14,8 @@ use crate::{apis::dispatcher::DispatchManager, context::AppContext};
 
 use super::generic::{Dispatcher, DispatcherError};
 
-pub type CoreDispatcher = Dispatcher<CoreTriggerManager, WasmEngine<FileStorage>, CoreSubmission>;
+pub type CoreDispatcher =
+    Dispatcher<CoreTriggerManager, Arc<WasmEngine<FileStorage>>, CoreSubmission>;
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
@@ -22,11 +25,22 @@ impl CoreDispatcher {
 
         let triggers = CoreTriggerManager::new();
 
-        let engine = WasmEngine::new(file_storage);
+        let engine = Arc::new(WasmEngine::new(file_storage));
 
         let submission = CoreSubmission::new();
 
         Self::new(triggers, engine, submission, ctx.config.data.join("db"))
+    }
+}
+
+impl Clone for CoreDispatcher {
+    fn clone(&self) -> Self {
+        Self {
+            triggers: self.triggers.clone(),
+            engine: self.engine.clone(),
+            submission: self.submission.clone(),
+            storage: self.storage.clone(),
+        }
     }
 }
 

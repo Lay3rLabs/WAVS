@@ -28,7 +28,7 @@ pub fn start(ctx: AppContext, dispatcher: Arc<CoreDispatcher>) -> anyhow::Result
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(ctx, dispatcher).await?;
+        let router = make_router(ctx.config.as_ref().clone(), dispatcher).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -50,12 +50,10 @@ pub fn start(ctx: AppContext, dispatcher: Arc<CoreDispatcher>) -> anyhow::Result
 
 // this is called from main and tests
 pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
-    ctx: AppContext,
+    config: Config,
     dispatcher: Arc<D>,
 ) -> anyhow::Result<axum::Router> {
-    let config = ctx.config.clone();
-
-    let state = HttpState::new(ctx, dispatcher).await?;
+    let state = HttpState::new(config.clone(), dispatcher).await?;
 
     // build our application with a single route
     let mut router = axum::Router::new()

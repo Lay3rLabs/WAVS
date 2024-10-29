@@ -3,6 +3,8 @@ use crate::{
     context::AppContext,
 };
 use tokio::sync::mpsc;
+
+#[derive(Clone)]
 pub struct MockTriggerManager {}
 
 impl MockTriggerManager {

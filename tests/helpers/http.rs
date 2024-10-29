@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use wasmatic::{context::AppContext, dispatcher::MockDispatcher};
+use wasmatic::dispatcher::MockDispatcher;
 
 use super::app::TestApp;
 
@@ -14,13 +14,12 @@ impl TestHttpApp {
     pub async fn new() -> Self {
         let inner = TestApp::new().await;
 
-        let ctx = AppContext::new(inner.config.as_ref().clone());
+        let dispatcher = Arc::new(MockDispatcher::new_mock());
 
-        let dispatcher = Arc::new(MockDispatcher::new_mock(ctx.clone()));
-
-        let http_router = wasmatic::http::server::make_router(ctx, dispatcher)
-            .await
-            .unwrap();
+        let http_router =
+            wasmatic::http::server::make_router(inner.config.as_ref().clone(), dispatcher)
+                .await
+                .unwrap();
 
         Self {
             inner,

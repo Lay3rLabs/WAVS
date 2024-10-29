@@ -8,7 +8,7 @@ mod e2e {
 
     use helpers::app::TestApp;
     use layer_climb::prelude::*;
-    use wasmatic::dispatcher::core::CoreDispatcher;
+    use wasmatic::{context::AppContext, dispatcher::CoreDispatcher};
 
     #[test]
     fn e2e_tests() {
@@ -32,22 +32,25 @@ mod e2e {
             })
         };
 
-        let dispatcher = Arc::new(CoreDispatcher::new(config).unwrap());
+        let ctx = AppContext::new(config.clone());
+
+        let dispatcher = Arc::new(CoreDispatcher::new_core(ctx.clone()).unwrap());
 
         let wasmatic_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
+            let ctx = ctx.clone();
             move || {
-                wasmatic::start(dispatcher);
+                wasmatic::start(ctx, dispatcher);
             }
         });
 
         let test_handle = std::thread::spawn({
-            let dispatcher = dispatcher.clone();
+            let ctx = ctx.clone();
             move || {
-                dispatcher.async_runtime.clone().block_on({
+                ctx.rt.clone().block_on({
                     async move {
-                        run_tests(dispatcher.clone()).await;
-                        dispatcher.kill();
+                        run_tests(ctx.clone()).await;
+                        ctx.kill();
                     }
                 });
             }
@@ -57,8 +60,8 @@ mod e2e {
         test_handle.join().unwrap();
     }
 
-    async fn run_tests(dispatcher: Arc<CoreDispatcher>) {
-        let query_client = QueryClient::new(dispatcher.config.chain_config().unwrap())
+    async fn run_tests(ctx: AppContext) {
+        let query_client = QueryClient::new(ctx.config.chain_config().unwrap())
             .await
             .unwrap();
         tracing::info!("TODO - run tests on {}", query_client.chain_config.chain_id);

@@ -17,6 +17,25 @@ pub trait Engine: Send + Sync {
     ) -> Result<Vec<u8>, EngineError>;
 }
 
+impl<E: Engine> Engine for std::sync::Arc<E> {
+    fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+        self.as_ref().store_wasm(bytecode)
+    }
+
+    fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
+        self.as_ref().list_digests()
+    }
+
+    fn execute_queue(
+        &self,
+        digest: Digest,
+        request: Vec<u8>,
+        timestamp: u64,
+    ) -> Result<Vec<u8>, EngineError> {
+        self.as_ref().execute_queue(digest, request, timestamp)
+    }
+}
+
 // Note: I tried to pull this into an associated type of the trait,
 // But then embedding this in DispatcherError got all kinds of ugly.
 // We need to use anyhow if we want to allow this to be a trait associated type

@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 pub struct CoreTriggerManager {}
 
 impl CoreTriggerManager {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {}
     }

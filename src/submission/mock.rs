@@ -5,9 +5,11 @@ use crate::{
     context::AppContext,
 };
 
+#[derive(Clone)]
 pub struct MockSubmission {}
 
 impl MockSubmission {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {}
     }

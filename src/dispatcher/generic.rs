@@ -10,7 +10,6 @@ use crate::apis::{IDError, ID};
 use crate::storage::db::{DBError, RedbStorage};
 use crate::storage::CAStorageError;
 
-#[derive(Clone)]
 pub struct Dispatcher<T: TriggerManager, E: Engine, S: Submission> {
     pub triggers: T,
     pub engine: E,
