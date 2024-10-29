@@ -5,10 +5,10 @@ use tokio::sync::mpsc;
 use super::{Trigger, ID};
 
 pub trait TriggerManager {
-    /// get the action receiver.
+    /// start the trigger manager, get an action receiver.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
     /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    fn receiver(&self) -> mpsc::Receiver<TriggerAction>;
+    fn start(&self) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 
