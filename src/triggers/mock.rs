@@ -15,10 +15,7 @@ impl MockTriggerManager {
 }
 
 impl TriggerManager for MockTriggerManager {
-    fn start(
-        &self,
-        _ctx: AppContext,
-    ) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+    fn start(&self, _ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         todo!()
     }
 

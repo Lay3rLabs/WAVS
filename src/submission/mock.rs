@@ -16,10 +16,7 @@ impl MockSubmission {
 }
 
 impl Submission for MockSubmission {
-    fn start(
-        &self,
-        ctx: AppContext,
-    ) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
+    fn start(&self, ctx: AppContext) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
         let (tx, mut rx) = mpsc::channel(10);
 
         ctx.rt.spawn(async move {

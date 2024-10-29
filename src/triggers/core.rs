@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 #[derive(Clone)]
 pub struct CoreTriggerManager {
     pub chain_config: ChainConfig,
-    pub channel_bound: usize
+    pub channel_bound: usize,
 }
 
 impl CoreTriggerManager {
@@ -18,7 +18,7 @@ impl CoreTriggerManager {
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
         let chain_config = config.chain_config().map_err(TriggerError::QueryClient)?;
 
-        Ok(Self { 
+        Ok(Self {
             chain_config,
             channel_bound: 100, // TODO: get from config
         })
@@ -47,10 +47,7 @@ impl CoreTriggerManager {
 }
 
 impl TriggerManager for CoreTriggerManager {
-    fn start(
-        &self,
-        ctx: AppContext,
-    ) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+    fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         // The trigger manager should be free to quickly fire off triggers
         // so that it can continue to monitor the chain
         // it's up to the dispatcher to alleviate the backpressure

@@ -54,9 +54,31 @@ impl DispatchManager for CoreDispatcher {
         let mut actions_in = self.triggers.start(ctx.clone())?;
         let msgs_out = self.submission.start(ctx.clone())?;
 
+        // limiting this to 1 should ensure we don't move on to the next trigger until the previous one is done
+        // TODO: test this!
+        let (worker_tx, mut worker_rx) = tokio::sync::mpsc::channel(1);
+        let _self = self.clone();
+
+        // this will not hang because the kill switch will cause `worker_tx` to drop, thereby closing the channel
+        let worker_handle = std::thread::spawn(move || match worker_rx.blocking_recv() {
+            Some(action) => match _self.run_trigger(action) {
+                Err(e) => {
+                    tracing::error!("Error running trigger: {:?}", e);
+                }
+                Ok(Some(msg)) => {
+                    if let Err(err) = msgs_out.blocking_send(msg) {
+                        tracing::error!("Error submitting msg: {:?}", err);
+                    }
+                }
+                Ok(None) => {}
+            },
+            None => {
+                tracing::info!("no more work in dispatcher, channel closed");
+            }
+        });
+
         ctx.rt.clone().spawn({
             let mut kill_receiver = ctx.get_kill_receiver();
-            let _self = self.clone();
             async move {
                 tokio::select! {
                     _ = kill_receiver.recv() => {
@@ -64,22 +86,16 @@ impl DispatchManager for CoreDispatcher {
                     },
                     _ = async move {
                         while let Some(action) = actions_in.recv().await {
-                            match _self.run_trigger(action) {
-                                Err(e) => {
-                                    tracing::error!("Error running trigger: {:?}", e);
-                                },
-                                Ok(Some(msg)) => {
-                                    msgs_out.send(msg).await.unwrap();
-                                },
-                                Ok(None) => {
-                                },
-                            }
+                            worker_tx.send(action).await.unwrap();
                         }
                     } => {
                     }
                 }
             }
         });
+
+        worker_handle.join().unwrap();
+
         Ok(())
     }
 

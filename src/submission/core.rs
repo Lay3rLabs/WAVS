@@ -21,10 +21,7 @@ impl CoreSubmission {
 }
 
 impl Submission for CoreSubmission {
-    fn start(
-        &self,
-        ctx: AppContext,
-    ) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
+    fn start(&self, ctx: AppContext) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
         let (tx, mut rx) = mpsc::channel(self.channel_bound);
 
         ctx.rt.clone().spawn({
