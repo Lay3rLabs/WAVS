@@ -31,7 +31,7 @@ pub struct TriggerData {
 }
 
 /// The data returned from a trigger action
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
     /// Identify which service and workflow this came from
     pub service_id: ID,
@@ -42,7 +42,7 @@ pub struct TriggerAction {
 }
 
 /// This is the actual data we got from the trigger, used to feed into the component
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum TriggerResult {
     Queue {
         /// The id from the task queue

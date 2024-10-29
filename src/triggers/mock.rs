@@ -85,3 +85,72 @@ impl TriggerManager for MockTriggerManager {
         Ok(vec![])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::apis::{trigger::TriggerResult, Trigger};
+
+    use super::*;
+
+    #[test]
+    fn mock_trigger_sends() {
+        let actions = vec![
+            TriggerAction {
+                service_id: ID::new("service1").unwrap(),
+                workflow_id: ID::new("workflow1").unwrap(),
+                result: TriggerResult::Queue {
+                    task_id: 2,
+                    payload: "foobar".into(),
+                },
+            },
+            TriggerAction {
+                service_id: ID::new("service2").unwrap(),
+                workflow_id: ID::new("workflow2").unwrap(),
+                result: TriggerResult::Queue {
+                    task_id: 4,
+                    payload: "zoomba".into(),
+                },
+            },
+        ];
+        let triggers = MockTriggerManager::with_actions(actions.clone());
+        let mut flow = triggers.start(AppContext::new()).unwrap();
+
+        // read the triggers
+        let first = flow.blocking_recv().unwrap();
+        assert_eq!(&first, &actions[0]);
+        let second = flow.blocking_recv().unwrap();
+        assert_eq!(&second, &actions[1]);
+
+        // channel is closed
+        assert!(flow.blocking_recv().is_none());
+
+        // add trigger works
+        let data = TriggerData {
+            service_id: ID::new("abcd").unwrap(),
+            workflow_id: ID::new("abcd").unwrap(),
+            trigger: Trigger::Queue {
+                task_queue_addr: "layer12345".into(),
+                poll_interval: 5,
+            },
+        };
+        triggers.add_trigger(data).unwrap();
+    }
+
+    #[test]
+    fn mock_trigger_fails() {
+        let triggers = MockTriggerManager::failing();
+        // ensure start fails
+        triggers.start(AppContext::new()).unwrap_err();
+
+        // ensure store fails
+        let data = TriggerData {
+            service_id: ID::new("abcd").unwrap(),
+            workflow_id: ID::new("abcd").unwrap(),
+            trigger: Trigger::Queue {
+                task_queue_addr: "layer12345".into(),
+                poll_interval: 5,
+            },
+        };
+        triggers.add_trigger(data).unwrap_err();
+    }
+}
