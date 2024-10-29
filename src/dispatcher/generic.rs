@@ -42,12 +42,7 @@ impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
-impl<T, E, S> DispatchManager for Dispatcher<T, E, S>
-where
-    T: TriggerManager + Clone + 'static,
-    E: Engine + Clone + 'static,
-    S: Submission + Clone + 'static,
-{
+impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
@@ -55,49 +50,28 @@ where
         let mut actions_in = self.triggers.start(ctx.clone())?;
         let msgs_out = self.submission.start(ctx.clone())?;
 
-        // we're only processing one item at a time for now, but in theory
-        // this could eventually be something that feeds a threadpool
-        // so let's give it a larger capacity to work with
-        let (worker_tx, mut worker_rx) = tokio::sync::mpsc::channel(32);
-        let _self = self.clone();
+        // since triggers listens to the async kill signal handler and closes the channel when
+        // it is triggered, we don't need to jump through hoops here to make an async block to listen.
+        // Just waiting for the channel to close is enough.
 
-        // this will not hang because the kill switch will cause `worker_tx` to drop, thereby closing the channel
-        let worker_handle = std::thread::spawn(move || match worker_rx.blocking_recv() {
-            Some(action) => match _self.run_trigger(action) {
-                Err(e) => {
-                    tracing::error!("Error running trigger: {:?}", e);
-                }
+        while let Some(action) = actions_in.blocking_recv() {
+            match self.run_trigger(action) {
                 Ok(Some(msg)) => {
+                    tracing::info!("Ran action, got result to submit");
                     if let Err(err) = msgs_out.blocking_send(msg) {
                         tracing::error!("Error submitting msg: {:?}", err);
                     }
                 }
-                Ok(None) => {}
-            },
-            None => {
-                tracing::info!("no more work in dispatcher, channel closed");
-            }
-        });
-
-        ctx.rt.clone().spawn({
-            let mut kill_receiver = ctx.get_kill_receiver();
-            async move {
-                tokio::select! {
-                    _ = kill_receiver.recv() => {
-                        tracing::info!("Dispatcher shutting down");
-                    },
-                    _ = async move {
-                        while let Some(action) = actions_in.recv().await {
-                            worker_tx.send(action).await.unwrap();
-                        }
-                    } => {
-                    }
+                Ok(None) => {
+                    tracing::info!("Ran action, no submission");
+                }
+                Err(e) => {
+                    tracing::error!("Error running trigger: {:?}", e);
                 }
             }
-        });
+        }
 
-        worker_handle.join().unwrap();
-
+        tracing::info!("no more work in dispatcher, channel closed");
         Ok(())
     }
 
