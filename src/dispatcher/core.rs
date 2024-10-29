@@ -83,6 +83,9 @@ impl DispatchManager for CoreDispatcher {
         Ok(())
     }
 
+    /// This is where the heavy lifting is done (at least for now, where self.engine.execute_queue happens in the same thread)
+    /// effectively, it slows down the consumption of triggers and can inadvertendly cause the whole system to slow down
+    /// TODO: optimize this, at the very least have wasm executions across a threadpool, and get real metrics to test assumptions about the performance
     fn run_trigger(&self, action: TriggerAction) -> Result<Option<ChainMessage>, DispatcherError> {
         // look up the proper workflow
         let service = self
