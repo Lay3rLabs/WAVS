@@ -49,14 +49,14 @@ impl DispatchManager for CoreDispatcher {
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
-    /// If it is given a `rt` it will pass that runtime to triggers and submission, otherwise they will each create a new one.
     fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
         let mut actions_in = self.triggers.start(ctx.clone())?;
         let msgs_out = self.submission.start(ctx.clone())?;
 
-        // limiting this to 1 should ensure we don't move on to the next trigger until the previous one is done
-        // TODO: test this!
-        let (worker_tx, mut worker_rx) = tokio::sync::mpsc::channel(1);
+        // we're only processing one item at a time for now, but in theory
+        // this could eventually be something that feeds a threadpool
+        // so let's give it a larger capacity to work with
+        let (worker_tx, mut worker_rx) = tokio::sync::mpsc::channel(32);
         let _self = self.clone();
 
         // this will not hang because the kill switch will cause `worker_tx` to drop, thereby closing the channel
