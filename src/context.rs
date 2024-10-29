@@ -43,3 +43,30 @@ impl AppContext {
         self.kill_sender.send(()).unwrap();
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn kill_switch_drop_fails() {
+        let sender = {
+            let (sender, _) = tokio::sync::broadcast::channel::<&'static str>(1);
+            sender
+        };
+
+        sender.send("hello").unwrap_err();
+    }
+
+    #[test]
+    fn kill_switch_hold_succeeds() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let (sender, mut receiver) = tokio::sync::broadcast::channel::<&'static str>(1);
+
+        sender.send("hello").unwrap();
+
+        runtime.block_on(async move {
+            let msg = receiver.recv().await;
+
+            assert_eq!("hello", msg.unwrap());
+        });
+    }
+}
