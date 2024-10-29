@@ -1,6 +1,7 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
+use tokio::runtime::Runtime;
 
 use super::{Trigger, ID};
 use crate::Digest;
@@ -26,6 +27,8 @@ pub trait DispatchManager {
     fn remove_service(&self, id: ID) -> Result<(), Self::Error>;
 
     fn list_services(&self) -> Result<Vec<Service>, Self::Error>;
+
+    fn start(&self, rt: Option<Arc<Runtime>>) -> Result<(), Self::Error>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

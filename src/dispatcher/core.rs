@@ -1,40 +1,53 @@
 use std::path::Path;
-use std::sync::RwLock;
+use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::mpsc::Receiver;
+use tokio::{runtime::Runtime, sync::mpsc};
 
-use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
+use crate::apis::dispatcher::{DispatchManager, Service, Submit, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::trigger::{
-    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
-};
+use crate::apis::submission::{ChainMessage, Submission};
+use crate::apis::trigger::{TriggerData, TriggerError, TriggerManager, TriggerResult};
 use crate::apis::{IDError, ID};
 
 use crate::storage::db::{DBError, RedbStorage, Table, JSON};
 
-pub struct Dispatcher<T: TriggerManager, E: Engine> {
+pub struct Dispatcher<T: TriggerManager, E: Engine, S: Submission> {
     triggers: T,
     engine: E,
+    submission: S,
     storage: RedbStorage,
-    actions_in: RwLock<Receiver<TriggerAction>>,
 }
 
-impl<T: TriggerManager, E: Engine> Dispatcher<T, E> {
-    pub fn new(engine: E, file: impl AsRef<Path>) -> Result<Self, DispatcherError> {
+impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
+    pub fn new(
+        triggers: T,
+        engine: E,
+        submission: S,
+        file: impl AsRef<Path>,
+    ) -> Result<Self, DispatcherError> {
         let storage = RedbStorage::new(file)?;
-        let (triggers, channel) = T::create();
-        let actions_in = RwLock::new(channel);
         Ok(Dispatcher {
             triggers,
             engine,
+            submission,
             storage,
-            actions_in,
         })
     }
+}
 
-    /// This will run forever, taking the triggers and
-    pub fn start(&self) -> Result<(), DispatcherError> {
-        while let Some(action) = self.actions_in.write().unwrap().blocking_recv() {
+const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
+
+impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher<T, E, S> {
+    type Error = DispatcherError;
+
+    /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
+    /// If it is given a `rt` it will pass that runtime to triggers and submission, otherwise they will each create a new one.
+    fn start(&self, rt: Option<Arc<Runtime>>) -> Result<(), DispatcherError> {
+        let mut actions_in = self.triggers.start(rt.clone());
+        let (msg_out, msg_in) = mpsc::channel::<ChainMessage>(1);
+        self.submission.start(rt, msg_in);
+
+        while let Some(action) = actions_in.blocking_recv() {
             // look up the proper workflow
             let service = self
                 .storage
@@ -61,20 +74,30 @@ impl<T: TriggerManager, E: Engine> Dispatcher<T, E> {
                     let timestamp = 1234567890;
                     let wasm_result = self.engine.execute_queue(digest, payload, timestamp)?;
 
-                    // TODO: we need to sent these off to the submission engine
-                    let _ = (task_id, wasm_result);
+                    if let Some(submit) = workflow.submit.as_ref() {
+                        match submit {
+                            Submit::VerifierTx {
+                                hd_index,
+                                verifier_addr,
+                            } => {
+                                let chain_msg = ChainMessage {
+                                    service_id: action.service_id.clone(),
+                                    workflow_id: action.workflow_id.clone(),
+                                    task_id,
+                                    wasm_result,
+                                    hd_index: *hd_index,
+                                    verifier_addr: verifier_addr.clone(),
+                                };
+                                msg_out.blocking_send(chain_msg).unwrap();
+                            }
+                        }
+                    }
                 }
             }
         }
         println!("Trigger channel closed, shutting down");
         Ok(())
     }
-}
-
-const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
-
-impl<T: TriggerManager, E: Engine> DispatchManager for Dispatcher<T, E> {
-    type Error = DispatcherError;
 
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
         let bytecode = match source {

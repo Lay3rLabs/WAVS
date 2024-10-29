@@ -1,18 +1,16 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::{runtime::Runtime, sync::mpsc};
 
 use super::{Trigger, ID};
 
 pub trait TriggerManager {
-    /// Create a new trigger manager.
-    /// This returns the manager and a receiver for the trigger actions.
-    /// Internally, all triggers may run in an async runtime and send results to the receiver.
-    /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    fn create() -> (Self, mpsc::Receiver<TriggerAction>)
-    where
-        Self: Sized;
-    // TODO: is this in the trait or just the implementation?
+    /// Start running the trigger manager.
+    /// This can create it's own default runtime or use the runtime passed in.
+    /// This should only be called once in the lifetime of the object.
+    fn start(&self, rt: Option<Arc<Runtime>>) -> mpsc::Receiver<TriggerAction>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 
@@ -49,7 +47,7 @@ pub struct TriggerAction {
 pub enum TriggerResult {
     Queue {
         /// The id from the task queue
-        task_id: String,
+        task_id: u64,
         /// The input data associated with that task
         payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
     },
