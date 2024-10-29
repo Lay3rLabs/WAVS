@@ -1,5 +1,5 @@
-use crate::apis::trigger::{TriggerError, TriggerManager};
-
+use crate::apis::trigger::{TriggerAction, TriggerError, TriggerManager};
+use tokio::sync::mpsc;
 pub struct MockTriggerManager {}
 
 impl MockTriggerManager {
@@ -10,7 +10,7 @@ impl MockTriggerManager {
 }
 
 impl TriggerManager for MockTriggerManager {
-    fn receiver(&self) -> tokio::sync::mpsc::Receiver<crate::apis::trigger::TriggerAction> {
+    fn start(&self) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         todo!()
     }
 

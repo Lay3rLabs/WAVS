@@ -2,6 +2,8 @@ use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::{runtime::Runtime, sync::mpsc};
+use std::sync::Arc;
+
 use thiserror::Error;
 use tokio::runtime::Runtime;
 
@@ -25,6 +27,12 @@ pub struct Dispatcher<T: TriggerManager, E: Engine, S: Submission> {
     engine: E,
     submission: S,
     storage: RedbStorage,
+pub struct CoreDispatcher {
+    triggers: CoreTriggerManager,
+    engine: WasmEngine<FileStorage>,
+    db_storage: RedbStorage,
+    pub async_runtime: Arc<Runtime>,
+    pub config: Config,
 }
 
 impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
@@ -57,19 +65,15 @@ impl CoreDispatcher {
 
         let engine = WasmEngine::new(file_storage);
 
-        let async_runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(4) // TODO: make configurable?
-            .enable_all()
-            .build()
-            .unwrap();
+        let async_runtime = Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(4) // TODO: make configurable?
+                .enable_all()
+                .build()
+                .unwrap(),
+        );
 
-        let triggers = async_runtime.block_on({
-            let config = config.clone();
-            async move {
-                let chain_config = config.chain_config().map_err(TriggerError::QueryClient)?;
-                CoreTriggerManager::new(chain_config).await
-            }
-        })?;
+        let triggers = CoreTriggerManager::new(config.clone(), async_runtime.clone())?;
 
         Ok(Self {
             triggers,
@@ -96,7 +100,7 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
         while let Some(action) = actions_in.blocking_recv() {
     /// This will run forever, taking the triggers and
     pub fn start(&self) -> Result<(), DispatcherError> {
-        while let Some(action) = self.triggers.receiver().blocking_recv() {
+        while let Some(action) = self.triggers.start()?.blocking_recv() {
             // look up the proper workflow
             let service = self
                 .db_storage

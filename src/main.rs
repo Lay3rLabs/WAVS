@@ -29,8 +29,15 @@ fn main() {
         }
     });
 
-    // wait for the server to finish
-    // TODO: add more thread handles here to wait on
+    let dispatcher_handle = std::thread::spawn({
+        let dispatcher = dispatcher.clone();
+        move || {
+            dispatcher.start().unwrap();
+        }
+    });
+
+    // wait for all threads to finish
 
     server_handle.join().unwrap();
+    dispatcher_handle.join().unwrap();
 }

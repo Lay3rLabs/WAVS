@@ -21,7 +21,7 @@ use super::{
 
 pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
-    dispatcher.clone().async_runtime.block_on(async move {
+    dispatcher.async_runtime.clone().block_on(async move {
         let (host, port) = (dispatcher.config.host.clone(), dispatcher.config.port);
 
         let router = make_router(dispatcher).await?;
@@ -41,7 +41,9 @@ pub fn start(dispatcher: Arc<CoreDispatcher>) -> anyhow::Result<()> {
 pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
     dispatcher: Arc<D>,
 ) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(dispatcher.clone()).await?;
+    let config = dispatcher.config().clone();
+
+    let state = HttpState::new(dispatcher).await?;
 
     // build our application with a single route
     let mut router = axum::Router::new()
@@ -59,7 +61,7 @@ pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
         .fallback(handle_not_found)
         .with_state(state);
 
-    if let Some(cors) = cors_layer(dispatcher.config()) {
+    if let Some(cors) = cors_layer(&config) {
         router = router.layer(cors);
     }
 
