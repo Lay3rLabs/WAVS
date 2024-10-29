@@ -20,7 +20,7 @@ impl CoreTriggerManager {
 }
 
 impl TriggerManager for CoreTriggerManager {
-    fn start(&self) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+    fn start(&self) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError> {
         let chain_config = self
             .config
             .chain_config()
@@ -33,9 +33,11 @@ impl TriggerManager for CoreTriggerManager {
                 .map_err(TriggerError::QueryClient)
         })?;
 
-        // TODO: the bounds here should be configurable
-        // or maybe driven by same rough criteria as dispatcher component threads
-        let (tx, rx) = mpsc::channel(100);
+        // The trigger manager should be free to quickly fire off triggers
+        // so that it can continue to monitor the chain
+        // if there are any backpressure issues, it should be dealt with on the dispatcher side
+        // e.g. holding a limited local queue of triggers to be processed, after being recieved from the channel
+        let (tx, rx) = mpsc::unbounded_channel();
 
         self.runtime.spawn(async move {
             let _tx = tx;

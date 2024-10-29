@@ -8,7 +8,7 @@ pub trait TriggerManager {
     /// start the trigger manager, get an action receiver.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
     /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    fn start(&self) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
+    fn start(&self) -> Result<mpsc::UnboundedReceiver<TriggerAction>, TriggerError>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 
