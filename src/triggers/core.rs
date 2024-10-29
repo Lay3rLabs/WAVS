@@ -36,6 +36,8 @@ impl CoreTriggerManager {
         // TODO: start watching
         std::future::pending::<()>().await;
 
+        tracing::info!("Trigger Manager watcher finished");
+
         Ok(())
     }
 }

@@ -23,15 +23,21 @@ impl Submission for CoreSubmission {
     ) -> Result<mpsc::UnboundedSender<ChainMessage>, SubmissionError> {
         let (tx, mut rx) = mpsc::unbounded_channel();
 
-        ctx.rt.spawn(async move {
-            loop {
-                match rx.recv().await {
-                    Some(msg) => {
-                        tracing::info!("Received message to submit: {:?}", msg);
-                    }
-                    None => {
+        ctx.rt.clone().spawn({
+            let mut kill_receiver = ctx.get_kill_receiver();
+            let _self = self.clone();
+            async move {
+                tokio::select! {
+                    _ = kill_receiver.recv() => {
+                        tracing::info!("Submissions shutting down");
+                    },
+                    _ = async move {
+                    } => {
+                        while let Some(msg) = rx.recv().await {
+                            tracing::info!("Received message to submit: {:?}", msg);
+                        }
+
                         tracing::info!("Submission channel closed");
-                        break;
                     }
                 }
             }

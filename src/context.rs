@@ -31,10 +31,14 @@ impl AppContext {
         }
     }
 
+    /// The kill system is a way to signal to all running tasks that they should stop
+    /// it can be used to gracefully shutdown the system in async code
+    /// without relying on its parent to drop it
     pub fn get_kill_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
         self.kill_sender.subscribe()
     }
 
+    /// This is typically only called from main or tests - it will kill the system gracefully
     pub fn kill(&self) {
         self.kill_sender.send(()).unwrap();
     }
