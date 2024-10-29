@@ -11,6 +11,9 @@ use crate::apis::dispatcher::{DispatchManager, Service, Submit, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{ChainMessage, Submission};
 use crate::apis::trigger::{TriggerData, TriggerError, TriggerManager, TriggerResult};
+use crate::apis::trigger::{
+    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
+};
 use crate::apis::{IDError, ID};
 
 use crate::config::Config;
@@ -31,6 +34,7 @@ pub struct CoreDispatcher {
     triggers: CoreTriggerManager,
     engine: WasmEngine<FileStorage>,
     db_storage: RedbStorage,
+    kill_sender: tokio::sync::broadcast::Sender<()>,
     pub async_runtime: Arc<Runtime>,
     pub config: Config,
 }
@@ -53,6 +57,12 @@ impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
 
 impl CoreDispatcher {
     pub fn new(config: Config) -> Result<Self, DispatcherError> {
+        println!(
+            "{} -> {}",
+            config.data.join("db").display(),
+            config.data.join("db").exists()
+        );
+
         let db_storage = RedbStorage::new(config.data.join("db"))?;
         let file_storage = FileStorage::new(config.data.join("ca"))?;
 
@@ -66,7 +76,10 @@ impl CoreDispatcher {
                 .unwrap(),
         );
 
-        let triggers = CoreTriggerManager::new(config.clone(), async_runtime.clone())?;
+        let (kill_sender, kill_receiver) = tokio::sync::broadcast::channel(1);
+
+        let triggers =
+            CoreTriggerManager::new(config.clone(), async_runtime.clone(), kill_receiver)?;
 
         Ok(Self {
             triggers,
@@ -74,6 +87,7 @@ impl CoreDispatcher {
             db_storage,
             async_runtime,
             config,
+            kill_sender,
         })
     }
 }
@@ -92,37 +106,34 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
 
         while let Some(action) = actions_in.blocking_recv() {
     /// This will run forever, taking the triggers and
+    pub fn kill(&self) {
+        let _ = self.kill_sender.send(());
+    }
+
+    /// This will run forever until killed
+    /// taking the trigger actions and processing them as needed
     pub fn start(&self) -> Result<(), DispatcherError> {
-        while let Some(action) = self.triggers.start()?.blocking_recv() {
-            // look up the proper workflow
-            let service = self
-                .db_storage
-                .get(SERVICE_TABLE, action.service_id.as_ref())?
-                .ok_or_else(|| DispatcherError::UnknownService(action.service_id.clone()))?
-                .value();
-            let workflow = service.workflows.get(&action.workflow_id).ok_or_else(|| {
-                DispatcherError::UnknownWorkflow(
-                    action.service_id.clone(),
-                    action.workflow_id.clone(),
-                )
-            })?;
-            let component = service
-                .components
-                .get(&workflow.component)
-                .ok_or_else(|| DispatcherError::UnknownComponent(workflow.component.clone()))?;
+        self.async_runtime.clone().block_on(async move {
+            let mut kill_receiver = self.kill_receiver();
+            let mut trigger_actions_receiver = self.triggers.start()?;
 
-            // TODO: we actually get other info, like permissions and apply in the execution
-            let digest = component.wasm.clone();
+            tokio::select! {
+                _ = async move {
+                    while let Some(action) = trigger_actions_receiver.recv().await {
+                        if let Err(e) = self.run_trigger(action) {
+                            tracing::error!("Error running trigger: {:?}", e);
+                        }
+                    }
+                } => {
 
-            match action.result {
-                TriggerResult::Queue { task_id, payload } => {
-                    // TODO: add the timestamp to the trigger, don't invent it
-                    let timestamp = 1234567890;
-                    let wasm_result = self.engine.execute_queue(digest, payload, timestamp)?;
+                },
+                _ = kill_receiver.recv() => {
+                    tracing::info!("Dispatcher shutting down");
+                },
+            }
 
                     if let Some(submit) = workflow.submit.as_ref() {
                         match submit {
-                            Submit::VerifierTx {
                                 hd_index,
                                 verifier_addr,
                             } => {
@@ -139,9 +150,37 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
                         }
                     }
                 }
+            Ok(())
+        })
+
+    fn run_trigger(&self, action: TriggerAction) -> Result<(), DispatcherError> {
+        // look up the proper workflow
+        let service = self
+            .db_storage
+            .get(SERVICE_TABLE, action.service_id.as_ref())?
+            .ok_or_else(|| DispatcherError::UnknownService(action.service_id.clone()))?
+            .value();
+        let workflow = service.workflows.get(&action.workflow_id).ok_or_else(|| {
+            DispatcherError::UnknownWorkflow(action.service_id.clone(), action.workflow_id.clone())
+        })?;
+        let component = service
+            .components
+            .get(&workflow.component)
+            .ok_or_else(|| DispatcherError::UnknownComponent(workflow.component.clone()))?;
+
+        // TODO: we actually get other info, like permissions and apply in the execution
+        let digest = component.wasm.clone();
+
+        match action.result {
+            TriggerResult::Queue { task_id, payload } => {
+                // TODO: add the timestamp to the trigger, don't invent it
+                let timestamp = 1234567890;
+                let wasm_result = self.engine.execute_queue(digest, payload, timestamp)?;
+
+                // TODO: we need to sent these off to the submission engine
+                let _ = (task_id, wasm_result);
             }
         }
-        tracing::info!("Trigger channel closed, shutting down");
         Ok(())
     }
 }
@@ -153,6 +192,10 @@ impl DispatchManager for CoreDispatcher {
 
     fn config(&self) -> &Config {
         &self.config
+    }
+
+    fn kill_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
+        self.kill_sender.subscribe()
     }
 
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {

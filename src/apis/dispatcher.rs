@@ -31,6 +31,7 @@ pub trait DispatchManager: Send + Sync {
     fn list_services(&self) -> Result<Vec<Service>, Self::Error>;
 
     fn start(&self, rt: Option<Arc<Runtime>>) -> Result<(), Self::Error>;
+    fn kill_receiver(&self) -> tokio::sync::broadcast::Receiver<()>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

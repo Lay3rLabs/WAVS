@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wasmatic::{args::CliArgs, config::ConfigBuilder, dispatcher::core::CoreDispatcher, http};
+use wasmatic::{args::CliArgs, config::ConfigBuilder, dispatcher::core::CoreDispatcher};
 
 fn main() {
     let args = CliArgs::parse();
@@ -21,23 +21,5 @@ fn main() {
 
     let dispatcher = Arc::new(CoreDispatcher::new(config).unwrap());
 
-    // start the http server in its own thread
-    let server_handle = std::thread::spawn({
-        let dispatcher = dispatcher.clone();
-        move || {
-            http::server::start(dispatcher).unwrap();
-        }
-    });
-
-    let dispatcher_handle = std::thread::spawn({
-        let dispatcher = dispatcher.clone();
-        move || {
-            dispatcher.start().unwrap();
-        }
-    });
-
-    // wait for all threads to finish
-
-    server_handle.join().unwrap();
-    dispatcher_handle.join().unwrap();
+    wasmatic::start(dispatcher);
 }
