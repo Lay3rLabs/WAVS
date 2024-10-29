@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tokio::runtime::Runtime;
 
@@ -8,9 +8,8 @@ use crate::config::Config;
 pub struct AppContext {
     pub rt: Arc<Runtime>,
     kill_sender: tokio::sync::broadcast::Sender<()>,
-    // keep the first receiver alive as long as context is alive
-    // subsequent receivers will subscribe from the sender
-    kill_receiver: Arc<Mutex<Option<tokio::sync::broadcast::Receiver<()>>>>,
+    // just to make sure we don't send in the case of "no receivers" accidentally
+    _kill_receiver: Arc<tokio::sync::broadcast::Receiver<()>>,
 }
 
 impl AppContext {
@@ -28,15 +27,12 @@ impl AppContext {
         Self {
             rt,
             kill_sender,
-            kill_receiver: Arc::new(Mutex::new(Some(kill_receiver))),
+            _kill_receiver: Arc::new(kill_receiver),
         }
     }
 
     pub fn get_kill_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
-        match self.kill_receiver.lock().unwrap().take() {
-            Some(rx) => rx,
-            None => self.kill_sender.subscribe(),
-        }
+        self.kill_sender.subscribe()
     }
 
     pub fn kill(&self) {
