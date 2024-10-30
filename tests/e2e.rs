@@ -4,14 +4,10 @@ mod helpers;
 mod e2e {
     use super::helpers;
 
-    use std::{
-        path::PathBuf,
-        sync::{atomic::AtomicBool, Arc},
-    };
+    use std::{path::PathBuf, sync::Arc};
 
     use helpers::app::TestApp;
     use layer_climb::prelude::*;
-    use tokio::time::Instant;
     use wasmatic::{config::Config, context::AppContext, dispatcher::CoreDispatcher};
 
     #[test]
@@ -40,16 +36,15 @@ mod e2e {
 
         let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 
-        let drop_handle = DropHandle::new();
-        let drop_checker = drop_handle.drop_checker.clone();
+        let (wasmatic_end_sender, wasmatic_end_receiver) = tokio::sync::oneshot::channel::<()>();
 
         let wasmatic_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
             let ctx = ctx.clone();
             let config = config.clone();
             move || {
-                let _drop_handle = drop_handle;
                 wasmatic::run_server(ctx, config, dispatcher);
+                wasmatic_end_sender.send(()).unwrap();
             }
         });
 
@@ -60,11 +55,9 @@ mod e2e {
                         run_tests(config).await;
                         ctx.kill_switch.kill();
 
-                        let wait_for_drop: Instant = Instant::now();
-
-                        while !drop_checker.load(std::sync::atomic::Ordering::Relaxed) {
-                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                            if wait_for_drop.elapsed().as_secs() > 3 {
+                        tokio::select! {
+                            _ = wasmatic_end_receiver => {},
+                            _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
                                 panic!("Wasmatic did not kill properly");
                             }
                         }
@@ -73,8 +66,9 @@ mod e2e {
             }
         });
 
-        wasmatic_handle.join().unwrap();
+        // this must come first so we can catch the timeout panic
         test_handle.join().unwrap();
+        wasmatic_handle.join().unwrap();
     }
 
     async fn run_tests(config: Config) {
@@ -84,24 +78,5 @@ mod e2e {
         tracing::info!("TODO - run tests on {}", query_client.chain_config.chain_id);
         tracing::info!("Sleeping for 1 second...");
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
-
-    struct DropHandle {
-        drop_checker: Arc<AtomicBool>,
-    }
-
-    impl DropHandle {
-        fn new() -> Self {
-            Self {
-                drop_checker: Arc::new(AtomicBool::new(false)),
-            }
-        }
-    }
-
-    impl Drop for DropHandle {
-        fn drop(&mut self) {
-            self.drop_checker
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-        }
     }
 }
