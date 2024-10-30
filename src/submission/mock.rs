@@ -72,6 +72,8 @@ impl Submission for MockSubmission {
             tracing::info!("Submission channel closed");
         });
 
+        sleep(Duration::from_millis(20));
+
         Ok(tx)
     }
 }

@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
 
 use crate::apis::dispatcher::{DispatchManager, Service, Submit, WasmSource};
@@ -80,7 +81,12 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
         // and it seems like they should be delivered...
         // https://github.com/tokio-rs/tokio/issues/6053
 
-        tracing::info!("no more work in dispatcher, channel closed");
+        // FIXME: this sleep is a hack to make sure the messages are delivered
+        // is there a better way to do this?
+        // (in production, this is only hit in shutdown, so not so important, but it causes annoying test failures)
+        tracing::info!("no more work in dispatcher, channel closing");
+        std::thread::sleep(Duration::from_millis(500));
+
         Ok(())
     }
 
