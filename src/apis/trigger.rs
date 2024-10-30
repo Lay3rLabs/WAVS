@@ -24,6 +24,7 @@ pub trait TriggerManager: Send + Sync {
     fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError>;
 }
 
+#[derive(Debug)]
 /// Internal description of a registered trigger, to be indexed by associated IDs
 pub struct TriggerData {
     pub service_id: ID,
@@ -68,6 +69,8 @@ pub enum TriggerError {
     QueryClient(anyhow::Error),
     #[error("Unable to create event stream: {0}")]
     EventStream(anyhow::Error),
+    #[error("Unable to parse address: {0}")]
+    Address(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

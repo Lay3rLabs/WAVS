@@ -2,9 +2,10 @@ use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    apis::Trigger,
     http::{
         state::HttpState,
-        types::app::{App, Permissions, Status, Trigger},
+        types::app::{App, Permissions, Status},
     },
     Digest,
 };
@@ -24,7 +25,6 @@ pub async fn handle_list_services(State(_state): State<HttpState>) -> impl IntoR
             App {
                 trigger: Trigger::Queue {
                     task_queue_addr: "layer18cpv22kxz9g7yljyvh309vd7al5qx40av3edkt".to_string(),
-                    hd_index: 0,
                     poll_interval: 1000,
                 },
                 name: "mock-service-1".to_string(),
@@ -37,7 +37,6 @@ pub async fn handle_list_services(State(_state): State<HttpState>) -> impl IntoR
             App {
                 trigger: Trigger::Queue {
                     task_queue_addr: "layer18cpv22kxz9g7yljyvh309vd7al5qx40av3edkt".to_string(),
-                    hd_index: 0,
                     poll_interval: 1000,
                 },
                 name: "mock-service-2".to_string(),

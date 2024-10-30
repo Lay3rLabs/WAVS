@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Digest;
+use crate::{apis::Trigger, Digest};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct App {
     pub name: String,
@@ -18,17 +18,6 @@ pub struct App {
     pub testable: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub enum Trigger {
-    #[serde(rename_all = "camelCase")]
-    Queue {
-        task_queue_addr: String,
-        hd_index: u32,
-        poll_interval: u64,
-    },
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Copy)]
 #[serde(rename_all = "camelCase")]
 pub enum Status {
@@ -37,7 +26,7 @@ pub enum Status {
     MissingWasm,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Permissions {
     // TODO

@@ -6,9 +6,10 @@ mod helpers;
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
+
     use super::helpers;
 
-    use std::{path::PathBuf, sync::Arc, time::Duration};
+    use std::{sync::Arc, time::Duration};
 
     use anyhow::{bail, Context, Result};
     use helpers::app::TestApp;
@@ -19,7 +20,14 @@ mod e2e {
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::Serialize;
-    use wasmatic::{config::Config, context::AppContext, dispatcher::CoreDispatcher};
+    use wasmatic::{
+        apis::Trigger,
+        config::Config,
+        context::AppContext,
+        dispatcher::CoreDispatcher,
+        http::{handlers::service::add::RegisterAppRequest, types::app::App},
+        Digest,
+    };
 
     #[test]
     fn e2e_tests() {
@@ -28,13 +36,7 @@ mod e2e {
                 async {
                     let mut cli_args = TestApp::default_cli_args();
                     cli_args.dotenv = None;
-                    cli_args.data = Some(
-                        PathBuf::from(file!())
-                            .parent()
-                            .unwrap()
-                            .join("wasmatic")
-                            .join("test-data"),
-                    );
+                    cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
                     TestApp::new_with_args(cli_args)
                         .await
                         .config
@@ -73,6 +75,10 @@ mod e2e {
     }
 
     async fn run_tests(config: Config) {
+        let http_client = HttpClient::new(&config);
+        // sanity test - is web service running
+        let _ = http_client.get_config().await.unwrap();
+
         let chain_config = config.chain_config().unwrap();
         let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
         let task_queue_addr = chain_config
@@ -89,6 +95,11 @@ mod e2e {
             .unwrap();
 
         tracing::info!("Running tasks on task queue contract: {}", task_queue.addr);
+
+        let _ = http_client
+            .create_service("test-service", Digest::new(&[0; 32]), &task_queue.addr)
+            .await
+            .unwrap();
 
         let tx_resp = task_queue
             .submit_task("squaring 3", serde_json::json!({ "x": 3 }))
@@ -209,6 +220,68 @@ mod e2e {
                 _client: client,
                 _addr: addr,
             })
+        }
+    }
+
+    struct HttpClient {
+        inner: reqwest::Client,
+        endpoint: String,
+    }
+
+    impl HttpClient {
+        pub fn new(config: &Config) -> Self {
+            let endpoint = format!("http://{}:{}", config.host, config.port);
+
+            println!("endpoint: {}", endpoint);
+            Self {
+                inner: reqwest::Client::new(),
+                endpoint,
+            }
+        }
+
+        pub async fn get_config(&self) -> Result<Config> {
+            self.inner
+                .get(&format!("{}/config", self.endpoint))
+                .send()
+                .await?
+                .json()
+                .await
+                .map_err(|e| e.into())
+        }
+
+        pub async fn create_service(
+            &self,
+            name: impl ToString,
+            digest: Digest,
+            task_queue_addr: &Address,
+        ) -> Result<()> {
+            let app = App {
+                trigger: Trigger::Queue {
+                    task_queue_addr: task_queue_addr.to_string(),
+                    poll_interval: 1000,
+                },
+                name: name.to_string(),
+                status: None,
+                digest,
+                permissions: wasmatic::http::types::app::Permissions {},
+                envs: Vec::new(),
+                testable: Some(true),
+            };
+
+            let body = serde_json::to_string(&RegisterAppRequest {
+                app,
+                wasm_url: None,
+            })?;
+
+            self.inner
+                .post(&format!("{}/app", self.endpoint))
+                .header("Content-Type", "application/json")
+                .body(body)
+                .send()
+                .await?
+                .error_for_status()?;
+
+            Ok(())
         }
     }
 }
