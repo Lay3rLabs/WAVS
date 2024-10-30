@@ -1,23 +1,18 @@
-use std::sync::Arc;
-
 use crate::{
-    engine::WasmEngine, storage::memory::MemoryStorage, submission::mock::MockSubmission,
+    engine::identity::IdentityEngine, submission::mock::MockSubmission,
     triggers::mock::MockTriggerManager,
 };
 
 use super::generic::Dispatcher;
 
-pub type MockDispatcher =
-    Dispatcher<MockTriggerManager, Arc<WasmEngine<MemoryStorage>>, MockSubmission>;
+pub type MockDispatcher = Dispatcher<MockTriggerManager, IdentityEngine, MockSubmission>;
 
 /// Note: this is more or less useless, as we will want to actually to configure these items more.
 impl MockDispatcher {
     pub fn new_mock() -> Self {
-        let file_storage = MemoryStorage::new();
-
         let triggers = MockTriggerManager::new();
 
-        let engine = Arc::new(WasmEngine::new(file_storage));
+        let engine = IdentityEngine;
 
         let submission = MockSubmission::new();
 

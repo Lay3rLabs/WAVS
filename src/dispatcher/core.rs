@@ -17,7 +17,8 @@ impl CoreDispatcher {
 
         let triggers = CoreTriggerManager::new(config)?;
 
-        let engine = Arc::new(WasmEngine::new(file_storage));
+        let app_storage = config.data.join("app");
+        let engine = Arc::new(WasmEngine::new(file_storage, app_storage));
 
         let submission = CoreSubmission::new(config)?;
 

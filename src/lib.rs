@@ -8,7 +8,9 @@ pub mod engine; // where we manage and execute wasm
 pub mod http;
 pub mod storage;
 pub mod submission; // where we submit the results to the chain
+pub mod task_bindings;
 pub mod triggers; // where we handle the trigger runtime
+
 use apis::dispatcher::DispatchManager;
 use config::Config;
 use context::AppContext;

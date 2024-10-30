@@ -44,6 +44,9 @@ pub enum EngineError {
     #[error("Storage: {0}")]
     Storage(#[from] CAStorageError),
 
+    #[error{"IO: {0}"}]
+    IO(#[from] std::io::Error),
+
     #[error("Invalid Wasm bytecode")]
     InvalidWasmCode,
 
@@ -52,6 +55,9 @@ pub enum EngineError {
 
     #[error("No wasm found for digest {0}")]
     UnknownDigest(Digest),
+
+    #[error("Component returned an error: {0}")]
+    ComponentError(String),
 
     #[error{"{0}"}]
     Other(#[from] anyhow::Error),

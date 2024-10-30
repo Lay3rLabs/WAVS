@@ -1,22 +1,27 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
+use anyhow::Context;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
 };
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 pub use crate::apis::engine::Engine;
 use crate::apis::engine::EngineError;
 
 use crate::storage::{CAStorage, CAStorageError};
-use crate::Digest;
+use crate::{task_bindings, Digest};
 
 pub struct WasmEngine<S: CAStorage> {
     wasm_storage: S,
     wasm_engine: WTEngine,
     // TODO: we need some LRU limit here to avoid memory exhaustion
     memory_cache: RwLock<HashMap<Digest, Component>>,
+    app_data_dir: PathBuf,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -24,7 +29,7 @@ impl<S: CAStorage> WasmEngine<S> {
     /// This returns the manager and a receiver for the trigger actions.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
     /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    pub fn new(wasm_storage: S) -> Self {
+    pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
         config.async_support(false);
@@ -34,6 +39,7 @@ impl<S: CAStorage> WasmEngine<S> {
             wasm_storage,
             wasm_engine,
             memory_cache: RwLock::new(HashMap::new()),
+            app_data_dir: app_data_dir.as_ref().to_path_buf(),
         }
     }
 }
@@ -67,12 +73,85 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
     fn execute_queue(
         &self,
-        _digest: Digest,
-        _request: Vec<u8>,
-        _timestamp: u64,
+        digest: Digest,
+        request: Vec<u8>,
+        timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        tracing::warn!("EXECUTING TASK QUEUE!");
-        todo!();
+        // load component from memory cache or compile from wasm
+        // TODO: use serialized precompile as well, pull this into a method
+        let component = match self.memory_cache.read().unwrap().get(&digest) {
+            Some(cm) => cm.clone(),
+            None => {
+                let bytes = self.wasm_storage.get_data(&digest)?;
+                Component::new(&self.wasm_engine, &bytes)?
+            }
+        };
+
+        // create linker
+        let mut linker = Linker::new(&self.wasm_engine);
+        wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
+        wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+
+        // create wasi context
+        let mut builder = WasiCtxBuilder::new();
+        let app_cache_path = self.app_data_dir.join(digest.to_string());
+        if !app_cache_path.is_dir() {
+            std::fs::create_dir(&app_cache_path)?;
+        }
+        builder
+            .preopened_dir(app_cache_path, ".", DirPerms::all(), FilePerms::all())
+            .context("preopen failed")?;
+        // TODO: add some env here
+        // if !envs.is_empty() {
+        //     builder.envs(envs);
+        // }
+        let ctx = builder.build();
+
+        // create host (what is this actually? some state needed for the linker?)
+        let host = Host {
+            table: wasmtime::component::ResourceTable::new(),
+            ctx,
+            http: WasiHttpCtx::new(),
+        };
+        let mut store = wasmtime::Store::new(&self.wasm_engine, host);
+
+        let bindings = task_bindings::TaskQueue::instantiate(&mut store, &component, &linker)
+            .context("Wasm instantiate failed")?;
+
+        let input = task_bindings::lay3r::avs::types::TaskQueueInput { timestamp, request };
+        let result = bindings
+            .call_run_task(&mut store, &input)
+            .context("Failed to run task")?
+            .map_err(EngineError::ComponentError)?;
+        Ok(result)
+    }
+}
+
+// TODO: revisit this an understand it.
+// Copied blindly from old code
+pub(crate) struct Host {
+    pub(crate) table: wasmtime::component::ResourceTable,
+    pub(crate) ctx: WasiCtx,
+    pub(crate) http: WasiHttpCtx,
+}
+
+impl WasiView for Host {
+    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
+        &mut self.table
+    }
+
+    fn ctx(&mut self) -> &mut WasiCtx {
+        &mut self.ctx
+    }
+}
+
+impl WasiHttpView for Host {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        &mut self.table
+    }
+
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        &mut self.http
     }
 }
 
@@ -88,7 +167,8 @@ mod tests {
     #[test]
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
-        let engine = WasmEngine::new(storage);
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(storage, &app_data);
 
         // store two blobs
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -105,7 +185,8 @@ mod tests {
     #[test]
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
-        let engine = WasmEngine::new(storage);
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(storage, &app_data);
 
         // store valid wasm
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -120,7 +201,8 @@ mod tests {
     #[test]
     fn execute_square() {
         let storage = MemoryStorage::new();
-        let engine = WasmEngine::new(storage);
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(storage, &app_data);
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
