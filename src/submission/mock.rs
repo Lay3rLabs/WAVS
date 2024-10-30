@@ -64,6 +64,7 @@ impl Submission for MockSubmission {
 
         let mock = self.clone();
         ctx.rt.spawn(async move {
+            tracing::info!("Submission listening on channel");
             while let Some(msg) = rx.recv().await {
                 tracing::info!("Received message: {} / {}", msg.service_id, msg.workflow_id);
                 mock.inbox.lock().unwrap().push(msg);
