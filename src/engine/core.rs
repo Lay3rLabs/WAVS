@@ -32,7 +32,7 @@ impl<S: CAStorage> WasmEngine<S> {
     pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
-        config.async_support(false);
+        config.async_support(true);
         let wasm_engine = WTEngine::new(&config).unwrap();
 
         Self {
@@ -89,6 +89,8 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
         // create linker
         let mut linker = Linker::new(&self.wasm_engine);
+        // wasmtime_wasi::add_to_linker_sync(&mut linker).unwrap();
+        // wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker).unwrap();
         wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
         wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
 
@@ -115,15 +117,26 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         };
         let mut store = wasmtime::Store::new(&self.wasm_engine, host);
 
-        let bindings = task_bindings::TaskQueue::instantiate(&mut store, &component, &linker)
-            .context("Wasm instantiate failed")?;
-
-        let input = task_bindings::lay3r::avs::types::TaskQueueInput { timestamp, request };
-        let result = bindings
-            .call_run_task(&mut store, &input)
-            .context("Failed to run task")?
-            .map_err(EngineError::ComponentError)?;
-        Ok(result)
+        // This feels like an ugly hack.
+        // I cannot figure out how to add wasi http support and keep this sync
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        rt.block_on({
+            async {
+                let bindings =
+                    task_bindings::TaskQueue::instantiate_async(&mut store, &component, &linker)
+                        .await
+                        .context("Wasm instantiate failed")?;
+                let input = task_bindings::lay3r::avs::types::TaskQueueInput { timestamp, request };
+                let result = bindings
+                    .call_run_task(&mut store, &input)
+                    .await
+                    .context("Failed to run task")?
+                    .map_err(EngineError::ComponentError)?;
+                Ok::<_, EngineError>(result)
+            }
+        })
     }
 }
 
