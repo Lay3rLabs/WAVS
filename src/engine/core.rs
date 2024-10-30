@@ -44,3 +44,45 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         todo!();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::storage::memory::MemoryStorage;
+
+    use super::*;
+
+    const SQUARE: &[u8] = include_bytes!("../../components/square.wasm");
+    const BTC_AVG: &[u8] = include_bytes!("../../components/btc_avg.wasm");
+
+    #[test]
+    fn store_and_list_wasm() {
+        let storage = MemoryStorage::new();
+        let engine = WasmEngine::new(storage);
+
+        // store two blobs
+        let digest = engine.store_wasm(SQUARE).unwrap();
+        let digest2 = engine.store_wasm(BTC_AVG).unwrap();
+        assert_ne!(digest, digest2);
+
+        // list them
+        let digests = engine.list_digests().unwrap();
+        let mut expected = vec![digest, digest2];
+        expected.sort();
+        assert_eq!(digests, expected);
+    }
+
+    #[test]
+    fn execute_square() {
+        let storage = MemoryStorage::new();
+        let engine = WasmEngine::new(storage);
+
+        // store square digest
+        let digest = engine.store_wasm(SQUARE).unwrap();
+
+        // execute it and get square
+        let result = engine
+            .execute_queue(digest, br#"{"x":12}"#.into(), 12345)
+            .unwrap();
+        assert_eq!(&result, br#"{"y":144}"#);
+    }
+}
