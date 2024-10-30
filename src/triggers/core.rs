@@ -60,7 +60,7 @@ type LookupId = usize;
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
-        let chain_config = config.chain_config().map_err(TriggerError::QueryClient)?;
+        let chain_config = config.chain_config().map_err(TriggerError::Climb)?;
 
         Ok(Self {
             chain_config,
@@ -75,7 +75,7 @@ impl CoreTriggerManager {
     ) -> Result<(), TriggerError> {
         let query_client = QueryClient::new(self.chain_config.clone())
             .await
-            .map_err(TriggerError::QueryClient)
+            .map_err(TriggerError::Climb)
             .unwrap();
 
         tracing::info!(
@@ -85,7 +85,7 @@ impl CoreTriggerManager {
 
         let event_stream = Box::pin(query_client.clone().stream_block_events(None))
             .await
-            .map_err(TriggerError::EventStream)?;
+            .map_err(TriggerError::Climb)?;
 
         event_stream
             .for_each(|block_events| {
@@ -137,7 +137,7 @@ impl CoreTriggerManager {
                                     ),
                                 )
                                 .await
-                                .map_err(TriggerError::QueryClient)
+                                .map_err(TriggerError::Climb)
                                 .unwrap();
 
                             let result = TriggerResult::Queue {
@@ -222,7 +222,7 @@ impl TriggerManager for CoreTriggerManager {
                 let addr = self
                     .chain_config
                     .parse_address(task_queue_addr)
-                    .map_err(TriggerError::Address)?;
+                    .map_err(TriggerError::Climb)?;
                 self.lookup_maps
                     .task_queue_lookup_map
                     .write()

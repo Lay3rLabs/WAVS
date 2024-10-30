@@ -28,6 +28,6 @@ pub struct ChainMessage {
 
 #[derive(Error, Debug)]
 pub enum SubmissionError {
-    #[error("chain error: {0}")]
-    ChainError(anyhow::Error),
+    #[error("climb: {0}")]
+    Climb(anyhow::Error),
 }

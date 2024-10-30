@@ -65,12 +65,8 @@ impl TriggerResult {
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
-    #[error("Cannot create query client: {0}")]
-    QueryClient(anyhow::Error),
-    #[error("Unable to create event stream: {0}")]
-    EventStream(anyhow::Error),
-    #[error("Unable to parse address: {0}")]
-    Address(anyhow::Error),
+    #[error("climb: {0}")]
+    Climb(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]
