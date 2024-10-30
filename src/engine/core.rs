@@ -1,3 +1,11 @@
+use std::collections::HashMap;
+use std::sync::RwLock;
+
+use wasmtime::{
+    component::{Component, Linker},
+    Config as WTConfig, Engine as WTEngine,
+};
+
 pub use crate::apis::engine::Engine;
 use crate::apis::engine::EngineError;
 
@@ -6,7 +14,9 @@ use crate::Digest;
 
 pub struct WasmEngine<S: CAStorage> {
     wasm_storage: S,
-    // TODO: implement actual wasmtime engine here
+    wasm_engine: WTEngine,
+    // TODO: we need some LRU limit here to avoid memory exhaustion
+    memory_cache: RwLock<HashMap<Digest, Component>>,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -15,15 +25,36 @@ impl<S: CAStorage> WasmEngine<S> {
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
     /// Externally, the Dispatcher can read the incoming tasks either sync or async
     pub fn new(wasm_storage: S) -> Self {
-        Self { wasm_storage }
+        let mut config = WTConfig::new();
+        config.wasm_component_model(true);
+        config.async_support(false);
+        let wasm_engine = WTEngine::new(&config).unwrap();
+
+        Self {
+            wasm_storage,
+            wasm_engine,
+            memory_cache: RwLock::new(HashMap::new()),
+        }
     }
 }
 
 // TODO: should we make some trait for quicker tasks where you just register closures for the digests?
 impl<S: CAStorage> Engine for WasmEngine<S> {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
-        // TODO: validate bytecode is proper wasm with some wit interface
+        // compile component (validate it is proper wasm)
+        let cm = Component::new(&self.wasm_engine, bytecode)?;
+
+        // store original wasm
         let digest = self.wasm_storage.set_data(bytecode)?;
+
+        // // TODO: write precompiled wasm (huge optimization on restart)
+        // tokio::fs::write(self.path_for_precompiled_wasm(digest), cm.serialize()?).await?;
+
+        self.memory_cache
+            .write()
+            .unwrap()
+            .insert(digest.clone(), cm);
+
         Ok(digest)
     }
 
@@ -69,6 +100,21 @@ mod tests {
         let mut expected = vec![digest, digest2];
         expected.sort();
         assert_eq!(digests, expected);
+    }
+
+    #[test]
+    fn reject_invalid_wasm() {
+        let storage = MemoryStorage::new();
+        let engine = WasmEngine::new(storage);
+
+        // store valid wasm
+        let digest = engine.store_wasm(SQUARE).unwrap();
+        // fail on invalid wasm
+        engine.store_wasm(b"foobarbaz").unwrap_err();
+
+        // only list the valid one
+        let digests = engine.list_digests().unwrap();
+        assert_eq!(digests, vec![digest]);
     }
 
     #[test]

@@ -52,4 +52,7 @@ pub enum EngineError {
 
     #[error("No wasm found for digest {0}")]
     UnknownDigest(Digest),
+
+    #[error{"{0}"}]
+    Other(#[from] anyhow::Error),
 }
