@@ -10,6 +10,7 @@ use super::generic::Dispatcher;
 pub type MockDispatcher =
     Dispatcher<MockTriggerManager, Arc<WasmEngine<MemoryStorage>>, MockSubmission>;
 
+/// Note: this is more or less useless, as we will want to actually to configure these items more.
 impl MockDispatcher {
     pub fn new_mock() -> Self {
         let file_storage = MemoryStorage::new();

@@ -203,3 +203,99 @@ pub enum DispatcherError {
     #[error("Submission: {0}")]
     Submission(#[from] SubmissionError),
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        apis::{
+            dispatcher::{Component, Permissions, ServiceStatus},
+            Trigger,
+        },
+        engine::identity::IdentityEngine,
+        submission::mock::MockSubmission,
+        triggers::mock::MockTriggerManager,
+        Digest,
+    };
+
+    use super::*;
+
+    /// Ensure that some items pass end-to-end in simplest possible setup
+    #[test]
+    fn dispatcher_pipeline_happy_path() {
+        let db_file = tempfile::NamedTempFile::new().unwrap();
+        let task_id = 2;
+        let payload: &str = "foobar";
+
+        let action = TriggerAction {
+            service_id: ID::new("service1").unwrap(),
+            workflow_id: ID::new("workflow1").unwrap(),
+            result: TriggerResult::Queue {
+                task_id,
+                payload: payload.into(),
+            },
+        };
+
+        let dispatcher = Dispatcher::new(
+            MockTriggerManager::with_actions(vec![action.clone()]),
+            IdentityEngine::new(),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
+
+        // Register a service to handle this action
+        let digest = Digest::new(b"wasm1");
+        let component_id = ID::new("component1").unwrap();
+        let hd_index = 2;
+        let verifier_addr = "layer1verifier";
+        let service = Service {
+            id: action.service_id.clone(),
+            name: "My awesome service".to_string(),
+            components: [(
+                component_id.clone(),
+                Component {
+                    wasm: digest.clone(),
+                    permissions: Permissions::default(),
+                    env: vec![],
+                },
+            )]
+            .into(),
+            workflows: [(
+                action.workflow_id.clone(),
+                crate::apis::dispatcher::Workflow {
+                    component: component_id.clone(),
+                    trigger: Trigger::Queue {
+                        task_queue_addr: "some-task".to_string(),
+                        poll_interval: 5,
+                    },
+                    submit: Some(crate::apis::dispatcher::Submit::VerifierTx {
+                        hd_index,
+                        verifier_addr: verifier_addr.to_string(),
+                    }),
+                },
+            )]
+            .into(),
+            status: ServiceStatus::Active,
+            testable: false,
+        };
+        dispatcher.add_service(service).unwrap();
+
+        // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
+        let ctx = AppContext::new();
+        dispatcher.start(ctx).unwrap();
+
+        // check that this event was properly handled and arrived at submission
+        dispatcher.submission.wait_for_messages(1).unwrap();
+        let processed = dispatcher.submission.received();
+        assert_eq!(processed.len(), 1);
+        let expected = ChainMessage {
+            service_id: action.service_id.clone(),
+            workflow_id: action.workflow_id.clone(),
+            task_id,
+            wasm_result: payload.into(),
+            hd_index,
+            verifier_addr: verifier_addr.to_string(),
+        };
+        assert_eq!(processed[0], expected);
+    }
+}
