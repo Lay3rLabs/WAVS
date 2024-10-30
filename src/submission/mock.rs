@@ -2,14 +2,15 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Mutex};
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 use crate::context::AppContext;
 
 #[derive(Clone)]
 pub struct MockSubmission {
-    inbox: Arc<RwLock<Vec<ChainMessage>>>,
+    // This is accessed in an async runtime in start, so must be tokio sync
+    inbox: Arc<Mutex<Vec<ChainMessage>>>,
 }
 
 impl MockSubmission {
@@ -19,12 +20,12 @@ impl MockSubmission {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
-            inbox: Arc::new(RwLock::new(vec![])),
+            inbox: Arc::new(Mutex::new(vec![])),
         }
     }
 
     pub fn received(&self) -> Vec<ChainMessage> {
-        self.inbox.blocking_read().clone()
+        self.inbox.blocking_lock().clone()
     }
 
     /// This will block until n messages arrive in the inbox, or until 10 seconds passes
@@ -36,7 +37,7 @@ impl MockSubmission {
     pub fn wait_for_messages_timeout(&self, n: usize, timeout: Duration) -> Result<(), WaitError> {
         let end = Instant::now() + timeout;
         while Instant::now() < end {
-            if self.inbox.blocking_read().len() >= n {
+            if self.inbox.blocking_lock().len() >= n {
                 return Ok(());
             }
             sleep(Self::POLL);
@@ -61,7 +62,7 @@ impl Submission for MockSubmission {
         let mock = self.clone();
         ctx.rt.spawn(async move {
             while let Some(msg) = rx.recv().await {
-                mock.inbox.write().await.push(msg);
+                mock.inbox.lock().await.push(msg);
             }
         });
 
@@ -139,5 +140,4 @@ mod test {
             .unwrap_err();
         assert_eq!(err, WaitError::Timeout);
     }
-
 }
