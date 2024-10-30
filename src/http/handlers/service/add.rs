@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 
 use axum::{extract::State, response::IntoResponse, Json};
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     apis::{
-        dispatcher::{Component, Service, ServiceStatus, Workflow},
-        ID,
+        dispatcher::{Component, Service, ServiceStatus, Submit, Workflow},
+        Trigger, ID,
     },
     http::{
         error::HttpResult,
@@ -53,12 +54,34 @@ async fn add_service_inner(
 
     let components = BTreeMap::from([(component_id.clone(), Component::new(&req.app.digest))]);
 
+    let submit = match &req.app.trigger {
+        Trigger::Queue {
+            task_queue_addr, ..
+        } => {
+            let hd_index = 0; // TODO: should this come from the request?
+
+            let query_client = QueryClient::new(state.config.chain_config()?).await?;
+            let task_queue_addr = query_client.chain_config.parse_address(task_queue_addr)?;
+
+            let resp: lavs_apis::tasks::ConfigResponse = query_client
+                .contract_smart(
+                    &task_queue_addr,
+                    &lavs_apis::tasks::QueryMsg::Custom(
+                        lavs_apis::tasks::CustomQueryMsg::Config {},
+                    ),
+                )
+                .await?;
+
+            Some(Submit::verifier_tx(hd_index, &resp.verifier))
+        }
+    };
+
     let workflows = BTreeMap::from([(
         workflow_id,
         Workflow {
             trigger: req.app.trigger,
             component: component_id,
-            submit: None,
+            submit,
         },
     )]);
 
