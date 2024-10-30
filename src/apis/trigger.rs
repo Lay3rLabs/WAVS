@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
@@ -9,7 +8,10 @@ use super::{Trigger, ID};
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
     /// This should only be called once in the lifetime of the object
-    fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
+    fn start(
+        &self,
+        ctx: AppContext,
+    ) -> Result<crossbeam_channel::Receiver<TriggerAction>, TriggerError>;
 
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
 

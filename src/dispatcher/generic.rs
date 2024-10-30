@@ -47,27 +47,32 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
     fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
-        let mut actions_in = self.triggers.start(ctx.clone())?;
+        let actions_in = self.triggers.start(ctx.clone())?;
         let msgs_out = self.submission.start(ctx.clone())?;
 
-        // since triggers listens to the async kill signal handler and closes the channel when
-        // it is triggered, we don't need to jump through hoops here to make an async block to listen.
-        // Just waiting for the channel to close is enough.
-
-        while let Some(action) = actions_in.blocking_recv() {
-            match self.run_trigger(action) {
-                Ok(Some(msg)) => {
-                    tracing::info!("Ran action, got result to submit");
-                    if let Err(err) = msgs_out.blocking_send(msg) {
-                        tracing::error!("Error submitting msg: {:?}", err);
+        // if we receive the kill signal, we should stop, otherwise - keep processing new trigger actions forever
+        crossbeam_channel::select! {
+            recv(actions_in) -> action => {
+                if let Ok(action) = action {
+                    match self.run_trigger(action) {
+                        Ok(Some(msg)) => {
+                            tracing::info!("Ran action, got result to submit");
+                            if let Err(err) = msgs_out.blocking_send(msg) {
+                                tracing::error!("Error submitting msg: {:?}", err);
+                            }
+                        }
+                        Ok(None) => {
+                            tracing::info!("Ran action, no submission");
+                        }
+                        Err(e) => {
+                            tracing::error!("Error running trigger: {:?}", e);
+                        }
                     }
                 }
-                Ok(None) => {
-                    tracing::info!("Ran action, no submission");
-                }
-                Err(e) => {
-                    tracing::error!("Error running trigger: {:?}", e);
-                }
+            },
+
+            recv(ctx.kill_switch.dispatcher_receiver) -> _ => {
+                tracing::info!("Received kill signal, shutting down dispatcher");
             }
         }
 

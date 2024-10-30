@@ -2,8 +2,6 @@ use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerMana
 use crate::apis::ID;
 use crate::context::AppContext;
 
-use tokio::sync::mpsc;
-
 // Annoying that TriggerAction cannot implement Clone (due to anyhow variant)
 // So I need to store a function here rather than a simple element
 #[derive(Clone)]
@@ -56,11 +54,14 @@ impl MockTriggerManager {
 }
 
 impl TriggerManager for MockTriggerManager {
-    fn start(&self, _ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+    fn start(
+        &self,
+        _ctx: AppContext,
+    ) -> Result<crossbeam_channel::Receiver<TriggerAction>, TriggerError> {
         self.start_error()?;
-        let (sender, receiver) = mpsc::channel(self.triggers.len() + 1);
+        let (sender, receiver) = crossbeam_channel::bounded(self.triggers.len() + 1);
         for t in self.triggers.clone() {
-            let _ = sender.blocking_send(t);
+            let _ = sender.send(t);
         }
         Ok(receiver)
     }
@@ -113,16 +114,16 @@ mod tests {
             },
         ];
         let triggers = MockTriggerManager::with_actions(actions.clone());
-        let mut flow = triggers.start(AppContext::new()).unwrap();
+        let flow = triggers.start(AppContext::new()).unwrap();
 
         // read the triggers
-        let first = flow.blocking_recv().unwrap();
+        let first = flow.recv().unwrap();
         assert_eq!(&first, &actions[0]);
-        let second = flow.blocking_recv().unwrap();
+        let second = flow.recv().unwrap();
         assert_eq!(&second, &actions[1]);
 
         // channel is closed
-        assert!(flow.blocking_recv().is_none());
+        assert!(flow.recv().is_err());
 
         // add trigger works
         let data = TriggerData {

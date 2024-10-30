@@ -24,24 +24,12 @@ impl Submission for CoreSubmission {
     fn start(&self, ctx: AppContext) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
         let (tx, mut rx) = mpsc::channel(self.channel_bound);
 
-        ctx.rt.clone().spawn({
-            let mut kill_receiver = ctx.get_kill_receiver();
-            let _self = self.clone();
-            async move {
-                tokio::select! {
-                    _ = kill_receiver.recv() => {
-                        tracing::info!("Submissions shutting down");
-                    },
-                    _ = async move {
-                    } => {
-                        while let Some(msg) = rx.recv().await {
-                            tracing::info!("Received message to submit: {:?}", msg);
-                        }
-
-                        tracing::info!("Submission channel closed");
-                    }
-                }
+        ctx.rt.clone().spawn(async move {
+            while let Some(msg) = rx.recv().await {
+                tracing::info!("Received message to submit: {:?}", msg);
             }
+
+            tracing::info!("Submission channel closed");
         });
 
         Ok(tx)

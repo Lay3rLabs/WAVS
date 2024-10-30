@@ -1,18 +1,48 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tokio::runtime::Runtime;
 
 #[derive(Clone)]
 pub struct AppContext {
     pub rt: Arc<Runtime>,
-    kill_sender: tokio::sync::broadcast::Sender<()>,
-    // just to make sure we don't send in the case of "no receivers" accidentally
-    _kill_receiver: Arc<tokio::sync::broadcast::Receiver<()>>,
+    pub kill_switch: Arc<KillSwitch>,
 }
 
-impl Default for AppContext {
-    fn default() -> Self {
-        Self::new()
+pub struct KillSwitch {
+    // for sending kill to http server, we need it to be over an async channel
+    // but we want to be able to send it from either sync or async code
+    // so we use tokio::sync::oneshot which satisfies both requirements
+    // and consumes self, so we need to wrap it in a Mutex<Option<>> to be able to take it out
+    pub http_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    http_sender: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    // for sending kill to dispatcher, we only need it to be over a sync channel
+    // so we use crossbeam, which doesn't have the same restrictions as tokio
+    pub dispatcher_receiver: crossbeam_channel::Receiver<()>,
+    dispatcher_sender: crossbeam_channel::Sender<()>,
+}
+
+impl KillSwitch {
+    pub fn new() -> Self {
+        let (http_sender, http_receiver) = tokio::sync::oneshot::channel();
+        let (dispatcher_sender, dispatcher_receiver) = crossbeam_channel::bounded(1);
+
+        Self {
+            http_sender: Mutex::new(Some(http_sender)),
+            http_receiver: Mutex::new(Some(http_receiver)),
+            dispatcher_sender,
+            dispatcher_receiver,
+        }
+    }
+
+    pub fn kill(&self) {
+        self.http_sender
+            .lock()
+            .unwrap()
+            .take()
+            .unwrap()
+            .send(())
+            .unwrap();
+        self.dispatcher_sender.send(()).unwrap();
     }
 }
 
@@ -26,51 +56,20 @@ impl AppContext {
                 .unwrap(),
         );
 
-        let (kill_sender, kill_receiver) = tokio::sync::broadcast::channel(1);
+        let kill_switch = Arc::new(KillSwitch::new());
 
-        Self {
-            rt,
-            kill_sender,
-            _kill_receiver: Arc::new(kill_receiver),
-        }
-    }
-
-    /// The kill system is a way to signal to all running tasks that they should stop
-    /// it can be used to gracefully shutdown the system in async code
-    /// without relying on its parent to drop it
-    pub fn get_kill_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
-        self.kill_sender.subscribe()
-    }
-
-    /// This is typically only called from main or tests - it will kill the system gracefully
-    pub fn kill(&self) {
-        self.kill_sender.send(()).unwrap();
+        Self { rt, kill_switch }
     }
 }
 
-#[cfg(test)]
-mod test {
-    #[test]
-    fn kill_switch_drop_fails() {
-        let sender = {
-            let (sender, _) = tokio::sync::broadcast::channel::<&'static str>(1);
-            sender
-        };
-
-        sender.send("hello").unwrap_err();
+impl Default for AppContext {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    #[test]
-    fn kill_switch_hold_succeeds() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let (sender, mut receiver) = tokio::sync::broadcast::channel::<&'static str>(1);
-
-        sender.send("hello").unwrap();
-
-        runtime.block_on(async move {
-            let msg = receiver.recv().await;
-
-            assert_eq!("hello", msg.unwrap());
-        });
+impl Default for KillSwitch {
+    fn default() -> Self {
+        Self::new()
     }
 }

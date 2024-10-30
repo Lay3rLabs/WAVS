@@ -5,7 +5,6 @@ use crate::{
 };
 use anyhow::Result;
 use layer_climb::prelude::*;
-use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -23,48 +22,37 @@ impl CoreTriggerManager {
             channel_bound: 100, // TODO: get from config
         })
     }
-
-    async fn start_watcher(
-        &self,
-        _action_sender: mpsc::Sender<TriggerAction>,
-    ) -> Result<(), TriggerError> {
-        let query_client = QueryClient::new(self.chain_config.clone())
-            .await
-            .map_err(TriggerError::QueryClient)
-            .unwrap();
-
-        tracing::info!(
-            "Trigger Manager started on {}",
-            query_client.chain_config.chain_id
-        );
-        // TODO: start watching
-        std::future::pending::<()>().await;
-
-        tracing::info!("Trigger Manager watcher finished");
-
-        Ok(())
-    }
 }
 
 impl TriggerManager for CoreTriggerManager {
-    fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+    fn start(
+        &self,
+        ctx: AppContext,
+    ) -> Result<crossbeam_channel::Receiver<TriggerAction>, TriggerError> {
         // The trigger manager should be free to quickly fire off triggers
         // so that it can continue to monitor the chain
         // it's up to the dispatcher to alleviate the backpressure
-        let (action_sender, action_receiver) = mpsc::channel(self.channel_bound);
+        let (action_sender, action_receiver) = crossbeam_channel::bounded(self.channel_bound);
 
-        ctx.rt.clone().spawn({
-            let _self = self.clone();
-            let mut kill_receiver = ctx.get_kill_receiver();
-            async move {
-                tokio::select! {
-                    _ = kill_receiver.recv() => {
-                        tracing::info!("Trigger Manager shutting down");
-                    },
-                    _ = _self.start_watcher(action_sender) => {
-                    }
-                }
-            }
+        let chain_config = self.chain_config.clone();
+
+        ctx.rt.clone().spawn(async move {
+            let query_client = QueryClient::new(chain_config)
+                .await
+                .map_err(TriggerError::QueryClient)
+                .unwrap();
+
+            let _action_sender = action_sender;
+
+            tracing::info!(
+                "Trigger Manager started on {}",
+                query_client.chain_config.chain_id
+            );
+
+            // TODO: start watching
+            std::future::pending::<()>().await;
+
+            tracing::info!("Trigger Manager watcher finished");
         });
 
         Ok(action_receiver)

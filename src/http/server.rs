@@ -30,8 +30,6 @@ pub fn start(
     ctx.rt.clone().block_on(async move {
         let (host, port) = (config.host.clone(), config.port);
 
-        let mut shutdown_signal = ctx.get_kill_receiver();
-
         let router = make_router(config, dispatcher).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
@@ -40,7 +38,14 @@ pub fn start(
 
         axum::serve(listener, router)
             .with_graceful_shutdown(async move {
-                shutdown_signal.recv().await.ok();
+                let shutdown_signal = ctx
+                    .kill_switch
+                    .http_receiver
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap();
+                let _ = shutdown_signal.await;
 
                 tracing::info!("Http server shutting down");
             })

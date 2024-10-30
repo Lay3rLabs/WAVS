@@ -24,7 +24,7 @@ pub fn run_server(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatche
     ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {
-            ctx.kill();
+            ctx.kill_switch.kill();
         }
     })
     .unwrap();
