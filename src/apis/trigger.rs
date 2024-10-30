@@ -24,7 +24,7 @@ pub trait TriggerManager: Send + Sync {
     fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError>;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// Internal description of a registered trigger, to be indexed by associated IDs
 pub struct TriggerData {
     pub service_id: ID,

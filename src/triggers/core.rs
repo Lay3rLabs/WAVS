@@ -237,23 +237,104 @@ impl TriggerManager for CoreTriggerManager {
 
     fn remove_trigger(
         &self,
-        _service_id: crate::apis::ID,
-        _workflow_id: crate::apis::ID,
+        service_id: crate::apis::ID,
+        workflow_id: crate::apis::ID,
     ) -> Result<(), TriggerError> {
-        // TODO - just do the reverse of add_trigger
-        todo!()
+        // need to remove from:
+        // 1. triggers
+        // 2. (if task queue) task_queue_lookup_map
+        // 3. service_workflow_lookup_map
+
+        let mut service_lock = self
+            .lookup_maps
+            .service_workflow_lookup_map
+            .write()
+            .unwrap();
+        let workflow_map = service_lock.get_mut(&service_id).unwrap();
+        let lookup_id = *workflow_map.get(&workflow_id).unwrap();
+        let mut triggers_lock = self.lookup_maps.triggers.write().unwrap();
+
+        // 1. remove from triggers
+        let trigger_data = triggers_lock.remove(&lookup_id).unwrap();
+
+        // 2. remove from task_queue_lookup_map
+        match &trigger_data.trigger {
+            Trigger::Queue {
+                task_queue_addr,
+                poll_interval: _,
+            } => {
+                let addr = self
+                    .chain_config
+                    .parse_address(task_queue_addr)
+                    .map_err(TriggerError::Climb)?;
+                self.lookup_maps
+                    .task_queue_lookup_map
+                    .write()
+                    .unwrap()
+                    .remove(&addr);
+            }
+        }
+
+        // 3. remove from service_workflow_lookup_map
+        workflow_map.remove(&workflow_id);
+
+        Ok(())
     }
 
-    fn remove_service(&self, _service_id: crate::apis::ID) -> Result<(), TriggerError> {
-        // TODO - like remove_trigger but get the workflow_ids from service_workflow_map_lookup
-        todo!()
+    fn remove_service(&self, service_id: crate::apis::ID) -> Result<(), TriggerError> {
+        // need to remove from:
+        // 1. triggers
+        // 2. (if task queue) task_queue_lookup_map
+        // 3. service_workflow_lookup_map
+
+        let mut service_lock = self
+            .lookup_maps
+            .service_workflow_lookup_map
+            .write()
+            .unwrap();
+
+        for lookup_id in service_lock.get(&service_id).unwrap().values() {
+            let mut triggers_lock = self.lookup_maps.triggers.write().unwrap();
+
+            // 1. remove from triggers
+            let trigger_data = triggers_lock.remove(lookup_id).unwrap();
+
+            // 2. remove from task_queue
+            match &trigger_data.trigger {
+                Trigger::Queue {
+                    task_queue_addr,
+                    poll_interval: _,
+                } => {
+                    let addr = self
+                        .chain_config
+                        .parse_address(task_queue_addr)
+                        .map_err(TriggerError::Climb)?;
+                    self.lookup_maps
+                        .task_queue_lookup_map
+                        .write()
+                        .unwrap()
+                        .remove(&addr);
+                }
+            }
+        }
+
+        // 3. remove from service_workflow_lookup_map
+        service_lock.remove(&service_id);
+
+        Ok(())
     }
 
-    fn list_triggers(
-        &self,
-        _service_id: crate::apis::ID,
-    ) -> Result<Vec<crate::apis::trigger::TriggerData>, TriggerError> {
-        // just list all triggers
-        todo!()
+    fn list_triggers(&self, service_id: crate::apis::ID) -> Result<Vec<TriggerData>, TriggerError> {
+        let mut triggers = Vec::new();
+
+        let service_lock = self.lookup_maps.service_workflow_lookup_map.read().unwrap();
+        let triggers_lock = self.lookup_maps.triggers.read().unwrap();
+
+        let workflow_map = service_lock.get(&service_id).unwrap();
+        for lookup_id in workflow_map.values() {
+            triggers.push(triggers_lock.get(lookup_id).unwrap().clone());
+        }
+
+        Ok(triggers)
     }
 }
