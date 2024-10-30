@@ -59,17 +59,9 @@ impl Submission for MockSubmission {
         let (tx, mut rx) = mpsc::channel(10);
 
         let mock = self.clone();
-        let mut kill_receiver = ctx.get_kill_receiver();
-
         ctx.rt.spawn(async move {
-            loop {
-                tokio::select! {
-                    msg = rx.recv() => match msg {
-                        Some(msg) => mock.inbox.write().await.push(msg),
-                        None => break,
-                    },
-                    _ = kill_receiver.recv() => break,
-                }
+            while let Some(msg) = rx.recv().await {
+                mock.inbox.write().await.push(msg);
             }
         });
 
@@ -148,28 +140,4 @@ mod test {
         assert_eq!(err, WaitError::Timeout);
     }
 
-    #[test]
-    fn kill_stops_collection() {
-        let submission = MockSubmission::new();
-        assert_eq!(submission.received(), vec![]);
-
-        let ctx = AppContext::new();
-        let send = submission.start(ctx.clone()).unwrap();
-
-        let msg1 = dummy_message("serv2", 11, "foo");
-        let msg2 = dummy_message("serv3", 12, "bar");
-
-        send.blocking_send(msg1.clone()).unwrap();
-        submission.wait_for_messages(1).unwrap();
-        assert_eq!(submission.received(), vec![msg1.clone()]);
-
-        // now hit the kill switch
-        ctx.kill();
-        sleep(Duration::from_millis(10));
-
-        // future sends should fail
-        send.blocking_send(msg2).unwrap_err();
-        // nothing more should show up
-        assert_eq!(submission.received(), vec![msg1]);
-    }
 }
