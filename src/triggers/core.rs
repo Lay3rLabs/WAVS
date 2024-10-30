@@ -101,10 +101,10 @@ impl CoreTriggerManager {
                                 .map_err(TriggerError::QueryClient)
                                 .unwrap();
 
-                            let mut payload: Vec<u8> = Vec::new();
-                            serde_json::to_writer(&mut payload, &resp.payload).unwrap();
-
-                            let result = TriggerResult::Queue { task_id, payload };
+                            let result = TriggerResult::Queue {
+                                task_id,
+                                payload: serde_json::to_vec(&resp.payload).unwrap(),
+                            };
 
                             tracing::info!("Triggering action for task_id: {}", task_id);
 

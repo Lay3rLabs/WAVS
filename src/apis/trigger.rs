@@ -54,7 +54,7 @@ pub enum TriggerResult {
 }
 
 impl TriggerResult {
-    pub fn queue(task_id: u64, payload: &[u8]) -> Self {
+    pub fn queue(task_id: TaskId, payload: &[u8]) -> Self {
         TriggerResult::Queue {
             task_id,
             payload: payload.to_vec(),

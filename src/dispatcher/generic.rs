@@ -221,6 +221,8 @@ pub enum DispatcherError {
 
 #[cfg(test)]
 mod tests {
+    use lavs_apis::id::TaskId;
+
     use crate::{
         apis::{
             dispatcher::{Component, ServiceStatus},
@@ -241,7 +243,7 @@ mod tests {
         tracing_subscriber::fmt::init();
 
         let db_file = tempfile::NamedTempFile::new().unwrap();
-        let task_id = 2;
+        let task_id = TaskId::new(2);
         let payload = b"foobar";
 
         let action = TriggerAction {
