@@ -33,8 +33,6 @@ struct LookupMaps {
     pub task_queue_lookup_map: Arc<RwLock<HashMap<Address, LookupId>>>,
     /// lookup id by service id -> workflow id
     pub service_workflow_lookup_map: Arc<RwLock<BTreeMap<ID, BTreeMap<ID, LookupId>>>>,
-    /// reverse lookup for service workflow
-    pub service_workflow_reverse_lookup_map: Arc<RwLock<BTreeMap<LookupId, ServiceWorkflowIds>>>,
 }
 
 impl LookupMaps {
@@ -44,15 +42,8 @@ impl LookupMaps {
             lookup_id: Arc::new(AtomicUsize::new(0)),
             task_queue_lookup_map: Arc::new(RwLock::new(HashMap::new())),
             service_workflow_lookup_map: Arc::new(RwLock::new(BTreeMap::new())),
-            service_workflow_reverse_lookup_map: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-struct ServiceWorkflowIds {
-    pub service_id: ID,
-    pub workflow_id: ID,
 }
 
 type LookupId = usize;
@@ -145,21 +136,17 @@ impl CoreTriggerManager {
                                 payload: serde_json::to_vec(&resp.payload).unwrap(),
                             };
 
-                            let ServiceWorkflowIds {
-                                service_id,
-                                workflow_id,
-                            } = {
+                            let (service_id, workflow_id) = {
                                 let addr_lock = lookup_maps.task_queue_lookup_map.read().unwrap();
-                                let service_workflow_reverse_lock = lookup_maps
-                                    .service_workflow_reverse_lookup_map
-                                    .read()
-                                    .unwrap();
+                                let triggers_lock = lookup_maps.triggers.read().unwrap();
 
                                 let lookup_id = addr_lock.get(&contract_address).unwrap();
-                                let service_workflow_ids =
-                                    service_workflow_reverse_lock.get(lookup_id).unwrap();
+                                let service_workflow_ids = triggers_lock.get(lookup_id).unwrap();
 
-                                service_workflow_ids.clone()
+                                (
+                                    service_workflow_ids.service_id.clone(),
+                                    service_workflow_ids.workflow_id.clone(),
+                                )
                             };
 
                             action_sender
@@ -239,17 +226,6 @@ impl TriggerManager for CoreTriggerManager {
             .entry(data.service_id.clone())
             .or_default()
             .insert(data.workflow_id.clone(), lookup_id);
-        self.lookup_maps
-            .service_workflow_reverse_lookup_map
-            .write()
-            .unwrap()
-            .insert(
-                lookup_id,
-                ServiceWorkflowIds {
-                    service_id: data.service_id.clone(),
-                    workflow_id: data.workflow_id.clone(),
-                },
-            );
 
         self.lookup_maps
             .triggers
