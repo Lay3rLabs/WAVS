@@ -71,6 +71,15 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
             }
         }
 
+        // Note: closing channel doesn't let receiver read all buffered messages, but immediately shuts it down
+        // https://docs.rs/tokio/latest/tokio/sync/mpsc/fn.channel.html
+        // Similarly, if Sender is disconnected while trying to recv,
+        // the recv method will return None.
+
+        // see https://stackoverflow.com/questions/65501193/is-it-possible-to-preserve-items-in-a-tokio-mpsc-when-the-last-sender-is-dropped
+        // and it seems like they should be delivered...
+        // https://github.com/tokio-rs/tokio/issues/6053
+
         tracing::info!("no more work in dispatcher, channel closed");
         Ok(())
     }
@@ -222,6 +231,9 @@ mod tests {
     /// Ensure that some items pass end-to-end in simplest possible setup
     #[test]
     fn dispatcher_pipeline_happy_path() {
+        // question - how to do this global init in tests, not just in main?
+        tracing_subscriber::fmt::init();
+
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let task_id = 2;
         let payload = b"foobar";

@@ -60,13 +60,15 @@ impl Submission for MockSubmission {
     // TODO: how to add support for aborting on the kill signal from ctx
     // (Same on mock triggers)
     fn start(&self, ctx: AppContext) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::channel::<ChainMessage>(10);
 
         let mock = self.clone();
         ctx.rt.spawn(async move {
             while let Some(msg) = rx.recv().await {
+                tracing::info!("Received message: {} / {}", msg.service_id, msg.workflow_id);
                 mock.inbox.lock().unwrap().push(msg);
             }
+            tracing::info!("Submission channel closed");
         });
 
         Ok(tx)
