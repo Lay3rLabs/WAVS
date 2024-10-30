@@ -32,7 +32,7 @@ struct LookupMaps {
     /// lookup id by task queue address
     pub task_queue_lookup_map: Arc<RwLock<HashMap<Address, LookupId>>>,
     /// lookup id by service id -> workflow id
-    pub service_workflow_lookup_map: Arc<RwLock<BTreeMap<ID, BTreeMap<ID, usize>>>>,
+    pub service_workflow_lookup_map: Arc<RwLock<BTreeMap<ID, BTreeMap<ID, LookupId>>>>,
     /// reverse lookup for service workflow
     pub service_workflow_reverse_lookup_map: Arc<RwLock<BTreeMap<usize, ServiceWorkflowIds>>>,
 }
