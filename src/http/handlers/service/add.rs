@@ -51,19 +51,16 @@ async fn add_service_inner(
     let workflow_id = ID::new("default")?;
     let service_id = ID::new(&req.app.name)?;
 
-    let mut components = BTreeMap::new();
-    components.insert(component_id.clone(), Component::new(&req.app.digest));
+    let components = BTreeMap::from([(component_id.clone(), Component::new(&req.app.digest))]);
 
-    let mut workflows = BTreeMap::new();
-
-    workflows.insert(
+    let workflows = BTreeMap::from([(
         workflow_id,
         Workflow {
             trigger: req.app.trigger,
             component: component_id,
             submit: None,
         },
-    );
+    )]);
 
     let service = Service {
         id: service_id,
