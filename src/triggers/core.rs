@@ -34,7 +34,7 @@ struct LookupMaps {
     /// lookup id by service id -> workflow id
     pub service_workflow_lookup_map: Arc<RwLock<BTreeMap<ID, BTreeMap<ID, LookupId>>>>,
     /// reverse lookup for service workflow
-    pub service_workflow_reverse_lookup_map: Arc<RwLock<BTreeMap<usize, ServiceWorkflowIds>>>,
+    pub service_workflow_reverse_lookup_map: Arc<RwLock<BTreeMap<LookupId, ServiceWorkflowIds>>>,
 }
 
 impl LookupMaps {
