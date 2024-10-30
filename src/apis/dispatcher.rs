@@ -98,6 +98,15 @@ pub enum Submit {
     }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
 }
 
+impl Submit {
+    pub fn verifier_tx(hd_index: u32, verifier_addr: &str) -> Self {
+        Submit::VerifierTx {
+            hd_index,
+            verifier_addr: verifier_addr.to_string(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum ServiceStatus {
@@ -113,6 +122,16 @@ pub struct Component {
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
     pub env: Vec<[String; 2]>,
+}
+
+impl Component {
+    pub fn new(digest: &Digest) -> Self {
+        Self {
+            wasm: digest.clone(),
+            permissions: Default::default(),
+            env: vec![],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
