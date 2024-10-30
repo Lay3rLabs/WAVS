@@ -3868,6 +3868,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "cfg-if",
  "clap 4.5.20",
  "cosmwasm-std",
  "ctrlc",

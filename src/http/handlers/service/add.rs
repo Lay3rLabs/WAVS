@@ -59,20 +59,14 @@ async fn add_service_inner(
             task_queue_addr, ..
         } => {
             let hd_index = 0; // TODO: should this come from the request?
-
-            let query_client = QueryClient::new(state.config.chain_config()?).await?;
-            let task_queue_addr = query_client.chain_config.parse_address(task_queue_addr)?;
-
-            let resp: lavs_apis::tasks::ConfigResponse = query_client
-                .contract_smart(
-                    &task_queue_addr,
-                    &lavs_apis::tasks::QueryMsg::Custom(
-                        lavs_apis::tasks::CustomQueryMsg::Config {},
-                    ),
-                )
-                .await?;
-
-            Some(Submit::verifier_tx(hd_index, &resp.verifier))
+            let verifier_addr_string =
+                if std::env::var("MATIC_TESTING_HTTP") == Ok("yes-it-is".to_string()) {
+                    // just some random addr
+                    "layer1hd63uanu5jqsy2xhq40k6k3gexsuu9xl6y3hvr".to_string()
+                } else {
+                    get_verifier_addr_string(state, task_queue_addr).await?
+                };
+            Some(Submit::verifier_tx(hd_index, &verifier_addr_string))
         }
     };
 
@@ -100,4 +94,21 @@ async fn add_service_inner(
         name: req.app.name,
         status: Status::Active,
     })
+}
+
+async fn get_verifier_addr_string(
+    state: &HttpState,
+    task_queue_addr: &str,
+) -> anyhow::Result<String> {
+    let query_client = QueryClient::new(state.config.chain_config()?).await?;
+    let task_queue_addr = query_client.chain_config.parse_address(task_queue_addr)?;
+
+    let resp: lavs_apis::tasks::ConfigResponse = query_client
+        .contract_smart(
+            &task_queue_addr,
+            &lavs_apis::tasks::QueryMsg::Custom(lavs_apis::tasks::CustomQueryMsg::Config {}),
+        )
+        .await?;
+
+    Ok(resp.verifier)
 }

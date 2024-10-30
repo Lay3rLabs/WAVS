@@ -73,7 +73,11 @@ async fn http_add_service() {
         .body(body)
         .unwrap();
 
-    let response = app.http_router().await.call(req).await.unwrap();
+    let response =
+        temp_env::async_with_vars([("MATIC_TESTING_HTTP", Some("yes-it-is"))], async move {
+            app.http_router().await.call(req).await.unwrap()
+        })
+        .await;
 
     assert!(response.status().is_success());
 
