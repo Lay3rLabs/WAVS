@@ -32,7 +32,7 @@ mod e2e {
             })
         };
 
-        let ctx = AppContext::new(&config);
+        let ctx = AppContext::new();
 
         let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 

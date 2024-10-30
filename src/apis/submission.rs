@@ -13,7 +13,7 @@ pub trait Submission: Send + Sync {
 }
 
 /// The data returned from a trigger action
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChainMessage {
     /// Identify which service and workflow this came from
     pub service_id: ID,
