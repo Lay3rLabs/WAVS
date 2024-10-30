@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
 
 use crate::apis::dispatcher::{DispatchManager, Service, Submit, WasmSource};
@@ -71,7 +72,21 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
             }
         }
 
-        tracing::info!("no more work in dispatcher, channel closed");
+        // Note: closing channel doesn't let receiver read all buffered messages, but immediately shuts it down
+        // https://docs.rs/tokio/latest/tokio/sync/mpsc/fn.channel.html
+        // Similarly, if Sender is disconnected while trying to recv,
+        // the recv method will return None.
+
+        // see https://stackoverflow.com/questions/65501193/is-it-possible-to-preserve-items-in-a-tokio-mpsc-when-the-last-sender-is-dropped
+        // and it seems like they should be delivered...
+        // https://github.com/tokio-rs/tokio/issues/6053
+
+        // FIXME: this sleep is a hack to make sure the messages are delivered
+        // is there a better way to do this?
+        // (in production, this is only hit in shutdown, so not so important, but it causes annoying test failures)
+        tracing::info!("no more work in dispatcher, channel closing");
+        std::thread::sleep(Duration::from_millis(500));
+
         Ok(())
     }
 
@@ -202,4 +217,86 @@ pub enum DispatcherError {
 
     #[error("Submission: {0}")]
     Submission(#[from] SubmissionError),
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        apis::{
+            dispatcher::{Component, ServiceStatus},
+            Trigger,
+        },
+        engine::identity::IdentityEngine,
+        submission::mock::MockSubmission,
+        triggers::mock::MockTriggerManager,
+        Digest,
+    };
+
+    use super::*;
+
+    /// Ensure that some items pass end-to-end in simplest possible setup
+    #[test]
+    fn dispatcher_pipeline_happy_path() {
+        // question - how to do this global init in tests, not just in main?
+        tracing_subscriber::fmt::init();
+
+        let db_file = tempfile::NamedTempFile::new().unwrap();
+        let task_id = 2;
+        let payload = b"foobar";
+
+        let action = TriggerAction {
+            service_id: ID::new("service1").unwrap(),
+            workflow_id: ID::new("workflow1").unwrap(),
+            result: TriggerResult::queue(task_id, payload),
+        };
+
+        let dispatcher = Dispatcher::new(
+            MockTriggerManager::with_actions(vec![action.clone()]),
+            IdentityEngine::new(),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
+
+        // Register a service to handle this action
+        let digest = Digest::new(b"wasm1");
+        let component_id = ID::new("component1").unwrap();
+        let hd_index = 2;
+        let verifier_addr = "layer1verifier";
+        let service = Service {
+            id: action.service_id.clone(),
+            name: "My awesome service".to_string(),
+            components: [(component_id.clone(), Component::new(&digest))].into(),
+            workflows: [(
+                action.workflow_id.clone(),
+                crate::apis::dispatcher::Workflow {
+                    component: component_id.clone(),
+                    trigger: Trigger::queue("some-task", 5),
+                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
+                },
+            )]
+            .into(),
+            status: ServiceStatus::Active,
+            testable: false,
+        };
+        dispatcher.add_service(service).unwrap();
+
+        // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
+        let ctx = AppContext::new();
+        dispatcher.start(ctx).unwrap();
+
+        // check that this event was properly handled and arrived at submission
+        dispatcher.submission.wait_for_messages(1).unwrap();
+        let processed = dispatcher.submission.received();
+        assert_eq!(processed.len(), 1);
+        let expected = ChainMessage {
+            service_id: action.service_id.clone(),
+            workflow_id: action.workflow_id.clone(),
+            task_id,
+            wasm_result: payload.into(),
+            hd_index,
+            verifier_addr: verifier_addr.to_string(),
+        };
+        assert_eq!(processed[0], expected);
+    }
 }
