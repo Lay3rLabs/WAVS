@@ -1,3 +1,4 @@
+use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -46,7 +47,7 @@ pub struct TriggerAction {
 pub enum TriggerResult {
     Queue {
         /// The id from the task queue
-        task_id: u64,
+        task_id: TaskId,
         /// The input data associated with that task
         payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
     },
@@ -56,6 +57,8 @@ pub enum TriggerResult {
 pub enum TriggerError {
     #[error("Cannot create query client: {0}")]
     QueryClient(anyhow::Error),
+    #[error("Unable to create event stream: {0}")]
+    EventStream(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

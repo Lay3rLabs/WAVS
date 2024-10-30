@@ -1,13 +1,24 @@
+// Currently - e2e tests are disabled by default.
+// they also assume some environment variables are set:
+// MATIC_E2E_SEED_PHRASE: seed phrase for client running the tests
+// MATIC_E2E_TASK_QUEUE_ADDR: address of the task queue contract
 mod helpers;
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
     use super::helpers;
 
-    use std::{path::PathBuf, sync::Arc};
+    use std::{path::PathBuf, sync::Arc, time::Duration};
 
+    use anyhow::{bail, Context, Result};
     use helpers::app::TestApp;
-    use layer_climb::prelude::*;
+    use lavs_apis::{
+        events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
+        id::TaskId,
+        tasks as task_queue,
+    };
+    use layer_climb::{prelude::*, proto::abci::TxResponse};
+    use serde::Serialize;
     use wasmatic::{config::Config, context::AppContext, dispatcher::CoreDispatcher};
 
     #[test]
@@ -16,6 +27,7 @@ mod e2e {
             tokio::runtime::Runtime::new().unwrap().block_on({
                 async {
                     let mut cli_args = TestApp::default_cli_args();
+                    cli_args.dotenv = None;
                     cli_args.data = Some(
                         PathBuf::from(file!())
                             .parent()
@@ -56,16 +68,147 @@ mod e2e {
             }
         });
 
-        wasmatic_handle.join().unwrap();
         test_handle.join().unwrap();
+        wasmatic_handle.join().unwrap();
     }
 
     async fn run_tests(config: Config) {
-        let query_client = QueryClient::new(config.chain_config().unwrap())
+        let chain_config = config.chain_config().unwrap();
+        let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
+        let task_queue_addr = chain_config
+            .parse_address(
+                &std::env::var("MATIC_E2E_TASK_QUEUE_ADDRESS")
+                    .expect("MATIC_E2E_TASK_QUEUE_ADDRESS not set"),
+            )
+            .unwrap();
+        let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
+        let signing_client = SigningClient::new(chain_config, key_signer).await.unwrap();
+
+        let task_queue = TaskQueueContract::new(signing_client.clone(), task_queue_addr)
             .await
             .unwrap();
-        tracing::info!("TODO - run tests on {}", query_client.chain_config.chain_id);
-        tracing::info!("Sleeping for 1 second...");
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        tracing::info!("Running tasks on task queue contract: {}", task_queue.addr);
+
+        let tx_resp = task_queue
+            .submit_task("squaring 3", serde_json::json!({ "x": 3 }))
+            .await
+            .unwrap();
+        let event: TaskCreatedEvent = CosmosTxEvents::from(&tx_resp)
+            .event_first_by_type(TaskCreatedEvent::NAME)
+            .map(cosmwasm_std::Event::from)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        tracing::info!("Task created: {}", event.task_id);
+
+        let timeout = tokio::time::timeout(Duration::from_secs(3), async move {
+            loop {
+                let task = task_queue.query_task(event.task_id).await.unwrap();
+                match task.status {
+                    task_queue::Status::Open {} => {
+                        // still open, waiting...
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                    task_queue::Status::Completed { .. } => return Ok(task),
+                    task_queue::Status::Expired {} => bail!("Task expired"),
+                }
+            }
+        })
+        .await;
+
+        match timeout {
+            Ok(task) => {
+                let task = task.unwrap();
+                let result = task.result.unwrap();
+                tracing::info!("task completed!");
+                tracing::info!("result: {:#?}", result);
+            }
+            Err(_) => panic!("Timeout waiting for task to complete"),
+        }
+    }
+
+    struct TaskQueueContract {
+        pub client: SigningClient,
+        pub addr: Address,
+        pub _verifier: VerifierContract,
+        pub task_cost: Option<Coin>,
+    }
+
+    impl TaskQueueContract {
+        pub async fn new(client: SigningClient, addr: Address) -> Result<Self> {
+            let resp: task_queue::ConfigResponse = client
+                .querier
+                .contract_smart(
+                    &addr,
+                    &task_queue::QueryMsg::Custom(task_queue::CustomQueryMsg::Config {}),
+                )
+                .await?;
+
+            let task_cost = match resp.requestor {
+                task_queue::Requestor::Fixed(_) => None,
+                task_queue::Requestor::OpenPayment(coin) => Some(new_coin(coin.amount, coin.denom)),
+            };
+
+            let verifier = VerifierContract::new(
+                client.clone(),
+                client.querier.chain_config.parse_address(&resp.verifier)?,
+            )
+            .await?;
+
+            Ok(Self {
+                client,
+                addr,
+                _verifier: verifier,
+                task_cost,
+            })
+        }
+
+        pub async fn submit_task(
+            &self,
+            description: impl ToString,
+            payload: impl Serialize,
+        ) -> Result<TxResponse> {
+            let msg = task_queue::ExecuteMsg::Custom(task_queue::CustomExecuteMsg::Create {
+                description: description.to_string(),
+                timeout: None,
+                payload: serde_json::to_value(payload)?,
+            });
+
+            let funds = match self.task_cost.as_ref() {
+                Some(cost) => vec![cost.clone()],
+                None => vec![],
+            };
+
+            self.client
+                .contract_execute(&self.addr, &msg, funds, None)
+                .await
+                .context("submit task")
+        }
+
+        pub async fn query_task(&self, id: TaskId) -> Result<task_queue::TaskResponse> {
+            self.client
+                .querier
+                .contract_smart(
+                    &self.addr,
+                    &task_queue::QueryMsg::Custom(task_queue::CustomQueryMsg::Task { id }),
+                )
+                .await
+                .context("query task")
+        }
+    }
+
+    struct VerifierContract {
+        pub _client: SigningClient,
+        pub _addr: Address,
+    }
+
+    impl VerifierContract {
+        pub async fn new(client: SigningClient, addr: Address) -> Result<Self> {
+            Ok(Self {
+                _client: client,
+                _addr: addr,
+            })
+        }
     }
 }

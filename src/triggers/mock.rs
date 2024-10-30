@@ -88,6 +88,8 @@ impl TriggerManager for MockTriggerManager {
 
 #[cfg(test)]
 mod tests {
+    use lavs_apis::id::TaskId;
+
     use crate::apis::{trigger::TriggerResult, Trigger};
 
     use super::*;
@@ -99,7 +101,7 @@ mod tests {
                 service_id: ID::new("service1").unwrap(),
                 workflow_id: ID::new("workflow1").unwrap(),
                 result: TriggerResult::Queue {
-                    task_id: 2,
+                    task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
@@ -107,7 +109,7 @@ mod tests {
                 service_id: ID::new("service2").unwrap(),
                 workflow_id: ID::new("workflow2").unwrap(),
                 result: TriggerResult::Queue {
-                    task_id: 4,
+                    task_id: TaskId::new(4),
                     payload: "zoomba".into(),
                 },
             },

@@ -34,6 +34,9 @@ wildmatch = "2.4.0"
 layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.1.1" }
 ctrlc = "3.4.5"
 tempfile = "3.13.0"
+lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.0" }
+futures = "0.3.31"
+cosmwasm-std = "2.1.4"
 
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }
