@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use super::prelude::*;
 use crate::digest::Digest;
@@ -68,6 +69,17 @@ impl CAStorage for FileStorage {
         let mut data = vec![];
         f.read_to_end(&mut data)?;
         Ok(data)
+    }
+
+    fn digests(
+        &self,
+    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>> + '_>, CAStorageError> {
+        // TODO: test this
+        let iter = std::fs::read_dir(&self.data_dir)?.map(|entry| {
+            let name = entry?.file_name().into_string().unwrap();
+            Ok(Digest::from_str(&name)?)
+        });
+        Ok(Box::new(iter))
     }
 }
 

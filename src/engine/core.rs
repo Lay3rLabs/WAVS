@@ -1,7 +1,7 @@
 pub use crate::apis::engine::Engine;
 use crate::apis::engine::EngineError;
 
-use crate::storage::CAStorage;
+use crate::storage::{CAStorage, CAStorageError};
 use crate::Digest;
 
 pub struct WasmEngine<S: CAStorage> {
@@ -29,8 +29,8 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
     // TODO: paginate this
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
-        // TODO: requires a range query on the castorage (.keys())
-        todo!();
+        let digests: Result<Vec<_>, CAStorageError> = self.wasm_storage.digests()?.collect();
+        Ok(digests?)
     }
 
     /// This will execute a contract that implements the layer_avs:task-queue wit interface

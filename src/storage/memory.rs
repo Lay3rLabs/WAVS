@@ -45,6 +45,14 @@ impl CAStorage for MemoryStorage {
             None => Err(CAStorageError::NotFound(digest.clone())),
         }
     }
+
+    fn digests(
+        &self,
+    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>> + '_>, CAStorageError> {
+        let tree = self.data.read()?;
+        let it: Vec<_> = tree.keys().map(|d| Ok(d.clone())).collect();
+        Ok(Box::new(it.into_iter()))
+    }
 }
 
 #[cfg(test)]

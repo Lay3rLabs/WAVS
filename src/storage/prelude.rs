@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use thiserror::Error;
 
-use crate::digest::Digest;
+use crate::digest::{Digest, DigestError};
 
 /*
   Documenting a design decisions here:
@@ -35,6 +35,10 @@ pub trait CAStorage: Send + Sync {
 
     /// Looks up the data for a given digest and returns it. If data not present, returns CAStorageError::NotFound(_)
     fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError>;
+
+    fn digests(
+        &self,
+    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>> + '_>, CAStorageError>;
 }
 
 /// Represents an error returned by storage implementation.
@@ -42,6 +46,9 @@ pub trait CAStorage: Send + Sync {
 pub enum CAStorageError {
     #[error("Digest not found: {0}")]
     NotFound(Digest),
+
+    #[error("{0}")]
+    Digest(#[from] DigestError),
 
     /// An error occurred doing IO in the storage implementation
     #[error("IO error: {0}")]
