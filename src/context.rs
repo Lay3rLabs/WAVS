@@ -12,7 +12,7 @@ pub struct KillSwitch {
     // for sending kill to http server, we need it to be over an async channel
     // but we want to be able to send it from either sync or async code
     // so we use tokio::sync::oneshot which satisfies both requirements
-    // and consumes self, so we need to wrap it in a Mutex<Option<>> to be able to take it out
+    // and consumes self, so we need to wrap it in a Mutex<Option<>> to be able to take it out and mutate
     pub http_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
     http_sender: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     // for sending kill to dispatcher, we only need it to be over a sync channel
