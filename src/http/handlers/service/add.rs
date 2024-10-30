@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use axum::{extract::State, response::IntoResponse, Json};
-use rand::distributions::{Alphanumeric, DistString};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -50,11 +49,7 @@ async fn add_service_inner(
 ) -> HttpResult<RegisterAppResponse> {
     let component_id = ID::new("default")?;
     let workflow_id = ID::new("default")?;
-    let service_id = ID::new(
-        &Alphanumeric
-            .sample_string(&mut rand::thread_rng(), 16)
-            .to_lowercase(),
-    )?;
+    let service_id = ID::new(&req.app.name)?;
 
     let mut components = BTreeMap::new();
     components.insert(component_id.clone(), Component::new(&req.app.digest));
