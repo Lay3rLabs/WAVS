@@ -1,3 +1,4 @@
+use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -23,6 +24,7 @@ pub trait TriggerManager: Send + Sync {
     fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError>;
 }
 
+#[derive(Debug)]
 /// Internal description of a registered trigger, to be indexed by associated IDs
 pub struct TriggerData {
     pub service_id: ID,
@@ -46,14 +48,14 @@ pub struct TriggerAction {
 pub enum TriggerResult {
     Queue {
         /// The id from the task queue
-        task_id: u64,
+        task_id: TaskId,
         /// The input data associated with that task
         payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
     },
 }
 
 impl TriggerResult {
-    pub fn queue(task_id: u64, payload: &[u8]) -> Self {
+    pub fn queue(task_id: TaskId, payload: &[u8]) -> Self {
         TriggerResult::Queue {
             task_id,
             payload: payload.to_vec(),
@@ -63,8 +65,8 @@ impl TriggerResult {
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
-    #[error("Cannot create query client: {0}")]
-    QueryClient(anyhow::Error),
+    #[error("climb: {0}")]
+    Climb(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

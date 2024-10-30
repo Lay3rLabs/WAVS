@@ -1,3 +1,4 @@
+use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -19,7 +20,7 @@ pub struct ChainMessage {
     pub service_id: ID,
     pub workflow_id: ID,
 
-    pub task_id: u64,
+    pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
     pub hd_index: u32,
     pub verifier_addr: String,
@@ -27,6 +28,6 @@ pub struct ChainMessage {
 
 #[derive(Error, Debug)]
 pub enum SubmissionError {
-    #[error("chain error: {0}")]
-    ChainError(anyhow::Error),
+    #[error("climb: {0}")]
+    Climb(anyhow::Error),
 }

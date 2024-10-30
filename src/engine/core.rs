@@ -40,6 +40,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         _request: Vec<u8>,
         _timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
+        tracing::warn!("EXECUTING TASK QUEUE!");
         todo!();
     }
 }

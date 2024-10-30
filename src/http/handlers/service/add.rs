@@ -1,12 +1,22 @@
+use std::collections::BTreeMap;
+
 use axum::{extract::State, response::IntoResponse, Json};
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::http::{
-    state::HttpState,
-    types::app::{App, Status},
+use crate::{
+    apis::{
+        dispatcher::{Component, Service, ServiceStatus, Submit, Workflow},
+        Trigger, ID,
+    },
+    http::{
+        error::HttpResult,
+        state::HttpState,
+        types::app::{App, Status},
+    },
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterAppRequest {
     #[serde(flatten)]
@@ -16,7 +26,7 @@ pub struct RegisterAppRequest {
     pub wasm_url: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterAppResponse {
     pub name: String,
@@ -25,13 +35,80 @@ pub struct RegisterAppResponse {
 
 #[axum::debug_handler]
 pub async fn handle_add_service(
-    State(_state): State<HttpState>,
+    State(state): State<HttpState>,
     Json(req): Json<RegisterAppRequest>,
 ) -> impl IntoResponse {
-    let resp = RegisterAppResponse {
-        name: req.app.name,
-        status: Status::Active,
+    match add_service_inner(&state, req).await {
+        Ok(resp) => Json(resp).into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn add_service_inner(
+    state: &HttpState,
+    req: RegisterAppRequest,
+) -> HttpResult<RegisterAppResponse> {
+    let component_id = ID::new("default")?;
+    let workflow_id = ID::new("default")?;
+    let service_id = ID::new(&req.app.name)?;
+
+    let components = BTreeMap::from([(component_id.clone(), Component::new(&req.app.digest))]);
+
+    let submit = match &req.app.trigger {
+        Trigger::Queue {
+            task_queue_addr, ..
+        } => {
+            let hd_index = 0; // TODO: should this come from the request?
+            let verifier_addr_string =
+                if std::env::var("MATIC_TESTING_HTTP") == Ok("yes-it-is".to_string()) {
+                    // just some random addr
+                    "layer1hd63uanu5jqsy2xhq40k6k3gexsuu9xl6y3hvr".to_string()
+                } else {
+                    get_verifier_addr_string(state, task_queue_addr).await?
+                };
+            Some(Submit::verifier_tx(hd_index, &verifier_addr_string))
+        }
     };
 
-    Json(resp).into_response()
+    let workflows = BTreeMap::from([(
+        workflow_id,
+        Workflow {
+            trigger: req.app.trigger,
+            component: component_id,
+            submit,
+        },
+    )]);
+
+    let service = Service {
+        id: service_id,
+        name: req.app.name.clone(),
+        components,
+        workflows,
+        status: ServiceStatus::Active,
+        testable: req.app.testable.unwrap_or(false),
+    };
+
+    state.dispatcher.add_service(service)?;
+
+    Ok(RegisterAppResponse {
+        name: req.app.name,
+        status: Status::Active,
+    })
+}
+
+async fn get_verifier_addr_string(
+    state: &HttpState,
+    task_queue_addr: &str,
+) -> anyhow::Result<String> {
+    let query_client = QueryClient::new(state.config.chain_config()?).await?;
+    let task_queue_addr = query_client.chain_config.parse_address(task_queue_addr)?;
+
+    let resp: lavs_apis::tasks::ConfigResponse = query_client
+        .contract_smart(
+            &task_queue_addr,
+            &lavs_apis::tasks::QueryMsg::Custom(lavs_apis::tasks::CustomQueryMsg::Config {}),
+        )
+        .await?;
+
+    Ok(resp.verifier)
 }

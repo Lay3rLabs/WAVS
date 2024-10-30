@@ -82,6 +82,8 @@ impl Submission for MockSubmission {
 mod test {
     use std::{thread::sleep, time::Duration};
 
+    use lavs_apis::id::TaskId;
+
     use crate::apis::ID;
 
     use super::*;
@@ -90,7 +92,7 @@ mod test {
         ChainMessage {
             service_id: ID::new(service).unwrap(),
             workflow_id: ID::new(service).unwrap(),
-            task_id,
+            task_id: TaskId::new(task_id),
             wasm_result: payload.as_bytes().to_vec(),
             hd_index: 0,
             verifier_addr: "verifier".to_string(),

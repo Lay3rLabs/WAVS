@@ -1,7 +1,8 @@
 use std::sync::LazyLock;
 
 use wasmatic::{
-    http::types::app::{App, Permissions, Status, Trigger},
+    apis::Trigger,
+    http::types::app::{App, Permissions, Status},
     Digest,
 };
 
@@ -45,7 +46,6 @@ impl MockServiceBuilder {
         App {
             trigger: self.trigger.unwrap_or(Trigger::Queue {
                 task_queue_addr: MOCK_TASK_QUEUE_ADDRESS.to_string(),
-                hd_index: 0,
                 poll_interval: 1000,
             }),
             name: self.name,
