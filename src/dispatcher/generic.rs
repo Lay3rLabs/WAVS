@@ -208,7 +208,7 @@ pub enum DispatcherError {
 mod tests {
     use crate::{
         apis::{
-            dispatcher::{Component, Permissions, ServiceStatus},
+            dispatcher::{Component, ServiceStatus},
             Trigger,
         },
         engine::identity::IdentityEngine,
@@ -224,15 +224,12 @@ mod tests {
     fn dispatcher_pipeline_happy_path() {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let task_id = 2;
-        let payload: &str = "foobar";
+        let payload = b"foobar";
 
         let action = TriggerAction {
             service_id: ID::new("service1").unwrap(),
             workflow_id: ID::new("workflow1").unwrap(),
-            result: TriggerResult::Queue {
-                task_id,
-                payload: payload.into(),
-            },
+            result: TriggerResult::queue(task_id, payload),
         };
 
         let dispatcher = Dispatcher::new(
@@ -251,27 +248,13 @@ mod tests {
         let service = Service {
             id: action.service_id.clone(),
             name: "My awesome service".to_string(),
-            components: [(
-                component_id.clone(),
-                Component {
-                    wasm: digest.clone(),
-                    permissions: Permissions::default(),
-                    env: vec![],
-                },
-            )]
-            .into(),
+            components: [(component_id.clone(), Component::new(&digest))].into(),
             workflows: [(
                 action.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::Queue {
-                        task_queue_addr: "some-task".to_string(),
-                        poll_interval: 5,
-                    },
-                    submit: Some(crate::apis::dispatcher::Submit::VerifierTx {
-                        hd_index,
-                        verifier_addr: verifier_addr.to_string(),
-                    }),
+                    trigger: Trigger::queue("some-task", 5),
+                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
                 },
             )]
             .into(),

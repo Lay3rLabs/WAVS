@@ -52,6 +52,15 @@ pub enum TriggerResult {
     },
 }
 
+impl TriggerResult {
+    pub fn queue(task_id: u64, payload: &[u8]) -> Self {
+        TriggerResult::Queue {
+            task_id,
+            payload: payload.to_vec(),
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum TriggerError {
     #[error("Cannot create query client: {0}")]

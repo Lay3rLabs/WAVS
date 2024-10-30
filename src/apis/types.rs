@@ -18,6 +18,15 @@ pub enum Trigger {
     },
 }
 
+impl Trigger {
+    pub fn queue(task_queue_addr: &str, poll_interval: u32) -> Self {
+        Trigger::Queue {
+            task_queue_addr: task_queue_addr.to_string(),
+            poll_interval,
+        }
+    }
+}
+
 // TODO: custom Deserialize that enforces validation rules
 /// ID is meant to identify a component or a service (I don't think we need to enforce the distinction there, do we?)
 /// It is a string, but with some strict validation rules. It must be lowecase alphanumeric: `[a-z0-9-_]{3,32}`
