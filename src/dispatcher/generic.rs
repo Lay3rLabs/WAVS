@@ -227,7 +227,15 @@ mod tests {
         apis::{
             dispatcher::{Component, ServiceStatus},
             Trigger,
-        }, engine::{identity::IdentityEngine, mock::{Function, MockEngine}}, init_tracing_tests, submission::mock::MockSubmission, triggers::mock::MockTriggerManager, Digest
+        },
+        engine::{
+            identity::IdentityEngine,
+            mock::{Function, MockEngine},
+        },
+        init_tracing_tests,
+        submission::mock::MockSubmission,
+        triggers::mock::MockTriggerManager,
+        Digest,
     };
     use serde::{Deserialize, Serialize};
 
