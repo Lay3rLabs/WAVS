@@ -1,7 +1,11 @@
 use axum::{body::Bytes, extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
-use crate::{http::state::HttpState, Digest};
+use crate::{
+    apis::dispatcher::WasmSource,
+    http::{error::HttpResult, state::HttpState},
+    Digest,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -11,10 +15,26 @@ pub struct UploadServiceResponse {
 
 #[axum::debug_handler]
 pub async fn handle_upload_service(
-    State(_state): State<HttpState>,
+    State(state): State<HttpState>,
     bytes: Bytes,
 ) -> impl IntoResponse {
-    let digest = Digest::new(&bytes);
+    match inner_handle_upload_service(state, bytes).await {
+        Ok(resp) => Json(resp).into_response(),
+        Err(e) => e.into_response(),
+    }
+}
 
-    Json(UploadServiceResponse { digest }).into_response()
+async fn inner_handle_upload_service(
+    state: HttpState,
+    bytes: Bytes,
+) -> HttpResult<UploadServiceResponse> {
+    let digest = tokio::task::spawn_blocking(move || {
+        state
+            .dispatcher
+            .store_component(WasmSource::Bytecode(bytes.to_vec()))
+    })
+    .await
+    .unwrap()?;
+
+    Ok(UploadServiceResponse { digest })
 }

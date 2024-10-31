@@ -25,7 +25,10 @@ mod e2e {
         config::Config,
         context::AppContext,
         dispatcher::CoreDispatcher,
-        http::{handlers::service::add::RegisterAppRequest, types::app::App},
+        http::{
+            handlers::service::{add::RegisterAppRequest, upload::UploadServiceResponse},
+            types::app::App,
+        },
         Digest,
     };
 
@@ -79,17 +82,31 @@ mod e2e {
         // sanity test - is web service running
         let _ = http_client.get_config().await.unwrap();
 
-        let chain_config = config.chain_config().unwrap();
+        // get all env vars
         let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
-        let task_queue_addr = chain_config
-            .parse_address(
-                &std::env::var("MATIC_E2E_TASK_QUEUE_ADDRESS")
-                    .expect("MATIC_E2E_TASK_QUEUE_ADDRESS not set"),
-            )
-            .unwrap();
-        let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
-        let signing_client = SigningClient::new(chain_config, key_signer).await.unwrap();
+        let task_queue_addr = std::env::var("MATIC_E2E_TASK_QUEUE_ADDRESS")
+            .expect("MATIC_E2E_TASK_QUEUE_ADDRESS not set");
+        let wasm_digest = std::env::var("MATIC_E2E_WASM_DIGEST");
 
+        // if wasm_digest isn't set, upload our wasm blob for square
+        let wasm_digest: Digest = match wasm_digest {
+            Ok(digest) => digest.parse().unwrap(),
+            Err(_) => {
+                let wasm_bytes = include_bytes!("../components/square.wasm");
+                http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
+            }
+        };
+
+        tracing::info!("Wasm digest: {}", wasm_digest);
+
+        let chain_config = config.chain_config().unwrap();
+
+        let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
+        let signing_client = SigningClient::new(chain_config.clone(), key_signer)
+            .await
+            .unwrap();
+
+        let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
         let task_queue = TaskQueueContract::new(signing_client.clone(), task_queue_addr)
             .await
             .unwrap();
@@ -97,7 +114,7 @@ mod e2e {
         tracing::info!("Running tasks on task queue contract: {}", task_queue.addr);
 
         let _ = http_client
-            .create_service("test-service", Digest::new(&[0; 32]), &task_queue.addr)
+            .create_service("test-service", wasm_digest, &task_queue.addr)
             .await
             .unwrap();
 
@@ -285,6 +302,19 @@ mod e2e {
                 .error_for_status()?;
 
             Ok(())
+        }
+
+        pub async fn upload_wasm(&self, wasm_bytes: Vec<u8>) -> Result<Digest> {
+            let response: UploadServiceResponse = self
+                .inner
+                .post(&format!("{}/upload", self.endpoint))
+                .body(wasm_bytes)
+                .send()
+                .await?
+                .json()
+                .await?;
+
+            Ok(response.digest)
         }
     }
 }
