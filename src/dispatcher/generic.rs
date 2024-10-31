@@ -97,13 +97,19 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
         // look up the proper workflow
         let service = self
             .storage
-            .get(SERVICE_TABLE, action.service_id.as_ref())?
-            .ok_or_else(|| DispatcherError::UnknownService(action.service_id.clone()))?
+            .get(SERVICE_TABLE, action.trigger.service_id.as_ref())?
+            .ok_or_else(|| DispatcherError::UnknownService(action.trigger.service_id.clone()))?
             .value();
 
-        let workflow = service.workflows.get(&action.workflow_id).ok_or_else(|| {
-            DispatcherError::UnknownWorkflow(action.service_id.clone(), action.workflow_id.clone())
-        })?;
+        let workflow = service
+            .workflows
+            .get(&action.trigger.workflow_id)
+            .ok_or_else(|| {
+                DispatcherError::UnknownWorkflow(
+                    action.trigger.service_id.clone(),
+                    action.trigger.workflow_id.clone(),
+                )
+            })?;
 
         let component = service
             .components
@@ -126,8 +132,7 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
                 }) = workflow.submit.as_ref()
                 {
                     Ok(Some(ChainMessage {
-                        service_id: action.service_id.clone(),
-                        workflow_id: action.workflow_id.clone(),
+                        trigger_data: action.trigger,
                         task_id,
                         wasm_result,
                         hd_index: *hd_index,
@@ -251,8 +256,14 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            service_id: ID::new("service1").unwrap(),
-            workflow_id: ID::new("workflow1").unwrap(),
+            trigger: TriggerData {
+                service_id: ID::new("service1").unwrap(),
+                workflow_id: ID::new("workflow1").unwrap(),
+                trigger: Trigger::Queue {
+                    task_queue_addr: "layer1taskqueue".to_string(),
+                    poll_interval: 5,
+                },
+            },
             result: TriggerResult::queue(task_id, payload),
         };
 
@@ -270,11 +281,11 @@ mod tests {
         let hd_index = 2;
         let verifier_addr = "layer1verifier";
         let service = Service {
-            id: action.service_id.clone(),
+            id: action.trigger.service_id.clone(),
             name: "My awesome service".to_string(),
             components: [(component_id.clone(), Component::new(&digest))].into(),
             workflows: [(
-                action.workflow_id.clone(),
+                action.trigger.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::queue("some-task", 5),
@@ -296,8 +307,7 @@ mod tests {
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 1);
         let expected = ChainMessage {
-            service_id: action.service_id.clone(),
-            workflow_id: action.workflow_id.clone(),
+            trigger_data: action.trigger,
             task_id,
             wasm_result: payload.into(),
             hd_index,
@@ -338,13 +348,25 @@ mod tests {
         let workflow_id = ID::new("workflow1").unwrap();
         let actions = vec![
             TriggerAction {
-                service_id: service_id.clone(),
-                workflow_id: workflow_id.clone(),
+                trigger: TriggerData {
+                    service_id: service_id.clone(),
+                    workflow_id: workflow_id.clone(),
+                    trigger: Trigger::Queue {
+                        task_queue_addr: "layer1taskqueue".to_string(),
+                        poll_interval: 5,
+                    },
+                },
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                service_id: service_id.clone(),
-                workflow_id: workflow_id.clone(),
+                trigger: TriggerData {
+                    service_id: service_id.clone(),
+                    workflow_id: workflow_id.clone(),
+                    trigger: Trigger::Queue {
+                        task_queue_addr: "layer1taskqueue".to_string(),
+                        poll_interval: 5,
+                    },
+                },
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];

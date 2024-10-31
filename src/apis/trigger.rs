@@ -25,7 +25,7 @@ pub trait TriggerManager: Send + Sync {
     fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 /// Internal description of a registered trigger, to be indexed by associated IDs
 pub struct TriggerData {
     pub service_id: ID,
@@ -36,9 +36,8 @@ pub struct TriggerData {
 /// The data returned from a trigger action
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
-    /// Identify which service and workflow this came from
-    pub service_id: ID,
-    pub workflow_id: ID,
+    /// Identify which trigger this came from
+    pub trigger: TriggerData,
 
     /// The data we got from the trigger
     pub result: TriggerResult,

@@ -3,7 +3,7 @@ use std::{fmt, ops::Deref};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Trigger {
     // TODO: add this variant later, not for now

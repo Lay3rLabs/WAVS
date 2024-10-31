@@ -113,16 +113,28 @@ mod tests {
     fn mock_trigger_sends() {
         let actions = vec![
             TriggerAction {
-                service_id: ID::new("service1").unwrap(),
-                workflow_id: ID::new("workflow1").unwrap(),
+                trigger: TriggerData {
+                    service_id: ID::new("service1").unwrap(),
+                    workflow_id: ID::new("workflow1").unwrap(),
+                    trigger: Trigger::Queue {
+                        task_queue_addr: "layer12345".into(),
+                        poll_interval: 5,
+                    },
+                },
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
-                service_id: ID::new("service2").unwrap(),
-                workflow_id: ID::new("workflow2").unwrap(),
+                trigger: TriggerData {
+                    service_id: ID::new("service2").unwrap(),
+                    workflow_id: ID::new("workflow2").unwrap(),
+                    trigger: Trigger::Queue {
+                        task_queue_addr: "layer12345".into(),
+                        poll_interval: 5,
+                    },
+                },
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),

@@ -62,7 +62,7 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn chain_config(&self) -> Result<ChainConfig> {
+    pub fn wasmatic_chain_config(&self) -> Result<WasmaticChainConfig> {
         let config: WasmaticChainConfig = Figment::new()
             .merge(figment::providers::Serialized::defaults(
                 self.chains
@@ -74,17 +74,11 @@ impl Config {
             ))
             .extract()?;
 
-        Ok(ChainConfig {
-            chain_id: config.chain_id,
-            rpc_endpoint: config.rpc_endpoint,
-            grpc_endpoint: config.grpc_endpoint,
-            grpc_web_endpoint: None,
-            gas_price: config.gas_price,
-            gas_denom: config.gas_denom,
-            address_kind: AddrKind::Cosmos {
-                prefix: config.bech32_prefix,
-            },
-        })
+        Ok(config)
+    }
+
+    pub fn chain_config(&self) -> Result<ChainConfig> {
+        self.wasmatic_chain_config().map(ChainConfig::from)
     }
 }
 
@@ -105,6 +99,8 @@ pub struct WasmaticChainConfig {
     pub bech32_prefix: String,
     /// optional faucet endpoint for this chain
     pub faucet_endpoint: Option<String>,
+    /// mnemonic for the submission client (usually leave this as None and override in env)
+    pub submission_mnemonic: Option<String>,
 }
 
 impl WasmaticChainConfig {
@@ -118,6 +114,22 @@ impl WasmaticChainConfig {
 
     fn default_bech32_prefix() -> String {
         "layer".to_string()
+    }
+}
+
+impl From<WasmaticChainConfig> for ChainConfig {
+    fn from(config: WasmaticChainConfig) -> Self {
+        Self {
+            chain_id: config.chain_id,
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            grpc_web_endpoint: None,
+            gas_price: config.gas_price,
+            gas_denom: config.gas_denom,
+            address_kind: AddrKind::Cosmos {
+                prefix: config.bech32_prefix,
+            },
+        }
     }
 }
 

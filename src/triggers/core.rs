@@ -135,19 +135,14 @@ impl CoreTriggerManager {
                                 }
                             };
 
-                            let ids = {
+                            let trigger = {
                                 let all_trigger_data_lock =
                                     lookup_maps.all_trigger_data.read().unwrap();
 
                                 all_trigger_data_lock
                                     .get(&lookup_id)
                                     .ok_or(TriggerError::NoSuchTriggerData(lookup_id))
-                                    .map(|service_workflow_ids| {
-                                        (
-                                            service_workflow_ids.service_id.clone(),
-                                            service_workflow_ids.workflow_id.clone(),
-                                        )
-                                    })
+                                    .cloned()
                             };
 
                             let resp: Result<task_queue::TaskResponse> = query_client
@@ -173,12 +168,11 @@ impl CoreTriggerManager {
                                 }
                             };
 
-                            match ids {
-                                Ok((service_id, workflow_id)) => {
+                            match trigger {
+                                Ok(trigger) => {
                                     action_sender
                                         .send(TriggerAction {
-                                            service_id,
-                                            workflow_id,
+                                            trigger,
                                             result: TriggerResult::Queue {
                                                 task_id,
                                                 payload: serde_json::to_vec(&payload).unwrap(),
@@ -408,6 +402,7 @@ mod tests {
                     gas_denom: "uslay".to_string(),
                     bech32_prefix: "layer".to_string(),
                     faucet_endpoint: None,
+                    submission_mnemonic: None,
                 },
             )]
             .into_iter()

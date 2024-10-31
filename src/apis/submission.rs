@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::ID;
+use super::trigger::TriggerData;
 
 pub trait Submission: Send + Sync {
     /// Start running the submission manager
@@ -16,9 +16,8 @@ pub trait Submission: Send + Sync {
 /// The data returned from a trigger action
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChainMessage {
-    /// Identify which service and workflow this came from
-    pub service_id: ID,
-    pub workflow_id: ID,
+    /// Identify which trigger this came from
+    pub trigger_data: TriggerData,
 
     pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
@@ -30,4 +29,6 @@ pub struct ChainMessage {
 pub enum SubmissionError {
     #[error("climb: {0}")]
     Climb(anyhow::Error),
+    #[error("missing mnemonic")]
+    MissingMnemonic,
 }

@@ -98,6 +98,10 @@ pub struct OptionalWasmaticChainConfig {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub faucet_endpoint: Option<String>,
+    /// To override the chosen chain's submission mnemonic
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submission_mnemonic: Option<String>,
 }
 
 impl CliArgs {

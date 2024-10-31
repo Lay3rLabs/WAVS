@@ -66,7 +66,11 @@ impl Submission for MockSubmission {
         ctx.rt.spawn(async move {
             tracing::info!("Submission listening on channel");
             while let Some(msg) = rx.recv().await {
-                tracing::info!("Received message: {} / {}", msg.service_id, msg.workflow_id);
+                tracing::info!(
+                    "Received message: {} / {}",
+                    msg.trigger_data.service_id,
+                    msg.trigger_data.workflow_id
+                );
                 mock.inbox.lock().unwrap().push(msg);
             }
             tracing::info!("Submission channel closed");
@@ -84,14 +88,20 @@ mod test {
 
     use lavs_apis::id::TaskId;
 
-    use crate::apis::ID;
+    use crate::apis::{trigger::TriggerData, Trigger, ID};
 
     use super::*;
 
     fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
         ChainMessage {
-            service_id: ID::new(service).unwrap(),
-            workflow_id: ID::new(service).unwrap(),
+            trigger_data: TriggerData {
+                service_id: ID::new(service).unwrap(),
+                workflow_id: ID::new(service).unwrap(),
+                trigger: Trigger::Queue {
+                    task_queue_addr: "task_queue".to_string(),
+                    poll_interval: 5,
+                },
+            },
             task_id: TaskId::new(task_id),
             wasm_result: payload.as_bytes().to_vec(),
             hd_index: 0,
