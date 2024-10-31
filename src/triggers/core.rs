@@ -390,22 +390,24 @@ mod tests {
 
     #[test]
     fn core_trigger_lookups() {
-        let mut config = Config::default();
-        config.chain = "test".to_string();
-        config.chains = vec![(
-            "test".to_string(),
-            WasmaticChainConfig {
-                chain_id: "slay3r-local".parse().unwrap(),
-                rpc_endpoint: "http://localhost:26657".to_string(),
-                grpc_endpoint: "http://localhost:9090".to_string(),
-                gas_price: 0.025,
-                gas_denom: "uslay".to_string(),
-                bech32_prefix: "layer".to_string(),
-                faucet_endpoint: None,
-            },
-        )]
-        .into_iter()
-        .collect();
+        let config = Config {
+            chain: "test".to_string(),
+            chains: vec![(
+                "test".to_string(),
+                WasmaticChainConfig {
+                    chain_id: "slay3r-local".parse().unwrap(),
+                    rpc_endpoint: "http://localhost:26657".to_string(),
+                    grpc_endpoint: "http://localhost:9090".to_string(),
+                    gas_price: 0.025,
+                    gas_denom: "uslay".to_string(),
+                    bech32_prefix: "layer".to_string(),
+                    faucet_endpoint: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
 
         let manager = CoreTriggerManager::new(&config).unwrap();
 
