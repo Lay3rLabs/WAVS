@@ -1,4 +1,5 @@
 use lavs_apis::id::TaskId;
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -71,6 +72,10 @@ pub enum TriggerError {
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]
     NoSuchWorkflow(ID, ID),
+    #[error("Cannot find trigger data: {0}")]
+    NoSuchTriggerData(usize),
+    #[error("Cannot find trigger data: {0}")]
+    NoSuchTaskQueueTrigger(Address),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]

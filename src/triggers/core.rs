@@ -66,8 +66,7 @@ impl CoreTriggerManager {
     ) -> Result<(), TriggerError> {
         let query_client = QueryClient::new(self.chain_config.clone())
             .await
-            .map_err(TriggerError::Climb)
-            .unwrap();
+            .map_err(TriggerError::Climb)?;
 
         tracing::info!(
             "Trigger Manager started on {}",
@@ -120,47 +119,72 @@ impl CoreTriggerManager {
 
                     for (contract_address, task_ids) in task_created_events {
                         for task_id in task_ids {
-                            let resp: task_queue::TaskResponse = query_client
+                            let resp: Result<task_queue::TaskResponse> = query_client
                                 .contract_smart(
                                     &contract_address,
                                     &task_queue::QueryMsg::Custom(
                                         task_queue::CustomQueryMsg::Task { id: task_id },
                                     ),
                                 )
-                                .await
-                                .map_err(TriggerError::Climb)
-                                .unwrap();
+                                .await;
 
-                            let result = TriggerResult::Queue {
-                                task_id,
-                                payload: serde_json::to_vec(&resp.payload).unwrap(),
-                            };
+                            match resp {
+                                Ok(resp) => {
+                                    let result = TriggerResult::Queue {
+                                        task_id,
+                                        payload: serde_json::to_vec(&resp.payload).unwrap(),
+                                    };
 
-                            let (service_id, workflow_id) = {
-                                let triggers_by_task_queue_lock =
-                                    lookup_maps.triggers_by_task_queue.read().unwrap();
-                                let all_trigger_data_lock =
-                                    lookup_maps.all_trigger_data.read().unwrap();
+                                    let ids = {
+                                        let triggers_by_task_queue_lock =
+                                            lookup_maps.triggers_by_task_queue.read().unwrap();
+                                        let all_trigger_data_lock =
+                                            lookup_maps.all_trigger_data.read().unwrap();
 
-                                let lookup_id =
-                                    triggers_by_task_queue_lock.get(&contract_address).unwrap();
-                                let service_workflow_ids =
-                                    all_trigger_data_lock.get(lookup_id).unwrap();
+                                        triggers_by_task_queue_lock
+                                            .get(&contract_address)
+                                            .ok_or_else(|| {
+                                                TriggerError::NoSuchTaskQueueTrigger(
+                                                    contract_address.clone(),
+                                                )
+                                            })
+                                            .and_then(|lookup_id| {
+                                                all_trigger_data_lock
+                                                    .get(lookup_id)
+                                                    .ok_or(TriggerError::NoSuchTriggerData(
+                                                        *lookup_id,
+                                                    ))
+                                                    .map(|service_workflow_ids| {
+                                                        (
+                                                            service_workflow_ids.service_id.clone(),
+                                                            service_workflow_ids
+                                                                .workflow_id
+                                                                .clone(),
+                                                        )
+                                                    })
+                                            })
+                                    };
 
-                                (
-                                    service_workflow_ids.service_id.clone(),
-                                    service_workflow_ids.workflow_id.clone(),
-                                )
-                            };
-
-                            action_sender
-                                .send(TriggerAction {
-                                    service_id,
-                                    workflow_id,
-                                    result,
-                                })
-                                .await
-                                .unwrap();
+                                    match ids {
+                                        Ok((service_id, workflow_id)) => {
+                                            action_sender
+                                                .send(TriggerAction {
+                                                    service_id,
+                                                    workflow_id,
+                                                    result,
+                                                })
+                                                .await
+                                                .unwrap();
+                                        }
+                                        Err(err) => {
+                                            tracing::error!("error finding task: {:?}", err);
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    tracing::error!("error querying task queue: {:?}", err);
+                                }
+                            }
                         }
                     }
                 }
@@ -250,10 +274,14 @@ impl TriggerManager for CoreTriggerManager {
             .write()
             .unwrap();
 
-        let workflow_map = service_lock.get_mut(&service_id).unwrap();
+        let workflow_map = service_lock
+            .get_mut(&service_id)
+            .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
 
         // first remove it from services
-        let lookup_id = workflow_map.remove(&workflow_id).unwrap();
+        let lookup_id = workflow_map
+            .remove(&workflow_id)
+            .ok_or(TriggerError::NoSuchWorkflow(service_id, workflow_id))?;
 
         remove_trigger_data(
             &mut self.lookup_maps.all_trigger_data.write().unwrap(),
@@ -275,11 +303,11 @@ impl TriggerManager for CoreTriggerManager {
             .write()
             .unwrap();
 
-        for lookup_id in triggers_by_service_workflow_lock
+        let workflow_map = triggers_by_service_workflow_lock
             .get(&service_id)
-            .unwrap()
-            .values()
-        {
+            .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
+
+        for lookup_id in workflow_map.values() {
             remove_trigger_data(
                 &mut all_trigger_data_lock,
                 &mut triggers_by_task_queue_lock,
@@ -304,9 +332,15 @@ impl TriggerManager for CoreTriggerManager {
             .unwrap();
         let all_trigger_data_lock = self.lookup_maps.all_trigger_data.read().unwrap();
 
-        let workflow_map = triggers_by_service_workflow_lock.get(&service_id).unwrap();
+        let workflow_map = triggers_by_service_workflow_lock
+            .get(&service_id)
+            .ok_or(TriggerError::NoSuchService(service_id))?;
+
         for lookup_id in workflow_map.values() {
-            triggers.push(all_trigger_data_lock.get(lookup_id).unwrap().clone());
+            let trigger_data = all_trigger_data_lock
+                .get(lookup_id)
+                .ok_or(TriggerError::NoSuchTriggerData(*lookup_id))?;
+            triggers.push(trigger_data.clone());
         }
 
         Ok(triggers)
@@ -320,7 +354,9 @@ fn remove_trigger_data(
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
-    let trigger_data = all_trigger_data.remove(&lookup_id).unwrap();
+    let trigger_data = all_trigger_data
+        .remove(&lookup_id)
+        .ok_or(TriggerError::NoSuchTriggerData(lookup_id))?;
 
     // 2. remove from task_queue_lookup_map
     match &trigger_data.trigger {
@@ -331,7 +367,9 @@ fn remove_trigger_data(
             let addr = chain_config
                 .parse_address(task_queue_addr)
                 .map_err(TriggerError::Climb)?;
-            triggers_by_task_queue.remove(&addr);
+            triggers_by_task_queue
+                .remove(&addr)
+                .ok_or(TriggerError::NoSuchTaskQueueTrigger(addr))?;
         }
     }
 
