@@ -30,6 +30,9 @@ pub struct Config {
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
 
+    // wasm engine config
+    pub wasm_lru_size: usize,
+
     /// The chosen chain name
     pub chain: String,
 
@@ -53,6 +56,7 @@ impl Default for Config {
             chain: String::new(),
             chains: HashMap::new(),
             chain_config_override: OptionalWasmaticChainConfig::default(),
+            wasm_lru_size: 10,
         }
     }
 }
