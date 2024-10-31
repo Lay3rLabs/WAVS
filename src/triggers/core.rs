@@ -26,22 +26,22 @@ pub struct CoreTriggerManager {
 
 struct LookupMaps {
     /// single lookup for all triggers (in theory, can be more than just task queue addr)
-    pub triggers: Arc<RwLock<BTreeMap<LookupId, TriggerData>>>,
+    pub all_trigger_data: Arc<RwLock<BTreeMap<LookupId, TriggerData>>>,
+    /// lookup id by task queue address
+    pub triggers_by_task_queue: Arc<RwLock<HashMap<Address, LookupId>>>,
+    /// lookup id by service id -> workflow id
+    pub triggers_by_service_workflow: Arc<RwLock<BTreeMap<ID, BTreeMap<ID, LookupId>>>>,
     /// latest lookup_id
     pub lookup_id: Arc<AtomicUsize>,
-    /// lookup id by task queue address
-    pub task_queue_lookup_map: Arc<RwLock<HashMap<Address, LookupId>>>,
-    /// lookup id by service id -> workflow id
-    pub service_workflow_lookup_map: Arc<RwLock<BTreeMap<ID, BTreeMap<ID, LookupId>>>>,
 }
 
 impl LookupMaps {
     pub fn new() -> Self {
         Self {
-            triggers: Arc::new(RwLock::new(BTreeMap::new())),
+            all_trigger_data: Arc::new(RwLock::new(BTreeMap::new())),
             lookup_id: Arc::new(AtomicUsize::new(0)),
-            task_queue_lookup_map: Arc::new(RwLock::new(HashMap::new())),
-            service_workflow_lookup_map: Arc::new(RwLock::new(BTreeMap::new())),
+            triggers_by_task_queue: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 }
@@ -137,11 +137,15 @@ impl CoreTriggerManager {
                             };
 
                             let (service_id, workflow_id) = {
-                                let addr_lock = lookup_maps.task_queue_lookup_map.read().unwrap();
-                                let triggers_lock = lookup_maps.triggers.read().unwrap();
+                                let triggers_by_task_queue_lock =
+                                    lookup_maps.triggers_by_task_queue.read().unwrap();
+                                let all_trigger_data_lock =
+                                    lookup_maps.all_trigger_data.read().unwrap();
 
-                                let lookup_id = addr_lock.get(&contract_address).unwrap();
-                                let service_workflow_ids = triggers_lock.get(lookup_id).unwrap();
+                                let lookup_id =
+                                    triggers_by_task_queue_lock.get(&contract_address).unwrap();
+                                let service_workflow_ids =
+                                    all_trigger_data_lock.get(lookup_id).unwrap();
 
                                 (
                                     service_workflow_ids.service_id.clone(),
@@ -211,7 +215,7 @@ impl TriggerManager for CoreTriggerManager {
                     .parse_address(task_queue_addr)
                     .map_err(TriggerError::Climb)?;
                 self.lookup_maps
-                    .task_queue_lookup_map
+                    .triggers_by_task_queue
                     .write()
                     .unwrap()
                     .insert(addr, lookup_id);
@@ -220,7 +224,7 @@ impl TriggerManager for CoreTriggerManager {
 
         // adding it to our lookups is the same, regardless of type
         self.lookup_maps
-            .service_workflow_lookup_map
+            .triggers_by_service_workflow
             .write()
             .unwrap()
             .entry(data.service_id.clone())
@@ -228,7 +232,7 @@ impl TriggerManager for CoreTriggerManager {
             .insert(data.workflow_id.clone(), lookup_id);
 
         self.lookup_maps
-            .triggers
+            .all_trigger_data
             .write()
             .unwrap()
             .insert(lookup_id, data);
@@ -240,86 +244,52 @@ impl TriggerManager for CoreTriggerManager {
         service_id: crate::apis::ID,
         workflow_id: crate::apis::ID,
     ) -> Result<(), TriggerError> {
-        // need to remove from:
-        // 1. triggers
-        // 2. (if task queue) task_queue_lookup_map
-        // 3. service_workflow_lookup_map
-
         let mut service_lock = self
             .lookup_maps
-            .service_workflow_lookup_map
+            .triggers_by_service_workflow
             .write()
             .unwrap();
+
         let workflow_map = service_lock.get_mut(&service_id).unwrap();
-        let lookup_id = *workflow_map.get(&workflow_id).unwrap();
-        let mut triggers_lock = self.lookup_maps.triggers.write().unwrap();
 
-        // 1. remove from triggers
-        let trigger_data = triggers_lock.remove(&lookup_id).unwrap();
+        // first remove it from services
+        let lookup_id = workflow_map.remove(&workflow_id).unwrap();
 
-        // 2. remove from task_queue_lookup_map
-        match &trigger_data.trigger {
-            Trigger::Queue {
-                task_queue_addr,
-                poll_interval: _,
-            } => {
-                let addr = self
-                    .chain_config
-                    .parse_address(task_queue_addr)
-                    .map_err(TriggerError::Climb)?;
-                self.lookup_maps
-                    .task_queue_lookup_map
-                    .write()
-                    .unwrap()
-                    .remove(&addr);
-            }
-        }
-
-        // 3. remove from service_workflow_lookup_map
-        workflow_map.remove(&workflow_id);
+        remove_trigger_data(
+            &mut self.lookup_maps.all_trigger_data.write().unwrap(),
+            &mut self.lookup_maps.triggers_by_task_queue.write().unwrap(),
+            &self.chain_config,
+            lookup_id,
+        )?;
 
         Ok(())
     }
 
     fn remove_service(&self, service_id: crate::apis::ID) -> Result<(), TriggerError> {
-        // need to remove from:
-        // 1. triggers
-        // 2. (if task queue) task_queue_lookup_map
-        // 3. service_workflow_lookup_map
-
-        let mut service_lock = self
+        let mut all_trigger_data_lock = self.lookup_maps.all_trigger_data.write().unwrap();
+        let mut triggers_by_task_queue_lock =
+            self.lookup_maps.triggers_by_task_queue.write().unwrap();
+        let mut triggers_by_service_workflow_lock = self
             .lookup_maps
-            .service_workflow_lookup_map
+            .triggers_by_service_workflow
             .write()
             .unwrap();
 
-        for lookup_id in service_lock.get(&service_id).unwrap().values() {
-            let mut triggers_lock = self.lookup_maps.triggers.write().unwrap();
-
-            // 1. remove from triggers
-            let trigger_data = triggers_lock.remove(lookup_id).unwrap();
-
-            // 2. remove from task_queue
-            match &trigger_data.trigger {
-                Trigger::Queue {
-                    task_queue_addr,
-                    poll_interval: _,
-                } => {
-                    let addr = self
-                        .chain_config
-                        .parse_address(task_queue_addr)
-                        .map_err(TriggerError::Climb)?;
-                    self.lookup_maps
-                        .task_queue_lookup_map
-                        .write()
-                        .unwrap()
-                        .remove(&addr);
-                }
-            }
+        for lookup_id in triggers_by_service_workflow_lock
+            .get(&service_id)
+            .unwrap()
+            .values()
+        {
+            remove_trigger_data(
+                &mut all_trigger_data_lock,
+                &mut triggers_by_task_queue_lock,
+                &self.chain_config,
+                *lookup_id,
+            )?;
         }
 
         // 3. remove from service_workflow_lookup_map
-        service_lock.remove(&service_id);
+        triggers_by_service_workflow_lock.remove(&service_id);
 
         Ok(())
     }
@@ -327,14 +297,43 @@ impl TriggerManager for CoreTriggerManager {
     fn list_triggers(&self, service_id: crate::apis::ID) -> Result<Vec<TriggerData>, TriggerError> {
         let mut triggers = Vec::new();
 
-        let service_lock = self.lookup_maps.service_workflow_lookup_map.read().unwrap();
-        let triggers_lock = self.lookup_maps.triggers.read().unwrap();
+        let triggers_by_service_workflow_lock = self
+            .lookup_maps
+            .triggers_by_service_workflow
+            .read()
+            .unwrap();
+        let all_trigger_data_lock = self.lookup_maps.all_trigger_data.read().unwrap();
 
-        let workflow_map = service_lock.get(&service_id).unwrap();
+        let workflow_map = triggers_by_service_workflow_lock.get(&service_id).unwrap();
         for lookup_id in workflow_map.values() {
-            triggers.push(triggers_lock.get(lookup_id).unwrap().clone());
+            triggers.push(all_trigger_data_lock.get(lookup_id).unwrap().clone());
         }
 
         Ok(triggers)
     }
+}
+
+fn remove_trigger_data(
+    all_trigger_data: &mut BTreeMap<usize, TriggerData>,
+    triggers_by_task_queue: &mut HashMap<Address, LookupId>,
+    chain_config: &ChainConfig,
+    lookup_id: LookupId,
+) -> Result<(), TriggerError> {
+    // 1. remove from triggers
+    let trigger_data = all_trigger_data.remove(&lookup_id).unwrap();
+
+    // 2. remove from task_queue_lookup_map
+    match &trigger_data.trigger {
+        Trigger::Queue {
+            task_queue_addr,
+            poll_interval: _,
+        } => {
+            let addr = chain_config
+                .parse_address(task_queue_addr)
+                .map_err(TriggerError::Climb)?;
+            triggers_by_task_queue.remove(&addr);
+        }
+    }
+
+    Ok(())
 }
