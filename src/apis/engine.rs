@@ -2,6 +2,8 @@ use thiserror::Error;
 
 use crate::{storage::CAStorageError, Digest};
 
+use super::ID;
+
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
 
@@ -11,9 +13,9 @@ pub trait Engine: Send + Sync {
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
     fn execute_queue(
         &self,
-        _digest: Digest,
-        _request: Vec<u8>,
-        _timestamp: u64,
+        digest: Digest,
+        request: Vec<u8>,
+        timestamp: u64,
     ) -> Result<Vec<u8>, EngineError>;
 }
 
@@ -46,6 +48,12 @@ pub enum EngineError {
 
     #[error{"IO: {0}"}]
     IO(#[from] std::io::Error),
+
+    #[error("Unknown Workflow {0} / {1}")]
+    UnknownWorkflow(ID, ID),
+
+    #[error("Unknown Component {0}")]
+    UnknownComponent(ID),
 
     #[error("Invalid Wasm bytecode")]
     InvalidWasmCode,
