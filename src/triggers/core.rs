@@ -119,6 +119,37 @@ impl CoreTriggerManager {
 
                     for (contract_address, task_ids) in task_created_events {
                         for task_id in task_ids {
+                            let lookup_id = {
+                                let triggers_by_task_queue_lock =
+                                    lookup_maps.triggers_by_task_queue.read().unwrap();
+
+                                match triggers_by_task_queue_lock.get(&contract_address) {
+                                    Some(lookup_id) => *lookup_id,
+                                    None => {
+                                        tracing::info!(
+                                            "not our task queue: {:?}",
+                                            contract_address
+                                        );
+                                        continue;
+                                    }
+                                }
+                            };
+
+                            let ids = {
+                                let all_trigger_data_lock =
+                                    lookup_maps.all_trigger_data.read().unwrap();
+
+                                all_trigger_data_lock
+                                    .get(&lookup_id)
+                                    .ok_or(TriggerError::NoSuchTriggerData(lookup_id))
+                                    .map(|service_workflow_ids| {
+                                        (
+                                            service_workflow_ids.service_id.clone(),
+                                            service_workflow_ids.workflow_id.clone(),
+                                        )
+                                    })
+                            };
+
                             let resp: Result<task_queue::TaskResponse> = query_client
                                 .contract_smart(
                                     &contract_address,
@@ -128,38 +159,18 @@ impl CoreTriggerManager {
                                 )
                                 .await;
 
-                            let resp = match resp {
-                                Ok(resp) => resp,
+                            let payload = match resp {
+                                Ok(resp) => {
+                                    if !matches!(resp.status, task_queue::Status::Open {}) {
+                                        tracing::info!("task is not open: {:?}", resp);
+                                        continue;
+                                    }
+                                    resp.payload
+                                }
                                 Err(err) => {
                                     tracing::error!("error querying task queue: {:?}", err);
                                     continue;
                                 }
-                            };
-
-                            let ids = {
-                                let triggers_by_task_queue_lock =
-                                    lookup_maps.triggers_by_task_queue.read().unwrap();
-                                let all_trigger_data_lock =
-                                    lookup_maps.all_trigger_data.read().unwrap();
-
-                                triggers_by_task_queue_lock
-                                    .get(&contract_address)
-                                    .ok_or_else(|| {
-                                        TriggerError::NoSuchTaskQueueTrigger(
-                                            contract_address.clone(),
-                                        )
-                                    })
-                                    .and_then(|lookup_id| {
-                                        all_trigger_data_lock
-                                            .get(lookup_id)
-                                            .ok_or(TriggerError::NoSuchTriggerData(*lookup_id))
-                                            .map(|service_workflow_ids| {
-                                                (
-                                                    service_workflow_ids.service_id.clone(),
-                                                    service_workflow_ids.workflow_id.clone(),
-                                                )
-                                            })
-                                    })
                             };
 
                             match ids {
@@ -170,7 +181,7 @@ impl CoreTriggerManager {
                                             workflow_id,
                                             result: TriggerResult::Queue {
                                                 task_id,
-                                                payload: serde_json::to_vec(&resp.payload).unwrap(),
+                                                payload: serde_json::to_vec(&payload).unwrap(),
                                             },
                                         })
                                         .await
