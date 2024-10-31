@@ -128,61 +128,56 @@ impl CoreTriggerManager {
                                 )
                                 .await;
 
-                            match resp {
-                                Ok(resp) => {
-                                    let result = TriggerResult::Queue {
-                                        task_id,
-                                        payload: serde_json::to_vec(&resp.payload).unwrap(),
-                                    };
-
-                                    let ids = {
-                                        let triggers_by_task_queue_lock =
-                                            lookup_maps.triggers_by_task_queue.read().unwrap();
-                                        let all_trigger_data_lock =
-                                            lookup_maps.all_trigger_data.read().unwrap();
-
-                                        triggers_by_task_queue_lock
-                                            .get(&contract_address)
-                                            .ok_or_else(|| {
-                                                TriggerError::NoSuchTaskQueueTrigger(
-                                                    contract_address.clone(),
-                                                )
-                                            })
-                                            .and_then(|lookup_id| {
-                                                all_trigger_data_lock
-                                                    .get(lookup_id)
-                                                    .ok_or(TriggerError::NoSuchTriggerData(
-                                                        *lookup_id,
-                                                    ))
-                                                    .map(|service_workflow_ids| {
-                                                        (
-                                                            service_workflow_ids.service_id.clone(),
-                                                            service_workflow_ids
-                                                                .workflow_id
-                                                                .clone(),
-                                                        )
-                                                    })
-                                            })
-                                    };
-
-                                    match ids {
-                                        Ok((service_id, workflow_id)) => {
-                                            action_sender
-                                                .send(TriggerAction {
-                                                    service_id,
-                                                    workflow_id,
-                                                    result,
-                                                })
-                                                .await
-                                                .unwrap();
-                                        }
-                                        Err(err) => {
-                                            tracing::error!("error finding task: {:?}", err);
-                                        }
-                                    }
-                                }
+                            let resp = match resp {
+                                Ok(resp) => resp,
                                 Err(err) => {
                                     tracing::error!("error querying task queue: {:?}", err);
+                                    continue;
+                                }
+                            };
+
+                            let ids = {
+                                let triggers_by_task_queue_lock =
+                                    lookup_maps.triggers_by_task_queue.read().unwrap();
+                                let all_trigger_data_lock =
+                                    lookup_maps.all_trigger_data.read().unwrap();
+
+                                triggers_by_task_queue_lock
+                                    .get(&contract_address)
+                                    .ok_or_else(|| {
+                                        TriggerError::NoSuchTaskQueueTrigger(
+                                            contract_address.clone(),
+                                        )
+                                    })
+                                    .and_then(|lookup_id| {
+                                        all_trigger_data_lock
+                                            .get(lookup_id)
+                                            .ok_or(TriggerError::NoSuchTriggerData(*lookup_id))
+                                            .map(|service_workflow_ids| {
+                                                (
+                                                    service_workflow_ids.service_id.clone(),
+                                                    service_workflow_ids.workflow_id.clone(),
+                                                )
+                                            })
+                                    })
+                            };
+
+                            match ids {
+                                Ok((service_id, workflow_id)) => {
+                                    action_sender
+                                        .send(TriggerAction {
+                                            service_id,
+                                            workflow_id,
+                                            result: TriggerResult::Queue {
+                                                task_id,
+                                                payload: serde_json::to_vec(&resp.payload).unwrap(),
+                                            },
+                                        })
+                                        .await
+                                        .unwrap();
+                                }
+                                Err(err) => {
+                                    tracing::error!("error finding task: {:?}", err);
                                 }
                             }
                         }
