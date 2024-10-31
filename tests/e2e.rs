@@ -51,10 +51,8 @@ mod e2e {
 
         let ctx = AppContext::new();
 
-        tracing::info!("setting up dispatcher");
         let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 
-        tracing::info!("setting up wasmatic handle");
         let wasmatic_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
             let ctx = ctx.clone();
