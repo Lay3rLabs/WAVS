@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
 use crate::apis::ID;
 use crate::context::AppContext;
@@ -9,24 +11,28 @@ use tokio::sync::mpsc;
 #[derive(Clone)]
 pub struct MockTriggerManager {
     triggers: Vec<TriggerAction>,
+    delay: Duration,
     error_on_start: bool,
     error_on_store: bool,
     // FIXME: store trigger data for proper list response
 }
 
 impl MockTriggerManager {
+    const DEFAULT_WAIT: Duration = Duration::from_millis(200);
+
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self {
-            triggers: vec![],
-            error_on_start: false,
-            error_on_store: false,
-        }
+        Self::with_actions(vec![])
     }
 
     pub fn with_actions(triggers: Vec<TriggerAction>) -> Self {
+        Self::with_actions_and_wait(triggers, Self::DEFAULT_WAIT)
+    }
+
+    pub fn with_actions_and_wait(triggers: Vec<TriggerAction>, delay: Duration) -> Self {
         Self {
             triggers,
+            delay,
             error_on_start: false,
             error_on_store: false,
         }
@@ -35,6 +41,7 @@ impl MockTriggerManager {
     pub fn failing() -> Self {
         Self {
             triggers: vec![],
+            delay: Self::DEFAULT_WAIT,
             error_on_start: true,
             error_on_store: true,
         }
@@ -56,12 +63,20 @@ impl MockTriggerManager {
 }
 
 impl TriggerManager for MockTriggerManager {
-    fn start(&self, _ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+    fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         self.start_error()?;
         let (sender, receiver) = mpsc::channel(self.triggers.len() + 1);
-        for t in self.triggers.clone() {
-            let _ = sender.blocking_send(t);
-        }
+
+        ctx.rt.clone().spawn({
+            let triggers = self.triggers.clone();
+            let delay = self.delay;
+            async move {
+                for t in triggers {
+                    tokio::time::sleep(delay).await;
+                    sender.send(t).await.unwrap();
+                }
+            }
+        });
         Ok(receiver)
     }
 
@@ -115,7 +130,8 @@ mod tests {
             },
         ];
         let triggers = MockTriggerManager::with_actions(actions.clone());
-        let mut flow = triggers.start(AppContext::new()).unwrap();
+        let ctx = AppContext::new();
+        let mut flow = triggers.start(ctx.clone()).unwrap();
 
         // read the triggers
         let first = flow.blocking_recv().unwrap();

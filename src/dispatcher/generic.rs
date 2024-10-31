@@ -228,19 +228,23 @@ mod tests {
             dispatcher::{Component, ServiceStatus},
             Trigger,
         },
-        engine::identity::IdentityEngine,
+        engine::{
+            identity::IdentityEngine,
+            mock::{Function, MockEngine},
+        },
+        init_tracing_tests,
         submission::mock::MockSubmission,
         triggers::mock::MockTriggerManager,
         Digest,
     };
+    use serde::{Deserialize, Serialize};
 
     use super::*;
 
     /// Ensure that some items pass end-to-end in simplest possible setup
     #[test]
     fn dispatcher_pipeline_happy_path() {
-        // question - how to do this global init in tests, not just in main?
-        tracing_subscriber::fmt::init();
+        init_tracing_tests();
 
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let task_id = TaskId::new(2);
@@ -300,5 +304,99 @@ mod tests {
             verifier_addr: verifier_addr.to_string(),
         };
         assert_eq!(processed[0], expected);
+    }
+
+    struct BigSquare;
+
+    #[derive(Deserialize, Serialize)]
+    struct SquareIn {
+        pub x: u64,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct SquareOut {
+        pub y: u64,
+    }
+
+    impl Function for BigSquare {
+        fn execute(&self, request: Vec<u8>, _timestamp: u64) -> Result<Vec<u8>, EngineError> {
+            let SquareIn { x } = serde_json::from_slice(&request).unwrap();
+            let output = SquareOut { y: x * x };
+            Ok(serde_json::to_vec(&output).unwrap())
+        }
+    }
+
+    /// Simulate running the square workflow but Function not WASI component
+    #[test]
+    fn dispatcher_big_square_mocked() {
+        init_tracing_tests();
+
+        let db_file = tempfile::NamedTempFile::new().unwrap();
+
+        // Prepare two actions to be squared
+        let service_id = ID::new("service1").unwrap();
+        let workflow_id = ID::new("workflow1").unwrap();
+        let actions = vec![
+            TriggerAction {
+                service_id: service_id.clone(),
+                workflow_id: workflow_id.clone(),
+                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
+            },
+            TriggerAction {
+                service_id: service_id.clone(),
+                workflow_id: workflow_id.clone(),
+                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
+            },
+        ];
+
+        // Set up the dispatcher
+        let dispatcher = Dispatcher::new(
+            MockTriggerManager::with_actions(actions),
+            MockEngine::new(),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
+
+        // Register the BigSquare function on our known digest
+        let digest = Digest::new(b"wasm1");
+        dispatcher.engine.register(&digest, BigSquare);
+
+        // Register a service to handle this action
+        let component_id = ID::new("component1").unwrap();
+        let hd_index = 2;
+        let verifier_addr = "layer1verifier";
+        let service = Service {
+            id: service_id.clone(),
+            name: "Big Square AVS".to_string(),
+            components: [(component_id.clone(), Component::new(&digest))].into(),
+            workflows: [(
+                workflow_id.clone(),
+                crate::apis::dispatcher::Workflow {
+                    component: component_id.clone(),
+                    trigger: Trigger::queue("some-task", 5),
+                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
+                },
+            )]
+            .into(),
+            status: ServiceStatus::Active,
+            testable: false,
+        };
+        dispatcher.add_service(service).unwrap();
+
+        // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
+        let ctx = AppContext::new();
+        dispatcher.start(ctx).unwrap();
+
+        // check that the events were properly handled and arrived at submission
+        dispatcher.submission.wait_for_messages(2).unwrap();
+        let processed = dispatcher.submission.received();
+        assert_eq!(processed.len(), 2);
+
+        // Check the task_id and payloads
+        assert_eq!(processed[0].task_id, TaskId::new(1));
+        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
+        assert_eq!(processed[1].task_id, TaskId::new(2));
+        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
     }
 }

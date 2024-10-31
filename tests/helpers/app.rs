@@ -1,9 +1,5 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, LazyLock},
-};
+use std::{path::PathBuf, sync::Arc};
 
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use wasmatic::{
     args::CliArgs,
     config::{Config, ConfigBuilder},
@@ -54,35 +50,8 @@ impl TestApp {
     pub async fn new_with_args(cli_args: CliArgs) -> Self {
         let config = Arc::new(ConfigBuilder::new(cli_args).build().unwrap());
 
-        init(&config).await;
+        wasmatic::init_tracing_tests();
 
         Self { config }
-    }
-}
-
-async fn init(config: &Config) {
-    // gate this initialization section to only run one time globally
-    {
-        static INIT: LazyLock<tokio::sync::Mutex<bool>> =
-            LazyLock::new(|| tokio::sync::Mutex::new(false));
-
-        let mut init = INIT.lock().await;
-
-        if !*init {
-            *init = true;
-
-            // we want to be able to see tracing info in tests
-            // also, although we could technically just store a separate tracing handle in each app
-            // this serves as a good sanity check that we're only initializing once
-            tracing_subscriber::registry()
-                .with(
-                    tracing_subscriber::fmt::layer()
-                        .without_time()
-                        .with_target(false),
-                )
-                .with(config.tracing_env_filter().unwrap())
-                .try_init()
-                .unwrap();
-        }
     }
 }
