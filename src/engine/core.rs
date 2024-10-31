@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
 use anyhow::Context;
+use lru::LruCache;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -19,8 +20,7 @@ use crate::{task_bindings, Digest};
 pub struct WasmEngine<S: CAStorage> {
     wasm_storage: S,
     wasm_engine: WTEngine,
-    // TODO: we need some LRU limit here to avoid memory exhaustion
-    memory_cache: RwLock<HashMap<Digest, Component>>,
+    memory_cache: RwLock<LruCache<Digest, Component>>,
     app_data_dir: PathBuf,
 }
 
@@ -29,22 +29,22 @@ impl<S: CAStorage> WasmEngine<S> {
     /// This returns the manager and a receiver for the trigger actions.
     /// Internally, all triggers may run in an async runtime and send results to the receiver.
     /// Externally, the Dispatcher can read the incoming tasks either sync or async
-    pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>) -> Self {
+    pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>, lru_size: usize) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
         config.async_support(true);
         let wasm_engine = WTEngine::new(&config).unwrap();
 
+        let lru_size = NonZeroUsize::new(lru_size).unwrap();
         Self {
             wasm_storage,
             wasm_engine,
-            memory_cache: RwLock::new(HashMap::new()),
+            memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir: app_data_dir.as_ref().to_path_buf(),
         }
     }
 }
 
-// TODO: should we make some trait for quicker tasks where you just register closures for the digests?
 impl<S: CAStorage> Engine for WasmEngine<S> {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
@@ -56,10 +56,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         // // TODO: write precompiled wasm (huge optimization on restart)
         // tokio::fs::write(self.path_for_precompiled_wasm(digest), cm.serialize()?).await?;
 
-        self.memory_cache
-            .write()
-            .unwrap()
-            .insert(digest.clone(), cm);
+        self.memory_cache.write().unwrap().put(digest.clone(), cm);
 
         Ok(digest)
     }
@@ -79,7 +76,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     ) -> Result<Vec<u8>, EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
-        let component = match self.memory_cache.read().unwrap().get(&digest) {
+        let component = match self.memory_cache.write().unwrap().get(&digest) {
             Some(cm) => cm.clone(),
             None => {
                 let bytes = self.wasm_storage.get_data(&digest)?;
@@ -134,7 +131,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                     .await
                     .context("Failed to run task")?
                     .map_err(EngineError::ComponentError)?;
-                Ok::<_, EngineError>(result)
+                Ok::<Vec<u8>, EngineError>(result)
             }
         })
     }
@@ -181,7 +178,7 @@ mod tests {
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data);
+        let engine = WasmEngine::new(storage, &app_data, 3);
 
         // store two blobs
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -199,7 +196,7 @@ mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data);
+        let engine = WasmEngine::new(storage, &app_data, 3);
 
         // store valid wasm
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -215,7 +212,7 @@ mod tests {
     fn execute_square() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data);
+        let engine = WasmEngine::new(storage, &app_data, 3);
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
