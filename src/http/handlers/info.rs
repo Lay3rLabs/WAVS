@@ -1,7 +1,7 @@
+use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
-
-use crate::http::state::HttpState;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -10,6 +10,28 @@ pub struct InfoResponse {
 }
 
 #[axum::debug_handler]
-pub async fn handle_info(State(_state): State<HttpState>) -> impl IntoResponse {
-    Json::<[(); 0]>([]).into_response()
+pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
+    match inner_handle_info(state).await {
+        Ok(response) => Json(response).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
+    // TODO - get the operators from the dispatcher?
+
+    let chain_config = state.config.chain_config()?;
+    let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
+    let mut operators = Vec::new();
+
+    for i in 0..10 {
+        let key_signer =
+            KeySigner::new_mnemonic_str(&seed_phrase, Some(&cosmos_hub_derivation(i)?)).unwrap();
+        let address = chain_config
+            .address_kind
+            .address_from_pub_key(&key_signer.public_key().await?)?;
+        operators.push(address.to_string());
+    }
+
+    Ok(InfoResponse { operators })
 }
