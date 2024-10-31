@@ -375,3 +375,124 @@ fn remove_trigger_data(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        apis::{
+            trigger::{TriggerData, TriggerManager},
+            Trigger, ID,
+        },
+        config::{Config, WasmaticChainConfig},
+    };
+
+    use super::CoreTriggerManager;
+
+    #[test]
+    fn core_trigger_lookups() {
+        let mut config = Config::default();
+        config.chain = "test".to_string();
+        config.chains = vec![(
+            "test".to_string(),
+            WasmaticChainConfig {
+                chain_id: "slay3r-local".parse().unwrap(),
+                rpc_endpoint: "http://localhost:26657".to_string(),
+                grpc_endpoint: "http://localhost:9090".to_string(),
+                gas_price: 0.025,
+                gas_denom: "uslay".to_string(),
+                bech32_prefix: "layer".to_string(),
+                faucet_endpoint: None,
+            },
+        )]
+        .into_iter()
+        .collect();
+
+        let manager = CoreTriggerManager::new(&config).unwrap();
+
+        let service_id_1 = ID::new("service-1").unwrap();
+        let workflow_id_1 = ID::new("workflow-1").unwrap();
+
+        let service_id_2 = ID::new("service-2").unwrap();
+        let workflow_id_2 = ID::new("workflow-2").unwrap();
+
+        let task_queue_addr_1_1 = "layer13jwzcq8m4k4tyz6dwvqtnww0ds9vwptph0lnqm".to_string();
+        let task_queue_addr_1_2 = "layer1aktndkmndlxd60ep7g58vc3wxkpqd0hn7ngj2w".to_string();
+        let task_queue_addr_2_1 = "layer18aa3r27pk2vtsvqfwj045vheyjsu3hv6e3h6qw".to_string();
+        let task_queue_addr_2_2 = "layer1jvuf2fye4sr09sn4042a5c30zf22u8ar60apyp".to_string();
+
+        let trigger_1_1 = make_trigger(&service_id_1, &workflow_id_1, &task_queue_addr_1_1);
+        let trigger_1_2 = make_trigger(&service_id_1, &workflow_id_2, &task_queue_addr_1_2);
+        let trigger_2_1 = make_trigger(&service_id_2, &workflow_id_1, &task_queue_addr_2_1);
+        let trigger_2_2 = make_trigger(&service_id_2, &workflow_id_2, &task_queue_addr_2_2);
+
+        manager.add_trigger(trigger_1_1).unwrap();
+        manager.add_trigger(trigger_1_2).unwrap();
+        manager.add_trigger(trigger_2_1).unwrap();
+        manager.add_trigger(trigger_2_2).unwrap();
+
+        let triggers_service_1 = manager.list_triggers(service_id_1.clone()).unwrap();
+
+        assert_eq!(triggers_service_1.len(), 2);
+        assert_eq!(triggers_service_1[0].service_id, service_id_1);
+        assert_eq!(triggers_service_1[0].workflow_id, workflow_id_1);
+        assert_eq!(
+            get_trigger_addr(&triggers_service_1[0].trigger),
+            &task_queue_addr_1_1
+        );
+        assert_eq!(triggers_service_1[1].service_id, service_id_1);
+        assert_eq!(triggers_service_1[1].workflow_id, workflow_id_2);
+        assert_eq!(
+            get_trigger_addr(&triggers_service_1[1].trigger),
+            &task_queue_addr_1_2
+        );
+
+        let triggers_service_2 = manager.list_triggers(service_id_2.clone()).unwrap();
+
+        assert_eq!(triggers_service_2.len(), 2);
+        assert_eq!(triggers_service_2[0].service_id, service_id_2);
+        assert_eq!(triggers_service_2[0].workflow_id, workflow_id_1);
+        assert_eq!(
+            get_trigger_addr(&triggers_service_2[0].trigger),
+            &task_queue_addr_2_1
+        );
+        assert_eq!(triggers_service_2[1].service_id, service_id_2);
+        assert_eq!(triggers_service_2[1].workflow_id, workflow_id_2);
+        assert_eq!(
+            get_trigger_addr(&triggers_service_2[1].trigger),
+            &task_queue_addr_2_2
+        );
+
+        manager
+            .remove_trigger(service_id_1.clone(), workflow_id_1)
+            .unwrap();
+        let triggers_service_1 = manager.list_triggers(service_id_1.clone()).unwrap();
+        let triggers_service_2 = manager.list_triggers(service_id_2.clone()).unwrap();
+        assert_eq!(triggers_service_1.len(), 1);
+        assert_eq!(triggers_service_2.len(), 2);
+
+        manager.remove_service(service_id_2.clone()).unwrap();
+        let triggers_service_1 = manager.list_triggers(service_id_1.clone()).unwrap();
+        let _triggers_service_2_err = manager.list_triggers(service_id_2.clone()).unwrap_err();
+        assert_eq!(triggers_service_1.len(), 1);
+
+        fn make_trigger(service_id: &ID, workflow_id: &ID, task_queue_addr: &str) -> TriggerData {
+            TriggerData {
+                service_id: service_id.clone(),
+                workflow_id: workflow_id.clone(),
+                trigger: Trigger::Queue {
+                    task_queue_addr: task_queue_addr.to_string(),
+                    poll_interval: 5,
+                },
+            }
+        }
+
+        fn get_trigger_addr(trigger: &Trigger) -> &str {
+            match trigger {
+                Trigger::Queue {
+                    task_queue_addr,
+                    poll_interval: _,
+                } => task_queue_addr,
+            }
+        }
+    }
+}
