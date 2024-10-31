@@ -227,11 +227,7 @@ mod tests {
         apis::{
             dispatcher::{Component, ServiceStatus},
             Trigger,
-        },
-        engine::{identity::IdentityEngine, mock::{Function, MockEngine}},
-        submission::mock::MockSubmission,
-        triggers::mock::MockTriggerManager,
-        Digest,
+        }, engine::{identity::IdentityEngine, mock::{Function, MockEngine}}, init_tracing_tests, submission::mock::MockSubmission, triggers::mock::MockTriggerManager, Digest
     };
     use serde::{Deserialize, Serialize};
 
@@ -240,8 +236,7 @@ mod tests {
     /// Ensure that some items pass end-to-end in simplest possible setup
     #[test]
     fn dispatcher_pipeline_happy_path() {
-        // question - how to do this global init in tests, not just in main?
-        tracing_subscriber::fmt::init();
+        init_tracing_tests();
 
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let task_id = TaskId::new(2);
@@ -326,8 +321,7 @@ mod tests {
     /// Simulate running the square workflow but Function not WASI component
     #[test]
     fn dispatcher_big_square_mocked() {
-        // We can only do this once - in one test
-        // tracing_subscriber::fmt::init();
+        init_tracing_tests();
 
         let db_file = tempfile::NamedTempFile::new().unwrap();
 
