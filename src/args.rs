@@ -55,6 +55,11 @@ pub struct CliArgs {
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub cors_allowed_origins: Vec<String>,
 
+    /// Size of the LRU cache for in-memory components
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wasm_lru_size: Option<usize>,
+
     /// The chain to use for the application
     /// will load from the config file
     #[arg(long)]
