@@ -25,10 +25,7 @@ pub struct WasmEngine<S: CAStorage> {
 }
 
 impl<S: CAStorage> WasmEngine<S> {
-    /// Create a new trigger manager.
-    /// This returns the manager and a receiver for the trigger actions.
-    /// Internally, all triggers may run in an async runtime and send results to the receiver.
-    /// Externally, the Dispatcher can read the incoming tasks either sync or async
+    /// Create a new Wasm Engine manager.
     pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>, lru_size: usize) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -36,11 +33,18 @@ impl<S: CAStorage> WasmEngine<S> {
         let wasm_engine = WTEngine::new(&config).unwrap();
 
         let lru_size = NonZeroUsize::new(lru_size).unwrap();
+
+        let app_data_dir = app_data_dir.as_ref().to_path_buf();
+
+        if !app_data_dir.is_dir() {
+            std::fs::create_dir(&app_data_dir).unwrap();
+        }
+
         Self {
             wasm_storage,
             wasm_engine,
             memory_cache: RwLock::new(LruCache::new(lru_size)),
-            app_data_dir: app_data_dir.as_ref().to_path_buf(),
+            app_data_dir,
         }
     }
 }
@@ -94,12 +98,15 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         // create wasi context
         let mut builder = WasiCtxBuilder::new();
         let app_cache_path = self.app_data_dir.join(digest.to_string());
+
         if !app_cache_path.is_dir() {
             std::fs::create_dir(&app_cache_path)?;
         }
+
         builder
-            .preopened_dir(app_cache_path, ".", DirPerms::all(), FilePerms::all())
+            .preopened_dir(&app_cache_path, ".", DirPerms::all(), FilePerms::all())
             .context("preopen failed")?;
+
         // TODO: add some env here
         // if !envs.is_empty() {
         //     builder.envs(envs);
