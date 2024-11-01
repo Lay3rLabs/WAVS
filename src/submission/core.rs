@@ -137,16 +137,15 @@ impl Submission for CoreSubmission {
                                 }
                             };
 
-                            let task_queue_addr = match msg.trigger_data.trigger {
-                                Trigger::Queue { task_queue_addr, .. } => task_queue_addr
+                            let contract_msg = match msg.trigger_data.trigger {
+                                Trigger::Queue { task_queue_addr, .. } => {
+                                    VerifierExecuteMsg::ExecutedTask {
+                                        task_queue_contract: task_queue_addr,
+                                        task_id: msg.task_id,
+                                        result,
+                                    }
+                                }
                             };
-
-                            let contract_msg = VerifierExecuteMsg::ExecutedTask {
-                                task_queue_contract: task_queue_addr,
-                                task_id: msg.task_id,
-                                result,
-                            };
-
 
                             match client.contract_execute(&verifier_addr, &contract_msg, Vec::new(), None).await {
                                 Ok(_) => {
