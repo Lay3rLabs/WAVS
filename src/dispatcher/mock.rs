@@ -7,17 +7,23 @@ use super::generic::Dispatcher;
 
 pub type MockDispatcher = Dispatcher<MockTriggerManager, IdentityEngine, MockSubmission>;
 
-/// Note: this is more or less useless, as we will want to actually to configure these items more.
-impl MockDispatcher {
-    pub fn new_mock() -> Self {
-        let triggers = MockTriggerManager::new();
+pub struct MockDispatcherBuilder {
+    pub triggers: MockTriggerManager,
+    pub engine: IdentityEngine,
+    pub submission: MockSubmission,
+}
 
-        let engine = IdentityEngine;
+impl MockDispatcherBuilder {
+    pub fn new() -> Self {
+        Self {
+            triggers: MockTriggerManager::new(),
+            engine: IdentityEngine,
+            submission: MockSubmission::new(),
+        }
+    }
 
-        let submission = MockSubmission::new();
-
+    pub fn build(self) -> MockDispatcher {
         let temp_file = tempfile::NamedTempFile::new().unwrap();
-
-        Self::new(triggers, engine, submission, temp_file.as_ref()).unwrap()
+        MockDispatcher::new(self.triggers, self.engine, self.submission, temp_file).unwrap()
     }
 }

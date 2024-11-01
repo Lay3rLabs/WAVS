@@ -261,7 +261,7 @@ mod tests {
         };
 
         let dispatcher = Dispatcher::new(
-            MockTriggerManager::with_actions(vec![action.clone()]),
+            MockTriggerManager::new().with_actions(vec![action.clone()]),
             IdentityEngine::new(),
             MockSubmission::new(),
             db_file.as_ref(),
@@ -354,7 +354,7 @@ mod tests {
 
         // Set up the dispatcher
         let dispatcher = Dispatcher::new(
-            MockTriggerManager::with_actions(actions),
+            MockTriggerManager::new().with_actions(actions),
             MockEngine::new(),
             MockSubmission::new(),
             db_file.as_ref(),

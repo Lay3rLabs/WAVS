@@ -22,20 +22,23 @@ impl MockTriggerManager {
 
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self::with_actions(vec![])
-    }
-
-    pub fn with_actions(triggers: Vec<TriggerAction>) -> Self {
-        Self::with_actions_and_wait(triggers, Self::DEFAULT_WAIT)
-    }
-
-    pub fn with_actions_and_wait(triggers: Vec<TriggerAction>, delay: Duration) -> Self {
         Self {
-            triggers,
-            delay,
+            triggers: Vec::new(),
+            delay: Self::DEFAULT_WAIT,
             error_on_start: false,
             error_on_store: false,
         }
+    }
+
+    pub fn with_actions(mut self, triggers: Vec<TriggerAction>) -> Self {
+        self.triggers = triggers;
+        self
+    }
+
+    pub fn with_actions_and_wait(mut self, triggers: Vec<TriggerAction>, delay: Duration) -> Self {
+        self.triggers = triggers;
+        self.delay = delay;
+        self
     }
 
     pub fn failing() -> Self {
@@ -127,7 +130,7 @@ mod tests {
                 },
             },
         ];
-        let triggers = MockTriggerManager::with_actions(actions.clone());
+        let triggers = MockTriggerManager::new().with_actions(actions.clone());
         let ctx = AppContext::new();
         let mut flow = triggers.start(ctx.clone()).unwrap();
 
