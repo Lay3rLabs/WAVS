@@ -17,7 +17,7 @@ impl TestHttpApp {
         let dispatcher = Arc::new(MockDispatcher::new_mock());
 
         let http_router =
-            wasmatic::http::server::make_router(inner.config.as_ref().clone(), dispatcher)
+            wasmatic::http::server::make_router(inner.config.as_ref().clone(), dispatcher, true)
                 .await
                 .unwrap();
 

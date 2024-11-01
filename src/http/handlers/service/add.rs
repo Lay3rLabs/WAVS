@@ -59,13 +59,7 @@ async fn add_service_inner(
             task_queue_addr, ..
         } => {
             let hd_index = 0; // TODO: should this come from the request?
-            let verifier_addr_string =
-                if std::env::var("MATIC_TESTING_HTTP") == Ok("yes-it-is".to_string()) {
-                    // just some random addr
-                    "layer1hd63uanu5jqsy2xhq40k6k3gexsuu9xl6y3hvr".to_string()
-                } else {
-                    get_verifier_addr_string(state, task_queue_addr).await?
-                };
+            let verifier_addr_string = get_verifier_addr_string(state, task_queue_addr).await?;
             Some(Submit::verifier_tx(hd_index, &verifier_addr_string))
         }
     };
@@ -100,6 +94,11 @@ async fn get_verifier_addr_string(
     state: &HttpState,
     task_queue_addr: &str,
 ) -> anyhow::Result<String> {
+    if state.is_mock_chain_client {
+        // just some random addr
+        return Ok("layer1hd63uanu5jqsy2xhq40k6k3gexsuu9xl6y3hvr".to_string())
+    }
+
     let query_client = QueryClient::new(state.config.chain_config()?).await?;
     let task_queue_addr = query_client.chain_config.parse_address(task_queue_addr)?;
 
