@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{Trigger, ID};
+use super::{IDError, Trigger, ID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -25,7 +25,7 @@ pub trait TriggerManager: Send + Sync {
     fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 /// Internal description of a registered trigger, to be indexed by associated IDs
 pub struct TriggerData {
     pub service_id: ID,
@@ -33,12 +33,27 @@ pub struct TriggerData {
     pub trigger: Trigger,
 }
 
+impl TriggerData {
+    #[cfg(debug_assertions)]
+    pub fn queue(
+        service_id: impl TryInto<ID, Error = IDError>,
+        workflow_id: impl TryInto<ID, Error = IDError>,
+        task_queue_addr: &str,
+        poll_interval: u32,
+    ) -> Result<Self, IDError> {
+        Ok(Self {
+            service_id: service_id.try_into()?,
+            workflow_id: workflow_id.try_into()?,
+            trigger: Trigger::queue(task_queue_addr, poll_interval),
+        })
+    }
+}
+
 /// The data returned from a trigger action
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
-    /// Identify which service and workflow this came from
-    pub service_id: ID,
-    pub workflow_id: ID,
+    /// Identify which trigger this came from
+    pub trigger: TriggerData,
 
     /// The data we got from the trigger
     pub result: TriggerResult,

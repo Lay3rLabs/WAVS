@@ -3,7 +3,7 @@ use std::{fmt, ops::Deref};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Trigger {
     // TODO: add this variant later, not for now
@@ -66,6 +66,23 @@ impl Deref for ID {
 impl fmt::Display for ID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<&str> for ID {
+    type Error = IDError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        ID::new(s)
+    }
+}
+
+// makes it easier to use in T: TryInto
+impl TryFrom<&ID> for ID {
+    type Error = IDError;
+
+    fn try_from(id: &ID) -> Result<Self, Self::Error> {
+        Ok(id.clone())
     }
 }
 
