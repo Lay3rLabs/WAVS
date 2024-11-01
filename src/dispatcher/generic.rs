@@ -239,7 +239,7 @@ mod tests {
         },
         init_tracing_tests,
         submission::mock::MockSubmission,
-        triggers::mock::MockTriggerManager,
+        triggers::mock::MockTriggerManagerVec,
         Digest,
     };
     use serde::{Deserialize, Serialize};
@@ -261,7 +261,7 @@ mod tests {
         };
 
         let dispatcher = Dispatcher::new(
-            MockTriggerManager::new().with_actions(vec![action.clone()]),
+            MockTriggerManagerVec::new().with_actions(vec![action.clone()]),
             IdentityEngine::new(),
             MockSubmission::new(),
             db_file.as_ref(),
@@ -354,7 +354,7 @@ mod tests {
 
         // Set up the dispatcher
         let dispatcher = Dispatcher::new(
-            MockTriggerManager::new().with_actions(actions),
+            MockTriggerManagerVec::new().with_actions(actions),
             MockEngine::new(),
             MockSubmission::new(),
             db_file.as_ref(),
