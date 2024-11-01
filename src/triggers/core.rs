@@ -423,10 +423,14 @@ mod tests {
         let task_queue_addr_2_1 = "layer18aa3r27pk2vtsvqfwj045vheyjsu3hv6e3h6qw".to_string();
         let task_queue_addr_2_2 = "layer1jvuf2fye4sr09sn4042a5c30zf22u8ar60apyp".to_string();
 
-        let trigger_1_1 = make_trigger(&service_id_1, &workflow_id_1, &task_queue_addr_1_1);
-        let trigger_1_2 = make_trigger(&service_id_1, &workflow_id_2, &task_queue_addr_1_2);
-        let trigger_2_1 = make_trigger(&service_id_2, &workflow_id_1, &task_queue_addr_2_1);
-        let trigger_2_2 = make_trigger(&service_id_2, &workflow_id_2, &task_queue_addr_2_2);
+        let trigger_1_1 =
+            TriggerData::queue(&service_id_1, &workflow_id_1, &task_queue_addr_1_1, 5).unwrap();
+        let trigger_1_2 =
+            TriggerData::queue(&service_id_1, &workflow_id_2, &task_queue_addr_1_2, 5).unwrap();
+        let trigger_2_1 =
+            TriggerData::queue(&service_id_2, &workflow_id_1, &task_queue_addr_2_1, 5).unwrap();
+        let trigger_2_2 =
+            TriggerData::queue(&service_id_2, &workflow_id_2, &task_queue_addr_2_2, 5).unwrap();
 
         manager.add_trigger(trigger_1_1).unwrap();
         manager.add_trigger(trigger_1_2).unwrap();
@@ -477,17 +481,6 @@ mod tests {
         let triggers_service_1 = manager.list_triggers(service_id_1.clone()).unwrap();
         let _triggers_service_2_err = manager.list_triggers(service_id_2.clone()).unwrap_err();
         assert_eq!(triggers_service_1.len(), 1);
-
-        fn make_trigger(service_id: &ID, workflow_id: &ID, task_queue_addr: &str) -> TriggerData {
-            TriggerData {
-                service_id: service_id.clone(),
-                workflow_id: workflow_id.clone(),
-                trigger: Trigger::Queue {
-                    task_queue_addr: task_queue_addr.to_string(),
-                    poll_interval: 5,
-                },
-            }
-        }
 
         fn get_trigger_addr(trigger: &Trigger) -> &str {
             match trigger {

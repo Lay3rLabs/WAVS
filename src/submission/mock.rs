@@ -88,20 +88,13 @@ mod test {
 
     use lavs_apis::id::TaskId;
 
-    use crate::apis::{trigger::TriggerData, Trigger, ID};
+    use crate::apis::trigger::TriggerData;
 
     use super::*;
 
     fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_data: TriggerData {
-                service_id: ID::new(service).unwrap(),
-                workflow_id: ID::new(service).unwrap(),
-                trigger: Trigger::Queue {
-                    task_queue_addr: "task_queue".to_string(),
-                    poll_interval: 5,
-                },
-            },
+            trigger_data: TriggerData::queue(service, service, "task_queue", 5).unwrap(),
             task_id: TaskId::new(task_id),
             wasm_result: payload.as_bytes().to_vec(),
             hd_index: 0,

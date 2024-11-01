@@ -105,7 +105,7 @@ impl TriggerManager for MockTriggerManager {
 mod tests {
     use lavs_apis::id::TaskId;
 
-    use crate::apis::{trigger::TriggerResult, Trigger};
+    use crate::apis::trigger::TriggerResult;
 
     use super::*;
 
@@ -113,28 +113,14 @@ mod tests {
     fn mock_trigger_sends() {
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData {
-                    service_id: ID::new("service1").unwrap(),
-                    workflow_id: ID::new("workflow1").unwrap(),
-                    trigger: Trigger::Queue {
-                        task_queue_addr: "layer12345".into(),
-                        poll_interval: 5,
-                    },
-                },
+                trigger: TriggerData::queue("service1", "workflow1", "layer12345", 5).unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
-                trigger: TriggerData {
-                    service_id: ID::new("service2").unwrap(),
-                    workflow_id: ID::new("workflow2").unwrap(),
-                    trigger: Trigger::Queue {
-                        task_queue_addr: "layer12345".into(),
-                        poll_interval: 5,
-                    },
-                },
+                trigger: TriggerData::queue("service2", "workflow2", "layer12345", 5).unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
@@ -155,14 +141,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerData {
-            service_id: ID::new("abcd").unwrap(),
-            workflow_id: ID::new("abcd").unwrap(),
-            trigger: Trigger::Queue {
-                task_queue_addr: "layer12345".into(),
-                poll_interval: 5,
-            },
-        };
+        let data = TriggerData::queue("abcd", "abcd", "layer12345", 5).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -173,14 +152,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerData {
-            service_id: ID::new("abcd").unwrap(),
-            workflow_id: ID::new("abcd").unwrap(),
-            trigger: Trigger::Queue {
-                task_queue_addr: "layer12345".into(),
-                poll_interval: 5,
-            },
-        };
+        let data = TriggerData::queue("abcd", "abcd", "layer12345", 5).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }

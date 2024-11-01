@@ -256,14 +256,7 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            trigger: TriggerData {
-                service_id: ID::new("service1").unwrap(),
-                workflow_id: ID::new("workflow1").unwrap(),
-                trigger: Trigger::Queue {
-                    task_queue_addr: "layer1taskqueue".to_string(),
-                    poll_interval: 5,
-                },
-            },
+            trigger: TriggerData::queue("service1", "workflow1", "layer1taskqueue", 5).unwrap(),
             result: TriggerResult::queue(task_id, payload),
         };
 
@@ -348,25 +341,13 @@ mod tests {
         let workflow_id = ID::new("workflow1").unwrap();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData {
-                    service_id: service_id.clone(),
-                    workflow_id: workflow_id.clone(),
-                    trigger: Trigger::Queue {
-                        task_queue_addr: "layer1taskqueue".to_string(),
-                        poll_interval: 5,
-                    },
-                },
+                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                    .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData {
-                    service_id: service_id.clone(),
-                    workflow_id: workflow_id.clone(),
-                    trigger: Trigger::Queue {
-                        task_queue_addr: "layer1taskqueue".to_string(),
-                        poll_interval: 5,
-                    },
-                },
+                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                    .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];

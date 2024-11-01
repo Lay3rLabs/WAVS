@@ -69,6 +69,23 @@ impl fmt::Display for ID {
     }
 }
 
+impl TryFrom<&str> for ID {
+    type Error = IDError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        ID::new(s)
+    }
+}
+
+// makes it easier to use in T: TryInto
+impl TryFrom<&ID> for ID {
+    type Error = IDError;
+
+    fn try_from(id: &ID) -> Result<Self, Self::Error> {
+        Ok(id.clone())
+    }
+}
+
 #[derive(Error, Debug, PartialEq, Clone)]
 pub enum IDError {
     #[error("ID must be between 3 and 32 characters")]

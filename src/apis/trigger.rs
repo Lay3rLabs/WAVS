@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{Trigger, ID};
+use super::{IDError, Trigger, ID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -31,6 +31,22 @@ pub struct TriggerData {
     pub service_id: ID,
     pub workflow_id: ID,
     pub trigger: Trigger,
+}
+
+impl TriggerData {
+    #[cfg(debug_assertions)]
+    pub fn queue(
+        service_id: impl TryInto<ID, Error = IDError>,
+        workflow_id: impl TryInto<ID, Error = IDError>,
+        task_queue_addr: &str,
+        poll_interval: u32,
+    ) -> Result<Self, IDError> {
+        Ok(Self {
+            service_id: service_id.try_into()?,
+            workflow_id: workflow_id.try_into()?,
+            trigger: Trigger::queue(task_queue_addr, poll_interval),
+        })
+    }
 }
 
 /// The data returned from a trigger action
