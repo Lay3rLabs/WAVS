@@ -96,7 +96,7 @@ async fn get_verifier_addr_string(
 ) -> anyhow::Result<String> {
     if state.is_mock_chain_client {
         // just some random addr
-        return Ok("layer1hd63uanu5jqsy2xhq40k6k3gexsuu9xl6y3hvr".to_string())
+        return Ok("layer1hd63uanu5jqsy2xhq40k6k3gexsuu9xl6y3hvr".to_string());
     }
 
     let query_client = QueryClient::new(state.config.chain_config()?).await?;
