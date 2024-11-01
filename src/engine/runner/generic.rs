@@ -7,6 +7,8 @@ use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
 
 pub trait EngineRunner: Send + Sync {
+    type Engine: Engine;
+
     // This starts a loop to process all incoming triggers ans prepare outgoing results
     // It should immediately return and run the processing task in the background
     fn start(
@@ -17,7 +19,7 @@ pub trait EngineRunner: Send + Sync {
     ) -> Result<(), EngineError>;
 
     // Return the engine if they want to use that directly.
-    fn engine(&self) -> &dyn Engine;
+    fn engine(&self) -> &Self::Engine;
 
     /// This is where the heavy lifting is done (at least for now, where self.engine.execute_queue happens in the same thread)
     /// effectively, it slows down the consumption of triggers and can inadvertendly cause the whole system to slow down

@@ -20,6 +20,8 @@ impl<E: Engine + Clone + 'static> SingleEngineRunner<E> {
 }
 
 impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
+    type Engine = E;
+
     fn start(
         &self,
         _ctx: AppContext,
@@ -48,7 +50,7 @@ impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
         Ok(())
     }
 
-    fn engine(&self) -> &dyn Engine {
+    fn engine(&self) -> &Self::Engine {
         &self.engine
     }
 }

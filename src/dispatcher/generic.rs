@@ -5,7 +5,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 
 use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
-use crate::apis::engine::EngineError;
+use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
 use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
 use crate::apis::{IDError, ID};
@@ -188,11 +188,15 @@ mod tests {
 
     use crate::{
         apis::{
-            dispatcher::{Component, ServiceStatus, Submit}, submission::ChainMessage, trigger::TriggerResult, Trigger
+            dispatcher::{Component, ServiceStatus, Submit},
+            submission::ChainMessage,
+            trigger::TriggerResult,
+            Trigger,
         },
         engine::{
             identity::IdentityEngine,
-            mock::{Function, MockEngine}, runner::SingleEngineRunner,
+            mock::{Function, MockEngine},
+            runner::SingleEngineRunner,
         },
         init_tracing_tests,
         submission::mock::MockSubmission,
@@ -320,7 +324,7 @@ mod tests {
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");
-        dispatcher.engine.register(&digest, BigSquare);
+        dispatcher.engine.engine().register(&digest, BigSquare);
 
         // Register a service to handle this action
         let component_id = ID::new("component1").unwrap();
