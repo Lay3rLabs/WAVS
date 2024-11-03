@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use wasmatic::dispatcher::{MockDispatcher, MockDispatcherBuilder};
+use wasmatic::{
+    apis::{engine::Engine, submission::Submission, trigger::TriggerManager},
+    dispatcher::Dispatcher,
+    engine::identity::IdentityEngine,
+    submission::mock::MockSubmission,
+    triggers::mock::MockTriggerManagerVec,
+};
 
 use super::app::TestApp;
 
@@ -12,10 +18,23 @@ pub struct TestHttpApp {
 
 impl TestHttpApp {
     pub async fn new() -> Self {
-        Self::new_with_dispatcher(MockDispatcherBuilder::new().build()).await
+        let trigger_manager = MockTriggerManagerVec::new();
+        let engine = IdentityEngine::new();
+        let submission = MockSubmission::new();
+        let storage_path = tempfile::NamedTempFile::new().unwrap();
+
+        let dispatcher =
+            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
+
+        Self::new_with_dispatcher(dispatcher).await
     }
 
-    pub async fn new_with_dispatcher(dispatcher: Arc<MockDispatcher>) -> Self {
+    pub async fn new_with_dispatcher<T, E, S>(dispatcher: Arc<Dispatcher<T, E, S>>) -> Self
+    where
+        T: TriggerManager + 'static,
+        E: Engine + 'static,
+        S: Submission + 'static,
+    {
         let inner = TestApp::new().await;
 
         let http_router =

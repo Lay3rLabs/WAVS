@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::http::{Method, Request};
 use helpers::{chain::MOCK_TASK_QUEUE_ADDRESS, http::TestHttpApp};
 use lavs_apis::id::TaskId;
@@ -11,9 +13,10 @@ use wasmatic::{
         Trigger, ID,
     },
     context::AppContext,
-    dispatcher::MockDispatcherBuilder,
+    dispatcher::Dispatcher,
     engine::mock::{Function, MockEngine},
     http::{handlers::service::add::RegisterAppRequest, types::app::App},
+    submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
     Digest,
 };
@@ -31,10 +34,13 @@ fn mock_e2e() {
     let service_id = ID::new("test-service").unwrap();
 
     // create our dispatcher
-    let dispatcher = MockDispatcherBuilder::new()
-        .with_trigger_manager_channel(MockTriggerManagerChannel::new(10))
-        .with_mock_engine(MockEngine::new())
-        .build();
+    let trigger_manager = MockTriggerManagerChannel::new(10);
+    let engine = MockEngine::new();
+    let submission = MockSubmission::new();
+    let storage_path = tempfile::NamedTempFile::new().unwrap();
+
+    let dispatcher =
+        Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
 
     // start up the dispatcher in its own thread, before creating any data (similar to how we do it in main)
     std::thread::spawn({
@@ -54,7 +60,7 @@ fn mock_e2e() {
     // "upload" a component that squares a number
     // not going through http for this because we don't have raw bytes, digest is fake
     let digest = Digest::new(b"wasm1");
-    dispatcher.engine.as_mock().register(&digest, BigSquare);
+    dispatcher.engine.register(&digest, BigSquare);
 
     // but we can create a service via http
     ctx.rt.spawn({
@@ -73,7 +79,6 @@ fn mock_e2e() {
         async move {
             dispatcher
                 .triggers
-                .as_channel()
                 .sender
                 .send(TriggerAction {
                     trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
@@ -85,7 +90,6 @@ fn mock_e2e() {
 
             dispatcher
                 .triggers
-                .as_channel()
                 .sender
                 .send(TriggerAction {
                     trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
