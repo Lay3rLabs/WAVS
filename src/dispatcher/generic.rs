@@ -5,7 +5,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
-use crate::apis::dispatcher::{DispatchManager, Service, WasmSource,ListBounds};
+use crate::apis::dispatcher::{DispatchManager, ListBounds, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
 use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
@@ -119,12 +119,10 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
 
     fn test_service(&self, service_id: ID, payload: Vec<u8>) -> Result<Vec<u8>, DispatcherError> {
         let service = self
-        .storage
-        .get(SERVICE_TABLE, service_id.as_ref())?
-        .ok_or(DispatcherError::UnknownService(
-            service_id.clone(),
-        ))?
-        .value();
+            .storage
+            .get(SERVICE_TABLE, service_id.as_ref())?
+            .ok_or(DispatcherError::UnknownService(service_id.clone()))?
+            .value();
 
         Ok(self.engine.test_service(service, payload)?)
     }
@@ -454,9 +452,9 @@ mod tests {
 
         // Check the task_id and payloads
         assert_eq!(processed[0].task_id, TaskId::new(1));
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
+        assert_eq!(&processed[0].wasm_result, br#"{"y":9.0}"#);
         assert_eq!(processed[1].task_id, TaskId::new(2));
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[1].wasm_result, br#"{"y":441.0}"#);
     }
 
     /// Simulate big-square on a multi-threaded dispatcher

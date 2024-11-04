@@ -74,21 +74,14 @@ pub trait EngineRunner: Send + Sync {
     }
 
     fn test_service(&self, service: Service, payload: Vec<u8>) -> Result<Vec<u8>, EngineError> {
-        let workflow = service
-        .workflows
-        .values()
-        .next()
-        .ok_or_else(|| {
-            EngineError::UnknownWorkflow(
-                service.id.clone(),
-                ID::new("default").unwrap(),
-            )
+        let workflow = service.workflows.values().next().ok_or_else(|| {
+            EngineError::UnknownWorkflow(service.id.clone(), ID::new("default").unwrap())
         })?;
 
-    let component = service
-        .components
-        .get(&workflow.component)
-        .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
+        let component = service
+            .components
+            .get(&workflow.component)
+            .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
         // TODO: we actually get other info, like permissions and apply in the execution
         let digest = component.wasm.clone();
