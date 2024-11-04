@@ -2,12 +2,7 @@ use std::sync::Arc;
 
 use super::http::TestHttpApp;
 use crate::{
-    apis::{
-        dispatcher::DispatchManager,
-        engine::EngineError,
-        trigger::{TriggerAction, TriggerData, TriggerResult},
-        IDError, Trigger, ID,
-    },
+    apis::{dispatcher::DispatchManager, engine::EngineError, Trigger, ID},
     context::AppContext,
     dispatcher::Dispatcher,
     engine::mock::{Function, MockEngine},
@@ -17,7 +12,6 @@ use crate::{
     Digest,
 };
 use axum::http::{Method, Request};
-use lavs_apis::id::TaskId;
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use tower::Service;
@@ -29,10 +23,7 @@ pub struct MockE2ETestRunner {
 }
 
 impl MockE2ETestRunner {
-    pub fn new() -> Arc<Self> {
-        // create our app context
-        let ctx = AppContext::new();
-
+    pub fn new(ctx: AppContext) -> Arc<Self> {
         // create our dispatcher
         let trigger_manager = MockTriggerManagerChannel::new(10);
         let engine = MockEngine::new();
@@ -106,33 +97,6 @@ impl MockE2ETestRunner {
             .unwrap();
 
         assert!(response.status().is_success());
-    }
-
-    pub async fn send_trigger(
-        &self,
-        service_id: impl TryInto<ID, Error = IDError>,
-        workflow_id: impl TryInto<ID, Error = IDError>,
-        task_queue_addr: &Address,
-        data: &impl Serialize,
-    ) {
-        self.dispatcher
-            .triggers
-            .sender
-            .send(TriggerAction {
-                trigger: TriggerData::queue(
-                    service_id,
-                    workflow_id,
-                    &task_queue_addr.to_string(),
-                    5,
-                )
-                .unwrap(),
-                result: TriggerResult::queue(
-                    TaskId::new(1),
-                    serde_json::to_string(data).unwrap().as_bytes(),
-                ),
-            })
-            .await
-            .unwrap();
     }
 
     pub fn teardown(&self) {

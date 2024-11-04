@@ -1,30 +1,72 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use wasmatic::{
+    apis::ID,
+    context::AppContext,
+    test_utils::{
+        chain::MOCK_TASK_QUEUE_ADDRESS,
+        mock::{BigSquare, MockE2ETestRunner, SquareIn},
+    },
+    Digest,
+};
 
 pub fn criterion_benchmark(c: &mut Criterion) {
+    let runner = MockE2ETestRunner::new(AppContext::new());
+
+    let service_id = ID::new("default").unwrap();
+    let workflow_id = ID::new("default").unwrap();
+
+    // block and wait for creating the service
+    runner.ctx.rt.block_on({
+        let runner = runner.clone();
+        let service_id = service_id.clone();
+
+        async move {
+            let digest = Digest::new(b"wasm");
+            runner
+                .create_service(
+                    service_id.clone(),
+                    digest,
+                    &MOCK_TASK_QUEUE_ADDRESS,
+                    BigSquare,
+                )
+                .await;
+        }
+    });
+
     c.bench_function("mock_bench", |b| {
-        //setup();
-
+        // Run the benchmarks
         b.iter(|| {
-            // Code to benchmark
-        });
+            const N_TRIGGERS: usize = 1;
 
-        //teardown();
+            let pre_submission_count = runner.dispatcher.submission.received().len();
+
+            runner.ctx.rt.spawn({
+                let runner = runner.clone();
+                let service_id = service_id.clone();
+                let workflow_id = workflow_id.clone();
+                async move {
+                    for i in 1..N_TRIGGERS {
+                        runner
+                            .dispatcher
+                            .triggers
+                            .send_trigger(
+                                &service_id,
+                                &workflow_id,
+                                &MOCK_TASK_QUEUE_ADDRESS,
+                                &SquareIn { x: i as u64 },
+                            )
+                            .await;
+                    }
+                }
+            });
+
+            let _submission_count_target = pre_submission_count + N_TRIGGERS;
+
+            // FIXME
+            // runner.dispatcher.submission.wait_for_messages_timeout(submission_count_target, Duration::from_secs(60)).unwrap();
+        });
     });
 }
-
-// fn setup() -> InputType {
-//     // Your setup code here
-//     InputType::new()
-// }
-
-// fn teardown(input: InputType) {
-//     // Your teardown code here
-//     drop(input);
-// }
-
-// fn runner(input: &InputType) {
-//     // The code you want to benchmark
-// }
 
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);

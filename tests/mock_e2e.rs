@@ -1,5 +1,6 @@
 use wasmatic::{
     apis::ID,
+    context::AppContext,
     test_utils::{
         chain::MOCK_TASK_QUEUE_ADDRESS,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},
@@ -12,7 +13,7 @@ use wasmatic::{
 // intended more to confirm API and logic is working as expected
 #[test]
 fn mock_e2e() {
-    let runner = MockE2ETestRunner::new();
+    let runner = MockE2ETestRunner::new(AppContext::new());
 
     let service_id = ID::new("default").unwrap();
     let workflow_id = ID::new("default").unwrap();
@@ -41,6 +42,8 @@ fn mock_e2e() {
         let runner = runner.clone();
         async move {
             runner
+                .dispatcher
+                .triggers
                 .send_trigger(
                     &service_id,
                     &workflow_id,
@@ -49,6 +52,8 @@ fn mock_e2e() {
                 )
                 .await;
             runner
+                .dispatcher
+                .triggers
                 .send_trigger(
                     &service_id,
                     &workflow_id,
