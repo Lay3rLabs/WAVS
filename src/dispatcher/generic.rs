@@ -397,7 +397,7 @@ mod tests {
 
         // Set up the dispatcher
         let dispatcher = Dispatcher::new(
-            MockTriggerManager::with_actions(actions),
+            MockTriggerManagerVec::new().with_actions(actions),
             MultiEngineRunner::new(MockEngine::new(), 4),
             MockSubmission::new(),
             db_file.as_ref(),

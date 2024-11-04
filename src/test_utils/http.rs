@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use crate::{
-    apis::{engine::Engine, submission::Submission, trigger::TriggerManager},
+    apis::{submission::Submission, trigger::TriggerManager},
     dispatcher::Dispatcher,
-    engine::identity::IdentityEngine,
+    engine::{
+        identity::IdentityEngine,
+        runner::{EngineRunner, SingleEngineRunner},
+    },
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerVec,
 };
@@ -19,7 +22,7 @@ pub struct TestHttpApp {
 impl TestHttpApp {
     pub async fn new() -> Self {
         let trigger_manager = MockTriggerManagerVec::new();
-        let engine = IdentityEngine::new();
+        let engine = SingleEngineRunner::new(IdentityEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
 
@@ -32,7 +35,7 @@ impl TestHttpApp {
     pub async fn new_with_dispatcher<T, E, S>(dispatcher: Arc<Dispatcher<T, E, S>>) -> Self
     where
         T: TriggerManager + 'static,
-        E: Engine + 'static,
+        E: EngineRunner + 'static,
         S: Submission + 'static,
     {
         let inner = TestApp::new().await;
