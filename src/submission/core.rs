@@ -17,7 +17,6 @@ use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct CoreSubmission {
-    channel_bound: usize,
     clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
     chain_config: ChainConfig,
     mnemonic: String,
@@ -31,7 +30,6 @@ impl CoreSubmission {
             .map_err(SubmissionError::Climb)?;
 
         Ok(Self {
-            channel_bound: 100, // TODO: get from config
             clients: Arc::new(Mutex::new(HashMap::new())),
             mnemonic: wasmatic_chain_config
                 .submission_mnemonic
@@ -84,9 +82,11 @@ impl CoreSubmission {
 }
 
 impl Submission for CoreSubmission {
-    fn start(&self, ctx: AppContext) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
-        let (tx, mut rx) = mpsc::channel::<ChainMessage>(self.channel_bound);
-
+    fn start(
+        &self,
+        ctx: AppContext,
+        mut rx: mpsc::Receiver<ChainMessage>,
+    ) -> Result<(), SubmissionError> {
         ctx.rt.clone().spawn({
             let mut kill_receiver = ctx.get_kill_receiver();
             let _self = self.clone();
@@ -164,6 +164,6 @@ impl Submission for CoreSubmission {
             }
         });
 
-        Ok(tx)
+        Ok(())
     }
 }

@@ -59,9 +59,11 @@ impl Submission for MockSubmission {
     // doing this sync so easier to block on
     // TODO: how to add support for aborting on the kill signal from ctx
     // (Same on mock triggers)
-    fn start(&self, ctx: AppContext) -> Result<mpsc::Sender<ChainMessage>, SubmissionError> {
-        let (tx, mut rx) = mpsc::channel::<ChainMessage>(10);
-
+    fn start(
+        &self,
+        ctx: AppContext,
+        mut rx: mpsc::Receiver<ChainMessage>,
+    ) -> Result<(), SubmissionError> {
         let mock = self.clone();
         ctx.rt.spawn(async move {
             tracing::info!("Submission listening on channel");
@@ -78,7 +80,7 @@ impl Submission for MockSubmission {
 
         sleep(Duration::from_millis(20));
 
-        Ok(tx)
+        Ok(())
     }
 }
 
@@ -108,7 +110,9 @@ mod test {
         assert_eq!(submission.received(), vec![]);
 
         let ctx = AppContext::new();
-        let send = submission.start(ctx.clone()).unwrap();
+
+        let (send, rx) = mpsc::channel::<ChainMessage>(2);
+        submission.start(ctx.clone(), rx).unwrap();
 
         let msg1 = dummy_message("serv1", 1, "foo");
         let msg2 = dummy_message("serv1", 2, "bar");
@@ -132,7 +136,8 @@ mod test {
         assert_eq!(submission.received(), vec![]);
 
         let ctx = AppContext::new();
-        let send = submission.start(ctx.clone()).unwrap();
+        let (send, rx) = mpsc::channel::<ChainMessage>(2);
+        submission.start(ctx.clone(), rx).unwrap();
 
         let msg1 = dummy_message("serv1", 1, "foo");
         let msg2 = dummy_message("serv1", 2, "bar");

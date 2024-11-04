@@ -9,10 +9,14 @@ use crate::engine::{Engine, EngineError};
 
 use super::EngineRunner;
 
+// TODO: get from config
+const DEFAULT_CHANNEL_SIZE: usize = 100;
+
 #[derive(Clone)]
 pub struct MultiEngineRunner<E: Engine + Clone + 'static> {
     engine: E,
     thread_count: usize,
+    output_channel_size: usize,
 }
 
 impl<E: Engine + Clone + 'static> MultiEngineRunner<E> {
@@ -20,6 +24,7 @@ impl<E: Engine + Clone + 'static> MultiEngineRunner<E> {
         MultiEngineRunner {
             engine,
             thread_count,
+            output_channel_size: DEFAULT_CHANNEL_SIZE,
         }
     }
 }
@@ -31,9 +36,10 @@ impl<E: Engine + Clone + 'static> EngineRunner for MultiEngineRunner<E> {
         &self,
         _ctx: AppContext,
         mut input: mpsc::Receiver<(TriggerAction, Service)>,
-        output: mpsc::Sender<ChainMessage>,
-    ) -> Result<(), EngineError> {
+    ) -> Result<mpsc::Receiver<ChainMessage>, EngineError> {
+        let (output, rx) = mpsc::channel::<ChainMessage>(self.output_channel_size);
         let _self = self.clone();
+
         std::thread::spawn(move || {
             let pool = ThreadPoolBuilder::new()
                 .num_threads(_self.thread_count)
@@ -58,7 +64,7 @@ impl<E: Engine + Clone + 'static> EngineRunner for MultiEngineRunner<E> {
                 })
             }
         });
-        Ok(())
+        Ok(rx)
     }
 
     fn engine(&self) -> &Self::Engine {

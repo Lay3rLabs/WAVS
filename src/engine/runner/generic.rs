@@ -15,8 +15,7 @@ pub trait EngineRunner: Send + Sync {
         &self,
         ctx: AppContext,
         input: mpsc::Receiver<(TriggerAction, Service)>,
-        output: mpsc::Sender<ChainMessage>,
-    ) -> Result<(), EngineError>;
+    ) -> Result<mpsc::Receiver<ChainMessage>, EngineError>;
 
     // Return the engine if they want to use that directly.
     fn engine(&self) -> &Self::Engine;

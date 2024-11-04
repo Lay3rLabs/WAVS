@@ -43,17 +43,22 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
+const TRIGGER_PIPELINE_SIZE: usize = 20;
+
 impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
     fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
+        // Trigger is pipeline start
         let mut actions_in = self.triggers.start(ctx.clone())?;
-        let msgs_out = self.submission.start(ctx.clone())?;
-
-        // TODO: configure this - designed to give work to the engine runner
-        let (work_sender, work_receiver) = mpsc::channel::<(TriggerAction, Service)>(10);
-        self.engine.start(ctx.clone(), work_receiver, msgs_out)?;
+        // Next is the local (blocking) processing
+        let (work_sender, work_receiver) =
+            mpsc::channel::<(TriggerAction, Service)>(TRIGGER_PIPELINE_SIZE);
+        // Then the engine processing
+        let msgs_out = self.engine.start(ctx.clone(), work_receiver)?;
+        // And pipeline finishes with submission
+        self.submission.start(ctx.clone(), msgs_out)?;
 
         // since triggers listens to the async kill signal handler and closes the channel when
         // it is triggered, we don't need to jump through hoops here to make an async block to listen.
