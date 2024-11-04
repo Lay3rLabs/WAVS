@@ -3,6 +3,7 @@ use tokio::sync::mpsc;
 use crate::apis::dispatcher::{Service, Submit};
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::{TriggerAction, TriggerResult};
+use crate::apis::ID;
 use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
 
@@ -70,6 +71,33 @@ pub trait EngineRunner: Send + Sync {
                 }
             }
         }
+    }
+
+    fn test_service(&self, service: Service, payload: Vec<u8>) -> Result<Vec<u8>, EngineError> {
+        let workflow = service
+        .workflows
+        .values()
+        .next()
+        .ok_or_else(|| {
+            EngineError::UnknownWorkflow(
+                service.id.clone(),
+                ID::new("default").unwrap(),
+            )
+        })?;
+
+    let component = service
+        .components
+        .get(&workflow.component)
+        .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
+
+        // TODO: we actually get other info, like permissions and apply in the execution
+        let digest = component.wasm.clone();
+
+        // TODO: add the timestamp to the trigger, don't invent it
+        let timestamp = 1234567890;
+        let wasm_result = self.engine().execute_queue(digest, payload, timestamp)?;
+
+        Ok(wasm_result)
     }
 }
 

@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use super::http::{map_response, TestHttpApp};
 use crate::{
-    apis::{dispatcher::{DispatchManager, Permissions}, engine::EngineError, Trigger, ID},
+    apis::{
+        dispatcher::{DispatchManager, Permissions},
+        engine::EngineError,
+        Trigger, ID,
+    },
     context::AppContext,
     dispatcher::Dispatcher,
     engine::{
@@ -12,13 +16,17 @@ use crate::{
     http::{handlers::service::add::RegisterAppRequest, types::app::App},
     http::handlers::service::list::ListAppsResponse,
     http::handlers::service::delete::DeleteApps,
+    http::handlers::service::test::{TestAppRequest, TestAppResponse},
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
     Digest,
 };
-use axum::{body::Body, http::{Method, Request}};
+use axum::{
+    body::Body,
+    http::{Method, Request},
+};
 use layer_climb::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tower::Service;
 
 pub struct MockE2ETestRunner {
@@ -61,7 +69,6 @@ impl MockE2ETestRunner {
     }
 
     pub async fn list_services(&self) -> ListAppsResponse {
-
         let req = Request::builder()
             .method(Method::GET)
             .uri("/app")
@@ -125,15 +132,12 @@ impl MockE2ETestRunner {
         assert!(response.status().is_success());
     }
 
-    pub async fn delete_services(
-        &self,
-        service_ids: Vec<ID>
-    ) {
+    pub async fn delete_services(&self, service_ids: Vec<ID>) {
         let body = serde_json::to_string(&DeleteApps {
-            apps: service_ids.iter().map(|id| id.to_string()).collect(), 
+            apps: service_ids.iter().map(|id| id.to_string()).collect(),
         })
         .unwrap();
-    
+
         let req = Request::builder()
             .method(Method::DELETE)
             .header("Content-Type", "application/json")
@@ -153,6 +157,38 @@ impl MockE2ETestRunner {
         assert!(response.status().is_success());
     }
 
+    pub async fn test_service<D: DeserializeOwned>(
+        &self,
+        service_id: ID,
+        input: impl Serialize,
+    ) -> D {
+        let body = serde_json::to_string(&TestAppRequest {
+            name: service_id.to_string(),
+            input: Some(serde_json::to_value(input).unwrap()),
+        })
+        .unwrap();
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .header("Content-Type", "application/json")
+            .uri("/test")
+            .body(body)
+            .unwrap();
+
+        let response = self
+            .http_app
+            .clone()
+            .http_router()
+            .await
+            .call(req)
+            .await
+            .unwrap();
+
+        let res = map_response::<TestAppResponse>(response).await;
+
+        serde_json::from_value(res.output).unwrap()
+    }
+
     pub fn teardown(&self) {
         // Your teardown code here
     }
@@ -161,14 +197,14 @@ impl MockE2ETestRunner {
 // taken from dispatcher unit test
 pub struct BigSquare;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct SquareIn {
-    pub x: u64,
+    pub x: f32,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct SquareOut {
-    pub y: u64,
+    pub y: f32,
 }
 
 impl Function for BigSquare {

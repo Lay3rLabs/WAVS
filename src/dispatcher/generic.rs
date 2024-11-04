@@ -1,7 +1,7 @@
+use redb::ReadableTable;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use redb::ReadableTable;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
@@ -117,6 +117,18 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(self.engine.run_trigger(action, service)?)
     }
 
+    fn test_service(&self, service_id: ID, payload: Vec<u8>) -> Result<Vec<u8>, DispatcherError> {
+        let service = self
+        .storage
+        .get(SERVICE_TABLE, service_id.as_ref())?
+        .ok_or(DispatcherError::UnknownService(
+            service_id.clone(),
+        ))?
+        .value();
+
+        Ok(self.engine.test_service(service, payload)?)
+    }
+
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
         let bytecode = match source {
             WasmSource::Bytecode(code) => code,
@@ -158,119 +170,98 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    fn list_services(&self, bounds_start: Option<ListBounds>, bounds_end: Option<ListBounds>) -> Result<Vec<Service>, Self::Error> {
-        let res = self.storage.map_table_read(SERVICE_TABLE, |table| {
-            match table {
-                Some(table) => {
-                    match(bounds_start, bounds_end) {
-                        (None, None) => {
-                            let res = table.iter()?.map(|i| {
-                                i
-                                    .map(|(_, value)| {
-                                        value.value()
-                                    })
-                            }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+    fn list_services(
+        &self,
+        bounds_start: Option<ListBounds>,
+        bounds_end: Option<ListBounds>,
+    ) -> Result<Vec<Service>, Self::Error> {
+        let res = self
+            .storage
+            .map_table_read(SERVICE_TABLE, |table| match table {
+                Some(table) => match (bounds_start, bounds_end) {
+                    (None, None) => {
+                        let res = table
+                            .iter()?
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+                        Ok(res)
+                    }
+                    (None, Some(y)) => match y {
+                        ListBounds::Inclusive(y) => {
+                            let res = table
+                                .range(..y)?
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
                             Ok(res)
                         }
-                        (None, Some(y)) => {
-                            match y {
-                                ListBounds::Inclusive(y) => {
-                                    let res = table.range(..y)?.map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+                        ListBounds::Exclusive(y) => {
+                            let res = table
+                                .range(..=y)?
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
 
-                                    Ok(res)
-                                },
-                                ListBounds::Exclusive(y) => {
-                                    let res = table.range(..=y)?.map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                                    Ok(res)
-                                },
-                            }
+                            Ok(res)
                         }
-                        (Some(x), None) => {
-                            match x {
-                                ListBounds::Inclusive(x) => {
-                                    let res = table.range(x..)?.map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+                    },
+                    (Some(x), None) => match x {
+                        ListBounds::Inclusive(x) => {
+                            let res = table
+                                .range(x..)?
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
 
-                                    Ok(res)
-                                },
-                                ListBounds::Exclusive(x) => {
-                                    let res = table.range(x..)?.skip(1).map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                                    Ok(res)
-                                },
-                            }
+                            Ok(res)
                         }
-                        (Some(x), Some(y)) => {
-                            match(x,y) {
-                                (ListBounds::Inclusive(x), ListBounds::Inclusive(y)) => {
-                                    let res = table.range(x..=y)?.map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+                        ListBounds::Exclusive(x) => {
+                            let res = table
+                                .range(x..)?
+                                .skip(1)
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
 
-                                    Ok(res)
-                                }, 
-                                (ListBounds::Inclusive(x), ListBounds::Exclusive(y)) => {
-                                    let res = table.range(x..y)?.map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+                            Ok(res)
+                        }
+                    },
+                    (Some(x), Some(y)) => match (x, y) {
+                        (ListBounds::Inclusive(x), ListBounds::Inclusive(y)) => {
+                            let res = table
+                                .range(x..=y)?
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
 
-                                    Ok(res)
-                                },
-                                (ListBounds::Exclusive(x), ListBounds::Inclusive(y)) => {
-                                    let res = table.range(x..=y)?.skip(1).map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+                            Ok(res)
+                        }
+                        (ListBounds::Inclusive(x), ListBounds::Exclusive(y)) => {
+                            let res = table
+                                .range(x..y)?
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
 
-                                    Ok(res)
-                                },
-                                (ListBounds::Exclusive(x), ListBounds::Exclusive(y)) => {
-                                    let res = table.range(x..y)?.skip(1).map(|i| {
-                                        i
-                                            .map(|(_, value)| {
-                                                value.value()
-                                            })
-                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+                            Ok(res)
+                        }
+                        (ListBounds::Exclusive(x), ListBounds::Inclusive(y)) => {
+                            let res = table
+                                .range(x..=y)?
+                                .skip(1)
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
 
-                                    Ok(res)
-                                }
-                            }
-                        } 
-                    }
-                }
-                None => {
-                    Ok(Vec::new())
-                }
-            }
-        })?;
+                            Ok(res)
+                        }
+                        (ListBounds::Exclusive(x), ListBounds::Exclusive(y)) => {
+                            let res = table
+                                .range(x..y)?
+                                .skip(1)
+                                .map(|i| i.map(|(_, value)| value.value()))
+                                .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                            Ok(res)
+                        }
+                    },
+                },
+                None => Ok(Vec::new()),
+            })?;
 
         Ok(res)
     }
@@ -319,15 +310,15 @@ mod tests {
         },
         engine::{
             identity::IdentityEngine,
-            mock::{Function, MockEngine},
+            mock::MockEngine,
             runner::{MultiEngineRunner, SingleEngineRunner},
         },
         init_tracing_tests,
         submission::mock::MockSubmission,
+        test_utils::mock::BigSquare,
         triggers::mock::MockTriggerManagerVec,
         Digest,
     };
-    use serde::{Deserialize, Serialize};
 
     use super::*;
 
@@ -394,26 +385,6 @@ mod tests {
         assert_eq!(processed[0], expected);
     }
 
-    struct BigSquare;
-
-    #[derive(Deserialize, Serialize)]
-    struct SquareIn {
-        pub x: u64,
-    }
-
-    #[derive(Deserialize, Serialize)]
-    struct SquareOut {
-        pub y: u64,
-    }
-
-    impl Function for BigSquare {
-        fn execute(&self, request: Vec<u8>, _timestamp: u64) -> Result<Vec<u8>, EngineError> {
-            let SquareIn { x } = serde_json::from_slice(&request).unwrap();
-            let output = SquareOut { y: x * x };
-            Ok(serde_json::to_vec(&output).unwrap())
-        }
-    }
-
     /// Simulate running the square workflow but Function not WASI component
     #[test]
     fn dispatcher_big_square_mocked() {
@@ -428,12 +399,12 @@ mod tests {
             TriggerAction {
                 trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
                     .unwrap(),
-                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
+                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3.0}"#),
             },
             TriggerAction {
                 trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
                     .unwrap(),
-                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
+                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21.0}"#),
             },
         ];
 
@@ -558,8 +529,8 @@ mod tests {
 
         // Check the task_id and payloads
         assert_eq!(processed[0].task_id, TaskId::new(1));
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
+        assert_eq!(&processed[0].wasm_result, br#"{"y":9.0}"#);
         assert_eq!(processed[1].task_id, TaskId::new(2));
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[1].wasm_result, br#"{"y":441.0}"#);
     }
 }

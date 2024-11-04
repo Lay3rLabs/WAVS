@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{apis::{dispatcher::Permissions, Trigger}, Digest};
+use crate::{
+    apis::{dispatcher::Permissions, Trigger},
+    Digest,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -25,7 +28,6 @@ pub enum Status {
     Failed,
     MissingWasm,
 }
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

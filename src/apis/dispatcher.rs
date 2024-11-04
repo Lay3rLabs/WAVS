@@ -29,10 +29,16 @@ pub trait DispatchManager: Send + Sync {
 
     fn remove_service(&self, id: ID) -> Result<(), Self::Error>;
 
-    fn list_services(&self, bounds_start: Option<ListBounds>, bounds_end: Option<ListBounds>) -> Result<Vec<Service>, Self::Error>;
+    fn list_services(
+        &self,
+        bounds_start: Option<ListBounds>,
+        bounds_end: Option<ListBounds>,
+    ) -> Result<Vec<Service>, Self::Error>;
+
+    fn test_service(&self, service_id: ID, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
 }
 
-pub enum ListBounds <'a> {
+pub enum ListBounds<'a> {
     Inclusive(&'a str),
     Exclusive(&'a str),
 }

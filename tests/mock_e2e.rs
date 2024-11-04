@@ -7,7 +7,7 @@ use wasmatic::{
     context::AppContext,
     test_utils::{
         chain::MOCK_TASK_QUEUE_ADDRESS,
-        mock::{BigSquare, MockE2ETestRunner, SquareIn},
+        mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
     },
     Digest,
 };
@@ -49,7 +49,7 @@ fn mock_e2e_trigger_flow() {
                     &service_id,
                     &workflow_id,
                     &MOCK_TASK_QUEUE_ADDRESS,
-                    &SquareIn { x: 3 },
+                    &SquareIn { x: 3.0 },
                 )
                 .await;
             runner
@@ -59,7 +59,7 @@ fn mock_e2e_trigger_flow() {
                     &service_id,
                     &workflow_id,
                     &MOCK_TASK_QUEUE_ADDRESS,
-                    &SquareIn { x: 21 },
+                    &SquareIn { x: 21.0 },
                 )
                 .await;
         }
@@ -69,7 +69,7 @@ fn mock_e2e_trigger_flow() {
     runner.dispatcher.submission.wait_for_messages(2).unwrap();
 
     // check the results
-    let results: Vec<serde_json::Value> = runner
+    let results: Vec<SquareOut> = runner
         .dispatcher
         .submission
         .received()
@@ -77,12 +77,7 @@ fn mock_e2e_trigger_flow() {
         .map(|msg| serde_json::from_slice(&msg.wasm_result).unwrap())
         .collect();
 
-    tracing::info!("results: {:?}", results);
-
-    assert_eq!(
-        results,
-        vec![serde_json::json!({"y": 9}), serde_json::json!({"y": 441})]
-    );
+    assert_eq!(results, vec![SquareOut { y: 9.0 }, SquareOut { y: 441.0 }]);
 }
 
 #[test]
@@ -98,7 +93,6 @@ fn mock_e2e_service_lifecycle() {
 
             assert!(services.apps.is_empty());
             assert!(services.digests.is_empty());
-
 
             // add services in order
             let service_id1 = ID::new("service1").unwrap();
@@ -136,9 +130,7 @@ fn mock_e2e_service_lifecycle() {
             // selectively delete services 1 and 3, leaving just 2
 
             runner
-                .delete_services(
-                    vec![service_id1.clone(),service_id3.clone()]
-                )
+                .delete_services(vec![service_id1.clone(), service_id3.clone()])
                 .await;
 
             let services = runner.list_services().await;
@@ -149,21 +141,43 @@ fn mock_e2e_service_lifecycle() {
 
             // and make sure we can delete the last one but still get an empty list
             runner
-                .delete_services(
-                    vec![service_id1.clone(),service_id3.clone()]
-                )
+                .delete_services(vec![service_id1.clone(), service_id3.clone()])
                 .await;
 
-            runner
-                .delete_services(
-                    vec![service_id2.clone()]
-                )
-                .await;
+            runner.delete_services(vec![service_id2.clone()]).await;
 
             let services = runner.list_services().await;
 
             assert!(services.apps.is_empty());
         }
     });
+}
 
+#[test]
+fn mock_e2e_service_test() {
+    let runner = MockE2ETestRunner::new(AppContext::new());
+    // block and wait for creating the service
+
+    runner.ctx.rt.block_on({
+        let runner = runner.clone();
+
+        async move {
+            // add services in order
+            let service_id = ID::new("service").unwrap();
+            let digest = Digest::new(b"wasm");
+
+            runner
+                .create_service(
+                    service_id.clone(),
+                    digest.clone(),
+                    &MOCK_TASK_QUEUE_ADDRESS,
+                    BigSquare,
+                )
+                .await;
+
+            let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3.0 }).await;
+
+            assert_eq!(y, 9.0);
+        }
+    })
 }

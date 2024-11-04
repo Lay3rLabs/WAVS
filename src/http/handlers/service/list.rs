@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::dispatcher::ServiceStatus,
     http::{
-        error::HttpResult, state::HttpState, types::app::{App, Status}
+        error::HttpResult,
+        state::HttpState,
+        types::app::{App, Status},
     },
     Digest,
 };
@@ -27,9 +29,7 @@ pub async fn handle_list_services(State(state): State<HttpState>) -> impl IntoRe
 }
 
 async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> {
-    let services = state
-        .dispatcher
-        .list_services(None, None)?;
+    let services = state.dispatcher.list_services(None, None)?;
 
     let mut apps = Vec::with_capacity(services.len());
     let mut digests = HashSet::with_capacity(services.len());
@@ -39,7 +39,11 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
     for service in services {
         for component in service.components.values() {
             let digest = component.wasm.clone();
-            let envs = component.env.iter().map(|e| (e[0].clone(), e[1].clone())).collect();
+            let envs = component
+                .env
+                .iter()
+                .map(|e| (e[0].clone(), e[1].clone()))
+                .collect();
             let permissions = component.permissions.clone();
             let status = match service.status {
                 ServiceStatus::Active => Status::Active,
@@ -64,5 +68,8 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
         }
     }
 
-    Ok(ListAppsResponse { apps, digests: digests.into_iter().collect() })
+    Ok(ListAppsResponse {
+        apps,
+        digests: digests.into_iter().collect(),
+    })
 }

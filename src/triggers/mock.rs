@@ -73,7 +73,7 @@ impl TriggerManager for MockTriggerManagerVec {
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         self.start_error()?;
 
-        let triggers:Vec<TriggerAction> = self.triggers.write().unwrap().drain(..).collect();
+        let triggers: Vec<TriggerAction> = self.triggers.write().unwrap().drain(..).collect();
 
         let (sender, receiver) = mpsc::channel(triggers.len() + 1);
 
@@ -89,33 +89,17 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(receiver)
     }
 
-    fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError> {
+    fn add_trigger(&self, _trigger: TriggerData) -> Result<(), TriggerError> {
         self.store_error()?;
 
-        let mut latest_task_id = 0;
-        for t in self.triggers.read().unwrap().iter() {
-            let TriggerResult::Queue { task_id, .. } = &t.result;
-            latest_task_id = latest_task_id.max(task_id.u64());
-        }
-
-        self.triggers
-            .write()
-            .unwrap()
-            .push(TriggerAction {
-                trigger,
-                result: TriggerResult::Queue {
-                    task_id: TaskId::new(latest_task_id + 1),
-                    payload: b"mock".to_vec(),
-                },
-            });
+        // MockTriggerManagerVec doesn't allow adding new triggers, since they need their data too
         Ok(())
     }
 
     fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError> {
         self.store_error()?;
 
-        self
-            .triggers
+        self.triggers
             .write()
             .unwrap()
             .retain(|t| t.trigger.service_id != service_id && t.trigger.workflow_id != workflow_id);
@@ -125,8 +109,7 @@ impl TriggerManager for MockTriggerManagerVec {
     fn remove_service(&self, service_id: ID) -> Result<(), TriggerError> {
         self.store_error()?;
 
-        self
-            .triggers
+        self.triggers
             .write()
             .unwrap()
             .retain(|t| t.trigger.service_id != service_id);

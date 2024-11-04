@@ -63,24 +63,19 @@ impl RedbStorage {
         Ok(())
     }
 
-    pub fn map_table_read<'a, K, V, F, R>(&self, table: Table<K, V>, f: F) -> Result<R, DBError> 
-    where 
+    pub fn map_table_read<'a, K, V, F, R>(&self, table: Table<K, V>, f: F) -> Result<R, DBError>
+    where
         K: Key + 'a,
         V: Value + 'a,
-        F: FnOnce(Option<ReadOnlyTable<K, V>>) -> Result<R, DBError>
+        F: FnOnce(Option<ReadOnlyTable<K, V>>) -> Result<R, DBError>,
     {
         let read_txn = self.db.begin_read()?;
         match read_txn.open_table(table) {
-            Ok(table) => {
-                f(Some(table))
-            },
-            Err(TableError::TableDoesNotExist(_)) => {
-                f(None)
-            },
+            Ok(table) => f(Some(table)),
+            Err(TableError::TableDoesNotExist(_)) => f(None),
             Err(e) => Err(e.into()),
         }
     }
-
 }
 
 /// Wrapper type to handle keys and values using bincode serialization
