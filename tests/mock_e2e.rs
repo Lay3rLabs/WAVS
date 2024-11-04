@@ -63,7 +63,7 @@ fn mock_e2e() {
     dispatcher.engine.register(&digest, BigSquare);
 
     // but we can create a service via http
-    ctx.rt.spawn({
+    ctx.rt.block_on({
         let mut app = app.clone();
         let service_id = service_id.clone();
         async move {
