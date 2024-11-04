@@ -100,29 +100,69 @@ fn mock_e2e_service_lifecycle() {
             assert!(services.digests.is_empty());
 
 
+            // add services in order
             let service_id1 = ID::new("service1").unwrap();
+            let digest1 = Digest::new(b"wasm1");
+
             let service_id2 = ID::new("service2").unwrap();
-            let digest = Digest::new(b"wasm1");
+            let digest2 = Digest::new(b"wasm2");
+
+            let service_id3 = ID::new("service3").unwrap();
+            let digest3 = Digest::new(b"wasm3");
+
+            for (service_id, digest) in [
+                (&service_id1, digest1),
+                (&service_id2, digest2),
+                (&service_id3, digest3),
+            ] {
+                runner
+                    .create_service(
+                        service_id.clone(),
+                        digest.clone(),
+                        &MOCK_TASK_QUEUE_ADDRESS,
+                        BigSquare,
+                    )
+                    .await;
+            }
+
+            let services = runner.list_services().await;
+
+            assert_eq!(services.apps.len(), 3);
+            assert_eq!(services.digests.len(), 3);
+            assert_eq!(services.apps[0].name, service_id1.to_string());
+            assert_eq!(services.apps[1].name, service_id2.to_string());
+            assert_eq!(services.apps[2].name, service_id3.to_string());
+
+            // selectively delete services 1 and 3, leaving just 2
+
             runner
-                .create_service(
-                    service_id1.clone(),
-                    digest,
-                    &MOCK_TASK_QUEUE_ADDRESS,
-                    BigSquare,
+                .delete_services(
+                    vec![service_id1.clone(),service_id3.clone()]
                 )
                 .await;
 
-            let digest = Digest::new(b"wasm2");
+            let services = runner.list_services().await;
+
+            assert_eq!(services.apps.len(), 1);
+            assert_eq!(services.digests.len(), 1);
+            assert_eq!(services.apps[0].name, service_id2.to_string());
+
+            // and make sure we can delete the last one but still get an empty list
             runner
-                .create_service(
-                    service_id2.clone(),
-                    digest,
-                    &MOCK_TASK_QUEUE_ADDRESS,
-                    BigSquare,
+                .delete_services(
+                    vec![service_id1.clone(),service_id3.clone()]
                 )
                 .await;
 
+            runner
+                .delete_services(
+                    vec![service_id2.clone()]
+                )
+                .await;
 
+            let services = runner.list_services().await;
+
+            assert!(services.apps.is_empty());
         }
     });
 

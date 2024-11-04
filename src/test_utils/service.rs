@@ -1,8 +1,8 @@
 use std::sync::LazyLock;
 
 use crate::{
-    apis::Trigger,
-    http::types::app::{App, Permissions, Status},
+    apis::{dispatcher::Permissions, Trigger},
+    http::types::app::{App, Status},
     Digest,
 };
 
@@ -51,7 +51,7 @@ impl MockServiceBuilder {
             name: self.name,
             status: self.status.unwrap_or_default(),
             digest: DIGEST.clone(),
-            permissions: Permissions {},
+            permissions: Permissions::default(),
             envs: Vec::new(),
             testable: self.testable.unwrap_or_default(),
         }

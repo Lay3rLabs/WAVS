@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{apis::Trigger, Digest};
+use crate::{apis::{dispatcher::Permissions, Trigger}, Digest};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -26,13 +26,6 @@ pub enum Status {
     MissingWasm,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Permissions {
-    // TODO
-    //#[serde(default, skip_serializing_if = "Vec::is_empty")]
-    //pub allowed_url_authorities: Vec<String>,
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

@@ -29,7 +29,7 @@ pub async fn handle_test_service(
 }
 
 async fn test_service_inner(
-    _state: &HttpState,
+    state: &HttpState,
     req: TestAppRequest,
 ) -> HttpResult<TestAppResponse> {
     let input = req.input.unwrap_or_default();

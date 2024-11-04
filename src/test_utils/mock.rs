@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::http::{map_response, TestHttpApp};
 use crate::{
-    apis::{dispatcher::DispatchManager, engine::EngineError, Trigger, ID},
+    apis::{dispatcher::{DispatchManager, Permissions}, engine::EngineError, Trigger, ID},
     context::AppContext,
     dispatcher::Dispatcher,
     engine::{
@@ -11,6 +11,7 @@ use crate::{
     },
     http::{handlers::service::add::RegisterAppRequest, types::app::App},
     http::handlers::service::list::ListAppsResponse,
+    http::handlers::service::delete::DeleteApps,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
     Digest,
@@ -97,7 +98,7 @@ impl MockE2ETestRunner {
                 name: service_id.to_string(),
                 status: None,
                 digest,
-                permissions: crate::http::types::app::Permissions {},
+                permissions: Permissions::default(),
                 envs: Vec::new(),
                 testable: None,
             },
@@ -107,6 +108,34 @@ impl MockE2ETestRunner {
 
         let req = Request::builder()
             .method(Method::POST)
+            .header("Content-Type", "application/json")
+            .uri("/app")
+            .body(body)
+            .unwrap();
+
+        let response = self
+            .http_app
+            .clone()
+            .http_router()
+            .await
+            .call(req)
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+    }
+
+    pub async fn delete_services(
+        &self,
+        service_ids: Vec<ID>
+    ) {
+        let body = serde_json::to_string(&DeleteApps {
+            apps: service_ids.iter().map(|id| id.to_string()).collect(), 
+        })
+        .unwrap();
+    
+        let req = Request::builder()
+            .method(Method::DELETE)
             .header("Content-Type", "application/json")
             .uri("/app")
             .body(body)

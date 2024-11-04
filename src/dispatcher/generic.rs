@@ -1,10 +1,11 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use redb::ReadableTable;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
-use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
+use crate::apis::dispatcher::{DispatchManager, Service, WasmSource,ListBounds};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
 use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
@@ -157,9 +158,121 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    fn list_services(&self) -> Result<Vec<Service>, Self::Error> {
-        // TODO: we need to list all keys of the storage (range and range_keys)
-        todo!()
+    fn list_services(&self, bounds_start: Option<ListBounds>, bounds_end: Option<ListBounds>) -> Result<Vec<Service>, Self::Error> {
+        let res = self.storage.map_table_read(SERVICE_TABLE, |table| {
+            match table {
+                Some(table) => {
+                    match(bounds_start, bounds_end) {
+                        (None, None) => {
+                            let res = table.iter()?.map(|i| {
+                                i
+                                    .map(|(_, value)| {
+                                        value.value()
+                                    })
+                            }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+                            Ok(res)
+                        }
+                        (None, Some(y)) => {
+                            match y {
+                                ListBounds::Inclusive(y) => {
+                                    let res = table.range(..y)?.map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                },
+                                ListBounds::Exclusive(y) => {
+                                    let res = table.range(..=y)?.map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                },
+                            }
+                        }
+                        (Some(x), None) => {
+                            match x {
+                                ListBounds::Inclusive(x) => {
+                                    let res = table.range(x..)?.map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                },
+                                ListBounds::Exclusive(x) => {
+                                    let res = table.range(x..)?.skip(1).map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                },
+                            }
+                        }
+                        (Some(x), Some(y)) => {
+                            match(x,y) {
+                                (ListBounds::Inclusive(x), ListBounds::Inclusive(y)) => {
+                                    let res = table.range(x..=y)?.map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                }, 
+                                (ListBounds::Inclusive(x), ListBounds::Exclusive(y)) => {
+                                    let res = table.range(x..y)?.map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                },
+                                (ListBounds::Exclusive(x), ListBounds::Inclusive(y)) => {
+                                    let res = table.range(x..=y)?.skip(1).map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                },
+                                (ListBounds::Exclusive(x), ListBounds::Exclusive(y)) => {
+                                    let res = table.range(x..y)?.skip(1).map(|i| {
+                                        i
+                                            .map(|(_, value)| {
+                                                value.value()
+                                            })
+                                    }).collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                                    Ok(res)
+                                }
+                            }
+                        } 
+                    }
+                }
+                None => {
+                    Ok(Vec::new())
+                }
+            }
+        })?;
+
+        Ok(res)
     }
 }
 
@@ -176,6 +289,9 @@ pub enum DispatcherError {
 
     #[error("DB: {0}")]
     DB(#[from] DBError),
+
+    #[error("DB Storage: {0}")]
+    DBStorage(#[from] redb::StorageError),
 
     #[error("DB: {0}")]
     CA(#[from] CAStorageError),

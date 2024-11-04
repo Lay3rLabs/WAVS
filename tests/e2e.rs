@@ -15,7 +15,7 @@ mod e2e {
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::Serialize;
-    use wasmatic::test_utils::app::TestApp;
+    use wasmatic::{apis::dispatcher::Permissions, test_utils::app::TestApp};
     use wasmatic::{
         apis::Trigger,
         config::Config,
@@ -279,7 +279,7 @@ mod e2e {
                 name: name.to_string(),
                 status: None,
                 digest,
-                permissions: wasmatic::http::types::app::Permissions {},
+                permissions: Permissions::default(),
                 envs: Vec::new(),
                 testable: Some(true),
             };
