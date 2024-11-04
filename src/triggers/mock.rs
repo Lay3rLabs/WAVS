@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
@@ -6,10 +7,7 @@ use crate::context::AppContext;
 
 use tokio::sync::mpsc;
 
-// Annoying that TriggerAction cannot implement Clone (due to anyhow variant)
-// So I need to store a function here rather than a simple element
-#[derive(Clone)]
-pub struct MockTriggerManager {
+pub struct MockTriggerManagerVec {
     triggers: Vec<TriggerAction>,
     delay: Duration,
     error_on_start: bool,
@@ -17,25 +15,28 @@ pub struct MockTriggerManager {
     // FIXME: store trigger data for proper list response
 }
 
-impl MockTriggerManager {
+impl MockTriggerManagerVec {
     const DEFAULT_WAIT: Duration = Duration::from_millis(200);
 
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self::with_actions(vec![])
-    }
-
-    pub fn with_actions(triggers: Vec<TriggerAction>) -> Self {
-        Self::with_actions_and_wait(triggers, Self::DEFAULT_WAIT)
-    }
-
-    pub fn with_actions_and_wait(triggers: Vec<TriggerAction>, delay: Duration) -> Self {
         Self {
-            triggers,
-            delay,
+            triggers: Vec::new(),
+            delay: Self::DEFAULT_WAIT,
             error_on_start: false,
             error_on_store: false,
         }
+    }
+
+    pub fn with_actions(mut self, triggers: Vec<TriggerAction>) -> Self {
+        self.triggers = triggers;
+        self
+    }
+
+    pub fn with_actions_and_wait(mut self, triggers: Vec<TriggerAction>, delay: Duration) -> Self {
+        self.triggers = triggers;
+        self.delay = delay;
+        self
     }
 
     pub fn failing() -> Self {
@@ -62,7 +63,7 @@ impl MockTriggerManager {
     }
 }
 
-impl TriggerManager for MockTriggerManager {
+impl TriggerManager for MockTriggerManagerVec {
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         self.start_error()?;
         let (sender, receiver) = mpsc::channel(self.triggers.len() + 1);
@@ -101,6 +102,65 @@ impl TriggerManager for MockTriggerManager {
     }
 }
 
+// This mock is currently only used in mock_e2e.rs
+// it doesn't have the same coverage in unit tests here as MockTriggerManager
+pub struct MockTriggerManagerChannel {
+    pub sender: mpsc::Sender<TriggerAction>,
+    receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
+    trigger_datas: Mutex<Vec<TriggerData>>,
+}
+
+impl MockTriggerManagerChannel {
+    #[allow(clippy::new_without_default)]
+    pub fn new(channel_bound: usize) -> Self {
+        let (sender, receiver) = mpsc::channel(channel_bound);
+
+        Self {
+            receiver: Mutex::new(Some(receiver)),
+            sender,
+            trigger_datas: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl TriggerManager for MockTriggerManagerChannel {
+    fn start(&self, _ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+        let receiver = self.receiver.lock().unwrap().take().unwrap();
+        Ok(receiver)
+    }
+
+    fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError> {
+        self.trigger_datas.lock().unwrap().push(trigger);
+        Ok(())
+    }
+
+    fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError> {
+        self.trigger_datas
+            .lock()
+            .unwrap()
+            .retain(|t| t.service_id != service_id && t.workflow_id != workflow_id);
+        Ok(())
+    }
+
+    fn remove_service(&self, service_id: ID) -> Result<(), TriggerError> {
+        self.trigger_datas
+            .lock()
+            .unwrap()
+            .retain(|t| t.service_id != service_id);
+        Ok(())
+    }
+
+    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
+        let triggers = self.trigger_datas.lock().unwrap();
+        let triggers = triggers
+            .iter()
+            .filter(|t| t.service_id == service_id)
+            .cloned()
+            .collect();
+        Ok(triggers)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use lavs_apis::id::TaskId;
@@ -127,7 +187,7 @@ mod tests {
                 },
             },
         ];
-        let triggers = MockTriggerManager::with_actions(actions.clone());
+        let triggers = MockTriggerManagerVec::new().with_actions(actions.clone());
         let ctx = AppContext::new();
         let mut flow = triggers.start(ctx.clone()).unwrap();
 
@@ -147,7 +207,7 @@ mod tests {
 
     #[test]
     fn mock_trigger_fails() {
-        let triggers = MockTriggerManager::failing();
+        let triggers = MockTriggerManagerVec::failing();
         // ensure start fails
         triggers.start(AppContext::new()).unwrap_err();
 

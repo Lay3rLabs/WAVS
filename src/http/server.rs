@@ -32,7 +32,7 @@ pub fn start(
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(config, dispatcher).await?;
+        let router = make_router(config, dispatcher, false).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -56,8 +56,9 @@ pub fn start(
 pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
     config: Config,
     dispatcher: Arc<D>,
+    is_mock_chain_client: bool,
 ) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone(), dispatcher).await?;
+    let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client).await?;
 
     // build our application with a single route
     let mut router = axum::Router::new()
