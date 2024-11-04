@@ -29,9 +29,15 @@ pub trait EngineRunner: Send + Sync {
         service: Service,
     ) -> Result<Option<ChainMessage>, EngineError> {
         // look up the proper workflow
-        let workflow = service.workflows.get(&action.workflow_id).ok_or_else(|| {
-            EngineError::UnknownWorkflow(action.service_id.clone(), action.workflow_id.clone())
-        })?;
+        let workflow = service
+            .workflows
+            .get(&action.trigger.workflow_id)
+            .ok_or_else(|| {
+                EngineError::UnknownWorkflow(
+                    action.trigger.service_id.clone(),
+                    action.trigger.workflow_id.clone(),
+                )
+            })?;
 
         let component = service
             .components
@@ -54,8 +60,7 @@ pub trait EngineRunner: Send + Sync {
                 }) = workflow.submit.as_ref()
                 {
                     Ok(Some(ChainMessage {
-                        service_id: action.service_id.clone(),
-                        workflow_id: action.workflow_id.clone(),
+                        trigger_data: action.trigger,
                         task_id,
                         wasm_result,
                         hd_index: *hd_index,

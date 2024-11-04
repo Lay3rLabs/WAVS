@@ -64,11 +64,11 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         while let Some(action) = actions_in.blocking_recv() {
             let service = match self
                 .storage
-                .get(SERVICE_TABLE, action.service_id.as_ref())?
+                .get(SERVICE_TABLE, action.trigger.service_id.as_ref())?
             {
                 Some(service) => service.value(),
                 None => {
-                    let err = DispatcherError::UnknownService(action.service_id.clone());
+                    let err = DispatcherError::UnknownService(action.trigger.service_id.clone());
                     tracing::error!("{}", err);
                     continue;
                 }
@@ -103,7 +103,9 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let service = self
             .storage
             .get(SERVICE_TABLE, action.trigger.service_id.as_ref())?
-            .ok_or(DispatcherError::UnknownService(action.trigger.service_id.clone()))?
+            .ok_or(DispatcherError::UnknownService(
+                action.trigger.service_id.clone(),
+            ))?
             .value();
 
         Ok(self.engine.run_trigger(action, service)?)
@@ -377,13 +379,13 @@ mod tests {
         let workflow_id = ID::new("workflow1").unwrap();
         let actions = vec![
             TriggerAction {
-                service_id: service_id.clone(),
-                workflow_id: workflow_id.clone(),
+                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                    .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                service_id: service_id.clone(),
-                workflow_id: workflow_id.clone(),
+                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                    .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];
