@@ -1,9 +1,7 @@
-mod helpers;
 use axum::{
     body::Body,
     http::{Method, Request},
 };
-use helpers::{http::TestHttpApp, service::MockServiceBuilder};
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use tower::Service;
@@ -19,6 +17,7 @@ use wasmatic::{
         },
         types::app::Status,
     },
+    test_utils::{http::TestHttpApp, service::MockServiceBuilder},
     Digest,
 };
 

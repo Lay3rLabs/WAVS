@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use wasmatic::{
+use crate::{
     apis::{engine::Engine, submission::Submission, trigger::TriggerManager},
     dispatcher::Dispatcher,
     engine::identity::IdentityEngine,
@@ -38,7 +38,7 @@ impl TestHttpApp {
         let inner = TestApp::new().await;
 
         let http_router =
-            wasmatic::http::server::make_router(inner.config.as_ref().clone(), dispatcher, true)
+            crate::http::server::make_router(inner.config.as_ref().clone(), dispatcher, true)
                 .await
                 .unwrap();
 

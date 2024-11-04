@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use wasmatic::{
+use crate::{
     apis::Trigger,
     http::types::app::{App, Permissions, Status},
     Digest,

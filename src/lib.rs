@@ -9,6 +9,7 @@ pub mod http;
 pub mod storage;
 pub mod submission; // where we submit the results to the chain
 pub mod task_bindings;
+pub mod test_utils;
 pub mod triggers; // where we handle the trigger runtime
 
 use apis::dispatcher::DispatchManager;

@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use wasmatic::{
+use crate::{
     args::CliArgs,
     config::{Config, ConfigBuilder},
 };
@@ -20,6 +20,9 @@ impl TestApp {
                     .unwrap()
                     .parent()
                     .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("tests")
                     .join(ConfigBuilder::DIRNAME),
             ),
             // this purposefully points at a non-existing file
@@ -30,6 +33,9 @@ impl TestApp {
                     .unwrap()
                     .parent()
                     .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("tests")
                     .join(ConfigBuilder::DIRNAME)
                     .join("non-existing-testdotenv"),
             ),
@@ -51,7 +57,7 @@ impl TestApp {
     pub async fn new_with_args(cli_args: CliArgs) -> Self {
         let config = Arc::new(ConfigBuilder::new(cli_args).build().unwrap());
 
-        wasmatic::init_tracing_tests();
+        crate::init_tracing_tests();
 
         Self { config }
     }
