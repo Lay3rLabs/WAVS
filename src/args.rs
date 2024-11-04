@@ -60,6 +60,11 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wasm_lru_size: Option<usize>,
 
+    /// Number of threads to run WASI components on
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wasm_threads: Option<usize>,
+
     /// The chain to use for the application
     /// will load from the config file
     #[arg(long)]

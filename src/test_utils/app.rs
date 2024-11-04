@@ -47,6 +47,7 @@ impl TestApp {
             chain: None,
             chain_config: Default::default(),
             wasm_lru_size: None,
+            wasm_threads: None,
         }
     }
 
