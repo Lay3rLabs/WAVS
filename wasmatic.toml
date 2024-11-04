@@ -13,7 +13,7 @@
 log_level = ["info", "wasmatic=debug"]
 
 # the allowed cors origins. Default is empty list.
-# cors_allowed_origins = ["https://lay3rlabs.github.io/*", "http://localhost:*", "http://127.0.0.1:*"]
+cors_allowed_origins = ["https://lay3rlabs.github.io/*", "http://localhost:*", "http://127.0.0.1:*"]
 
 # the host to serve on. Default is localhost
 # host = "localhost"
@@ -22,11 +22,29 @@ log_level = ["info", "wasmatic=debug"]
 # data = "~/wasmatic/data"
 
 # chosen chain name 
-chain = "local"
+# chain = "localnode"
 
 # chain config
-[chains.local]
+# localhost is local testing when you run the image outside of the docker-compose network
+[chains.localhost]
 chain_id = "slay3r-local"
 rpc_endpoint = "http://localhost:26657"
 grpc_endpoint = "http://localhost:9090"
 gas_price = 0.025
+faucet_endpoint = "http://localhost:8000"
+
+# localnode is local testing inside localnode docker-compose network
+[chains.localnode]
+chain_id = "slay3r-local"
+rpc_endpoint = "http://cometbft:26657"
+grpc_endpoint = "http://slay3r:9090"
+gas_price = 0.025
+faucet_endpoint = "http://faucet:8000"
+
+# hacknet is our public facing pseudo-testnet for hackathons
+[chains.hacknet]
+chain_id = "layer-hack-1"
+rpc_endpoint = "https://rpc.hack.layer.xyz:443"
+grpc_endpoint = "https://grpc.hack.layer.xyz:443"
+gas_price = 0.025
+gas_denom = "ulayer"
