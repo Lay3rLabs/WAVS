@@ -6,7 +6,7 @@ use crate::apis::trigger::TriggerAction;
 use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
 
-use super::EngineRunner;
+use super::{submit_result, EngineRunner};
 
 // TODO: get from config
 const DEFAULT_CHANNEL_SIZE: usize = 20;
@@ -39,20 +39,8 @@ impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
 
         std::thread::spawn(move || {
             while let Some((action, service)) = input.blocking_recv() {
-                match _self.run_trigger(action, service) {
-                    Ok(Some(msg)) => {
-                        tracing::info!("Ran action, got result to submit");
-                        if let Err(err) = output.blocking_send(msg) {
-                            tracing::error!("Error submitting msg: {:?}", err);
-                        }
-                    }
-                    Ok(None) => {
-                        tracing::info!("Ran action, no submission");
-                    }
-                    Err(e) => {
-                        tracing::error!("Error running trigger: {:?}", e);
-                    }
-                }
+                let msg = _self.run_trigger(action, service);
+                submit_result(&output, msg);
             }
         });
         Ok(rx)

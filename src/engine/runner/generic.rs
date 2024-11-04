@@ -72,3 +72,23 @@ pub trait EngineRunner: Send + Sync {
         }
     }
 }
+
+pub fn submit_result(
+    out: &mpsc::Sender<ChainMessage>,
+    msg: Result<Option<ChainMessage>, EngineError>,
+) {
+    match msg {
+        Ok(Some(msg)) => {
+            tracing::info!("Ran action, got result to submit");
+            if let Err(err) = out.blocking_send(msg) {
+                tracing::error!("Error submitting msg: {:?}", err);
+            }
+        }
+        Ok(None) => {
+            tracing::info!("Ran action, no submission");
+        }
+        Err(e) => {
+            tracing::error!("Error running trigger: {:?}", e);
+        }
+    }
+}
