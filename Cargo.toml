@@ -48,6 +48,11 @@ lru = "0.12.1"
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }
 tempfile = "3.13"
+criterion = "0.5.1"
+
+[[bench]]
+name = "mock_bench"
+harness = false
 
 # old [workspace.dependencies]
 # cw-orch = { version = "0.22.0", features = ["daemon"] }

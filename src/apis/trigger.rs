@@ -34,7 +34,6 @@ pub struct TriggerData {
 }
 
 impl TriggerData {
-    #[cfg(debug_assertions)]
     pub fn queue(
         service_id: impl TryInto<ID, Error = IDError>,
         workflow_id: impl TryInto<ID, Error = IDError>,

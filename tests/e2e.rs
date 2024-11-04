@@ -2,17 +2,12 @@
 // they also assume some environment variables are set:
 // MATIC_E2E_SEED_PHRASE: seed phrase for client running the tests
 // MATIC_E2E_TASK_QUEUE_ADDR: address of the task queue contract
-mod helpers;
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
-
-    use super::helpers;
-
     use std::{sync::Arc, time::Duration};
 
     use anyhow::{bail, Context, Result};
-    use helpers::app::TestApp;
     use lavs_apis::{
         events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
         id::TaskId,
@@ -20,6 +15,7 @@ mod e2e {
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::Serialize;
+    use wasmatic::test_utils::app::TestApp;
     use wasmatic::{
         apis::Trigger,
         config::Config,

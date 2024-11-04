@@ -1,10 +1,16 @@
+use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
-use crate::apis::ID;
+use crate::apis::trigger::{
+    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
+};
+use crate::apis::{IDError, ID};
 use crate::context::AppContext;
 
+use lavs_apis::id::TaskId;
+use layer_climb::prelude::Address;
+use serde::Serialize;
 use tokio::sync::mpsc;
 
 pub struct MockTriggerManagerVec {
@@ -105,7 +111,8 @@ impl TriggerManager for MockTriggerManagerVec {
 // This mock is currently only used in mock_e2e.rs
 // it doesn't have the same coverage in unit tests here as MockTriggerManager
 pub struct MockTriggerManagerChannel {
-    pub sender: mpsc::Sender<TriggerAction>,
+    trigger_count: AtomicU64,
+    sender: mpsc::Sender<TriggerAction>,
     receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
     trigger_datas: Mutex<Vec<TriggerData>>,
 }
@@ -116,10 +123,41 @@ impl MockTriggerManagerChannel {
         let (sender, receiver) = mpsc::channel(channel_bound);
 
         Self {
+            trigger_count: AtomicU64::new(1),
             receiver: Mutex::new(Some(receiver)),
             sender,
             trigger_datas: Mutex::new(Vec::new()),
         }
+    }
+
+    pub async fn send_trigger(
+        &self,
+        service_id: impl TryInto<ID, Error = IDError>,
+        workflow_id: impl TryInto<ID, Error = IDError>,
+        task_queue_addr: &Address,
+        data: &impl Serialize,
+    ) {
+        let task_id = TaskId::new(
+            self.trigger_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        );
+
+        self.sender
+            .send(TriggerAction {
+                trigger: TriggerData::queue(
+                    service_id,
+                    workflow_id,
+                    &task_queue_addr.to_string(),
+                    5,
+                )
+                .unwrap(),
+                result: TriggerResult::queue(
+                    task_id,
+                    serde_json::to_string(data).unwrap().as_bytes(),
+                ),
+            })
+            .await
+            .unwrap();
     }
 }
 

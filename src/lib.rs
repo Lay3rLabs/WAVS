@@ -9,6 +9,7 @@ pub mod http;
 pub mod storage;
 pub mod submission; // where we submit the results to the chain
 pub mod task_bindings;
+pub mod test_utils;
 pub mod triggers; // where we handle the trigger runtime
 
 use apis::dispatcher::DispatchManager;
@@ -52,8 +53,7 @@ pub fn run_server(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatche
 
 // the test version of init_tracing does not take a config
 // only uses the default tracing settings
-// this is only gated behind debug_assertions, not cfg(test), because it is also used in integration tests
-#[cfg(debug_assertions)]
+// this is not gated out because it is used in benches and integration tests as well
 pub fn init_tracing_tests() {
     use std::sync::LazyLock;
 
