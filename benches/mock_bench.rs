@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use criterion::{criterion_group, criterion_main, Criterion};
 use wasmatic::{
     apis::ID,
@@ -45,7 +47,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 let service_id = service_id.clone();
                 let workflow_id = workflow_id.clone();
                 async move {
-                    for i in 1..N_TRIGGERS {
+                    for i in 1..=N_TRIGGERS {
                         runner
                             .dispatcher
                             .triggers
@@ -60,10 +62,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 }
             });
 
-            let _submission_count_target = pre_submission_count + N_TRIGGERS;
+            let submission_count_target = pre_submission_count + N_TRIGGERS;
 
             // FIXME
-            // runner.dispatcher.submission.wait_for_messages_timeout(submission_count_target, Duration::from_secs(60)).unwrap();
+            runner
+                .dispatcher
+                .submission
+                .wait_for_messages_timeout(submission_count_target, Duration::from_secs(60))
+                .unwrap();
         });
     });
 }
