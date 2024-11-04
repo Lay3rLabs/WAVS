@@ -26,5 +26,4 @@ RUN apt install -y libcurl4
 COPY --from=builder /myapp/target/release/wasmatic /usr/local/bin/wasmatic
 COPY --from=builder /myapp/wasmatic.toml /etc/wasmatic/wasmatic.toml
 EXPOSE 8081
-ENTRYPOINT [ "/usr/local/bin/wasmatic" ]
-CMD ["up"]
+CMD ["/usr/local/bin/wasmatic"]
