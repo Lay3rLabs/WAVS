@@ -25,5 +25,5 @@ RUN apt-get update && apt-get upgrade -y
 RUN apt install -y libcurl4
 COPY --from=builder /myapp/target/release/wasmatic /usr/local/bin/wasmatic
 COPY --from=builder /myapp/wasmatic.toml /etc/wasmatic/wasmatic.toml
-EXPOSE 8081
+EXPOSE 8000
 CMD ["/usr/local/bin/wasmatic"]
