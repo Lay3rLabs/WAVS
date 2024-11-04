@@ -1,5 +1,5 @@
 use std::sync::atomic::AtomicU64;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
 use crate::apis::trigger::{
@@ -14,7 +14,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 
 pub struct MockTriggerManagerVec {
-    triggers: Vec<TriggerAction>,
+    triggers: RwLock<Vec<TriggerAction>>,
     delay: Duration,
     error_on_start: bool,
     error_on_store: bool,
@@ -27,7 +27,7 @@ impl MockTriggerManagerVec {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
-            triggers: Vec::new(),
+            triggers: RwLock::new(Vec::new()),
             delay: Self::DEFAULT_WAIT,
             error_on_start: false,
             error_on_store: false,
@@ -35,19 +35,19 @@ impl MockTriggerManagerVec {
     }
 
     pub fn with_actions(mut self, triggers: Vec<TriggerAction>) -> Self {
-        self.triggers = triggers;
+        self.triggers = RwLock::new(triggers);
         self
     }
 
     pub fn with_actions_and_wait(mut self, triggers: Vec<TriggerAction>, delay: Duration) -> Self {
-        self.triggers = triggers;
+        self.triggers = RwLock::new(triggers);
         self.delay = delay;
         self
     }
 
     pub fn failing() -> Self {
         Self {
-            triggers: vec![],
+            triggers: RwLock::new(vec![]),
             delay: Self::DEFAULT_WAIT,
             error_on_start: true,
             error_on_store: true,
@@ -72,10 +72,12 @@ impl MockTriggerManagerVec {
 impl TriggerManager for MockTriggerManagerVec {
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         self.start_error()?;
-        let (sender, receiver) = mpsc::channel(self.triggers.len() + 1);
+
+        let triggers:Vec<TriggerAction> = self.triggers.write().unwrap().drain(..).collect();
+
+        let (sender, receiver) = mpsc::channel(triggers.len() + 1);
 
         ctx.rt.clone().spawn({
-            let triggers = self.triggers.clone();
             let delay = self.delay;
             async move {
                 for t in triggers {
@@ -87,24 +89,61 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(receiver)
     }
 
-    fn add_trigger(&self, _trigger: TriggerData) -> Result<(), TriggerError> {
+    fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError> {
         self.store_error()?;
+
+        let mut latest_task_id = 0;
+        for t in self.triggers.read().unwrap().iter() {
+            let TriggerResult::Queue { task_id, .. } = &t.result;
+            latest_task_id = latest_task_id.max(task_id.u64());
+        }
+
+        self.triggers
+            .write()
+            .unwrap()
+            .push(TriggerAction {
+                trigger,
+                result: TriggerResult::Queue {
+                    task_id: TaskId::new(latest_task_id + 1),
+                    payload: b"mock".to_vec(),
+                },
+            });
         Ok(())
     }
 
-    fn remove_trigger(&self, _service_id: ID, _workflow_id: ID) -> Result<(), TriggerError> {
+    fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError> {
         self.store_error()?;
+
+        self
+            .triggers
+            .write()
+            .unwrap()
+            .retain(|t| t.trigger.service_id != service_id && t.trigger.workflow_id != workflow_id);
         Ok(())
     }
 
-    fn remove_service(&self, _service_id: ID) -> Result<(), TriggerError> {
+    fn remove_service(&self, service_id: ID) -> Result<(), TriggerError> {
         self.store_error()?;
+
+        self
+            .triggers
+            .write()
+            .unwrap()
+            .retain(|t| t.trigger.service_id != service_id);
+
         Ok(())
     }
 
-    fn list_triggers(&self, _service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
+    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
         self.store_error()?;
-        Ok(vec![])
+
+        self.triggers
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|t| t.trigger.service_id == service_id)
+            .map(|t| Ok(t.trigger.clone()))
+            .collect()
     }
 }
 

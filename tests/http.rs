@@ -2,8 +2,6 @@ use axum::{
     body::Body,
     http::{Method, Request},
 };
-use http_body_util::BodyExt;
-use serde::de::DeserializeOwned;
 use tower::Service;
 use wasmatic::{
     config::Config,
@@ -17,7 +15,7 @@ use wasmatic::{
         },
         types::app::Status,
     },
-    test_utils::{http::TestHttpApp, service::MockServiceBuilder},
+    test_utils::{http::{map_response, TestHttpApp}, service::MockServiceBuilder},
     Digest,
 };
 
@@ -183,7 +181,3 @@ async fn http_upload_service() {
     assert_eq!(response.digest, digest);
 }
 
-async fn map_response<T: DeserializeOwned>(response: axum::http::Response<Body>) -> T {
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    serde_json::from_slice(&bytes).unwrap()
-}

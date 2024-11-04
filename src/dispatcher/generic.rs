@@ -150,10 +150,11 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    fn remove_service(&self, _id: ID) -> Result<(), Self::Error> {
-        // TODO: remove it from storage
-        // TODO: remove all triggers
-        todo!()
+    fn remove_service(&self, id: ID) -> Result<(), Self::Error> {
+        self.storage.remove(SERVICE_TABLE, id.as_ref())?;
+        self.triggers.remove_service(id)?;
+
+        Ok(())
     }
 
     fn list_services(&self) -> Result<Vec<Service>, Self::Error> {

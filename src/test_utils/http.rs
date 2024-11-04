@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use axum::body::Body;
+use http_body_util::BodyExt;
+use serde::de::DeserializeOwned;
+
 use crate::{
     apis::{submission::Submission, trigger::TriggerManager},
     dispatcher::Dispatcher,
@@ -62,4 +66,9 @@ impl TestHttpApp {
 
         &mut self._http_router
     }
+}
+
+pub async fn map_response<T: DeserializeOwned>(response: axum::http::Response<Body>) -> T {
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&bytes).unwrap()
 }

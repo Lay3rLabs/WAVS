@@ -1,3 +1,7 @@
+// these are like the real e2e but with only mocks
+// does not test throughput with real pipelinning
+// intended more to confirm API and logic is working as expected
+
 use wasmatic::{
     apis::ID,
     context::AppContext,
@@ -8,14 +12,11 @@ use wasmatic::{
     Digest,
 };
 
-// this is like the real e2e but with only mocks
-// does not test throughput with real pipelinning
-// intended more to confirm API and logic is working as expected
 #[test]
-fn mock_e2e() {
+fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
-    let service_id = ID::new("default").unwrap();
+    let service_id = ID::new("service1").unwrap();
     let workflow_id = ID::new("default").unwrap();
 
     // block and wait for creating the service
@@ -82,4 +83,47 @@ fn mock_e2e() {
         results,
         vec![serde_json::json!({"y": 9}), serde_json::json!({"y": 441})]
     );
+}
+
+#[test]
+fn mock_e2e_service_lifecycle() {
+    let runner = MockE2ETestRunner::new(AppContext::new());
+    // block and wait for creating the service
+
+    runner.ctx.rt.block_on({
+        let runner = runner.clone();
+
+        async move {
+            let services = runner.list_services().await;
+
+            assert!(services.apps.is_empty());
+            assert!(services.digests.is_empty());
+
+
+            let service_id1 = ID::new("service1").unwrap();
+            let service_id2 = ID::new("service2").unwrap();
+            let digest = Digest::new(b"wasm1");
+            runner
+                .create_service(
+                    service_id1.clone(),
+                    digest,
+                    &MOCK_TASK_QUEUE_ADDRESS,
+                    BigSquare,
+                )
+                .await;
+
+            let digest = Digest::new(b"wasm2");
+            runner
+                .create_service(
+                    service_id2.clone(),
+                    digest,
+                    &MOCK_TASK_QUEUE_ADDRESS,
+                    BigSquare,
+                )
+                .await;
+
+
+        }
+    });
+
 }

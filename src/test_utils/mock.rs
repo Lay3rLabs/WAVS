@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::http::TestHttpApp;
+use super::http::{map_response, TestHttpApp};
 use crate::{
     apis::{dispatcher::DispatchManager, engine::EngineError, Trigger, ID},
     context::AppContext,
@@ -10,11 +10,12 @@ use crate::{
         runner::{EngineRunner, SingleEngineRunner},
     },
     http::{handlers::service::add::RegisterAppRequest, types::app::App},
+    http::handlers::service::list::ListAppsResponse,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
     Digest,
 };
-use axum::http::{Method, Request};
+use axum::{body::Body, http::{Method, Request}};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use tower::Service;
@@ -56,6 +57,26 @@ impl MockE2ETestRunner {
             dispatcher,
             http_app,
         })
+    }
+
+    pub async fn list_services(&self) -> ListAppsResponse {
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/app")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = self
+            .http_app
+            .clone()
+            .http_router()
+            .await
+            .call(req)
+            .await
+            .unwrap();
+
+        map_response::<ListAppsResponse>(response).await
     }
 
     pub async fn create_service(
