@@ -5,7 +5,10 @@ use crate::{
     apis::{dispatcher::DispatchManager, engine::EngineError, Trigger, ID},
     context::AppContext,
     dispatcher::Dispatcher,
-    engine::mock::{Function, MockEngine},
+    engine::{
+        mock::{Function, MockEngine},
+        runner::{EngineRunner, SingleEngineRunner},
+    },
     http::{handlers::service::add::RegisterAppRequest, types::app::App},
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
@@ -18,7 +21,8 @@ use tower::Service;
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,
-    pub dispatcher: Arc<Dispatcher<MockTriggerManagerChannel, MockEngine, MockSubmission>>,
+    pub dispatcher:
+        Arc<Dispatcher<MockTriggerManagerChannel, SingleEngineRunner<MockEngine>, MockSubmission>>,
     pub http_app: TestHttpApp,
 }
 
@@ -26,7 +30,7 @@ impl MockE2ETestRunner {
     pub fn new(ctx: AppContext) -> Arc<Self> {
         // create our dispatcher
         let trigger_manager = MockTriggerManagerChannel::new(10);
-        let engine = MockEngine::new();
+        let engine = SingleEngineRunner::new(MockEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
         let dispatcher =
@@ -63,7 +67,7 @@ impl MockE2ETestRunner {
     ) {
         // "upload" the component
         // not going through http for this because we don't have raw bytes, digest is fake
-        self.dispatcher.engine.register(&digest, function);
+        self.dispatcher.engine.engine().register(&digest, function);
 
         // but we can create a service via http router
         let body = serde_json::to_string(&RegisterAppRequest {

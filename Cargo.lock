@@ -4709,6 +4709,7 @@ dependencies = [
  "layer-climb",
  "lru",
  "rand",
+ "rayon",
  "redb",
  "reqwest",
  "serde",

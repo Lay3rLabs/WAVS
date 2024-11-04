@@ -2,29 +2,29 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
+use tokio::sync::mpsc;
 
-use crate::apis::dispatcher::{DispatchManager, Service, Submit, WasmSource};
+use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
-use crate::apis::trigger::{
-    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
-};
+use crate::apis::submission::{Submission, SubmissionError};
+use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
 use crate::apis::{IDError, ID};
 
 use crate::context::AppContext;
+use crate::engine::runner::EngineRunner;
 use crate::storage::db::{DBError, RedbStorage, Table, JSON};
 use crate::storage::CAStorageError;
 
 /// This should auto-derive clone if T, E, S: Clone
 #[derive(Clone)]
-pub struct Dispatcher<T: TriggerManager, E: Engine, S: Submission> {
+pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub triggers: T,
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
 }
 
-impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
+impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
     pub fn new(
         triggers: T,
         engine: E,
@@ -43,32 +43,43 @@ impl<T: TriggerManager, E: Engine, S: Submission> Dispatcher<T, E, S> {
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
-impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher<T, E, S> {
+const TRIGGER_PIPELINE_SIZE: usize = 20;
+
+impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
     fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
+        // Trigger is pipeline start
         let mut actions_in = self.triggers.start(ctx.clone())?;
-        let msgs_out = self.submission.start(ctx.clone())?;
+        // Next is the local (blocking) processing
+        let (work_sender, work_receiver) =
+            mpsc::channel::<(TriggerAction, Service)>(TRIGGER_PIPELINE_SIZE);
+        // Then the engine processing
+        let msgs_out = self.engine.start(ctx.clone(), work_receiver)?;
+        // And pipeline finishes with submission
+        self.submission.start(ctx.clone(), msgs_out)?;
 
         // since triggers listens to the async kill signal handler and closes the channel when
         // it is triggered, we don't need to jump through hoops here to make an async block to listen.
         // Just waiting for the channel to close is enough.
 
+        // This reads the actions, extends them with the local service data, and passes
+        // the combined info down to the EngineRunner to work.
         while let Some(action) = actions_in.blocking_recv() {
-            match self.run_trigger(action) {
-                Ok(Some(msg)) => {
-                    tracing::info!("Ran action, got result to submit");
-                    if let Err(err) = msgs_out.blocking_send(msg) {
-                        tracing::error!("Error submitting msg: {:?}", err);
-                    }
+            let service = match self
+                .storage
+                .get(SERVICE_TABLE, action.trigger.service_id.as_ref())?
+            {
+                Some(service) => service.value(),
+                None => {
+                    let err = DispatcherError::UnknownService(action.trigger.service_id.clone());
+                    tracing::error!("{}", err);
+                    continue;
                 }
-                Ok(None) => {
-                    tracing::info!("Ran action, no submission");
-                }
-                Err(e) => {
-                    tracing::error!("Error running trigger: {:?}", e);
-                }
+            };
+            if let Err(err) = work_sender.blocking_send((action, service)) {
+                tracing::error!("Error sending work to engine: {:?}", err);
             }
         }
 
@@ -90,59 +101,19 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
         Ok(())
     }
 
-    /// This is where the heavy lifting is done (at least for now, where self.engine.execute_queue happens in the same thread)
-    /// effectively, it slows down the consumption of triggers and can inadvertendly cause the whole system to slow down
-    /// TODO: optimize this, at the very least have wasm executions across a threadpool, and get real metrics to test assumptions about the performance
-    fn run_trigger(&self, action: TriggerAction) -> Result<Option<ChainMessage>, DispatcherError> {
-        // look up the proper workflow
+    fn run_trigger(
+        &self,
+        action: TriggerAction,
+    ) -> Result<Option<crate::apis::submission::ChainMessage>, Self::Error> {
         let service = self
             .storage
             .get(SERVICE_TABLE, action.trigger.service_id.as_ref())?
-            .ok_or_else(|| DispatcherError::UnknownService(action.trigger.service_id.clone()))?
+            .ok_or(DispatcherError::UnknownService(
+                action.trigger.service_id.clone(),
+            ))?
             .value();
 
-        let workflow = service
-            .workflows
-            .get(&action.trigger.workflow_id)
-            .ok_or_else(|| {
-                DispatcherError::UnknownWorkflow(
-                    action.trigger.service_id.clone(),
-                    action.trigger.workflow_id.clone(),
-                )
-            })?;
-
-        let component = service
-            .components
-            .get(&workflow.component)
-            .ok_or_else(|| DispatcherError::UnknownComponent(workflow.component.clone()))?;
-
-        // TODO: we actually get other info, like permissions and apply in the execution
-        let digest = component.wasm.clone();
-
-        match action.result {
-            TriggerResult::Queue { task_id, payload } => {
-                // TODO: add the timestamp to the trigger, don't invent it
-                let timestamp = 1234567890;
-                let wasm_result = self.engine.execute_queue(digest, payload, timestamp)?;
-
-                // TODO: we need to sent these off to the submission engine
-                if let Some(Submit::VerifierTx {
-                    hd_index,
-                    verifier_addr,
-                }) = workflow.submit.as_ref()
-                {
-                    Ok(Some(ChainMessage {
-                        trigger_data: action.trigger,
-                        task_id,
-                        wasm_result,
-                        hd_index: *hd_index,
-                        verifier_addr: verifier_addr.clone(),
-                    }))
-                } else {
-                    Ok(None)
-                }
-            }
-        }
+        Ok(self.engine.run_trigger(action, service)?)
     }
 
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
@@ -150,7 +121,7 @@ impl<T: TriggerManager, E: Engine, S: Submission> DispatchManager for Dispatcher
             WasmSource::Bytecode(code) => code,
             _ => todo!(),
         };
-        let digest = self.engine.store_wasm(&bytecode)?;
+        let digest = self.engine.engine().store_wasm(&bytecode)?;
         Ok(digest)
     }
 
@@ -199,12 +170,6 @@ pub enum DispatcherError {
     #[error("Unknown Service {0}")]
     UnknownService(ID),
 
-    #[error("Unknown Workflow {0} / {1}")]
-    UnknownWorkflow(ID, ID),
-
-    #[error("Unknown Component {0}")]
-    UnknownComponent(ID),
-
     #[error("Invalid ID: {0}")]
     ID(#[from] IDError),
 
@@ -230,12 +195,15 @@ mod tests {
 
     use crate::{
         apis::{
-            dispatcher::{Component, ServiceStatus},
+            dispatcher::{Component, ServiceStatus, Submit},
+            submission::ChainMessage,
+            trigger::TriggerResult,
             Trigger,
         },
         engine::{
             identity::IdentityEngine,
             mock::{Function, MockEngine},
+            runner::{MultiEngineRunner, SingleEngineRunner},
         },
         init_tracing_tests,
         submission::mock::MockSubmission,
@@ -262,7 +230,7 @@ mod tests {
 
         let dispatcher = Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(vec![action.clone()]),
-            IdentityEngine::new(),
+            SingleEngineRunner::new(IdentityEngine),
             MockSubmission::new(),
             db_file.as_ref(),
         )
@@ -355,7 +323,7 @@ mod tests {
         // Set up the dispatcher
         let dispatcher = Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(actions),
-            MockEngine::new(),
+            SingleEngineRunner::new(MockEngine::new()),
             MockSubmission::new(),
             db_file.as_ref(),
         )
@@ -363,7 +331,82 @@ mod tests {
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");
-        dispatcher.engine.register(&digest, BigSquare);
+        dispatcher.engine.engine().register(&digest, BigSquare);
+
+        // Register a service to handle this action
+        let component_id = ID::new("component1").unwrap();
+        let hd_index = 2;
+        let verifier_addr = "layer1verifier";
+        let service = Service {
+            id: service_id.clone(),
+            name: "Big Square AVS".to_string(),
+            components: [(component_id.clone(), Component::new(&digest))].into(),
+            workflows: [(
+                workflow_id.clone(),
+                crate::apis::dispatcher::Workflow {
+                    component: component_id.clone(),
+                    trigger: Trigger::queue("some-task", 5),
+                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
+                },
+            )]
+            .into(),
+            status: ServiceStatus::Active,
+            testable: false,
+        };
+        dispatcher.add_service(service).unwrap();
+
+        // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
+        let ctx = AppContext::new();
+        dispatcher.start(ctx).unwrap();
+
+        // check that the events were properly handled and arrived at submission
+        dispatcher.submission.wait_for_messages(2).unwrap();
+        let processed = dispatcher.submission.received();
+        assert_eq!(processed.len(), 2);
+
+        // Check the task_id and payloads
+        assert_eq!(processed[0].task_id, TaskId::new(1));
+        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
+        assert_eq!(processed[1].task_id, TaskId::new(2));
+        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+    }
+
+    /// Simulate big-square on a multi-threaded dispatcher
+    /// TODO: don't copy this test, but refactor the above for reuse
+    #[test]
+    fn multi_dispatcher_big_square_mocked() {
+        init_tracing_tests();
+
+        let db_file = tempfile::NamedTempFile::new().unwrap();
+
+        // Prepare two actions to be squared
+        let service_id = ID::new("service1").unwrap();
+        let workflow_id = ID::new("workflow1").unwrap();
+        let actions = vec![
+            TriggerAction {
+                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                    .unwrap(),
+                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
+            },
+            TriggerAction {
+                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                    .unwrap(),
+                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
+            },
+        ];
+
+        // Set up the dispatcher
+        let dispatcher = Dispatcher::new(
+            MockTriggerManagerVec::new().with_actions(actions),
+            MultiEngineRunner::new(MockEngine::new(), 4),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
+
+        // Register the BigSquare function on our known digest
+        let digest = Digest::new(b"wasm1");
+        dispatcher.engine.engine().register(&digest, BigSquare);
 
         // Register a service to handle this action
         let component_id = ID::new("component1").unwrap();

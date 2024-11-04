@@ -32,6 +32,7 @@ pub struct Config {
 
     // wasm engine config
     pub wasm_lru_size: usize,
+    pub wasm_threads: usize,
 
     /// The chosen chain name
     pub chain: String,
@@ -56,7 +57,8 @@ impl Default for Config {
             chain: String::new(),
             chains: HashMap::new(),
             chain_config_override: OptionalWasmaticChainConfig::default(),
-            wasm_lru_size: 10,
+            wasm_lru_size: 20,
+            wasm_threads: 4,
         }
     }
 }

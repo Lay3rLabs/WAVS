@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::config::Config;
+use crate::engine::runner::MultiEngineRunner;
 use crate::engine::WasmEngine;
 use crate::storage::fs::FileStorage;
 use crate::submission::core::CoreSubmission;
@@ -9,7 +10,7 @@ use crate::triggers::core::CoreTriggerManager;
 use super::generic::{Dispatcher, DispatcherError};
 
 pub type CoreDispatcher =
-    Dispatcher<CoreTriggerManager, Arc<WasmEngine<FileStorage>>, CoreSubmission>;
+    Dispatcher<CoreTriggerManager, MultiEngineRunner<Arc<WasmEngine<FileStorage>>>, CoreSubmission>;
 
 impl CoreDispatcher {
     pub fn new_core(config: &Config) -> Result<CoreDispatcher, DispatcherError> {
@@ -23,6 +24,7 @@ impl CoreDispatcher {
             app_storage,
             config.wasm_lru_size,
         ));
+        let engine = MultiEngineRunner::new(engine, config.wasm_threads);
 
         let submission = CoreSubmission::new(config)?;
 

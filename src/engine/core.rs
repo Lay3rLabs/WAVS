@@ -11,11 +11,10 @@ use wasmtime::{
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-pub use crate::apis::engine::Engine;
-use crate::apis::engine::EngineError;
-
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{task_bindings, Digest};
+
+use super::{Engine, EngineError};
 
 pub struct WasmEngine<S: CAStorage> {
     wasm_storage: S,

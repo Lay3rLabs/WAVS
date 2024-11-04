@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-// We can provide a mock implementation of the trait here for easier testing.
-use crate::apis::engine::{Engine, EngineError};
-
 use crate::Digest;
+
+use super::{Engine, EngineError};
 
 /// Maintains a list of the digests that have been stored.
 /// You can also register Functions with any of the digests and it will be run
