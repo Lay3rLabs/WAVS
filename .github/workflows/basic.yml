@@ -8,7 +8,7 @@ name: Basic Checks
 jobs:
   test:
     name: Wasmatic Test Suite
-    runs-on: ubuntu-latest
+    runs-on: linux-8-core
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
