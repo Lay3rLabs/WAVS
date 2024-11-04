@@ -248,7 +248,6 @@ mod e2e {
         pub fn new(config: &Config) -> Self {
             let endpoint = format!("http://{}:{}", config.host, config.port);
 
-            println!("endpoint: {}", endpoint);
             Self {
                 inner: reqwest::Client::new(),
                 endpoint,

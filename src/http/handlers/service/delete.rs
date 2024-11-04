@@ -25,7 +25,6 @@ pub async fn handle_delete_service(
 
 async fn delete_service_inner(state: HttpState, app_names: Vec<String>) -> HttpResult<()> {
     for app_name in app_names {
-        println!("deleting {}", app_name);
         state.dispatcher.remove_service(ID::new(&app_name)?)?;
     }
 
