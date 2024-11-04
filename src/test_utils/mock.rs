@@ -203,6 +203,7 @@ pub struct SquareIn {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
+
 pub struct SquareOut {
     pub y: f32,
 }
