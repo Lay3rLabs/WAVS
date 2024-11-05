@@ -5,6 +5,7 @@
 use wasmatic::{
     apis::ID,
     context::AppContext,
+    engine::runner::EngineRunner,
     test_utils::{
         chain::MOCK_TASK_QUEUE_ADDRESS,
         mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
@@ -127,6 +128,18 @@ fn mock_e2e_service_lifecycle() {
             assert_eq!(services.apps[1].name, service_id2.to_string());
             assert_eq!(services.apps[2].name, service_id3.to_string());
 
+            // add an orphaned digest
+            let orphaned_digest = Digest::new(b"orphaned");
+            runner
+                .dispatcher
+                .engine
+                .engine()
+                .register(&orphaned_digest, BigSquare);
+
+            let services = runner.list_services().await;
+            assert_eq!(services.apps.len(), 3);
+            assert_eq!(services.digests.len(), 4);
+
             // selectively delete services 1 and 3, leaving just 2
 
             runner
@@ -136,7 +149,7 @@ fn mock_e2e_service_lifecycle() {
             let services = runner.list_services().await;
 
             assert_eq!(services.apps.len(), 1);
-            assert_eq!(services.digests.len(), 1);
+            assert_eq!(services.digests.len(), 4);
             assert_eq!(services.apps[0].name, service_id2.to_string());
 
             // and make sure we can delete the last one but still get an empty list
@@ -149,6 +162,7 @@ fn mock_e2e_service_lifecycle() {
             let services = runner.list_services().await;
 
             assert!(services.apps.is_empty());
+            assert_eq!(services.digests.len(), 4);
         }
     });
 }

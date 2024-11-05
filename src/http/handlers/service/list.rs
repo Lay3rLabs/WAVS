@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Bound};
+use std::ops::Bound;
 
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,6 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
         .list_services(Bound::Unbounded, Bound::Unbounded)?;
 
     let mut apps = Vec::with_capacity(services.len());
-    let mut digests = HashSet::with_capacity(services.len());
 
     // for backwards compatibility, we do some funky things here
     // it will be nicer in 0.3
@@ -67,12 +66,10 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
             };
 
             apps.push(app);
-            digests.insert(component.wasm.clone());
         }
     }
 
-    Ok(ListAppsResponse {
-        apps,
-        digests: digests.into_iter().collect(),
-    })
+    let digests = state.dispatcher.list_component_digests()?;
+
+    Ok(ListAppsResponse { apps, digests })
 }

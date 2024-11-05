@@ -23,6 +23,8 @@ impl MockEngine {
     }
 
     pub fn register(&self, digest: &Digest, function: impl Function) {
+        self.digests.write().unwrap().insert(digest.clone());
+
         self.functions
             .write()
             .unwrap()

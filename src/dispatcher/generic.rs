@@ -127,6 +127,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digest)
     }
 
+    fn list_component_digests(&self) -> Result<Vec<crate::Digest>, Self::Error> {
+        let digests = self.engine.engine().list_digests()?;
+
+        Ok(digests)
+    }
+
     fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
