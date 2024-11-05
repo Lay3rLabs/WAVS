@@ -1,4 +1,5 @@
 use crate::http::{error::HttpResult, state::HttpState};
+use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -21,12 +22,17 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     // TODO - get the operators from the dispatcher?
 
     let chain_config = state.config.chain_config()?;
-    let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
+    let mnemonic = state
+        .config
+        .wasmatic_chain_config()?
+        .submission_mnemonic
+        .context("submission_mnemonic not set")?;
+
     let mut operators = Vec::new();
 
     for i in 0..10 {
         let key_signer =
-            KeySigner::new_mnemonic_str(&seed_phrase, Some(&cosmos_hub_derivation(i)?)).unwrap();
+            KeySigner::new_mnemonic_str(&mnemonic, Some(&cosmos_hub_derivation(i)?)).unwrap();
         let address = chain_config
             .address_kind
             .address_from_pub_key(&key_signer.public_key().await?)?;
