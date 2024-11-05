@@ -69,7 +69,8 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
 
     let chain_message = state
         .dispatcher
-        .run_trigger(action)?
+        .run_trigger(action)
+        .await?
         .context("could not get chain message")?;
 
     let output = serde_json::from_slice(&chain_message.wasm_result)?;

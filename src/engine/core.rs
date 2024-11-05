@@ -2,7 +2,11 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
+use crate::apis::engine::WasiTask;
+use crate::storage::{CAStorage, CAStorageError};
+use crate::{task_bindings, Digest};
 use anyhow::Context;
+use async_trait::async_trait;
 use lru::LruCache;
 use wasmtime::{
     component::{Component, Linker},
@@ -10,9 +14,6 @@ use wasmtime::{
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-
-use crate::storage::{CAStorage, CAStorageError};
-use crate::{task_bindings, Digest};
 
 use super::{Engine, EngineError};
 
@@ -48,6 +49,7 @@ impl<S: CAStorage> WasmEngine<S> {
     }
 }
 
+#[async_trait]
 impl<S: CAStorage> Engine for WasmEngine<S> {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
@@ -70,13 +72,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         Ok(digests?)
     }
 
-    /// This will execute a contract that implements the layer_avs:task-queue wit interface
-    fn execute_queue(
-        &self,
-        digest: Digest,
-        request: Vec<u8>,
-        timestamp: u64,
-    ) -> Result<Vec<u8>, EngineError> {
+    fn get_wasi_task(&self, digest: Digest) -> Result<WasiTask, EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
         let component = match self.memory_cache.write().unwrap().get(&digest) {
@@ -118,34 +114,50 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             ctx,
             http: WasiHttpCtx::new(),
         };
-        let mut store = wasmtime::Store::new(&self.wasm_engine, host);
 
-        // This feels like an ugly hack.
-        // I cannot figure out how to add wasi http support and keep this sync
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
-        rt.block_on({
-            async {
-                let bindings =
-                    task_bindings::TaskQueue::instantiate_async(&mut store, &component, &linker)
-                        .await
-                        .context("Wasm instantiate failed")?;
-                let input = task_bindings::lay3r::avs::types::TaskQueueInput { timestamp, request };
-                let result = bindings
-                    .call_run_task(&mut store, &input)
-                    .await
-                    .context("Failed to run task")?
-                    .map_err(EngineError::ComponentError)?;
-                Ok::<Vec<u8>, EngineError>(result)
-            }
-        })
+        let store = wasmtime::Store::new(&self.wasm_engine, host);
+
+        Ok(WasiTask::Core(CoreWasiTask {
+            component,
+            linker,
+            store,
+        }))
     }
+
+    /// This will execute a contract that implements the layer_avs:task-queue wit interface
+    async fn execute_queue(
+        &self,
+        wask_task: WasiTask,
+        request: Vec<u8>,
+        timestamp: u64,
+    ) -> Result<Vec<u8>, EngineError> {
+        let (mut store, component, linker) = match wask_task {
+            WasiTask::Core(core) => (core.store, core.component, core.linker),
+            WasiTask::Mock(_) => return Err(EngineError::WasiTaskMismatch),
+        };
+
+        let bindings = task_bindings::TaskQueue::instantiate_async(&mut store, &component, &linker)
+            .await
+            .context("Wasm instantiate failed")?;
+        let input = task_bindings::lay3r::avs::types::TaskQueueInput { timestamp, request };
+        let result = bindings
+            .call_run_task(&mut store, &input)
+            .await
+            .context("Failed to run task")?
+            .map_err(EngineError::ComponentError)?;
+        Ok::<Vec<u8>, EngineError>(result)
+    }
+}
+
+pub struct CoreWasiTask {
+    pub component: Component,
+    pub linker: Linker<Host>,
+    pub store: wasmtime::Store<Host>,
 }
 
 // TODO: revisit this an understand it.
 // Copied blindly from old code
-pub(crate) struct Host {
+pub struct Host {
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,
@@ -214,8 +226,8 @@ mod tests {
         assert_eq!(digests, vec![digest]);
     }
 
-    #[test]
-    fn execute_square() {
+    #[tokio::test]
+    async fn execute_square() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(storage, &app_data, 3);
@@ -223,9 +235,12 @@ mod tests {
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
 
+        let wasi_task = engine.get_wasi_task(digest).unwrap();
+
         // execute it and get square
         let result = engine
-            .execute_queue(digest, br#"{"x":12}"#.into(), 12345)
+            .execute_queue(wasi_task, br#"{"x":12}"#.into(), 12345)
+            .await
             .unwrap();
         assert_eq!(&result, br#"{"y":144}"#);
     }

@@ -4693,6 +4693,7 @@ name = "wasmatic"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "cfg-if",
  "clap 4.5.20",

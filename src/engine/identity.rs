@@ -1,6 +1,6 @@
-use crate::apis::engine::{Engine, EngineError};
-
+use crate::apis::engine::{Engine, EngineError, WasiTask};
 use crate::Digest;
+use async_trait::async_trait;
 
 /// Simply returns the request as the result.
 /// MVP for just testing inputs and outputs and wiring
@@ -13,6 +13,7 @@ impl IdentityEngine {
     }
 }
 
+#[async_trait]
 impl Engine for IdentityEngine {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         Ok(Digest::new(bytecode))
@@ -22,9 +23,13 @@ impl Engine for IdentityEngine {
         Ok(vec![])
     }
 
-    fn execute_queue(
+    fn get_wasi_task(&self, digest: Digest) -> Result<WasiTask, EngineError> {
+        Ok(WasiTask::Mock(digest))
+    }
+
+    async fn execute_queue(
         &self,
-        _digest: Digest,
+        _wasi_task: WasiTask,
         request: Vec<u8>,
         _timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -36,8 +41,8 @@ impl Engine for IdentityEngine {
 mod test {
     use super::*;
 
-    #[test]
-    fn returns_identity() {
+    #[tokio::test]
+    async fn returns_identity() {
         let engine = IdentityEngine::new();
 
         // stores and returns unique digest
@@ -51,7 +56,8 @@ mod test {
         // execute returns self
         let request = b"this is only a test".to_vec();
         let result = engine
-            .execute_queue(d1, request.clone(), 1234567890)
+            .execute_queue(WasiTask::Mock(d1), request.clone(), 1234567890)
+            .await
             .unwrap();
         assert_eq!(request, result);
     }

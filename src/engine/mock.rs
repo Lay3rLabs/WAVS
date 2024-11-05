@@ -1,9 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
+use crate::apis::engine::WasiTask;
 use crate::Digest;
 
 use super::{Engine, EngineError};
+use async_trait::async_trait;
 
 /// Maintains a list of the digests that have been stored.
 /// You can also register Functions with any of the digests and it will be run
@@ -32,6 +34,7 @@ impl MockEngine {
     }
 }
 
+#[async_trait]
 impl Engine for MockEngine {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         let digest = Digest::new(bytecode);
@@ -43,12 +46,17 @@ impl Engine for MockEngine {
         Ok(self.digests.read().unwrap().iter().cloned().collect())
     }
 
-    fn execute_queue(
+    async fn execute_queue(
         &self,
-        digest: Digest,
+        wasi_task: WasiTask,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
+        let digest = match wasi_task {
+            WasiTask::Mock(digest) => digest,
+            _ => return Err(EngineError::WasiTaskMismatch),
+        };
+
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
@@ -56,6 +64,10 @@ impl Engine for MockEngine {
             .ok_or(EngineError::UnknownDigest(digest))?;
         let result = fx.execute(request, timestamp)?;
         Ok(result)
+    }
+
+    fn get_wasi_task(&self, digest: Digest) -> Result<WasiTask, EngineError> {
+        Ok(WasiTask::Mock(digest))
     }
 }
 
@@ -91,8 +103,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn executes_functions() {
+    #[tokio::test]
+    async fn executes_functions() {
         let engine = MockEngine::new();
 
         // stores and returns unique digest
@@ -107,16 +119,23 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let res = engine.execute_queue(d1, b"123".into(), 1234).unwrap();
+        let res = engine
+            .execute_queue(WasiTask::Mock(d1), b"123".into(), 1234)
+            .await
+            .unwrap();
         assert_eq!(res, r1);
 
         // d2 call gets r2
-        let res = engine.execute_queue(d2, b"123".into(), 1234).unwrap();
+        let res = engine
+            .execute_queue(WasiTask::Mock(d2), b"123".into(), 1234)
+            .await
+            .unwrap();
         assert_eq!(res, r2);
 
         // d1 call returns missing error
         let err = engine
-            .execute_queue(d3.clone(), b"123".into(), 1234)
+            .execute_queue(WasiTask::Mock(d3.clone()), b"123".into(), 1234)
+            .await
             .unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));
     }

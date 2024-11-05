@@ -1,4 +1,4 @@
-mod core;
+pub mod core;
 pub mod identity;
 pub mod mock;
 pub mod runner;

@@ -277,7 +277,7 @@ mod e2e {
                 },
                 name: name.to_string(),
                 status: None,
-                digest,
+                digest: digest.into(),
                 permissions: Permissions::default(),
                 envs: Vec::new(),
                 testable: Some(true),
@@ -309,7 +309,7 @@ mod e2e {
                 .json()
                 .await?;
 
-            Ok(response.digest)
+            Ok(response.digest.into())
         }
     }
 }

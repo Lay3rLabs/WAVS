@@ -31,7 +31,7 @@ impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
 
     fn start(
         &self,
-        _ctx: AppContext,
+        ctx: AppContext,
         mut input: mpsc::Receiver<(TriggerAction, Service)>,
     ) -> Result<mpsc::Receiver<ChainMessage>, EngineError> {
         let (output, rx) = mpsc::channel::<ChainMessage>(self.output_channel_size);
@@ -39,7 +39,7 @@ impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
 
         std::thread::spawn(move || {
             while let Some((action, service)) = input.blocking_recv() {
-                let msg = _self.run_trigger(action, service);
+                let msg = ctx.rt.block_on(_self.run_trigger(action, service));
                 submit_result(&output, msg);
             }
         });

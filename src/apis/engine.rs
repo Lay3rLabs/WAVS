@@ -1,9 +1,10 @@
 use thiserror::Error;
 
-use crate::{storage::CAStorageError, Digest};
-
 use super::ID;
+use crate::{engine::core::CoreWasiTask, storage::CAStorageError, Digest};
+use async_trait::async_trait;
 
+#[async_trait]
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
 
@@ -11,14 +12,17 @@ pub trait Engine: Send + Sync {
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError>;
 
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
-    fn execute_queue(
+    async fn execute_queue(
         &self,
-        digest: Digest,
+        wask_task: WasiTask,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError>;
+
+    fn get_wasi_task(&self, digest: Digest) -> Result<WasiTask, EngineError>;
 }
 
+#[async_trait]
 impl<E: Engine> Engine for std::sync::Arc<E> {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         self.as_ref().store_wasm(bytecode)
@@ -28,14 +32,25 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
         self.as_ref().list_digests()
     }
 
-    fn execute_queue(
+    async fn execute_queue(
         &self,
-        digest: Digest,
+        wasi_task: WasiTask,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute_queue(digest, request, timestamp)
+        self.as_ref()
+            .execute_queue(wasi_task, request, timestamp)
+            .await
     }
+
+    fn get_wasi_task(&self, digest: Digest) -> Result<WasiTask, EngineError> {
+        self.as_ref().get_wasi_task(digest)
+    }
+}
+
+pub enum WasiTask {
+    Core(CoreWasiTask),
+    Mock(Digest),
 }
 
 // Note: I tried to pull this into an associated type of the trait,
@@ -66,6 +81,9 @@ pub enum EngineError {
 
     #[error("Component returned an error: {0}")]
     ComponentError(String),
+
+    #[error("Wrong wasi-task type")]
+    WasiTaskMismatch,
 
     #[error{"{0}"}]
     Other(#[from] anyhow::Error),

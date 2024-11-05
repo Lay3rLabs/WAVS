@@ -34,7 +34,7 @@ impl<E: Engine + Clone + 'static> EngineRunner for MultiEngineRunner<E> {
 
     fn start(
         &self,
-        _ctx: AppContext,
+        ctx: AppContext,
         mut input: mpsc::Receiver<(TriggerAction, Service)>,
     ) -> Result<mpsc::Receiver<ChainMessage>, EngineError> {
         let (output, rx) = mpsc::channel::<ChainMessage>(self.output_channel_size);
@@ -48,9 +48,12 @@ impl<E: Engine + Clone + 'static> EngineRunner for MultiEngineRunner<E> {
             while let Some((action, service)) = input.blocking_recv() {
                 let runner = _self.clone();
                 let out = output.clone();
-                pool.install(move || {
-                    let msg = runner.run_trigger(action, service);
-                    submit_result(&out, msg);
+                pool.install({
+                    let ctx = ctx.clone();
+                    move || {
+                        let msg = ctx.rt.block_on(runner.run_trigger(action, service));
+                        submit_result(&out, msg);
+                    }
                 })
             }
         });

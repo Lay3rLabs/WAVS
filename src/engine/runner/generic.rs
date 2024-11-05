@@ -5,9 +5,11 @@ use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::{TriggerAction, TriggerResult};
 use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
+use async_trait::async_trait;
 
+#[async_trait]
 pub trait EngineRunner: Send + Sync {
-    type Engine: Engine;
+    type Engine: Engine + Clone + 'static;
 
     // This starts a loop to process all incoming triggers ans prepare outgoing results
     // It should immediately return and run the processing task in the background
@@ -22,7 +24,7 @@ pub trait EngineRunner: Send + Sync {
 
     /// This is where the heavy lifting is done (at least for now, where self.engine.execute_queue happens in the same thread)
     /// effectively, it slows down the consumption of triggers and can inadvertendly cause the whole system to slow down
-    fn run_trigger(
+    async fn run_trigger(
         &self,
         action: TriggerAction,
         service: Service,
@@ -50,7 +52,20 @@ pub trait EngineRunner: Send + Sync {
             TriggerResult::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
-                let wasm_result = self.engine().execute_queue(digest, payload, timestamp)?;
+
+                let engine = self.engine().clone();
+
+                let wasi_task = tokio::task::spawn_blocking(move || {
+                    let engine = engine;
+                    engine.get_wasi_task(digest)
+                })
+                .await
+                .unwrap()?;
+
+                let wasm_result = self
+                    .engine()
+                    .execute_queue(wasi_task, payload, timestamp)
+                    .await?;
 
                 // TODO: we need to sent these off to the submission engine
                 if let Some(Submit::VerifierTx {

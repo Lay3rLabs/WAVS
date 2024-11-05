@@ -1,6 +1,6 @@
-use std::{collections::BTreeMap, ops::Bound};
-
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, ops::Bound};
 
 use super::{submission::ChainMessage, trigger::TriggerAction, Trigger, ID};
 use crate::{context::AppContext, Digest};
@@ -14,12 +14,14 @@ use crate::{context::AppContext, Digest};
 ///
 /// These types should not be raw from the user, but parsed from the JSON structs, validated,
 /// and converted into our internal structs
+#[async_trait]
 pub trait DispatchManager: Send + Sync {
     type Error;
 
     fn start(&self, ctx: AppContext) -> Result<(), Self::Error>;
 
-    fn run_trigger(&self, action: TriggerAction) -> Result<Option<ChainMessage>, Self::Error>;
+    async fn run_trigger(&self, action: TriggerAction)
+        -> Result<Option<ChainMessage>, Self::Error>;
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.

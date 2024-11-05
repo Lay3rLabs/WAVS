@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use redb::ReadableTable;
 use std::ops::Bound;
 use std::path::Path;
@@ -47,6 +48,7 @@ const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
 const TRIGGER_PIPELINE_SIZE: usize = 20;
 
+#[async_trait]
 impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;
 
@@ -103,7 +105,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    fn run_trigger(
+    async fn run_trigger(
         &self,
         action: TriggerAction,
     ) -> Result<Option<crate::apis::submission::ChainMessage>, Self::Error> {
@@ -115,7 +117,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
             ))?
             .value();
 
-        Ok(self.engine.run_trigger(action, service)?)
+        Ok(self.engine.run_trigger(action, service).await?)
     }
 
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
