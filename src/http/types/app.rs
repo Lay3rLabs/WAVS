@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::{fmt, ops::Deref, str::FromStr};
 
 use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
@@ -15,7 +15,7 @@ pub struct App {
     // i.e. the request shouldn't contain this field at all
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<Status>,
-    pub digest: Digest,
+    pub digest: ShaDigest,
     pub trigger: Trigger,
     pub permissions: Permissions,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -43,6 +43,14 @@ pub struct ShaDigest(Digest);
 impl ShaDigest {
     pub fn new(digest: Digest) -> Self {
         Self(digest)
+    }
+}
+
+impl Deref for ShaDigest {
+    type Target = Digest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

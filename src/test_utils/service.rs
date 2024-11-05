@@ -50,7 +50,7 @@ impl MockServiceBuilder {
             }),
             name: self.name,
             status: self.status.unwrap_or_default(),
-            digest: DIGEST.clone(),
+            digest: DIGEST.clone().into(),
             permissions: Permissions::default(),
             envs: Vec::new(),
             testable: self.testable.unwrap_or_default(),

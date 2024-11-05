@@ -3,14 +3,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     apis::dispatcher::WasmSource,
-    http::{error::HttpResult, state::HttpState},
-    Digest,
+    http::{error::HttpResult, state::HttpState, types::app::ShaDigest},
 };
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadServiceResponse {
-    pub digest: Digest,
+    pub digest: ShaDigest,
 }
 
 #[axum::debug_handler]
@@ -34,7 +33,8 @@ async fn inner_handle_upload_service(
             .store_component(WasmSource::Bytecode(bytes.to_vec()))
     })
     .await
-    .unwrap()?;
+    .unwrap()?
+    .into();
 
     Ok(UploadServiceResponse { digest })
 }
