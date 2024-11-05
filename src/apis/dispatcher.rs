@@ -35,6 +35,10 @@ pub trait DispatchManager: Send + Sync {
         bounds_end: Bound<&str>,
     ) -> Result<Vec<Service>, Self::Error>;
 
+    // TODO: this would be nicer so we can just pass in a range
+    // but then we run into problems with storing DispatchManager as a trait object
+    // fn list_services<'a>(&self, bounds: impl RangeBounds<&'a str>) -> Result<Vec<Service>, Self::Error>;
+
     fn test_service(&self, service_id: ID, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
 }
 

@@ -177,6 +177,10 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let res = self
             .storage
             .map_table_read(SERVICE_TABLE, |table| match table {
+                // TODO: try to refactor. There's a couple areas of improvement:
+                //
+                // 1. just taking in a RangeBounds<&str> instead of two Bound<&str>
+                // 2. just calling `.range()` on the range once
                 Some(table) => match (bounds_start, bounds_end) {
                     (Bound::Unbounded, Bound::Unbounded) => {
                         let res = table
