@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Bound};
 
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +29,18 @@ pub trait DispatchManager: Send + Sync {
 
     fn remove_service(&self, id: ID) -> Result<(), Self::Error>;
 
-    fn list_services(&self) -> Result<Vec<Service>, Self::Error>;
+    fn list_services(
+        &self,
+        bounds_start: Bound<&str>,
+        bounds_end: Bound<&str>,
+    ) -> Result<Vec<Service>, Self::Error>;
+
+    /// TODO: pagination
+    fn list_component_digests(&self) -> Result<Vec<Digest>, Self::Error>;
+
+    // TODO: this would be nicer so we can just pass in a range
+    // but then we run into problems with storing DispatchManager as a trait object
+    // fn list_services<'a>(&self, bounds: impl RangeBounds<&'a str>) -> Result<Vec<Service>, Self::Error>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

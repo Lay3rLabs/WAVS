@@ -1,3 +1,5 @@
+use redb::ReadableTable;
+use std::ops::Bound;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -125,6 +127,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digest)
     }
 
+    fn list_component_digests(&self) -> Result<Vec<crate::Digest>, Self::Error> {
+        let digests = self.engine.engine().list_digests()?;
+
+        Ok(digests)
+    }
+
     fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
@@ -150,15 +158,103 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    fn remove_service(&self, _id: ID) -> Result<(), Self::Error> {
-        // TODO: remove it from storage
-        // TODO: remove all triggers
-        todo!()
+    fn remove_service(&self, id: ID) -> Result<(), Self::Error> {
+        self.storage.remove(SERVICE_TABLE, id.as_ref())?;
+        self.triggers.remove_service(id)?;
+
+        Ok(())
     }
 
-    fn list_services(&self) -> Result<Vec<Service>, Self::Error> {
-        // TODO: we need to list all keys of the storage (range and range_keys)
-        todo!()
+    fn list_services(
+        &self,
+        bounds_start: Bound<&str>,
+        bounds_end: Bound<&str>,
+    ) -> Result<Vec<Service>, Self::Error> {
+        let res = self
+            .storage
+            .map_table_read(SERVICE_TABLE, |table| match table {
+                // TODO: try to refactor. There's a couple areas of improvement:
+                //
+                // 1. just taking in a RangeBounds<&str> instead of two Bound<&str>
+                // 2. just calling `.range()` on the range once
+                Some(table) => match (bounds_start, bounds_end) {
+                    (Bound::Unbounded, Bound::Unbounded) => {
+                        let res = table
+                            .iter()?
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+                        Ok(res)
+                    }
+                    (Bound::Unbounded, Bound::Included(y)) => {
+                        let res = table
+                            .range(..=y)?
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                        Ok(res)
+                    }
+                    (Bound::Unbounded, Bound::Excluded(y)) => {
+                        let res = table
+                            .range(..y)?
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                        Ok(res)
+                    }
+                    (Bound::Included(x), Bound::Unbounded) => {
+                        let res = table
+                            .range(x..)?
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                        Ok(res)
+                    }
+                    (Bound::Excluded(x), Bound::Unbounded) => {
+                        let res = table
+                            .range(x..)?
+                            .skip(1)
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                        Ok(res)
+                    }
+                    (Bound::Included(x), Bound::Included(y)) => {
+                        let res = table
+                            .range(x..=y)?
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                        Ok(res)
+                    }
+                    (Bound::Included(x), Bound::Excluded(y)) => {
+                        let res = table
+                            .range(x..y)?
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+
+                        Ok(res)
+                    }
+                    (Bound::Excluded(x), Bound::Included(y)) => {
+                        let res = table
+                            .range(x..=y)?
+                            .skip(1)
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+                        Ok(res)
+                    }
+                    (Bound::Excluded(x), Bound::Excluded(y)) => {
+                        let res = table
+                            .range(x..y)?
+                            .skip(1)
+                            .map(|i| i.map(|(_, value)| value.value()))
+                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
+                        Ok(res)
+                    }
+                },
+                None => Ok(Vec::new()),
+            })?;
+
+        Ok(res)
     }
 }
 
@@ -175,6 +271,9 @@ pub enum DispatcherError {
 
     #[error("DB: {0}")]
     DB(#[from] DBError),
+
+    #[error("DB Storage: {0}")]
+    DBStorage(#[from] redb::StorageError),
 
     #[error("DB: {0}")]
     CA(#[from] CAStorageError),
@@ -202,15 +301,15 @@ mod tests {
         },
         engine::{
             identity::IdentityEngine,
-            mock::{Function, MockEngine},
+            mock::MockEngine,
             runner::{MultiEngineRunner, SingleEngineRunner},
         },
         init_tracing_tests,
         submission::mock::MockSubmission,
+        test_utils::mock::BigSquare,
         triggers::mock::MockTriggerManagerVec,
         Digest,
     };
-    use serde::{Deserialize, Serialize};
 
     use super::*;
 
@@ -275,26 +374,6 @@ mod tests {
             verifier_addr: verifier_addr.to_string(),
         };
         assert_eq!(processed[0], expected);
-    }
-
-    struct BigSquare;
-
-    #[derive(Deserialize, Serialize)]
-    struct SquareIn {
-        pub x: u64,
-    }
-
-    #[derive(Deserialize, Serialize)]
-    struct SquareOut {
-        pub y: u64,
-    }
-
-    impl Function for BigSquare {
-        fn execute(&self, request: Vec<u8>, _timestamp: u64) -> Result<Vec<u8>, EngineError> {
-            let SquareIn { x } = serde_json::from_slice(&request).unwrap();
-            let output = SquareOut { y: x * x };
-            Ok(serde_json::to_vec(&output).unwrap())
-        }
     }
 
     /// Simulate running the square workflow but Function not WASI component

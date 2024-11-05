@@ -15,7 +15,7 @@ mod e2e {
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::Serialize;
-    use wasmatic::test_utils::app::TestApp;
+    use wasmatic::{apis::dispatcher::Permissions, test_utils::app::TestApp};
     use wasmatic::{
         apis::Trigger,
         config::Config,
@@ -148,8 +148,8 @@ mod e2e {
                 tracing::info!("task completed!");
                 tracing::info!("result: {:#?}", result);
 
-                let y = result.get("y").unwrap().as_f64().unwrap();
-                assert_eq!(y, 9.0);
+                let y = result.get("y").unwrap().as_u64().unwrap();
+                assert_eq!(y, 9);
             }
             Err(_) => panic!("Timeout waiting for task to complete"),
         }
@@ -248,7 +248,6 @@ mod e2e {
         pub fn new(config: &Config) -> Self {
             let endpoint = format!("http://{}:{}", config.host, config.port);
 
-            println!("endpoint: {}", endpoint);
             Self {
                 inner: reqwest::Client::new(),
                 endpoint,
@@ -279,7 +278,7 @@ mod e2e {
                 name: name.to_string(),
                 status: None,
                 digest,
-                permissions: wasmatic::http::types::app::Permissions {},
+                permissions: Permissions::default(),
                 envs: Vec::new(),
                 testable: Some(true),
             };

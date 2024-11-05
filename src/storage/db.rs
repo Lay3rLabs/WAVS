@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use redb::{AccessGuard, Database, Key, TableError, TypeName, Value};
+use redb::{AccessGuard, Database, Key, ReadOnlyTable, TableError, TypeName, Value};
 use serde::{de::Deserialize, Serialize};
 use std::any::type_name;
 
@@ -61,6 +61,21 @@ impl RedbStorage {
         }
         write_txn.commit()?;
         Ok(())
+    }
+
+    // TODO: this could just be an internal helper method for get(), range(), etc.
+    pub fn map_table_read<'a, K, V, F, R>(&self, table: Table<K, V>, f: F) -> Result<R, DBError>
+    where
+        K: Key + 'a,
+        V: Value + 'a,
+        F: FnOnce(Option<ReadOnlyTable<K, V>>) -> Result<R, DBError>,
+    {
+        let read_txn = self.db.begin_read()?;
+        match read_txn.open_table(table) {
+            Ok(table) => f(Some(table)),
+            Err(TableError::TableDoesNotExist(_)) => f(None),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
