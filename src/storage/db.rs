@@ -63,6 +63,7 @@ impl RedbStorage {
         Ok(())
     }
 
+    // TODO: this could just be an internal helper method for get(), range(), etc.
     pub fn map_table_read<'a, K, V, F, R>(&self, table: Table<K, V>, f: F) -> Result<R, DBError>
     where
         K: Key + 'a,
