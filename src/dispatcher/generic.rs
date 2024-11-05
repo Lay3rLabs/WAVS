@@ -118,16 +118,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(self.engine.run_trigger(action, service)?)
     }
 
-    fn test_service(&self, service_id: ID, payload: Vec<u8>) -> Result<Vec<u8>, DispatcherError> {
-        let service = self
-            .storage
-            .get(SERVICE_TABLE, service_id.as_ref())?
-            .ok_or(DispatcherError::UnknownService(service_id.clone()))?
-            .value();
-
-        Ok(self.engine.test_service(service, payload)?)
-    }
-
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
         let bytecode = match source {
             WasmSource::Bytecode(code) => code,

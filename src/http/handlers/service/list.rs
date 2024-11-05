@@ -58,6 +58,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
                 permissions,
                 status: Some(status),
                 name: service.id.to_string(),
+                // just first workflow for now
                 trigger: match service.workflows.values().next() {
                     None => return Err(anyhow::anyhow!("No workflows found").into()),
                     Some(w) => w.trigger.clone(),

@@ -1,8 +1,15 @@
+use std::ops::Bound;
+
+use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
+use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    apis::ID,
+    apis::{
+        trigger::{TriggerAction, TriggerData, TriggerResult},
+        Trigger,
+    },
     http::{error::HttpResult, state::HttpState},
 };
 
@@ -33,11 +40,39 @@ pub async fn handle_test_service(
 async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResult<TestAppResponse> {
     let input = req.input.unwrap_or_default();
 
-    let output_bytes = state
+    let services = state
         .dispatcher
-        .test_service(ID::new(&req.name)?, serde_json::to_vec(&input)?)?;
+        .list_services(Bound::Included(&req.name), Bound::Included(&req.name))?;
+    let service = services
+        .first()
+        .context(format!("Service {} not found", req.name))?;
 
-    let output = serde_json::from_slice(&output_bytes)?;
+    // TODO: just use the first workflow for now
+    let (workflow_id, workflow) = service
+        .workflows
+        .iter()
+        .next()
+        .context("No workflows found")?;
+
+    let action = TriggerAction {
+        trigger: TriggerData {
+            service_id: service.id.clone(),
+            workflow_id: workflow_id.clone(),
+            trigger: workflow.trigger.clone(),
+        },
+        result: match workflow.trigger {
+            Trigger::Queue { .. } => {
+                TriggerResult::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
+            }
+        },
+    };
+
+    let chain_message = state
+        .dispatcher
+        .run_trigger(action)?
+        .context("could not get chain message")?;
+
+    let output = serde_json::from_slice(&chain_message.wasm_result)?;
 
     let resp = TestAppResponse { output };
 
