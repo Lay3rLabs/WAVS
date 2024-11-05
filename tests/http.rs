@@ -66,5 +66,5 @@ async fn http_upload_service() {
 
     let response: UploadServiceResponse = map_response(response).await;
 
-    assert_eq!(response.digest, digest);
+    assert_eq!(response.digest, digest.into());
 }

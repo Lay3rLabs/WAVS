@@ -8,16 +8,15 @@ use crate::{
     http::{
         error::HttpResult,
         state::HttpState,
-        types::app::{App, Status},
+        types::app::{App, ShaDigest, Status},
     },
-    Digest,
 };
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListAppsResponse {
     pub apps: Vec<App>,
-    pub digests: Vec<Digest>,
+    pub digests: Vec<ShaDigest>,
 }
 
 #[axum::debug_handler]
@@ -52,7 +51,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
             };
 
             let app = App {
-                digest,
+                digest: digest.into(),
                 envs,
                 permissions,
                 status: Some(status),
@@ -70,6 +69,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
     }
 
     let digests = state.dispatcher.list_component_digests()?;
+    let digests = digests.into_iter().map(Into::into).collect();
 
     Ok(ListAppsResponse { apps, digests })
 }

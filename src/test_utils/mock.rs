@@ -104,7 +104,7 @@ impl MockE2ETestRunner {
                 trigger: Trigger::queue(&task_queue_address.to_string(), 5),
                 name: service_id.to_string(),
                 status: None,
-                digest,
+                digest: digest.into(),
                 permissions: Permissions::default(),
                 envs: Vec::new(),
                 testable: None,
