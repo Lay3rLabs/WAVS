@@ -67,10 +67,18 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
         },
     };
 
-    let chain_message = state
-        .dispatcher
-        .run_trigger(action)?
-        .context("could not get chain message")?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    std::thread::spawn({
+        let state = state.clone();
+        move || {
+            let resp = state.dispatcher.run_trigger(action);
+
+            tx.send(resp).unwrap();
+        }
+    });
+
+    let chain_message = rx.await.unwrap()?.context("could not get chain message")?;
 
     let output = serde_json::from_slice(&chain_message.wasm_result)?;
 
