@@ -199,13 +199,13 @@ pub struct BigSquare;
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct SquareIn {
-    pub x: f32,
+    pub x: u64,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 
 pub struct SquareOut {
-    pub y: f32,
+    pub y: u64,
 }
 
 impl Function for BigSquare {

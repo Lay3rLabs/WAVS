@@ -148,8 +148,8 @@ mod e2e {
                 tracing::info!("task completed!");
                 tracing::info!("result: {:#?}", result);
 
-                let y = result.get("y").unwrap().as_f64().unwrap();
-                assert_eq!(y, 9.0);
+                let y = result.get("y").unwrap().as_u64().unwrap();
+                assert_eq!(y, 9);
             }
             Err(_) => panic!("Timeout waiting for task to complete"),
         }

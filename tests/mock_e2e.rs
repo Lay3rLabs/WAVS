@@ -49,7 +49,7 @@ fn mock_e2e_trigger_flow() {
                     &service_id,
                     &workflow_id,
                     &MOCK_TASK_QUEUE_ADDRESS,
-                    &SquareIn { x: 3.0 },
+                    &SquareIn { x: 3 },
                 )
                 .await;
             runner
@@ -59,7 +59,7 @@ fn mock_e2e_trigger_flow() {
                     &service_id,
                     &workflow_id,
                     &MOCK_TASK_QUEUE_ADDRESS,
-                    &SquareIn { x: 21.0 },
+                    &SquareIn { x: 21 },
                 )
                 .await;
         }
@@ -77,7 +77,7 @@ fn mock_e2e_trigger_flow() {
         .map(|msg| serde_json::from_slice(&msg.wasm_result).unwrap())
         .collect();
 
-    assert_eq!(results, vec![SquareOut { y: 9.0 }, SquareOut { y: 441.0 }]);
+    assert_eq!(results, vec![SquareOut { y: 9 }, SquareOut { y: 441 }]);
 }
 
 #[test]
@@ -175,9 +175,9 @@ fn mock_e2e_service_test() {
                 )
                 .await;
 
-            let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3.0 }).await;
+            let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3 }).await;
 
-            assert_eq!(y, 9.0);
+            assert_eq!(y, 9);
         }
     })
 }

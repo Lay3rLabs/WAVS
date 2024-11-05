@@ -55,7 +55,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                                 &service_id,
                                 &workflow_id,
                                 &MOCK_TASK_QUEUE_ADDRESS,
-                                &SquareIn { x: i as f32 },
+                                &SquareIn { x: i as u64 },
                             )
                             .await;
                     }

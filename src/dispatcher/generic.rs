@@ -397,12 +397,12 @@ mod tests {
             TriggerAction {
                 trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
                     .unwrap(),
-                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3.0}"#),
+                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
                 trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
                     .unwrap(),
-                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21.0}"#),
+                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];
 
@@ -452,9 +452,9 @@ mod tests {
 
         // Check the task_id and payloads
         assert_eq!(processed[0].task_id, TaskId::new(1));
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9.0}"#);
+        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
         assert_eq!(processed[1].task_id, TaskId::new(2));
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441.0}"#);
+        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
     }
 
     /// Simulate big-square on a multi-threaded dispatcher
@@ -527,8 +527,8 @@ mod tests {
 
         // Check the task_id and payloads
         assert_eq!(processed[0].task_id, TaskId::new(1));
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9.0}"#);
+        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
         assert_eq!(processed[1].task_id, TaskId::new(2));
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441.0}"#);
+        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
     }
 }
