@@ -14,8 +14,7 @@ mod e2e {
         tasks as task_queue,
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
-    use serde::Serialize;
-    use wasmatic::{apis::dispatcher::Permissions, test_utils::app::TestApp};
+    use serde::{de::DeserializeOwned, Serialize};
     use wasmatic::{
         apis::Trigger,
         config::Config,
@@ -26,6 +25,14 @@ mod e2e {
             types::app::App,
         },
         Digest,
+    };
+    use wasmatic::{
+        apis::{dispatcher::Permissions, ID},
+        http::handlers::service::test::{TestAppRequest, TestAppResponse},
+        test_utils::{
+            app::TestApp,
+            mock::{SquareIn, SquareOut},
+        },
     };
 
     #[test]
@@ -109,8 +116,10 @@ mod e2e {
 
         tracing::info!("Running tasks on task queue contract: {}", task_queue.addr);
 
+        let service_id = ID::new("test-service").unwrap();
+
         let _ = http_client
-            .create_service("test-service", wasm_digest, &task_queue.addr)
+            .create_service(&service_id, wasm_digest, &task_queue.addr)
             .await
             .unwrap();
 
@@ -153,6 +162,16 @@ mod e2e {
             }
             Err(_) => panic!("Timeout waiting for task to complete"),
         }
+
+        tracing::info!("regular task submission past, running test service..");
+
+        let result: SquareOut = http_client
+            .test_service(&service_id, SquareIn { x: 4 })
+            .await
+            .unwrap();
+
+        assert_eq!(result.y, 16);
+        tracing::info!("success!");
     }
 
     struct TaskQueueContract {
@@ -277,7 +296,7 @@ mod e2e {
                 },
                 name: name.to_string(),
                 status: None,
-                digest,
+                digest: digest.into(),
                 permissions: Permissions::default(),
                 envs: Vec::new(),
                 testable: Some(true),
@@ -299,6 +318,29 @@ mod e2e {
             Ok(())
         }
 
+        pub async fn test_service<D: DeserializeOwned>(
+            &self,
+            name: impl ToString,
+            input: impl Serialize,
+        ) -> Result<D> {
+            let body = serde_json::to_string(&TestAppRequest {
+                name: name.to_string(),
+                input: Some(serde_json::to_value(input)?),
+            })?;
+
+            let response: TestAppResponse = self
+                .inner
+                .post(&format!("{}/test", self.endpoint))
+                .header("Content-Type", "application/json")
+                .body(body)
+                .send()
+                .await?
+                .json()
+                .await?;
+
+            Ok(serde_json::from_value(response.output)?)
+        }
+
         pub async fn upload_wasm(&self, wasm_bytes: Vec<u8>) -> Result<Digest> {
             let response: UploadServiceResponse = self
                 .inner
@@ -309,7 +351,7 @@ mod e2e {
                 .json()
                 .await?;
 
-            Ok(response.digest)
+            Ok(response.digest.into())
         }
     }
 }
