@@ -180,11 +180,11 @@ mod tests {
         let json = "{}";
         let permissions: Permissions = serde_json::from_str(json).unwrap();
         assert_eq!(permissions.allowed_http_hosts, AllowedHostPermission::All);
-        assert_eq!(permissions.file_system, true);
+        assert!(permissions.file_system);
 
         let json = r#"{"allowedHttpHosts":"none","fileSystem":false}"#;
         let permissions: super::Permissions = serde_json::from_str(json).unwrap();
         assert_eq!(permissions.allowed_http_hosts, AllowedHostPermission::None,);
-        assert_eq!(permissions.file_system, false);
+        assert!(!permissions.file_system);
     }
 }
