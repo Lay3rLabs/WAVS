@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Bound};
 
 use serde::{Deserialize, Serialize};
 
@@ -31,16 +31,11 @@ pub trait DispatchManager: Send + Sync {
 
     fn list_services(
         &self,
-        bounds_start: Option<ListBounds>,
-        bounds_end: Option<ListBounds>,
+        bounds_start: Bound<&str>,
+        bounds_end: Bound<&str>,
     ) -> Result<Vec<Service>, Self::Error>;
 
     fn test_service(&self, service_id: ID, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
-}
-
-pub enum ListBounds<'a> {
-    Inclusive(&'a str),
-    Exclusive(&'a str),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

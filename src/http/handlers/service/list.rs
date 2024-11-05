@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Bound};
 
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,9 @@ pub async fn handle_list_services(State(state): State<HttpState>) -> impl IntoRe
 }
 
 async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> {
-    let services = state.dispatcher.list_services(None, None)?;
+    let services = state
+        .dispatcher
+        .list_services(Bound::Unbounded, Bound::Unbounded)?;
 
     let mut apps = Vec::with_capacity(services.len());
     let mut digests = HashSet::with_capacity(services.len());
