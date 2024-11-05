@@ -59,7 +59,7 @@ impl<'de> Visitor<'de> for StrVisitor {
     type Value = Digest;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("expected hex-encoded string with a prefix for the hash algorithm type")
+        formatter.write_str("expected hex-encoded string")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
