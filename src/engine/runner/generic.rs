@@ -43,14 +43,11 @@ pub trait EngineRunner: Send + Sync {
             .get(&workflow.component)
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
-        // TODO: we actually get other info, like permissions and apply in the execution
-        let digest = component.wasm.clone();
-
         match action.result {
             TriggerResult::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
-                let wasm_result = self.engine().execute_queue(digest, payload, timestamp)?;
+                let wasm_result = self.engine().execute_queue(component, payload, timestamp)?;
 
                 // TODO: we need to sent these off to the submission engine
                 if let Some(Submit::VerifierTx {

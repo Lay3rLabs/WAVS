@@ -11,8 +11,9 @@ use wasmtime::{
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
+use crate::apis::dispatcher::AllowedHostPermission;
 use crate::storage::{CAStorage, CAStorageError};
-use crate::{task_bindings, Digest};
+use crate::{apis, task_bindings, Digest};
 
 use super::{Engine, EngineError};
 
@@ -73,12 +74,13 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
     fn execute_queue(
         &self,
-        digest: Digest,
+        wasi: &apis::dispatcher::Component,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
+        let digest = wasi.wasm.clone();
         let component = match self.memory_cache.write().unwrap().get(&digest) {
             Some(cm) => cm.clone(),
             None => {
@@ -92,24 +94,30 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         // wasmtime_wasi::add_to_linker_sync(&mut linker).unwrap();
         // wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker).unwrap();
         wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
-        wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+        // don't add http support if we don't allow it
+        // FIXME: we need to apply Only(host) checks as well, but that involves some wat magic
+        if wasi.permissions.allowed_http_hosts != AllowedHostPermission::None {
+            wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+        }
 
         // create wasi context
         let mut builder = WasiCtxBuilder::new();
-        let app_cache_path = self.app_data_dir.join(digest.to_string());
 
-        if !app_cache_path.is_dir() {
-            std::fs::create_dir(&app_cache_path)?;
+        // conditionally allow fs access
+        if wasi.permissions.file_system {
+            let app_cache_path = self.app_data_dir.join(digest.to_string());
+            if !app_cache_path.is_dir() {
+                std::fs::create_dir(&app_cache_path)?;
+            }
+            builder
+                .preopened_dir(&app_cache_path, ".", DirPerms::all(), FilePerms::all())
+                .context("preopen failed")?;
         }
 
-        builder
-            .preopened_dir(&app_cache_path, ".", DirPerms::all(), FilePerms::all())
-            .context("preopen failed")?;
-
-        // TODO: add some env here
-        // if !envs.is_empty() {
-        //     builder.envs(envs);
-        // }
+        // add any env vars that were provided
+        if !wasi.env.is_empty() {
+            builder.envs(&wasi.env);
+        }
         let ctx = builder.build();
 
         // create host (what is this actually? some state needed for the linker?)
@@ -222,10 +230,11 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
+        let component = crate::apis::dispatcher::Component::new(&digest);
 
         // execute it and get square
         let result = engine
-            .execute_queue(digest, br#"{"x":12}"#.into(), 12345)
+            .execute_queue(&component, br#"{"x":12}"#.into(), 12345)
             .unwrap();
         assert_eq!(&result, br#"{"y":144}"#);
     }

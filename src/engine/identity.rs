@@ -1,3 +1,4 @@
+use crate::apis::dispatcher::Component;
 use crate::apis::engine::{Engine, EngineError};
 
 use crate::Digest;
@@ -24,7 +25,7 @@ impl Engine for IdentityEngine {
 
     fn execute_queue(
         &self,
-        _digest: Digest,
+        _component: &Component,
         request: Vec<u8>,
         _timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -50,8 +51,9 @@ mod test {
 
         // execute returns self
         let request = b"this is only a test".to_vec();
+        let component = Component::new(&d1);
         let result = engine
-            .execute_queue(d1, request.clone(), 1234567890)
+            .execute_queue(&component, request.clone(), 1234567890)
             .unwrap();
         assert_eq!(request, result);
     }
