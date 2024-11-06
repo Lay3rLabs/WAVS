@@ -48,10 +48,10 @@ impl CAStorage for MemoryStorage {
 
     fn digests(
         &self,
-    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>> + '_>, CAStorageError> {
+    ) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, CAStorageError> {
         let tree = self.data.read()?;
         let it: Vec<_> = tree.keys().map(|d| Ok(d.clone())).collect();
-        Ok(Box::new(it.into_iter()))
+        Ok(it.into_iter())
     }
 }
 

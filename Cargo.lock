@@ -4724,6 +4724,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
