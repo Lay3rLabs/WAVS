@@ -53,14 +53,15 @@ pub mod castorage {
         // they have different keys
         assert_ne!(digest1, digest2);
 
-        // we can list the digests (sorted)
+        // we can list the digests (sort both as order is not defined)
         let mut expected = vec![digest1, digest2];
         expected.sort();
-        let digests = store
+        let mut digests = store
             .digests()
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
+        digests.sort();
         assert_eq!(expected, digests);
     }
 }

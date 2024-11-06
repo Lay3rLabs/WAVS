@@ -56,14 +56,65 @@ fn filter_dirs(entry: std::io::Result<DirEntry>) -> Option<std::io::Result<DirEn
     }
 }
 
-fn read_digests(
-    dir: DirEntry,
-) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, std::io::Error> {
-    let digests = std::fs::read_dir(&dir.path())?.map(|entry| {
-        let name = entry?.file_name().into_string().unwrap();
-        Ok::<_, CAStorageError>(Digest::from_str(&name)?)
-    });
-    Ok(digests)
+struct DigestIterator {
+    dirs: <Vec<DirEntry> as IntoIterator>::IntoIter,
+    top_dir: Option<std::fs::ReadDir>,
+    second_dir: Option<std::fs::ReadDir>,
+}
+
+impl DigestIterator {
+    fn new(dirs: Vec<DirEntry>) -> Self {
+        DigestIterator {
+            dirs: dirs.into_iter(),
+            top_dir: None,
+            second_dir: None,
+        }
+    }
+}
+
+impl Iterator for DigestIterator {
+    type Item = Result<Digest, CAStorageError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref mut second_dir) = self.second_dir {
+            match second_dir.next() {
+                Some(Ok(entry)) => {
+                    let name = entry.file_name().into_string().unwrap();
+                    println!("name: {:?}", name);
+                    Some(Digest::from_str(&name).map_err(CAStorageError::from))
+                }
+                Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
+                None => {
+                    println!("finished lower-level dir");
+                    self.second_dir = None;
+                    self.next()
+                }
+            }
+        } else if let Some(ref mut top_dir) = self.top_dir {
+            match top_dir.next() {
+                Some(Ok(entry)) => {
+                    println!("opening second-level dir {:?}", entry.path());
+                    self.second_dir = Some(std::fs::read_dir(&entry.path()).unwrap());
+                    self.next()
+                }
+                Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
+                None => {
+                    println!("finished top-level dir");
+                    self.top_dir = None;
+                    self.next()
+                }
+            }
+        } else {
+            match self.dirs.next() {
+                Some(dir) => {
+                    println!("opening top-level dir {:?}", dir.path());
+                    self.top_dir = Some(std::fs::read_dir(&dir.path()).unwrap());
+                    self.next()
+                }
+                None => None,
+            }
+        }
+    }
 }
 
 impl CAStorage for FileStorage {
@@ -106,8 +157,7 @@ impl CAStorage for FileStorage {
         let top_dirs: Result<Vec<DirEntry>, std::io::Error> = std::fs::read_dir(&self.data_dir)?
             .filter_map(filter_dirs)
             .collect();
-        // now, read the lower ones, and iterate over the files in them
-        let iter = top_dirs?.into_iter().flat_map(read_digests);
+        let iter = DigestIterator::new(top_dirs?);
         Ok(Box::new(iter))
 
         // let mut all_dirs = vec![];
