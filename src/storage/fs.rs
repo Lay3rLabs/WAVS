@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{DirEntry, File};
 use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -40,6 +40,32 @@ impl FileStorage {
     }
 }
 
+fn filter_dirs(entry: std::io::Result<DirEntry>) -> Option<std::io::Result<DirEntry>> {
+    match entry {
+        Ok(dir) => match dir.file_type() {
+            Ok(ft) => {
+                if ft.is_dir() {
+                    Some(Ok(dir))
+                } else {
+                    None
+                }
+            }
+            Err(e) => Some(Err(e)),
+        },
+        Err(e) => Some(Err(e)),
+    }
+}
+
+fn read_digests(
+    dir: DirEntry,
+) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, std::io::Error> {
+    let digests = std::fs::read_dir(&dir.path())?.map(|entry| {
+        let name = entry?.file_name().into_string().unwrap();
+        Ok::<_, CAStorageError>(Digest::from_str(&name)?)
+    });
+    Ok(digests)
+}
+
 impl CAStorage for FileStorage {
     fn reset(&self) -> Result<(), CAStorageError> {
         // wipe out and re-create the entire directory
@@ -71,15 +97,56 @@ impl CAStorage for FileStorage {
         Ok(data)
     }
 
+    /// Returns an iterator over all the digests in the storage.
+    /// We store these two levels deep (see digest_to_path), so we need to walk the directory tree.
     fn digests(
         &self,
     ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>> + '_>, CAStorageError> {
-        // TODO: test this
-        let iter = std::fs::read_dir(&self.data_dir)?.map(|entry| {
-            let name = entry?.file_name().into_string().unwrap();
-            Ok(Digest::from_str(&name)?)
-        });
+        // First, collect all the top-level dirs
+        let top_dirs: Result<Vec<DirEntry>, std::io::Error> = std::fs::read_dir(&self.data_dir)?
+            .filter_map(filter_dirs)
+            .collect();
+        // now, read the lower ones, and iterate over the files in them
+        let iter = top_dirs?.into_iter().flat_map(read_digests);
         Ok(Box::new(iter))
+
+        // let mut all_dirs = vec![];
+        // for dir in top_dirs? {
+        //     let digests = std::fs::read_dir(&dir.path())?.map(|entry| {
+        //         let name = entry?.file_name().into_string().unwrap();
+        //         Ok::<_, CAStorageError>(Digest::from_str(&name)?)
+        //     });
+        //     all_dirs.extend(digests);
+        // }
+        // let all_dirs: Box<dyn Iterator<Item=Result<DirEntry, std::io::Error>>> = Box::new(top_dirs?.into_iter().flat_map(|dir| {
+        //             Ok(std::fs::read_dir(&dir.path())?.filter_map(filter_dirs))
+        //         }));
+
+        // let dirs: Result<Vec<DirEntry>, CAStorageError> =
+        //     .flat_map(|entry| Ok::<dyn Iterator<Item=Result<DirEntry, CAStorageError>>, CAStorageError>(std::fs::read_dir(&entry?.path())?.filter_map(filter_dirs)))
+        //     .collect();
+
+        // let iter = dirs?.into_iter().flat_map(|dir| {
+        //     let digests = std::fs::read_dir(&dir.path())?.map(|entry| {
+        //         let name = entry?.file_name().into_string().unwrap();
+        //         Ok::<_, CAStorageError>(Digest::from_str(&name)?)
+        //     });
+        //     Ok(digests)
+        // });
+
+        // First attempt, looks better but had type issues
+        // let iter = std::fs::read_dir(&self.data_dir)?.flat_map(|entry| {
+        //     let dir = entry?;
+        //     if dir.file_type()?.is_dir() {
+        //         Ok(std::fs::read_dir(dir.path())?.map(|entry| {
+        //             let name = entry?.file_name().into_string().unwrap();
+        //             Ok::<_, CAStorageError>(Digest::from_str(&name)?)
+        //         }))
+        //     } else {
+        //         Err(CAStorageError::Other("unexpected file in data dir".to_string()))
+        //     }
+        // });
+        // Ok(Box::new(iter))
     }
 }
 
@@ -127,5 +194,4 @@ mod tests {
         // it also gets cleaned up with Drop, in case of test failure
         dir.close().unwrap();
     }
-
 }

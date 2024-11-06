@@ -57,6 +57,9 @@ pub enum CAStorageError {
     /// An error occurred doing locking in the storage implementation
     #[error("Poisoned Lock error")]
     PoisonedLock,
+
+    #[error("Other: {0}")]
+    Other(String),
 }
 
 impl<T> From<std::sync::PoisonError<T>> for CAStorageError {

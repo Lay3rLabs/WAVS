@@ -56,7 +56,11 @@ pub mod castorage {
         // we can list the digests (sorted)
         let mut expected = vec![digest1, digest2];
         expected.sort();
-        let digests = store.digests().unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        let digests = store
+            .digests()
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(expected, digests);
     }
 }
