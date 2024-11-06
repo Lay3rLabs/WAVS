@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use super::prelude::*;
@@ -40,6 +40,83 @@ impl FileStorage {
     }
 }
 
+/// This takes a top-level data dir and contains all the logic to
+/// walk the directory tree two levels deep and return all the filenames of the bottom-level files
+/// as parsed digests.
+struct DigestIterator {
+    dirs: std::fs::ReadDir,
+    top_dir: Option<std::fs::ReadDir>,
+    second_dir: Option<std::fs::ReadDir>,
+}
+
+impl DigestIterator {
+    fn new(data_dir: impl AsRef<Path>) -> Result<Self, CAStorageError> {
+        let me = DigestIterator {
+            dirs: std::fs::read_dir(data_dir.as_ref())?,
+            top_dir: None,
+            second_dir: None,
+        };
+        Ok(me)
+    }
+}
+
+impl Iterator for DigestIterator {
+    type Item = Result<Digest, CAStorageError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref mut second_dir) = self.second_dir {
+            match second_dir.next() {
+                Some(Ok(entry)) => {
+                    let name = entry.file_name().into_string().unwrap();
+                    Some(Digest::from_str(&name).map_err(CAStorageError::from))
+                }
+                Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
+                None => {
+                    self.second_dir = None;
+                    self.next()
+                }
+            }
+        } else if let Some(ref mut top_dir) = self.top_dir {
+            match top_dir.next() {
+                Some(Ok(dir)) => {
+                    // check if it is a dir or file, and skip if not a dir
+                    match dir.file_type() {
+                        Ok(file_type) => {
+                            if file_type.is_dir() {
+                                self.second_dir = Some(std::fs::read_dir(dir.path()).unwrap());
+                            }
+                        }
+                        Err(e) => return Some(Err(CAStorageError::IO(e))),
+                    }
+                    self.next()
+                }
+                Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
+                None => {
+                    self.top_dir = None;
+                    self.next()
+                }
+            }
+        } else {
+            match self.dirs.next() {
+                Some(Ok(dir)) => {
+                    // check if it is a dir or file, and skip if not a dir
+                    match dir.file_type() {
+                        Ok(file_type) => {
+                            if file_type.is_dir() {
+                                self.top_dir = Some(std::fs::read_dir(dir.path()).unwrap());
+                            }
+                        }
+                        Err(e) => return Some(Err(CAStorageError::IO(e))),
+                    }
+                    self.next()
+                }
+                Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
+                None => None,
+            }
+        }
+    }
+}
+
 impl CAStorage for FileStorage {
     fn reset(&self) -> Result<(), CAStorageError> {
         // wipe out and re-create the entire directory
@@ -71,14 +148,12 @@ impl CAStorage for FileStorage {
         Ok(data)
     }
 
+    /// Returns an iterator over all the digests in the storage.
+    /// We store these two levels deep (see digest_to_path), so we need to walk the directory tree.
     fn digests(
         &self,
     ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>> + '_>, CAStorageError> {
-        // TODO: test this
-        let iter = std::fs::read_dir(&self.data_dir)?.map(|entry| {
-            let name = entry?.file_name().into_string().unwrap();
-            Ok(Digest::from_str(&name)?)
-        });
+        let iter = DigestIterator::new(&self.data_dir)?;
         Ok(Box::new(iter))
     }
 }
@@ -116,6 +191,14 @@ mod tests {
     fn test_multiple_keys() {
         let (store, dir) = setup();
         castorage::test_multiple_keys(store);
+        // it also gets cleaned up with Drop, in case of test failure
+        dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_list_digests() {
+        let (store, dir) = setup();
+        castorage::test_list_digests(store);
         // it also gets cleaned up with Drop, in case of test failure
         dir.close().unwrap();
     }
