@@ -166,14 +166,6 @@ impl Submission for CoreSubmission {
                                 tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, msg.hd_index, err);
                             }
 
-                            let verifier_addr = match _self.chain_config.parse_address(&msg.verifier_addr) {
-                                Ok(addr) => addr,
-                                Err(e) => {
-                                    tracing::error!("Failed to parse verifier address: {:?}", e);
-                                    continue;
-                                }
-                            };
-
                             let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
                                 Ok(result) => result,
                                 Err(e) => {
@@ -193,14 +185,14 @@ impl Submission for CoreSubmission {
                             let contract_msg = match msg.trigger_data.trigger {
                                 Trigger::Queue { task_queue_addr, .. } => {
                                     VerifierExecuteMsg::ExecutedTask {
-                                        task_queue_contract: task_queue_addr,
+                                        task_queue_contract: task_queue_addr.to_string(),
                                         task_id: msg.task_id,
                                         result,
                                     }
                                 }
                             };
 
-                            match client.contract_execute(&verifier_addr, &contract_msg, Vec::new(), None).await {
+                            match client.contract_execute(&msg.verifier_addr, &contract_msg, Vec::new(), None).await {
                                 Ok(_) => {
                                     tracing::info!("Submission successful");
                                 },

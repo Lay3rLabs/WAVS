@@ -5,7 +5,7 @@ use wasmatic::{
     apis::ID,
     context::AppContext,
     test_utils::{
-        chain::MOCK_TASK_QUEUE_ADDRESS,
+        address::rand_address,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},
     },
     Digest,
@@ -16,11 +16,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let service_id = ID::new("default").unwrap();
     let workflow_id = ID::new("default").unwrap();
+    let task_queue_address = rand_address();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
         let runner = runner.clone();
         let service_id = service_id.clone();
+        let task_queue_address = task_queue_address.clone();
 
         async move {
             let digest = Digest::new(b"wasm");
@@ -28,7 +30,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 .create_service_simple(
                     service_id.clone(),
                     digest,
-                    &MOCK_TASK_QUEUE_ADDRESS,
+                    &task_queue_address,
                     BigSquare,
                 )
                 .await;
@@ -46,6 +48,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 let runner = runner.clone();
                 let service_id = service_id.clone();
                 let workflow_id = workflow_id.clone();
+                let task_queue_address = task_queue_address.clone();
                 async move {
                     for i in 1..=N_TRIGGERS {
                         runner
@@ -54,7 +57,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                             .send_trigger(
                                 &service_id,
                                 &workflow_id,
-                                &MOCK_TASK_QUEUE_ADDRESS,
+                                &task_queue_address,
                                 &SquareIn { x: i as u64 },
                             )
                             .await;

@@ -2,33 +2,37 @@ use std::{fmt, ops::Deref, str::FromStr};
 
 use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{
-    apis::{dispatcher::Permissions, Trigger},
-    Digest,
-};
+use crate::{apis::Trigger, Digest};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct App {
-    pub name: String,
-    // TODO - probably make a different struct for request vs. response
-    // i.e. the request shouldn't contain this field at all
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub status: Option<Status>,
-    pub digest: ShaDigest,
-    pub trigger: Trigger,
-    pub permissions: Permissions,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub envs: Vec<(String, String)>,
-    pub testable: Option<bool>,
+pub enum TriggerRequest {
+    // TODO: add this variant later, not for now
+    // #[serde(rename_all = "camelCase")]
+    // Cron { schedule: String },
+    #[serde(rename_all = "camelCase")]
+    Queue {
+        // FIXME: add some chain name. right now all triggers are on one chain
+        task_queue_addr: String,
+        /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
+        poll_interval: u32,
+    },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
-#[serde(rename_all = "camelCase")]
-pub enum Status {
-    Active,
-    Failed,
-    MissingWasm,
+pub type TriggerResponse = TriggerRequest;
+
+impl From<Trigger> for TriggerResponse {
+    fn from(trigger: Trigger) -> Self {
+        match trigger {
+            Trigger::Queue {
+                task_queue_addr,
+                poll_interval,
+            } => TriggerResponse::Queue {
+                task_queue_addr: task_queue_addr.to_string(),
+                poll_interval,
+            },
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -5,7 +5,7 @@ use crate::{
     apis::{
         dispatcher::{DispatchManager, Permissions},
         engine::EngineError,
-        Trigger, ID,
+        ID,
     },
     context::AppContext,
     dispatcher::Dispatcher,
@@ -13,10 +13,13 @@ use crate::{
         mock::{Function, MockEngine},
         runner::{EngineRunner, SingleEngineRunner},
     },
-    http::handlers::service::delete::DeleteApps,
-    http::handlers::service::list::ListAppsResponse,
-    http::handlers::service::test::{TestAppRequest, TestAppResponse},
-    http::{handlers::service::add::RegisterAppRequest, types::app::App},
+    http::handlers::service::{
+        add::{AddServiceRequest, ServiceRequest},
+        delete::DeleteServices,
+        list::ListServicesResponse,
+        test::{TestAppRequest, TestAppResponse},
+    },
+    http::types::TriggerRequest,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
     Digest,
@@ -68,7 +71,7 @@ impl MockE2ETestRunner {
         })
     }
 
-    pub async fn list_services(&self) -> ListAppsResponse {
+    pub async fn list_services(&self) -> ListServicesResponse {
         let req = Request::builder()
             .method(Method::GET)
             .uri("/app")
@@ -84,7 +87,7 @@ impl MockE2ETestRunner {
             .await
             .unwrap();
 
-        map_response::<ListAppsResponse>(response).await
+        map_response::<ListServicesResponse>(response).await
     }
 
     pub async fn create_service_simple(
@@ -119,11 +122,10 @@ impl MockE2ETestRunner {
         self.dispatcher.engine.engine().register(&digest, function);
 
         // but we can create a service via http router
-        let body = serde_json::to_string(&RegisterAppRequest {
-            app: App {
-                trigger: Trigger::queue(&task_queue_address.to_string(), 5),
-                name: service_id.to_string(),
-                status: None,
+        let body = serde_json::to_string(&AddServiceRequest {
+            service: ServiceRequest {
+                trigger: TriggerRequest::queue(&task_queue_address.to_string(), 5),
+                id: service_id,
                 digest: digest.into(),
                 permissions,
                 envs,
@@ -153,10 +155,7 @@ impl MockE2ETestRunner {
     }
 
     pub async fn delete_services(&self, service_ids: Vec<ID>) {
-        let body = serde_json::to_string(&DeleteApps {
-            apps: service_ids.iter().map(|id| id.to_string()).collect(),
-        })
-        .unwrap();
+        let body = serde_json::to_string(&DeleteServices { service_ids }).unwrap();
 
         let req = Request::builder()
             .method(Method::DELETE)

@@ -16,23 +16,25 @@ mod e2e {
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::{de::DeserializeOwned, Serialize};
     use wasmatic::{
-        apis::Trigger,
-        config::Config,
-        context::AppContext,
-        dispatcher::CoreDispatcher,
-        http::{
-            handlers::service::{add::RegisterAppRequest, upload::UploadServiceResponse},
-            types::app::App,
-        },
-        Digest,
-    };
-    use wasmatic::{
         apis::{dispatcher::Permissions, ID},
-        http::handlers::service::test::{TestAppRequest, TestAppResponse},
+        http::{
+            handlers::service::test::{TestAppRequest, TestAppResponse},
+            types::TriggerRequest,
+        },
         test_utils::{
             app::TestApp,
             mock::{SquareIn, SquareOut},
         },
+    };
+    use wasmatic::{
+        config::Config,
+        context::AppContext,
+        dispatcher::CoreDispatcher,
+        http::handlers::service::{
+            add::{AddServiceRequest, ServiceRequest},
+            upload::UploadServiceResponse,
+        },
+        Digest,
     };
 
     #[test]
@@ -119,7 +121,7 @@ mod e2e {
         let service_id = ID::new("test-service").unwrap();
 
         let _ = http_client
-            .create_service(&service_id, wasm_digest, &task_queue.addr)
+            .create_service(service_id.clone(), wasm_digest, &task_queue.addr)
             .await
             .unwrap();
 
@@ -285,25 +287,24 @@ mod e2e {
 
         pub async fn create_service(
             &self,
-            name: impl ToString,
+            id: ID,
             digest: Digest,
-            task_queue_addr: &Address,
+            task_queue_addr: impl ToString,
         ) -> Result<()> {
-            let app = App {
-                trigger: Trigger::Queue {
+            let service = ServiceRequest {
+                trigger: TriggerRequest::Queue {
                     task_queue_addr: task_queue_addr.to_string(),
                     poll_interval: 1000,
                 },
-                name: name.to_string(),
-                status: None,
+                id,
                 digest: digest.into(),
                 permissions: Permissions::default(),
                 envs: Vec::new(),
                 testable: Some(true),
             };
 
-            let body = serde_json::to_string(&RegisterAppRequest {
-                app,
+            let body = serde_json::to_string(&AddServiceRequest {
+                service,
                 wasm_url: None,
             })?;
 

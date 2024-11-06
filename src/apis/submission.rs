@@ -1,4 +1,5 @@
 use lavs_apis::id::TaskId;
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -26,7 +27,7 @@ pub struct ChainMessage {
     pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
     pub hd_index: u32,
-    pub verifier_addr: String,
+    pub verifier_addr: Address,
 }
 
 #[derive(Error, Debug)]

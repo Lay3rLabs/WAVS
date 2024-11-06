@@ -166,13 +166,8 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
-                trigger: TriggerData::queue(
-                    service_id,
-                    workflow_id,
-                    &task_queue_addr.to_string(),
-                    5,
-                )
-                .unwrap(),
+                trigger: TriggerData::queue(service_id, workflow_id, task_queue_addr.clone(), 5)
+                    .unwrap(),
                 result: TriggerResult::queue(
                     task_id,
                     serde_json::to_string(data).unwrap().as_bytes(),
@@ -223,24 +218,28 @@ impl TriggerManager for MockTriggerManagerChannel {
 
 #[cfg(test)]
 mod tests {
+
     use lavs_apis::id::TaskId;
 
-    use crate::apis::trigger::TriggerResult;
+    use crate::{apis::trigger::TriggerResult, test_utils::address::rand_address};
 
     use super::*;
 
     #[test]
     fn mock_trigger_sends() {
+        let task_queue_addr = rand_address();
+
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::queue("service1", "workflow1", "layer12345", 5).unwrap(),
+                trigger: TriggerData::queue("service1", "workflow1", task_queue_addr.clone(), 5)
+                    .unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
-                trigger: TriggerData::queue("service2", "workflow2", "layer12345", 5).unwrap(),
+                trigger: TriggerData::queue("service2", "workflow2", task_queue_addr, 5).unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
@@ -261,7 +260,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerData::queue("abcd", "abcd", "layer12345", 5).unwrap();
+        let data = TriggerData::queue("abcd", "abcd", rand_address(), 5).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -272,7 +271,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerData::queue("abcd", "abcd", "layer12345", 5).unwrap();
+        let data = TriggerData::queue("abcd", "abcd", rand_address(), 5).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }
