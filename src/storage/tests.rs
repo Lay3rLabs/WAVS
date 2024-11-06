@@ -41,4 +41,27 @@ pub mod castorage {
         let loaded1 = store.get_data(&digest1).unwrap();
         assert_eq!(data1, loaded1.as_slice());
     }
+
+    pub fn test_list_digests<S: CAStorage>(store: S) {
+        let data1 = b"hello world";
+        let data2 = b"hello mom";
+
+        // store two different data blobs
+        let digest1 = store.set_data(data1).unwrap();
+        let digest2 = store.set_data(data2).unwrap();
+
+        // they have different keys
+        assert_ne!(digest1, digest2);
+
+        // we can list the digests (sort both as order is not defined)
+        let mut expected = vec![digest1, digest2];
+        expected.sort();
+        let mut digests = store
+            .digests()
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        digests.sort();
+        assert_eq!(expected, digests);
+    }
 }
