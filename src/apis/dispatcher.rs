@@ -132,7 +132,7 @@ pub struct Component {
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
-    pub env: Vec<[String; 2]>,
+    pub env: Vec<(String, String)>,
 }
 
 impl Component {

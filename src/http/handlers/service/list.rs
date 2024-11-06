@@ -39,11 +39,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListAppsResponse> 
     for service in services {
         for component in service.components.values() {
             let digest = component.wasm.clone();
-            let envs = component
-                .env
-                .iter()
-                .map(|e| (e[0].clone(), e[1].clone()))
-                .collect();
+            let envs = component.env.clone();
             let permissions = component.permissions.clone();
             let status = match service.status {
                 ServiceStatus::Active => Status::Active,
