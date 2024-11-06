@@ -68,27 +68,30 @@ impl Iterator for DigestIterator {
             match second_dir.next() {
                 Some(Ok(entry)) => {
                     let name = entry.file_name().into_string().unwrap();
-                    println!("name: {:?}", name);
                     Some(Digest::from_str(&name).map_err(CAStorageError::from))
                 }
                 Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
                 None => {
-                    println!("finished lower-level dir");
                     self.second_dir = None;
                     self.next()
                 }
             }
         } else if let Some(ref mut top_dir) = self.top_dir {
             match top_dir.next() {
-                Some(Ok(entry)) => {
-                    // TODO: check if it is a dir or file, and skip if not a dir
-                    println!("opening second-level dir {:?}", entry.path());
-                    self.second_dir = Some(std::fs::read_dir(entry.path()).unwrap());
+                Some(Ok(dir)) => {
+                    // check if it is a dir or file, and skip if not a dir
+                    match dir.file_type() {
+                        Ok(file_type) => {
+                            if file_type.is_dir() {
+                                self.second_dir = Some(std::fs::read_dir(dir.path()).unwrap());
+                            }
+                        }
+                        Err(e) => return Some(Err(CAStorageError::IO(e))),
+                    }
                     self.next()
                 }
                 Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
                 None => {
-                    println!("finished top-level dir");
                     self.top_dir = None;
                     self.next()
                 }
@@ -96,9 +99,15 @@ impl Iterator for DigestIterator {
         } else {
             match self.dirs.next() {
                 Some(Ok(dir)) => {
-                    // TODO: check if it is a dir or file, and skip if not a dir
-                    println!("opening top-level dir {:?}", dir.path());
-                    self.top_dir = Some(std::fs::read_dir(dir.path()).unwrap());
+                    // check if it is a dir or file, and skip if not a dir
+                    match dir.file_type() {
+                        Ok(file_type) => {
+                            if file_type.is_dir() {
+                                self.top_dir = Some(std::fs::read_dir(dir.path()).unwrap());
+                            }
+                        }
+                        Err(e) => return Some(Err(CAStorageError::IO(e))),
+                    }
                     self.next()
                 }
                 Some(Err(e)) => Some(Err(CAStorageError::IO(e))),
