@@ -12,7 +12,7 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::storage::{CAStorage, CAStorageError};
-use crate::{task_bindings, Digest};
+use crate::{apis, task_bindings, Digest};
 
 use super::{Engine, EngineError};
 
@@ -73,12 +73,13 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
     fn execute_queue(
         &self,
-        digest: Digest,
+        component: &apis::dispatcher::Component,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
+        let digest = component.wasm.clone();
         let component = match self.memory_cache.write().unwrap().get(&digest) {
             Some(cm) => cm.clone(),
             None => {
@@ -222,10 +223,11 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
+        let component = crate::apis::dispatcher::Component::new(&digest);
 
         // execute it and get square
         let result = engine
-            .execute_queue(digest, br#"{"x":12}"#.into(), 12345)
+            .execute_queue(&component, br#"{"x":12}"#.into(), 12345)
             .unwrap();
         assert_eq!(&result, br#"{"y":144}"#);
     }

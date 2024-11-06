@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{storage::CAStorageError, Digest};
 
-use super::ID;
+use super::{dispatcher::Component, ID};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
@@ -13,7 +13,7 @@ pub trait Engine: Send + Sync {
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
     fn execute_queue(
         &self,
-        digest: Digest,
+        component: &Component,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError>;
@@ -30,11 +30,11 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
 
     fn execute_queue(
         &self,
-        digest: Digest,
+        component: &Component,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute_queue(digest, request, timestamp)
+        self.as_ref().execute_queue(component, request, timestamp)
     }
 }
 

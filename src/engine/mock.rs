@@ -45,15 +45,15 @@ impl Engine for MockEngine {
 
     fn execute_queue(
         &self,
-        digest: Digest,
+        component: &crate::apis::dispatcher::Component,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
-            .get(&digest)
-            .ok_or(EngineError::UnknownDigest(digest))?;
+            .get(&component.wasm)
+            .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
         let result = fx.execute(request, timestamp)?;
         Ok(result)
     }
@@ -107,17 +107,18 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let res = engine.execute_queue(d1, b"123".into(), 1234).unwrap();
+        let c1 = crate::apis::dispatcher::Component::new(&d1);
+        let res = engine.execute_queue(&c1, b"123".into(), 1234).unwrap();
         assert_eq!(res, r1);
 
         // d2 call gets r2
-        let res = engine.execute_queue(d2, b"123".into(), 1234).unwrap();
+        let c2 = crate::apis::dispatcher::Component::new(&d2);
+        let res = engine.execute_queue(&c2, b"123".into(), 1234).unwrap();
         assert_eq!(res, r2);
 
-        // d1 call returns missing error
-        let err = engine
-            .execute_queue(d3.clone(), b"123".into(), 1234)
-            .unwrap_err();
+        // d3 call returns missing error
+        let c3 = crate::apis::dispatcher::Component::new(&d3);
+        let err = engine.execute_queue(&c3, b"123".into(), 1234).unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));
     }
 }
