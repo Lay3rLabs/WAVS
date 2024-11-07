@@ -33,12 +33,7 @@ fn mock_e2e_trigger_flow() {
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(
-                    service_id.clone(),
-                    digest,
-                    &task_queue_address,
-                    BigSquare,
-                )
+                .create_service_simple(service_id.clone(), digest, &task_queue_address, BigSquare)
                 .await;
         }
     });
@@ -237,8 +232,8 @@ fn mock_e2e_service_settings() {
 
             let services = runner.list_services().await;
 
-            assert_eq!(services.apps[0].permissions, permissions);
-            assert_eq!(services.apps[0].envs, envs);
+            assert_eq!(services.services[0].permissions, permissions);
+            assert_eq!(services.services[0].envs, envs);
         }
     })
 }

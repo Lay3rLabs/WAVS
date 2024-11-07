@@ -128,6 +128,7 @@ mod tests {
             dispatcher::{Component, Service, ServiceStatus, Workflow},
             Trigger, ID,
         },
+        test_utils::address::rand_address,
         Digest,
     };
 
@@ -206,7 +207,7 @@ mod tests {
             (
                 ID::new("workflow-id-1").unwrap(),
                 Workflow {
-                    trigger: Trigger::queue("fake-addr-1", 5),
+                    trigger: Trigger::queue(rand_address(), 5),
                     component: ID::new("component-id-1").unwrap(),
                     submit: None,
                 },
@@ -214,7 +215,7 @@ mod tests {
             (
                 ID::new("workflow-id-2").unwrap(),
                 Workflow {
-                    trigger: Trigger::queue("fake-addr-2", 5),
+                    trigger: Trigger::queue(rand_address(), 5),
                     component: ID::new("component-id-2").unwrap(),
                     submit: None,
                 },

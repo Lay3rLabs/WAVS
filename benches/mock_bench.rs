@@ -27,12 +27,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(
-                    service_id.clone(),
-                    digest,
-                    &task_queue_address,
-                    BigSquare,
-                )
+                .create_service_simple(service_id.clone(), digest, &task_queue_address, BigSquare)
                 .await;
         }
     });
