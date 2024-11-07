@@ -66,15 +66,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let initial_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
         tracing::info!("Initializing {} services", initial_services.len());
         for service in initial_services {
-            // go through and add the triggers to the table
-            for (id, workflow) in service.workflows {
-                let trigger = TriggerData {
-                    service_id: service.id.clone(),
-                    workflow_id: id,
-                    trigger: workflow.trigger,
-                };
-                self.triggers.add_trigger(trigger)?;
-            }
+            add_service_to_trigger_manager(service, &self.triggers)?;
         }
 
         // since triggers listens to the async kill signal handler and closes the channel when
@@ -160,15 +152,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
-        // go through and add the triggers to the table
-        for (id, workflow) in service.workflows {
-            let trigger = TriggerData {
-                service_id: service.id.clone(),
-                workflow_id: id,
-                trigger: workflow.trigger,
-            };
-            self.triggers.add_trigger(trigger)?;
-        }
+        add_service_to_trigger_manager(service, &self.triggers)?;
 
         Ok(())
     }
@@ -271,6 +255,23 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
 
         Ok(res)
     }
+}
+
+// called at init and when a new service is added
+fn add_service_to_trigger_manager(
+    service: Service,
+    triggers: &impl TriggerManager,
+) -> Result<(), DispatcherError> {
+    for (id, workflow) in service.workflows {
+        let trigger = TriggerData {
+            service_id: service.id.clone(),
+            workflow_id: id,
+            trigger: workflow.trigger,
+        };
+        triggers.add_trigger(trigger)?;
+    }
+
+    Ok(())
 }
 
 #[derive(Error, Debug)]
