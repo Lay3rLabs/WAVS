@@ -52,9 +52,11 @@ async fn add_service_inner(
     let workflow_id = ID::new("default")?;
     let service_id = ID::new(&req.app.name)?;
 
-    let mut component = Component::new(&req.app.digest);
-    component.permissions = req.app.permissions.clone();
-    component.env = req.app.envs.clone();
+    let component = Component {
+        wasm: req.app.digest.into(),
+        permissions: req.app.permissions,
+        env: req.app.envs,
+    };
 
     let components = BTreeMap::from([(component_id.clone(), component)]);
 
