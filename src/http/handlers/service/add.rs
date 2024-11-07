@@ -62,7 +62,7 @@ pub struct AddServiceResponse {
     #[serde(rename = "name")]
     pub id: ID,
     // TODO for 0.3, not sure why this is needed, it's always "Active"
-    pub status: super::list::Status,
+    pub status: ServiceStatus,
 }
 
 #[axum::debug_handler]
@@ -89,7 +89,7 @@ async fn add_service_inner(
 
     Ok(AddServiceResponse {
         id: service_id,
-        status: super::list::Status::Active,
+        status: ServiceStatus::Active,
     })
 }
 
@@ -184,12 +184,12 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        apis::{dispatcher::Permissions, ID},
+        apis::{
+            dispatcher::{Permissions, ServiceStatus},
+            ID,
+        },
         http::{
-            handlers::service::{
-                add::{AddServiceRequest, TriggerRequest},
-                list::Status,
-            },
+            handlers::service::add::{AddServiceRequest, TriggerRequest},
             types::ShaDigest,
         },
         test_utils::address::rand_address,
@@ -212,10 +212,8 @@ mod test {
     #[serde(rename_all = "camelCase")]
     pub struct OldApp {
         pub name: String,
-        // TODO - probably make a different struct for request vs. response
-        // i.e. the request shouldn't contain this field at all
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub status: Option<Status>,
+        pub status: Option<ServiceStatus>,
         pub digest: ShaDigest,
         pub trigger: TriggerRequest,
         pub permissions: Permissions,

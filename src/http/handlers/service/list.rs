@@ -33,7 +33,7 @@ pub struct ServiceResponse {
     /// This is the ID of the service
     #[serde(rename = "name")]
     pub id: ID,
-    pub status: Status,
+    pub status: ServiceStatus,
     pub digest: ShaDigest,
     // for 0.3, it might be nice to make this just Trigger, but the address type breaks backwards compat
     pub trigger: TriggerResponse,
@@ -41,14 +41,6 @@ pub struct ServiceResponse {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub envs: Vec<(String, String)>,
     pub testable: Option<bool>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Copy)]
-#[serde(rename_all = "camelCase")]
-pub enum Status {
-    Active,
-    Failed,
-    MissingWasm,
 }
 
 #[axum::debug_handler]
@@ -74,10 +66,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                 digest: component.wasm.clone().into(),
                 envs: component.env.clone(),
                 permissions: component.permissions.clone(),
-                status: match service.status {
-                    ServiceStatus::Active => Status::Active,
-                    ServiceStatus::Stopped => Status::Failed,
-                },
+                status: service.status,
                 id: service.id.clone(),
                 // just first workflow for now
                 trigger: match service.workflows.values().next() {
@@ -110,9 +99,9 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        apis::dispatcher::Permissions,
+        apis::dispatcher::{Permissions, ServiceStatus},
         http::{
-            handlers::service::list::{ListServicesResponse, Status},
+            handlers::service::list::ListServicesResponse,
             types::{ShaDigest, TriggerResponse},
         },
         test_utils::address::rand_address,
@@ -130,10 +119,8 @@ mod test {
     #[serde(rename_all = "camelCase")]
     pub struct OldApp {
         pub name: String,
-        // TODO - probably make a different struct for request vs. response
-        // i.e. the request shouldn't contain this field at all
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub status: Option<Status>,
+        pub status: Option<ServiceStatus>,
         pub digest: ShaDigest,
         pub trigger: TriggerResponse,
         pub permissions: Permissions,
@@ -148,7 +135,7 @@ mod test {
             apps: vec![
                 OldApp {
                     name: "test-name-1".to_string(),
-                    status: Some(Status::Active),
+                    status: Some(ServiceStatus::Active),
                     digest: Digest::new(&[0; 32]).into(),
                     trigger: TriggerResponse::queue(rand_address(), 5, 0),
                     permissions: Permissions::default(),
@@ -157,7 +144,7 @@ mod test {
                 },
                 OldApp {
                     name: "test-name-2".to_string(),
-                    status: Some(Status::Failed),
+                    status: Some(ServiceStatus::Active),
                     digest: Digest::new(&[0; 32]).into(),
                     trigger: TriggerResponse::queue(rand_address(), 5, 0),
                     permissions: Permissions::default(),
@@ -166,7 +153,7 @@ mod test {
                 },
                 OldApp {
                     name: "test-name-3".to_string(),
-                    status: Some(Status::MissingWasm),
+                    status: Some(ServiceStatus::Active),
                     digest: Digest::new(&[0; 32]).into(),
                     trigger: TriggerResponse::queue(rand_address(), 5, 0),
                     permissions: Permissions::default(),

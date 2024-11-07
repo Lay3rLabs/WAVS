@@ -119,11 +119,15 @@ impl Submit {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
 #[serde(rename_all = "camelCase")]
 pub enum ServiceStatus {
     Active,
-    Stopped,
+    // we could have more like Stopped, Failed, Cooldown, etc.
+    // Technically these exist in 0.2, but only on response, and we never actually respond with them for now
+    // so it doesn't break backwards compat to remove them:
+    // Failed,
+    // MissingWasm,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
