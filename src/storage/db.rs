@@ -244,11 +244,10 @@ mod tests {
                     .unwrap()
                     .iter()
                     .unwrap()
-                    .map(|i| {
-                        let (k, _) = i.unwrap();
+                    .map(|entry| {
+                        let (k, _) = entry.unwrap();
                         k.value().to_string()
                     })
-                    .map(|k| k)
                     .collect::<Vec<String>>())
             })
             .unwrap();
@@ -261,11 +260,10 @@ mod tests {
                     .unwrap()
                     .iter()
                     .unwrap()
-                    .map(|i| {
-                        let (_, v) = i.unwrap();
+                    .map(|entry| {
+                        let (_, v) = entry.unwrap();
                         v.value()
                     })
-                    .map(|k| k)
                     .collect::<Vec<Service>>())
             })
             .unwrap();

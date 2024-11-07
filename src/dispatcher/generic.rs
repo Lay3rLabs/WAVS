@@ -63,17 +63,18 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.submission.start(ctx.clone(), msgs_out)?;
 
         // populate the initial triggers
-        for service in self.list_services(Bound::Unbounded, Bound::Unbounded)? {
-            println!("{:#?}", service);
+        let initial_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
+        tracing::info!("Initializing {} services", initial_services.len());
+        for service in initial_services {
             // go through and add the triggers to the table
-            // for (id, workflow) in service.workflows {
-            //     let trigger = TriggerData {
-            //         service_id: service.id.clone(),
-            //         workflow_id: id,
-            //         trigger: workflow.trigger,
-            //     };
-            //     self.triggers.add_trigger(trigger)?;
-            // }
+            for (id, workflow) in service.workflows {
+                let trigger = TriggerData {
+                    service_id: service.id.clone(),
+                    workflow_id: id,
+                    trigger: workflow.trigger,
+                };
+                self.triggers.add_trigger(trigger)?;
+            }
         }
 
         // since triggers listens to the async kill signal handler and closes the channel when
@@ -195,22 +196,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
                     (Bound::Unbounded, Bound::Unbounded) => {
                         let res = table
                             .iter()?
-                            .map(|i| {
-                                println!("{:#?}", i.as_ref().map(|(key, value)| key.value()));
-                                /// FIXME, FAILS HERE:
-                                println!(
-                                    "as service: {:#?}",
-                                    i.as_ref().map(|(key, value)| {
-                                        let service: Service = value.value();
-                                        service
-                                    })
-                                );
-                                println!(
-                                    "direct: {:#?}",
-                                    i.as_ref().map(|(key, value)| { value.value() })
-                                );
-                                i.map(|(_, value)| value.value())
-                            })
+                            .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<Result<Vec<_>, redb::StorageError>>()?;
                         Ok(res)
                     }
