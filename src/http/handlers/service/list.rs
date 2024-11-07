@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     apis::{
-        dispatcher::{Permissions, ServiceStatus},
+        dispatcher::{Permissions, ServiceStatus, Submit},
         ID,
     },
     http::{
@@ -82,7 +82,17 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                 // just first workflow for now
                 trigger: match service.workflows.values().next() {
                     None => return Err(anyhow::anyhow!("No workflows found").into()),
-                    Some(w) => w.trigger.clone().into(),
+                    Some(w) => {
+                        let hd_index = w
+                            .submit
+                            .as_ref()
+                            .map(|s| match s {
+                                Submit::VerifierTx { hd_index, .. } => *hd_index,
+                            })
+                            .unwrap_or(0);
+
+                        w.trigger.clone().into_response(hd_index)
+                    }
                 },
                 testable: Some(service.testable),
             });
@@ -140,10 +150,7 @@ mod test {
                     name: "test-name-1".to_string(),
                     status: Some(Status::Active),
                     digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::Queue {
-                        task_queue_addr: rand_address().to_string(),
-                        poll_interval: 5,
-                    },
+                    trigger: TriggerResponse::queue(rand_address(), 5, 0),
                     permissions: Permissions::default(),
                     envs: vec![],
                     testable: Some(true),
@@ -152,10 +159,7 @@ mod test {
                     name: "test-name-2".to_string(),
                     status: Some(Status::Failed),
                     digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::Queue {
-                        task_queue_addr: rand_address().to_string(),
-                        poll_interval: 5,
-                    },
+                    trigger: TriggerResponse::queue(rand_address(), 5, 0),
                     permissions: Permissions::default(),
                     envs: vec![],
                     testable: Some(true),
@@ -164,10 +168,7 @@ mod test {
                     name: "test-name-3".to_string(),
                     status: Some(Status::MissingWasm),
                     digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::Queue {
-                        task_queue_addr: rand_address().to_string(),
-                        poll_interval: 5,
-                    },
+                    trigger: TriggerResponse::queue(rand_address(), 5, 0),
                     permissions: Permissions::default(),
                     envs: vec![],
                     testable: Some(true),

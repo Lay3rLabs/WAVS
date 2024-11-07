@@ -16,20 +16,25 @@ pub enum TriggerRequest {
         task_queue_addr: String,
         /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
         poll_interval: u32,
+        /// For now, this is the hd_index associated with this trigger
+        /// Later, this will likely be part of a separate "submission manager" API
+        /// and internally it's already separated that way
+        hd_index: u32,
     },
 }
 
 pub type TriggerResponse = TriggerRequest;
 
-impl From<Trigger> for TriggerResponse {
-    fn from(trigger: Trigger) -> Self {
-        match trigger {
+impl Trigger {
+    pub fn into_response(self, hd_index: u32) -> TriggerResponse {
+        match self {
             Trigger::Queue {
                 task_queue_addr,
                 poll_interval,
             } => TriggerResponse::Queue {
                 task_queue_addr: task_queue_addr.to_string(),
                 poll_interval,
+                hd_index,
             },
         }
     }

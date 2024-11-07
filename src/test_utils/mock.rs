@@ -124,7 +124,7 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: TriggerRequest::queue(&task_queue_address.to_string(), 5),
+                trigger: TriggerRequest::queue(task_queue_address, 5, 0),
                 id: service_id,
                 digest: digest.into(),
                 permissions,

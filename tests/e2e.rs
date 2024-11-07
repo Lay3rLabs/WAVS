@@ -292,10 +292,7 @@ mod e2e {
             task_queue_addr: impl ToString,
         ) -> Result<()> {
             let service = ServiceRequest {
-                trigger: TriggerRequest::Queue {
-                    task_queue_addr: task_queue_addr.to_string(),
-                    poll_interval: 1000,
-                },
+                trigger: TriggerRequest::queue(task_queue_addr, 1000, 0),
                 id,
                 digest: digest.into(),
                 permissions: Permissions::default(),

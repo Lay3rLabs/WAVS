@@ -44,10 +44,11 @@ pub struct ServiceRequest {
 }
 
 impl TriggerRequest {
-    pub fn queue(task_queue_addr: &str, poll_interval: u32) -> Self {
+    pub fn queue(task_queue_addr: impl ToString, poll_interval: u32, hd_index: u32) -> Self {
         TriggerRequest::Queue {
             task_queue_addr: task_queue_addr.to_string(),
             poll_interval,
+            hd_index,
         }
     }
 }
@@ -114,25 +115,11 @@ impl ServiceRequestParser {
 
         let components = BTreeMap::from([(component_id.clone(), component)]);
 
-        let submit = match &req.trigger {
-            TriggerRequest::Queue {
-                task_queue_addr, ..
-            } => {
-                let hd_index = 0; // TODO: should this come from the request?
-                let verifier_addr = match &self.state {
-                    Some(state) if !state.is_mock_chain_client => {
-                        query_verifier_addr(state.config.chain_config()?, task_queue_addr).await?
-                    }
-                    _ => rand_address(),
-                };
-                Some(Submit::verifier_tx(hd_index, verifier_addr))
-            }
-        };
-
-        let trigger = match req.trigger {
+        let (trigger, submit) = match req.trigger {
             TriggerRequest::Queue {
                 task_queue_addr,
                 poll_interval,
+                hd_index,
             } => {
                 let task_queue_addr = match &self.state {
                     Some(state) => state
@@ -141,7 +128,18 @@ impl ServiceRequestParser {
                         .parse_address(&task_queue_addr)?,
                     None => Address::new_cosmos_string(&task_queue_addr, None)?,
                 };
-                Trigger::queue(task_queue_addr, poll_interval)
+
+                let verifier_addr = match &self.state {
+                    Some(state) if !state.is_mock_chain_client => {
+                        query_verifier_addr(state.config.chain_config()?, &task_queue_addr).await?
+                    }
+                    _ => rand_address(),
+                };
+
+                let trigger = Trigger::queue(task_queue_addr, poll_interval);
+                let submit = Some(Submit::verifier_tx(hd_index, verifier_addr));
+
+                (trigger, submit)
             }
         };
 
@@ -167,14 +165,13 @@ impl ServiceRequestParser {
 
 async fn query_verifier_addr(
     chain_config: ChainConfig,
-    task_queue_addr: &str,
+    task_queue_addr: &Address,
 ) -> anyhow::Result<Address> {
     let query_client = QueryClient::new(chain_config).await?;
-    let task_queue_addr = query_client.chain_config.parse_address(task_queue_addr)?;
 
     let resp: lavs_apis::tasks::ConfigResponse = query_client
         .contract_smart(
-            &task_queue_addr,
+            task_queue_addr,
             &lavs_apis::tasks::QueryMsg::Custom(lavs_apis::tasks::CustomQueryMsg::Config {}),
         )
         .await?;
@@ -235,10 +232,7 @@ mod test {
                 name: "test-name".to_string(),
                 status: None,
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::Queue {
-                    task_queue_addr: rand_address().to_string(),
-                    poll_interval: 5,
-                },
+                trigger: TriggerRequest::queue(rand_address(), 5, 0),
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
@@ -267,10 +261,7 @@ mod test {
             ServiceRequest {
                 id: ID::new("test-name").unwrap(),
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::Queue {
-                    task_queue_addr: addr.to_string(),
-                    poll_interval: 5,
-                },
+                trigger: TriggerRequest::queue(addr, 5, 0),
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
