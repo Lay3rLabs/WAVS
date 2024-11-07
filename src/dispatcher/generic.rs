@@ -198,7 +198,17 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
                             .map(|i| {
                                 println!("{:#?}", i.as_ref().map(|(key, value)| key.value()));
                                 /// FIXME, FAILS HERE:
-                                println!("{:#?}", i.as_ref().map(|(key, value)| value.value()));
+                                println!(
+                                    "as service: {:#?}",
+                                    i.as_ref().map(|(key, value)| {
+                                        let service: Service = value.value();
+                                        service
+                                    })
+                                );
+                                println!(
+                                    "direct: {:#?}",
+                                    i.as_ref().map(|(key, value)| { value.value() })
+                                );
                                 i.map(|(_, value)| value.value())
                             })
                             .collect::<Result<Vec<_>, redb::StorageError>>()?;

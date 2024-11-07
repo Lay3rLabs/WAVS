@@ -133,6 +133,7 @@ mod tests {
 
     use super::*;
 
+    use redb::ReadableTable;
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
@@ -235,5 +236,40 @@ mod tests {
         let service_stored = storage.get(SERVICE_TABLE, &service_id).unwrap().unwrap();
 
         assert_eq!(service, service_stored.value());
+
+        // can read keys via iterator
+        let keys = storage
+            .map_table_read(SERVICE_TABLE, |table| {
+                Ok(table
+                    .unwrap()
+                    .iter()
+                    .unwrap()
+                    .map(|i| {
+                        let (k, _) = i.unwrap();
+                        k.value().to_string()
+                    })
+                    .map(|k| k)
+                    .collect::<Vec<String>>())
+            })
+            .unwrap();
+
+        assert_eq!(vec![service_id.to_string()], keys);
+
+        let values = storage
+            .map_table_read(SERVICE_TABLE, |table| {
+                Ok(table
+                    .unwrap()
+                    .iter()
+                    .unwrap()
+                    .map(|i| {
+                        let (_, v) = i.unwrap();
+                        v.value()
+                    })
+                    .map(|k| k)
+                    .collect::<Vec<Service>>())
+            })
+            .unwrap();
+
+        assert_eq!(vec![service], values);
     }
 }
