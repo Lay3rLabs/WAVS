@@ -23,7 +23,7 @@ pub struct App {
     pub testable: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Copy)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
 #[serde(rename_all = "camelCase")]
 pub enum Status {
     Active,
@@ -37,7 +37,7 @@ pub enum AppError {
     //InvalidCronFrequency,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ShaDigest(Digest);
 
 impl ShaDigest {

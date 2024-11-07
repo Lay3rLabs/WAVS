@@ -109,12 +109,12 @@ mod e2e {
             .await
             .unwrap();
 
+        tracing::info!("Running tasks on task queue contract: {}", task_queue_addr);
         let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
+
         let task_queue = TaskQueueContract::new(signing_client.clone(), task_queue_addr)
             .await
             .unwrap();
-
-        tracing::info!("Running tasks on task queue contract: {}", task_queue.addr);
 
         let service_id = ID::new("test-service").unwrap();
 

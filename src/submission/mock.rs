@@ -49,7 +49,7 @@ impl MockSubmission {
     }
 }
 
-#[derive(Error, Debug, PartialEq, Clone)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum WaitError {
     #[error("Waiting timed out")]
     Timeout,

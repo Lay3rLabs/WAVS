@@ -86,7 +86,7 @@ impl TryFrom<&ID> for ID {
     }
 }
 
-#[derive(Error, Debug, PartialEq, Clone)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum IDError {
     #[error("ID must be between 3 and 32 characters")]
     LengthError,

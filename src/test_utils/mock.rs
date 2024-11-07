@@ -197,12 +197,12 @@ impl MockE2ETestRunner {
 // taken from dispatcher unit test
 pub struct BigSquare;
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
 pub struct SquareIn {
     pub x: u64,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
 
 pub struct SquareOut {
     pub y: u64,

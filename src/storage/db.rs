@@ -121,8 +121,19 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use crate::{
+        apis::{
+            dispatcher::{Component, Service, ServiceStatus, Workflow},
+            Trigger, ID,
+        },
+        Digest,
+    };
+
     use super::*;
 
+    use redb::ReadableTable;
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
@@ -168,5 +179,95 @@ mod tests {
         store.set(TJ, "john", &data).unwrap();
         let full = store.get(TJ, "john").unwrap().unwrap();
         assert_eq!(data, full.value());
+    }
+
+    #[test]
+    fn db_service_store() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let storage = RedbStorage::new(file.path()).unwrap();
+
+        const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("temp-services");
+
+        let service_id = ID::new("service-id-1").unwrap();
+
+        let components: BTreeMap<ID, Component> = [
+            (
+                ID::new("component-id-1").unwrap(),
+                Component::new(&Digest::new(b"digest-1")),
+            ),
+            (
+                ID::new("component-id-2").unwrap(),
+                Component::new(&Digest::new(b"digest-2")),
+            ),
+        ]
+        .into();
+
+        let workflows: BTreeMap<ID, Workflow> = [
+            (
+                ID::new("workflow-id-1").unwrap(),
+                Workflow {
+                    trigger: Trigger::queue("fake-addr-1", 5),
+                    component: ID::new("component-id-1").unwrap(),
+                    submit: None,
+                },
+            ),
+            (
+                ID::new("workflow-id-2").unwrap(),
+                Workflow {
+                    trigger: Trigger::queue("fake-addr-2", 5),
+                    component: ID::new("component-id-2").unwrap(),
+                    submit: None,
+                },
+            ),
+        ]
+        .into();
+
+        let service = Service {
+            id: service_id.clone(),
+            name: service_id.to_string(),
+            components,
+            workflows,
+            status: ServiceStatus::Active,
+            testable: true,
+        };
+
+        storage.set(SERVICE_TABLE, &service_id, &service).unwrap();
+
+        let service_stored = storage.get(SERVICE_TABLE, &service_id).unwrap().unwrap();
+
+        assert_eq!(service, service_stored.value());
+
+        // can read keys via iterator
+        let keys = storage
+            .map_table_read(SERVICE_TABLE, |table| {
+                Ok(table
+                    .unwrap()
+                    .iter()
+                    .unwrap()
+                    .map(|entry| {
+                        let (k, _) = entry.unwrap();
+                        k.value().to_string()
+                    })
+                    .collect::<Vec<String>>())
+            })
+            .unwrap();
+
+        assert_eq!(vec![service_id.to_string()], keys);
+
+        let values = storage
+            .map_table_read(SERVICE_TABLE, |table| {
+                Ok(table
+                    .unwrap()
+                    .iter()
+                    .unwrap()
+                    .map(|entry| {
+                        let (_, v) = entry.unwrap();
+                        v.value()
+                    })
+                    .collect::<Vec<Service>>())
+            })
+            .unwrap();
+
+        assert_eq!(vec![service], values);
     }
 }
