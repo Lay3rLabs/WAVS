@@ -34,7 +34,12 @@ impl Trigger {
 pub struct ID(String);
 
 impl ID {
-    pub fn new(id: &str) -> Result<Self, IDError> {
+    // take Into<String> instead of ToString so we benefit from zero-cost conversions for common cases
+    // String -> String is a no-op
+    // &str -> String is via std lib magic (internal transmute, ultimately)
+    pub fn new(id: impl Into<String>) -> Result<Self, IDError> {
+        let id = id.into();
+
         if id.len() < 3 || id.len() > 32 {
             return Err(IDError::LengthError);
         }
@@ -44,7 +49,7 @@ impl ID {
         {
             return Err(IDError::CharError);
         }
-        Ok(Self(id.to_string()))
+        Ok(Self(id))
     }
 }
 
@@ -54,7 +59,7 @@ impl<'de> Deserialize<'de> for ID {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        ID::new(&s).map_err(serde::de::Error::custom)
+        ID::new(s).map_err(serde::de::Error::custom)
     }
 }
 
