@@ -59,7 +59,7 @@ pub enum WasmSource {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Service {
     // Public identifier. Must be unique for all services
@@ -83,7 +83,7 @@ pub struct Service {
 
 // FIXME: happy for a better name.
 /// This captures the triggers we listen to, the components we run, and how we submit the result
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Workflow {
     pub trigger: Trigger,
@@ -94,7 +94,7 @@ pub struct Workflow {
     pub submit: Option<Submit>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Submit {
     /// Writing a transaction directly to the verifier contract on the main chain
@@ -118,14 +118,14 @@ impl Submit {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ServiceStatus {
     Active,
     Stopped,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Component {
     pub wasm: Digest,
@@ -146,7 +146,7 @@ impl Component {
 }
 
 // TODO: we can remove / change defaults in 0.3.0, they are needed for 0.2.0 compat
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Permissions {
     /// If it can talk to http hosts on the network
