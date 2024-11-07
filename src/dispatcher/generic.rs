@@ -62,6 +62,20 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         // And pipeline finishes with submission
         self.submission.start(ctx.clone(), msgs_out)?;
 
+        // populate the initial triggers
+        for service in self.list_services(Bound::Unbounded, Bound::Unbounded)? {
+            println!("{:#?}", service);
+            // go through and add the triggers to the table
+            // for (id, workflow) in service.workflows {
+            //     let trigger = TriggerData {
+            //         service_id: service.id.clone(),
+            //         workflow_id: id,
+            //         trigger: workflow.trigger,
+            //     };
+            //     self.triggers.add_trigger(trigger)?;
+            // }
+        }
+
         // since triggers listens to the async kill signal handler and closes the channel when
         // it is triggered, we don't need to jump through hoops here to make an async block to listen.
         // Just waiting for the channel to close is enough.
@@ -181,7 +195,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
                     (Bound::Unbounded, Bound::Unbounded) => {
                         let res = table
                             .iter()?
-                            .map(|i| i.map(|(_, value)| value.value()))
+                            .map(|i| {
+                                println!("{:#?}", i.as_ref().map(|(key, value)| key.value()));
+                                /// FIXME, FAILS HERE:
+                                println!("{:#?}", i.as_ref().map(|(key, value)| value.value()));
+                                i.map(|(_, value)| value.value())
+                            })
                             .collect::<Result<Vec<_>, redb::StorageError>>()?;
                         Ok(res)
                     }
