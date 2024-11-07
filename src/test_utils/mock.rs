@@ -87,11 +87,31 @@ impl MockE2ETestRunner {
         map_response::<ListAppsResponse>(response).await
     }
 
+    pub async fn create_service_simple(
+        &self,
+        service_id: ID,
+        digest: Digest,
+        task_queue_address: &Address,
+        function: impl Function,
+    ) {
+        self.create_service(
+            service_id,
+            digest,
+            task_queue_address,
+            Permissions::default(),
+            Vec::new(),
+            function,
+        )
+        .await
+    }
+
     pub async fn create_service(
         &self,
         service_id: ID,
         digest: Digest,
         task_queue_address: &Address,
+        permissions: Permissions,
+        envs: Vec<(String, String)>,
         function: impl Function,
     ) {
         // "upload" the component
@@ -105,8 +125,8 @@ impl MockE2ETestRunner {
                 name: service_id.to_string(),
                 status: None,
                 digest: digest.into(),
-                permissions: Permissions::default(),
-                envs: Vec::new(),
+                permissions,
+                envs,
                 testable: None,
             },
             wasm_url: None,

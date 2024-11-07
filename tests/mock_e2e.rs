@@ -3,7 +3,10 @@
 // intended more to confirm API and logic is working as expected
 
 use wasmatic::{
-    apis::ID,
+    apis::{
+        dispatcher::{AllowedHostPermission, Permissions},
+        ID,
+    },
     context::AppContext,
     engine::runner::EngineRunner,
     test_utils::{
@@ -28,7 +31,7 @@ fn mock_e2e_trigger_flow() {
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service(
+                .create_service_simple(
                     service_id.clone(),
                     digest,
                     &MOCK_TASK_QUEUE_ADDRESS,
@@ -111,7 +114,7 @@ fn mock_e2e_service_lifecycle() {
                 (&service_id3, digest3),
             ] {
                 runner
-                    .create_service(
+                    .create_service_simple(
                         service_id.clone(),
                         digest.clone(),
                         &MOCK_TASK_QUEUE_ADDRESS,
@@ -181,7 +184,7 @@ fn mock_e2e_service_test() {
             let digest = Digest::new(b"wasm");
 
             runner
-                .create_service(
+                .create_service_simple(
                     service_id.clone(),
                     digest.clone(),
                     &MOCK_TASK_QUEUE_ADDRESS,
@@ -192,6 +195,44 @@ fn mock_e2e_service_test() {
             let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3 }).await;
 
             assert_eq!(y, 9);
+        }
+    })
+}
+
+#[test]
+fn mock_e2e_service_settings() {
+    let runner = MockE2ETestRunner::new(AppContext::new());
+    // block and wait for creating the service
+
+    runner.ctx.rt.block_on({
+        let runner = runner.clone();
+
+        async move {
+            let service_id = ID::new("service").unwrap();
+            let digest = Digest::new(b"wasm");
+
+            let permissions = Permissions {
+                allowed_http_hosts: AllowedHostPermission::Only(vec!["example.com".to_string()]),
+                ..Default::default()
+            };
+
+            let envs = vec![("KEY".to_string(), "VALUE".to_string())];
+
+            runner
+                .create_service(
+                    service_id.clone(),
+                    digest.clone(),
+                    &MOCK_TASK_QUEUE_ADDRESS,
+                    permissions.clone(),
+                    envs.clone(),
+                    BigSquare,
+                )
+                .await;
+
+            let services = runner.list_services().await;
+
+            assert_eq!(services.apps[0].permissions, permissions);
+            assert_eq!(services.apps[0].envs, envs);
         }
     })
 }

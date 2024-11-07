@@ -25,7 +25,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service(
+                .create_service_simple(
                     service_id.clone(),
                     digest,
                     &MOCK_TASK_QUEUE_ADDRESS,
