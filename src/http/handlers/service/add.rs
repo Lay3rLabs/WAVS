@@ -52,7 +52,13 @@ async fn add_service_inner(
     let workflow_id = ID::new("default")?;
     let service_id = ID::new(&req.app.name)?;
 
-    let components = BTreeMap::from([(component_id.clone(), Component::new(&req.app.digest))]);
+    let component = Component {
+        wasm: req.app.digest.into(),
+        permissions: req.app.permissions,
+        env: req.app.envs,
+    };
+
+    let components = BTreeMap::from([(component_id.clone(), component)]);
 
     let submit = match &req.app.trigger {
         Trigger::Queue {
