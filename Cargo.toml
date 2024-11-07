@@ -46,6 +46,7 @@ wasmtime-wasi = { version = "24.0.0", default-features = true }
 lru = "0.12.1"
 rayon = "1.5.1"
 walkdir = "2.5.0"
+url = "2.5.3"
 
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }

@@ -35,4 +35,10 @@ pub enum SubmissionError {
     Climb(anyhow::Error),
     #[error("missing mnemonic")]
     MissingMnemonic,
+    #[error("faucet url: {0}")]
+    FaucetUrl(url::ParseError),
+    #[error("reqwest: {0}")]
+    Reqwest(reqwest::Error),
+    #[error("faucet: {0}")]
+    Faucet(String),
 }
