@@ -48,6 +48,7 @@ rayon = "1.5.1"
 walkdir = "2.5.0"
 url = "2.5.3"
 bip39 = "2.0.0"
+chrono = "0.4.38"
 
 [dev-dependencies]
 temp-env = {version = "0.3.6", features = ["async_closure"] }

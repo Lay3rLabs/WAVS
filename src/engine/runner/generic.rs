@@ -1,3 +1,4 @@
+use chrono::Utc;
 use tokio::sync::mpsc;
 
 use crate::apis::dispatcher::{Service, Submit};
@@ -45,11 +46,11 @@ pub trait EngineRunner: Send + Sync {
 
         match action.result {
             TriggerResult::Queue { task_id, payload } => {
-                // TODO: add the timestamp to the trigger, don't invent it
-                let timestamp = 1234567890;
+                // TODO: confirm that local timestamp is the one we want to use
+                // safe to unwrap until sometime in April 2262
+                let timestamp = Utc::now().timestamp_nanos_opt().unwrap() as u64;
                 let wasm_result = self.engine().execute_queue(component, payload, timestamp)?;
 
-                // TODO: we need to sent these off to the submission engine
                 if let Some(Submit::VerifierTx {
                     hd_index,
                     verifier_addr,
