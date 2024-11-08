@@ -2,7 +2,9 @@ This was added to fix https://github.com/Lay3rLabs/wasmatic/issues/141
 
 Component was copy/pasted from https://github.com/Lay3rLabs/avs-toolkit/tree/6cf715d4b33a49b507c2c67ac7cf228cdf101e69/wasi/ai-bouncer
 
-To reproduce:
+Instructions below assume `avs-toolkit-cli` is installed globally (`cargo install --path ./tools/cli` in avs-toolkit repo)
+
+To reproduce
 
 ### In real wasmatic test
 
