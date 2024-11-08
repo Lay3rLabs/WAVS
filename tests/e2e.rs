@@ -196,6 +196,7 @@ mod e2e {
             .unwrap();
 
         tracing::info!("success!");
+        assert!(result.filecount > 0);
         tracing::info!("{:#?}", result);
     }
 
