@@ -233,16 +233,11 @@ impl TriggerManager for CoreTriggerManager {
                 task_queue_addr,
                 poll_interval: _,
             } => {
-                // parse the address
-                let addr = self
-                    .chain_config
-                    .parse_address(task_queue_addr)
-                    .map_err(TriggerError::Climb)?;
                 self.lookup_maps
                     .triggers_by_task_queue
                     .write()
                     .unwrap()
-                    .insert(addr, lookup_id);
+                    .insert(task_queue_addr.clone(), lookup_id);
             }
         }
 
@@ -286,7 +281,6 @@ impl TriggerManager for CoreTriggerManager {
         remove_trigger_data(
             &mut self.lookup_maps.all_trigger_data.write().unwrap(),
             &mut self.lookup_maps.triggers_by_task_queue.write().unwrap(),
-            &self.chain_config,
             lookup_id,
         )?;
 
@@ -311,7 +305,6 @@ impl TriggerManager for CoreTriggerManager {
             remove_trigger_data(
                 &mut all_trigger_data_lock,
                 &mut triggers_by_task_queue_lock,
-                &self.chain_config,
                 *lookup_id,
             )?;
         }
@@ -350,7 +343,6 @@ impl TriggerManager for CoreTriggerManager {
 fn remove_trigger_data(
     all_trigger_data: &mut BTreeMap<usize, TriggerData>,
     triggers_by_task_queue: &mut HashMap<Address, LookupId>,
-    chain_config: &ChainConfig,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -364,12 +356,9 @@ fn remove_trigger_data(
             task_queue_addr,
             poll_interval: _,
         } => {
-            let addr = chain_config
-                .parse_address(task_queue_addr)
-                .map_err(TriggerError::Climb)?;
-            triggers_by_task_queue
-                .remove(&addr)
-                .ok_or(TriggerError::NoSuchTaskQueueTrigger(addr))?;
+            triggers_by_task_queue.remove(task_queue_addr).ok_or(
+                TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
+            )?;
         }
     }
 
@@ -384,7 +373,10 @@ mod tests {
             Trigger, ID,
         },
         config::{Config, WasmaticChainConfig},
+        test_utils::address::rand_address,
     };
+
+    use layer_climb::prelude::*;
 
     use super::CoreTriggerManager;
 
@@ -418,19 +410,39 @@ mod tests {
         let service_id_2 = ID::new("service-2").unwrap();
         let workflow_id_2 = ID::new("workflow-2").unwrap();
 
-        let task_queue_addr_1_1 = "layer13jwzcq8m4k4tyz6dwvqtnww0ds9vwptph0lnqm".to_string();
-        let task_queue_addr_1_2 = "layer1aktndkmndlxd60ep7g58vc3wxkpqd0hn7ngj2w".to_string();
-        let task_queue_addr_2_1 = "layer18aa3r27pk2vtsvqfwj045vheyjsu3hv6e3h6qw".to_string();
-        let task_queue_addr_2_2 = "layer1jvuf2fye4sr09sn4042a5c30zf22u8ar60apyp".to_string();
+        let task_queue_addr_1_1 = rand_address();
+        let task_queue_addr_1_2 = rand_address();
+        let task_queue_addr_2_1 = rand_address();
+        let task_queue_addr_2_2 = rand_address();
 
-        let trigger_1_1 =
-            TriggerData::queue(&service_id_1, &workflow_id_1, &task_queue_addr_1_1, 5).unwrap();
-        let trigger_1_2 =
-            TriggerData::queue(&service_id_1, &workflow_id_2, &task_queue_addr_1_2, 5).unwrap();
-        let trigger_2_1 =
-            TriggerData::queue(&service_id_2, &workflow_id_1, &task_queue_addr_2_1, 5).unwrap();
-        let trigger_2_2 =
-            TriggerData::queue(&service_id_2, &workflow_id_2, &task_queue_addr_2_2, 5).unwrap();
+        let trigger_1_1 = TriggerData::queue(
+            &service_id_1,
+            &workflow_id_1,
+            task_queue_addr_1_1.clone(),
+            5,
+        )
+        .unwrap();
+        let trigger_1_2 = TriggerData::queue(
+            &service_id_1,
+            &workflow_id_2,
+            task_queue_addr_1_2.clone(),
+            5,
+        )
+        .unwrap();
+        let trigger_2_1 = TriggerData::queue(
+            &service_id_2,
+            &workflow_id_1,
+            task_queue_addr_2_1.clone(),
+            5,
+        )
+        .unwrap();
+        let trigger_2_2 = TriggerData::queue(
+            &service_id_2,
+            &workflow_id_2,
+            task_queue_addr_2_2.clone(),
+            5,
+        )
+        .unwrap();
 
         manager.add_trigger(trigger_1_1).unwrap();
         manager.add_trigger(trigger_1_2).unwrap();
@@ -482,7 +494,7 @@ mod tests {
         let _triggers_service_2_err = manager.list_triggers(service_id_2.clone()).unwrap_err();
         assert_eq!(triggers_service_1.len(), 1);
 
-        fn get_trigger_addr(trigger: &Trigger) -> &str {
+        fn get_trigger_addr(trigger: &Trigger) -> &Address {
             match trigger {
                 Trigger::Queue {
                     task_queue_addr,

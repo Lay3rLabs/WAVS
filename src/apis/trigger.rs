@@ -37,7 +37,7 @@ impl TriggerData {
     pub fn queue(
         service_id: impl TryInto<ID, Error = IDError>,
         workflow_id: impl TryInto<ID, Error = IDError>,
-        task_queue_addr: &str,
+        task_queue_addr: Address,
         poll_interval: u32,
     ) -> Result<Self, IDError> {
         Ok(Self {

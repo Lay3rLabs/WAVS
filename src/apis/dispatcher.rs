@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, ops::Bound};
 
+use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 
 use super::{submission::ChainMessage, trigger::TriggerAction, Trigger, ID};
@@ -105,24 +106,28 @@ pub enum Submit {
         // The address of the verifier contract to submit to
         // Note: To keep the same axum API, the http server can query this from the task queue contract (which is provided)
         // I want to break these hard dependencies internally, so Dispatcher doesn't assume those connections between contracts
-        verifier_addr: String,
+        verifier_addr: Address,
     }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
 }
 
 impl Submit {
-    pub fn verifier_tx(hd_index: u32, verifier_addr: &str) -> Self {
+    pub fn verifier_tx(hd_index: u32, verifier_addr: Address) -> Self {
         Submit::VerifierTx {
             hd_index,
-            verifier_addr: verifier_addr.to_string(),
+            verifier_addr,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
 #[serde(rename_all = "camelCase")]
 pub enum ServiceStatus {
     Active,
-    Stopped,
+    // we could have more like Stopped, Failed, Cooldown, etc.
+    // Technically these exist in 0.2, but only on response, and we never actually respond with them for now
+    // so it doesn't break backwards compat to remove them:
+    // Failed,
+    // MissingWasm,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     apis::dispatcher::WasmSource,
-    http::{error::HttpResult, state::HttpState, types::app::ShaDigest},
+    http::{error::HttpResult, state::HttpState, types::ShaDigest},
 };
 
 #[derive(Serialize, Deserialize)]

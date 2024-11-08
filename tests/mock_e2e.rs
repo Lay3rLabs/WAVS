@@ -10,7 +10,7 @@ use wasmatic::{
     context::AppContext,
     engine::runner::EngineRunner,
     test_utils::{
-        chain::MOCK_TASK_QUEUE_ADDRESS,
+        address::rand_address,
         mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
     },
     Digest,
@@ -22,21 +22,18 @@ fn mock_e2e_trigger_flow() {
 
     let service_id = ID::new("service1").unwrap();
     let workflow_id = ID::new("default").unwrap();
+    let task_queue_address = rand_address();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
         let runner = runner.clone();
         let service_id = service_id.clone();
+        let task_queue_address = task_queue_address.clone();
 
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(
-                    service_id.clone(),
-                    digest,
-                    &MOCK_TASK_QUEUE_ADDRESS,
-                    BigSquare,
-                )
+                .create_service_simple(service_id.clone(), digest, &task_queue_address, BigSquare)
                 .await;
         }
     });
@@ -45,6 +42,7 @@ fn mock_e2e_trigger_flow() {
     // this spawned into the async runtime, so it's sortof like the real TriggerManager
     runner.ctx.rt.spawn({
         let runner = runner.clone();
+        let task_queue_address = task_queue_address.clone();
         async move {
             runner
                 .dispatcher
@@ -52,7 +50,7 @@ fn mock_e2e_trigger_flow() {
                 .send_trigger(
                     &service_id,
                     &workflow_id,
-                    &MOCK_TASK_QUEUE_ADDRESS,
+                    &task_queue_address,
                     &SquareIn { x: 3 },
                 )
                 .await;
@@ -62,7 +60,7 @@ fn mock_e2e_trigger_flow() {
                 .send_trigger(
                     &service_id,
                     &workflow_id,
-                    &MOCK_TASK_QUEUE_ADDRESS,
+                    &task_queue_address,
                     &SquareIn { x: 21 },
                 )
                 .await;
@@ -95,8 +93,10 @@ fn mock_e2e_service_lifecycle() {
         async move {
             let services = runner.list_services().await;
 
-            assert!(services.apps.is_empty());
+            assert!(services.services.is_empty());
             assert!(services.digests.is_empty());
+
+            let task_queue_address = rand_address();
 
             // add services in order
             let service_id1 = ID::new("service1").unwrap();
@@ -117,7 +117,7 @@ fn mock_e2e_service_lifecycle() {
                     .create_service_simple(
                         service_id.clone(),
                         digest.clone(),
-                        &MOCK_TASK_QUEUE_ADDRESS,
+                        &task_queue_address,
                         BigSquare,
                     )
                     .await;
@@ -125,11 +125,11 @@ fn mock_e2e_service_lifecycle() {
 
             let services = runner.list_services().await;
 
-            assert_eq!(services.apps.len(), 3);
+            assert_eq!(services.services.len(), 3);
             assert_eq!(services.digests.len(), 3);
-            assert_eq!(services.apps[0].name, service_id1.to_string());
-            assert_eq!(services.apps[1].name, service_id2.to_string());
-            assert_eq!(services.apps[2].name, service_id3.to_string());
+            assert_eq!(services.services[0].id, service_id1);
+            assert_eq!(services.services[1].id, service_id2);
+            assert_eq!(services.services[2].id, service_id3);
 
             // add an orphaned digest
             let orphaned_digest = Digest::new(b"orphaned");
@@ -140,7 +140,7 @@ fn mock_e2e_service_lifecycle() {
                 .register(&orphaned_digest, BigSquare);
 
             let services = runner.list_services().await;
-            assert_eq!(services.apps.len(), 3);
+            assert_eq!(services.services.len(), 3);
             assert_eq!(services.digests.len(), 4);
 
             // selectively delete services 1 and 3, leaving just 2
@@ -151,9 +151,9 @@ fn mock_e2e_service_lifecycle() {
 
             let services = runner.list_services().await;
 
-            assert_eq!(services.apps.len(), 1);
+            assert_eq!(services.services.len(), 1);
             assert_eq!(services.digests.len(), 4);
-            assert_eq!(services.apps[0].name, service_id2.to_string());
+            assert_eq!(services.services[0].id, service_id2);
 
             // and make sure we can delete the last one but still get an empty list
             runner
@@ -164,7 +164,7 @@ fn mock_e2e_service_lifecycle() {
 
             let services = runner.list_services().await;
 
-            assert!(services.apps.is_empty());
+            assert!(services.services.is_empty());
             assert_eq!(services.digests.len(), 4);
         }
     });
@@ -182,12 +182,13 @@ fn mock_e2e_service_test() {
             // add services in order
             let service_id = ID::new("service").unwrap();
             let digest = Digest::new(b"wasm");
+            let task_queue_address = rand_address();
 
             runner
                 .create_service_simple(
                     service_id.clone(),
                     digest.clone(),
-                    &MOCK_TASK_QUEUE_ADDRESS,
+                    &task_queue_address,
                     BigSquare,
                 )
                 .await;
@@ -222,7 +223,7 @@ fn mock_e2e_service_settings() {
                 .create_service(
                     service_id.clone(),
                     digest.clone(),
-                    &MOCK_TASK_QUEUE_ADDRESS,
+                    &rand_address(),
                     permissions.clone(),
                     envs.clone(),
                     BigSquare,
@@ -231,8 +232,8 @@ fn mock_e2e_service_settings() {
 
             let services = runner.list_services().await;
 
-            assert_eq!(services.apps[0].permissions, permissions);
-            assert_eq!(services.apps[0].envs, envs);
+            assert_eq!(services.services[0].permissions, permissions);
+            assert_eq!(services.services[0].envs, envs);
         }
     })
 }

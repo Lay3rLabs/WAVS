@@ -1,6 +1,6 @@
+use layer_climb::prelude::*;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{fmt, ops::Deref};
-
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -12,30 +12,34 @@ pub enum Trigger {
     #[serde(rename_all = "camelCase")]
     Queue {
         // FIXME: add some chain name. right now all triggers are on one chain
-        task_queue_addr: String,
+        task_queue_addr: Address,
         /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
         poll_interval: u32,
     },
 }
 
 impl Trigger {
-    pub fn queue(task_queue_addr: &str, poll_interval: u32) -> Self {
+    pub fn queue(task_queue_addr: Address, poll_interval: u32) -> Self {
         Trigger::Queue {
-            task_queue_addr: task_queue_addr.to_string(),
+            task_queue_addr,
             poll_interval,
         }
     }
 }
 
-// TODO: custom Deserialize that enforces validation rules
 /// ID is meant to identify a component or a service (I don't think we need to enforce the distinction there, do we?)
 /// It is a string, but with some strict validation rules. It must be lowecase alphanumeric: `[a-z0-9-_]{3,32}`
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
 pub struct ID(String);
 
 impl ID {
-    pub fn new(id: &str) -> Result<Self, IDError> {
+    // take Into<String> instead of ToString so we benefit from zero-cost conversions for common cases
+    // String -> String is a no-op
+    // &str -> String is via std lib magic (internal transmute, ultimately)
+    pub fn new(id: impl Into<String>) -> Result<Self, IDError> {
+        let id = id.into();
+
         if id.len() < 3 || id.len() > 32 {
             return Err(IDError::LengthError);
         }
@@ -45,7 +49,17 @@ impl ID {
         {
             return Err(IDError::CharError);
         }
-        Ok(Self(id.to_string()))
+        Ok(Self(id))
+    }
+}
+
+impl<'de> Deserialize<'de> for ID {
+    fn deserialize<D>(deserializer: D) -> Result<ID, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        ID::new(s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -125,6 +139,18 @@ mod tests {
         ID::new("Capitalized").unwrap_err();
         ID::new("../../etc/passwd").unwrap_err();
         ID::new("c:\\\\badfile").unwrap_err();
+    }
+
+    #[test]
+    fn invalid_id_deserialize() {
+        // baseline, make sure we can deserialize properly
+        let id_str = "foo";
+        let id_obj: ID = serde_json::from_str(&format!("\"{}\"", id_str)).unwrap();
+        assert_eq!(id_obj.to_string(), id_str);
+
+        // now do a bad id
+        let id_str = "THIS/IS/BAD";
+        serde_json::from_str::<ID>(&format!("\"{}\"", id_str)).unwrap_err();
     }
 
     #[test]

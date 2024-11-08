@@ -322,7 +322,7 @@ mod tests {
         },
         init_tracing_tests,
         submission::mock::MockSubmission,
-        test_utils::mock::BigSquare,
+        test_utils::{address::rand_address, mock::BigSquare},
         triggers::mock::MockTriggerManagerVec,
         Digest,
     };
@@ -339,7 +339,7 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            trigger: TriggerData::queue("service1", "workflow1", "layer1taskqueue", 5).unwrap(),
+            trigger: TriggerData::queue("service1", "workflow1", rand_address(), 5).unwrap(),
             result: TriggerResult::queue(task_id, payload),
         };
 
@@ -355,7 +355,7 @@ mod tests {
         let digest = Digest::new(b"wasm1");
         let component_id = ID::new("component1").unwrap();
         let hd_index = 2;
-        let verifier_addr = "layer1verifier";
+        let verifier_addr = rand_address();
         let service = Service {
             id: action.trigger.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -364,8 +364,8 @@ mod tests {
                 action.trigger.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::queue("some-task", 5),
-                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
+                    trigger: Trigger::queue(rand_address(), 5),
+                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr.clone())),
                 },
             )]
             .into(),
@@ -387,7 +387,7 @@ mod tests {
             task_id,
             wasm_result: payload.into(),
             hd_index,
-            verifier_addr: verifier_addr.to_string(),
+            verifier_addr,
         };
         assert_eq!(processed[0], expected);
     }
@@ -402,14 +402,21 @@ mod tests {
         // Prepare two actions to be squared
         let service_id = ID::new("service1").unwrap();
         let workflow_id = ID::new("workflow1").unwrap();
+
+        let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
-                    .unwrap(),
+                trigger: TriggerData::queue(
+                    &service_id,
+                    &workflow_id,
+                    task_queue_address.clone(),
+                    5,
+                )
+                .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
@@ -431,7 +438,7 @@ mod tests {
         // Register a service to handle this action
         let component_id = ID::new("component1").unwrap();
         let hd_index = 2;
-        let verifier_addr = "layer1verifier";
+        let verifier_addr = rand_address();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -440,7 +447,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::queue("some-task", 5),
+                    trigger: Trigger::queue(rand_address(), 5),
                     submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
                 },
             )]
@@ -477,14 +484,20 @@ mod tests {
         // Prepare two actions to be squared
         let service_id = ID::new("service1").unwrap();
         let workflow_id = ID::new("workflow1").unwrap();
+        let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
-                    .unwrap(),
+                trigger: TriggerData::queue(
+                    &service_id,
+                    &workflow_id,
+                    task_queue_address.clone(),
+                    5,
+                )
+                .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::queue(&service_id, &workflow_id, "layer1taskqueue", 5)
+                trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
@@ -506,7 +519,7 @@ mod tests {
         // Register a service to handle this action
         let component_id = ID::new("component1").unwrap();
         let hd_index = 2;
-        let verifier_addr = "layer1verifier";
+        let verifier_addr = rand_address();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -515,7 +528,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::queue("some-task", 5),
+                    trigger: Trigger::queue(rand_address(), 5),
                     submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
                 },
             )]
