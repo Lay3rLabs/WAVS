@@ -48,3 +48,4 @@ rpc_endpoint = "https://rpc.hack.layer.xyz:443"
 grpc_endpoint = "https://grpc.hack.layer.xyz:443"
 gas_price = 0.025
 gas_denom = "ulayer"
+faucet_endpoint = "https://rabbit.hack.layer.xyz"
