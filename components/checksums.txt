@@ -1,0 +1,3 @@
+13d70ea0ac3a843c099b1a2f27d3239a134dc30bc94171ec4b317cff4fde904c  ai_bouncer.wasm
+7ab38c5bd8ae8735a5d30599e7c7a54ff73d5db76bd511d5e94a81644f0ed9ea  btc_avg.wasm
+42cfda009c66eeac866968ce9a8ba95ce834f0d159f43b76e9b0999dc0672dee  square.wasm
