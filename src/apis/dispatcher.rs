@@ -151,15 +151,22 @@ impl Component {
 }
 
 // TODO: we can remove / change defaults in 0.3.0, they are needed for 0.2.0 compat
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Permissions {
     /// If it can talk to http hosts on the network
-    #[serde(default)]
     pub allowed_http_hosts: AllowedHostPermission,
     /// If it can write to it's own local directory in the filesystem
-    #[serde(default = "allow")]
     pub file_system: bool,
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Self {
+            allowed_http_hosts: AllowedHostPermission::default(),
+            file_system: true,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq)]
@@ -170,10 +177,6 @@ pub enum AllowedHostPermission {
     Only(Vec<String>),
     // #[default] // this is for 0.3.0
     None,
-}
-
-fn allow() -> bool {
-    true
 }
 
 #[cfg(test)]
@@ -191,5 +194,18 @@ mod tests {
         let permissions: super::Permissions = serde_json::from_str(json).unwrap();
         assert_eq!(permissions.allowed_http_hosts, AllowedHostPermission::None,);
         assert!(!permissions.file_system);
+    }
+
+    #[test]
+    fn permission_defaults() {
+        let permissions_json: Permissions = serde_json::from_str("{}").unwrap();
+        let permissions_default: Permissions = Permissions::default();
+
+        assert_eq!(permissions_json, permissions_default);
+        assert_eq!(
+            permissions_default.allowed_http_hosts,
+            AllowedHostPermission::All
+        );
+        assert!(permissions_default.file_system);
     }
 }
