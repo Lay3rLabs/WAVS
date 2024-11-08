@@ -78,7 +78,6 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        tracing::debug!("Executing queue, component: {:?}", wasi);
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
         let digest = wasi.wasm.clone();
