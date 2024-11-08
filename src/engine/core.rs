@@ -131,6 +131,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         // This feels like an ugly hack.
         // I cannot figure out how to add wasi http support and keep this sync
         let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
             .build()
             .unwrap();
         rt.block_on({
