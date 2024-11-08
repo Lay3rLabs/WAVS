@@ -92,7 +92,7 @@ impl CoreSubmission {
 
         tracing::debug!("Client {} has balance: {}", client.addr, balance);
 
-        let required_funds = (1_000_000f32 * self.chain_config.gas_price).round() as u128;
+        let required_funds = (10_000_000f32 * self.chain_config.gas_price).round() as u128;
 
         if balance > required_funds {
             return Ok(());
