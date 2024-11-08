@@ -1,0 +1,7 @@
+bind = "0.0.0.0:8081"
+dir = "data"
+envs = [
+  ["VERSION", "0.0.1"]
+]
+chain_id = "layer-permissionless-3"
+grpc_url = "https://grpc.layer-p.net"

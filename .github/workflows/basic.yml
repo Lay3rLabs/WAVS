@@ -1,0 +1,100 @@
+# Based on https://github.com/actions-rs/example/blob/master/.github/workflows/quickstart.yml
+
+on: [pull_request]
+
+name: Basic Checks
+
+# TODO: perform other tests on wasi examples
+jobs:
+  test:
+    name: Wasmatic Test Suite
+    runs-on: linux-8-core
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.80.0
+        #   target: wasm32-unknown-unknown
+          override: true
+
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/            
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-test-
+  
+      - name: Check compilation
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: 1.80.0
+          command: test
+          args: --workspace --locked --no-run
+        env:
+          RUST_BACKTRACE: 1
+
+    #   # copies artifacts to a directory that can be used by deploy tests
+    #   - name: Prepare artifacts (wasm contracts)
+    #     run: bash ./scripts/collect_wasm.sh
+
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: 1.80.0
+          command: test
+          args: --workspace --locked
+        env:
+          RUST_BACKTRACE: 1
+
+
+  lints:
+    name: Lints
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+            
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.80.0
+          override: true
+          components: rustfmt, clippy
+
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/            
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-lint-
+  
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: 1.80.0
+          command: fmt
+          args: --all -- --check
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: 1.80.0
+          command: clippy
+          args: --all-targets -- -D warnings

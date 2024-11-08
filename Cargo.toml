@@ -1,94 +1,125 @@
 [package]
 name = "wasmatic"
 description = "Lay3r Labs Wasmatic Node Server"
-version = { workspace = true }
-edition = { workspace = true }
-authors = { workspace = true }
-rust-version = { workspace = true }
-#license = { workspace = true }
-#homepage = { workspace = true }
-repository = { workspace = true }
-
-[workspace]
-members = ["examples/btc-avg", "examples/composition/http-allow-list/http-allowed-coingecko", "examples/square"]
-
-[workspace.package]
+edition = "2021"
 version = "0.1.0"
 authors = ["Lay3r Labs Team"]
-edition = "2021"
-# Policy that this number can be no larger than the
-# current stable release of Rust minus 2.
-rust-version = "1.78.0"
-#license = ""
-#homepage = ""
+rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
-[workspace.dependencies]
-anyhow = "1.0.86"
-clap = { version = "4.5.16", features = ["derive", "env"] }
-cw-orch = { version = "0.22.0", features = ["daemon"] }
-derivative = "2.2.0"
-
-lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.0" }
-tokio = { version = "1.39.3", features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
-wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
-wasmtime-wasi-http = "24.0.0"
-wasmtime-wasi = { version = "24.0.0", default-features = true }
-wasmtime-cli-flags = "24.0.0"
-wasmparser = "0.216.0"
-hyper = "1.4.1"
-async-trait = "0.1.82"
-tokio-cron-scheduler = "0.11.0"
-axum = "0.7.5"
-tower = "0.5.0"
-axum-macros = "0.4.1"
-serde = { version = "1.0.209", features = ["derive"] }
-serde_json = "1.0.127"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] } 
-bytes = "1.7.1"
-log = "0.4.22"
-libc = "0.2.158"
-indexmap = "2.4.0"
-sha2 = "0.10.8"
-hex = "0.4.3"
-reqwest = "0.12.7"
-thiserror = "1.0.63"
-uuid = "1.4.1"
-toml = "0.8.19"
-tower-http = {version = "0.6.1", features = ["cors"] }
-dotenvy = {version = "0.15.7", features = ["cli"]}
+[features]
+e2e_tests = []
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-axum = { workspace = true }
-axum-macros = { workspace = true }
-bytes = { workspace = true }
-clap = { workspace = true }
-cw-orch = { workspace = true }
-derivative = { workspace = true }
-hex = { workspace = true }
-hyper = { workspace = true }
-indexmap = { workspace = true }
-lavs-apis = { workspace = true }
-libc = { workspace = true }
-log = { workspace = true }
-reqwest = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
-tokio-cron-scheduler = { workspace = true }
-toml = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-uuid = { workspace = true }
-wasmparser = { workspace = true }
-wasmtime = { workspace = true }
-wasmtime-cli-flags = { workspace = true }
-wasmtime-wasi = { workspace = true }
-wasmtime-wasi-http = { workspace = true }
-tower-http = { workspace = true }
-dotenvy = {workspace = true}
+clap = { version = "4.5.20", features = ["derive", "env"] }
+anyhow = "1.0.90"
+tokio = { version = "1.41.0", features = [ "full" ] }
+serde = { version = "1.0.211", features = ["derive"] }
+serde_json = "1.0.127"
+dirs = "5.0.1"
+toml = "0.8.19"
+tracing = "0.1.40"
+tracing-subscriber = {version = "0.3.18", features = ["env-filter"]}
+dotenvy = {version = "0.15.7", features = ["cli"]}
+figment = { version = "0.10.19", features = ["toml", "env"] }
+sha2 = "0.10.8"
+hex = "0.4.3"
+thiserror = "1.0.42"
+redb = { version = "2.1" }
+axum = {version = "0.7.7", features = ["macros"]}
+tower-http = {version = "0.6.1", features = ["cors", "trace"] }
+tower = { version = "0.5.1", features = ["util"] }
+http-body-util = "0.1.2"
+wildmatch = "2.4.0"
+layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.1.1" }
+ctrlc = "3.4.5"
+tempfile = "3.13.0"
+lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.0" }
+futures = "0.3.31"
+cosmwasm-std = "2.1.4"
+reqwest = { version = "0.12.9", features = ["json"] }
+rand = "0.8.5"
+cfg-if = "1.0.0"
+wasmtime = { version = "24.0.0", features = ["cache", "component-model", "runtime", "std"] } # add "async" ?
+wasmtime-wasi-http = "24.0.0"
+wasmtime-wasi = { version = "24.0.0", default-features = true }
+lru = "0.12.1"
+rayon = "1.5.1"
+walkdir = "2.5.0"
+url = "2.5.3"
+bip39 = "2.0.0"
+
+[dev-dependencies]
+temp-env = {version = "0.3.6", features = ["async_closure"] }
+tempfile = "3.13"
+criterion = "0.5.1"
+
+[[bench]]
+name = "mock_bench"
+harness = false
+
+# old [workspace.dependencies]
+# cw-orch = { version = "0.22.0", features = ["daemon"] }
+# derivative = "2.2.0"
+
+# lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.0" }
+# wasmtime = { version = "24.0.0", features = ["cache", "component-model", "async", "runtime", "std"] }
+# wasmtime-wasi-http = "24.0.0"
+# wasmtime-wasi = { version = "24.0.0", default-features = true }
+# wasmtime-cli-flags = "24.0.0"
+# wasmparser = "0.216.0"
+# hyper = "1.4.1"
+# async-trait = "0.1.82"
+# tokio-cron-scheduler = "0.11.0"
+# axum = "0.7.5"
+# tower = "0.5.0"
+# axum-macros = "0.4.1"
+# serde_json = "1.0.127"
+# tracing = "0.1.40"
+# tracing-subscriber = { version = "0.3.18", features = ["env-filter"] } 
+# bytes = "1.7.1"
+# log = "0.4.22"
+# libc = "0.2.158"
+# indexmap = "2.4.0"
+# sha2 = "0.10.8"
+# hex = "0.4.3"
+# reqwest = "0.12.7"
+# uuid = "1.4.1"
+# toml = "0.8.19"
+# tower-http = {version = "0.6.1", features = ["cors"] }
+# dotenvy = {version = "0.15.7", features = ["cli"]}
+
+# old [dependencies]
+# anyhow = { workspace = true }
+# async-trait = { workspace = true }
+# axum = { workspace = true }
+# axum-macros = { workspace = true }
+# bytes = { workspace = true }
+# clap = { workspace = true }
+# cw-orch = { workspace = true }
+# derivative = { workspace = true }
+# hex = { workspace = true }
+# hyper = { workspace = true }
+# indexmap = { workspace = true }
+# lavs-apis = { workspace = true }
+# libc = { workspace = true }
+# log = { workspace = true }
+# reqwest = { workspace = true }
+# serde = { workspace = true, features = ["derive"] }
+# serde_json = { workspace = true }
+# sha2 = { workspace = true }
+# thiserror = { workspace = true }
+# tokio = { workspace = true, features = [ "rt", "time", "signal", "macros", "rt-multi-thread", "fs" ] }
+# tokio-cron-scheduler = { workspace = true }
+# toml = { workspace = true }
+# tracing = { workspace = true }
+# tracing-subscriber = { workspace = true, features = ["env-filter"] }
+# uuid = { workspace = true }
+# wasmparser = { workspace = true }
+# wasmtime = { workspace = true }
+# wasmtime-cli-flags = { workspace = true }
+# wasmtime-wasi = { workspace = true }
+# wasmtime-wasi-http = { workspace = true }
+# tower-http = { workspace = true }
+# dotenvy = {workspace = true}
+# dirs = {workspace = true}

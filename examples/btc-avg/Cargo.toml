@@ -1,26 +1,20 @@
 [package]
 name = "btc-avg"
-version = "0.2.0"
+version.workspace = true
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+publish = false
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
+wit-bindgen-rt = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
-
-[profile.release]
-codegen-units = 1
-opt-level = "s"
-debug = false
-strip = true
-lto = true
 
 [package.metadata.component]
 package = "lay3r:btc-avg"

@@ -1,23 +1,17 @@
 [package]
 name = "http-allowed-coingecko"
-version = "0.1.0"
+version.workspace = true
 authors.workspace = true
 edition.workspace = true
 edition.rust-version = true
 repository.workspace = true
+publish = false
 
 [dependencies]
-wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
+wit-bindgen-rt = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
-
-[profile.release]
-codegen-units = 1
-opt-level = "s"
-debug = false
-strip = true
-lto = true
 
 [package.metadata.component]
 package = "lay3r-examples:http-allowed-coingecko"
