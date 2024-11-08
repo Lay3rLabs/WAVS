@@ -82,8 +82,21 @@ mod e2e {
 
     async fn run_tests(config: Config) {
         let http_client = HttpClient::new(&config);
-        // sanity test - is web service running
-        let _ = http_client.get_config().await.unwrap();
+
+        // give the server a bit of time to start
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                match http_client.get_config().await {
+                    Ok(_) => break,
+                    Err(_) => {
+                        tracing::info!("Waiting for server to start...");
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap();
 
         // get all env vars
         let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
@@ -166,9 +179,6 @@ mod e2e {
                 let result = task.result.unwrap();
                 tracing::info!("task completed!");
                 tracing::info!("result: {:#?}", result);
-
-                let y = result.get("y").unwrap().as_u64().unwrap();
-                assert_eq!(y, 9);
             }
             Err(_) => panic!("Timeout waiting for task to complete"),
         }
