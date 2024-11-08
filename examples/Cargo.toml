@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.1.0"
+version = "0.2.0-rc1"
 authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
@@ -14,7 +14,7 @@ serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 anyhow = "1.0.90"
 wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
-layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", version = "0.1.1" }
+layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.1" }
 
 [profile.release]
 codegen-units = 1

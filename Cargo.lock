@@ -1209,6 +1209,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw-address-like"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73553ee4dad5b1678977ff603e72c3fdd41518ca2b0bd9b245b21e4c72eafa9e"
+dependencies = [
+ "cosmwasm-std",
+]
+
+[[package]]
 name = "cw-controllers"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1225,9 +1234,9 @@ dependencies = [
 
 [[package]]
 name = "cw-orch"
-version = "0.25.1"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7353edbba484283e3162fba408bc450de43b8cc20124f89299af6ba70ad8727"
+checksum = "8970af7113824ab8d82f0a0d12f92b41d85410f3b7651425989ffa55d517708b"
 dependencies = [
  "anyhow",
  "cosmwasm-std",
@@ -1304,13 +1313,38 @@ dependencies = [
 
 [[package]]
 name = "cw-orch-traits"
-version = "0.24.1"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "563311d320c9bdbb2287892a70d54102381a2265c75b65086236c7d85cd7dd87"
+checksum = "2ccb1670cc49a7a10c425ba1072cb607eb00d8085f97692877b9bdb00d14dd3d"
 dependencies = [
  "cw-orch-core",
- "prost",
  "prost-types",
+]
+
+[[package]]
+name = "cw-ownable"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed2f8ee96ac5342c795a0610410998fc075a95af8c796b6d16479cdffd2471f1"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-address-like",
+ "cw-ownable-derive",
+ "cw-storage-plus",
+ "cw-utils",
+ "thiserror",
+]
+
+[[package]]
+name = "cw-ownable-derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e69178d27793063dd13812777709cf7d7860ba35a598094d4bd89e1b30c9341"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2594,12 +2628,12 @@ dependencies = [
 [[package]]
 name = "lavs-apis"
 version = "0.2.0"
-source = "git+https://github.com/Lay3rLabs/avs-toolkit?tag=v0.2.0#efc37b2b42c08ad4a214809ca8a68b1bd4d539b3"
+source = "git+https://github.com/Lay3rLabs/avs-toolkit?tag=v0.2.1#af296532f9814eb62ec96f9982e9f8a535f1e11e"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
- "cw-controllers",
  "cw-orch",
+ "cw-ownable",
  "cw-storage-plus",
  "cw-utils",
  "serde",
@@ -4863,7 +4897,7 @@ dependencies = [
 
 [[package]]
 name = "wasmatic"
-version = "0.1.0"
+version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "axum",

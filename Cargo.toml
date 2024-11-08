@@ -2,7 +2,7 @@
 name = "wasmatic"
 description = "Lay3r Labs Wasmatic Node Server"
 edition = "2021"
-version = "0.1.0"
+version = "0.2.0-rc1"
 authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
@@ -34,7 +34,7 @@ wildmatch = "2.4.0"
 layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.1.1" }
 ctrlc = "3.4.5"
 tempfile = "3.13.0"
-lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.0" }
+lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.1" }
 futures = "0.3.31"
 cosmwasm-std = "2.1.4"
 reqwest = { version = "0.12.9", features = ["json"] }
