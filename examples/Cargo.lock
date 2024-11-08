@@ -249,7 +249,11 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "permissions"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "layer-wasi",
+ "serde",
+ "serde_json",
+ "url",
  "wit-bindgen-rt 0.32.0",
 ]
 

@@ -5,7 +5,7 @@
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
-    use std::{sync::Arc, time::Duration};
+    use std::{path::PathBuf, sync::Arc, time::Duration};
 
     use anyhow::{bail, Context, Result};
     use lavs_apis::{
@@ -14,7 +14,7 @@ mod e2e {
         tasks as task_queue,
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::{de::DeserializeOwned, Deserialize, Serialize};
     use wasmatic::{
         apis::{dispatcher::Permissions, ID},
         http::{
@@ -102,6 +102,7 @@ mod e2e {
             }
         };
 
+
         tracing::info!("Wasm digest: {}", wasm_digest);
 
         let chain_config = config.chain_config().unwrap();
@@ -167,13 +168,15 @@ mod e2e {
 
         tracing::info!("regular task submission past, running test service..");
 
-        let result: SquareOut = http_client
-            .test_service(&service_id, SquareIn { x: 4 })
+        let result: PermissionsExampleResponse = http_client
+            .test_service(&service_id, PermissionsExampleRequest { 
+                url: "https://httpbin.org/get".to_string()
+            })
             .await
             .unwrap();
 
-        assert_eq!(result.y, 16);
         tracing::info!("success!");
+        tracing::info!("{:#?}", result);
     }
 
     struct TaskQueueContract {
@@ -351,5 +354,17 @@ mod e2e {
 
             Ok(response.digest.into())
         }
+    }
+
+    #[derive(Deserialize, Serialize, Debug)]
+    struct PermissionsExampleRequest {
+        pub url: String,
+    }
+
+    #[derive(Deserialize, Serialize, Debug)]
+    struct PermissionsExampleResponse {
+        pub filename: PathBuf,
+        pub contents: String,
+        pub filecount: usize,
     }
 }

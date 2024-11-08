@@ -7,8 +7,11 @@ vars:
 tasks:
   run:
     cmds:
-      -  avs-toolkit-cli wasmatic run --wasm-source "{{.TARGET_WASM}}" --input '{}'
+      -  avs-toolkit-cli wasmatic run --wasm-source "{{.TARGET_WASM}}" --input '{{.INPUT}}'
     deps: [build]
+    vars:
+      INPUT: |
+        {"url": "https://httpbin.org/get"}
   build:
     cmds:
       - cargo component build --release
