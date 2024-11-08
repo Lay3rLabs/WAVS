@@ -78,6 +78,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
+        tracing::debug!("Executing queue, component: {:?}", wasi);
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
         let digest = wasi.wasm.clone();
@@ -109,6 +110,9 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             if !app_cache_path.is_dir() {
                 std::fs::create_dir(&app_cache_path)?;
             }
+
+            tracing::debug!("Preopening {:?}", app_cache_path);
+
             builder
                 .preopened_dir(&app_cache_path, ".", DirPerms::all(), FilePerms::all())
                 .context("preopen failed")?;

@@ -21,12 +21,10 @@ mod e2e {
             handlers::service::test::{TestAppRequest, TestAppResponse},
             types::TriggerRequest,
         },
-        test_utils::{
-            app::TestApp,
-            mock::{SquareIn, SquareOut},
-        },
+        test_utils::app::TestApp,
     };
     use wasmatic::{
+        apis::dispatcher::AllowedHostPermission,
         config::Config,
         context::AppContext,
         dispatcher::CoreDispatcher,
@@ -102,7 +100,6 @@ mod e2e {
             }
         };
 
-
         tracing::info!("Wasm digest: {}", wasm_digest);
 
         let chain_config = config.chain_config().unwrap();
@@ -112,7 +109,10 @@ mod e2e {
             .await
             .unwrap();
 
-        tracing::info!("Running tasks on task queue contract: {}", task_queue_addr);
+        tracing::info!(
+            "Creating service on task queue contract: {}",
+            task_queue_addr
+        );
         let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
 
         let task_queue = TaskQueueContract::new(signing_client.clone(), task_queue_addr)
@@ -126,8 +126,15 @@ mod e2e {
             .await
             .unwrap();
 
+        tracing::info!("Service created: {}", service_id);
+
         let tx_resp = task_queue
-            .submit_task("squaring 3", serde_json::json!({ "x": 3 }))
+            .submit_task(
+                "example request",
+                PermissionsExampleRequest {
+                    url: "https://httpbin.org/get".to_string(),
+                },
+            )
             .await
             .unwrap();
         let event: TaskCreatedEvent = CosmosTxEvents::from(&tx_resp)
@@ -169,9 +176,12 @@ mod e2e {
         tracing::info!("regular task submission past, running test service..");
 
         let result: PermissionsExampleResponse = http_client
-            .test_service(&service_id, PermissionsExampleRequest { 
-                url: "https://httpbin.org/get".to_string()
-            })
+            .test_service(
+                &service_id,
+                PermissionsExampleRequest {
+                    url: "https://httpbin.org/get".to_string(),
+                },
+            )
             .await
             .unwrap();
 
@@ -298,7 +308,10 @@ mod e2e {
                 trigger: TriggerRequest::queue(task_queue_addr, 1000, 0),
                 id,
                 digest: digest.into(),
-                permissions: Permissions::default(),
+                permissions: Permissions {
+                    allowed_http_hosts: AllowedHostPermission::All,
+                    file_system: true,
+                },
                 envs: Vec::new(),
                 testable: Some(true),
             };

@@ -37,12 +37,12 @@ fn inner_run_task(input: TaskQueueInput) -> Result<Response> {
 
     let responses_path = Path::new(DIRECTORY_NAME);
     if !responses_path.exists() {
-        fs::create_dir(DIRECTORY_NAME)?;
+        fs::create_dir_all(DIRECTORY_NAME)?;
     }
 
-    let req: Request = serde_json::from_slice(&input.request).unwrap();
+    let req: Request = serde_json::from_slice(&input.request).context("Failed to parse request")?;
 
-    let response_path = responses_path.join(input.timestamp.to_string());
+    let response_path = responses_path.join(format!("{}.txt", input.timestamp));
     let mut response_file = fs::File::create(&response_path)?;
 
     let contents = get_url(Url::parse(&req.url)?)?;
