@@ -110,9 +110,6 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             if !app_cache_path.is_dir() {
                 std::fs::create_dir(&app_cache_path)?;
             }
-
-            tracing::debug!("Preopening {:?}", app_cache_path);
-
             builder
                 .preopened_dir(&app_cache_path, ".", DirPerms::all(), FilePerms::all())
                 .context("preopen failed")?;

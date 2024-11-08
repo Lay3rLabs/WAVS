@@ -16,14 +16,6 @@ mod e2e {
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
     use wasmatic::{
-        apis::{dispatcher::Permissions, ID},
-        http::{
-            handlers::service::test::{TestAppRequest, TestAppResponse},
-            types::TriggerRequest,
-        },
-        test_utils::app::TestApp,
-    };
-    use wasmatic::{
         apis::dispatcher::AllowedHostPermission,
         config::Config,
         context::AppContext,
@@ -33,6 +25,14 @@ mod e2e {
             upload::UploadServiceResponse,
         },
         Digest,
+    };
+    use wasmatic::{
+        apis::{dispatcher::Permissions, ID},
+        http::{
+            handlers::service::test::{TestAppRequest, TestAppResponse},
+            types::TriggerRequest,
+        },
+        test_utils::app::TestApp,
     };
 
     #[test]
