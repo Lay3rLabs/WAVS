@@ -1,5 +1,5 @@
 [workspace]
-members = ["btc-avg", "composition/http-allow-list/http-allowed-coingecko", "square", "ai-bouncer"]
+members = ["btc-avg", "composition/http-allow-list/http-allowed-coingecko", "square", "permissions", "ai-bouncer"]
 resolver = "2"
 
 [workspace.package]

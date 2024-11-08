@@ -5,7 +5,7 @@
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
-    use std::{sync::Arc, time::Duration};
+    use std::{path::PathBuf, sync::Arc, time::Duration};
 
     use anyhow::{bail, Context, Result};
     use lavs_apis::{
@@ -14,19 +14,9 @@ mod e2e {
         tasks as task_queue,
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::{de::DeserializeOwned, Deserialize, Serialize};
     use wasmatic::{
-        apis::{dispatcher::Permissions, ID},
-        http::{
-            handlers::service::test::{TestAppRequest, TestAppResponse},
-            types::TriggerRequest,
-        },
-        test_utils::{
-            app::TestApp,
-            mock::{SquareIn, SquareOut},
-        },
-    };
-    use wasmatic::{
+        apis::dispatcher::AllowedHostPermission,
         config::Config,
         context::AppContext,
         dispatcher::CoreDispatcher,
@@ -35,6 +25,14 @@ mod e2e {
             upload::UploadServiceResponse,
         },
         Digest,
+    };
+    use wasmatic::{
+        apis::{dispatcher::Permissions, ID},
+        http::{
+            handlers::service::test::{TestAppRequest, TestAppResponse},
+            types::TriggerRequest,
+        },
+        test_utils::app::TestApp,
     };
 
     #[test]
@@ -84,8 +82,21 @@ mod e2e {
 
     async fn run_tests(config: Config) {
         let http_client = HttpClient::new(&config);
-        // sanity test - is web service running
-        let _ = http_client.get_config().await.unwrap();
+
+        // give the server a bit of time to start
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                match http_client.get_config().await {
+                    Ok(_) => break,
+                    Err(_) => {
+                        tracing::info!("Waiting for server to start...");
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap();
 
         // get all env vars
         let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
@@ -97,7 +108,7 @@ mod e2e {
         let wasm_digest: Digest = match wasm_digest {
             Ok(digest) => digest.parse().unwrap(),
             Err(_) => {
-                let wasm_bytes = include_bytes!("../components/square.wasm");
+                let wasm_bytes = include_bytes!("../components/permissions.wasm");
                 http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
             }
         };
@@ -111,7 +122,10 @@ mod e2e {
             .await
             .unwrap();
 
-        tracing::info!("Running tasks on task queue contract: {}", task_queue_addr);
+        tracing::info!(
+            "Creating service on task queue contract: {}",
+            task_queue_addr
+        );
         let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
 
         let task_queue = TaskQueueContract::new(signing_client.clone(), task_queue_addr)
@@ -125,8 +139,15 @@ mod e2e {
             .await
             .unwrap();
 
+        tracing::info!("Service created: {}", service_id);
+
         let tx_resp = task_queue
-            .submit_task("squaring 3", serde_json::json!({ "x": 3 }))
+            .submit_task(
+                "example request",
+                PermissionsExampleRequest {
+                    url: "https://httpbin.org/get".to_string(),
+                },
+            )
             .await
             .unwrap();
         let event: TaskCreatedEvent = CosmosTxEvents::from(&tx_resp)
@@ -158,22 +179,25 @@ mod e2e {
                 let result = task.result.unwrap();
                 tracing::info!("task completed!");
                 tracing::info!("result: {:#?}", result);
-
-                let y = result.get("y").unwrap().as_u64().unwrap();
-                assert_eq!(y, 9);
             }
             Err(_) => panic!("Timeout waiting for task to complete"),
         }
 
         tracing::info!("regular task submission past, running test service..");
 
-        let result: SquareOut = http_client
-            .test_service(&service_id, SquareIn { x: 4 })
+        let result: PermissionsExampleResponse = http_client
+            .test_service(
+                &service_id,
+                PermissionsExampleRequest {
+                    url: "https://httpbin.org/get".to_string(),
+                },
+            )
             .await
             .unwrap();
 
-        assert_eq!(result.y, 16);
         tracing::info!("success!");
+        assert!(result.filecount > 0);
+        tracing::info!("{:#?}", result);
     }
 
     struct TaskQueueContract {
@@ -295,7 +319,10 @@ mod e2e {
                 trigger: TriggerRequest::queue(task_queue_addr, 1000, 0),
                 id,
                 digest: digest.into(),
-                permissions: Permissions::default(),
+                permissions: Permissions {
+                    allowed_http_hosts: AllowedHostPermission::All,
+                    file_system: true,
+                },
                 envs: Vec::new(),
                 testable: Some(true),
             };
@@ -351,5 +378,17 @@ mod e2e {
 
             Ok(response.digest.into())
         }
+    }
+
+    #[derive(Deserialize, Serialize, Debug)]
+    struct PermissionsExampleRequest {
+        pub url: String,
+    }
+
+    #[derive(Deserialize, Serialize, Debug)]
+    struct PermissionsExampleResponse {
+        pub filename: PathBuf,
+        pub contents: String,
+        pub filecount: usize,
     }
 }
