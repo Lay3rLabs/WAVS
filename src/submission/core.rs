@@ -13,6 +13,7 @@ use crate::{
 };
 use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
 use layer_climb::prelude::*;
+use reqwest::Url;
 use tokio::sync::mpsc;
 
 #[derive(Clone)]
@@ -20,6 +21,8 @@ pub struct CoreSubmission {
     clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
     chain_config: ChainConfig,
     mnemonic: String,
+    faucet_url: Option<Url>,
+    http_client: reqwest::Client,
 }
 
 impl CoreSubmission {
@@ -35,7 +38,13 @@ impl CoreSubmission {
                 .submission_mnemonic
                 .clone()
                 .ok_or(SubmissionError::MissingMnemonic)?,
+            faucet_url: wasmatic_chain_config
+                .faucet_endpoint
+                .as_ref()
+                .map(|url| Url::parse(url).map_err(SubmissionError::FaucetUrl))
+                .transpose()?,
             chain_config: wasmatic_chain_config.into(),
+            http_client: reqwest::Client::new(),
         })
     }
 
@@ -66,6 +75,14 @@ impl CoreSubmission {
     }
 
     async fn maybe_tap_faucet(&self, client: &SigningClient) -> Result<(), SubmissionError> {
+        let faucet_url = match self.faucet_url.clone() {
+            Some(url) => url,
+            None => {
+                tracing::debug!("No faucet configured, skipping");
+                return Ok(());
+            }
+        };
+
         let balance = client
             .querier
             .balance(client.addr.clone(), None)
@@ -73,9 +90,45 @@ impl CoreSubmission {
             .map_err(SubmissionError::Climb)?
             .unwrap_or_default();
 
-        tracing::info!("Client {} has balance: {}", client.addr, balance);
+        tracing::debug!("Client {} has balance: {}", client.addr, balance);
 
-        //TODO - decide if we need to tap the faucet and do it if needed
+        let required_funds = (10_000_000f32 * self.chain_config.gas_price).round() as u128;
+
+        if balance > required_funds {
+            return Ok(());
+        }
+
+        let body = serde_json::json!({
+            "address": client.addr.to_string(),
+            "denom": self.chain_config.gas_denom.clone()
+        })
+        .to_string();
+
+        tracing::debug!("Tapping faucet at {} with {}", faucet_url, body);
+
+        let res = self
+            .http_client
+            .post(faucet_url)
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await
+            .map_err(SubmissionError::Reqwest)?;
+
+        if !res.status().is_success() {
+            let body = res.text().await.map_err(SubmissionError::Reqwest)?;
+            return Err(SubmissionError::Faucet(body));
+        }
+
+        if cfg!(debug_assertions) {
+            let balance = client
+                .querier
+                .balance(client.addr.clone(), None)
+                .await
+                .map_err(SubmissionError::Climb)?
+                .unwrap_or_default();
+            tracing::debug!("After faucet tap, {} has balance: {}", client.addr, balance);
+        }
 
         Ok(())
     }
@@ -110,7 +163,7 @@ impl Submission for CoreSubmission {
                             };
 
                             if let Err(err) = _self.maybe_tap_faucet(&client).await {
-                                tracing::warn!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, msg.hd_index, err);
+                                tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, msg.hd_index, err);
                             }
 
                             let verifier_addr = match _self.chain_config.parse_address(&msg.verifier_addr) {
