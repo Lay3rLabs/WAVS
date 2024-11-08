@@ -78,6 +78,7 @@ impl CoreSubmission {
         let faucet_url = match self.faucet_url.clone() {
             Some(url) => url,
             None => {
+                tracing::debug!("No faucet configured, skipping");
                 return Ok(());
             }
         };
