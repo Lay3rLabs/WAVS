@@ -1,0 +1,15 @@
+version: '3'
+
+vars:
+  TARGET_DIR: "../target/wasm32-wasip1/release"
+  TARGET_WASM: "{{.TARGET_DIR}}/permissions.wasm"
+
+tasks:
+  run:
+    cmds:
+      -  avs-toolkit-cli wasmatic run --wasm-source "{{.TARGET_WASM}}" --input '{}'
+    deps: [build]
+  build:
+    cmds:
+      - cargo component build --release
+      - ls -la "{{.TARGET_WASM}}"

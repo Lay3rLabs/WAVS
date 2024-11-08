@@ -97,7 +97,7 @@ mod e2e {
         let wasm_digest: Digest = match wasm_digest {
             Ok(digest) => digest.parse().unwrap(),
             Err(_) => {
-                let wasm_bytes = include_bytes!("../components/square.wasm");
+                let wasm_bytes = include_bytes!("../components/permissions.wasm");
                 http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
             }
         };
