@@ -163,7 +163,7 @@ impl Submission for CoreSubmission {
                             };
 
                             if let Err(err) = _self.maybe_tap_faucet(&client).await {
-                                tracing::warn!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, msg.hd_index, err);
+                                tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, msg.hd_index, err);
                             }
 
                             let verifier_addr = match _self.chain_config.parse_address(&msg.verifier_addr) {
