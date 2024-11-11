@@ -27,18 +27,20 @@ cors_allowed_origins = ["https://lay3rlabs.github.io/*", "http://localhost:*", "
 # chain config
 # localhost is local testing when you run the image outside of the docker-compose network
 [chains.localhost]
-chain_id = "slay3r-local"
+chain_id = "layer-local"
 rpc_endpoint = "http://localhost:26657"
 grpc_endpoint = "http://localhost:9090"
 gas_price = 0.025
+gas_denom = "ulayer"
 faucet_endpoint = "http://localhost:8000"
 
 # localnode is local testing inside localnode docker-compose network
 [chains.localnode]
-chain_id = "slay3r-local"
-rpc_endpoint = "http://cometbft:26657"
-grpc_endpoint = "http://slay3r:9090"
+chain_id = "layer-local"
+rpc_endpoint = "http://layer:26657"
+grpc_endpoint = "http://layer:9090"
 gas_price = 0.025
+gas_denom = "ulayer"
 faucet_endpoint = "http://faucet:8000"
 
 # hacknet is our public facing pseudo-testnet for hackathons
