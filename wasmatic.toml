@@ -49,3 +49,12 @@ grpc_endpoint = "https://grpc.hack.layer.xyz:443"
 gas_price = 0.025
 gas_denom = "ulayer"
 faucet_endpoint = "https://rabbit.hack.layer.xyz"
+
+# hacknet is our public facing pseudo-testnet for hackathons
+[chains.demonet]
+chain_id = "layer-demo-1"
+rpc_endpoint = "https://rpc.demo.layer.xyz:443"
+grpc_endpoint = "https://grpc.demo.layer.xyz:443"
+gas_price = 0.025
+gas_denom = "ulayer"
+faucet_endpoint = "https://faucet.demo.layer.xyz"
