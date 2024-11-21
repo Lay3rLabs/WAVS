@@ -245,6 +245,8 @@ mod e2e {
                 description: description.to_string(),
                 timeout: None,
                 payload: serde_json::to_value(payload)?,
+                with_completed_hooks: None,
+                with_timeout_hooks: None,
             });
 
             let funds = match self.task_cost.as_ref() {
