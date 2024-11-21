@@ -4,10 +4,10 @@ version = 3
 
 [[package]]
 name = "ai-bouncer"
-version = "0.1.0"
+version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
- "layer-wasi",
+ "layer-wasi 0.1.1 (git+https://github.com/Lay3rLabs/avs-toolkit?tag=v0.2.1)",
  "serde",
  "serde_json",
  "wit-bindgen-rt 0.32.0",
@@ -33,7 +33,7 @@ checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
 
 [[package]]
 name = "btc-avg"
-version = "0.1.0"
+version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "serde",
@@ -63,7 +63,7 @@ dependencies = [
 
 [[package]]
 name = "http-allowed-coingecko"
-version = "0.1.0"
+version = "0.2.0-rc1"
 dependencies = [
  "wit-bindgen-rt 0.32.0",
 ]
@@ -216,6 +216,18 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 [[package]]
 name = "layer-wasi"
 version = "0.1.1"
+source = "git+https://github.com/Lay3rLabs/avs-toolkit?tag=v0.2.1#af296532f9814eb62ec96f9982e9f8a535f1e11e"
+dependencies = [
+ "serde",
+ "serde_json",
+ "url",
+ "wasi",
+ "wstd",
+]
+
+[[package]]
+name = "layer-wasi"
+version = "0.1.1"
 source = "git+https://github.com/Lay3rLabs/avs-toolkit#af296532f9814eb62ec96f9982e9f8a535f1e11e"
 dependencies = [
  "serde",
@@ -245,10 +257,10 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "permissions"
-version = "0.1.0"
+version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
- "layer-wasi",
+ "layer-wasi 0.1.1 (git+https://github.com/Lay3rLabs/avs-toolkit)",
  "serde",
  "serde_json",
  "url",
@@ -328,7 +340,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "square"
-version = "0.1.0"
+version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "serde",
