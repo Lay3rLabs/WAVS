@@ -3,6 +3,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use tracing::instrument;
+
 use super::prelude::*;
 use crate::digest::Digest;
 
@@ -11,6 +13,7 @@ pub struct FileStorage {
 }
 
 impl FileStorage {
+    #[instrument(skip(data_dir), fields(subsys = "CaStorage"))]
     pub fn new(data_dir: impl Into<PathBuf>) -> Result<Self, CAStorageError> {
         let data_dir = data_dir.into();
         if !data_dir.exists() {
@@ -41,6 +44,7 @@ impl FileStorage {
 }
 
 impl CAStorage for FileStorage {
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn reset(&self) -> Result<(), CAStorageError> {
         // wipe out and re-create the entire directory
         std::fs::remove_dir_all(&self.data_dir)?;
@@ -49,6 +53,7 @@ impl CAStorage for FileStorage {
     }
 
     /// look for file by key and only write if not present
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn set_data(&self, data: &[u8]) -> Result<Digest, CAStorageError> {
         let digest = Digest::new(data);
         let path = self.digest_to_path(&digest)?;
@@ -59,6 +64,7 @@ impl CAStorage for FileStorage {
         Ok(digest)
     }
 
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError> {
         let path = self.digest_to_path(digest)?;
         if !path.exists() {
@@ -73,6 +79,7 @@ impl CAStorage for FileStorage {
 
     /// Returns an iterator over all the digests in the storage.
     /// We store these multiple levels deep (see digest_to_path), so we need to walk the directory tree.
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn digests(
         &self,
     ) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, CAStorageError> {

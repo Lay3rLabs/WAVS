@@ -1,7 +1,10 @@
 use temp_env::async_with_vars;
 use wasmatic::test_utils::app::TestApp;
 
-use std::{path::PathBuf, sync::{Arc, LazyLock}};
+use std::{
+    path::PathBuf,
+    sync::{Arc, LazyLock},
+};
 use wasmatic::{
     args::CliArgs,
     config::{Config, ConfigBuilder},
@@ -87,14 +90,15 @@ async fn config_array_string() {
             .add_directive("bar=debug".parse().unwrap())
     });
 
-    // it's set in the file too for other tests, but here we need to be explicit 
+    // it's set in the file too for other tests, but here we need to be explicit
     let config = async_with_vars(
-        [( 
+        [(
             format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
             Some("info, wasmatic=debug, just_to_confirm_test=debug"),
         )],
-        get_config()
-    ).await;
+        get_config(),
+    )
+    .await;
 
     async fn get_config() -> Arc<Config> {
         TestApp::new().await.config
@@ -104,7 +108,6 @@ async fn config_array_string() {
         config.log_level,
         ["info", "wasmatic=debug", "just_to_confirm_test=debug"]
     );
-
 
     // replace the var and check that it is now what we expect
     // env replacement needs to be in an async function

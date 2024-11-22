@@ -1,4 +1,5 @@
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
@@ -29,6 +30,7 @@ impl<E: Engine + Clone + 'static> SingleEngineRunner<E> {
 impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
     type Engine = E;
 
+    #[instrument(skip(self, _ctx), fields(subsys = "EngineRunner"))]
     fn start(
         &self,
         _ctx: AppContext,
