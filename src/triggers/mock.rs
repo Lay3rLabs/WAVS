@@ -142,7 +142,7 @@ pub struct MockTriggerManagerChannel {
 
 impl MockTriggerManagerChannel {
     #[allow(clippy::new_without_default)]
-    #[instrument(fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(channel_bound: usize) -> Self {
         let (sender, receiver) = mpsc::channel(channel_bound);
 
@@ -154,7 +154,7 @@ impl MockTriggerManagerChannel {
         }
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     pub async fn send_trigger(
         &self,
         service_id: impl TryInto<ID, Error = IDError> + std::fmt::Debug,
@@ -182,19 +182,19 @@ impl MockTriggerManagerChannel {
 }
 
 impl TriggerManager for MockTriggerManagerChannel {
-    #[instrument(skip(self, _ctx), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self, _ctx), fields(subsys = "TriggerManager"))]
     fn start(&self, _ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         let receiver = self.receiver.lock().unwrap().take().unwrap();
         Ok(receiver)
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError> {
         self.trigger_datas.lock().unwrap().push(trigger);
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError> {
         self.trigger_datas
             .lock()
@@ -203,7 +203,7 @@ impl TriggerManager for MockTriggerManagerChannel {
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_service(&self, service_id: ID) -> Result<(), TriggerError> {
         self.trigger_datas
             .lock()
@@ -212,7 +212,7 @@ impl TriggerManager for MockTriggerManagerChannel {
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
         let triggers = self.trigger_datas.lock().unwrap();
         let triggers = triggers

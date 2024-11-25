@@ -52,7 +52,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
-    #[instrument(skip(self, ctx), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Dispatcher"))]
     fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
         // Trigger is pipeline start
         let mut actions_in = self.triggers.start(ctx.clone())?;
@@ -112,7 +112,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn run_trigger(
         &self,
         action: TriggerAction,
@@ -128,7 +128,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(self.engine.run_trigger(action, service)?)
     }
 
-    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
         let bytecode = match source {
             WasmSource::Bytecode(code) => code,
@@ -138,14 +138,14 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digest)
     }
 
-    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn list_component_digests(&self) -> Result<Vec<crate::Digest>, Self::Error> {
         let digests = self.engine.engine().list_digests()?;
 
         Ok(digests)
     }
 
-    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
@@ -163,7 +163,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn remove_service(&self, id: ID) -> Result<(), Self::Error> {
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.triggers.remove_service(id)?;
@@ -171,7 +171,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn list_services(
         &self,
         bounds_start: Bound<&str>,

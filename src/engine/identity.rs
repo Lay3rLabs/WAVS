@@ -17,17 +17,17 @@ impl IdentityEngine {
 }
 
 impl Engine for IdentityEngine {
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         Ok(Digest::new(bytecode))
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
         Ok(vec![])
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute_queue(
         &self,
         _component: &Component,

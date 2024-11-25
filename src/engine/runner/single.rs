@@ -30,7 +30,7 @@ impl<E: Engine + Clone + 'static> SingleEngineRunner<E> {
 impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
     type Engine = E;
 
-    #[instrument(skip(self, _ctx), fields(subsys = "EngineRunner"))]
+    #[instrument(level = "debug", skip(self, _ctx), fields(subsys = "EngineRunner"))]
     fn start(
         &self,
         _ctx: AppContext,

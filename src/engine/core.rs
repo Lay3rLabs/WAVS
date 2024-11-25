@@ -51,7 +51,7 @@ impl<S: CAStorage> WasmEngine<S> {
 }
 
 impl<S: CAStorage> Engine for WasmEngine<S> {
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
         let cm = Component::new(&self.wasm_engine, bytecode)?;
@@ -68,14 +68,14 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     }
 
     // TODO: paginate this
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
         let digests: Result<Vec<_>, CAStorageError> = self.wasm_storage.digests()?.collect();
         Ok(digests?)
     }
 
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute_queue(
         &self,
         wasi: &apis::dispatcher::Component,

@@ -51,7 +51,7 @@ type LookupId = usize;
 
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
-    #[instrument(fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
         let chain_config = config.chain_config().map_err(TriggerError::Climb)?;
 
@@ -62,7 +62,7 @@ impl CoreTriggerManager {
         })
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     async fn start_watcher(
         &self,
         action_sender: mpsc::Sender<TriggerAction>,
@@ -201,7 +201,7 @@ impl CoreTriggerManager {
 }
 
 impl TriggerManager for CoreTriggerManager {
-    #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         // The trigger manager should be free to quickly fire off triggers
         // so that it can continue to monitor the chain
@@ -225,7 +225,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(action_receiver)
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn add_trigger(&self, data: TriggerData) -> Result<(), TriggerError> {
         // get the next lookup id
         let lookup_id = self
@@ -263,7 +263,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_trigger(
         &self,
         service_id: crate::apis::ID,
@@ -293,7 +293,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_service(&self, service_id: crate::apis::ID) -> Result<(), TriggerError> {
         let mut all_trigger_data_lock = self.lookup_maps.all_trigger_data.write().unwrap();
         let mut triggers_by_task_queue_lock =
@@ -322,7 +322,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(())
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn list_triggers(&self, service_id: crate::apis::ID) -> Result<Vec<TriggerData>, TriggerError> {
         let mut triggers = Vec::new();
 

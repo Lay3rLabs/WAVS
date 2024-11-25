@@ -13,7 +13,7 @@ pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
 pub type DBError = redb::Error;
 
 impl RedbStorage {
-    #[instrument(skip(path), fields(subsys = "DbStorage"))]
+    #[instrument(level = "debug", skip(path), fields(subsys = "DbStorage"))]
     pub fn new(path: impl AsRef<Path>) -> Result<Self, DBError> {
         let db = redb::Database::create(path)?;
         Ok(RedbStorage { db })
@@ -21,7 +21,7 @@ impl RedbStorage {
 }
 
 impl RedbStorage {
-    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
+    #[instrument(level = "debug", skip(self, table), fields(subsys = "DbStorage"))]
     pub fn set<K: Key, V: Value + 'static>(
         &self,
         table: Table<K, V>,
@@ -37,7 +37,7 @@ impl RedbStorage {
         Ok(())
     }
 
-    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
+    #[instrument(level = "debug", skip(self, table), fields(subsys = "DbStorage"))]
     pub fn get<K: Key, V: Value + 'static>(
         &self,
         table: Table<K, V>,
@@ -53,7 +53,7 @@ impl RedbStorage {
         }
     }
 
-    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
+    #[instrument(level = "debug", skip(self, table), fields(subsys = "DbStorage"))]
     pub fn remove<K: Key, V: Value + 'static>(
         &self,
         table: Table<K, V>,
@@ -69,7 +69,7 @@ impl RedbStorage {
     }
 
     // TODO: this could just be an internal helper method for get(), range(), etc.
-    #[instrument(skip(self, table, f), fields(subsys = "DbStorage"))]
+    #[instrument(level = "debug", skip(self, table, f), fields(subsys = "DbStorage"))]
     pub fn map_table_read<'a, K, V, F, R>(&self, table: Table<K, V>, f: F) -> Result<R, DBError>
     where
         K: Key + 'a,

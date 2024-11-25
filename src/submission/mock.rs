@@ -60,7 +60,7 @@ impl Submission for MockSubmission {
     // doing this sync so easier to block on
     // TODO: how to add support for aborting on the kill signal from ctx
     // (Same on mock triggers)
-    #[instrument(skip(self, ctx), fields(subsys = "Submission"))]
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Submission"))]
     fn start(
         &self,
         ctx: AppContext,

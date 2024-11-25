@@ -35,19 +35,19 @@ impl MockEngine {
 }
 
 impl Engine for MockEngine {
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         let digest = Digest::new(bytecode);
         self.digests.write().unwrap().insert(digest.clone());
         Ok(digest)
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
         Ok(self.digests.read().unwrap().iter().cloned().collect())
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute_queue(
         &self,
         component: &crate::apis::dispatcher::Component,
