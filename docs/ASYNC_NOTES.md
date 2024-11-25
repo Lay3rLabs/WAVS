@@ -12,10 +12,12 @@
 
 WASI 0.2 is readiness-based rather than completion-based. Similar to `epoll`. Makes heavy use of the `pollable` resource type.
 
-`resource pollable {`  
-      `ready: func() -> bool;`  
-      `block: func();`  
-`}`
+```wit
+resource pollable {
+    ready: func() -> bool;
+    block: func();
+}
+```
 
 The guest needs an async executor. For Rust, the plan is to upstream support into Tokio, Reqwest, etc. However, it takes time to work with the crate owners. A stop gap attempt [https://docs.rs/wstd/0.4.0/wstd/runtime/index.html](https://docs.rs/wstd/0.4.0/wstd/runtime/index.html)
 
