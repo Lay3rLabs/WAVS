@@ -52,8 +52,9 @@ pub fn run_server(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatche
 }
 
 // the test version of init_tracing does not take a config
-// only uses the default tracing settings
-// this is not gated out because it is used in benches and integration tests as well
+// since config itself is tested and modified from different parallel tests
+// therefore, this only uses the default tracing settings
+// it's not gated out because it is used in benches and integration tests as well
 pub fn init_tracing_tests() {
     use std::sync::LazyLock;
 

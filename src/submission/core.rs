@@ -15,6 +15,7 @@ use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
 use layer_climb::prelude::*;
 use reqwest::Url;
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 #[derive(Clone)]
 pub struct CoreSubmission {
@@ -27,6 +28,7 @@ pub struct CoreSubmission {
 
 impl CoreSubmission {
     #[allow(clippy::new_without_default)]
+    #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
         let wasmatic_chain_config = config
             .wasmatic_chain_config()
@@ -48,6 +50,7 @@ impl CoreSubmission {
         })
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn get_client(&self, hd_index: u32) -> Result<SigningClient, SubmissionError> {
         {
             let lock = self.clients.lock().unwrap();
@@ -74,6 +77,7 @@ impl CoreSubmission {
         Ok(client)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn maybe_tap_faucet(&self, client: &SigningClient) -> Result<(), SubmissionError> {
         let faucet_url = match self.faucet_url.clone() {
             Some(url) => url,
@@ -135,6 +139,7 @@ impl CoreSubmission {
 }
 
 impl Submission for CoreSubmission {
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Submission"))]
     fn start(
         &self,
         ctx: AppContext,
@@ -147,12 +152,12 @@ impl Submission for CoreSubmission {
             async move {
                 tokio::select! {
                     _ = kill_receiver.recv() => {
-                        tracing::info!("Submissions shutting down");
+                        tracing::debug!("Submissions shutting down");
                     },
                     _ = async move {
                     } => {
                         while let Some(msg) = rx.recv().await {
-                            tracing::info!("Received message to submit: {:?}", msg);
+                            tracing::debug!("Received message to submit: {:?}", msg);
 
                             let client = match _self.get_client(msg.hd_index).await {
                                 Ok(client) => client,
@@ -194,7 +199,7 @@ impl Submission for CoreSubmission {
 
                             match client.contract_execute(&msg.verifier_addr, &contract_msg, Vec::new(), None).await {
                                 Ok(_) => {
-                                    tracing::info!("Submission successful");
+                                    tracing::debug!("Submission successful");
                                 },
                                 Err(e) => {
                                     tracing::error!("Submission failed: {:?}", e);
@@ -203,7 +208,7 @@ impl Submission for CoreSubmission {
 
                         }
 
-                        tracing::info!("Submission channel closed");
+                        tracing::debug!("Submission channel closed");
                     }
                 }
             }

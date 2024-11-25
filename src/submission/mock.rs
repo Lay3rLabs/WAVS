@@ -3,6 +3,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 use crate::context::AppContext;
@@ -59,6 +60,7 @@ impl Submission for MockSubmission {
     // doing this sync so easier to block on
     // TODO: how to add support for aborting on the kill signal from ctx
     // (Same on mock triggers)
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Submission"))]
     fn start(
         &self,
         ctx: AppContext,
@@ -66,16 +68,16 @@ impl Submission for MockSubmission {
     ) -> Result<(), SubmissionError> {
         let mock = self.clone();
         ctx.rt.spawn(async move {
-            tracing::info!("Submission listening on channel");
+            tracing::debug!("Submission listening on channel");
             while let Some(msg) = rx.recv().await {
-                tracing::info!(
+                tracing::debug!(
                     "Received message: {} / {}",
                     msg.trigger_data.service_id,
                     msg.trigger_data.workflow_id
                 );
                 mock.inbox.lock().unwrap().push(msg);
             }
-            tracing::info!("Submission channel closed");
+            tracing::debug!("Submission channel closed");
         });
 
         sleep(Duration::from_millis(20));

@@ -16,6 +16,7 @@ use futures::StreamExt;
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
 use layer_climb::prelude::*;
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -50,6 +51,7 @@ type LookupId = usize;
 
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
+    #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
         let chain_config = config.chain_config().map_err(TriggerError::Climb)?;
 
@@ -60,6 +62,7 @@ impl CoreTriggerManager {
         })
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     async fn start_watcher(
         &self,
         action_sender: mpsc::Sender<TriggerAction>,
@@ -68,7 +71,7 @@ impl CoreTriggerManager {
             .await
             .map_err(TriggerError::Climb)?;
 
-        tracing::info!(
+        tracing::debug!(
             "Trigger Manager started on {}",
             query_client.chain_config.chain_id
         );
@@ -126,7 +129,7 @@ impl CoreTriggerManager {
                                 match triggers_by_task_queue_lock.get(&contract_address) {
                                     Some(lookup_id) => *lookup_id,
                                     None => {
-                                        tracing::info!(
+                                        tracing::debug!(
                                             "not our task queue: {:?}",
                                             contract_address
                                         );
@@ -157,7 +160,7 @@ impl CoreTriggerManager {
                             let payload = match resp {
                                 Ok(resp) => {
                                     if !matches!(resp.status, task_queue::Status::Open {}) {
-                                        tracing::info!("task is not open: {:?}", resp);
+                                        tracing::debug!("task is not open: {:?}", resp);
                                         continue;
                                     }
                                     resp.payload
@@ -191,13 +194,14 @@ impl CoreTriggerManager {
             })
             .await;
 
-        tracing::info!("Trigger Manager watcher finished");
+        tracing::debug!("Trigger Manager watcher finished");
 
         Ok(())
     }
 }
 
 impl TriggerManager for CoreTriggerManager {
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         // The trigger manager should be free to quickly fire off triggers
         // so that it can continue to monitor the chain
@@ -210,7 +214,7 @@ impl TriggerManager for CoreTriggerManager {
             async move {
                 tokio::select! {
                     _ = kill_receiver.recv() => {
-                        tracing::info!("Trigger Manager shutting down");
+                        tracing::debug!("Trigger Manager shutting down");
                     },
                     _ = _self.start_watcher(action_sender) => {
                     }
@@ -221,6 +225,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(action_receiver)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn add_trigger(&self, data: TriggerData) -> Result<(), TriggerError> {
         // get the next lookup id
         let lookup_id = self
@@ -258,6 +263,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_trigger(
         &self,
         service_id: crate::apis::ID,
@@ -287,6 +293,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_service(&self, service_id: crate::apis::ID) -> Result<(), TriggerError> {
         let mut all_trigger_data_lock = self.lookup_maps.all_trigger_data.write().unwrap();
         let mut triggers_by_task_queue_lock =
@@ -315,6 +322,7 @@ impl TriggerManager for CoreTriggerManager {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn list_triggers(&self, service_id: crate::apis::ID) -> Result<Vec<TriggerData>, TriggerError> {
         let mut triggers = Vec::new();
 

@@ -76,13 +76,13 @@ pub fn submit_result(
 ) {
     match msg {
         Ok(Some(msg)) => {
-            tracing::info!("Ran action, got result to submit");
+            tracing::debug!("Ran action, got result to submit");
             if let Err(err) = out.blocking_send(msg) {
                 tracing::error!("Error submitting msg: {:?}", err);
             }
         }
         Ok(None) => {
-            tracing::info!("Ran action, no submission");
+            tracing::debug!("Ran action, no submission");
         }
         Err(e) => {
             tracing::error!("Error running trigger: {:?}", e);

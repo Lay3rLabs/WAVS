@@ -1,3 +1,5 @@
+use tracing::instrument;
+
 use crate::apis::dispatcher::Component;
 use crate::apis::engine::{Engine, EngineError};
 
@@ -15,14 +17,17 @@ impl IdentityEngine {
 }
 
 impl Engine for IdentityEngine {
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         Ok(Digest::new(bytecode))
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
         Ok(vec![])
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute_queue(
         &self,
         _component: &Component,

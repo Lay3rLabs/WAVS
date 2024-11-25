@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
@@ -51,6 +52,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Dispatcher"))]
     fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
         // Trigger is pipeline start
         let mut actions_in = self.triggers.start(ctx.clone())?;
@@ -104,12 +106,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         // FIXME: this sleep is a hack to make sure the messages are delivered
         // is there a better way to do this?
         // (in production, this is only hit in shutdown, so not so important, but it causes annoying test failures)
-        tracing::info!("no more work in dispatcher, channel closing");
+        tracing::debug!("no more work in dispatcher, channel closing");
         std::thread::sleep(Duration::from_millis(500));
 
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn run_trigger(
         &self,
         action: TriggerAction,
@@ -125,6 +128,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(self.engine.run_trigger(action, service)?)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
         let bytecode = match source {
             WasmSource::Bytecode(code) => code,
@@ -134,12 +138,14 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digest)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn list_component_digests(&self) -> Result<Vec<crate::Digest>, Self::Error> {
         let digests = self.engine.engine().list_digests()?;
 
         Ok(digests)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
@@ -157,6 +163,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn remove_service(&self, id: ID) -> Result<(), Self::Error> {
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.triggers.remove_service(id)?;
@@ -164,6 +171,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn list_services(
         &self,
         bounds_start: Bound<&str>,
