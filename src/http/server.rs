@@ -42,7 +42,7 @@ pub fn start(
             .with_graceful_shutdown(async move {
                 shutdown_signal.recv().await.ok();
 
-                tracing::info!("Http server shutting down");
+                tracing::debug!("Http server shutting down");
             })
             .await?;
 

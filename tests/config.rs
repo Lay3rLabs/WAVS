@@ -1,6 +1,10 @@
+use temp_env::async_with_vars;
 use wasmatic::test_utils::app::TestApp;
 
-use std::{path::PathBuf, sync::LazyLock};
+use std::{
+    path::PathBuf,
+    sync::{Arc, LazyLock},
+};
 use wasmatic::{
     args::CliArgs,
     config::{Config, ConfigBuilder},
@@ -86,9 +90,20 @@ async fn config_array_string() {
             .add_directive("bar=debug".parse().unwrap())
     });
 
-    let config = TestApp::new().await.config;
+    // it's set in the file too for other tests, but here we need to be explicit
+    let config = async_with_vars(
+        [(
+            format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
+            Some("info, wasmatic=debug, just_to_confirm_test=debug"),
+        )],
+        get_config(),
+    )
+    .await;
 
-    // sanity check that our log_level was correctly loaded from file
+    async fn get_config() -> Arc<Config> {
+        TestApp::new().await.config
+    }
+
     assert_eq!(
         config.log_level,
         ["info", "wasmatic=debug", "just_to_confirm_test=debug"]

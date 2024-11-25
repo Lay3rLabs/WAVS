@@ -2,6 +2,8 @@ We have 3 levels of tests: unit, mock-integration, and e2e
 
 Unit and mock-integration tests run with regular `cargo test`. e2e tests are more involved and are gated behind the `e2e_tests` feature.
 
+The logging level is set via `RUST_LOG` env var, see [LOGGING.md](./LOGGING.md) for more info 
+
 ## Unit tests
 
 These are generally written in the same file as the code they're testing

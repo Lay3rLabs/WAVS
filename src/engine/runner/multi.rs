@@ -1,5 +1,6 @@
 use rayon::ThreadPoolBuilder;
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
@@ -32,6 +33,7 @@ impl<E: Engine + Clone + 'static> MultiEngineRunner<E> {
 impl<E: Engine + Clone + 'static> EngineRunner for MultiEngineRunner<E> {
     type Engine = E;
 
+    #[instrument(level = "debug", skip(self, _ctx), fields(subsys = "EngineRunner"))]
     fn start(
         &self,
         _ctx: AppContext,

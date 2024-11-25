@@ -280,7 +280,10 @@ impl Config {
     pub fn tracing_env_filter(&self) -> Result<tracing_subscriber::EnvFilter> {
         let mut filter = tracing_subscriber::EnvFilter::from_default_env();
         for directive in &self.log_level {
-            filter = filter.add_directive(directive.parse()?);
+            match directive.parse() {
+                Ok(directive) => filter = filter.add_directive(directive),
+                Err(err) => bail!("{}: {}", err, directive),
+            }
         }
 
         Ok(filter)
