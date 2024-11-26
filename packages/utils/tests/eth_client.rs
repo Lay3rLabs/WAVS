@@ -1,4 +1,4 @@
-use alloy::{network::NetworkWallet, node_bindings::Anvil, providers::Provider, signers::Signer};
+use alloy::{node_bindings::Anvil, providers::Provider, signers::Signer};
 use futures::StreamExt;
 use utils::eth_client::{EthClientBuilder, EthClientConfig};
 
@@ -25,7 +25,6 @@ async fn client_stream_blocks() {
 
     while counter < 3 {
         let _header = stream.next().await.unwrap();
-        println!("Received block header: {:?}", _header);
         counter += 1;
     }
 }
