@@ -231,15 +231,15 @@ impl ConfigBuilder {
         }
 
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
-        // in this case, to not pollute the home directory, it looks for ~/.wavs/wavs/wavs.toml
+        // in this case, to not pollute the home directory, it looks for ~/.wavs/wavs.toml
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(Self::HIDDEN_DIRNAME)) {
             dirs.push(dir);
         }
 
-        // checks the `.wavs/wavs/wavs.toml` file in the system config directory
+        // checks the `.wavs/wavs.toml` file in the system config directory
         // this will vary, but the final path with then be something like:
-        // Linux: ~/.config/wavs/wavs/wavs.toml
-        // macOS: ~/Library/Application Support/wavs/wavs/wavs.toml
+        // Linux: ~/.config/wavs/wavs.toml
+        // macOS: ~/Library/Application Support/wavs/wavs.toml
         // Windows: C:\Users\MyUserName\AppData\Roaming\wavs\wavs.toml
         if let Some(dir) = dirs::config_dir().map(|dir| dir.join(Self::DIRNAME)) {
             dirs.push(dir);
@@ -248,7 +248,7 @@ impl ConfigBuilder {
         // On linux, this may already be added via config_dir above
         // but on macOS and windows, and maybe unix-like environments (msys, wsl, etc)
         // it's helpful to add it explicitly
-        // the final path here typically becomes something like ~/.config/wavs/wavs/wavs.toml
+        // the final path here typically becomes something like ~/.config/wavs/wavs.toml
         if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
             .ok()
             .map(PathBuf::from)
@@ -261,12 +261,12 @@ impl ConfigBuilder {
         // but on systems like Windows, it's helpful to add it explicitly
         // since the system may place the config dir in AppData/Roaming
         // but we want to check the user's home dir first
-        // this will definitively become something like ~/.config/wavs/wavs/wavs.toml
+        // this will definitively become something like ~/.config/wavs/wavs.toml
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(Self::DIRNAME)) {
             dirs.push(dir);
         }
 
-        // Lastly, try /etc/wavs/wavs/wavs.toml
+        // Lastly, try /etc/wavs/wavs.toml
         dirs.push(PathBuf::from("/etc").join(Self::DIRNAME));
 
         // now we have a list of directories to check, we need to add the filename to each
