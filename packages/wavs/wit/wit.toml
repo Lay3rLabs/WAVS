@@ -1,0 +1,7 @@
+version = "0.3.0"
+[dependencies]
+"wasi:clocks" = "0.2.0"
+"wasi:cli" = "0.2.0"
+"wasi:io" = "0.2.0"
+"wasi:http" = "0.2.0"
+"wasi:filesystem" = "0.2.0"

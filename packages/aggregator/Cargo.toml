@@ -1,0 +1,8 @@
+[package]
+name = "aggregator"
+description = "Lay3r Labs WAVS Aggregator Server"
+edition = "2021"
+version = "0.2.0-rc1"
+authors = ["Lay3r Labs Team"]
+rust-version = "1.80.0"
+repository = "https://github.com/Lay3rLabs/wasmatic"

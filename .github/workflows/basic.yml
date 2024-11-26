@@ -7,7 +7,7 @@ name: Basic Checks
 # TODO: perform other tests on wasi examples
 jobs:
   test:
-    name: Wasmatic Test Suite
+    name: Wavs Test Suite
     runs-on: linux-8-core
     steps:
       - name: Checkout sources

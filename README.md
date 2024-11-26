@@ -1,10 +1,23 @@
-# Wasmatic
+# Wavs
 
 This is an AVS operator node, that is quickly configurable to easily serve
 logic for many AVSes, each one sandboxed from each other and the node's
 operating system.
 
 To acheive this sandboxing, we use WASI components, with limited access to system resources.
+
+## Running
+
+This repo is organized with multiple packages. The default binary when running from the workspace is `wavs`, 
+but it will only find the config file automatically when running from within the package.
+
+To run from the root workspace (with `localhost` chain):
+
+```
+cargo run -- --home=./packages/wavs --chain=localhost
+```
+
+Similarly, it will pick up the `.env` from the current working directory.
 
 ## Persona
 

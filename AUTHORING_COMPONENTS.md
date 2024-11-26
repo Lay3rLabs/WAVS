@@ -31,7 +31,7 @@ the [wkg docs](https://github.com/bytecodealliance/wasm-pkg-tools).
 
 ## Setup a New Project
 
-To create an new Wasm component for use with Layer's Wasmatic, let's use `cargo component`
+To create an new Wasm component for use with Layer's Wavs, let's use `cargo component`
 to scaffold a new project with a task queue trigger. Feel free to choose a different project
 name then "my-task".
 
@@ -76,7 +76,7 @@ First, let's do a release build of the component:
 cargo component build --release
 ```
 
-Upload the compiled Wasm component to the Wasmatic node.
+Upload the compiled Wasm component to the Wavs node.
 ```bash
 curl -X POST --data-binary @./target/wasm32-wasip1/release/my_task.wasm http://localhost:8081/upload
 ```
@@ -107,7 +107,7 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8081/app -d "$
 
 ## Testing Deployment
 
-To test the deployed application on the Wasmatic node, you can provide `input` test data
+To test the deployed application on the Wavs node, you can provide `input` test data
 that your application expects. The server responds with the output of the applicaton without
 sending the result to the chain.
 
