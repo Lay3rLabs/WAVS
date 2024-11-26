@@ -1,10 +1,6 @@
 [workspace]
-members = [
-    "packages/*",
-]
-default-members = [
-    "packages/wavs",
-]
+members = ["packages/*"]
+default-members = ["packages/wavs"]
 resolver = "2"
 
 [workspace.package]
@@ -17,21 +13,21 @@ rust-version = "1.80.0"
 [workspace.dependencies]
 clap = { version = "4.5.20", features = ["derive", "env"] }
 anyhow = "1.0.90"
-tokio = { version = "1.41.0", features = [ "full" ] }
+tokio = { version = "1.41.0", features = ["full"] }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 dirs = "5.0.1"
 toml = "0.8.19"
 tracing = "0.1.40"
-tracing-subscriber = {version = "0.3.18", features = ["env-filter"]}
-dotenvy = {version = "0.15.7", features = ["cli"]}
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+dotenvy = { version = "0.15.7", features = ["cli"] }
 figment = { version = "0.10.19", features = ["toml", "env"] }
 sha2 = "0.10.8"
 hex = "0.4.3"
 thiserror = "1.0.42"
 redb = { version = "2.1" }
-axum = {version = "0.7.7", features = ["macros"]}
-tower-http = {version = "0.6.1", features = ["cors", "trace"] }
+axum = { version = "0.7.7", features = ["macros"] }
+tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
@@ -44,7 +40,12 @@ cosmwasm-std = "2.1.4"
 reqwest = { version = "0.12.9", features = ["json"] }
 rand = "0.8.5"
 cfg-if = "1.0.0"
-wasmtime = { version = "24.0.0", features = ["cache", "component-model", "runtime", "std"] } # add "async" ?
+wasmtime = { version = "24.0.0", features = [
+  "cache",
+  "component-model",
+  "runtime",
+  "std",
+] } # add "async" ?
 wasmtime-wasi-http = "24.0.0"
 wasmtime-wasi = { version = "24.0.0", default-features = true }
 lru = "0.12.1"
@@ -52,5 +53,5 @@ rayon = "1.5.1"
 walkdir = "2.5.0"
 url = "2.5.3"
 bip39 = "2.0.0"
-temp-env = {version = "0.3.6", features = ["async_closure"] }
+temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"

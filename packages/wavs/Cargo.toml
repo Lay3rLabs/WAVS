@@ -11,48 +11,48 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 e2e_tests = []
 
 [dependencies]
-clap = {workspace = true} 
-anyhow = {workspace = true}
-tokio = {workspace = true}
-serde = {workspace = true}
-serde_json = {workspace = true}
-dirs = {workspace = true}
-toml = {workspace = true}
-tracing = {workspace = true}
-tracing-subscriber = {workspace = true}
-dotenvy = {workspace = true}
-figment = {workspace = true}
-sha2 = {workspace = true}
-hex = {workspace = true}
-thiserror = {workspace = true}
-redb = {workspace = true}
-axum = {workspace = true}
-tower-http = {workspace = true}
-tower = {workspace = true}
-http-body-util = {workspace = true}
-wildmatch = {workspace = true}
-layer-climb = {workspace = true}
-ctrlc = {workspace = true}
-tempfile = {workspace = true}
-lavs-apis = {workspace = true}
-futures = {workspace = true}
-cosmwasm-std = {workspace = true}
-reqwest = {workspace = true}
-rand = {workspace = true}
-cfg-if = {workspace = true}
-wasmtime = {workspace = true}
-wasmtime-wasi-http = {workspace = true}
-wasmtime-wasi = {workspace = true}
-lru = {workspace = true}
-rayon = {workspace = true}
-walkdir = {workspace = true}
-url = {workspace = true}
-bip39 = {workspace = true}
+clap = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
+figment = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+redb = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+tower = { workspace = true }
+http-body-util = { workspace = true }
+wildmatch = { workspace = true }
+layer-climb = { workspace = true }
+ctrlc = { workspace = true }
+tempfile = { workspace = true }
+lavs-apis = { workspace = true }
+futures = { workspace = true }
+cosmwasm-std = { workspace = true }
+reqwest = { workspace = true }
+rand = { workspace = true }
+cfg-if = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-wasi-http = { workspace = true }
+wasmtime-wasi = { workspace = true }
+lru = { workspace = true }
+rayon = { workspace = true }
+walkdir = { workspace = true }
+url = { workspace = true }
+bip39 = { workspace = true }
 
 [dev-dependencies]
-temp-env = {workspace = true}
-tempfile = {workspace = true}
-criterion = {workspace = true}
+temp-env = { workspace = true }
+tempfile = { workspace = true }
+criterion = { workspace = true }
 
 [[bench]]
 name = "mock_bench"

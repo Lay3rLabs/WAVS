@@ -13,7 +13,11 @@
 log_level = ["info", "wavs=debug"]
 
 # the allowed cors origins. Default is empty list.
-cors_allowed_origins = ["https://lay3rlabs.github.io/*", "http://localhost:*", "http://127.0.0.1:*"]
+cors_allowed_origins = [
+  "https://lay3rlabs.github.io/*",
+  "http://localhost:*",
+  "http://127.0.0.1:*",
+]
 
 # the host to serve on. Default is localhost
 # host = "localhost"
