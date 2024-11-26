@@ -1,10 +1,10 @@
-# wasmatic
+# Wavs
 
 **PRE-PRODUCTION PROTOTYPE, USE WITH CARE**
 
 ### Build and run instructions
 
-Run `cargo run up` to start the Wasmatic server node with the default configuration options.
+Run `cargo run up` to start the Wavs server node with the default configuration options.
 By default, the operator API will be listen on `http://0.0.0.0:8081`.
 
 
