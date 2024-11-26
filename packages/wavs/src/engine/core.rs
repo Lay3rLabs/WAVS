@@ -190,8 +190,8 @@ mod tests {
 
     use super::*;
 
-    const SQUARE: &[u8] = include_bytes!("../../components/square.wasm");
-    const BTC_AVG: &[u8] = include_bytes!("../../components/btc_avg.wasm");
+    const SQUARE: &[u8] = include_bytes!("../../../../components/square.wasm");
+    const BTC_AVG: &[u8] = include_bytes!("../../../../components/btc_avg.wasm");
 
     #[test]
     fn store_and_list_wasm() {

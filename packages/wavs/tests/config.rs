@@ -151,11 +151,10 @@ async fn config_array_string() {
 #[tokio::test]
 async fn config_dotenv() {
     let mut cli_args = TestApp::default_cli_args();
-    // this points to a real file
+
     cli_args.dotenv = Some(
-        PathBuf::from(file!())
-            .parent()
-            .unwrap()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
             .join(ConfigBuilder::DIRNAME)
             .join("testdotenv"),
     );

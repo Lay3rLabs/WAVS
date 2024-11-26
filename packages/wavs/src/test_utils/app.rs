@@ -15,29 +15,17 @@ impl TestApp {
         // get the path relative from this source file, regardless of where we run the test from
         CliArgs {
             home: Some(
-                PathBuf::from(file!())
-                    .parent()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("tests")
                     .join(ConfigBuilder::DIRNAME),
             ),
             // this purposefully points at a non-existing file
             // so that we don't load a real .env in tests
             dotenv: Some(
-                PathBuf::from(file!())
-                    .parent()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("tests")
                     .join(ConfigBuilder::DIRNAME)
-                    .join("non-existing-testdotenv"),
+                    .join("non-existant-file"),
             ),
             port: None,
             log_level: Vec::new(),
