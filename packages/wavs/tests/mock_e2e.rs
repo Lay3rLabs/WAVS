@@ -2,7 +2,7 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use wasmatic::{
+use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions},
         ID,

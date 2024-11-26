@@ -1,5 +1,5 @@
 [package]
-name = "wasmatic"
+name = "wavs"
 description = "Lay3r Labs WAVS Node Server"
 edition = "2021"
 version = "0.2.0-rc1"

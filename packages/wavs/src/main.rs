@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wasmatic::{
-    args::CliArgs, config::ConfigBuilder, context::AppContext, dispatcher::CoreDispatcher,
-};
+use wavs::{args::CliArgs, config::ConfigBuilder, context::AppContext, dispatcher::CoreDispatcher};
 
 fn main() {
     let args = CliArgs::parse();
@@ -25,5 +23,5 @@ fn main() {
 
     let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 
-    wasmatic::run_server(ctx, config, dispatcher);
+    wavs::run_server(ctx, config, dispatcher);
 }

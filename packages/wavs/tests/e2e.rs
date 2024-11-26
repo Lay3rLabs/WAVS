@@ -15,7 +15,7 @@ mod e2e {
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
-    use wasmatic::{
+    use wavs::{
         apis::dispatcher::AllowedHostPermission,
         config::Config,
         context::AppContext,
@@ -26,7 +26,7 @@ mod e2e {
         },
         Digest,
     };
-    use wasmatic::{
+    use wavs::{
         apis::{dispatcher::Permissions, ID},
         http::{
             handlers::service::test::{TestAppRequest, TestAppResponse},
@@ -56,12 +56,12 @@ mod e2e {
 
         let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 
-        let wasmatic_handle = std::thread::spawn({
+        let wavs_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
             let ctx = ctx.clone();
             let config = config.clone();
             move || {
-                wasmatic::run_server(ctx, config, dispatcher);
+                wavs::run_server(ctx, config, dispatcher);
             }
         });
 
@@ -77,7 +77,7 @@ mod e2e {
         });
 
         test_handle.join().unwrap();
-        wasmatic_handle.join().unwrap();
+        wavs_handle.join().unwrap();
     }
 
     async fn run_tests(config: Config) {

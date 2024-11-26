@@ -380,7 +380,7 @@ mod tests {
             trigger::{TriggerData, TriggerManager},
             Trigger, ID,
         },
-        config::{Config, WasmaticChainConfig},
+        config::{Config, WavsChainConfig},
         test_utils::address::rand_address,
     };
 
@@ -394,7 +394,7 @@ mod tests {
             chain: "test".to_string(),
             chains: vec![(
                 "test".to_string(),
-                WasmaticChainConfig {
+                WavsChainConfig {
                     chain_id: "slay3r-local".parse().unwrap(),
                     rpc_endpoint: "http://localhost:26657".to_string(),
                     grpc_endpoint: "http://localhost:9090".to_string(),

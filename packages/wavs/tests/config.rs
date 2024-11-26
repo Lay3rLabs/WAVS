@@ -1,11 +1,11 @@
 use temp_env::async_with_vars;
-use wasmatic::test_utils::app::TestApp;
+use wavs::test_utils::app::TestApp;
 
 use std::{
     path::PathBuf,
     sync::{Arc, LazyLock},
 };
-use wasmatic::{
+use wavs::{
     args::CliArgs,
     config::{Config, ConfigBuilder},
 };
@@ -94,7 +94,7 @@ async fn config_array_string() {
     let config = async_with_vars(
         [(
             format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
-            Some("info, wasmatic=debug, just_to_confirm_test=debug"),
+            Some("info, wavs=debug, just_to_confirm_test=debug"),
         )],
         get_config(),
     )
@@ -106,7 +106,7 @@ async fn config_array_string() {
 
     assert_eq!(
         config.log_level,
-        ["info", "wasmatic=debug", "just_to_confirm_test=debug"]
+        ["info", "wavs=debug", "just_to_confirm_test=debug"]
     );
 
     // replace the var and check that it is now what we expect

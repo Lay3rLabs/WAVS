@@ -30,22 +30,20 @@ impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
-        let wasmatic_chain_config = config
-            .wasmatic_chain_config()
-            .map_err(SubmissionError::Climb)?;
+        let wavs_chain_config = config.wavs_chain_config().map_err(SubmissionError::Climb)?;
 
         Ok(Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            mnemonic: wasmatic_chain_config
+            mnemonic: wavs_chain_config
                 .submission_mnemonic
                 .clone()
                 .ok_or(SubmissionError::MissingMnemonic)?,
-            faucet_url: wasmatic_chain_config
+            faucet_url: wavs_chain_config
                 .faucet_endpoint
                 .as_ref()
                 .map(|url| Url::parse(url).map_err(SubmissionError::FaucetUrl))
                 .transpose()?,
-            chain_config: wasmatic_chain_config.into(),
+            chain_config: wavs_chain_config.into(),
             http_client: reqwest::Client::new(),
         })
     }

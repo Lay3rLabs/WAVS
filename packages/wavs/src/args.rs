@@ -11,7 +11,7 @@ use std::{fmt, path::PathBuf};
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct CliArgs {
-    /// The home directory of the application, where the wasmatic.toml configuration file is stored
+    /// The home directory of the application, where the wavs.toml configuration file is stored
     /// if not provided, a series of default directories will be tried
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -73,12 +73,12 @@ pub struct CliArgs {
 
     #[clap(flatten)]
     #[serde(flatten)]
-    pub chain_config: OptionalWasmaticChainConfig,
+    pub chain_config: OptionalWavsChainConfig,
 }
 
 // used in both config and cli/env args
 #[derive(Parser, Clone, Debug, Serialize, Deserialize, Default)]
-pub struct OptionalWasmaticChainConfig {
+pub struct OptionalWavsChainConfig {
     /// To override the chosen chain's chain_id
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]

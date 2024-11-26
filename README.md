@@ -1,4 +1,4 @@
-# Wasmatic
+# Wavs
 
 This is an AVS operator node, that is quickly configurable to easily serve
 logic for many AVSes, each one sandboxed from each other and the node's

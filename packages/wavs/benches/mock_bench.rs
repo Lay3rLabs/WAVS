@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use wasmatic::{
+use wavs::{
     apis::ID,
     context::AppContext,
     test_utils::{

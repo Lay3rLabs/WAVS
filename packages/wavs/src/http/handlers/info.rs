@@ -24,7 +24,7 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     let chain_config = state.config.chain_config()?;
     let mnemonic = state
         .config
-        .wasmatic_chain_config()?
+        .wavs_chain_config()?
         .submission_mnemonic
         .context("submission_mnemonic not set")?;
 

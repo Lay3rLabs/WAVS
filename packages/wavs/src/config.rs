@@ -4,7 +4,7 @@ use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::args::{CliArgs, OptionalWasmaticChainConfig};
+use crate::args::{CliArgs, OptionalWavsChainConfig};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -24,7 +24,7 @@ pub struct Config {
     /// Default is `localhost`
     pub host: String,
     /// The directory to store all internal data files
-    /// Default is `/var/wasmatic`
+    /// Default is `/var/wavs`
     pub data: PathBuf,
     /// The allowed cors origins
     /// Default is empty
@@ -38,10 +38,10 @@ pub struct Config {
     pub chain: String,
 
     /// A lookup of chain configs, keyed by a "chain name"
-    pub chains: HashMap<String, WasmaticChainConfig>,
+    pub chains: HashMap<String, WavsChainConfig>,
 
     #[serde(flatten)]
-    pub chain_config_override: OptionalWasmaticChainConfig,
+    pub chain_config_override: OptionalWavsChainConfig,
 }
 
 /// Default values for the config struct
@@ -52,11 +52,11 @@ impl Default for Config {
             port: 8000,
             log_level: vec!["info".to_string()],
             host: "localhost".to_string(),
-            data: PathBuf::from("/var/wasmatic"),
+            data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
             chain: String::new(),
             chains: HashMap::new(),
-            chain_config_override: OptionalWasmaticChainConfig::default(),
+            chain_config_override: OptionalWavsChainConfig::default(),
             wasm_lru_size: 20,
             wasm_threads: 4,
         }
@@ -64,8 +64,8 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn wasmatic_chain_config(&self) -> Result<WasmaticChainConfig> {
-        let config: WasmaticChainConfig = Figment::new()
+    pub fn wavs_chain_config(&self) -> Result<WavsChainConfig> {
+        let config: WavsChainConfig = Figment::new()
             .merge(figment::providers::Serialized::defaults(
                 self.chains
                     .get(&self.chain)
@@ -80,24 +80,24 @@ impl Config {
     }
 
     pub fn chain_config(&self) -> Result<ChainConfig> {
-        self.wasmatic_chain_config().map(ChainConfig::from)
+        self.wavs_chain_config().map(ChainConfig::from)
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WasmaticChainConfig {
+pub struct WavsChainConfig {
     pub chain_id: ChainId,
     pub rpc_endpoint: String,
     pub grpc_endpoint: String,
     /// not micro-units, e.g. 0.025 would be a typical value
     /// if not specified, defaults to 0.025
-    #[serde(default = "WasmaticChainConfig::default_gas_price")]
+    #[serde(default = "WavsChainConfig::default_gas_price")]
     pub gas_price: f32,
     /// if not specified, defaults to "uslay"
-    #[serde(default = "WasmaticChainConfig::default_gas_denom")]
+    #[serde(default = "WavsChainConfig::default_gas_denom")]
     pub gas_denom: String,
     /// if not specified, defaults to "layer"
-    #[serde(default = "WasmaticChainConfig::default_bech32_prefix")]
+    #[serde(default = "WavsChainConfig::default_bech32_prefix")]
     pub bech32_prefix: String,
     /// optional faucet endpoint for this chain
     pub faucet_endpoint: Option<String>,
@@ -105,7 +105,7 @@ pub struct WasmaticChainConfig {
     pub submission_mnemonic: Option<String>,
 }
 
-impl WasmaticChainConfig {
+impl WavsChainConfig {
     const fn default_gas_price() -> f32 {
         0.025
     }
@@ -119,8 +119,8 @@ impl WasmaticChainConfig {
     }
 }
 
-impl From<WasmaticChainConfig> for ChainConfig {
-    fn from(config: WasmaticChainConfig) -> Self {
+impl From<WavsChainConfig> for ChainConfig {
+    fn from(config: WavsChainConfig) -> Self {
         Self {
             chain_id: config.chain_id,
             rpc_endpoint: config.rpc_endpoint,
@@ -142,9 +142,9 @@ pub struct ConfigBuilder {
 }
 
 impl ConfigBuilder {
-    pub const FILENAME: &'static str = "wasmatic.toml";
-    pub const DIRNAME: &'static str = "wasmatic";
-    pub const HIDDEN_DIRNAME: &'static str = ".wasmatic";
+    pub const FILENAME: &'static str = "wavs.toml";
+    pub const DIRNAME: &'static str = "wavs";
+    pub const HIDDEN_DIRNAME: &'static str = ".wavs";
 
     pub fn new(cli_args: CliArgs) -> Self {
         Self { cli_args }
@@ -217,30 +217,30 @@ impl ConfigBuilder {
         let mut dirs = Vec::new();
 
         // explicit arg passed to the cli, e.g. --home /foo, or env var HOME="/foo"
-        // this does not append the default "wasmatic" subdirectory
+        // this does not append the default "wavs" subdirectory
         // instead, it is used as the direct home directory
-        // i.e. the path in this case will be /foo/wasmatic.toml
+        // i.e. the path in this case will be /foo/wavs.toml
         if let Some(dir) = cli_env_args.home.clone() {
             dirs.push(dir);
         }
 
         // next, check the current working directory, wherever the command is run from
-        // i.e. ./wasmatic.toml
+        // i.e. ./wavs.toml
         if let Ok(dir) = std::env::current_dir() {
             dirs.push(dir);
         }
 
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
-        // in this case, to not pollute the home directory, it looks for ~/.wasmatic/wasmatic.toml
+        // in this case, to not pollute the home directory, it looks for ~/.wavs/wavs/wavs.toml
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(Self::HIDDEN_DIRNAME)) {
             dirs.push(dir);
         }
 
-        // checks the `.wasmatic/wasmatic.toml` file in the system config directory
+        // checks the `.wavs/wavs/wavs.toml` file in the system config directory
         // this will vary, but the final path with then be something like:
-        // Linux: ~/.config/wasmatic/wasmatic.toml
-        // macOS: ~/Library/Application Support/wasmatic/wasmatic.toml
-        // Windows: C:\Users\MyUserName\AppData\Roaming\wasmatic\wasmatic.toml
+        // Linux: ~/.config/wavs/wavs/wavs.toml
+        // macOS: ~/Library/Application Support/wavs/wavs/wavs.toml
+        // Windows: C:\Users\MyUserName\AppData\Roaming\wavs\wavs.toml
         if let Some(dir) = dirs::config_dir().map(|dir| dir.join(Self::DIRNAME)) {
             dirs.push(dir);
         }
@@ -248,7 +248,7 @@ impl ConfigBuilder {
         // On linux, this may already be added via config_dir above
         // but on macOS and windows, and maybe unix-like environments (msys, wsl, etc)
         // it's helpful to add it explicitly
-        // the final path here typically becomes something like ~/.config/wasmatic/wasmatic.toml
+        // the final path here typically becomes something like ~/.config/wavs/wavs/wavs.toml
         if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
             .ok()
             .map(PathBuf::from)
@@ -261,12 +261,12 @@ impl ConfigBuilder {
         // but on systems like Windows, it's helpful to add it explicitly
         // since the system may place the config dir in AppData/Roaming
         // but we want to check the user's home dir first
-        // this will definitively become something like ~/.config/wasmatic/wasmatic.toml
+        // this will definitively become something like ~/.config/wavs/wavs/wavs.toml
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(Self::DIRNAME)) {
             dirs.push(dir);
         }
 
-        // Lastly, try /etc/wasmatic/wasmatic.toml
+        // Lastly, try /etc/wavs/wavs/wavs.toml
         dirs.push(PathBuf::from("/etc").join(Self::DIRNAME));
 
         // now we have a list of directories to check, we need to add the filename to each

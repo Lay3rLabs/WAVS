@@ -3,7 +3,7 @@ use axum::{
     http::{Method, Request},
 };
 use tower::Service;
-use wasmatic::{
+use wavs::{
     config::Config,
     http::handlers::service::upload::UploadServiceResponse,
     test_utils::http::{map_response, TestHttpApp},

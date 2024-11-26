@@ -4904,51 +4904,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmatic"
-version = "0.2.0-rc1"
-dependencies = [
- "anyhow",
- "axum",
- "bip39",
- "cfg-if",
- "clap 4.5.20",
- "cosmwasm-std",
- "criterion",
- "ctrlc",
- "dirs 5.0.1",
- "dotenvy",
- "figment",
- "futures",
- "hex",
- "http-body-util",
- "lavs-apis",
- "layer-climb",
- "lru",
- "rand",
- "rayon",
- "redb",
- "reqwest",
- "serde",
- "serde_json",
- "sha2 0.10.8",
- "temp-env",
- "tempfile",
- "thiserror",
- "tokio",
- "toml",
- "tower 0.5.1",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "url",
- "walkdir",
- "wasmtime",
- "wasmtime-wasi",
- "wasmtime-wasi-http",
- "wildmatch",
-]
-
-[[package]]
 name = "wasmparser"
 version = "0.215.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5322,6 +5277,51 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bc3cf014fb336883a411cd662f987abf6a1d2a27f2f0008616a0070bbf6bd0d"
 dependencies = [
  "wast 219.0.1",
+]
+
+[[package]]
+name = "wavs"
+version = "0.2.0-rc1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bip39",
+ "cfg-if",
+ "clap 4.5.20",
+ "cosmwasm-std",
+ "criterion",
+ "ctrlc",
+ "dirs 5.0.1",
+ "dotenvy",
+ "figment",
+ "futures",
+ "hex",
+ "http-body-util",
+ "lavs-apis",
+ "layer-climb",
+ "lru",
+ "rand",
+ "rayon",
+ "redb",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "temp-env",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tower 0.5.1",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "walkdir",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
+ "wildmatch",
 ]
 
 [[package]]
