@@ -47,6 +47,12 @@ jobs:
     #   - name: Prepare artifacts (wasm contracts)
     #     run: bash ./scripts/collect_wasm.sh
 
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | bash
+          source ~/.bashrc
+          foundryup
+
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
