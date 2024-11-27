@@ -18,7 +18,13 @@ pub struct EthQueryClient {
 
 pub struct EthSigningClient {
     pub provider: RootProvider<PubSubFrontend>,
+    /// The wallet is a collection of signers, with one designated as the default signer
+    /// it allows signing transactions
     pub wallet: EthereumWallet,
+    /// The signer is the same as the default signer in the wallet, but used for simple message signing
+    /// due to type system limitations, we need to store it separately
+    /// since the signer in `EthereumWallet` implements only `TxSigner`
+    /// and there is not a direct way convert it into `Signer`
     pub signer: LocalSigner<SigningKey>,
 }
 
