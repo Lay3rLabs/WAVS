@@ -57,4 +57,5 @@ bip39 = "2.0.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
 
+alloy = { version = "0.6.4", features = ["full", "signer-mnemonic"] }
 wavs = { path = "packages/wavs" }

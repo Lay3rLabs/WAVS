@@ -6,3 +6,15 @@ version = "0.2.0-rc1"
 authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+alloy = { workspace = true } 
+thiserror = { workspace = true } 
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
