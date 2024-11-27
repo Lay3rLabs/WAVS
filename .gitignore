@@ -10,3 +10,6 @@ data
 cache
 broadcast
 out
+
+# Uncomment on release
+deployments

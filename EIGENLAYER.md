@@ -52,6 +52,13 @@ Before using Eigenlayer ensure you have the following tools installed:
 
 ## Available Scripts
 
-- Deploy eigenlayer: `chmod +x scripts/deploy_el.sh && ./scripts/deploy_el.sh`
-- Deploy hello-world: `chmod +x scripts/deploy_avl.sh ./scripts/deploy_avl.sh`
-- Deploy all: `chmod +x scripts/deploy_el_full.sh && ./scripts/deploy_el_full.sh`
+- Deploy EigenLayer: `./scripts/deploy_el.sh`
+  - EigenLayer is a set of smart contracts that enable restaking of assets to secure new services called AVS
+- Deploy hello-world: `./scripts/deploy_avl.sh`
+  - Simplest AVS contract
+- Deploy all: `./scripts/deploy_el_full.sh`
+  - Deploy all of the contracts above
+
+## Source
+
+Contracts was copied from hello-world avs: https://github.com/Layr-Labs/hello-world-avs/tree/001dc6e944280559dfb44f75faf5102349a61d8e/contracts
