@@ -54,6 +54,7 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 name = "aggregator"
 version = "0.2.0-rc1"
 dependencies = [
+ "alloy",
  "anyhow",
  "axum",
  "clap 4.5.20",
@@ -68,6 +69,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "wavs",
  "wildmatch",
 ]

@@ -1,10 +1,9 @@
-use anyhow::{bail, Context, Result};
-use figment::{providers::Format, Figment};
-use layer_climb::prelude::*;
+use anyhow::{bail, Result};
+use figment::Figment;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use utils::eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient};
 
-use crate::args::{CliArgs, OptionalWavsChainConfig};
+use crate::args::CliArgs;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -30,11 +29,9 @@ pub struct Config {
     /// The chosen chain name
     pub chain: String,
 
-    /// A lookup of chain configs, keyed by a "chain name"
-    pub chains: HashMap<String, wavs::config::WavsChainConfig>,
+    pub endpoint: Option<String>,
 
-    #[serde(flatten)]
-    pub chain_config_override: OptionalWavsChainConfig,
+    pub mnemonic: Option<String>,
 }
 
 /// Default values for the config struct
@@ -47,30 +44,24 @@ impl Default for Config {
             host: "localhost".to_string(),
             cors_allowed_origins: Vec::new(),
             chain: String::new(),
-            chains: HashMap::new(),
-            chain_config_override: OptionalWavsChainConfig::default(),
+            endpoint: None,
+            mnemonic: None,
         }
     }
 }
 
 impl Config {
-    pub fn wavs_chain_config(&self) -> Result<wavs::config::WavsChainConfig> {
-        let config: wavs::config::WavsChainConfig = Figment::new()
-            .merge(figment::providers::Serialized::defaults(
-                self.chains
-                    .get(&self.chain)
-                    .context(format!("No chain config found for \"{}\"", self.chain))?,
-            ))
-            .merge(figment::providers::Serialized::defaults(
-                &self.chain_config_override,
-            ))
-            .extract()?;
-
-        Ok(config)
-    }
-
-    pub fn chain_config(&self) -> Result<ChainConfig> {
-        self.wavs_chain_config().map(ChainConfig::from)
+    pub async fn signing_client(&self) -> Result<EthSigningClient> {
+        let endpoint = self
+            .endpoint
+            .clone()
+            .unwrap_or("ws://127.0.0.1:8545".to_owned());
+        let eth_client = EthClientConfig {
+            endpoint,
+            mnemonic: self.mnemonic.clone(),
+        };
+        let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
+        Ok(signing_client)
     }
 }
 
@@ -81,10 +72,6 @@ pub struct ConfigBuilder {
 }
 
 impl ConfigBuilder {
-    pub const FILENAME: &'static str = "wavs.toml";
-    pub const DIRNAME: &'static str = "wavs";
-    pub const HIDDEN_DIRNAME: &'static str = ".wavs";
-
     pub fn new(cli_args: CliArgs) -> Self {
         Self { cli_args }
     }
@@ -122,96 +109,15 @@ impl ConfigBuilder {
         // then, our final config, which can have more complex types with easier TOML-like syntax
         // and also fills in defaults for required values at the end
         let config: Config = Figment::new()
-            .merge(figment::providers::Toml::file(Self::filepath(
-                &cli_env_args,
-            )?))
+            // TODO: toml config for aggregator
+            // .merge(figment::providers::Toml::file(Self::filepath(
+            //     &cli_env_args,
+            // )?))
             .merge(figment::providers::Serialized::defaults(cli_env_args))
             .join(figment::providers::Serialized::defaults(Config::default()))
             .extract()?;
 
         Ok(config)
-    }
-
-    /// finds the filepath through a series of fallbacks
-    /// the argument is internally derived cli + env args
-    pub fn filepath(cli_env_args: &CliArgs) -> Result<PathBuf> {
-        let filepaths_to_try = Self::filepaths_to_try(cli_env_args);
-
-        filepaths_to_try
-            .iter()
-            .find(|filename| filename.exists())
-            .with_context(|| {
-                format!(
-                    "No config file found, try creating one of these: {:?}",
-                    filepaths_to_try
-                )
-            })
-            .cloned()
-    }
-
-    /// provides the list of filepaths to try for the config file
-    /// the argument is internally from cli + env args
-    pub fn filepaths_to_try(cli_env_args: &CliArgs) -> Vec<PathBuf> {
-        // the paths returned will be tried in order of pushing
-        let mut dirs = Vec::new();
-
-        // explicit arg passed to the cli, e.g. --home /foo, or env var HOME="/foo"
-        // this does not append the default "wavs" subdirectory
-        // instead, it is used as the direct home directory
-        // i.e. the path in this case will be /foo/wavs.toml
-        if let Some(dir) = cli_env_args.home.clone() {
-            dirs.push(dir);
-        }
-
-        // next, check the current working directory, wherever the command is run from
-        // i.e. ./wavs.toml
-        if let Ok(dir) = std::env::current_dir() {
-            dirs.push(dir);
-        }
-
-        // here we want to check the user's home directory directly, not in the `.config` subdirectory
-        // in this case, to not pollute the home directory, it looks for ~/.wavs/wavs.toml
-        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(Self::HIDDEN_DIRNAME)) {
-            dirs.push(dir);
-        }
-
-        // checks the `.wavs/wavs.toml` file in the system config directory
-        // this will vary, but the final path with then be something like:
-        // Linux: ~/.config/wavs/wavs.toml
-        // macOS: ~/Library/Application Support/wavs/wavs.toml
-        // Windows: C:\Users\MyUserName\AppData\Roaming\wavs\wavs.toml
-        if let Some(dir) = dirs::config_dir().map(|dir| dir.join(Self::DIRNAME)) {
-            dirs.push(dir);
-        }
-
-        // On linux, this may already be added via config_dir above
-        // but on macOS and windows, and maybe unix-like environments (msys, wsl, etc)
-        // it's helpful to add it explicitly
-        // the final path here typically becomes something like ~/.config/wavs/wavs.toml
-        if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
-            .ok()
-            .map(PathBuf::from)
-            .map(|dir| dir.join(Self::DIRNAME))
-        {
-            dirs.push(dir);
-        }
-
-        // Similarly, `config_dir` above may have already added this
-        // but on systems like Windows, it's helpful to add it explicitly
-        // since the system may place the config dir in AppData/Roaming
-        // but we want to check the user's home dir first
-        // this will definitively become something like ~/.config/wavs/wavs.toml
-        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(Self::DIRNAME)) {
-            dirs.push(dir);
-        }
-
-        // Lastly, try /etc/wavs/wavs.toml
-        dirs.push(PathBuf::from("/etc").join(Self::DIRNAME));
-
-        // now we have a list of directories to check, we need to add the filename to each
-        dirs.into_iter()
-            .map(|dir| dir.join(Self::FILENAME))
-            .collect()
     }
 }
 

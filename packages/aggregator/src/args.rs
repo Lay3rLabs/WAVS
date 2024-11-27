@@ -1,5 +1,4 @@
 use clap::Parser;
-use layer_climb::prelude::*;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::{fmt, path::PathBuf};
 
@@ -71,50 +70,15 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain: Option<String>,
 
-    #[clap(flatten)]
-    #[serde(flatten)]
-    pub chain_config: OptionalWavsChainConfig,
-}
+    /// Websocket ethereum endpoint
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eth_endpoint: Option<String>,
 
-// used in both config and cli/env args
-#[derive(Parser, Clone, Debug, Serialize, Deserialize, Default)]
-pub struct OptionalWavsChainConfig {
-    /// To override the chosen chain's chain_id
+    /// Ethereum mnemonic
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain_id: Option<ChainId>,
-    /// To override the chosen chain's rpc_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc_endpoint: Option<String>,
-    /// To override the chosen chain's grpc_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub grpc_endpoint: Option<String>,
-    /// To override the chosen chain's gas_price
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gas_price: Option<f32>,
-    /// To override the chosen chain's gas_denom
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gas_denom: Option<String>,
-    /// To override the chosen chain's faucet_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub faucet_endpoint: Option<String>,
-    /// To override the chosen chain's submission mnemonic
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub submission_mnemonic: Option<String>,
-}
-
-impl CliArgs {
-    pub const ENV_VAR_PREFIX: &'static str = "MATIC";
-
-    pub fn env_var(name: &str) -> Option<String> {
-        std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
-    }
+    pub mnemonic: Option<String>,
 }
 
 fn deserialize_vec_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
