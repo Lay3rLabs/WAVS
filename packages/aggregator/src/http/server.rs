@@ -1,4 +1,4 @@
-use crate::{config::Config, context::AppContext, http::state::AggregatorState};
+use crate::{config::Config, context::AppContext};
 use axum::routing::get;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use wildmatch::WildMatch;
@@ -15,8 +15,7 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
         let (host, port) = (config.host.clone(), config.port);
 
         let mut shutdown_signal = ctx.get_kill_receiver();
-
-        let router = make_router(config, AggregatorState {}, false).await?;
+        let router = make_router(config).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -37,12 +36,8 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
 }
 
 // this is called from main and tests
-pub async fn make_router(
-    config: Config,
-    aggregator: AggregatorState,
-    is_mock_chain_client: bool,
-) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone(), aggregator, is_mock_chain_client).await?;
+pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
+    let state = HttpState::new(config.clone()).await?;
 
     // build our application with a single route
     let mut router = axum::Router::new()

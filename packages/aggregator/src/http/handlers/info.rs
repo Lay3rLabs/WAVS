@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoResponse {
-    pub address: alloy::primitives::Address,
-    pub balance: String,
+    pub signer_address: alloy::primitives::Address,
+    pub signer_balance: String,
 }
 
 #[axum::debug_handler]
@@ -19,14 +19,14 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 }
 
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
-    let chain_config = state.config.signing_client().await?;
-    let address = chain_config.signer.address();
-    let account = chain_config.provider.get_account(address).await?;
+    let signing_client = state.config.signing_client().await?;
+    let address = signing_client.signer.address();
+    let account = signing_client.provider.get_account(address).await?;
     let balance = account.balance;
 
     Ok(InfoResponse {
-        address,
+        signer_address: address,
         // TODO: decimals?
-        balance: balance.to_string(),
+        signer_balance: balance.to_string(),
     })
 }

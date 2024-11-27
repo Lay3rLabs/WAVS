@@ -4,18 +4,12 @@ use std::{fmt, path::PathBuf};
 
 /// This struct is used for both CliArgs and Environment variables
 /// Every Cli Arg can be overridden by an environment variable
-/// following the pattern of MATIC_{UPPERCASE_ARG_NAME}
-/// where "MATIC" is configured in the CliArgs::ENV_VAR_PREFIX constant
+/// following the pattern of AGGREGATOR_{UPPERCASE_ARG_NAME}
+/// where "AGGREGATOR" is configured in the CliArgs::ENV_VAR_PREFIX constant
 #[derive(Debug, Parser, Serialize, Deserialize, Default)]
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct CliArgs {
-    /// The home directory of the application, where the wavs.toml configuration file is stored
-    /// if not provided, a series of default directories will be tried
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub home: Option<PathBuf>,
-
     /// The path to an optional dotenv file to try and load
     /// if not set, will be the current working directory's .env
     #[arg(long)]
@@ -41,28 +35,12 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
 
-    /// The directory to store all internal data files
-    /// See example config file for more info
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<PathBuf>,
-
     /// The allowed cors origins
     /// See example config file for more info
     #[arg(long, value_delimiter = ',')]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub cors_allowed_origins: Vec<String>,
-
-    /// Size of the LRU cache for in-memory components
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub wasm_lru_size: Option<usize>,
-
-    /// Number of threads to run WASI components on
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub wasm_threads: Option<usize>,
 
     /// The chain to use for the application
     /// will load from the config file
@@ -73,7 +51,7 @@ pub struct CliArgs {
     /// Websocket ethereum endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub eth_endpoint: Option<String>,
+    pub endpoint: Option<String>,
 
     /// Ethereum mnemonic
     #[arg(long)]

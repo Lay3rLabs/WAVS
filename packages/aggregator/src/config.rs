@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use figment::Figment;
 use serde::{Deserialize, Serialize};
-use utils::eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient};
+use utils::eth_client::{EthClientBuilder, EthClientConfig, EthQueryClient, EthSigningClient};
 
 use crate::args::CliArgs;
 
@@ -14,7 +14,7 @@ use crate::args::CliArgs;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     /// The port to bind the server to.
-    /// Default is `8000`
+    /// Default is `8001`
     pub port: u32,
     /// The log-level to use, in the format of [tracing directives](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives).
     /// Default is `["info"]`
@@ -29,8 +29,10 @@ pub struct Config {
     /// The chosen chain name
     pub chain: String,
 
-    pub endpoint: Option<String>,
+    /// Websocket eth endpoint
+    pub endpoint: String,
 
+    /// Mnemonic of the signer
     pub mnemonic: Option<String>,
 }
 
@@ -39,12 +41,12 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            port: 8000,
+            port: 8001,
             log_level: vec!["info".to_string()],
             host: "localhost".to_string(),
             cors_allowed_origins: Vec::new(),
             chain: String::new(),
-            endpoint: None,
+            endpoint: "ws://127.0.0.1:8545".to_string(),
             mnemonic: None,
         }
     }
@@ -52,16 +54,19 @@ impl Default for Config {
 
 impl Config {
     pub async fn signing_client(&self) -> Result<EthSigningClient> {
-        let endpoint = self
-            .endpoint
-            .clone()
-            .unwrap_or("ws://127.0.0.1:8545".to_owned());
-        let eth_client = EthClientConfig {
-            endpoint,
-            mnemonic: self.mnemonic.clone(),
-        };
+        let endpoint = self.endpoint.clone();
+        let mnemonic = self.mnemonic.clone();
+        let eth_client = EthClientConfig { endpoint, mnemonic };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)
+    }
+
+    pub async fn query_client(&self) -> Result<EthQueryClient> {
+        let endpoint = self.endpoint.clone();
+        let mnemonic = None;
+        let eth_client = EthClientConfig { endpoint, mnemonic };
+        let query_client = EthClientBuilder::new(eth_client).build_query().await?;
+        Ok(query_client)
     }
 }
 
@@ -83,7 +88,7 @@ impl ConfigBuilder {
 
     pub fn merge_cli_env_args(&self) -> Result<CliArgs> {
         let cli_args: CliArgs = Figment::new()
-            .merge(figment::providers::Env::prefixed("MATIC_"))
+            .merge(figment::providers::Env::prefixed("AGGREGATOR_"))
             .merge(figment::providers::Serialized::defaults(&self.cli_args))
             .extract()?;
 
