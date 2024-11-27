@@ -47,6 +47,9 @@ jobs:
     #   - name: Prepare artifacts (wasm contracts)
     #     run: bash ./scripts/collect_wasm.sh
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
