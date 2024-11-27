@@ -64,7 +64,7 @@ Before using Eigenlayer ensure you have the following tools installed:
 ## Available Scripts
 
 - Deploy EigenLayer: `./scripts/deploy_el.sh`
-  - EigenLayer is a set of smart contracts that enable restaking of assets to secure new services called AVS
+  - EigenLayer is a set of smart contracts that enable restaking of assets to secure new Actively Validated Services ("AVS")
 - Deploy hello-world: `./scripts/deploy_avl.sh`
   - Simplest AVS contract
 - Deploy all contracts above: `./scripts/deploy_el_full.sh`
