@@ -6,6 +6,10 @@ name: Basic Checks
 
 # TODO: perform other tests on wasi examples
 jobs:
+  env:
+    FOUNDRY_BIN: ${{ github.runner.home }}/.foundry/bin
+    PATH: ${{ github.runner.home }}/.foundry/bin:${{ env.PATH }}
+
   test:
     name: Wavs Test Suite
     runs-on: linux-8-core
@@ -50,7 +54,6 @@ jobs:
       - name: Install Foundry
         run: |
           curl -L https://foundry.paradigm.xyz | bash
-          source ~/.bashrc
           foundryup
 
       - name: Run tests
