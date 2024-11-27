@@ -30,7 +30,7 @@ Before using Eigenlayer ensure you have the following tools installed:
    git submodule add git@github.com:Layr-Labs/eigenlayer-contracts.git contracts/lib/eigenlayer-contracts
    ```
 
-## Setup
+## Initial Setup
 
 1. **Create Environment Configuration**  
    Copy the example environment file to create your `.env` configuration:
@@ -49,6 +49,17 @@ Before using Eigenlayer ensure you have the following tools installed:
 3. **Configure Deployment Key**  
    - Anvil will display a list of private and public keys upon startup. Choose one of the private keys and add it to your `.env` file under `DEPLOYER_PRIVATE_KEY`.
    - **Note**: The default address provided in `.env.example` is an Anvil-generated address, so it should work without changes if you're using the default Anvil setup.
+
+## Setup
+
+1. **Start Anvil**  
+   Launch a local Anvil blockchain instance by running:
+
+     ```bash
+     anvil
+     ```
+
+   Note: anvil starts at block 0 by default
 
 ## Available Scripts
 
