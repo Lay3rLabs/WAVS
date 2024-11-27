@@ -53,6 +53,24 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 [[package]]
 name = "aggregator"
 version = "0.2.0-rc1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap 4.5.20",
+ "ctrlc",
+ "dirs 5.0.1",
+ "dotenvy",
+ "figment",
+ "layer-climb",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "wavs",
+ "wildmatch",
+]
 
 [[package]]
 name = "ahash"
