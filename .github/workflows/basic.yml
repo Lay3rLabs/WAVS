@@ -9,8 +9,6 @@ jobs:
   test:
     name: Wavs Test Suite
     runs-on: linux-8-core
-    env:
-      FOUNDRY_BIN: ${{ runner.home }}/.foundry/bin
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -50,14 +48,8 @@ jobs:
     #     run: bash ./scripts/collect_wasm.sh
 
       - name: Install Foundry
-        env:
-          FOUNDRY_BIN: ${{ env.FOUNDRY_BIN }}
-        run: |
-          # Add Foundry binaries to PATH
-          echo "$FOUNDRY_BIN" >> $GITHUB_PATH
+        uses: foundry-rs/foundry-toolchain@v1
 
-          curl -L https://foundry.paradigm.xyz | bash
-          foundryup
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
