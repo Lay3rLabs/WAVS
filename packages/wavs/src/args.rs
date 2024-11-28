@@ -5,8 +5,8 @@ use std::{fmt, path::PathBuf};
 
 /// This struct is used for both CliArgs and Environment variables
 /// Every Cli Arg can be overridden by an environment variable
-/// following the pattern of MATIC_{UPPERCASE_ARG_NAME}
-/// where "MATIC" is configured in the CliArgs::ENV_VAR_PREFIX constant
+/// following the pattern of WAVS_{UPPERCASE_ARG_NAME}
+/// where "WAVS" is configured in the CliArgs::ENV_VAR_PREFIX constant
 #[derive(Debug, Parser, Serialize, Deserialize, Default)]
 #[command(version, about, long_about = None)]
 #[serde(default)]
@@ -79,38 +79,46 @@ pub struct CliArgs {
 // used in both config and cli/env args
 #[derive(Parser, Clone, Debug, Serialize, Deserialize, Default)]
 pub struct OptionalWavsChainConfig {
-    /// To override the chosen chain's chain_id
+    /// To override the chosen eth chain's ws_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain_id: Option<ChainId>,
-    /// To override the chosen chain's rpc_endpoint
+    pub ws_endpoint: Option<String>,
+    /// To override the chosen eth chain's rpc_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_endpoint: Option<String>,
-    /// To override the chosen chain's grpc_endpoint
+    /// To override the chosen layer chain's chain_id
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub grpc_endpoint: Option<String>,
-    /// To override the chosen chain's gas_price
+    pub layer_chain_id: Option<ChainId>,
+    /// To override the chosen layer chain's rpc_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gas_price: Option<f32>,
-    /// To override the chosen chain's gas_denom
+    pub layer_rpc_endpoint: Option<String>,
+    /// To override the chosen layer chain's grpc_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gas_denom: Option<String>,
-    /// To override the chosen chain's faucet_endpoint
+    pub layer_grpc_endpoint: Option<String>,
+    /// To override the chosen layer chain's gas_price
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub faucet_endpoint: Option<String>,
-    /// To override the chosen chain's submission mnemonic
+    pub layer_gas_price: Option<f32>,
+    /// To override the chosen layer chain's gas_denom
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub submission_mnemonic: Option<String>,
+    pub layer_gas_denom: Option<String>,
+    /// To override the chosen layer chain's faucet_endpoint
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layer_faucet_endpoint: Option<String>,
+    /// To override the chosen layer chain's submission mnemonic
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layer_submission_mnemonic: Option<String>,
 }
 
 impl CliArgs {
-    pub const ENV_VAR_PREFIX: &'static str = "MATIC";
+    pub const ENV_VAR_PREFIX: &'static str = "WAVS";
 
     pub fn env_var(name: &str) -> Option<String> {
         std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()

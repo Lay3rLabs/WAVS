@@ -191,10 +191,20 @@ async fn config_chains() {
         "layer-permissionless-3".parse().unwrap()
     );
 
-    // change the grpc endpoint
+    // change the rpc endpoint for cosmos
     let mut cli_args = TestApp::default_cli_args();
-    cli_args.chain_config.grpc_endpoint = Some("http://example.com:1234".to_string());
+    cli_args.chain_config.layer_rpc_endpoint = Some("http://example.com:1234".to_string());
+    cli_args.chain_config.rpc_endpoint = Some("THIS-ISN'T-USED".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
     let chain_config = config.cosmos_chain_config().unwrap();
-    assert_eq!(chain_config.grpc_endpoint, "http://example.com:1234");
+    assert_eq!(chain_config.rpc_endpoint, "http://example.com:1234");
+
+    // change the rpc endpoint for ethereum
+    let mut cli_args = TestApp::default_cli_args();
+    cli_args.chain_config.layer_rpc_endpoint = Some("THIS-ISN'T-USED".to_string());
+    cli_args.chain_config.rpc_endpoint = Some("http://example.com:1234".to_string());
+    cli_args.chain = Some("local-eth".to_string());
+    let config = TestApp::new_with_args(cli_args).await.config;
+    let chain_config = config.ethereum_chain_config().unwrap();
+    assert_eq!(chain_config.rpc_endpoint, "http://example.com:1234");
 }
