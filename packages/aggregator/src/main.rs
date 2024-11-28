@@ -1,27 +1,7 @@
-mod args;
-mod config;
-mod context;
-mod http;
-
-use args::CliArgs;
-use config::ConfigBuilder;
-use context::AppContext;
-
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-pub fn run_server(ctx: AppContext, config: config::Config) {
-    ctrlc::set_handler({
-        let ctx = ctx.clone();
-        move || {
-            ctx.kill();
-        }
-    })
-    .unwrap();
-
-    // start the http server in its own thread
-    http::server::start(ctx, config).unwrap();
-}
+use aggregator::{args::CliArgs, config::ConfigBuilder, context::AppContext, run_server};
 
 fn main() {
     let args = CliArgs::parse();

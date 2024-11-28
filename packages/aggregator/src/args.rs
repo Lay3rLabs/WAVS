@@ -65,6 +65,14 @@ pub struct CliArgs {
     pub mnemonic: Option<String>,
 }
 
+impl CliArgs {
+    pub const ENV_VAR_PREFIX: &'static str = "AGGREGATOR";
+
+    pub fn env_var(name: &str) -> Option<String> {
+        std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
+    }
+}
+
 fn deserialize_vec_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,

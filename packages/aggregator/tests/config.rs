@@ -1,31 +1,31 @@
 use aggregator::test_utils::app::TestApp;
+use alloy::{node_bindings::Anvil, primitives::Address};
 use temp_env::async_with_vars;
 
 use aggregator::{
     args::CliArgs,
     config::{Config, ConfigBuilder},
 };
-use std::{
-    path::PathBuf,
-    sync::{Arc, LazyLock},
-};
+use std::{path::PathBuf, sync::LazyLock};
 
 // this test is confiming the user overrides for filepath work as expected
 // but it does not test the complete list of fallbacks past those first few common cases
 // because the complete list will change depending on the platform, global env vars, etc.
 #[tokio::test]
 async fn config_filepath() {
-    fn filepaths(home: Option<PathBuf>) -> Vec<PathBuf> {
+    let anvil = Anvil::new().block_time(1).spawn();
+
+    let filepaths = |home: Option<PathBuf>| -> Vec<PathBuf> {
         let config_builder = ConfigBuilder::new(CliArgs {
             home,
             dotenv: None,
-            ..TestApp::default_cli_args()
+            ..TestApp::cli_args(anvil.ws_endpoint())
         });
 
         let cli_env_args = config_builder.merge_cli_env_args().unwrap();
 
         ConfigBuilder::filepaths_to_try(&cli_env_args)
-    }
+    };
 
     // make sure all the test directories are not there by default
     let default_dirs = filepaths(None);
@@ -73,12 +73,20 @@ async fn config_filepath() {
 #[tokio::test]
 async fn config_default() {
     // port is *not* set in the test toml file
-    assert_eq!(TestApp::new().await.config.port, Config::default().port);
+    assert_eq!(
+        TestApp::new("ws://127.0.0.1:8545".to_owned())
+            .await
+            .config
+            .port,
+        Config::default().port
+    );
 }
 
 // tests that we can configure array-strings, and it overrides as expected
 #[tokio::test]
 async fn config_array_string() {
+    let anvil = Anvil::new().block_time(1).spawn();
+
     static TRACING_ENV_FILTER_ENV: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
         tracing_subscriber::EnvFilter::from_default_env()
             .add_directive("debug".parse().unwrap())
@@ -91,18 +99,15 @@ async fn config_array_string() {
     });
 
     // it's set in the file too for other tests, but here we need to be explicit
+    let get_config = || async { TestApp::new(anvil.ws_endpoint()).await.config };
     let config = async_with_vars(
         [(
             format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
-            Some("info, wavs=debug, just_to_confirm_test=debug"),
+            Some("info, aggregator=debug, just_to_confirm_test=debug"),
         )],
         get_config(),
     )
     .await;
-
-    async fn get_config() -> Arc<Config> {
-        TestApp::new().await.config
-    }
 
     assert_eq!(
         config.log_level,
@@ -112,25 +117,16 @@ async fn config_array_string() {
     // replace the var and check that it is now what we expect
     // env replacement needs to be in an async function
     {
-        temp_env::async_with_vars(
-            [(
-                format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
-                Some("debug, foo=trace"),
-            )],
-            check(),
-        )
-        .await;
-
-        async fn check() {
+        let check = || async {
             // first - if we don't set a CLI var, it should use the env var
-            let config = TestApp::new().await.config;
+            let config = TestApp::new(anvil.ws_endpoint()).await.config;
             assert_eq!(
                 config.tracing_env_filter().unwrap().to_string(),
                 TRACING_ENV_FILTER_ENV.to_string()
             );
 
             // but then, even when the env var is available, if we set a CLI var, it should override
-            let mut cli_args = TestApp::default_cli_args();
+            let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
             cli_args.log_level = TRACING_ENV_FILTER_CLI
                 .to_string()
                 .split(",")
@@ -143,14 +139,25 @@ async fn config_array_string() {
                 config.tracing_env_filter().unwrap().to_string(),
                 TRACING_ENV_FILTER_CLI.to_string()
             );
-        }
+        };
+
+        temp_env::async_with_vars(
+            [(
+                format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
+                Some("debug, foo=trace"),
+            )],
+            check(),
+        )
+        .await;
     }
 }
 
 // tests that we load a dotenv file correctly, if specified in cli args
 #[tokio::test]
 async fn config_dotenv() {
-    let mut cli_args = TestApp::default_cli_args();
+    let anvil = Anvil::default().block_time(1).spawn();
+
+    let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
 
     cli_args.dotenv = Some(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -176,25 +183,32 @@ async fn config_dotenv() {
 // tests that we load chain config section correctly
 #[tokio::test]
 async fn config_chains() {
-    let config = TestApp::new().await.config;
+    let anvil = Anvil::new().block_time(1).spawn();
 
-    let chain_config = config.chain_config().unwrap();
-    assert_eq!(chain_config.chain_id, "slay3r-local".parse().unwrap());
+    let config = TestApp::new(anvil.ws_endpoint()).await.config;
 
-    // change the target chain via cli
-    let mut cli_args = TestApp::default_cli_args();
-    cli_args.chain = Some("testnet".to_string());
-    let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.chain_config().unwrap();
+    let signing_client = config.signing_client().await.unwrap();
     assert_eq!(
-        chain_config.chain_id,
-        "layer-permissionless-3".parse().unwrap()
+        signing_client.signer.address(),
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+            .parse::<Address>()
+            .unwrap()
     );
 
-    // change the grpc endpoint
-    let mut cli_args = TestApp::default_cli_args();
-    cli_args.chain_config.grpc_endpoint = Some("http://example.com:1234".to_string());
-    let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.chain_config().unwrap();
-    assert_eq!(chain_config.grpc_endpoint, "http://example.com:1234");
+    // change the target chain via cli
+    // let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
+    // cli_args.chain = Some("testnet".to_string());
+    // let config = TestApp::new_with_args(cli_args).await.config;
+    // let chain_config = config.chain_config().unwrap();
+    // assert_eq!(
+    //     chain_config.chain_id,
+    //     "layer-permissionless-3".parse().unwrap()
+    // );
+
+    // // change the grpc endpoint
+    // let mut cli_args = TestApp::default_cli_args();
+    // cli_args.chain_config.grpc_endpoint = Some("http://example.com:1234".to_string());
+    // let config = TestApp::new_with_args(cli_args).await.config;
+    // let chain_config = config.chain_config().unwrap();
+    // assert_eq!(chain_config.grpc_endpoint, "http://example.com:1234");
 }

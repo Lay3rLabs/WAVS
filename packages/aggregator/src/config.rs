@@ -86,7 +86,10 @@ impl ConfigBuilder {
 
     pub fn merge_cli_env_args(&self) -> Result<CliArgs> {
         let cli_args: CliArgs = Figment::new()
-            .merge(figment::providers::Env::prefixed("AGGREGATOR_"))
+            .merge(figment::providers::Env::prefixed(&format!(
+                "{}_",
+                CliArgs::ENV_VAR_PREFIX
+            )))
             .merge(figment::providers::Serialized::defaults(&self.cli_args))
             .extract()?;
 
