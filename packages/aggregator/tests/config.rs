@@ -182,7 +182,7 @@ async fn config_dotenv() {
 
 // tests that we load chain config section correctly
 #[tokio::test]
-async fn config_chains() {
+async fn config_mnemonic() {
     let anvil = Anvil::new().block_time(1).spawn();
 
     let config = TestApp::new(anvil.ws_endpoint()).await.config;
@@ -195,20 +195,21 @@ async fn config_chains() {
             .unwrap()
     );
 
-    // change the target chain via cli
-    // let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
-    // cli_args.chain = Some("testnet".to_string());
-    // let config = TestApp::new_with_args(cli_args).await.config;
-    // let chain_config = config.chain_config().unwrap();
-    // assert_eq!(
-    //     chain_config.chain_id,
-    //     "layer-permissionless-3".parse().unwrap()
-    // );
+    // change the mnemonic via cli
+    let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
+    let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_owned();
+    cli_args.mnemonic = Some(mnemonic);
+    let config = TestApp::new_with_args(cli_args).await.config;
+    let signing_client2 = config.signing_client().await.unwrap();
+    assert_eq!(
+        signing_client2.signer.address(),
+        "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            .parse::<Address>()
+            .unwrap()
+    );
 
-    // // change the grpc endpoint
-    // let mut cli_args = TestApp::default_cli_args();
-    // cli_args.chain_config.grpc_endpoint = Some("http://example.com:1234".to_string());
-    // let config = TestApp::new_with_args(cli_args).await.config;
-    // let chain_config = config.chain_config().unwrap();
-    // assert_eq!(chain_config.grpc_endpoint, "http://example.com:1234");
+    // change the endpoint
+    let cli_args = TestApp::cli_args("ws://localhost:1234".to_string());
+    let config = TestApp::new_with_args(cli_args).await.config;
+    assert_eq!(config.endpoint, "ws://localhost:1234");
 }
