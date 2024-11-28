@@ -8,7 +8,7 @@ use super::{
     state::HttpState,
 };
 
-// this is called from main, takes a real CoreDispatcher
+// this is called from main
 pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
