@@ -6,3 +6,8 @@ data
 .DS_Store
 .env
 .vscode
+# Forge
+cache
+broadcast
+out
+deployments
