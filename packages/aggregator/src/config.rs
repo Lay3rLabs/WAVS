@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
+use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
 use serde::{Deserialize, Serialize};
-use utils::eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient};
+use utils::eth_client::{EthClientBuilder, EthClientConfig, EthClientError, EthSigningClient};
 
 use crate::args::CliArgs;
 
@@ -61,6 +62,17 @@ impl Config {
         let eth_client = EthClientConfig { endpoint, mnemonic };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)
+    }
+
+    pub fn signer(&self) -> Result<PrivateKeySigner> {
+        let mnemonic = self
+            .mnemonic
+            .clone()
+            .ok_or(EthClientError::MissingMnemonic)?;
+        let signer = MnemonicBuilder::<English>::default()
+            .phrase(mnemonic)
+            .build()?;
+        Ok(signer)
     }
 }
 

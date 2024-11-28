@@ -11,7 +11,7 @@ pub struct TestApp {
 }
 
 impl TestApp {
-    pub fn cli_args(endpoint: String) -> CliArgs {
+    pub fn default_cli_args() -> CliArgs {
         // get the path relative from this source file, regardless of where we run the test from
         CliArgs {
             home: Some(
@@ -36,12 +36,12 @@ impl TestApp {
             ),
             cors_allowed_origins: Vec::new(),
             chain: None,
-            endpoint: Some(endpoint),
+            endpoint: None,
         }
     }
 
-    pub async fn new(endpoint: String) -> Self {
-        Self::new_with_args(Self::cli_args(endpoint)).await
+    pub async fn new() -> Self {
+        Self::new_with_args(Self::default_cli_args()).await
     }
 
     pub async fn new_with_args(cli_args: CliArgs) -> Self {

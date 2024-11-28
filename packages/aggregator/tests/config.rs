@@ -1,5 +1,5 @@
 use aggregator::test_utils::app::TestApp;
-use alloy::{node_bindings::Anvil, primitives::Address};
+use alloy::primitives::Address;
 use temp_env::async_with_vars;
 
 use aggregator::{
@@ -13,13 +13,11 @@ use std::{path::PathBuf, sync::LazyLock};
 // because the complete list will change depending on the platform, global env vars, etc.
 #[tokio::test]
 async fn config_filepath() {
-    let anvil = Anvil::new().block_time(1).spawn();
-
     let filepaths = |home: Option<PathBuf>| -> Vec<PathBuf> {
         let config_builder = ConfigBuilder::new(CliArgs {
             home,
             dotenv: None,
-            ..TestApp::cli_args(anvil.ws_endpoint())
+            ..TestApp::default_cli_args()
         });
 
         let cli_env_args = config_builder.merge_cli_env_args().unwrap();
@@ -73,20 +71,12 @@ async fn config_filepath() {
 #[tokio::test]
 async fn config_default() {
     // port is *not* set in the test toml file
-    assert_eq!(
-        TestApp::new("ws://127.0.0.1:8545".to_owned())
-            .await
-            .config
-            .port,
-        Config::default().port
-    );
+    assert_eq!(TestApp::new().await.config.port, Config::default().port);
 }
 
 // tests that we can configure array-strings, and it overrides as expected
 #[tokio::test]
 async fn config_array_string() {
-    let anvil = Anvil::new().block_time(1).spawn();
-
     static TRACING_ENV_FILTER_ENV: LazyLock<tracing_subscriber::EnvFilter> = LazyLock::new(|| {
         tracing_subscriber::EnvFilter::from_default_env()
             .add_directive("debug".parse().unwrap())
@@ -99,7 +89,7 @@ async fn config_array_string() {
     });
 
     // it's set in the file too for other tests, but here we need to be explicit
-    let get_config = || async { TestApp::new(anvil.ws_endpoint()).await.config };
+    let get_config = || async { TestApp::new().await.config };
     let config = async_with_vars(
         [(
             format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
@@ -119,14 +109,14 @@ async fn config_array_string() {
     {
         let check = || async {
             // first - if we don't set a CLI var, it should use the env var
-            let config = TestApp::new(anvil.ws_endpoint()).await.config;
+            let config = TestApp::new().await.config;
             assert_eq!(
                 config.tracing_env_filter().unwrap().to_string(),
                 TRACING_ENV_FILTER_ENV.to_string()
             );
 
             // but then, even when the env var is available, if we set a CLI var, it should override
-            let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
+            let mut cli_args = TestApp::default_cli_args();
             cli_args.log_level = TRACING_ENV_FILTER_CLI
                 .to_string()
                 .split(",")
@@ -155,9 +145,7 @@ async fn config_array_string() {
 // tests that we load a dotenv file correctly, if specified in cli args
 #[tokio::test]
 async fn config_dotenv() {
-    let anvil = Anvil::default().block_time(1).spawn();
-
-    let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
+    let mut cli_args = TestApp::default_cli_args();
 
     cli_args.dotenv = Some(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -183,13 +171,11 @@ async fn config_dotenv() {
 // tests that we load chain config section correctly
 #[tokio::test]
 async fn config_mnemonic() {
-    let anvil = Anvil::new().block_time(1).spawn();
+    let config = TestApp::new().await.config;
 
-    let config = TestApp::new(anvil.ws_endpoint()).await.config;
-
-    let signing_client = config.signing_client().await.unwrap();
+    let signer = config.signer().unwrap();
     assert_eq!(
-        signing_client.signer.address(),
+        signer.address(),
         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
             .parse::<Address>()
             .unwrap()
@@ -198,20 +184,21 @@ async fn config_mnemonic() {
     assert_eq!(config.chain, "anvil");
 
     // change the mnemonic via cli
-    let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
+    let mut cli_args = TestApp::default_cli_args();
     let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_owned();
     cli_args.mnemonic = Some(mnemonic);
     let config = TestApp::new_with_args(cli_args).await.config;
-    let signing_client2 = config.signing_client().await.unwrap();
+    let signer2 = config.signer().unwrap();
     assert_eq!(
-        signing_client2.signer.address(),
+        signer2.address(),
         "0x9858effd232b4033e47d90003d41ec34ecaeda94"
             .parse::<Address>()
             .unwrap()
     );
 
     // change the endpoint and chain
-    let mut cli_args = TestApp::cli_args("ws://localhost:1234".to_string());
+    let mut cli_args = TestApp::default_cli_args();
+    cli_args.endpoint = Some("ws://localhost:1234".to_owned());
     cli_args.chain = Some("notanvil".to_owned());
     let config = TestApp::new_with_args(cli_args).await.config;
     assert_eq!(config.endpoint, "ws://localhost:1234");
