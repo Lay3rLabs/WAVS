@@ -123,7 +123,7 @@ impl ServiceRequestParser {
             } => {
                 let task_queue_addr = match &self.state {
                     Some(state) => {
-                        let chain_config: ChainConfig = state.config.cosmos_chain_config()?.into();
+                        let chain_config: ChainConfig = state.config.layer_chain_config()?.into();
                         chain_config.parse_address(&task_queue_addr)?
                     }
                     None => Address::new_cosmos_string(&task_queue_addr, None)?,
@@ -131,7 +131,7 @@ impl ServiceRequestParser {
 
                 let verifier_addr = match &self.state {
                     Some(state) if !state.is_mock_chain_client => {
-                        let chain_config: ChainConfig = state.config.cosmos_chain_config()?.into();
+                        let chain_config: ChainConfig = state.config.layer_chain_config()?.into();
                         query_verifier_addr(chain_config, &task_queue_addr).await?
                     }
                     _ => rand_address(),

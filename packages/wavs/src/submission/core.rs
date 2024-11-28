@@ -31,7 +31,7 @@ impl CoreSubmission {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
         let wavs_chain_config = config
-            .cosmos_chain_config()
+            .layer_chain_config()
             .map_err(SubmissionError::Climb)?;
 
         Ok(Self {

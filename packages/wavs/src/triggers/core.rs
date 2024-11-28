@@ -54,7 +54,7 @@ impl CoreTriggerManager {
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
         let chain_config = config
-            .cosmos_chain_config()
+            .layer_chain_config()
             .map_err(TriggerError::Climb)?
             .into();
 
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            chain: "test".to_string(),
+            layer_chain: Some("test".to_string()),
             chains: vec![(
                 "test".to_string(),
                 WavsChainConfig::Cosmos(WavsCosmosChainConfig {

@@ -2,9 +2,10 @@
 
 log_level = ["info", "wavs=debug", "just_to_confirm_test=debug"]
 
-chain = "local"
+layer_chain = "local-layer"
+chain = "local-eth"
 
-[chains.local]
+[chains.local-layer]
 chain_kind = "cosmos"
 chain_id = "slay3r-local"
 rpc_endpoint = "http://localhost:26657"

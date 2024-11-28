@@ -115,7 +115,7 @@ mod e2e {
 
         tracing::info!("Wasm digest: {}", wasm_digest);
 
-        let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().into();
+        let chain_config: ChainConfig = config.layer_chain_config().unwrap().into();
 
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
         let signing_client = SigningClient::new(chain_config.clone(), key_signer)

@@ -33,6 +33,7 @@ impl TestApp {
             data: None,
             cors_allowed_origins: Vec::new(),
             chain: None,
+            layer_chain: None,
             chain_config: Default::default(),
             wasm_lru_size: None,
             wasm_threads: None,
