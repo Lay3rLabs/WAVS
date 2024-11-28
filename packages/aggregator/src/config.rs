@@ -32,7 +32,7 @@ pub struct Config {
     /// Websocket eth endpoint
     pub endpoint: String,
 
-    /// Mnemonic of the signer
+    /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
 }
 
