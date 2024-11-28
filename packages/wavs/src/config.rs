@@ -79,25 +79,36 @@ impl Config {
         Ok(config)
     }
 
-    pub fn chain_config(&self) -> Result<ChainConfig> {
-        self.wavs_chain_config().map(ChainConfig::from)
+    pub fn cosmos_chain_config(&self) -> Result<WavsCosmosChainConfig> {
+        let wavs_chain_config = self.wavs_chain_config()?;
+        match wavs_chain_config {
+            WavsChainConfig::Cosmos(config) => Ok(config),
+            WavsChainConfig::Ethereum(_) => bail!("Expected Cosmos chain config, found Ethereum"),
+        }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WavsChainConfig {
+#[serde(rename_all = "snake_case", tag = "chain_kind")]
+pub enum WavsChainConfig {
+    Cosmos(WavsCosmosChainConfig),
+    Ethereum(WavsEthereumChainConfig),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WavsCosmosChainConfig {
     pub chain_id: ChainId,
     pub rpc_endpoint: String,
     pub grpc_endpoint: String,
     /// not micro-units, e.g. 0.025 would be a typical value
     /// if not specified, defaults to 0.025
-    #[serde(default = "WavsChainConfig::default_gas_price")]
+    #[serde(default = "WavsCosmosChainConfig::default_gas_price")]
     pub gas_price: f32,
     /// if not specified, defaults to "uslay"
-    #[serde(default = "WavsChainConfig::default_gas_denom")]
+    #[serde(default = "WavsCosmosChainConfig::default_gas_denom")]
     pub gas_denom: String,
     /// if not specified, defaults to "layer"
-    #[serde(default = "WavsChainConfig::default_bech32_prefix")]
+    #[serde(default = "WavsCosmosChainConfig::default_bech32_prefix")]
     pub bech32_prefix: String,
     /// optional faucet endpoint for this chain
     pub faucet_endpoint: Option<String>,
@@ -105,7 +116,13 @@ pub struct WavsChainConfig {
     pub submission_mnemonic: Option<String>,
 }
 
-impl WavsChainConfig {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WavsEthereumChainConfig {
+    pub ws_endpoint: String,
+    pub rpc_endpoint: String,
+}
+
+impl WavsCosmosChainConfig {
     const fn default_gas_price() -> f32 {
         0.025
     }
@@ -119,8 +136,8 @@ impl WavsChainConfig {
     }
 }
 
-impl From<WavsChainConfig> for ChainConfig {
-    fn from(config: WavsChainConfig) -> Self {
+impl From<WavsCosmosChainConfig> for ChainConfig {
+    fn from(config: WavsCosmosChainConfig) -> Self {
         Self {
             chain_id: config.chain_id,
             rpc_endpoint: config.rpc_endpoint,

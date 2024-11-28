@@ -53,7 +53,10 @@ impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
-        let chain_config = config.chain_config().map_err(TriggerError::Climb)?;
+        let chain_config = config
+            .cosmos_chain_config()
+            .map_err(TriggerError::Climb)?
+            .into();
 
         Ok(Self {
             chain_config,
@@ -380,7 +383,7 @@ mod tests {
             trigger::{TriggerData, TriggerManager},
             Trigger, ID,
         },
-        config::{Config, WavsChainConfig},
+        config::{Config, WavsChainConfig, WavsCosmosChainConfig},
         test_utils::address::rand_address,
     };
 
@@ -394,7 +397,7 @@ mod tests {
             chain: "test".to_string(),
             chains: vec![(
                 "test".to_string(),
-                WavsChainConfig {
+                WavsChainConfig::Cosmos(WavsCosmosChainConfig {
                     chain_id: "slay3r-local".parse().unwrap(),
                     rpc_endpoint: "http://localhost:26657".to_string(),
                     grpc_endpoint: "http://localhost:9090".to_string(),
@@ -403,7 +406,7 @@ mod tests {
                     bech32_prefix: "layer".to_string(),
                     faucet_endpoint: None,
                     submission_mnemonic: None,
-                },
+                }),
             )]
             .into_iter()
             .collect(),

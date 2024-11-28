@@ -30,7 +30,9 @@ impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
-        let wavs_chain_config = config.wavs_chain_config().map_err(SubmissionError::Climb)?;
+        let wavs_chain_config = config
+            .cosmos_chain_config()
+            .map_err(SubmissionError::Climb)?;
 
         Ok(Self {
             clients: Arc::new(Mutex::new(HashMap::new())),

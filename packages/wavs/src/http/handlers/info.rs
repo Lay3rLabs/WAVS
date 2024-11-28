@@ -19,23 +19,23 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 }
 
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
-    // TODO - get the operators from the dispatcher?
+    // TODO - get the operators from the dispatcher, and/or Eigenlayer?
 
-    let chain_config = state.config.chain_config()?;
-    let mnemonic = state
-        .config
-        .wavs_chain_config()?
+    let cosmos_chain_config = state.config.cosmos_chain_config()?;
+
+    let mnemonic = cosmos_chain_config
         .submission_mnemonic
+        .clone()
         .context("submission_mnemonic not set")?;
 
     let mut operators = Vec::new();
 
+    let climb_address_kind = ChainConfig::from(cosmos_chain_config).address_kind;
+
     for i in 0..10 {
         let key_signer =
             KeySigner::new_mnemonic_str(&mnemonic, Some(&cosmos_hub_derivation(i)?)).unwrap();
-        let address = chain_config
-            .address_kind
-            .address_from_pub_key(&key_signer.public_key().await?)?;
+        let address = climb_address_kind.address_from_pub_key(&key_signer.public_key().await?)?;
         operators.push(address.to_string());
     }
 

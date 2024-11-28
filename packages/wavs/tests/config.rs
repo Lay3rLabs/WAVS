@@ -178,14 +178,14 @@ async fn config_dotenv() {
 async fn config_chains() {
     let config = TestApp::new().await.config;
 
-    let chain_config = config.chain_config().unwrap();
+    let chain_config = config.cosmos_chain_config().unwrap();
     assert_eq!(chain_config.chain_id, "slay3r-local".parse().unwrap());
 
     // change the target chain via cli
     let mut cli_args = TestApp::default_cli_args();
     cli_args.chain = Some("testnet".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.chain_config().unwrap();
+    let chain_config = config.cosmos_chain_config().unwrap();
     assert_eq!(
         chain_config.chain_id,
         "layer-permissionless-3".parse().unwrap()
@@ -195,6 +195,6 @@ async fn config_chains() {
     let mut cli_args = TestApp::default_cli_args();
     cli_args.chain_config.grpc_endpoint = Some("http://example.com:1234".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.chain_config().unwrap();
+    let chain_config = config.cosmos_chain_config().unwrap();
     assert_eq!(chain_config.grpc_endpoint, "http://example.com:1234");
 }
