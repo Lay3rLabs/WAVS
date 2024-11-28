@@ -17,7 +17,6 @@ dotenvy = { workspace = true }
 ctrlc = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
-layer-climb = { workspace = true }
 figment = { workspace = true}
 dirs = { workspace = true }
 thiserror = { workspace = true }

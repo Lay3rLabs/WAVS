@@ -62,7 +62,6 @@ dependencies = [
  "dirs 5.0.1",
  "dotenvy",
  "figment",
- "layer-climb",
  "serde",
  "thiserror",
  "tokio",

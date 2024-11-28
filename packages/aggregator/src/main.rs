@@ -20,16 +20,7 @@ pub fn run_server(ctx: AppContext, config: config::Config) {
     .unwrap();
 
     // start the http server in its own thread
-    let server_handle = std::thread::spawn({
-        let ctx = ctx.clone();
-        move || {
-            http::server::start(ctx, config).unwrap();
-        }
-    });
-
-    // wait for all threads to finish
-
-    server_handle.join().unwrap();
+    http::server::start(ctx, config).unwrap();
 }
 
 fn main() {
