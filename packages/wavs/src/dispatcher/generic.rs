@@ -321,7 +321,7 @@ mod tests {
             dispatcher::{Component, ServiceStatus, Submit},
             submission::ChainMessage,
             trigger::TriggerResult,
-            Trigger,
+            ChainKind, Trigger,
         },
         engine::{
             identity::IdentityEngine,
@@ -347,6 +347,7 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
+            chain_kind: ChainKind::Ethereum,
             trigger: TriggerData::queue("service1", "workflow1", rand_address(), 5).unwrap(),
             result: TriggerResult::queue(task_id, payload),
         };
@@ -414,6 +415,7 @@ mod tests {
         let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
+                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(
                     &service_id,
                     &workflow_id,
@@ -424,6 +426,7 @@ mod tests {
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
+                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
@@ -495,6 +498,7 @@ mod tests {
         let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
+                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(
                     &service_id,
                     &workflow_id,
@@ -505,6 +509,7 @@ mod tests {
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
+                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),

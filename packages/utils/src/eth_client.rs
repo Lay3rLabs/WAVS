@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use alloy::{
     network::EthereumWallet,
     providers::{Identity, ProviderBuilder, RootProvider, WsConnect},
@@ -12,20 +14,22 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(Clone)]
 pub struct EthQueryClient {
-    pub provider: RootProvider<PubSubFrontend>,
+    pub provider: Arc<RootProvider<PubSubFrontend>>,
 }
 
+#[derive(Clone)]
 pub struct EthSigningClient {
-    pub provider: RootProvider<PubSubFrontend>,
+    pub provider: Arc<RootProvider<PubSubFrontend>>,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
-    pub wallet: EthereumWallet,
+    pub wallet: Arc<EthereumWallet>,
     /// The signer is the same as the default signer in the wallet, but used for simple message signing
     /// due to type system limitations, we need to store it separately
     /// since the signer in `EthereumWallet` implements only `TxSigner`
     /// and there is not a direct way convert it into `Signer`
-    pub signer: LocalSigner<SigningKey>,
+    pub signer: Arc<LocalSigner<SigningKey>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -51,7 +55,7 @@ impl EthClientBuilder {
     pub async fn build_query(self) -> Result<EthQueryClient> {
         let ws = WsConnect::new(self.config.endpoint);
 
-        let provider = self.provider_builder.on_ws(ws).await?;
+        let provider = Arc::new(self.provider_builder.on_ws(ws).await?);
 
         Ok(EthQueryClient { provider })
     }
@@ -68,12 +72,12 @@ impl EthClientBuilder {
             .phrase(mnemonic)
             .build()?;
 
-        let wallet = signer.clone().into();
+        let wallet = Arc::new(signer.clone().into());
 
         Ok(EthSigningClient {
             provider,
             wallet,
-            signer,
+            signer: Arc::new(signer),
         })
     }
 }

@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::apis::trigger::{
     TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
 };
-use crate::apis::{IDError, ID};
+use crate::apis::{ChainKind, IDError, ID};
 use crate::context::AppContext;
 
 use lavs_apis::id::TaskId;
@@ -169,6 +169,7 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
+                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(service_id, workflow_id, task_queue_addr.clone(), 5)
                     .unwrap(),
                 result: TriggerResult::queue(
@@ -239,6 +240,7 @@ mod tests {
 
         let actions = vec![
             TriggerAction {
+                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue("service1", "workflow1", task_queue_addr.clone(), 5)
                     .unwrap(),
                 result: TriggerResult::Queue {
@@ -247,6 +249,7 @@ mod tests {
                 },
             },
             TriggerAction {
+                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue("service2", "workflow2", task_queue_addr, 5).unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(4),

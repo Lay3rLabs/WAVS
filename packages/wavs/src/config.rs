@@ -3,6 +3,7 @@ use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
+use utils::eth_client::EthClientConfig;
 
 use crate::args::{CliArgs, OptionalWavsChainConfig};
 
@@ -228,6 +229,15 @@ impl From<WavsCosmosChainConfig> for ChainConfig {
             address_kind: AddrKind::Cosmos {
                 prefix: config.bech32_prefix,
             },
+        }
+    }
+}
+
+impl From<WavsEthereumChainConfig> for EthClientConfig {
+    fn from(config: WavsEthereumChainConfig) -> Self {
+        Self {
+            endpoint: config.ws_endpoint,
+            mnemonic: None,
         }
     }
 }

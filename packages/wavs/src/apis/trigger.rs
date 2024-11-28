@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{IDError, Trigger, ID};
+use super::{ChainKind, IDError, Trigger, ID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -51,6 +51,9 @@ impl TriggerData {
 /// The data returned from a trigger action
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
+    /// The chain kind that triggered this action
+    pub chain_kind: ChainKind,
+
     /// Identify which trigger this came from
     pub trigger: TriggerData,
 
@@ -82,6 +85,8 @@ impl TriggerResult {
 pub enum TriggerError {
     #[error("climb: {0}")]
     Climb(anyhow::Error),
+    #[error("ethereum: {0}")]
+    Ethereum(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

@@ -12,6 +12,7 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 rust-version = "1.80.0"
 
 [workspace.dependencies]
+utils = { path = "packages/utils" }
 clap = { version = "4.5.20", features = ["derive", "env"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }

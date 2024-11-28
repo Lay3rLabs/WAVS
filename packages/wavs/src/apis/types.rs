@@ -27,6 +27,15 @@ impl Trigger {
     }
 }
 
+// For right now we only support exactly one of each kind of these chains
+// and we need to distinguish them
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChainKind {
+    Layer,
+    Ethereum,
+}
+
 /// ID is meant to identify a component or a service (I don't think we need to enforce the distinction there, do we?)
 /// It is a string, but with some strict validation rules. It must be lowecase alphanumeric: `[a-z0-9-_]{3,32}`
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
