@@ -24,11 +24,6 @@ Before using Eigenlayer ensure you have the following tools installed:
    git submodule update --init --recursive
    ```
 
-   If the submodule has not been added to your repository yet, you can add it manually:
-
-   ```bash
-   git submodule add git@github.com:Layr-Labs/eigenlayer-contracts.git contracts/lib/eigenlayer-contracts
-   ```
 
 ## Initial Setup
 
