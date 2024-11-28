@@ -63,6 +63,7 @@ dependencies = [
  "dotenvy",
  "figment",
  "serde",
+ "temp-env",
  "thiserror",
  "tokio",
  "tower-http",

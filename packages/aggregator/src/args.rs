@@ -10,6 +10,12 @@ use std::{fmt, path::PathBuf};
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct CliArgs {
+    /// The home directory of the application, where the aggregator.toml configuration file is stored
+    /// if not provided, a series of default directories will be tried
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub home: Option<PathBuf>,
+
     /// The path to an optional dotenv file to try and load
     /// if not set, will be the current working directory's .env
     #[arg(long)]
