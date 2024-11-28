@@ -194,6 +194,8 @@ async fn config_mnemonic() {
             .parse::<Address>()
             .unwrap()
     );
+    // Set up by the toml config file
+    assert_eq!(config.chain, "anvil");
 
     // change the mnemonic via cli
     let mut cli_args = TestApp::cli_args(anvil.ws_endpoint());
@@ -208,8 +210,10 @@ async fn config_mnemonic() {
             .unwrap()
     );
 
-    // change the endpoint
-    let cli_args = TestApp::cli_args("ws://localhost:1234".to_string());
+    // change the endpoint and chain
+    let mut cli_args = TestApp::cli_args("ws://localhost:1234".to_string());
+    cli_args.chain = Some("notanvil".to_owned());
     let config = TestApp::new_with_args(cli_args).await.config;
     assert_eq!(config.endpoint, "ws://localhost:1234");
+    assert_eq!(config.chain, "notanvil");
 }
