@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -70,17 +70,20 @@ impl Default for Config {
 impl Config {
     pub fn layer_chain_config(&self) -> Result<WavsCosmosChainConfig> {
         let chain_name = self.layer_chain.as_deref();
+        self.try_layer_chain_config()?.ok_or(anyhow!(
+            "No chain config found for \"{}\"",
+            chain_name.unwrap_or_default()
+        ))
+    }
+    pub fn try_layer_chain_config(&self) -> Result<Option<WavsCosmosChainConfig>> {
+        let chain_name = self.layer_chain.as_deref();
 
-        let config = chain_name
-            .and_then(|chain_name| self.chains.get(chain_name))
-            .context(format!(
-                "No chain config found for \"{}\"",
-                chain_name.unwrap_or_default()
-            ))?;
-
-        let config = match config {
-            WavsChainConfig::Cosmos(config) => config,
-            WavsChainConfig::Ethereum(_) => bail!("Expected Cosmos chain config, found Ethereum"),
+        let config = match chain_name.and_then(|chain_name| self.chains.get(chain_name)) {
+            None => return Ok(None),
+            Some(WavsChainConfig::Ethereum(_)) => {
+                bail!("Expected Cosmos chain config, found Ethereum")
+            }
+            Some(WavsChainConfig::Cosmos(config)) => config,
         };
 
         // The optional overrides use a prefix to distinguish between layer and ethereum fields
@@ -119,22 +122,25 @@ impl Config {
             .merge(figment::providers::Serialized::defaults(config_override))
             .extract()?;
 
-        Ok(config_merged)
+        Ok(Some(config_merged))
     }
 
     pub fn ethereum_chain_config(&self) -> Result<WavsEthereumChainConfig> {
         let chain_name = self.chain.as_deref();
+        self.try_ethereum_chain_config()?.ok_or(anyhow!(
+            "No chain config found for \"{}\"",
+            chain_name.unwrap_or_default()
+        ))
+    }
+    pub fn try_ethereum_chain_config(&self) -> Result<Option<WavsEthereumChainConfig>> {
+        let chain_name = self.chain.as_deref();
 
-        let config = chain_name
-            .and_then(|chain_name| self.chains.get(chain_name))
-            .context(format!(
-                "No chain config found for \"{}\"",
-                chain_name.unwrap_or_default()
-            ))?;
-
-        let config = match config {
-            WavsChainConfig::Cosmos(_) => bail!("Expected Ethereum chain config, found Cosmos"),
-            WavsChainConfig::Ethereum(config) => config,
+        let config = match chain_name.and_then(|chain_name| self.chains.get(chain_name)) {
+            None => return Ok(None),
+            Some(WavsChainConfig::Cosmos(_)) => {
+                bail!("Expected Ethereum chain config, found Cosmos")
+            }
+            Some(WavsChainConfig::Ethereum(config)) => config,
         };
 
         // The optional overrides use a prefix to distinguish between layer and ethereum fields
@@ -158,7 +164,7 @@ impl Config {
             .merge(figment::providers::Serialized::defaults(config_override))
             .extract()?;
 
-        Ok(config_merged)
+        Ok(Some(config_merged))
     }
 }
 
