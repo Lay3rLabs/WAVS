@@ -1,7 +1,7 @@
 use crate::{
     apis::{
         trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult},
-        ChainKind, Trigger, ID,
+        Trigger, ID,
     },
     config::Config,
     context::AppContext,
@@ -84,12 +84,10 @@ impl CoreTriggerManager {
             Vec::new();
 
         enum BlockTriggers {
-            Ethereum {
-                triggers: HashMap<Address, HashSet<TaskId>>,
-            },
+            Ethereum {},
             Layer {
                 triggers: HashMap<Address, HashSet<TaskId>>,
-            }
+            },
         }
 
         let layer_client = match self.layer_chain_config.clone() {
@@ -175,14 +173,8 @@ impl CoreTriggerManager {
                 .map_err(|e| TriggerError::Ethereum(e.into()))?;
             let stream = subscribtion.into_stream();
 
-            let event_stream = Box::pin(stream.map({
-                move |_header| {
-                    let task_created_events: HashMap<Address, HashSet<TaskId>> = HashMap::new();
-                    Ok(BlockTriggers::Ethereum { 
-                        triggers: task_created_events,
-                    })
-                }
-            }));
+            let event_stream =
+                Box::pin(stream.map({ move |_header| Ok(BlockTriggers::Ethereum {}) }));
 
             streams.push(event_stream);
         }
@@ -195,10 +187,10 @@ impl CoreTriggerManager {
                 Err(err) => {
                     tracing::error!("{:?}", err);
                 }
-                Ok(BlockTriggers {
-                    chain_kind,
-                    triggers,
-                }) => {
+                Ok(BlockTriggers::Ethereum {}) => {
+                    // TODO!
+                }
+                Ok(BlockTriggers::Layer { triggers }) => {
                     for (contract_address, task_ids) in triggers {
                         for task_id in task_ids {
                             let lookup_id = {
@@ -227,23 +219,16 @@ impl CoreTriggerManager {
                                     .cloned()
                             };
 
-                            let resp: Result<task_queue::TaskResponse> = match chain_kind {
-                                ChainKind::Layer => {
-                                    layer_client
-                                        .as_ref()
-                                        .unwrap() // safe - only way we got this is by having a client in the first place
-                                        .contract_smart(
-                                            &contract_address,
-                                            &task_queue::QueryMsg::Custom(
-                                                task_queue::CustomQueryMsg::Task { id: task_id },
-                                            ),
-                                        )
-                                        .await
-                                }
-                                ChainKind::Ethereum => {
-                                    todo!()
-                                }
-                            };
+                            let resp: Result<task_queue::TaskResponse> = layer_client
+                                .as_ref()
+                                .unwrap() // safe - only way we got this is by having a client in the first place
+                                .contract_smart(
+                                    &contract_address,
+                                    &task_queue::QueryMsg::Custom(
+                                        task_queue::CustomQueryMsg::Task { id: task_id },
+                                    ),
+                                )
+                                .await;
 
                             let payload = match resp {
                                 Ok(resp) => {
