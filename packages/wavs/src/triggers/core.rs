@@ -83,12 +83,13 @@ impl CoreTriggerManager {
         let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<BlockTriggers>> + Send>>> =
             Vec::new();
 
-        struct BlockTriggers {
-            // we can get this via a workflow lookup
-            // but we already know which chain we're watching
-            // so might as well just set it explicitly
-            chain_kind: ChainKind,
-            triggers: HashMap<Address, HashSet<TaskId>>,
+        enum BlockTriggers {
+            Ethereum {
+                triggers: HashMap<Address, HashSet<TaskId>>,
+            },
+            Layer {
+                triggers: HashMap<Address, HashSet<TaskId>>,
+            }
         }
 
         let layer_client = match self.layer_chain_config.clone() {
@@ -155,8 +156,7 @@ impl CoreTriggerManager {
                             }
                         }
 
-                        Ok(BlockTriggers {
-                            chain_kind: ChainKind::Layer,
+                        Ok(BlockTriggers::Layer {
                             triggers: task_created_events,
                         })
                     }),
@@ -178,8 +178,7 @@ impl CoreTriggerManager {
             let event_stream = Box::pin(stream.map({
                 move |_header| {
                     let task_created_events: HashMap<Address, HashSet<TaskId>> = HashMap::new();
-                    Ok(BlockTriggers {
-                        chain_kind: ChainKind::Ethereum,
+                    Ok(BlockTriggers::Ethereum { 
                         triggers: task_created_events,
                     })
                 }
