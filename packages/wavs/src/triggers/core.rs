@@ -173,8 +173,7 @@ impl CoreTriggerManager {
                 .map_err(|e| TriggerError::Ethereum(e.into()))?;
             let stream = subscribtion.into_stream();
 
-            let event_stream =
-                Box::pin(stream.map({ move |_header| Ok(BlockTriggers::Ethereum {}) }));
+            let event_stream = Box::pin(stream.map(move |_header| Ok(BlockTriggers::Ethereum {})));
 
             streams.push(event_stream);
         }
