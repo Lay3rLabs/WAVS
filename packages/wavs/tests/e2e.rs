@@ -1,12 +1,11 @@
 // Currently - e2e tests are disabled by default.
-// they also assume some environment variables are set:
-// WAVS_E2E_SEED_PHRASE: seed phrase for client running the tests
-// WAVS_E2E_TASK_QUEUE_ADDR: address of the task queue contract
+// See TESTS.md for more information on how to run e2e tests.
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
     use std::{path::PathBuf, sync::Arc, time::Duration};
 
+    use alloy::node_bindings::Anvil;
     use anyhow::{bail, Context, Result};
     use lavs_apis::{
         events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
@@ -15,6 +14,7 @@ mod e2e {
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
+    use utils::eth_client::EthClientConfig;
     use wavs::{
         apis::{dispatcher::AllowedHostPermission, ChainKind},
         config::Config,
@@ -138,7 +138,24 @@ mod e2e {
         wavs_handle.join().unwrap();
     }
 
-    async fn run_tests_ethereum(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
+    async fn run_tests_ethereum(_http_client: HttpClient, config: Config, _wasm_digest: Digest) {
+        let chain_config = config.ethereum_chain_config().unwrap();
+
+        let filepath = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("deployments")
+            .join("hello-world")
+            .join("31337.json");
+
+        println!("Filepath: {:?}", filepath);
+
+        let avs_deployment_data = tokio::fs::read_to_string(filepath).await.unwrap();
+
+        println!("AVS deployment data: {}", avs_deployment_data);
+
         tracing::info!("Running e2e ethereum tests");
     }
 
@@ -150,9 +167,10 @@ mod e2e {
     async fn run_tests_layer(http_client: HttpClient, config: Config, wasm_digest: Digest) {
         tracing::info!("Running e2e layer tests");
         // get all env vars
-        let seed_phrase = std::env::var("WAVS_E2E_MNEMONIC").expect("WAVS_E2E_MNEMONIC not set");
-        let task_queue_addr = std::env::var("WAVS_E2E_TASK_QUEUE_ADDRESS")
-            .expect("WAVS_E2E_TASK_QUEUE_ADDRESS not set");
+        let seed_phrase =
+            std::env::var("WAVS_E2E_LAYER_MNEMONIC").expect("WAVS_E2E_LAYER_MNEMONIC not set");
+        let task_queue_addr = std::env::var("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS")
+            .expect("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS not set");
 
         tracing::info!("Wasm digest: {}", wasm_digest);
 

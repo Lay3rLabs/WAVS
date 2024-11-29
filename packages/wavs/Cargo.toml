@@ -57,6 +57,7 @@ alloy = {workspace = true}
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true }
+alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
 
 [[bench]]
 name = "mock_bench"
