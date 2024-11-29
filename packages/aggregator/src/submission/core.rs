@@ -3,114 +3,80 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{
-    apis::{
-        submission::{ChainMessage, Submission, SubmissionError},
-        Trigger,
-    },
-    config::Config,
-    context::AppContext,
+use crate::{config::Config, context::AppContext};
+use alloy::{
+    contract::CallBuilder,
+    network::{Ethereum, Network},
+    primitives::Address,
+    providers::{PendingTransactionError, Provider},
+    rpc::types::TransactionRequest,
+    sol,
+    sol_types::SolValue,
 };
-use alloy::rpc::types::TransactionRequest;
-use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
-use layer_climb::prelude::*;
-use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::eth_client::EthSigningClient;
 
-#[derive(Clone)]
-pub struct CoreSubmission {
-    signing_client: EthSigningClient,
-    // clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
-    // chain_config: ChainConfig,
-    // mnemonic: String,
-    // faucet_url: Option<Url>,
-    // http_client: reqwest::Client,
-}
+sol! {
+    #[sol(rpc)]
+    contract HelloWorldServiceManager {
+        constructor(address) {} // The `deploy` method will also include any constructor arguments.
 
-impl CoreSubmission {
-    pub fn submit(&self) {
-        todo!()
+        #[derive(Debug)]
+        struct Task {
+            string name;
+            uint32 taskCreatedBlock;
+        }
+
+        #[derive(Debug)]
+        function respondToTask(
+            Task calldata task,
+            uint32 referenceTaskIndex,
+            bytes memory signature
+        ) external;
     }
 }
 
-impl Submission for CoreSubmission {
-    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Submission"))]
-    fn start(
+#[derive(Clone)]
+pub struct EthSubmission {}
+
+impl EthSubmission {
+    pub async fn submit(
         &self,
-        ctx: AppContext,
-        mut rx: mpsc::Receiver<ChainMessage>,
+        task_index: u32,
+        task_name: String,
+        task_created_block: u32,
+        client: EthSigningClient,
+        operators: Vec<Address>,
+        signatures: Vec<Vec<u8>>,
+        reference_block: u32,
+        hello_world_address: Address,
     ) -> Result<(), SubmissionError> {
-        ctx.rt.clone().spawn({
-            let mut kill_receiver = ctx.get_kill_receiver();
-            let _self = self.clone();
+        let signed_task = (operators, signatures, reference_block).abi_encode();
+        let contract = HelloWorldServiceManager::new(hello_world_address, client.provider);
+        let respond_to_task = contract.respondToTask(
+            HelloWorldServiceManager::Task {
+                name: task_name,
+                taskCreatedBlock: task_created_block,
+            },
+            task_index,
+            signed_task.into(),
+        );
+        respond_to_task.call().await?;
 
-            async move {
-                tokio::select! {
-                    _ = kill_receiver.recv() => {
-                        tracing::debug!("Submissions shutting down");
-                    },
-                    _ = async move {
-                    } => {
-                        while let Some(msg) = rx.recv().await {
-                            tracing::debug!("Received message to submit: {:?}", msg);
-
-                            let client = match _self.get_client(msg.hd_index).await {
-                                Ok(client) => client,
-                                Err(e) => {
-                                    tracing::error!("Failed to get client: {:?}", e);
-                                    continue;
-                                }
-                            };
-
-                            if let Err(err) = _self.maybe_tap_faucet(&client).await {
-                                tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, msg.hd_index, err);
-                            }
-
-                            let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
-                                Ok(result) => result,
-                                Err(e) => {
-                                    tracing::error!("Failed to parse wasm result into json value: {:?}", e);
-                                    continue;
-                                }
-                            };
-
-                            let result = match serde_json::to_string(&result) {
-                                Ok(result) => result,
-                                Err(e) => {
-                                    tracing::error!("Failed to serialize json value into string: {:?}", e);
-                                    continue;
-                                }
-                            };
-
-                            let contract_msg = match msg.trigger_data.trigger {
-                                Trigger::Queue { task_queue_addr, .. } => {
-                                    VerifierExecuteMsg::ExecutedTask {
-                                        task_queue_contract: task_queue_addr.to_string(),
-                                        task_id: msg.task_id,
-                                        result,
-                                    }
-                                }
-                            };
-
-                            match client.contract_execute(&msg.verifier_addr, &contract_msg, Vec::new(), None).await {
-                                Ok(_) => {
-                                    tracing::debug!("Submission successful");
-                                },
-                                Err(e) => {
-                                    tracing::error!("Submission failed: {:?}", e);
-                                }
-                            }
-
-                        }
-
-                        tracing::debug!("Submission channel closed");
-                    }
-                }
-            }
-        });
-
+        // Call without error, let's send
+        let pending_tx = respond_to_task.send().await?;
+        let tx_hash = pending_tx.watch().await?;
+        eprintln!("Hello world txhash:{}", tx_hash.to_string());
         Ok(())
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SubmissionError {
+    #[error(transparent)]
+    AlloyContractError(#[from] alloy::contract::Error),
+
+    #[error(transparent)]
+    PendingTransactionError(#[from] PendingTransactionError),
 }
