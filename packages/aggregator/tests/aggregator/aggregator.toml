@@ -1,5 +1,5 @@
 # aggregator toml for tests
 
-log_level = ["info", "wavs=debug", "just_to_confirm_test=debug"]
+log_level = ["info", "aggregator=debug", "just_to_confirm_test=debug"]
 
 chain = "anvil"
