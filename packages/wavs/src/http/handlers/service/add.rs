@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         dispatcher::{Component, Permissions, Service, ServiceStatus, Submit, Workflow},
-        Trigger, ID,
+        ChainKind, Trigger, ID,
     },
     http::{
         error::HttpResult,
@@ -41,6 +41,14 @@ pub struct ServiceRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub envs: Vec<(String, String)>,
     pub testable: Option<bool>,
+    // TODO for 0.3, make this required
+    #[serde(default = "default_chain_kind")]
+    pub chain_kind: ChainKind,
+}
+
+// just for backwards-compat
+fn default_chain_kind() -> ChainKind {
+    ChainKind::Layer
 }
 
 impl TriggerRequest {
@@ -150,6 +158,7 @@ impl ServiceRequestParser {
                 trigger,
                 component: component_id,
                 submit,
+                chain_kind: req.chain_kind,
             },
         )]);
 
@@ -187,7 +196,7 @@ mod test {
     use crate::{
         apis::{
             dispatcher::{Permissions, ServiceStatus},
-            ID,
+            ChainKind, ID,
         },
         http::{
             handlers::service::add::{AddServiceRequest, TriggerRequest},
@@ -264,6 +273,7 @@ mod test {
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
+                chain_kind: ChainKind::Ethereum,
             }
         }
 

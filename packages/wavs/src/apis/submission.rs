@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::trigger::TriggerData;
+use super::{trigger::TriggerData, ChainKind};
 
 pub trait Submission: Send + Sync {
     /// Start running the submission manager
@@ -23,7 +23,7 @@ pub trait Submission: Send + Sync {
 pub struct ChainMessage {
     /// Identify which trigger this came from
     pub trigger_data: TriggerData,
-
+    pub chain_kind: ChainKind,
     pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
     pub hd_index: u32,
@@ -42,4 +42,6 @@ pub enum SubmissionError {
     Reqwest(reqwest::Error),
     #[error("faucet: {0}")]
     Faucet(String),
+    #[error("missing layer chain")]
+    MissingLayerChain,
 }

@@ -84,6 +84,9 @@ impl CoreTriggerManager {
             Vec::new();
 
         struct BlockTriggers {
+            // we can get this via a workflow lookup
+            // but we already know which chain we're watching
+            // so might as well just set it explicitly
             chain_kind: ChainKind,
             triggers: HashMap<Address, HashSet<TaskId>>,
         }
@@ -261,7 +264,6 @@ impl CoreTriggerManager {
                                 Ok(trigger) => {
                                     action_sender
                                         .send(TriggerAction {
-                                            chain_kind,
                                             trigger,
                                             result: TriggerResult::Queue {
                                                 task_id,

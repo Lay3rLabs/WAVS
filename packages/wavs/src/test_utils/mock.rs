@@ -5,7 +5,7 @@ use crate::{
     apis::{
         dispatcher::{DispatchManager, Permissions},
         engine::EngineError,
-        ID,
+        ChainKind, ID,
     },
     context::AppContext,
     dispatcher::Dispatcher,
@@ -13,13 +13,15 @@ use crate::{
         mock::{Function, MockEngine},
         runner::{EngineRunner, SingleEngineRunner},
     },
-    http::handlers::service::{
-        add::{AddServiceRequest, ServiceRequest},
-        delete::DeleteServices,
-        list::ListServicesResponse,
-        test::{TestAppRequest, TestAppResponse},
+    http::{
+        handlers::service::{
+            add::{AddServiceRequest, ServiceRequest},
+            delete::DeleteServices,
+            list::ListServicesResponse,
+            test::{TestAppRequest, TestAppResponse},
+        },
+        types::TriggerRequest,
     },
-    http::types::TriggerRequest,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
     Digest,
@@ -130,6 +132,7 @@ impl MockE2ETestRunner {
                 permissions,
                 envs,
                 testable: None,
+                chain_kind: ChainKind::Ethereum,
             },
             wasm_url: None,
         })

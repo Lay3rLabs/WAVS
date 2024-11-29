@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         trigger::{TriggerAction, TriggerData, TriggerResult},
-        ChainKind, Trigger,
+        Trigger,
     },
     http::{error::HttpResult, state::HttpState},
 };
@@ -55,7 +55,6 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
         .context("No workflows found")?;
 
     let action = TriggerAction {
-        chain_kind: ChainKind::Ethereum,
         trigger: TriggerData {
             service_id: service.id.clone(),
             workflow_id: workflow_id.clone(),

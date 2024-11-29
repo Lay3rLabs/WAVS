@@ -61,6 +61,7 @@ pub trait EngineRunner: Send + Sync {
                         wasm_result,
                         hd_index: *hd_index,
                         verifier_addr: verifier_addr.clone(),
+                        chain_kind: workflow.chain_kind,
                     }))
                 } else {
                     Ok(None)

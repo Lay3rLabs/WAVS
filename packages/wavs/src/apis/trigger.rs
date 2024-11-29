@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{ChainKind, IDError, Trigger, ID};
+use super::{IDError, Trigger, ID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -51,9 +51,6 @@ impl TriggerData {
 /// The data returned from a trigger action
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
-    /// The chain kind that triggered this action
-    pub chain_kind: ChainKind,
-
     /// Identify which trigger this came from
     pub trigger: TriggerData,
 

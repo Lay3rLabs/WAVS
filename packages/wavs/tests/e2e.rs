@@ -16,7 +16,7 @@ mod e2e {
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
     use wavs::{
-        apis::dispatcher::AllowedHostPermission,
+        apis::{dispatcher::AllowedHostPermission, ChainKind},
         config::Config,
         context::AppContext,
         dispatcher::CoreDispatcher,
@@ -37,7 +37,7 @@ mod e2e {
 
     #[test]
     fn e2e_tests() {
-        let config = {
+        let mut config = {
             tokio::runtime::Runtime::new().unwrap().block_on({
                 async {
                     let mut cli_args = TestApp::default_cli_args();
@@ -51,6 +51,22 @@ mod e2e {
                 }
             })
         };
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "e2e_tests_layer")] {
+                config.layer_chain = Some(config.layer_chain.clone().unwrap());
+            } else {
+                config.layer_chain = None;
+            }
+        }
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "e2e_tests_ethereum")] {
+                config.chain= Some(config.chain.clone().unwrap());
+            } else {
+                config.chain = None;
+            }
+        }
 
         let ctx = AppContext::new();
 
@@ -69,7 +85,49 @@ mod e2e {
             move || {
                 ctx.rt.clone().block_on({
                     async move {
-                        run_tests(config).await;
+                        let http_client = HttpClient::new(&config);
+
+                        // give the server a bit of time to start
+                        tokio::time::timeout(Duration::from_secs(2), async {
+                            loop {
+                                match http_client.get_config().await {
+                                    Ok(_) => break,
+                                    Err(_) => {
+                                        tracing::info!("Waiting for server to start...");
+                                        tokio::time::sleep(Duration::from_millis(100)).await;
+                                    }
+                                }
+                            }
+                        })
+                        .await
+                        .unwrap();
+
+                        // if wasm_digest isn't set, upload our wasm blob for square
+                        let wasm_digest = std::env::var("WAVS_E2E_WASM_DIGEST");
+
+                        let wasm_digest: Digest = match wasm_digest {
+                            Ok(digest) => digest.parse().unwrap(),
+                            Err(_) => {
+                                let wasm_bytes =
+                                    include_bytes!("../../../components/permissions.wasm");
+                                http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
+                            }
+                        };
+
+                        match (config.layer_chain.is_some(), config.chain.is_some()) {
+                            (true, false) => {
+                                run_tests_layer(http_client, config, wasm_digest).await
+                            }
+                            (false, true) => {
+                                run_tests_ethereum(http_client, config, wasm_digest).await
+                            }
+                            (true, true) => {
+                                run_tests_crosschain(http_client, config, wasm_digest).await
+                            }
+                            (false, false) => panic!(
+                                "No chain selected at all for e2e tests (see e2e_tests_* features)"
+                            ),
+                        }
                         ctx.kill();
                     }
                 });
@@ -80,38 +138,21 @@ mod e2e {
         wavs_handle.join().unwrap();
     }
 
-    async fn run_tests(config: Config) {
-        let http_client = HttpClient::new(&config);
+    async fn run_tests_ethereum(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
+        tracing::info!("Running e2e ethereum tests");
+    }
 
-        // give the server a bit of time to start
-        tokio::time::timeout(Duration::from_secs(2), async {
-            loop {
-                match http_client.get_config().await {
-                    Ok(_) => break,
-                    Err(_) => {
-                        tracing::info!("Waiting for server to start...");
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
-                }
-            }
-        })
-        .await
-        .unwrap();
+    async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
+        tracing::info!("Running e2e crosschain tests");
+        // TODO!
+    }
 
+    async fn run_tests_layer(http_client: HttpClient, config: Config, wasm_digest: Digest) {
+        tracing::info!("Running e2e layer tests");
         // get all env vars
         let seed_phrase = std::env::var("WAVS_E2E_MNEMONIC").expect("WAVS_E2E_MNEMONIC not set");
         let task_queue_addr = std::env::var("WAVS_E2E_TASK_QUEUE_ADDRESS")
             .expect("WAVS_E2E_TASK_QUEUE_ADDRESS not set");
-        let wasm_digest = std::env::var("WAVS_E2E_WASM_DIGEST");
-
-        // if wasm_digest isn't set, upload our wasm blob for square
-        let wasm_digest: Digest = match wasm_digest {
-            Ok(digest) => digest.parse().unwrap(),
-            Err(_) => {
-                let wasm_bytes = include_bytes!("../../../components/permissions.wasm");
-                http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
-            }
-        };
 
         tracing::info!("Wasm digest: {}", wasm_digest);
 
@@ -135,7 +176,12 @@ mod e2e {
         let service_id = ID::new("test-service").unwrap();
 
         let _ = http_client
-            .create_service(service_id.clone(), wasm_digest, &task_queue.addr)
+            .create_service(
+                service_id.clone(),
+                wasm_digest,
+                &task_queue.addr,
+                ChainKind::Layer,
+            )
             .await
             .unwrap();
 
@@ -316,6 +362,7 @@ mod e2e {
             id: ID,
             digest: Digest,
             task_queue_addr: impl ToString,
+            chain_kind: ChainKind,
         ) -> Result<()> {
             let service = ServiceRequest {
                 trigger: TriggerRequest::queue(task_queue_addr, 1000, 0),
@@ -327,6 +374,7 @@ mod e2e {
                 },
                 envs: Vec::new(),
                 testable: Some(true),
+                chain_kind,
             };
 
             let body = serde_json::to_string(&AddServiceRequest {

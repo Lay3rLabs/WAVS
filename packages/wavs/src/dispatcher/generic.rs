@@ -347,7 +347,6 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            chain_kind: ChainKind::Ethereum,
             trigger: TriggerData::queue("service1", "workflow1", rand_address(), 5).unwrap(),
             result: TriggerResult::queue(task_id, payload),
         };
@@ -375,6 +374,7 @@ mod tests {
                     component: component_id.clone(),
                     trigger: Trigger::queue(rand_address(), 5),
                     submit: Some(Submit::verifier_tx(hd_index, verifier_addr.clone())),
+                    chain_kind: ChainKind::Ethereum,
                 },
             )]
             .into(),
@@ -397,6 +397,7 @@ mod tests {
             wasm_result: payload.into(),
             hd_index,
             verifier_addr,
+            chain_kind: ChainKind::Ethereum,
         };
         assert_eq!(processed[0], expected);
     }
@@ -415,7 +416,6 @@ mod tests {
         let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
-                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(
                     &service_id,
                     &workflow_id,
@@ -426,7 +426,6 @@ mod tests {
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
@@ -460,6 +459,7 @@ mod tests {
                     component: component_id.clone(),
                     trigger: Trigger::queue(rand_address(), 5),
                     submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
+                    chain_kind: ChainKind::Ethereum,
                 },
             )]
             .into(),
@@ -498,7 +498,6 @@ mod tests {
         let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
-                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(
                     &service_id,
                     &workflow_id,
@@ -509,7 +508,6 @@ mod tests {
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                chain_kind: ChainKind::Ethereum,
                 trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
@@ -543,6 +541,7 @@ mod tests {
                     component: component_id.clone(),
                     trigger: Trigger::queue(rand_address(), 5),
                     submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
+                    chain_kind: ChainKind::Ethereum,
                 },
             )]
             .into(),

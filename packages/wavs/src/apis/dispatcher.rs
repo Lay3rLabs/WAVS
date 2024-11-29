@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, ops::Bound};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 
-use super::{submission::ChainMessage, trigger::TriggerAction, Trigger, ID};
+use super::{submission::ChainMessage, trigger::TriggerAction, ChainKind, Trigger, ID};
 use crate::{context::AppContext, Digest};
 
 /// This is the highest-level container for the system.
@@ -90,6 +90,9 @@ pub struct Workflow {
     pub trigger: Trigger,
     /// A reference to which component to run with this data - for now, always "default"
     pub component: ID,
+
+    /// The kind of chain this workflow is on
+    pub chain_kind: ChainKind,
     /// How to submit the result of the component.
     /// May be unset for eg cron jobs that just update internal state and don't submit anything
     pub submit: Option<Submit>,

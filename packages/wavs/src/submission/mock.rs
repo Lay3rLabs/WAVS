@@ -92,7 +92,10 @@ mod test {
 
     use lavs_apis::id::TaskId;
 
-    use crate::{apis::trigger::TriggerData, test_utils::address::rand_address};
+    use crate::{
+        apis::{trigger::TriggerData, ChainKind},
+        test_utils::address::rand_address,
+    };
 
     use super::*;
 
@@ -103,6 +106,7 @@ mod test {
             wasm_result: payload.as_bytes().to_vec(),
             hd_index: 0,
             verifier_addr: rand_address(),
+            chain_kind: ChainKind::Ethereum,
         }
     }
 
