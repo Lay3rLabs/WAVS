@@ -10,7 +10,17 @@ use utils::{
 async fn register_operator() {
     let anvil = Anvil::new().block_time(1).try_spawn().unwrap();
 
+    // ProcessCommand::Shell(shell_cmd) => shell_cmd
+    // .try_spawn(ctx.clone())
+    // .map(|child| ProcessHandle::new_shell(child, ctx.logger.clone())),
+
+    // forge script contracts/DeployEigenLayerCore.s.sol --rpc-url $RPC_URL --broadcast
+    // forge script contracts/HelloWorldDeployer.s.sol --rpc-url $RPC_URL --broadcast
+    // TODO - deploy contracts
+
     let config = EthClientConfig {
+        // ws_endpoint: "ws://localhost:8545".to_string(),
+        // http_endpoint: "http://localhost:8545".to_string(),
         ws_endpoint: anvil.ws_endpoint().to_string(),
         http_endpoint: anvil.endpoint().to_string(),
         mnemonic: Some(
@@ -46,5 +56,9 @@ async fn register_operator() {
 
     let eigen_client = EigenClient::new(eth_client, eigen_config);
 
-    eigen_client.register_operator().await.unwrap();
+    let delegation_manager = eigen_client.deploy_delegation_manager().await.unwrap();
+
+    println!("Delegation Manager: {:?}", delegation_manager);
+
+    eigen_client.register_operator(Some(delegation_manager)).await.unwrap();
 }

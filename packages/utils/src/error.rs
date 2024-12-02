@@ -1,3 +1,4 @@
+use alloy::primitives::Address;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -7,4 +8,7 @@ pub enum EthClientError {
 
     #[error("No Transaction Receipt")]
     NoTransactionReceipt,
+
+    #[error("Contract not deployed {0}")]
+    ContractNotDeployed(Address),
 }

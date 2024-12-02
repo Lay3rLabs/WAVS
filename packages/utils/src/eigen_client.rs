@@ -2,10 +2,10 @@ pub mod config;
 use std::sync::Arc;
 
 use crate::{error::EthClientError, eth_client::EthSigningClient};
-use alloy::{providers::Provider, rpc::types::TransactionReceipt, sol};
+use alloy::{primitives::Address, providers::Provider, rpc::types::TransactionReceipt, sol};
 use config::EigenClientConfig;
 //use eigen_utils::delegationmanager::{DelegationManager::{self}, IDelegationManager::OperatorDetails};
-use anyhow::Result;
+use anyhow::{Result, Context};
 use IDelegationManager::OperatorDetails;
 
 #[derive(Clone)]
@@ -21,6 +21,13 @@ sol!(
     "../../contracts/abi/eigenlayer-middleware/DelegationManager.json"
 );
 
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    EmptyContract,
+    "../../contracts/abi/eigenlayer-middleware/EmptyContract.json"
+);
+
 impl EigenClient {
     pub fn new(eth: EthSigningClient, config: EigenClientConfig) -> Self {
         Self {
@@ -29,19 +36,37 @@ impl EigenClient {
         }
     }
 
-    pub async fn register_operator(&self) -> Result<String> {
+    pub async fn deploy_delegation_manager(&self) -> Result<Address> {
+        let strategy_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
+        let slasher = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
+        let pod_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
+
+        let contract = DelegationManager::deploy(
+            self.eth.http_provider.clone(), 
+            strategy_manager, 
+            slasher, 
+            pod_manager, 
+        ).await?;
+
+        Ok(contract.address().clone())
+
+    }
+
+    pub async fn register_operator(&self, delegation_manager_address: Option<Address>) -> Result<String> {
+        let delegation_manager_address = delegation_manager_address.unwrap_or_else(|| self.config.core.addresses.delegation);
         let delegation_code = self
             .eth
             .http_provider
-            .get_code_at(self.config.core.addresses.delegation)
+            .get_code_at(delegation_manager_address)
             .await?;
-        anyhow::ensure!(
-            !delegation_code.is_empty(),
-            "Eigenlayer delegation is not deployed"
-        );
+
+
+        if delegation_code.is_empty() {
+            return Err(EthClientError::ContractNotDeployed(delegation_manager_address)).context("Eigenlayer delegation is not deployed")?;
+        }
 
         let contract = DelegationManager::new(
-            self.config.core.addresses.delegation,
+            delegation_manager_address,
             self.eth.http_provider.clone(),
         );
 
