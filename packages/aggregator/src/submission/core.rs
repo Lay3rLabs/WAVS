@@ -1,41 +1,7 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
-
-use crate::{config::Config, context::AppContext};
-use alloy::{
-    contract::CallBuilder,
-    network::{Ethereum, Network},
-    primitives::Address,
-    providers::{PendingTransactionError, Provider},
-    rpc::types::TransactionRequest,
-    sol,
-    sol_types::SolValue,
-};
-use tokio::sync::mpsc;
-use tracing::instrument;
+use alloy::{primitives::Address, providers::PendingTransactionError, sol_types::SolValue};
 use utils::eth_client::EthSigningClient;
 
-sol! {
-    #[sol(rpc)]
-    contract HelloWorldServiceManager {
-        constructor(address) {} // The `deploy` method will also include any constructor arguments.
-
-        #[derive(Debug)]
-        struct Task {
-            string name;
-            uint32 taskCreatedBlock;
-        }
-
-        #[derive(Debug)]
-        function respondToTask(
-            Task calldata task,
-            uint32 referenceTaskIndex,
-            bytes memory signature
-        ) external;
-    }
-}
+use crate::alloy_generated_types::HelloWorldServiceManager;
 
 #[derive(Clone)]
 pub struct EthSubmission {}
