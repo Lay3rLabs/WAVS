@@ -2,10 +2,15 @@ pub mod config;
 use std::sync::Arc;
 
 use crate::{error::EthClientError, eth_client::EthSigningClient};
-use alloy::{primitives::{Address, U256}, providers::Provider, rpc::types::TransactionReceipt, sol};
+use alloy::{
+    primitives::{Address, U256},
+    providers::Provider,
+    rpc::types::TransactionReceipt,
+    sol,
+};
 use config::EigenClientConfig;
 //use eigen_utils::delegationmanager::{DelegationManager::{self}, IDelegationManager::OperatorDetails};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use IDelegationManager::OperatorDetails;
 
 #[derive(Clone)]
@@ -57,50 +62,74 @@ impl EigenClient {
         }
     }
 
-    pub async fn deploy_delegation_manager(&self) -> Result<Address> {
-        let proxy_admin = ProxyAdmin::deploy(self.eth.http_provider.clone()).await?;
+    pub async fn deploy_delegation_manager(&self, url: String) -> Result<Address> {
+        // TODO: hardcoded
+        let http_provider = alloy::providers::ProviderBuilder::new()
+            .with_recommended_fillers()
+            .wallet(self.eth.wallet.clone())
+            .on_http(url.parse().unwrap());
+        let proxy_admin = ProxyAdmin::deploy(http_provider.clone()).await?;
         let admin_address = proxy_admin.address().clone();
-        
-        let pauser_registry = PauserRegistry::deploy(self.eth.http_provider.clone(), vec![], admin_address).await?;
-        // let strategy_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
-        // let strategy_manager = TransparentUpgradeableProxy::new(strategy_manager, self.eth.http_provider.clone());
-        // let upgrade_call = 
-        // proxy_admin.upgradeAndCall(proxy, implementation, data)
-        // let slasher = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
-        // let slasher = TransparentUpgradeableProxy::deploy(self.eth.http_provider.clone(), slasher, admin_address.clone(), b"".into()).await?.address().clone();
-        // let pod_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
-        // let pod_manager = TransparentUpgradeableProxy::deploy(self.eth.http_provider.clone(), pod_manager, admin_address.clone(), b"".into()).await?.address().clone();
 
-        
-        let delegation_manager  = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
-        let delegation_manager  = DelegationManager::new(delegation_manager, self.eth.http_provider.clone());
-
-        let call = delegation_manager.initialize(admin_address, pauser_registry.address().clone(), U256::ZERO, U256::ZERO, vec![], vec![]).await?;
-        let res = proxy_admin.upgradeAndCall(proxy_admin, delegation_manager, call).send().await?.get_receipt().await?;
+        let pauser_registry =
+            PauserRegistry::deploy(http_provider.clone(), vec![], admin_address).await?;
+        let delegation_manager = EmptyContract::deploy(http_provider.clone())
+            .await?
+            .address()
+            .clone();
+        let delegation_manager = TransparentUpgradeableProxy::deploy(
+            http_provider.clone(),
+            delegation_manager,
+            admin_address.clone(),
+            Default::default(),
+        )
+        .await?;
+        let delegation_manager =
+            DelegationManager::new(delegation_manager.address().clone(), http_provider.clone());
+        let call = dbg!(delegation_manager
+            .initialize(
+                admin_address.clone(),
+                pauser_registry.address().clone(),
+                U256::ZERO,
+                U256::ZERO,
+                vec![],
+                vec![]
+            )
+            .into_transaction_request());
+        let upgrade_and_call = proxy_admin.upgradeAndCall(
+            admin_address,
+            delegation_manager.address().clone(),
+            call.input.input.unwrap(),
+        );
+        let _call = upgrade_and_call.call().await?;
+        let res = upgrade_and_call.send().await?.get_receipt().await?;
 
         println!("{:?}", res);
 
         Ok(delegation_manager.address().clone())
-
     }
 
-    pub async fn register_operator(&self, delegation_manager_address: Option<Address>) -> Result<String> {
-        let delegation_manager_address = delegation_manager_address.unwrap_or_else(|| self.config.core.addresses.delegation);
+    pub async fn register_operator(
+        &self,
+        delegation_manager_address: Option<Address>,
+    ) -> Result<String> {
+        let delegation_manager_address =
+            delegation_manager_address.unwrap_or_else(|| self.config.core.addresses.delegation);
         let delegation_code = self
             .eth
             .http_provider
             .get_code_at(delegation_manager_address)
             .await?;
 
-
         if delegation_code.is_empty() {
-            return Err(EthClientError::ContractNotDeployed(delegation_manager_address)).context("Eigenlayer delegation is not deployed")?;
+            return Err(EthClientError::ContractNotDeployed(
+                delegation_manager_address,
+            ))
+            .context("Eigenlayer delegation is not deployed")?;
         }
 
-        let contract = DelegationManager::new(
-            delegation_manager_address,
-            self.eth.http_provider.clone(),
-        );
+        let contract =
+            DelegationManager::new(delegation_manager_address, self.eth.http_provider.clone());
 
         let operator = OperatorDetails {
             __deprecated_earningsReceiver: self.eth.address(),

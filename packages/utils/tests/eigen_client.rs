@@ -23,10 +23,7 @@ async fn register_operator() {
         // http_endpoint: "http://localhost:8545".to_string(),
         ws_endpoint: anvil.ws_endpoint().to_string(),
         http_endpoint: anvil.endpoint().to_string(),
-        mnemonic: Some(
-            "work man father plunge mystery proud hollow address reunion sauce theory bonus"
-                .to_string(),
-        ),
+        mnemonic: Some("test test test test test test test test test test test junk".to_owned()),
     };
 
     let builder = EthClientBuilder::new(config);
@@ -56,9 +53,15 @@ async fn register_operator() {
 
     let eigen_client = EigenClient::new(eth_client, eigen_config);
 
-    let delegation_manager = eigen_client.deploy_delegation_manager().await.unwrap();
+    let delegation_manager = eigen_client
+        .deploy_delegation_manager(anvil.endpoint())
+        .await
+        .unwrap();
 
     println!("Delegation Manager: {:?}", delegation_manager);
 
-    eigen_client.register_operator(Some(delegation_manager)).await.unwrap();
+    eigen_client
+        .register_operator(Some(delegation_manager))
+        .await
+        .unwrap();
 }
