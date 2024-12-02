@@ -28,6 +28,20 @@ sol!(
     "../../contracts/abi/eigenlayer-middleware/EmptyContract.json"
 );
 
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    TransparentUpgradeableProxy,
+    "../../contracts/abi/eigenlayer-middleware/TransparentUpgradeableProxy.json"
+);
+
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    ProxyAdmin,
+    "../../contracts/abi/eigenlayer-middleware/ProxyAdmin.json"
+);
+
 impl EigenClient {
     pub fn new(eth: EthSigningClient, config: EigenClientConfig) -> Self {
         Self {
@@ -37,18 +51,25 @@ impl EigenClient {
     }
 
     pub async fn deploy_delegation_manager(&self) -> Result<Address> {
-        let strategy_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
-        let slasher = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
-        let pod_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
+        let admin = ProxyAdmin::deploy(self.eth.http_provider.clone()).await?.address().clone();
 
-        let contract = DelegationManager::deploy(
+        let strategy_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
+        let strategy_manager = TransparentUpgradeableProxy::deploy(self.eth.http_provider.clone(), strategy_manager, admin.clone(), b"".into()).await?.address().clone();
+        let slasher = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
+        let slasher = TransparentUpgradeableProxy::deploy(self.eth.http_provider.clone(), slasher, admin.clone(), b"".into()).await?.address().clone();
+        let pod_manager = EmptyContract::deploy(self.eth.http_provider.clone()).await?.address().clone();
+        let pod_manager = TransparentUpgradeableProxy::deploy(self.eth.http_provider.clone(), pod_manager, admin.clone(), b"".into()).await?.address().clone();
+
+        let res = DelegationManager::deploy(
             self.eth.http_provider.clone(), 
             strategy_manager, 
             slasher, 
             pod_manager, 
         ).await?;
 
-        Ok(contract.address().clone())
+        println!("{:?}", res);
+
+        Ok(res.address().clone())
 
     }
 

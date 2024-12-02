@@ -31,3 +31,6 @@ cp "$middleware_out_path/EigenPodManager.sol/EigenPodManager.json" "$middleware_
 cp "$middleware_out_path/IStrategy.sol/IStrategy.json" "$middleware_dest_abi_path/IStrategy.json"
 cp "$middleware_out_path/AVSDirectory.sol/AVSDirectory.json" "$middleware_dest_abi_path/AVSDirectory.json"
 cp "$middleware_out_path/IRegistryCoordinator.sol/IRegistryCoordinator.json" "$middleware_dest_abi_path/IRegistryCoordinator.json"
+cp "$middleware_out_path/EmptyContract.sol/EmptyContract.json" "$middleware_dest_abi_path/EmptyContract.json"
+cp "$middleware_out_path/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json" "$middleware_dest_abi_path/TransparentUpgradeableProxy.json"
+cp "$middleware_out_path/ProxyAdmin.sol/ProxyAdmin.json" "$middleware_dest_abi_path/ProxyAdmin.json"
