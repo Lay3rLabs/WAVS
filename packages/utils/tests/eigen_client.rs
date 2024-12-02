@@ -24,7 +24,7 @@ async fn register_operator() {
         ws_endpoint: anvil.ws_endpoint().to_string(),
         http_endpoint: anvil.endpoint().to_string(),
         mnemonic: Some(
-            "work man father plunge mystery proud hollow address reunion sauce theory bonus"
+            "test test test test test test test test test test test junk"
                 .to_string(),
         ),
     };

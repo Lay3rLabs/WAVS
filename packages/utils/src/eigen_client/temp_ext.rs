@@ -12,6 +12,13 @@ use alloy::{
 use super::*;
 use anyhow::{Context, Result};
 
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    AvsDirectory,
+    "../../out/AvsDirectory.sol/AvsDirectory.json"
+);
+
 impl EigenClient {
     pub async fn deploy_core_contracts(&self) -> Result<()> {
         //let pauser_registry = PauserRegistry::deploy(self.eth.http_provider.clone(), vec![], admin_address).await?;
