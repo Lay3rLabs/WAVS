@@ -4,7 +4,7 @@ use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySig
 use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
 use serde::{Deserialize, Serialize};
-use utils::eth_client::{EthClientBuilder, EthClientConfig, EthClientError, EthSigningClient};
+use utils::{error::EthClientError, eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient}};
 
 use crate::args::CliArgs;
 
@@ -59,7 +59,8 @@ impl Config {
     pub async fn signing_client(&self) -> Result<EthSigningClient> {
         let endpoint = self.endpoint.clone();
         let mnemonic = self.mnemonic.clone();
-        let eth_client = EthClientConfig { endpoint, mnemonic };
+        // FIXME: this is a temporary workaround since we now have two endpoints, needs to be updated in config
+        let eth_client = EthClientConfig { ws_endpoint: endpoint.clone(), http_endpoint: endpoint, mnemonic };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)
     }

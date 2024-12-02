@@ -150,13 +150,13 @@ impl Config {
         #[derive(Clone, Debug, Serialize, Deserialize, Default)]
         struct ConfigOverride {
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub rpc_endpoint: Option<String>,
+            pub http_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             pub ws_endpoint: Option<String>,
         }
 
         let config_override = ConfigOverride {
-            rpc_endpoint: self.chain_config_override.rpc_endpoint.clone(),
+            http_endpoint: self.chain_config_override.http_endpoint.clone(),
             ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
         };
 
@@ -200,7 +200,7 @@ pub struct WavsCosmosChainConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WavsEthereumChainConfig {
     pub ws_endpoint: String,
-    pub rpc_endpoint: String,
+    pub http_endpoint: String,
 }
 
 impl WavsCosmosChainConfig {
@@ -236,7 +236,8 @@ impl From<WavsCosmosChainConfig> for ChainConfig {
 impl From<WavsEthereumChainConfig> for EthClientConfig {
     fn from(config: WavsEthereumChainConfig) -> Self {
         Self {
-            endpoint: config.ws_endpoint,
+            ws_endpoint: config.ws_endpoint,
+            http_endpoint: config.http_endpoint,
             mnemonic: None,
         }
     }

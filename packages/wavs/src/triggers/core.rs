@@ -167,7 +167,7 @@ impl CoreTriggerManager {
             tracing::debug!("Trigger Manager for Ethereum chain started");
 
             let subscribtion = query_client
-                .provider
+                .ws_provider
                 .subscribe_blocks()
                 .await
                 .map_err(|e| TriggerError::Ethereum(e.into()))?;

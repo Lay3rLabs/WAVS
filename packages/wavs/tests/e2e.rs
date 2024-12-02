@@ -5,7 +5,6 @@
 mod e2e {
     use std::{path::PathBuf, sync::Arc, time::Duration};
 
-    use alloy::node_bindings::Anvil;
     use anyhow::{bail, Context, Result};
     use lavs_apis::{
         events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
@@ -14,7 +13,6 @@ mod e2e {
     };
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
-    use utils::eth_client::EthClientConfig;
     use wavs::{
         apis::{dispatcher::AllowedHostPermission, ChainKind},
         config::Config,
@@ -138,28 +136,9 @@ mod e2e {
         wavs_handle.join().unwrap();
     }
 
-    async fn run_tests_ethereum(_http_client: HttpClient, config: Config, _wasm_digest: Digest) {
-        let chain_config = config.ethereum_chain_config().unwrap();
-
-        let deployments_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("deployments");
-
-        let core_deployment_data = tokio::fs::read_to_string(
-            deployments_dir
-            .join("core")
-            .join("31337.json")
-        ).await.unwrap();
-
-        let hello_world_deployment_data = tokio::fs::read_to_string(
-            deployments_dir
-            .join("hello-world")
-            .join("31337.json")
-        ).await.unwrap();
-
+    async fn run_tests_ethereum(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
+        // TODO - depends on eigen_client tests first
+        //let chain_config = config.ethereum_chain_config().unwrap();
 
         tracing::info!("Running e2e ethereum tests");
     }

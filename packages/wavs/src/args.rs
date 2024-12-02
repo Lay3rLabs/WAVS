@@ -92,7 +92,7 @@ pub struct OptionalWavsChainConfig {
     /// To override the chosen eth chain's rpc_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc_endpoint: Option<String>,
+    pub http_endpoint: Option<String>,
     /// To override the chosen layer chain's chain_id
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]

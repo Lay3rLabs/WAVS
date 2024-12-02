@@ -2,26 +2,31 @@ use std::sync::Arc;
 
 use alloy::{
     network::EthereumWallet,
+    primitives::Address,
     providers::{Identity, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     signers::{
         k256::ecdsa::SigningKey,
         local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
     },
+    transports::http::{Client, Http},
 };
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+
+use crate::error::EthClientError;
 
 #[derive(Clone)]
 pub struct EthQueryClient {
-    pub provider: Arc<RootProvider<PubSubFrontend>>,
+    pub ws_provider: RootProvider<PubSubFrontend>,
+    pub http_provider: RootProvider<Http<Client>>,
 }
 
 #[derive(Clone)]
 pub struct EthSigningClient {
-    pub provider: Arc<RootProvider<PubSubFrontend>>,
+    pub ws_provider: RootProvider<PubSubFrontend>,
+    pub http_provider: RootProvider<Http<Client>>,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
     pub wallet: Arc<EthereumWallet>,
@@ -32,32 +37,48 @@ pub struct EthSigningClient {
     pub signer: Arc<LocalSigner<SigningKey>>,
 }
 
+impl EthSigningClient {
+    pub fn address(&self) -> Address {
+        self.signer.address()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EthClientConfig {
-    pub endpoint: String,
+    pub ws_endpoint: String,
+    pub http_endpoint: String,
     pub mnemonic: Option<String>,
 }
 
 pub struct EthClientBuilder {
     pub config: EthClientConfig,
-    pub provider_builder: ProviderBuilder<Identity, Identity>,
+    pub ws_provider_builder: ProviderBuilder<Identity, Identity>,
+    pub http_provider_builder: ProviderBuilder<Identity, Identity>,
 }
 
 impl EthClientBuilder {
     pub fn new(config: EthClientConfig) -> Self {
-        let provider_builder = ProviderBuilder::new();
+        let ws_provider_builder = ProviderBuilder::new();
+        let http_provider_builder = ProviderBuilder::new();
         Self {
             config,
-            provider_builder,
+            ws_provider_builder,
+            http_provider_builder,
         }
     }
 
     pub async fn build_query(self) -> Result<EthQueryClient> {
-        let ws = WsConnect::new(self.config.endpoint);
+        let ws = WsConnect::new(self.config.ws_endpoint);
+        let ws_provider = self.ws_provider_builder.on_ws(ws).await?;
 
-        let provider = Arc::new(self.provider_builder.on_ws(ws).await?);
+        let http_provider = self
+            .http_provider_builder
+            .on_http(self.config.http_endpoint.parse()?);
 
-        Ok(EthQueryClient { provider })
+        Ok(EthQueryClient {
+            ws_provider,
+            http_provider,
+        })
     }
 
     pub async fn build_signing(mut self) -> Result<EthSigningClient> {
@@ -66,7 +87,8 @@ impl EthClientBuilder {
             .mnemonic
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
-        let provider = self.build_query().await?.provider;
+
+        let query_client = self.build_query().await?;
 
         let signer = MnemonicBuilder::<English>::default()
             .phrase(mnemonic)
@@ -75,15 +97,10 @@ impl EthClientBuilder {
         let wallet = Arc::new(signer.clone().into());
 
         Ok(EthSigningClient {
-            provider,
+            ws_provider: query_client.ws_provider,
+            http_provider: query_client.http_provider,
             wallet,
             signer: Arc::new(signer),
         })
     }
-}
-
-#[derive(Debug, Error)]
-pub enum EthClientError {
-    #[error("Missing mnemonic")]
-    MissingMnemonic,
 }

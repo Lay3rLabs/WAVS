@@ -14,8 +14,8 @@ tracing = { workspace = true }
 alloy = { workspace = true } 
 thiserror = { workspace = true } 
 futures = { workspace = true }
-eigen-utils = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
 alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
+serde_json = { workspace = true }

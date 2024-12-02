@@ -72,4 +72,4 @@ faucet_endpoint = "https://faucet.demo.layer.xyz"
 [chains.local-eth]
 chain_kind = "ethereum"
 ws_endpoint = "ws://localhost:8545"
-rpc_endpoint = "http://localhost:8545"
+http_endpoint = "http://localhost:8545"
