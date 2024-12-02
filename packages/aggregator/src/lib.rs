@@ -1,3 +1,4 @@
+pub mod alloy_generated_types;
 pub mod args;
 pub mod config;
 pub mod context;
