@@ -7,6 +7,7 @@ resolver = "2"
 edition = "2021"
 version = "0.2.0"
 license = "MIT"
+authors = ["Lay3r Labs Team"]
 repository = "https://github.com/Lay3rLabs/wasmatic"
 rust-version = "1.80.0"
 
@@ -55,4 +56,8 @@ url = "2.5.3"
 bip39 = "2.0.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
+
 alloy = { version = "0.6.4", features = ["full", "signer-mnemonic"] }
+
+wavs = { path = "packages/wavs" }
+utils = { path = "packages/utils" }

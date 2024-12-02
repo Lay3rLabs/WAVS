@@ -1,8 +1,32 @@
 [package]
 name = "aggregator"
 description = "Lay3r Labs WAVS Aggregator Server"
-edition = "2021"
-version = "0.2.0-rc1"
-authors = ["Lay3r Labs Team"]
-rust-version = "1.80.0"
-repository = "https://github.com/Lay3rLabs/wasmatic"
+edition.workspace = true
+version = "0.1.0-rc1"
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+axum = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }
+clap = { workspace = true }
+dotenvy = { workspace = true }
+ctrlc = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+figment = { workspace = true}
+dirs = { workspace = true }
+thiserror = { workspace = true }
+tower-http = { workspace = true }
+wildmatch = { workspace = true }
+alloy = { workspace = true }
+
+wavs = { workspace = true }
+utils = { workspace = true }
+
+[dev-dependencies]
+temp-env = { workspace = true }
+alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
