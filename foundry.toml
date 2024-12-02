@@ -1,4 +1,5 @@
 [profile.default]
+libs = ["lib", "lib/eigenlayer-middleware/lib"]
 remappings = [
     "@eigenlayer/contracts=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts",
     "@eigenlayer/middleware=lib/eigenlayer-middleware",
