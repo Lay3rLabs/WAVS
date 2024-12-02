@@ -114,7 +114,11 @@ impl EigenClient {
         )
         .await?;
 
+
         // FIXME: why is owner 0000000?
+        // according to OwnableUpgradeable (the base contract providing owner()),
+        // "By default, the owner account will be the one that deploys the contract"
+        // so... why is `deploy()` not setting it to the wallet address??
         println!("wallet address: {}", self.eth.address());
         println!("owner before: {}", delegation_manager_impl.owner().call().await?._0);
         let resp = delegation_manager_impl.transferOwnership(proxies.admin.address().clone()).send().await?;
