@@ -39,11 +39,11 @@ _Tip!_: For setting env vars, all the tooling is `.env` file aware, from whereve
     - set the mnemonic as `LOCAL_MNEMONIC` env var
     - tap the faucet: `cargo run -- --target=local faucet tap`
     - more info here: https://github.com/Lay3rLabs/my-layer/blob/main/localnode/DEMO.md#set-up-wallet
-4. Set this wallet mnemonic in the `MATIC_E2E_MNEMONIC` env var
+4. Set this wallet mnemonic in the `WAVS_E2E_MNEMONIC` env var
 5. In `avs-toolkit`, under the `tools/cli` directory, deploy the contracts
     - build the contracts: `(cd ../.. && ./scripts/optimizer.sh)`
         - success is if you see a final output of `.wasm` files with their hash
     - deploy the contracts: `cargo run -- --target=local deploy -m verifier-simple contracts --operators wasmatic`
-    - take the LOCAL_TASK_QUEUE_ADDRESS value, and set it in the `MATIC_E2E_TASK_QUEUE_ADDRESS` env var
+    - take the LOCAL_TASK_QUEUE_ADDRESS value, and set it in the `WAVS_E2E_TASK_QUEUE_ADDRESS` env var
 6. Kill the localnode's wasmatic instance to make sure we're hitting the test instance only: `docker stop localnode-wasmatic-1`
 7. In this repo, run the tests: `cargo test --features e2e_tests`

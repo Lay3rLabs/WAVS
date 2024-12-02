@@ -1,7 +1,7 @@
 // Currently - e2e tests are disabled by default.
 // they also assume some environment variables are set:
-// MATIC_E2E_SEED_PHRASE: seed phrase for client running the tests
-// MATIC_E2E_TASK_QUEUE_ADDR: address of the task queue contract
+// WAVS_E2E_SEED_PHRASE: seed phrase for client running the tests
+// WAVS_E2E_TASK_QUEUE_ADDR: address of the task queue contract
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
@@ -99,10 +99,10 @@ mod e2e {
         .unwrap();
 
         // get all env vars
-        let seed_phrase = std::env::var("MATIC_E2E_MNEMONIC").expect("MATIC_E2E_MNEMONIC not set");
-        let task_queue_addr = std::env::var("MATIC_E2E_TASK_QUEUE_ADDRESS")
-            .expect("MATIC_E2E_TASK_QUEUE_ADDRESS not set");
-        let wasm_digest = std::env::var("MATIC_E2E_WASM_DIGEST");
+        let seed_phrase = std::env::var("WAVS_E2E_MNEMONIC").expect("WAVS_E2E_MNEMONIC not set");
+        let task_queue_addr = std::env::var("WAVS_E2E_TASK_QUEUE_ADDRESS")
+            .expect("WAVS_E2E_TASK_QUEUE_ADDRESS not set");
+        let wasm_digest = std::env::var("WAVS_E2E_WASM_DIGEST");
 
         // if wasm_digest isn't set, upload our wasm blob for square
         let wasm_digest: Digest = match wasm_digest {
@@ -115,7 +115,7 @@ mod e2e {
 
         tracing::info!("Wasm digest: {}", wasm_digest);
 
-        let chain_config = config.chain_config().unwrap();
+        let chain_config: ChainConfig = config.layer_chain_config().unwrap().into();
 
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
         let signing_client = SigningClient::new(chain_config.clone(), key_signer)

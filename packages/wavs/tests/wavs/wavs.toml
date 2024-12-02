@@ -2,17 +2,25 @@
 
 log_level = ["info", "wavs=debug", "just_to_confirm_test=debug"]
 
-chain = "local"
+layer_chain = "local-layer"
+chain = "local-eth"
 
-[chains.local]
+[chains.local-layer]
+chain_kind = "cosmos"
 chain_id = "slay3r-local"
 rpc_endpoint = "http://localhost:26657"
 grpc_endpoint = "http://localhost:9090"
 gas_price = 0.025
 
 [chains.testnet]
+chain_kind = "cosmos"
 chain_id = "layer-permissionless-3"
 rpc_endpoint = "https://rpc.layer-p.net"
 grpc_endpoint = "https://grpc.layer-p.net:443"
 gas_price = 0.025
 gas_denom = "uperm"
+
+[chains.local-eth]
+chain_kind = "ethereum"
+ws_endpoint = "ws://localhost:8545"
+rpc_endpoint = "http://localhost:8545"

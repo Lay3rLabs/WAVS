@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -34,8 +34,11 @@ pub struct Config {
     pub wasm_lru_size: usize,
     pub wasm_threads: usize,
 
-    /// The chosen chain name
-    pub chain: String,
+    /// The chosen layer chain name
+    pub layer_chain: Option<String>,
+
+    /// The chosen ethereum chain name
+    pub chain: Option<String>,
 
     /// A lookup of chain configs, keyed by a "chain name"
     pub chains: HashMap<String, WavsChainConfig>,
@@ -54,7 +57,8 @@ impl Default for Config {
             host: "localhost".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
-            chain: String::new(),
+            layer_chain: None,
+            chain: None,
             chains: HashMap::new(),
             chain_config_override: OptionalWavsChainConfig::default(),
             wasm_lru_size: 20,
@@ -64,40 +68,127 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn wavs_chain_config(&self) -> Result<WavsChainConfig> {
-        let config: WavsChainConfig = Figment::new()
-            .merge(figment::providers::Serialized::defaults(
-                self.chains
-                    .get(&self.chain)
-                    .context(format!("No chain config found for \"{}\"", self.chain))?,
-            ))
-            .merge(figment::providers::Serialized::defaults(
-                &self.chain_config_override,
-            ))
+    pub fn layer_chain_config(&self) -> Result<WavsCosmosChainConfig> {
+        let chain_name = self.layer_chain.as_deref();
+        self.try_layer_chain_config()?.ok_or(anyhow!(
+            "No chain config found for \"{}\"",
+            chain_name.unwrap_or_default()
+        ))
+    }
+    pub fn try_layer_chain_config(&self) -> Result<Option<WavsCosmosChainConfig>> {
+        let chain_name = self.layer_chain.as_deref();
+
+        let config = match chain_name.and_then(|chain_name| self.chains.get(chain_name)) {
+            None => return Ok(None),
+            Some(WavsChainConfig::Ethereum(_)) => {
+                bail!("Expected Cosmos chain config, found Ethereum")
+            }
+            Some(WavsChainConfig::Cosmos(config)) => config,
+        };
+
+        // The optional overrides use a prefix to distinguish between layer and ethereum fields
+        // in order to cleanly merge it with our final, real chain config
+        // we need to strip that prefix in order for the fields to match
+        #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+        struct ConfigOverride {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub chain_id: Option<ChainId>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub grpc_endpoint: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub gas_price: Option<f32>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub gas_denom: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub faucet_endpoint: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub submission_mnemonic: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub rpc_endpoint: Option<String>,
+        }
+
+        let config_override = ConfigOverride {
+            chain_id: self.chain_config_override.layer_chain_id.clone(),
+            grpc_endpoint: self.chain_config_override.layer_grpc_endpoint.clone(),
+            gas_price: self.chain_config_override.layer_gas_price,
+            gas_denom: self.chain_config_override.layer_gas_denom.clone(),
+            faucet_endpoint: self.chain_config_override.layer_faucet_endpoint.clone(),
+            submission_mnemonic: self.chain_config_override.layer_submission_mnemonic.clone(),
+            rpc_endpoint: self.chain_config_override.layer_rpc_endpoint.clone(),
+        };
+
+        let config_merged = Figment::new()
+            .merge(figment::providers::Serialized::defaults(config))
+            .merge(figment::providers::Serialized::defaults(config_override))
             .extract()?;
 
-        Ok(config)
+        Ok(Some(config_merged))
     }
 
-    pub fn chain_config(&self) -> Result<ChainConfig> {
-        self.wavs_chain_config().map(ChainConfig::from)
+    pub fn ethereum_chain_config(&self) -> Result<WavsEthereumChainConfig> {
+        let chain_name = self.chain.as_deref();
+        self.try_ethereum_chain_config()?.ok_or(anyhow!(
+            "No chain config found for \"{}\"",
+            chain_name.unwrap_or_default()
+        ))
+    }
+    pub fn try_ethereum_chain_config(&self) -> Result<Option<WavsEthereumChainConfig>> {
+        let chain_name = self.chain.as_deref();
+
+        let config = match chain_name.and_then(|chain_name| self.chains.get(chain_name)) {
+            None => return Ok(None),
+            Some(WavsChainConfig::Cosmos(_)) => {
+                bail!("Expected Ethereum chain config, found Cosmos")
+            }
+            Some(WavsChainConfig::Ethereum(config)) => config,
+        };
+
+        // The optional overrides use a prefix to distinguish between layer and ethereum fields
+        // in order to cleanly merge it with our final, real chain config
+        // we need to strip that prefix in order for the fields to match
+        #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+        struct ConfigOverride {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub rpc_endpoint: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub ws_endpoint: Option<String>,
+        }
+
+        let config_override = ConfigOverride {
+            rpc_endpoint: self.chain_config_override.rpc_endpoint.clone(),
+            ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
+        };
+
+        let config_merged = Figment::new()
+            .merge(figment::providers::Serialized::defaults(config))
+            .merge(figment::providers::Serialized::defaults(config_override))
+            .extract()?;
+
+        Ok(Some(config_merged))
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WavsChainConfig {
+#[serde(rename_all = "snake_case", tag = "chain_kind")]
+pub enum WavsChainConfig {
+    Cosmos(WavsCosmosChainConfig),
+    Ethereum(WavsEthereumChainConfig),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WavsCosmosChainConfig {
     pub chain_id: ChainId,
     pub rpc_endpoint: String,
     pub grpc_endpoint: String,
     /// not micro-units, e.g. 0.025 would be a typical value
     /// if not specified, defaults to 0.025
-    #[serde(default = "WavsChainConfig::default_gas_price")]
+    #[serde(default = "WavsCosmosChainConfig::default_gas_price")]
     pub gas_price: f32,
     /// if not specified, defaults to "uslay"
-    #[serde(default = "WavsChainConfig::default_gas_denom")]
+    #[serde(default = "WavsCosmosChainConfig::default_gas_denom")]
     pub gas_denom: String,
     /// if not specified, defaults to "layer"
-    #[serde(default = "WavsChainConfig::default_bech32_prefix")]
+    #[serde(default = "WavsCosmosChainConfig::default_bech32_prefix")]
     pub bech32_prefix: String,
     /// optional faucet endpoint for this chain
     pub faucet_endpoint: Option<String>,
@@ -105,7 +196,13 @@ pub struct WavsChainConfig {
     pub submission_mnemonic: Option<String>,
 }
 
-impl WavsChainConfig {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WavsEthereumChainConfig {
+    pub ws_endpoint: String,
+    pub rpc_endpoint: String,
+}
+
+impl WavsCosmosChainConfig {
     const fn default_gas_price() -> f32 {
         0.025
     }
@@ -119,8 +216,8 @@ impl WavsChainConfig {
     }
 }
 
-impl From<WavsChainConfig> for ChainConfig {
-    fn from(config: WavsChainConfig) -> Self {
+impl From<WavsCosmosChainConfig> for ChainConfig {
+    fn from(config: WavsCosmosChainConfig) -> Self {
         Self {
             chain_id: config.chain_id,
             rpc_endpoint: config.rpc_endpoint,
@@ -157,7 +254,10 @@ impl ConfigBuilder {
 
     pub fn merge_cli_env_args(&self) -> Result<CliArgs> {
         let cli_args: CliArgs = Figment::new()
-            .merge(figment::providers::Env::prefixed("MATIC_"))
+            .merge(figment::providers::Env::prefixed(&format!(
+                "{}_",
+                CliArgs::ENV_VAR_PREFIX
+            )))
             .merge(figment::providers::Serialized::defaults(&self.cli_args))
             .extract()?;
 
