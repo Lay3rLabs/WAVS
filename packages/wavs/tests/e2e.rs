@@ -141,20 +141,25 @@ mod e2e {
     async fn run_tests_ethereum(_http_client: HttpClient, config: Config, _wasm_digest: Digest) {
         let chain_config = config.ethereum_chain_config().unwrap();
 
-        let filepath = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        let deployments_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .parent()
             .unwrap()
-            .join("deployments")
+            .join("deployments");
+
+        let core_deployment_data = tokio::fs::read_to_string(
+            deployments_dir
+            .join("core")
+            .join("31337.json")
+        ).await.unwrap();
+
+        let hello_world_deployment_data = tokio::fs::read_to_string(
+            deployments_dir
             .join("hello-world")
-            .join("31337.json");
+            .join("31337.json")
+        ).await.unwrap();
 
-        println!("Filepath: {:?}", filepath);
-
-        let avs_deployment_data = tokio::fs::read_to_string(filepath).await.unwrap();
-
-        println!("AVS deployment data: {}", avs_deployment_data);
 
         tracing::info!("Running e2e ethereum tests");
     }
