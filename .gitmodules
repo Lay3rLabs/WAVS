@@ -1,6 +1,3 @@
-[submodule "lib/eigenlayer-contracts"]
-	path = lib/eigenlayer-contracts
-	url = git@github.com:Layr-Labs/eigenlayer-contracts.git
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std.git
