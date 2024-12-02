@@ -1,5 +1,7 @@
 pub mod config;
+pub mod temp_ext;
 use std::sync::Arc;
+use temp_ext::*;
 
 use crate::{error::EthClientError, eth_client::EthSigningClient};
 use alloy::{
@@ -104,7 +106,7 @@ impl EigenClient {
         let _call = upgrade_and_call.call().await?;
         let res = upgrade_and_call.send().await?.get_receipt().await?;
 
-        println!("{:?}", res);
+        // println!("{:?}", res);
 
         Ok(delegation_manager.address().clone())
     }
