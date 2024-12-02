@@ -2,7 +2,7 @@ pub mod config;
 use std::sync::Arc;
 
 use crate::{error::EthClientError, eth_client::EthSigningClient};
-use alloy::{rpc::types::TransactionReceipt, sol};
+use alloy::{providers::Provider, rpc::types::TransactionReceipt, sol};
 use config::EigenClientConfig;
 //use eigen_utils::delegationmanager::{DelegationManager::{self}, IDelegationManager::OperatorDetails};
 use anyhow::Result;
@@ -30,6 +30,16 @@ impl EigenClient {
     }
 
     pub async fn register_operator(&self) -> Result<String> {
+        let delegation_code = self
+            .eth
+            .http_provider
+            .get_code_at(self.config.core.addresses.delegation)
+            .await?;
+        anyhow::ensure!(
+            !delegation_code.is_empty(),
+            "Eigenlayer delegation is not deployed"
+        );
+
         let contract = DelegationManager::new(
             self.config.core.addresses.delegation,
             self.eth.http_provider.clone(),
@@ -41,10 +51,9 @@ impl EigenClient {
             stakerOptOutWindowBlocks: 0,
         };
         let contract_call = contract.registerAsOperator(operator, "".to_string());
-
         let binding_tx = contract_call.gas(300000).send().await?;
 
-        let receipt: TransactionReceipt = binding_tx.get_receipt().await?;
+        let receipt: TransactionReceipt = dbg!(binding_tx.get_receipt().await?);
 
         let tx_status = receipt.status();
         if tx_status {
