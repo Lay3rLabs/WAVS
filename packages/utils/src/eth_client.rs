@@ -1,9 +1,15 @@
 use std::sync::Arc;
 
 use alloy::{
-    network::EthereumWallet,
+    network::{Ethereum, EthereumWallet},
     primitives::Address,
-    providers::{Identity, ProviderBuilder, RootProvider, WsConnect},
+    providers::{
+        fillers::{
+            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+            WalletFiller,
+        },
+        Identity, ProviderBuilder, RootProvider, WsConnect,
+    },
     pubsub::PubSubFrontend,
     signers::{
         k256::ecdsa::SigningKey,
@@ -23,10 +29,35 @@ pub struct EthQueryClient {
     pub http_provider: RootProvider<Http<Client>>,
 }
 
+type WsSigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<PubSubFrontend>,
+    PubSubFrontend,
+    Ethereum,
+>;
+type HttpSigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<Http<Client>>,
+    Http<Client>,
+    Ethereum,
+>;
+
 #[derive(Clone)]
 pub struct EthSigningClient {
-    pub ws_provider: RootProvider<PubSubFrontend>,
-    pub http_provider: RootProvider<Http<Client>>,
+    pub ws_provider: WsSigningProvider,
+    pub http_provider: HttpSigningProvider,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
     pub wallet: Arc<EthereumWallet>,
@@ -88,18 +119,30 @@ impl EthClientBuilder {
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
 
-        let query_client = self.build_query().await?;
-
         let signer = MnemonicBuilder::<English>::default()
             .phrase(mnemonic)
             .build()?;
 
-        let wallet = Arc::new(signer.clone().into());
+        let wallet: EthereumWallet = signer.clone().into();
+
+        let ws = WsConnect::new(self.config.ws_endpoint);
+        let ws_provider = self
+            .ws_provider_builder
+            .with_recommended_fillers()
+            .wallet(wallet.clone())
+            .on_ws(ws)
+            .await?;
+
+        let http_provider = self
+            .http_provider_builder
+            .with_recommended_fillers()
+            .wallet(wallet.clone())
+            .on_http(self.config.http_endpoint.parse()?);
 
         Ok(EthSigningClient {
-            ws_provider: query_client.ws_provider,
-            http_provider: query_client.http_provider,
-            wallet,
+            ws_provider,
+            http_provider,
+            wallet: Arc::new(wallet),
             signer: Arc::new(signer),
         })
     }

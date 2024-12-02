@@ -56,9 +56,11 @@ async fn register_operator() {
 
     let eigen_client = EigenClient::new(eth_client, eigen_config);
 
-    let delegation_manager = eigen_client.deploy_delegation_manager().await.unwrap();
+    eigen_client.deploy_core_contracts().await.unwrap();
 
-    println!("Delegation Manager: {:?}", delegation_manager);
+    // let delegation_manager = eigen_client.deploy_delegation_manager().await.unwrap();
 
-    eigen_client.register_operator(Some(delegation_manager)).await.unwrap();
+    // println!("Delegation Manager: {:?}", delegation_manager);
+
+    // eigen_client.register_operator(Some(delegation_manager)).await.unwrap();
 }
