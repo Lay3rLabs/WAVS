@@ -15,6 +15,7 @@ use crate::{
         solidity_types::{
             hello_world::HelloWorldServiceManager,
             stake_registry::ECDSAStakeRegistry::{self, Quorum, StrategyParams},
+            token::IStrategy,
         },
     },
 };
@@ -37,12 +38,13 @@ impl HelloWorldClientBuilder {
         tracing::debug!("deployed token: {}", token.address());
         let strategy_factory =
             StrategyFactory::new(strategy_factory, self.eth.http_provider.clone());
-        let new_strategy = strategy_factory
+        let tx_hash = strategy_factory
             .deployNewStrategy(token.address().clone())
             .send()
             .await?
             .watch()
             .await?;
+
         tracing::debug!("new_strategy: {new_strategy:?}");
         Ok(SetupAddrs {
             token: token.address().clone(),
@@ -63,6 +65,11 @@ impl HelloWorldClientBuilder {
 
         // sanity check - we own the ProxyAdmin
         debug_assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
+
+        let strategy = IStrategy::new(
+            setup.quorum.strategies.first().as_ref().unwrap().strategy,
+            self.eth.http_provider.clone(),
+        );
 
         tracing::debug!("deploying ECDSA stake registry");
         let ecdsa_stake_registry_impl =
@@ -106,6 +113,11 @@ impl HelloWorldClientBuilder {
             .await?
             .watch()
             .await?;
+
+        tracing::debug!(
+            "underlying strategy token: {}",
+            strategy.underlyingToken().call().await?._0
+        );
 
         // Upgrade contracts
         Ok(HelloWorldClient {

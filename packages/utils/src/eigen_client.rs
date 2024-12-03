@@ -2,7 +2,10 @@ pub mod avs_deploy;
 pub mod avs_operator;
 pub mod config;
 pub mod solidity_types;
-use std::sync::Arc;
+use std::{
+    fmt::{self, Debug, Formatter},
+    sync::Arc,
+};
 
 use crate::eth_client::EthSigningClient;
 use config::CoreAVSAddresses;
@@ -10,6 +13,12 @@ use config::CoreAVSAddresses;
 #[derive(Clone)]
 pub struct EigenClient {
     pub eth: EthSigningClient,
+}
+
+impl Debug for EigenClient {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EigenClient").finish()
+    }
 }
 
 impl EigenClient {
