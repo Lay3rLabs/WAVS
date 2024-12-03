@@ -104,7 +104,7 @@ impl EigenClient {
     pub async fn deploy_core_contracts(&self) -> Result<()> {
         println!("wallet address: {}", self.eth.address());
 
-        let proxies = ProxyAddresses::new(&self.eth).await?;
+        let mut proxies = ProxyAddresses::new(&self.eth).await?;
 
         // sanity check - we own the ProxyAdmin
         assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
@@ -200,11 +200,13 @@ impl EigenClient {
         )
         .await?;
 
-        let strategy_beacon_impl = UpgradeableBeacon::deploy(
+        proxies.strategy_beacon = UpgradeableBeacon::deploy(
             self.eth.http_provider.clone(),
             base_strategy_impl.address().clone(),
         )
-        .await?;
+        .await?
+        .address()
+        .clone();
 
         // Upgrade Delegation Manager
         let upgrade_call = DelegationManager::initializeCall {
@@ -216,33 +218,150 @@ impl EigenClient {
             _strategies: Vec::new(),
         };
 
-        // let admin_slot:FixedBytes<32> = alloy::hex::decode("0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103")?.as_slice().try_into()?;
-        // let proxy_admin:[u8;32] = self.eth.http_provider.get_storage_at(proxies.delegation_manager.clone(), admin_slot.into()).await?
-        //     .to_be_bytes();
-        // let proxy_admin = &proxy_admin[12..];
-        // // println!("BP 6");
-        // let proxy_admin = Address::from_slice(proxy_admin);
-        // println!("proxy_admin from storage: {}", proxy_admin);
+        dbg!(
+            proxies
+                .admin
+                .upgradeAndCall(
+                    proxies.delegation_manager,
+                    delegation_manager_impl.address().clone(),
+                    upgrade_call.abi_encode().into(),
+                )
+                .send()
+                .await?
+                .watch()
+                .await?
+        );
 
-        proxies
-            .admin
-            .upgradeAndCall(
-                proxies.delegation_manager,
-                delegation_manager_impl.address().clone(),
-                upgrade_call.abi_encode().into(),
-            )
-            .send()
-            .await?
-            .watch()
-            .await?;
+        // Upgrade strategy manager
+        let upgrade_call = StrategyManager::initializeCall {
+            initialOwner: proxies.admin.address().clone(),
+            initialStrategyWhitelister: proxies.strategy_factory,
+            _pauserRegistry: proxies.pauser_registry,
+            initialPausedStatus: U256::ZERO,
+        };
 
-        // UPgrade strategy manager
-        // let upgrade_call = StrategyManager::initializeCall{
-        //     _delegationManager: proxies.delegation_manager.clone(),
-        //     _eigenPodManager: proxies.eigen_pod_manager.clone(),
-        //     _strategyBeacon: strategy_beacon_impl.address().clone(),
-        //     _strategies: Vec::new()
-        // };
+        dbg!(
+            proxies
+                .admin
+                .upgradeAndCall(
+                    proxies.strategy_manager,
+                    strategy_manager_impl.address().clone(),
+                    upgrade_call.abi_encode().into(),
+                )
+                .send()
+                .await?
+                .watch()
+                .await?
+        );
+
+        // Upgrade StrategyFactory
+        let upgrade_call = StrategyFactory::initializeCall {
+            _initialOwner: proxies.admin.address().clone(),
+            _pauserRegistry: proxies.pauser_registry,
+            _initialPausedStatus: U256::ZERO,
+            _strategyBeacon: proxies.strategy_beacon,
+        };
+
+        dbg!(
+            proxies
+                .admin
+                .upgradeAndCall(
+                    proxies.strategy_factory,
+                    strategy_factory_impl.address().clone(),
+                    upgrade_call.abi_encode().into(),
+                )
+                .send()
+                .await?
+                .watch()
+                .await?
+        );
+
+        // Upgrade EigenPodManager
+        let upgrade_call = EigenPodManager::initializeCall {
+            initialOwner: proxies.admin.address().clone(),
+            _pauserRegistry: proxies.pauser_registry,
+            _initPausedStatus: U256::ZERO,
+        };
+
+        dbg!(
+            proxies
+                .admin
+                .upgradeAndCall(
+                    proxies.eigen_pod_manager,
+                    eigen_pod_manager_impl.address().clone(),
+                    upgrade_call.abi_encode().into(),
+                )
+                .send()
+                .await?
+                .watch()
+                .await?
+        );
+
+        // Upgrade AVSDirectory
+        let upgrade_call = AVSDirectory::initializeCall {
+            initialOwner: proxies.admin.address().clone(),
+            _pauserRegistry: proxies.pauser_registry,
+            initialPausedStatus: U256::ZERO,
+        };
+
+        dbg!(
+            proxies
+                .admin
+                .upgradeAndCall(
+                    proxies.avs_directory,
+                    avs_directory_impl.address().clone(),
+                    upgrade_call.abi_encode().into(),
+                )
+                .send()
+                .await?
+                .watch()
+                .await?
+        );
+
+        // Upgrade RewardsCoordinator
+        let upgrade_call = RewardsCoordinator::initializeCall {
+            initialOwner: proxies.admin.address().clone(),
+            _pauserRegistry: proxies.pauser_registry,
+            initialPausedStatus: U256::ZERO,
+            _rewardsUpdater: Address::ZERO,
+            // TODO: set config
+            _activationDelay: Default::default(),
+            // TODO: set config
+            _defaultSplitBips: Default::default(),
+        };
+
+        dbg!(
+            proxies
+                .admin
+                .upgradeAndCall(
+                    proxies.rewards_coordinator,
+                    rewards_coordinator_impl.address().clone(),
+                    upgrade_call.abi_encode().into(),
+                )
+                .send()
+                .await?
+                .watch()
+                .await?
+        );
+
+        // Upgrade EigenPod
+        let upgrade_call = EigenPod::initializeCall {
+            _podOwner: proxies.eigen_pod_manager,
+        };
+
+        dbg!(
+            proxies
+                .admin
+                .upgradeAndCall(
+                    proxies.eigen_pod_beacon,
+                    eigen_pod_beacon_impl.address().clone(),
+                    upgrade_call.abi_encode().into(),
+                )
+                .send()
+                .await?
+                .watch()
+                .await?
+        );
 
         println!("SO FAR SO GOOD!!");
 
@@ -272,8 +391,9 @@ struct ProxyAddresses {
     pub eigen_pod_manager: Address,
     pub rewards_coordinator: Address,
     pub eigen_pod_beacon: Address,
-    pub pauser_registery: Address,
+    pub pauser_registry: Address,
     pub strategy_factory: Address,
+    pub strategy_beacon: Address,
 }
 
 type EmptyContractT = EmptyContractInstance<
@@ -365,9 +485,14 @@ impl ProxyAddresses {
                 ._0;
             assert_eq!(admin_address, proxy_admin_address);
 
-            // 3. check that we can use proxy admin to do admin stuff 
+            // 3. check that we can use proxy admin to do admin stuff
             println!("trying to upgrade proxy admin...");
-            let _ = proxy_admin.changeProxyAdmin(proxy.address().clone(), admin_address).send().await?.watch().await?;
+            let _ = proxy_admin
+                .changeProxyAdmin(proxy.address().clone(), admin_address)
+                .send()
+                .await?
+                .watch()
+                .await?;
             println!("SUCCESS!");
 
             Ok((empty_contract, proxy))
@@ -396,8 +521,10 @@ impl ProxyAddresses {
             eigen_pod_manager: setup_empty_proxy(eth, &admin).await?,
             rewards_coordinator: setup_empty_proxy(eth, &admin).await?,
             eigen_pod_beacon: setup_empty_proxy(eth, &admin).await?,
-            pauser_registery: setup_empty_proxy(eth, &admin).await?,
+            pauser_registry: setup_empty_proxy(eth, &admin).await?,
             strategy_factory: setup_empty_proxy(eth, &admin).await?,
+            // Initialized later
+            strategy_beacon: Address::ZERO,
             admin,
         })
     }
