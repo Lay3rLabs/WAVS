@@ -33,7 +33,17 @@ jobs:
             target/            
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
-  
+
+    #   # copies artifacts to a directory that can be used by deploy tests
+    #   - name: Prepare artifacts (wasm contracts)
+    #     run: bash ./scripts/collect_wasm.sh
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build solidity contracts
+        run: bash ./scripts/build_solidity.sh
+
       - name: Check compilation
         uses: actions-rs/cargo@v1
         with:
@@ -42,13 +52,6 @@ jobs:
           args: --workspace --locked --no-run
         env:
           RUST_BACKTRACE: 1
-
-    #   # copies artifacts to a directory that can be used by deploy tests
-    #   - name: Prepare artifacts (wasm contracts)
-    #     run: bash ./scripts/collect_wasm.sh
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -87,6 +90,12 @@ jobs:
             target/            
           key: ${{ runner.os }}-cargo-lint-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-lint-
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build solidity contracts
+        run: bash ./scripts/build_solidity.sh
   
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
