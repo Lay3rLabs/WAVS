@@ -25,6 +25,7 @@ use alloy::{
     },
     transports::http::{Client, Http},
 };
+use futures::io::empty;
 use ProxyAdmin::ProxyAdminInstance;
 //use eigen_utils::delegationmanager::{DelegationManager::{self}, IDelegationManager::OperatorDetails};
 use super::*;
@@ -104,7 +105,11 @@ sol!(
 
 impl EigenClient {
     pub async fn deploy_core_contracts(&self) -> Result<()> {
+        println!("wallet address: {}", self.eth.address());
+
         let proxies = ProxyAddresses::new(&self.eth).await?;
+
+        println!("got all proxies");
 
         let delegation_manager_impl = DelegationManager::deploy(
             self.eth.http_provider.clone(),
@@ -114,18 +119,14 @@ impl EigenClient {
         )
         .await?;
 
+        println!("proxy impl before upgrade: {}", proxies.admin.getProxyImplementation(proxies.delegation_manager.clone()).call().await?._0); 
 
-        // FIXME: why is owner 0000000?
-        // according to OwnableUpgradeable (the base contract providing owner()),
-        // "By default, the owner account will be the one that deploys the contract"
-        // so... why is `deploy()` not setting it to the wallet address??
-        println!("wallet address: {}", self.eth.address());
-        println!("owner before: {}", delegation_manager_impl.owner().call().await?._0);
-        let resp = delegation_manager_impl.transferOwnership(proxies.admin.address().clone()).send().await?;
-        println!("owner after: {}", delegation_manager_impl.owner().call().await?._0);
+        // Temp - immediately upgrade
+        proxies.admin.upgrade(proxies.delegation_manager, delegation_manager_impl.address().clone())
+            .call()
+            .await?;
 
-
-
+        println!("proxy impl after upgrade: {}", proxies.admin.getProxyImplementation(proxies.delegation_manager.clone()).call().await?._0); 
 
         let avs_directory_impl = AvsDirectory::deploy(self.eth.http_provider.clone(), proxies.delegation_manager.clone()).await?;    
 
@@ -204,8 +205,6 @@ impl EigenClient {
             _strategies: Vec::new()
         };
 
-        println!("delegation_manager_impl: {}", delegation_manager_impl.owner().call().await?._0);
-
         // let admin_slot:FixedBytes<32> = alloy::hex::decode("0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103")?.as_slice().try_into()?;
         // let proxy_admin:[u8;32] = self.eth.http_provider.get_storage_at(proxies.delegation_manager.clone(), admin_slot.into()).await?
         //     .to_be_bytes();
@@ -250,7 +249,7 @@ fn vm_address() -> Address {
 }
 
 struct ProxyAddresses {
-    pub admin: ProxyAdminInstance<Http<Client>, FillProvider<JoinFill<JoinFill<Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, WalletFiller<EthereumWallet>>, RootProvider<Http<Client>>, Http<Client>, Ethereum>>,
+    pub admin: ProxyAdminT, 
     pub delegation_manager: Address,
     pub avs_directory: Address,
     pub strategy_manager: Address,
@@ -263,28 +262,42 @@ struct ProxyAddresses {
 
 type EmptyContractT = EmptyContractInstance<Http<Client>, FillProvider<JoinFill<JoinFill<Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, WalletFiller<EthereumWallet>>, RootProvider<Http<Client>>, Http<Client>, Ethereum>>; 
 type TransparentProxyContractT =TransparentUpgradeableProxyInstance<Http<Client>, FillProvider<JoinFill<JoinFill<Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, WalletFiller<EthereumWallet>>, RootProvider<Http<Client>>, Http<Client>, Ethereum>>;
+type ProxyAdminT = ProxyAdminInstance<Http<Client>, FillProvider<JoinFill<JoinFill<Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, WalletFiller<EthereumWallet>>, RootProvider<Http<Client>>, Http<Client>, Ethereum>>;
+
 impl ProxyAddresses {
     pub async fn new(eth: &EthSigningClient) -> Result<Self> {
         async fn setup_empty_proxy_all(
             eth: &EthSigningClient,
-            proxy_admin: Address,
+            proxy_admin: &ProxyAdminT,
         ) -> Result<(EmptyContractT, TransparentProxyContractT)> {
+            let proxy_admin_address = proxy_admin.address().clone();
+
             let empty_contract = EmptyContract::deploy(eth.http_provider.clone()).await?;
             let empty_contract_address = empty_contract.address().clone();
             let proxy = TransparentUpgradeableProxy::deploy(
                 eth.http_provider.clone(),
                 empty_contract_address,
-                proxy_admin,
+                proxy_admin_address.clone(),
                 b"".into(),
             )
             .await?;
+
+            // Sanity checks
+            // see TransparentUpgradeableProxy.sol: function admin() 
+            let admin_slot:FixedBytes<32> = alloy::hex::decode("0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103")?.as_slice().try_into()?;
+            let admin_address = eth.http_provider.get_storage_at(*proxy.address(), admin_slot.into()).await?;
+            let admin_address:Address = Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);
+            assert_eq!(admin_address, proxy_admin_address);
+
+            let admin_address = proxy_admin.getProxyAdmin(proxy.address().clone()).call().await?._0;
+            assert_eq!(admin_address, proxy_admin_address);
 
             Ok((empty_contract, proxy))
         }
 
         async fn setup_empty_proxy(
             eth: &EthSigningClient,
-            proxy_admin: Address,
+            proxy_admin: &ProxyAdminT,
         ) -> Result<Address> {
             let (empty_contract, proxy) = setup_empty_proxy_all(eth, proxy_admin).await?;
             Ok(proxy.address().clone())
@@ -292,20 +305,22 @@ impl ProxyAddresses {
 
         let admin = ProxyAdmin::deploy(eth.http_provider.clone()).await?;
 
+
+
         println!("proxy admin: {}", admin.address().clone());
-        let (delegation_manager_empty, delegation_manager_proxy) = setup_empty_proxy_all(eth, admin.address().clone()).await?;
+        let (delegation_manager_empty, delegation_manager_proxy) = setup_empty_proxy_all(eth, &admin).await?;
 
         //println!("delegation_manager_proxy admin: {}", delegation_manager_proxy.admin().call().await?.admin_);
 
         Ok(Self {
             delegation_manager: delegation_manager_proxy.address().clone(),
-            avs_directory: setup_empty_proxy(eth, admin.address().clone()).await?,
-            strategy_manager: setup_empty_proxy(eth, admin.address().clone()).await?,
-            eigen_pod_manager: setup_empty_proxy(eth, admin.address().clone()).await?,
-            rewards_coordinator: setup_empty_proxy(eth, admin.address().clone()).await?,
-            eigen_pod_beacon: setup_empty_proxy(eth, admin.address().clone()).await?,
-            pauser_registery: setup_empty_proxy(eth, admin.address().clone()).await?,
-            strategy_factory: setup_empty_proxy(eth, admin.address().clone()).await?,
+            avs_directory: setup_empty_proxy(eth, &admin).await?,
+            strategy_manager: setup_empty_proxy(eth, &admin).await?,
+            eigen_pod_manager: setup_empty_proxy(eth, &admin).await?,
+            rewards_coordinator: setup_empty_proxy(eth, &admin).await?,
+            eigen_pod_beacon: setup_empty_proxy(eth, &admin).await?,
+            pauser_registery: setup_empty_proxy(eth, &admin).await?,
+            strategy_factory: setup_empty_proxy(eth, &admin).await?,
             admin,
         })
     }
