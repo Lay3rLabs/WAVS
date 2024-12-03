@@ -1,6 +1,9 @@
 use alloy::{node_bindings::Anvil, providers::Provider, signers::Signer};
 use futures::StreamExt;
-use utils::{eth_client::{EthClientBuilder, EthClientConfig}, init_tracing_tests};
+use utils::{
+    eth_client::{EthClientBuilder, EthClientConfig},
+    init_tracing_tests,
+};
 
 #[tokio::test]
 async fn client_stream_blocks() {
