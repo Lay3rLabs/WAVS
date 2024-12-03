@@ -18,7 +18,7 @@ async fn deploy_hello_world_avs() {
     let EigenTestInit {
         core_contracts,
         eigen_client,
-        anvil: _,
+        anvil,
     } = EigenTestInit::new().await;
     let hello_world_client = HelloWorldClientBuilder::new(eigen_client.eth.clone());
     let hello_world_full_client = hello_world_client
