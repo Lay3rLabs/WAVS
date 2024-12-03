@@ -229,19 +229,17 @@ impl EigenClient {
             _strategies: Vec::new(),
         };
 
-        dbg!(
-            proxies
-                .admin
-                .upgradeAndCall(
-                    proxies.delegation_manager,
-                    delegation_manager_impl.address().clone(),
-                    upgrade_call.abi_encode().into(),
-                )
-                .send()
-                .await?
-                .watch()
-                .await?
-        );
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.delegation_manager,
+                delegation_manager_impl.address().clone(),
+                upgrade_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         tracing::debug!("upgrading strategy manager");
         // Upgrade strategy manager
@@ -252,19 +250,17 @@ impl EigenClient {
             initialPausedStatus: U256::ZERO,
         };
 
-        dbg!(
-            proxies
-                .admin
-                .upgradeAndCall(
-                    proxies.strategy_manager,
-                    strategy_manager_impl.address().clone(),
-                    upgrade_call.abi_encode().into(),
-                )
-                .send()
-                .await?
-                .watch()
-                .await?
-        );
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.strategy_manager,
+                strategy_manager_impl.address().clone(),
+                upgrade_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         tracing::debug!("upgrading strategy factory");
         // Upgrade StrategyFactory
@@ -275,19 +271,17 @@ impl EigenClient {
             _strategyBeacon: proxies.strategy_beacon,
         };
 
-        dbg!(
-            proxies
-                .admin
-                .upgradeAndCall(
-                    proxies.strategy_factory,
-                    strategy_factory_impl.address().clone(),
-                    upgrade_call.abi_encode().into(),
-                )
-                .send()
-                .await?
-                .watch()
-                .await?
-        );
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.strategy_factory,
+                strategy_factory_impl.address().clone(),
+                upgrade_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         tracing::debug!("upgrading eigen pod manager");
         // Upgrade EigenPodManager
@@ -297,19 +291,17 @@ impl EigenClient {
             _initPausedStatus: U256::ZERO,
         };
 
-        dbg!(
-            proxies
-                .admin
-                .upgradeAndCall(
-                    proxies.eigen_pod_manager,
-                    eigen_pod_manager_impl.address().clone(),
-                    upgrade_call.abi_encode().into(),
-                )
-                .send()
-                .await?
-                .watch()
-                .await?
-        );
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.eigen_pod_manager,
+                eigen_pod_manager_impl.address().clone(),
+                upgrade_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         tracing::debug!("upgrading avs directory");
         // Upgrade AVSDirectory
@@ -319,19 +311,17 @@ impl EigenClient {
             initialPausedStatus: U256::ZERO,
         };
 
-        dbg!(
-            proxies
-                .admin
-                .upgradeAndCall(
-                    proxies.avs_directory,
-                    avs_directory_impl.address().clone(),
-                    upgrade_call.abi_encode().into(),
-                )
-                .send()
-                .await?
-                .watch()
-                .await?
-        );
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.avs_directory,
+                avs_directory_impl.address().clone(),
+                upgrade_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         tracing::debug!("upgrading rewards coordinator");
         // Upgrade RewardsCoordinator
@@ -344,19 +334,17 @@ impl EigenClient {
             _defaultSplitBips: 1000,
         };
 
-        dbg!(
-            proxies
-                .admin
-                .upgradeAndCall(
-                    proxies.rewards_coordinator,
-                    rewards_coordinator_impl.address().clone(),
-                    upgrade_call.abi_encode().into(),
-                )
-                .send()
-                .await?
-                .watch()
-                .await?
-        );
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.rewards_coordinator,
+                rewards_coordinator_impl.address().clone(),
+                upgrade_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         // Upgrade EigenPod
         tracing::debug!("upgrading eigen pod");
@@ -364,21 +352,19 @@ impl EigenClient {
             _podOwner: proxies.eigen_pod_manager,
         };
 
-        dbg!(
-            proxies
-                .admin
-                .upgradeAndCall(
-                    proxies.eigen_pod_beacon,
-                    eigen_pod_impl.address().clone(),
-                    upgrade_call.abi_encode().into(),
-                )
-                .send()
-                .await?
-                .watch()
-                .await?
-        );
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.eigen_pod_beacon,
+                eigen_pod_impl.address().clone(),
+                upgrade_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
-        println!("SO FAR SO GOOD!!");
+        tracing::debug!("Deployed eigen core");
 
         Ok(())
     }
