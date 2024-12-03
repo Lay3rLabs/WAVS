@@ -31,4 +31,11 @@ pub mod token {
         LayerToken,
         "../../out/LayerToken.sol/LayerToken.json"
     );
+
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        IStrategy,
+        "../../out/IStrategy.sol/IStrategy.json"
+    );
 }
