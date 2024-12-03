@@ -1,4 +1,5 @@
 use super::{
+    config::CoreAVSAddresses,
     solidity_types::{
         delegation_manager::DelegationManager,
         misc::{
@@ -31,14 +32,10 @@ use alloy::{
 };
 use anyhow::Result;
 
-pub struct EigenCoreContracts {
-    pub delegation_manager: Address,
-}
-
 // TODO: read anvil config from: lib/eigenlayer-middleware/lib/eigenlayer-contracts/script/configs/local/deploy_from_scratch.anvil.config.json
 
 impl EigenClient {
-    pub async fn deploy_core_contracts(&self) -> Result<EigenCoreContracts> {
+    pub async fn deploy_core_contracts(&self) -> Result<CoreAVSAddresses> {
         tracing::debug!("deploying proxies");
 
         let mut proxies = Proxies::new(&self.eth).await?;
@@ -303,9 +300,7 @@ impl EigenClient {
 
         tracing::debug!("Deployed eigen core");
 
-        Ok(EigenCoreContracts {
-            delegation_manager: delegation_manager_impl.address().clone(),
-        })
+        Ok(proxies.into())
     }
 }
 
@@ -320,6 +315,23 @@ struct Proxies {
     pub pauser_registry: Address,
     pub strategy_factory: Address,
     pub strategy_beacon: Address,
+}
+
+impl From<Proxies> for CoreAVSAddresses {
+    fn from(value: Proxies) -> Self {
+        Self {
+            proxy_admin: value.admin.address().clone(),
+            delegation_manager: value.delegation_manager,
+            avs_directory: value.avs_directory,
+            strategy_manager: value.strategy_manager,
+            eigen_pod_manager: value.eigen_pod_manager,
+            rewards_coordinator: value.rewards_coordinator,
+            eigen_pod_beacon: value.eigen_pod_beacon,
+            pauser_registry: value.pauser_registry,
+            strategy_factory: value.strategy_factory,
+            strategy_beacon: value.strategy_beacon,
+        }
+    }
 }
 
 type EmptyContractT = EmptyContractInstance<
@@ -352,7 +364,7 @@ type TransparentProxyContractT = TransparentUpgradeableProxyInstance<
         Ethereum,
     >,
 >;
-type ProxyAdminT = ProxyAdminInstance<
+pub type ProxyAdminT = ProxyAdminInstance<
     Http<Client>,
     FillProvider<
         JoinFill<
@@ -368,78 +380,75 @@ type ProxyAdminT = ProxyAdminInstance<
     >,
 >;
 
+pub async fn setup_empty_proxy_all(
+    eth: &EthSigningClient,
+    proxy_admin: &ProxyAdminT,
+) -> Result<(EmptyContractT, TransparentProxyContractT)> {
+    let proxy_admin_address = proxy_admin.address().clone();
+
+    let empty_contract = EmptyContract::deploy(eth.http_provider.clone()).await?;
+    let empty_contract_address = empty_contract.address().clone();
+    let proxy = TransparentUpgradeableProxy::deploy(
+        eth.http_provider.clone(),
+        empty_contract_address,
+        proxy_admin_address.clone(),
+        b"".into(),
+    )
+    .await?;
+
+    #[cfg(debug_assertions)]
+    {
+        tracing::debug!("sanity checking admin...");
+        // Sanity checks - ensure the proxy admin is set correctly
+        // see TransparentUpgradeableProxy.sol: function admin()
+
+        // 1. check by storage
+        let admin_slot: FixedBytes<32> = alloy::hex::decode(
+            "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+        )?
+        .as_slice()
+        .try_into()?;
+        let admin_address = eth
+            .http_provider
+            .get_storage_at(*proxy.address(), admin_slot.into())
+            .await?;
+        let admin_address: Address = Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);
+        assert_eq!(admin_address, proxy_admin_address);
+
+        // 2. check by Calling via proxy_admin helper function (also loads via storage)
+        let admin_address = proxy_admin
+            .getProxyAdmin(proxy.address().clone())
+            .call()
+            .await?
+            ._0;
+        assert_eq!(admin_address, proxy_admin_address);
+
+        // 3. check that we can use proxy admin to do admin stuff
+        let _ = proxy_admin
+            .changeProxyAdmin(proxy.address().clone(), admin_address)
+            .send()
+            .await?
+            .watch()
+            .await?;
+    }
+
+    Ok((empty_contract, proxy))
+}
+
+pub async fn setup_empty_proxy(
+    eth: &EthSigningClient,
+    proxy_admin: &ProxyAdminT,
+) -> Result<Address> {
+    let (_, proxy) = setup_empty_proxy_all(eth, proxy_admin).await?;
+    Ok(proxy.address().clone())
+}
+
 impl Proxies {
     pub async fn new(eth: &EthSigningClient) -> Result<Self> {
-        async fn setup_empty_proxy_all(
-            eth: &EthSigningClient,
-            proxy_admin: &ProxyAdminT,
-        ) -> Result<(EmptyContractT, TransparentProxyContractT)> {
-            let proxy_admin_address = proxy_admin.address().clone();
-
-            let empty_contract = EmptyContract::deploy(eth.http_provider.clone()).await?;
-            let empty_contract_address = empty_contract.address().clone();
-            let proxy = TransparentUpgradeableProxy::deploy(
-                eth.http_provider.clone(),
-                empty_contract_address,
-                proxy_admin_address.clone(),
-                b"".into(),
-            )
-            .await?;
-
-            #[cfg(debug_assertions)]
-            {
-                tracing::debug!("sanity checking admin...");
-                // Sanity checks - ensure the proxy admin is set correctly
-                // see TransparentUpgradeableProxy.sol: function admin()
-
-                // 1. check by storage
-                let admin_slot: FixedBytes<32> = alloy::hex::decode(
-                    "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
-                )?
-                .as_slice()
-                .try_into()?;
-                let admin_address = eth
-                    .http_provider
-                    .get_storage_at(*proxy.address(), admin_slot.into())
-                    .await?;
-                let admin_address: Address =
-                    Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);
-                assert_eq!(admin_address, proxy_admin_address);
-
-                // 2. check by Calling via proxy_admin helper function (also loads via storage)
-                let admin_address = proxy_admin
-                    .getProxyAdmin(proxy.address().clone())
-                    .call()
-                    .await?
-                    ._0;
-                assert_eq!(admin_address, proxy_admin_address);
-
-                // 3. check that we can use proxy admin to do admin stuff
-                let _ = proxy_admin
-                    .changeProxyAdmin(proxy.address().clone(), admin_address)
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
-            }
-
-            Ok((empty_contract, proxy))
-        }
-
-        async fn setup_empty_proxy(
-            eth: &EthSigningClient,
-            proxy_admin: &ProxyAdminT,
-        ) -> Result<Address> {
-            let (_, proxy) = setup_empty_proxy_all(eth, proxy_admin).await?;
-            Ok(proxy.address().clone())
-        }
-
         let admin = ProxyAdmin::deploy(eth.http_provider.clone()).await?;
 
-        println!("proxy admin: {}", admin.address().clone());
+        tracing::debug!("Eigen core proxy admin: {}", admin.address().clone());
         let (_, delegation_manager_proxy) = setup_empty_proxy_all(eth, &admin).await?;
-
-        //println!("delegation_manager_proxy admin: {}", delegation_manager_proxy.admin().call().await?.admin_);
 
         Ok(Self {
             delegation_manager: delegation_manager_proxy.address().clone(),

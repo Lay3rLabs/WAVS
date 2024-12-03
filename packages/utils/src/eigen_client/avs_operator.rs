@@ -3,18 +3,15 @@ use alloy::{primitives::Address, providers::Provider, rpc::types::TransactionRec
 use crate::error::EthClientError;
 
 use super::{
+    config::CoreAVSAddresses,
     solidity_types::delegation_manager::{DelegationManager, IDelegationManager::OperatorDetails},
     EigenClient,
 };
 use anyhow::{Context, Result};
 
 impl EigenClient {
-    pub async fn register_operator(
-        &self,
-        delegation_manager_address: Option<Address>,
-    ) -> Result<String> {
-        let delegation_manager_address =
-            delegation_manager_address.unwrap_or_else(|| self.config.core.addresses.delegation);
+    pub async fn register_operator(&self, avs_addresses: &CoreAVSAddresses) -> Result<String> {
+        let delegation_manager_address = avs_addresses.delegation_manager.clone();
         let delegation_code = self
             .eth
             .http_provider
