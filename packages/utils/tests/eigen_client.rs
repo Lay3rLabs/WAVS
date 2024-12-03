@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use alloy::node_bindings::Anvil;
+use alloy::node_bindings::{Anvil, AnvilInstance};
 use utils::{
     eigen_client::{config::CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
@@ -18,6 +18,7 @@ async fn deploy_hello_world_avs() {
     let EigenTestInit {
         core_contracts,
         eigen_client,
+        anvil,
     } = EigenTestInit::new().await;
     let hello_world_client = HelloWorldClientBuilder::new(eigen_client.eth.clone());
     let hello_world_full_client = hello_world_client
@@ -36,6 +37,7 @@ async fn register_operator() {
 struct EigenTestInit {
     pub core_contracts: CoreAVSAddresses,
     pub eigen_client: EigenClient,
+    pub anvil: AnvilInstance,
 }
 
 impl EigenTestInit {
@@ -61,6 +63,7 @@ impl EigenTestInit {
         Self {
             core_contracts,
             eigen_client,
+            anvil,
         }
     }
 }

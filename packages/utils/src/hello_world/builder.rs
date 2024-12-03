@@ -48,7 +48,7 @@ impl HelloWorldClientBuilder {
             token: token.address().clone(),
             quorum: Quorum {
                 strategies: vec![StrategyParams {
-                    strategy: Address::from_slice(new_strategy.as_slice()),
+                    strategy: Address::from_word(new_strategy),
                     multiplier: U96::from(1_000_u64),
                 }],
             },
@@ -58,9 +58,8 @@ impl HelloWorldClientBuilder {
     pub async fn build(mut self) -> Result<HelloWorldClient> {
         tracing::debug!("Building");
         let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
-        let setup = self.set_up(core.strategy_factory.clone()).await?;
-
         let proxies = Proxies::new(&self.eth).await?;
+        let setup = self.set_up(core.strategy_factory.clone()).await?;
 
         // sanity check - we own the ProxyAdmin
         debug_assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
@@ -70,6 +69,7 @@ impl HelloWorldClientBuilder {
             ECDSAStakeRegistry::deploy(self.eth.http_provider.clone(), core.delegation_manager)
                 .await?;
 
+        tracing::debug!("deploying Hello world registry");
         let hello_world_impl = HelloWorldServiceManager::deploy(
             self.eth.http_provider.clone(),
             core.avs_directory,
@@ -85,6 +85,7 @@ impl HelloWorldClientBuilder {
             _quorum: setup.quorum,
         };
 
+        tracing::debug!("Upgrading stake registry");
         proxies
             .admin
             .upgradeAndCall(
@@ -97,6 +98,7 @@ impl HelloWorldClientBuilder {
             .watch()
             .await?;
 
+        tracing::debug!("Upgrading hello world");
         proxies
             .admin
             .upgrade(proxies.hello_world, hello_world_impl.address().clone())
