@@ -1,112 +1,47 @@
-use std::{ops::Add, sync::Arc};
-
-use crate::eigen_client::config::EigenClientConfig;
-use crate::{error::EthClientError, eth_client::EthSigningClient};
-use alloy::dyn_abi::abi;
-use alloy::primitives::{FixedBytes, U160};
+use super::{
+    solidity_types::{
+        delegation_manager::DelegationManager,
+        misc::{
+            AVSDirectory, EigenPod, EigenPodManager, PauserRegistry, RewardsCoordinator,
+            StrategyBase, StrategyFactory, StrategyManager, UpgradeableBeacon,
+        },
+        proxy::{
+            EmptyContract::{self, EmptyContractInstance},
+            ProxyAdmin::{self, ProxyAdminInstance},
+            TransparentUpgradeableProxy::{self, TransparentUpgradeableProxyInstance},
+        },
+    },
+    EigenClient,
+};
+use crate::eth_client::EthSigningClient;
+use alloy::primitives::{FixedBytes, U256};
+use alloy::providers::Provider;
 use alloy::sol_types::SolCall;
 use alloy::{
     network::{Ethereum, EthereumWallet},
-    primitives::{keccak256, Address},
+    primitives::Address,
     providers::{
         fillers::{
             BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
             WalletFiller,
         },
-        Identity, ProviderBuilder, RootProvider, WsConnect,
-    },
-    pubsub::PubSubFrontend,
-    signers::{
-        k256::ecdsa::SigningKey,
-        local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
+        Identity, RootProvider,
     },
     transports::http::{Client, Http},
 };
-use futures::io::empty;
-use ProxyAdmin::ProxyAdminInstance;
-//use eigen_utils::delegationmanager::{DelegationManager::{self}, IDelegationManager::OperatorDetails};
-use super::EmptyContract::EmptyContractInstance;
-use super::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance;
-use super::*;
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    AVSDirectory,
-    "../../out/AVSDirectory.sol/AVSDirectory.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    StrategyManager,
-    "../../out/StrategyManager.sol/StrategyManager.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    StrategyFactory,
-    "../../out/StrategyFactory.sol/StrategyFactory.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    EigenPodManager,
-    "../../out/EigenPodManager.sol/EigenPodManager.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    RewardsCoordinator,
-    "../../out/RewardsCoordinator.sol/RewardsCoordinator.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    EigenPod,
-    "../../out/EigenPod.sol/EigenPod.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    UpgradeableBeacon,
-    "../../out/UpgradeableBeacon.sol/UpgradeableBeacon.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    StrategyBase,
-    "../../out/StrategyBase.sol/StrategyBase.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    UpgradeableProxyLib,
-    "../../out/UpgradeableProxyLib.sol/UpgradeableProxyLib.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    Vm,
-    "../../out/Vm.sol/Vm.json"
-);
+pub struct EigenCoreContracts {
+    pub delegation_manager: Address,
+}
 
 // TODO: read anvil config from: lib/eigenlayer-middleware/lib/eigenlayer-contracts/script/configs/local/deploy_from_scratch.anvil.config.json
 
 impl EigenClient {
-    pub async fn deploy_core_contracts(&self) -> Result<()> {
+    pub async fn deploy_core_contracts(&self) -> Result<EigenCoreContracts> {
         tracing::debug!("deploying proxies");
 
-        let mut proxies = ProxyAddresses::new(&self.eth).await?;
+        let mut proxies = Proxies::new(&self.eth).await?;
 
         // sanity check - we own the ProxyAdmin
         debug_assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
@@ -169,7 +104,7 @@ impl EigenClient {
             self.eth.http_provider.clone(),
             proxies.delegation_manager.clone(),
             proxies.strategy_manager.clone(),
-            /// TODO: Get actual values
+            // TODO: Get actual values
             86400,
             86400,
             1,
@@ -188,12 +123,14 @@ impl EigenClient {
         )
         .await?;
 
-        tracing::debug!("deploying eigen beacon");
-        let eigen_pod_beacon_impl = UpgradeableBeacon::deploy(
-            self.eth.http_provider.clone(),
-            eigen_pod_impl.address().clone(),
-        )
-        .await?;
+        // Unused?
+        //
+        // tracing::debug!("deploying eigen beacon");
+        // let eigen_pod_beacon_impl = UpgradeableBeacon::deploy(
+        //     self.eth.http_provider.clone(),
+        //     eigen_pod_impl.address().clone(),
+        // )
+        // .await?;
 
         tracing::debug!("deploying strategy base");
         let base_strategy_impl = StrategyBase::deploy(
@@ -366,25 +303,13 @@ impl EigenClient {
 
         tracing::debug!("Deployed eigen core");
 
-        Ok(())
+        Ok(EigenCoreContracts {
+            delegation_manager: delegation_manager_impl.address().clone(),
+        })
     }
 }
 
-fn vm_address() -> Address {
-    // Step 1: Compute the Keccak256 hash of "hevm cheat code"
-    let input = b"hevm cheat code";
-    let hash = keccak256(input); // This produces a [u8; 32] array
-
-    // Step 2: Convert the hash to U256
-    let hash_u256 = U256::from_be_slice(hash.as_slice());
-
-    // Step 3: Take the lower 160 bits (20 bytes) of the hash
-    // Create an Address by taking the last 20 bytes
-    let address_bytes = &hash[12..32]; // Bytes from index 12 to 31 inclusive
-    Address::from_slice(address_bytes)
-}
-
-struct ProxyAddresses {
+struct Proxies {
     pub admin: ProxyAdminT,
     pub delegation_manager: Address,
     pub avs_directory: Address,
@@ -443,7 +368,7 @@ type ProxyAdminT = ProxyAdminInstance<
     >,
 >;
 
-impl ProxyAddresses {
+impl Proxies {
     pub async fn new(eth: &EthSigningClient) -> Result<Self> {
         async fn setup_empty_proxy_all(
             eth: &EthSigningClient,
@@ -505,15 +430,14 @@ impl ProxyAddresses {
             eth: &EthSigningClient,
             proxy_admin: &ProxyAdminT,
         ) -> Result<Address> {
-            let (empty_contract, proxy) = setup_empty_proxy_all(eth, proxy_admin).await?;
+            let (_, proxy) = setup_empty_proxy_all(eth, proxy_admin).await?;
             Ok(proxy.address().clone())
         }
 
         let admin = ProxyAdmin::deploy(eth.http_provider.clone()).await?;
 
         println!("proxy admin: {}", admin.address().clone());
-        let (delegation_manager_empty, delegation_manager_proxy) =
-            setup_empty_proxy_all(eth, &admin).await?;
+        let (_, delegation_manager_proxy) = setup_empty_proxy_all(eth, &admin).await?;
 
         //println!("delegation_manager_proxy admin: {}", delegation_manager_proxy.admin().call().await?.admin_);
 

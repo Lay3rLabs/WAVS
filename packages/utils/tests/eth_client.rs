@@ -8,7 +8,8 @@ use utils::{
 #[tokio::test]
 async fn client_stream_blocks() {
     init_tracing_tests();
-    let anvil = Anvil::new().try_spawn().unwrap();
+    // seems to be we need to set a block time to get new blocks without explicit transactions?
+    let anvil = Anvil::new().block_time_f64(0.02).try_spawn().unwrap();
 
     let config = EthClientConfig {
         ws_endpoint: anvil.ws_endpoint().to_string(),
@@ -29,6 +30,7 @@ async fn client_stream_blocks() {
     let mut counter = 0;
 
     while counter < 3 {
+        println!("counter: {}", counter);
         let _header = stream.next().await.unwrap();
         counter += 1;
     }
