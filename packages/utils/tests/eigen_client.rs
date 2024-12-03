@@ -8,7 +8,7 @@ use utils::{
 
 #[tokio::test]
 async fn register_operator() {
-    let anvil = Anvil::new().block_time(1).try_spawn().unwrap();
+    let anvil = Anvil::new().try_spawn().unwrap();
 
     // ProcessCommand::Shell(shell_cmd) => shell_cmd
     // .try_spawn(ctx.clone())

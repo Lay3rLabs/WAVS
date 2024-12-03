@@ -306,7 +306,6 @@ impl ProxyAddresses {
         let admin = ProxyAdmin::deploy(eth.http_provider.clone()).await?;
 
 
-
         println!("proxy admin: {}", admin.address().clone());
         let (delegation_manager_empty, delegation_manager_proxy) = setup_empty_proxy_all(eth, &admin).await?;
 

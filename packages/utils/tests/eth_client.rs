@@ -4,7 +4,7 @@ use utils::eth_client::{EthClientBuilder, EthClientConfig};
 
 #[tokio::test]
 async fn client_stream_blocks() {
-    let anvil = Anvil::new().block_time(1).try_spawn().unwrap();
+    let anvil = Anvil::new().try_spawn().unwrap();
 
     let config = EthClientConfig {
         ws_endpoint: anvil.ws_endpoint().to_string(),
@@ -32,7 +32,7 @@ async fn client_stream_blocks() {
 
 #[tokio::test]
 async fn client_sign_message() {
-    let anvil = Anvil::new().block_time(1).try_spawn().unwrap();
+    let anvil = Anvil::new().try_spawn().unwrap();
 
     let config = EthClientConfig {
         ws_endpoint: anvil.ws_endpoint().to_string(),
