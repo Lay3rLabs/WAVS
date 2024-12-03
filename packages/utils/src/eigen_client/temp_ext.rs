@@ -369,7 +369,7 @@ impl EigenClient {
                 .admin
                 .upgradeAndCall(
                     proxies.eigen_pod_beacon,
-                    eigen_pod_beacon_impl.address().clone(),
+                    eigen_pod_impl.address().clone(),
                     upgrade_call.abi_encode().into(),
                 )
                 .send()
