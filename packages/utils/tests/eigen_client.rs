@@ -3,11 +3,13 @@ use std::path::PathBuf;
 use alloy::node_bindings::Anvil;
 use utils::{
     eigen_client::{config::EigenClientConfig, EigenClient},
-    eth_client::{EthClientBuilder, EthClientConfig},
+    eth_client::{EthClientBuilder, EthClientConfig}, init_tracing_tests,
 };
 
 #[tokio::test]
 async fn register_operator() {
+    init_tracing_tests();
+
     let anvil = Anvil::new().try_spawn().unwrap();
 
     // ProcessCommand::Shell(shell_cmd) => shell_cmd

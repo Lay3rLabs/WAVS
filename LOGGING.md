@@ -17,6 +17,10 @@ Some useful example directives:
 * "wavs=debug" - show debug level just for wavs 
 * "[{subsys=TriggerManager}]=debug" - show debug level for the TriggerManager subsystem spans
 
+For tests, something like this is often useful:
+
+* RUST_LOG=info,utils=debug cargo test the_test_to_focus_on -- --nocapture
+
 The available subsys values are:
 
 * AppContext

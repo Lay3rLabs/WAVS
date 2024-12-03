@@ -104,15 +104,14 @@ sol!(
 
 impl EigenClient {
     pub async fn deploy_core_contracts(&self) -> Result<()> {
-        println!("wallet address: {}", self.eth.address());
+        tracing::debug!("deploying proxies");
 
         let mut proxies = ProxyAddresses::new(&self.eth).await?;
 
         // sanity check - we own the ProxyAdmin
-        assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
+        debug_assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
 
-        println!("got all proxies");
-
+        tracing::debug!("deploying delegation manager");
         let delegation_manager_impl = DelegationManager::deploy(
             self.eth.http_provider.clone(),
             proxies.strategy_manager.clone(),
@@ -121,12 +120,14 @@ impl EigenClient {
         )
         .await?;
 
+        tracing::debug!("deploying avs directory");
         let avs_directory_impl = AVSDirectory::deploy(
             self.eth.http_provider.clone(),
             proxies.delegation_manager.clone(),
         )
         .await?;
 
+        tracing::debug!("deploying strategy manager");
         let strategy_manager_impl = StrategyManager::deploy(
             self.eth.http_provider.clone(),
             proxies.delegation_manager.clone(),
@@ -135,6 +136,7 @@ impl EigenClient {
         )
         .await?;
 
+        tracing::debug!("deploying strategy factory");
         let strategy_factory_impl = StrategyFactory::deploy(
             self.eth.http_provider.clone(),
             proxies.strategy_manager.clone(),
@@ -151,6 +153,7 @@ impl EigenClient {
         //     /// TODO: Handle Eth pos
         // }
 
+        tracing::debug!("deploying eigen pod manager");
         let eigen_pod_manager_impl = EigenPodManager::deploy(
             self.eth.http_provider.clone(),
             eth_deposit_addr,
@@ -161,6 +164,7 @@ impl EigenClient {
         )
         .await?;
 
+        tracing::debug!("deploying rewards coordinator");
         let rewards_coordinator_impl = RewardsCoordinator::deploy(
             self.eth.http_provider.clone(),
             proxies.delegation_manager.clone(),
@@ -174,6 +178,7 @@ impl EigenClient {
         )
         .await?;
 
+        tracing::debug!("deploying eigen pod");
         let eigen_pod_impl = EigenPod::deploy(
             self.eth.http_provider.clone(),
             eth_deposit_addr,
@@ -183,18 +188,21 @@ impl EigenClient {
         )
         .await?;
 
+        tracing::debug!("deploying eigen beacon");
         let eigen_pod_beacon_impl = UpgradeableBeacon::deploy(
             self.eth.http_provider.clone(),
             eigen_pod_impl.address().clone(),
         )
         .await?;
 
+        tracing::debug!("deploying strategy base");
         let base_strategy_impl = StrategyBase::deploy(
             self.eth.http_provider.clone(),
             proxies.strategy_manager.clone(),
         )
         .await?;
 
+        tracing::debug!("deploying pauser registry");
         let pauser_registry_impl = PauserRegistry::deploy(
             self.eth.http_provider.clone(),
             vec![],
@@ -202,6 +210,7 @@ impl EigenClient {
         )
         .await?;
 
+        tracing::debug!("deploying upgradeable beacon");
         proxies.strategy_beacon = UpgradeableBeacon::deploy(
             self.eth.http_provider.clone(),
             base_strategy_impl.address().clone(),
@@ -210,7 +219,7 @@ impl EigenClient {
         .address()
         .clone();
 
-        // Upgrade Delegation Manager
+        tracing::debug!("upgrading delegation manager");
         let upgrade_call = DelegationManager::initializeCall {
             initialOwner: proxies.admin.address().clone(),
             _pauserRegistry: pauser_registry_impl.address().clone(),
@@ -234,6 +243,7 @@ impl EigenClient {
                 .await?
         );
 
+        tracing::debug!("upgrading strategy manager");
         // Upgrade strategy manager
         let upgrade_call = StrategyManager::initializeCall {
             initialOwner: proxies.admin.address().clone(),
@@ -256,6 +266,7 @@ impl EigenClient {
                 .await?
         );
 
+        tracing::debug!("upgrading strategy factory");
         // Upgrade StrategyFactory
         let upgrade_call = StrategyFactory::initializeCall {
             _initialOwner: proxies.admin.address().clone(),
@@ -278,6 +289,7 @@ impl EigenClient {
                 .await?
         );
 
+        tracing::debug!("upgrading eigen pod manager");
         // Upgrade EigenPodManager
         let upgrade_call = EigenPodManager::initializeCall {
             initialOwner: proxies.admin.address().clone(),
@@ -299,6 +311,7 @@ impl EigenClient {
                 .await?
         );
 
+        tracing::debug!("upgrading avs directory");
         // Upgrade AVSDirectory
         let upgrade_call = AVSDirectory::initializeCall {
             initialOwner: proxies.admin.address().clone(),
@@ -320,6 +333,7 @@ impl EigenClient {
                 .await?
         );
 
+        tracing::debug!("upgrading rewards coordinator");
         // Upgrade RewardsCoordinator
         let upgrade_call = RewardsCoordinator::initializeCall {
             initialOwner: proxies.admin.address().clone(),
@@ -345,6 +359,7 @@ impl EigenClient {
         );
 
         // Upgrade EigenPod
+        tracing::debug!("upgrading eigen pod");
         let upgrade_call = EigenPod::initializeCall {
             _podOwner: proxies.eigen_pod_manager,
         };
@@ -460,40 +475,42 @@ impl ProxyAddresses {
             )
             .await?;
 
-            // Sanity checks - ensure the proxy admin is set correctly
-            // see TransparentUpgradeableProxy.sol: function admin()
+            #[cfg(debug_assertions)]
+            {
+                tracing::debug!("sanity checking admin...");
+                // Sanity checks - ensure the proxy admin is set correctly
+                // see TransparentUpgradeableProxy.sol: function admin()
 
-            // 1. check by storage
-            let admin_slot: FixedBytes<32> = alloy::hex::decode(
-                "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
-            )?
-            .as_slice()
-            .try_into()?;
-            let admin_address = eth
-                .http_provider
-                .get_storage_at(*proxy.address(), admin_slot.into())
-                .await?;
-            let admin_address: Address =
-                Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);
-            assert_eq!(admin_address, proxy_admin_address);
+                // 1. check by storage
+                let admin_slot: FixedBytes<32> = alloy::hex::decode(
+                    "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+                )?
+                .as_slice()
+                .try_into()?;
+                let admin_address = eth
+                    .http_provider
+                    .get_storage_at(*proxy.address(), admin_slot.into())
+                    .await?;
+                let admin_address: Address =
+                    Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);
+                assert_eq!(admin_address, proxy_admin_address);
 
-            // 2. check by Calling via proxy_admin helper function (also loads via storage)
-            let admin_address = proxy_admin
-                .getProxyAdmin(proxy.address().clone())
-                .call()
-                .await?
-                ._0;
-            assert_eq!(admin_address, proxy_admin_address);
+                // 2. check by Calling via proxy_admin helper function (also loads via storage)
+                let admin_address = proxy_admin
+                    .getProxyAdmin(proxy.address().clone())
+                    .call()
+                    .await?
+                    ._0;
+                assert_eq!(admin_address, proxy_admin_address);
 
-            // 3. check that we can use proxy admin to do admin stuff
-            println!("trying to upgrade proxy admin...");
-            let _ = proxy_admin
-                .changeProxyAdmin(proxy.address().clone(), admin_address)
-                .send()
-                .await?
-                .watch()
-                .await?;
-            println!("SUCCESS!");
+                // 3. check that we can use proxy admin to do admin stuff
+                let _ = proxy_admin
+                    .changeProxyAdmin(proxy.address().clone(), admin_address)
+                    .send()
+                    .await?
+                    .watch()
+                    .await?;
+            }
 
             Ok((empty_contract, proxy))
         }

@@ -1,9 +1,10 @@
 use alloy::{node_bindings::Anvil, providers::Provider, signers::Signer};
 use futures::StreamExt;
-use utils::eth_client::{EthClientBuilder, EthClientConfig};
+use utils::{eth_client::{EthClientBuilder, EthClientConfig}, init_tracing_tests};
 
 #[tokio::test]
 async fn client_stream_blocks() {
+    init_tracing_tests();
     let anvil = Anvil::new().try_spawn().unwrap();
 
     let config = EthClientConfig {
@@ -32,6 +33,7 @@ async fn client_stream_blocks() {
 
 #[tokio::test]
 async fn client_sign_message() {
+    init_tracing_tests();
     let anvil = Anvil::new().try_spawn().unwrap();
 
     let config = EthClientConfig {
