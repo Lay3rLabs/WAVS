@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use alloy::node_bindings::Anvil;
 use utils::{
     eigen_client::{config::EigenClientConfig, EigenClient},
-    eth_client::{EthClientBuilder, EthClientConfig}, init_tracing_tests,
+    eth_client::{EthClientBuilder, EthClientConfig},
+    init_tracing_tests,
 };
 
 #[tokio::test]
