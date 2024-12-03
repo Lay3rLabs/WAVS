@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use alloy::{
     primitives::{aliases::U96, Address, U256},
     sol_types::SolCall,
@@ -38,19 +40,20 @@ impl HelloWorldClientBuilder {
         tracing::debug!("deployed token: {}", token.address());
         let strategy_factory =
             StrategyFactory::new(strategy_factory, self.eth.http_provider.clone());
-        let tx_hash = strategy_factory
+        let new_strategy = strategy_factory
             .deployNewStrategy(token.address().clone())
             .send()
             .await?
-            .watch()
-            .await?;
+            .get_receipt()
+            .await?
+            .contract_address
+            .context("new strategy contract address not found")?;
 
-        tracing::debug!("new_strategy: {new_strategy:?}");
         Ok(SetupAddrs {
             token: token.address().clone(),
             quorum: Quorum {
                 strategies: vec![StrategyParams {
-                    strategy: Address::from_word(new_strategy),
+                    strategy: new_strategy,
                     multiplier: U96::from(10_000_u64),
                 }],
             },
