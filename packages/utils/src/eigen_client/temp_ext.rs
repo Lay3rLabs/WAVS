@@ -106,6 +106,9 @@ impl EigenClient {
 
         let proxies = ProxyAddresses::new(&self.eth).await?;
 
+        // sanity check - we own the ProxyAdmin
+        assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
+
         println!("got all proxies");
 
         let delegation_manager_impl = DelegationManager::deploy(
@@ -115,36 +118,6 @@ impl EigenClient {
             proxies.eigen_pod_manager,
         )
         .await?;
-
-        println!(
-            "proxy impl before upgrade: {}",
-            proxies
-                .admin
-                .getProxyImplementation(proxies.delegation_manager.clone())
-                .call()
-                .await?
-                ._0
-        );
-
-        // Temp - immediately upgrade
-        proxies
-            .admin
-            .upgrade(
-                proxies.delegation_manager,
-                delegation_manager_impl.address().clone(),
-            )
-            .call()
-            .await?;
-
-        println!(
-            "proxy impl after upgrade: {}",
-            proxies
-                .admin
-                .getProxyImplementation(proxies.delegation_manager.clone())
-                .call()
-                .await?
-                ._0
-        );
 
         let avs_directory_impl = AVSDirectory::deploy(
             self.eth.http_provider.clone(),
@@ -258,7 +231,9 @@ impl EigenClient {
                 delegation_manager_impl.address().clone(),
                 upgrade_call.abi_encode().into(),
             )
-            .call()
+            .send()
+            .await?
+            .watch()
             .await?;
 
         // UPgrade strategy manager
@@ -367,6 +342,8 @@ impl ProxyAddresses {
 
             // Sanity checks - ensure the proxy admin is set correctly
             // see TransparentUpgradeableProxy.sol: function admin()
+
+            // 1. check by storage
             let admin_slot: FixedBytes<32> = alloy::hex::decode(
                 "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
             )?
@@ -380,12 +357,18 @@ impl ProxyAddresses {
                 Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);
             assert_eq!(admin_address, proxy_admin_address);
 
+            // 2. check by Calling via proxy_admin helper function (also loads via storage)
             let admin_address = proxy_admin
                 .getProxyAdmin(proxy.address().clone())
                 .call()
                 .await?
                 ._0;
             assert_eq!(admin_address, proxy_admin_address);
+
+            // 3. check that we can use proxy admin to do admin stuff 
+            println!("trying to upgrade proxy admin...");
+            let _ = proxy_admin.changeProxyAdmin(proxy.address().clone(), admin_address).send().await?.watch().await?;
+            println!("SUCCESS!");
 
             Ok((empty_contract, proxy))
         }
