@@ -282,7 +282,7 @@ impl ProxyAddresses {
             )
             .await?;
 
-            // Sanity checks
+            // Sanity checks - ensure the proxy admin is set correctly
             // see TransparentUpgradeableProxy.sol: function admin() 
             let admin_slot:FixedBytes<32> = alloy::hex::decode("0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103")?.as_slice().try_into()?;
             let admin_address = eth.http_provider.get_storage_at(*proxy.address(), admin_slot.into()).await?;
