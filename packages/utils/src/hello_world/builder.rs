@@ -49,7 +49,7 @@ impl HelloWorldClientBuilder {
             quorum: Quorum {
                 strategies: vec![StrategyParams {
                     strategy: Address::from_word(new_strategy),
-                    multiplier: U96::from(1_000_u64),
+                    multiplier: U96::from(10_000_u64),
                 }],
             },
         })

@@ -32,14 +32,3 @@ pub mod token {
         "../../out/LayerToken.sol/LayerToken.json"
     );
 }
-
-pub mod misc {
-    use super::*;
-
-    sol!(
-        #[allow(missing_docs)]
-        #[sol(rpc)]
-        IECDSAStakeRegistryEventsAndErrors,
-        "../../out/IECDSAStakeRegistryEventsAndErrors.sol/ECDSAStakeRegistryEventsAndErrors.json"
-    );
-}
