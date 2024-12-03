@@ -30,7 +30,6 @@ async fn client_stream_blocks() {
     let mut counter = 0;
 
     while counter < 3 {
-        println!("counter: {}", counter);
         let _header = stream.next().await.unwrap();
         counter += 1;
     }
