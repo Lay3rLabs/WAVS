@@ -100,6 +100,8 @@ sol!(
     "../../out/Vm.sol/Vm.json"
 );
 
+// TODO: read anvil config from: lib/eigenlayer-middleware/lib/eigenlayer-contracts/script/configs/local/deploy_from_scratch.anvil.config.json
+
 impl EigenClient {
     pub async fn deploy_core_contracts(&self) -> Result<()> {
         println!("wallet address: {}", self.eth.address());
@@ -324,10 +326,8 @@ impl EigenClient {
             _pauserRegistry: proxies.pauser_registry,
             initialPausedStatus: U256::ZERO,
             _rewardsUpdater: Address::ZERO,
-            // TODO: set config
-            _activationDelay: Default::default(),
-            // TODO: set config
-            _defaultSplitBips: Default::default(),
+            _activationDelay: 7200,
+            _defaultSplitBips: 1000,
         };
 
         dbg!(
