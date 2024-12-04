@@ -7,7 +7,7 @@ pub mod stake_registry {
         #[allow(missing_docs)]
         #[sol(rpc)]
         ECDSAStakeRegistry,
-        "../../out/ECDSAStakeRegistry.sol/ECDSAStakeRegistry.json"
+        "../../contracts/abi/ECDSAStakeRegistry.sol/ECDSAStakeRegistry.json"
     );
 }
 
@@ -18,7 +18,7 @@ pub mod hello_world {
         #[allow(missing_docs)]
         #[sol(rpc)]
         HelloWorldServiceManager,
-        "../../out/HelloWorldServiceManager.sol/HelloWorldServiceManager.json"
+        "../../contracts/abi/HelloWorldServiceManager.sol/HelloWorldServiceManager.json"
     );
 }
 
@@ -29,13 +29,13 @@ pub mod token {
         #[allow(missing_docs)]
         #[sol(rpc)]
         LayerToken,
-        "../../out/LayerToken.sol/LayerToken.json"
+        "../../contracts/abi/LayerToken.sol/LayerToken.json"
     );
 
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
         IStrategy,
-        "../../out/IStrategy.sol/IStrategy.json"
+        "../../contracts/abi/IStrategy.sol/IStrategy.json"
     );
 }

@@ -6,8 +6,20 @@ root_path=$(
     cd ..
     pwd -P
 )
+out="$root_path/contracts/abi"
 
 cd "$root_path"
 forge build
+cp -R out/* $out
 
-cp -TR out/ contracts/abi
+middleware_path="$root_path/lib/eigenlayer-middleware"
+
+cd "$middleware_path"
+forge build
+cp -r $middleware_path/out/* $out
+
+eigenlayer_contracts="$middleware_path/lib/eigenlayer-contracts"
+
+cd "$eigenlayer_contracts"
+forge build
+cp -r $eigenlayer_contracts/out/* $out
