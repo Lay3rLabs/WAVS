@@ -4,6 +4,7 @@ use alloy::{
 };
 
 use crate::{
+    alloy_helpers::SolidityEventFinder,
     eigen_client::{
         avs_deploy::{setup_empty_proxy, ProxyAdminT},
         solidity_types::{
@@ -49,24 +50,15 @@ impl HelloWorldClientBuilder {
             .await?;
 
         // https://github.com/Layr-Labs/eigenlayer-contracts/blob/e4c66a62923f6844edb7684803f575abd5381634/src/contracts/core/StrategyManager.sol#L187
-        let strategy = tx_receipt
-            .inner
-            .logs()
-            .iter()
-            .find_map(|log| {
-                if let Ok(event) = log.log_decode::<StrategyAddedToDepositWhitelist>() {
-                    Some(event.data().strategy)
-                } else {
-                    None
-                }
-            })
+        let strategy_added: StrategyAddedToDepositWhitelist = tx_receipt
+            .solidity_event()
             .context("No strategy address found")?;
 
         Ok(SetupAddrs {
             token: token.address().clone(),
             quorum: Quorum {
                 strategies: vec![StrategyParams {
-                    strategy,
+                    strategy: strategy_added.strategy,
                     multiplier: U96::from(10_000_u64),
                 }],
             },

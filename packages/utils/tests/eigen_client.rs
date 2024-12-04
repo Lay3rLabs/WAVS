@@ -26,13 +26,37 @@ async fn deploy_hello_world_avs() {
         .await
         .unwrap();
 
+    let new_task = hello_world_full_client
+        .create_new_task("foo".to_owned())
+        .await
+        .unwrap();
+    assert_eq!(new_task.taskIndex, 0);
+    assert_eq!(new_task.task.name, "foo");
+
+    let new_task = hello_world_full_client
+        .create_new_task("bar".to_owned())
+        .await
+        .unwrap();
+    assert_eq!(new_task.taskIndex, 1);
+    assert_eq!(new_task.task.name, "bar");
+
     // just to make sure we keep anvil alive
     let _ = anvil;
 }
 
 #[tokio::test]
 async fn register_operator() {
-    let EigenTestInit { .. } = EigenTestInit::new().await;
+    let EigenTestInit {
+        core_contracts,
+        eigen_client,
+        anvil,
+    } = EigenTestInit::new().await;
+    eigen_client
+        .register_operator(&core_contracts)
+        .await
+        .unwrap();
+
+    let _ = anvil;
     // TODO
 }
 

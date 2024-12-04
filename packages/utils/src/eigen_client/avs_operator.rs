@@ -1,4 +1,4 @@
-use alloy::{primitives::Address, providers::Provider, rpc::types::TransactionReceipt};
+use alloy::{providers::Provider, rpc::types::TransactionReceipt};
 
 use crate::error::EthClientError;
 
