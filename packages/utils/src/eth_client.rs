@@ -1,15 +1,9 @@
 use std::sync::Arc;
 
 use alloy::{
-    network::{Ethereum, EthereumWallet},
+    network::EthereumWallet,
     primitives::Address,
-    providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-            WalletFiller,
-        },
-        Identity, ProviderBuilder, RootProvider, WsConnect,
-    },
+    providers::{Identity, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     signers::{
         k256::ecdsa::SigningKey,
@@ -21,38 +15,16 @@ use alloy::{
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::error::EthClientError;
+use crate::{
+    eigen_client::solidity_types::{HttpSigningProvider, WsSigningProvider},
+    error::EthClientError,
+};
 
 #[derive(Clone)]
 pub struct EthQueryClient {
     pub ws_provider: RootProvider<PubSubFrontend>,
     pub http_provider: RootProvider<Http<Client>>,
 }
-
-type WsSigningProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider<PubSubFrontend>,
-    PubSubFrontend,
-    Ethereum,
->;
-type HttpSigningProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider<Http<Client>>,
-    Http<Client>,
-    Ethereum,
->;
 
 #[derive(Clone)]
 pub struct EthSigningClient {

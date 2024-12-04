@@ -8,6 +8,7 @@ use alloy::{
         },
         Identity, RootProvider,
     },
+    pubsub::PubSubFrontend,
     sol,
     transports::http::{Client, Http},
 };
@@ -165,4 +166,30 @@ pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<
         Http<Client>,
         Ethereum,
     >,
+>;
+
+pub type WsSigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<PubSubFrontend>,
+    PubSubFrontend,
+    Ethereum,
+>;
+
+pub type HttpSigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<Http<Client>>,
+    Http<Client>,
+    Ethereum,
 >;
