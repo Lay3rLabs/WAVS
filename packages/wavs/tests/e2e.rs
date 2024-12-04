@@ -3,16 +3,29 @@
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
+    mod eth;
+    mod http;
+    mod layer;
+
     use std::{path::PathBuf, sync::Arc, time::Duration};
 
+    use alloy::node_bindings::{Anvil, AnvilInstance};
     use anyhow::{bail, Context, Result};
+    use eth::EthTestApp;
+    use http::HttpClient;
     use lavs_apis::{
         events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
         id::TaskId,
         tasks as task_queue,
     };
+    use layer::LayerTestApp;
     use layer_climb::{prelude::*, proto::abci::TxResponse};
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
+    use utils::{
+        eigen_client::EigenClient,
+        eth_client::{EthClientBuilder, EthClientConfig},
+        hello_world::{HelloWorldClient, HelloWorldClientBuilder},
+    };
     use wavs::{
         apis::{dispatcher::AllowedHostPermission, ChainKind},
         config::Config,
@@ -137,10 +150,17 @@ mod e2e {
     }
 
     async fn run_tests_ethereum(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
-        // TODO - depends on eigen_client tests first
-        //let chain_config = config.ethereum_chain_config().unwrap();
-
         tracing::info!("Running e2e ethereum tests");
+
+        let app = EthTestApp::new(_config).await;
+
+        let new_task = app
+            .avs_client
+            .create_new_task("foo".to_owned())
+            .await
+            .unwrap();
+        assert_eq!(new_task.taskIndex, 0);
+        assert_eq!(new_task.task.name, "foo");
     }
 
     async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
@@ -150,30 +170,8 @@ mod e2e {
 
     async fn run_tests_layer(http_client: HttpClient, config: Config, wasm_digest: Digest) {
         tracing::info!("Running e2e layer tests");
-        // get all env vars
-        let seed_phrase =
-            std::env::var("WAVS_E2E_LAYER_MNEMONIC").expect("WAVS_E2E_LAYER_MNEMONIC not set");
-        let task_queue_addr = std::env::var("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS")
-            .expect("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS not set");
 
-        tracing::info!("Wasm digest: {}", wasm_digest);
-
-        let chain_config: ChainConfig = config.layer_chain_config().unwrap().into();
-
-        let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
-        let signing_client = SigningClient::new(chain_config.clone(), key_signer)
-            .await
-            .unwrap();
-
-        tracing::info!(
-            "Creating service on task queue contract: {}",
-            task_queue_addr
-        );
-        let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
-
-        let task_queue = TaskQueueContract::new(signing_client.clone(), task_queue_addr)
-            .await
-            .unwrap();
+        let app = LayerTestApp::new(config).await;
 
         let service_id = ID::new("test-service").unwrap();
 
@@ -181,7 +179,7 @@ mod e2e {
             .create_service(
                 service_id.clone(),
                 wasm_digest,
-                &task_queue.addr,
+                &app.task_queue.addr,
                 ChainKind::Layer,
             )
             .await
@@ -189,7 +187,8 @@ mod e2e {
 
         tracing::info!("Service created: {}", service_id);
 
-        let tx_resp = task_queue
+        let tx_resp = app
+            .task_queue
             .submit_task(
                 "example request",
                 PermissionsExampleRequest {
@@ -198,17 +197,19 @@ mod e2e {
             )
             .await
             .unwrap();
+
         let event: TaskCreatedEvent = CosmosTxEvents::from(&tx_resp)
             .event_first_by_type(TaskCreatedEvent::NAME)
             .map(cosmwasm_std::Event::from)
             .unwrap()
             .try_into()
             .unwrap();
+
         tracing::info!("Task created: {}", event.task_id);
 
         let timeout = tokio::time::timeout(Duration::from_secs(3), async move {
             loop {
-                let task = task_queue.query_task(event.task_id).await.unwrap();
+                let task = app.task_queue.query_task(event.task_id).await.unwrap();
                 match task.status {
                     task_queue::Status::Open {} => {
                         // still open, waiting...
@@ -246,190 +247,6 @@ mod e2e {
         tracing::info!("success!");
         assert!(result.filecount > 0);
         tracing::info!("{:#?}", result);
-    }
-
-    struct TaskQueueContract {
-        pub client: SigningClient,
-        pub addr: Address,
-        pub _verifier: VerifierContract,
-        pub task_cost: Option<Coin>,
-    }
-
-    impl TaskQueueContract {
-        pub async fn new(client: SigningClient, addr: Address) -> Result<Self> {
-            let resp: task_queue::ConfigResponse = client
-                .querier
-                .contract_smart(
-                    &addr,
-                    &task_queue::QueryMsg::Custom(task_queue::CustomQueryMsg::Config {}),
-                )
-                .await?;
-
-            let task_cost = match resp.requestor {
-                task_queue::Requestor::Fixed(_) => None,
-                task_queue::Requestor::OpenPayment(coin) => Some(new_coin(coin.amount, coin.denom)),
-            };
-
-            let verifier = VerifierContract::new(
-                client.clone(),
-                client.querier.chain_config.parse_address(&resp.verifier)?,
-            )
-            .await?;
-
-            Ok(Self {
-                client,
-                addr,
-                _verifier: verifier,
-                task_cost,
-            })
-        }
-
-        pub async fn submit_task(
-            &self,
-            description: impl ToString,
-            payload: impl Serialize,
-        ) -> Result<TxResponse> {
-            let msg = task_queue::ExecuteMsg::Custom(task_queue::CustomExecuteMsg::Create {
-                description: description.to_string(),
-                timeout: None,
-                payload: serde_json::to_value(payload)?,
-                with_completed_hooks: None,
-                with_timeout_hooks: None,
-            });
-
-            let funds = match self.task_cost.as_ref() {
-                Some(cost) => vec![cost.clone()],
-                None => vec![],
-            };
-
-            self.client
-                .contract_execute(&self.addr, &msg, funds, None)
-                .await
-                .context("submit task")
-        }
-
-        pub async fn query_task(&self, id: TaskId) -> Result<task_queue::TaskResponse> {
-            self.client
-                .querier
-                .contract_smart(
-                    &self.addr,
-                    &task_queue::QueryMsg::Custom(task_queue::CustomQueryMsg::Task { id }),
-                )
-                .await
-                .context("query task")
-        }
-    }
-
-    struct VerifierContract {
-        pub _client: SigningClient,
-        pub _addr: Address,
-    }
-
-    impl VerifierContract {
-        pub async fn new(client: SigningClient, addr: Address) -> Result<Self> {
-            Ok(Self {
-                _client: client,
-                _addr: addr,
-            })
-        }
-    }
-
-    struct HttpClient {
-        inner: reqwest::Client,
-        endpoint: String,
-    }
-
-    impl HttpClient {
-        pub fn new(config: &Config) -> Self {
-            let endpoint = format!("http://{}:{}", config.host, config.port);
-
-            Self {
-                inner: reqwest::Client::new(),
-                endpoint,
-            }
-        }
-
-        pub async fn get_config(&self) -> Result<Config> {
-            self.inner
-                .get(&format!("{}/config", self.endpoint))
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| e.into())
-        }
-
-        pub async fn create_service(
-            &self,
-            id: ID,
-            digest: Digest,
-            task_queue_addr: impl ToString,
-            chain_kind: ChainKind,
-        ) -> Result<()> {
-            let service = ServiceRequest {
-                trigger: TriggerRequest::queue(task_queue_addr, 1000, 0),
-                id,
-                digest: digest.into(),
-                permissions: Permissions {
-                    allowed_http_hosts: AllowedHostPermission::All,
-                    file_system: true,
-                },
-                envs: Vec::new(),
-                testable: Some(true),
-                chain_kind,
-            };
-
-            let body = serde_json::to_string(&AddServiceRequest {
-                service,
-                wasm_url: None,
-            })?;
-
-            self.inner
-                .post(&format!("{}/app", self.endpoint))
-                .header("Content-Type", "application/json")
-                .body(body)
-                .send()
-                .await?
-                .error_for_status()?;
-
-            Ok(())
-        }
-
-        pub async fn test_service<D: DeserializeOwned>(
-            &self,
-            name: impl ToString,
-            input: impl Serialize,
-        ) -> Result<D> {
-            let body = serde_json::to_string(&TestAppRequest {
-                name: name.to_string(),
-                input: Some(serde_json::to_value(input)?),
-            })?;
-
-            let response: TestAppResponse = self
-                .inner
-                .post(&format!("{}/test", self.endpoint))
-                .header("Content-Type", "application/json")
-                .body(body)
-                .send()
-                .await?
-                .json()
-                .await?;
-
-            Ok(serde_json::from_value(response.output)?)
-        }
-
-        pub async fn upload_wasm(&self, wasm_bytes: Vec<u8>) -> Result<Digest> {
-            let response: UploadServiceResponse = self
-                .inner
-                .post(&format!("{}/upload", self.endpoint))
-                .body(wasm_bytes)
-                .send()
-                .await?
-                .json()
-                .await?;
-
-            Ok(response.digest.into())
-        }
     }
 
     #[derive(Deserialize, Serialize, Debug)]

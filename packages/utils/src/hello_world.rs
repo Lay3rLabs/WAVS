@@ -3,7 +3,7 @@ use config::HelloWorldDeployment;
 use crate::{eigen_client::config::CoreAVSAddresses, eth_client::EthSigningClient};
 
 pub mod builder;
-mod client;
+pub mod client;
 pub mod config;
 pub mod solidity_types;
 
