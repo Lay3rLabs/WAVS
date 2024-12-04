@@ -56,39 +56,4 @@ impl EigenClient {
             Err(EthClientError::NoTransactionReceipt.into())
         }
     }
-
-    pub async fn sign_and_respond_to_task(
-        &self,
-        avs_address: Address,
-        new_task_event: NewTaskCreated,
-    ) -> Result<String> {
-        let message = format!("Hello, {}", new_task_event.task.name);
-        // Check this if 2 different strings
-        let message_hash = keccak256(message);
-        // Check if this is the same as toEthSignedMessageHash
-        let message_bytes = message_hash.as_slice();
-        // TODO: Sign hash or sign message?
-        let signature = self.eth.signer.sign_message(message_bytes).await?;
-        tracing::debug!(
-            "Signing and responding to task {}",
-            new_task_event.taskIndex
-        );
-        let operators = vec![self.eth.signer.address()];
-        let signatures = vec![signature.as_bytes().to_vec()];
-
-        // TODO: what type are we supposed to use?
-        use crate::hello_world::solidity_types::hello_world::HelloWorldServiceManager::respondToTaskCall;
-        // TODO: What is this for
-        let reference_block = self.eth.ws_provider.get_block_number().await? - 1;
-
-        let signed_task = (operators, signatures, reference_block).abi_encode();
-        let respond_to_task_call = respondToTaskCall {
-            task: new_task_event.task,
-            referenceTaskIndex: new_task_event.taskIndex,
-            signature: signed_task.into(),
-        };
-        // Send it to avs
-
-        todo!()
-    }
 }

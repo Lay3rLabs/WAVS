@@ -26,19 +26,29 @@ async fn deploy_hello_world_avs() {
         .await
         .unwrap();
 
+    // Create and respond first task
     let new_task = hello_world_full_client
         .create_new_task("foo".to_owned())
         .await
         .unwrap();
     assert_eq!(new_task.taskIndex, 0);
     assert_eq!(new_task.task.name, "foo");
+    hello_world_full_client
+        .sign_and_respond_to_task(new_task)
+        .await
+        .unwrap();
 
+    // Create and respond second task
     let new_task = hello_world_full_client
         .create_new_task("bar".to_owned())
         .await
         .unwrap();
     assert_eq!(new_task.taskIndex, 1);
     assert_eq!(new_task.task.name, "bar");
+    hello_world_full_client
+        .sign_and_respond_to_task(new_task)
+        .await
+        .unwrap();
 
     // just to make sure we keep anvil alive
     let _ = anvil;
