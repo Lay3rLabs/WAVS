@@ -6,30 +6,15 @@ use super::{
             AVSDirectory, EigenPod, EigenPodManager, PauserRegistry, RewardsCoordinator,
             StrategyBase, StrategyFactory, StrategyManager, UpgradeableBeacon,
         },
-        proxy::{
-            EmptyContract::{self, EmptyContractInstance},
-            ProxyAdmin::{self, ProxyAdminInstance},
-            TransparentUpgradeableProxy::{self, TransparentUpgradeableProxyInstance},
-        },
+        proxy::{EmptyContract, ProxyAdmin, TransparentUpgradeableProxy},
+        EmptyContractT, ProxyAdminT, TransparentProxyContractT,
     },
     EigenClient,
 };
 use crate::eth_client::EthSigningClient;
-use alloy::primitives::{FixedBytes, U256};
+use alloy::primitives::{Address, FixedBytes, U256};
 use alloy::providers::Provider;
 use alloy::sol_types::SolCall;
-use alloy::{
-    network::{Ethereum, EthereumWallet},
-    primitives::Address,
-    providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-            WalletFiller,
-        },
-        Identity, RootProvider,
-    },
-    transports::http::{Client, Http},
-};
 use anyhow::Result;
 
 // TODO: read anvil config from: lib/eigenlayer-middleware/lib/eigenlayer-contracts/script/configs/local/deploy_from_scratch.anvil.config.json
@@ -325,52 +310,6 @@ impl From<Proxies> for CoreAVSAddresses {
         }
     }
 }
-
-type EmptyContractT = EmptyContractInstance<
-    Http<Client>,
-    FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider<Http<Client>>,
-        Http<Client>,
-        Ethereum,
-    >,
->;
-type TransparentProxyContractT = TransparentUpgradeableProxyInstance<
-    Http<Client>,
-    FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider<Http<Client>>,
-        Http<Client>,
-        Ethereum,
-    >,
->;
-pub type ProxyAdminT = ProxyAdminInstance<
-    Http<Client>,
-    FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider<Http<Client>>,
-        Http<Client>,
-        Ethereum,
-    >,
->;
 
 pub async fn setup_empty_proxy_all(
     eth: &EthSigningClient,

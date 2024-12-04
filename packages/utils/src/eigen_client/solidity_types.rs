@@ -1,5 +1,16 @@
 #![allow(clippy::too_many_arguments)]
-use alloy::sol;
+use alloy::{
+    network::{Ethereum, EthereumWallet},
+    providers::{
+        fillers::{
+            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+            WalletFiller,
+        },
+        Identity, RootProvider,
+    },
+    sol,
+    transports::http::{Client, Http},
+};
 
 pub mod delegation_manager {
     use super::*;
@@ -103,3 +114,55 @@ pub mod misc {
         "../../contracts/abi/StrategyBase.sol/StrategyBase.json"
     );
 }
+
+pub type EmptyContractT = proxy::EmptyContract::EmptyContractInstance<
+    Http<Client>,
+    FillProvider<
+        JoinFill<
+            JoinFill<
+                Identity,
+                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            >,
+            WalletFiller<EthereumWallet>,
+        >,
+        RootProvider<Http<Client>>,
+        Http<Client>,
+        Ethereum,
+    >,
+>;
+
+pub type TransparentProxyContractT =
+    proxy::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance<
+        Http<Client>,
+        FillProvider<
+            JoinFill<
+                JoinFill<
+                    Identity,
+                    JoinFill<
+                        GasFiller,
+                        JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                    >,
+                >,
+                WalletFiller<EthereumWallet>,
+            >,
+            RootProvider<Http<Client>>,
+            Http<Client>,
+            Ethereum,
+        >,
+    >;
+
+pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<
+    Http<Client>,
+    FillProvider<
+        JoinFill<
+            JoinFill<
+                Identity,
+                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            >,
+            WalletFiller<EthereumWallet>,
+        >,
+        RootProvider<Http<Client>>,
+        Http<Client>,
+        Ethereum,
+    >,
+>;

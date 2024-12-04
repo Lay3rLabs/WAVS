@@ -6,10 +6,11 @@ use alloy::{
 use crate::{
     alloy_helpers::SolidityEventFinder,
     eigen_client::{
-        avs_deploy::{setup_empty_proxy, ProxyAdminT},
+        avs_deploy::setup_empty_proxy,
         solidity_types::{
             misc::{StrategyFactory, StrategyManager::StrategyAddedToDepositWhitelist},
             proxy::ProxyAdmin,
+            ProxyAdminT,
         },
     },
     eth_client::EthSigningClient,
