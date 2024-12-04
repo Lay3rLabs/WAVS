@@ -8,7 +8,7 @@ impl<E: SolEvent> SolidityEventFinder<E> for TransactionReceipt {
     fn solidity_event(&self) -> Option<E> {
         self.inner
             .logs()
-            .into_iter()
+            .iter()
             .find_map(|log| log.log_decode::<E>().map(|log| log.inner.data).ok())
     }
 }

@@ -43,7 +43,7 @@ impl HelloWorldClientBuilder {
             StrategyFactory::new(strategy_factory, self.eth.http_provider.clone());
 
         let tx_receipt = strategy_factory
-            .deployNewStrategy(token.address().clone())
+            .deployNewStrategy(*token.address())
             .send()
             .await?
             .get_receipt()
@@ -55,7 +55,7 @@ impl HelloWorldClientBuilder {
             .context("No strategy address found")?;
 
         Ok(SetupAddrs {
-            token: token.address().clone(),
+            token: *token.address(),
             quorum: Quorum {
                 strategies: vec![StrategyParams {
                     strategy: strategy_added.strategy,
@@ -69,7 +69,7 @@ impl HelloWorldClientBuilder {
         tracing::debug!("Building");
         let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
         let proxies = Proxies::new(&self.eth).await?;
-        let setup = self.set_up(core.strategy_factory.clone()).await?;
+        let setup = self.set_up(core.strategy_factory).await?;
 
         // sanity check - we own the ProxyAdmin
         debug_assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
@@ -88,7 +88,7 @@ impl HelloWorldClientBuilder {
         let hello_world_impl = HelloWorldServiceManager::deploy(
             self.eth.http_provider.clone(),
             core.avs_directory,
-            proxies.ecdsa_stake_registry.clone(),
+            proxies.ecdsa_stake_registry,
             core.rewards_coordinator,
             core.delegation_manager,
         )
@@ -105,7 +105,7 @@ impl HelloWorldClientBuilder {
             .admin
             .upgradeAndCall(
                 proxies.ecdsa_stake_registry,
-                ecdsa_stake_registry_impl.address().clone(),
+                *ecdsa_stake_registry_impl.address(),
                 upgrade_call.abi_encode().into(),
             )
             .send()
@@ -116,7 +116,7 @@ impl HelloWorldClientBuilder {
         tracing::debug!("Upgrading hello world");
         proxies
             .admin
-            .upgrade(proxies.hello_world, hello_world_impl.address().clone())
+            .upgrade(proxies.hello_world, *hello_world_impl.address())
             .send()
             .await?
             .watch()
@@ -132,9 +132,9 @@ impl HelloWorldClientBuilder {
             core,
             hello_world: HelloWorldDeployment {
                 addresses: HelloWorldAddressesConfig {
-                    proxy_admin: proxies.admin.address().clone(),
-                    hello_world_service_manager: proxies.hello_world.clone(),
-                    stake_registry: proxies.ecdsa_stake_registry.clone(),
+                    proxy_admin: *proxies.admin.address(),
+                    hello_world_service_manager: proxies.hello_world,
+                    stake_registry: proxies.ecdsa_stake_registry,
                     token: setup.token,
                 },
             },
@@ -152,7 +152,7 @@ impl Proxies {
     pub async fn new(eth: &EthSigningClient) -> Result<Self> {
         let admin = ProxyAdmin::deploy(eth.http_provider.clone()).await?;
 
-        tracing::debug!("Eigen core proxy admin: {}", admin.address().clone());
+        tracing::debug!("Eigen core proxy admin: {}", admin.address());
 
         Ok(Self {
             ecdsa_stake_registry: setup_empty_proxy(eth, &admin).await?,

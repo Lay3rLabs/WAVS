@@ -1,17 +1,6 @@
-use alloy::{
-    contract::{ContractInstance, Interface},
-    network::NetworkWallet,
-    primitives::{keccak256, Address},
-    providers::{Provider, WalletProvider},
-    rpc::types::{TransactionReceipt, TransactionRequest},
-    signers::Signer,
-    sol_types::SolValue,
-};
+use alloy::{providers::Provider, rpc::types::TransactionReceipt};
 
-use crate::{
-    error::EthClientError,
-    hello_world::solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
-};
+use crate::error::EthClientError;
 
 use super::{
     config::CoreAVSAddresses,
@@ -22,7 +11,7 @@ use anyhow::{Context, Result};
 
 impl EigenClient {
     pub async fn register_operator(&self, avs_addresses: &CoreAVSAddresses) -> Result<String> {
-        let delegation_manager_address = avs_addresses.delegation_manager.clone();
+        let delegation_manager_address = avs_addresses.delegation_manager;
         let delegation_code = self
             .eth
             .http_provider
