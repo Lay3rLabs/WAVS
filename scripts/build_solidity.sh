@@ -7,7 +7,7 @@ root_path=$(
     pwd -P
 )
 
-middleware_path="$root_path/lib/eigenlayer-middleware"
+cd "$root_path"
+forge build
 
-cd "$middleware_path"
-forge build 
+cp -TR out/ contracts/abi
