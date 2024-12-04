@@ -23,7 +23,7 @@ mod e2e {
     use wavs::{apis::ID, test_utils::app::TestApp};
     use wavs::{
         config::Config, context::AppContext, dispatcher::CoreDispatcher,
-        triggers::core::TEMP_ETHEREUM_EVENT_COUNT, Digest,
+        submission::core::TEMP_ETHEREUM_EVENT_COUNT, Digest,
     };
 
     #[test]
@@ -104,10 +104,11 @@ mod e2e {
                         .await
                         .unwrap();
 
-                        // if wasm_digest isn't set, upload our wasm blob for square
-                        let wasm_digest = std::env::var("WAVS_E2E_WASM_DIGEST");
+                        // if wasm_digest isn't set, upload our wasm blob for permissions
+                        let permissions_wasm_digest =
+                            std::env::var("WAVS_E2E_PERMISSIONS_WASM_DIGEST");
 
-                        let wasm_digest: Digest = match wasm_digest {
+                        let permissions_wasm_digest: Digest = match permissions_wasm_digest {
                             Ok(digest) => digest.parse().unwrap(),
                             Err(_) => {
                                 let wasm_bytes =
@@ -116,16 +117,34 @@ mod e2e {
                             }
                         };
 
+                        let message_echo_wasm_digest =
+                            std::env::var("WAVS_E2E_MESSAGE_ECHO_WASM_DIGEST");
+
+                        let message_echo_wasm_digest: Digest = match message_echo_wasm_digest {
+                            Ok(digest) => digest.parse().unwrap(),
+                            Err(_) => {
+                                let wasm_bytes =
+                                    include_bytes!("../../../components/message_echo.wasm");
+                                http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
+                            }
+                        };
+
                         match (config.layer_chain.is_some(), config.chain.is_some()) {
                             (true, false) => {
-                                run_tests_layer(http_client, config, wasm_digest).await
+                                run_tests_layer(http_client, config, permissions_wasm_digest).await
                             }
                             (false, true) => {
-                                run_tests_ethereum(anvil.unwrap(), http_client, config, wasm_digest)
-                                    .await
+                                run_tests_ethereum(
+                                    anvil.unwrap(),
+                                    http_client,
+                                    config,
+                                    message_echo_wasm_digest,
+                                )
+                                .await
                             }
                             (true, true) => {
-                                run_tests_crosschain(http_client, config, wasm_digest).await
+                                run_tests_crosschain(http_client, config, permissions_wasm_digest)
+                                    .await
                             }
                             (false, false) => panic!(
                                 "No chain selected at all for e2e tests (see e2e_tests_* features)"
@@ -176,6 +195,7 @@ mod e2e {
 
         tokio::time::timeout(Duration::from_secs(10), async move {
             loop {
+                // Once we actually submit the response on chain, we can get rid of this and check the contract properly
                 if TEMP_ETHEREUM_EVENT_COUNT.load(std::sync::atomic::Ordering::SeqCst) > 0 {
                     break;
                 }

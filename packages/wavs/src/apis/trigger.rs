@@ -96,6 +96,8 @@ pub enum TriggerError {
     Climb(anyhow::Error),
     #[error("ethereum: {0}")]
     Ethereum(anyhow::Error),
+    #[error("parse avs payload: {0}")]
+    ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

@@ -59,8 +59,6 @@ impl LookupMaps {
 
 type LookupId = usize;
 
-pub static TEMP_ETHEREUM_EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
-
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
@@ -205,39 +203,27 @@ impl CoreTriggerManager {
                     tracing::error!("{:?}", err);
                 }
                 Ok(BlockTriggers::EthereumLog { log }) => {
-                    tracing::info!("got ethereum event! {:?}", log);
+                    if let Ok(event) = log.log_decode::<NewTaskCreated>().map(|log| log.inner.data)
+                    {
+                        let contract_address = Address::Eth(AddrEth::new(log.address().into()));
+                        let task_id = TaskId::new(event.taskIndex.into());
 
-                    TEMP_ETHEREUM_EVENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        // TODO really we should query the contract, but hello world doesn't actually have a payload pipeline
+                        // rather, it's derived from the task name
+                        // let contract = HelloWorldServiceManager::new(log.address(), ethereum_client.as_ref().unwrap().http_provider.clone());
+                        let message = format!("Hello, {}", event.task.name);
+
+                        let payload =
+                            serde_json::to_vec(&serde_json::json!({ "message": message }))
+                                .map_err(|e| TriggerError::ParseAvsPayload(e.into()))?;
+
+                        self.handle_trigger(&action_sender, &contract_address, task_id, payload)
+                            .await;
+                    }
                 }
                 Ok(BlockTriggers::Layer { triggers }) => {
                     for (contract_address, task_ids) in triggers {
                         for task_id in task_ids {
-                            let lookup_id = {
-                                let triggers_by_task_queue_lock =
-                                    self.lookup_maps.triggers_by_task_queue.read().unwrap();
-
-                                match triggers_by_task_queue_lock.get(&contract_address) {
-                                    Some(lookup_id) => *lookup_id,
-                                    None => {
-                                        tracing::debug!(
-                                            "not our task queue: {:?}",
-                                            contract_address
-                                        );
-                                        continue;
-                                    }
-                                }
-                            };
-
-                            let trigger = {
-                                let all_trigger_data_lock =
-                                    self.lookup_maps.all_trigger_data.read().unwrap();
-
-                                all_trigger_data_lock
-                                    .get(&lookup_id)
-                                    .ok_or(TriggerError::NoSuchTriggerData(lookup_id))
-                                    .cloned()
-                            };
-
                             let resp: Result<task_queue::TaskResponse> = layer_client
                                 .as_ref()
                                 .unwrap() // safe - only way we got this is by having a client in the first place
@@ -263,23 +249,16 @@ impl CoreTriggerManager {
                                 }
                             };
 
-                            match trigger {
-                                Ok(trigger) => {
-                                    action_sender
-                                        .send(TriggerAction {
-                                            trigger,
-                                            result: TriggerResult::Queue {
-                                                task_id,
-                                                payload: serde_json::to_vec(&payload).unwrap(),
-                                            },
-                                        })
-                                        .await
-                                        .unwrap();
-                                }
-                                Err(err) => {
-                                    tracing::error!("error finding task: {:?}", err);
-                                }
-                            }
+                            let payload = serde_json::to_vec(&payload)
+                                .map_err(|e| TriggerError::ParseAvsPayload(e.into()))?;
+
+                            self.handle_trigger(
+                                &action_sender,
+                                &contract_address,
+                                task_id,
+                                payload,
+                            )
+                            .await;
                         }
                     }
                 }
@@ -289,6 +268,52 @@ impl CoreTriggerManager {
         tracing::debug!("Trigger Manager watcher finished");
 
         Ok(())
+    }
+
+    async fn handle_trigger(
+        &self,
+        action_sender: &mpsc::Sender<TriggerAction>,
+        contract_address: &Address,
+        task_id: TaskId,
+        payload: Vec<u8>,
+    ) {
+        let lookup_id = {
+            let triggers_by_task_queue_lock =
+                self.lookup_maps.triggers_by_task_queue.read().unwrap();
+
+            match triggers_by_task_queue_lock.get(contract_address) {
+                Some(lookup_id) => *lookup_id,
+                None => {
+                    tracing::debug!("not our task queue: {:?}", contract_address);
+
+                    return;
+                }
+            }
+        };
+
+        let trigger = {
+            let all_trigger_data_lock = self.lookup_maps.all_trigger_data.read().unwrap();
+
+            all_trigger_data_lock
+                .get(&lookup_id)
+                .ok_or(TriggerError::NoSuchTriggerData(lookup_id))
+                .cloned()
+        };
+
+        match trigger {
+            Ok(trigger) => {
+                action_sender
+                    .send(TriggerAction {
+                        trigger,
+                        result: TriggerResult::Queue { task_id, payload },
+                    })
+                    .await
+                    .unwrap();
+            }
+            Err(err) => {
+                tracing::error!("error finding task: {:?}", err);
+            }
+        }
     }
 }
 
