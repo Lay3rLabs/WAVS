@@ -56,6 +56,7 @@ type HttpSigningProvider = FillProvider<
 
 #[derive(Clone)]
 pub struct EthSigningClient {
+    pub config: EthClientConfig,
     pub ws_provider: WsSigningProvider,
     pub http_provider: HttpSigningProvider,
     /// The wallet is a collection of signers, with one designated as the default signer
@@ -125,7 +126,7 @@ impl EthClientBuilder {
 
         let wallet: EthereumWallet = signer.clone().into();
 
-        let ws = WsConnect::new(self.config.ws_endpoint);
+        let ws = WsConnect::new(&self.config.ws_endpoint);
         let ws_provider = self
             .ws_provider_builder
             .with_recommended_fillers()
@@ -140,6 +141,7 @@ impl EthClientBuilder {
             .on_http(self.config.http_endpoint.parse()?);
 
         Ok(EthSigningClient {
+            config: self.config,
             ws_provider,
             http_provider,
             wallet: Arc::new(wallet),

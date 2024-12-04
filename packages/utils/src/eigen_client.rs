@@ -13,7 +13,11 @@ pub struct EigenClient {
 
 impl Debug for EigenClient {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EigenClient").finish()
+        f.debug_struct("EigenClient")
+            .field("ws_endpoint", &self.eth.config.ws_endpoint)
+            .field("http_endpoint", &self.eth.config.http_endpoint)
+            .field("address", &self.eth.address())
+            .finish()
     }
 }
 
