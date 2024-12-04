@@ -57,7 +57,12 @@ pub struct CliArgs {
     /// Websocket ethereum endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub endpoint: Option<String>,
+    pub ws_endpoint: Option<String>,
+
+    /// Http ethereum endpoint
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_endpoint: Option<String>,
 
     /// Ethereum mnemonic
     #[arg(long)]

@@ -36,7 +36,8 @@ impl TestApp {
             ),
             cors_allowed_origins: Vec::new(),
             chain: None,
-            endpoint: None,
+            ws_endpoint: None,
+            http_endpoint: None,
         }
     }
 
