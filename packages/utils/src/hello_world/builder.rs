@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use alloy::{
     primitives::{aliases::U96, Address, U256},
     sol_types::SolCall,
@@ -7,9 +5,11 @@ use alloy::{
 
 use crate::{
     eigen_client::{
-        avs_deploy::{setup_empty_proxy, setup_empty_proxy_all, ProxyAdminT},
-        config::CoreAVSAddresses,
-        solidity_types::{misc::StrategyFactory, proxy::ProxyAdmin},
+        avs_deploy::{setup_empty_proxy, ProxyAdminT},
+        solidity_types::{
+            misc::{StrategyFactory, StrategyManager::StrategyAddedToDepositWhitelist},
+            proxy::ProxyAdmin,
+        },
     },
     eth_client::EthSigningClient,
     hello_world::{
@@ -40,20 +40,33 @@ impl HelloWorldClientBuilder {
         tracing::debug!("deployed token: {}", token.address());
         let strategy_factory =
             StrategyFactory::new(strategy_factory, self.eth.http_provider.clone());
-        let new_strategy = strategy_factory
+
+        let tx_receipt = strategy_factory
             .deployNewStrategy(token.address().clone())
             .send()
             .await?
             .get_receipt()
-            .await?
-            .contract_address
-            .context("new strategy contract address not found")?;
+            .await?;
+
+        // https://github.com/Layr-Labs/eigenlayer-contracts/blob/e4c66a62923f6844edb7684803f575abd5381634/src/contracts/core/StrategyManager.sol#L187
+        let strategy = tx_receipt
+            .inner
+            .logs()
+            .iter()
+            .find_map(|log| {
+                if let Ok(event) = log.log_decode::<StrategyAddedToDepositWhitelist>() {
+                    Some(event.data().strategy)
+                } else {
+                    None
+                }
+            })
+            .context("No strategy address found")?;
 
         Ok(SetupAddrs {
             token: token.address().clone(),
             quorum: Quorum {
                 strategies: vec![StrategyParams {
-                    strategy: new_strategy,
+                    strategy,
                     multiplier: U96::from(10_000_u64),
                 }],
             },
@@ -117,10 +130,9 @@ impl HelloWorldClientBuilder {
             .watch()
             .await?;
 
-        tracing::debug!(
-            "underlying strategy token: {}",
-            strategy.underlyingToken().call().await?._0
-        );
+        let underlying_token = strategy.underlyingToken().call().await?._0;
+        assert_ne!(underlying_token, Address::ZERO);
+        tracing::debug!("underlying strategy token addr: {}", underlying_token);
 
         // Upgrade contracts
         Ok(HelloWorldClient {

@@ -1,8 +1,3 @@
-use std::{
-    path::PathBuf,
-    sync::{LazyLock, OnceLock},
-};
-
 use alloy::node_bindings::{Anvil, AnvilInstance};
 use utils::{
     eigen_client::{config::CoreAVSAddresses, EigenClient},
