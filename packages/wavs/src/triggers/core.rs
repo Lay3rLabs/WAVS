@@ -9,6 +9,7 @@ use crate::{
 use alloy::{
     providers::Provider,
     rpc::types::{Filter, Log},
+    sol_types::SolEvent,
 };
 use anyhow::Result;
 use futures::{Stream, StreamExt};
@@ -21,7 +22,10 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::eth_client::{EthClientBuilder, EthClientConfig};
+use utils::{
+    eth_client::{EthClientBuilder, EthClientConfig},
+    hello_world::solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
+};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -89,7 +93,7 @@ impl CoreTriggerManager {
             Vec::new();
 
         enum BlockTriggers {
-            Ethereum {
+            EthereumLog {
                 log: Log,
             },
             Layer {
@@ -176,9 +180,9 @@ impl CoreTriggerManager {
         if let Some(query_client) = ethereum_client.clone() {
             tracing::debug!("Trigger Manager for Ethereum chain started");
 
-            let filter = Filter::new().event("NewTaskCreated(uint32, Task)");
-
             // Start the event stream
+            let filter = Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
+
             let stream = query_client
                 .ws_provider
                 .subscribe_logs(&filter)
@@ -186,7 +190,8 @@ impl CoreTriggerManager {
                 .map_err(|e| TriggerError::Ethereum(e.into()))?
                 .into_stream();
 
-            let event_stream = Box::pin(stream.map(move |log| Ok(BlockTriggers::Ethereum { log })));
+            let event_stream =
+                Box::pin(stream.map(move |log| Ok(BlockTriggers::EthereumLog { log })));
 
             streams.push(event_stream);
         }
@@ -199,7 +204,7 @@ impl CoreTriggerManager {
                 Err(err) => {
                     tracing::error!("{:?}", err);
                 }
-                Ok(BlockTriggers::Ethereum { log }) => {
+                Ok(BlockTriggers::EthereumLog { log }) => {
                     tracing::info!("got ethereum event! {:?}", log);
 
                     TEMP_ETHEREUM_EVENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
