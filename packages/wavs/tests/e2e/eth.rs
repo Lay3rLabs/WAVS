@@ -1,4 +1,4 @@
-use alloy::node_bindings::{Anvil, AnvilInstance};
+use alloy::node_bindings::AnvilInstance;
 use utils::{
     eigen_client::EigenClient,
     eth_client::{EthClientBuilder, EthClientConfig},
@@ -6,6 +6,7 @@ use utils::{
 };
 use wavs::config::Config;
 
+#[allow(dead_code)]
 pub struct EthTestApp {
     pub eigen_client: EigenClient,
     pub avs_client: HelloWorldClient,
@@ -13,9 +14,7 @@ pub struct EthTestApp {
 }
 
 impl EthTestApp {
-    pub async fn new(_config: Config) -> Self {
-        let anvil = Anvil::new().spawn();
-
+    pub async fn new(_config: Config, anvil: AnvilInstance) -> Self {
         let config = EthClientConfig {
             ws_endpoint: anvil.ws_endpoint().to_string(),
             http_endpoint: anvil.endpoint().to_string(),
@@ -23,6 +22,8 @@ impl EthTestApp {
                 "test test test test test test test test test test test junk".to_string(),
             ),
         };
+
+        tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);
 
         let eth_client = EthClientBuilder::new(config).build_signing().await.unwrap();
         let eigen_client = EigenClient::new(eth_client);

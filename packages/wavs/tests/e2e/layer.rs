@@ -1,13 +1,10 @@
 use anyhow::{Context, Result};
-use lavs_apis::{
-    events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
-    id::TaskId,
-    tasks as task_queue,
-};
+use lavs_apis::{id::TaskId, tasks as task_queue};
 use layer_climb::{prelude::*, proto::abci::TxResponse, signing::SigningClient};
 use serde::Serialize;
 use wavs::config::Config;
 
+#[allow(dead_code)]
 pub struct LayerTestApp {
     pub layer_client: SigningClient,
     pub task_queue: LayerTaskQueueContract,

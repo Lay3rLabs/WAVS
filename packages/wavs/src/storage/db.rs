@@ -132,7 +132,7 @@ mod tests {
     use crate::{
         apis::{
             dispatcher::{Component, Service, ServiceStatus, Workflow},
-            ChainKind, Trigger, ID,
+            Trigger, ID,
         },
         test_utils::address::rand_address,
         Digest,
@@ -213,19 +213,17 @@ mod tests {
             (
                 ID::new("workflow-id-1").unwrap(),
                 Workflow {
-                    trigger: Trigger::queue(rand_address(), 5),
+                    trigger: Trigger::eth_queue(rand_address()),
                     component: ID::new("component-id-1").unwrap(),
                     submit: None,
-                    chain_kind: ChainKind::Ethereum,
                 },
             ),
             (
                 ID::new("workflow-id-2").unwrap(),
                 Workflow {
-                    trigger: Trigger::queue(rand_address(), 5),
+                    trigger: Trigger::eth_queue(rand_address()),
                     component: ID::new("component-id-2").unwrap(),
                     submit: None,
-                    chain_kind: ChainKind::Ethereum,
                 },
             ),
         ]

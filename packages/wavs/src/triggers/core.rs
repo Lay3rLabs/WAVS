@@ -6,7 +6,10 @@ use crate::{
     config::Config,
     context::AppContext,
 };
-use alloy::providers::Provider;
+use alloy::{
+    providers::Provider,
+    rpc::types::{Filter, Log},
+};
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
@@ -52,6 +55,8 @@ impl LookupMaps {
 
 type LookupId = usize;
 
+pub static TEMP_ETHEREUM_EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
@@ -84,7 +89,9 @@ impl CoreTriggerManager {
             Vec::new();
 
         enum BlockTriggers {
-            Ethereum {},
+            Ethereum {
+                log: Log,
+            },
             Layer {
                 triggers: HashMap<Address, HashSet<TaskId>>,
             },
@@ -100,12 +107,15 @@ impl CoreTriggerManager {
         };
 
         let ethereum_client = match self.chain_config.clone() {
-            Some(chain_config) => Some(
-                EthClientBuilder::new(chain_config)
-                    .build_query()
-                    .await
-                    .map_err(TriggerError::Ethereum)?,
-            ),
+            Some(chain_config) => {
+                tracing::debug!("Ethereum client started on {}", chain_config.ws_endpoint);
+                Some(
+                    EthClientBuilder::new(chain_config)
+                        .build_query()
+                        .await
+                        .map_err(TriggerError::Ethereum)?,
+                )
+            }
             None => None,
         };
 
@@ -166,14 +176,17 @@ impl CoreTriggerManager {
         if let Some(query_client) = ethereum_client.clone() {
             tracing::debug!("Trigger Manager for Ethereum chain started");
 
-            let subscribtion = query_client
-                .ws_provider
-                .subscribe_blocks()
-                .await
-                .map_err(|e| TriggerError::Ethereum(e.into()))?;
-            let stream = subscribtion.into_stream();
+            let filter = Filter::new().event("NewTaskCreated(uint32, Task)");
 
-            let event_stream = Box::pin(stream.map(move |_header| Ok(BlockTriggers::Ethereum {})));
+            // Start the event stream
+            let stream = query_client
+                .ws_provider
+                .subscribe_logs(&filter)
+                .await
+                .map_err(|e| TriggerError::Ethereum(e.into()))?
+                .into_stream();
+
+            let event_stream = Box::pin(stream.map(move |log| Ok(BlockTriggers::Ethereum { log })));
 
             streams.push(event_stream);
         }
@@ -186,8 +199,10 @@ impl CoreTriggerManager {
                 Err(err) => {
                     tracing::error!("{:?}", err);
                 }
-                Ok(BlockTriggers::Ethereum {}) => {
-                    // TODO!
+                Ok(BlockTriggers::Ethereum { log }) => {
+                    tracing::info!("got ethereum event! {:?}", log);
+
+                    TEMP_ETHEREUM_EVENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 }
                 Ok(BlockTriggers::Layer { triggers }) => {
                     for (contract_address, task_ids) in triggers {
@@ -306,10 +321,17 @@ impl TriggerManager for CoreTriggerManager {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         match &data.trigger {
-            Trigger::Queue {
+            Trigger::LayerQueue {
                 task_queue_addr,
                 poll_interval: _,
             } => {
+                self.lookup_maps
+                    .triggers_by_task_queue
+                    .write()
+                    .unwrap()
+                    .insert(task_queue_addr.clone(), lookup_id);
+            }
+            Trigger::EthQueue { task_queue_addr } => {
                 self.lookup_maps
                     .triggers_by_task_queue
                     .write()
@@ -432,10 +454,15 @@ fn remove_trigger_data(
 
     // 2. remove from task_queue_lookup_map
     match &trigger_data.trigger {
-        Trigger::Queue {
+        Trigger::LayerQueue {
             task_queue_addr,
             poll_interval: _,
         } => {
+            triggers_by_task_queue.remove(task_queue_addr).ok_or(
+                TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
+            )?;
+        }
+        Trigger::EthQueue { task_queue_addr } => {
             triggers_by_task_queue.remove(task_queue_addr).ok_or(
                 TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
             )?;
@@ -495,34 +522,18 @@ mod tests {
         let task_queue_addr_2_1 = rand_address();
         let task_queue_addr_2_2 = rand_address();
 
-        let trigger_1_1 = TriggerData::queue(
-            &service_id_1,
-            &workflow_id_1,
-            task_queue_addr_1_1.clone(),
-            5,
-        )
-        .unwrap();
-        let trigger_1_2 = TriggerData::queue(
-            &service_id_1,
-            &workflow_id_2,
-            task_queue_addr_1_2.clone(),
-            5,
-        )
-        .unwrap();
-        let trigger_2_1 = TriggerData::queue(
-            &service_id_2,
-            &workflow_id_1,
-            task_queue_addr_2_1.clone(),
-            5,
-        )
-        .unwrap();
-        let trigger_2_2 = TriggerData::queue(
-            &service_id_2,
-            &workflow_id_2,
-            task_queue_addr_2_2.clone(),
-            5,
-        )
-        .unwrap();
+        let trigger_1_1 =
+            TriggerData::eth_queue(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
+                .unwrap();
+        let trigger_1_2 =
+            TriggerData::eth_queue(&service_id_1, &workflow_id_2, task_queue_addr_1_2.clone())
+                .unwrap();
+        let trigger_2_1 =
+            TriggerData::eth_queue(&service_id_2, &workflow_id_1, task_queue_addr_2_1.clone())
+                .unwrap();
+        let trigger_2_2 =
+            TriggerData::eth_queue(&service_id_2, &workflow_id_2, task_queue_addr_2_2.clone())
+                .unwrap();
 
         manager.add_trigger(trigger_1_1).unwrap();
         manager.add_trigger(trigger_1_2).unwrap();
@@ -576,10 +587,11 @@ mod tests {
 
         fn get_trigger_addr(trigger: &Trigger) -> &Address {
             match trigger {
-                Trigger::Queue {
+                Trigger::LayerQueue {
                     task_queue_addr,
                     poll_interval: _,
                 } => task_queue_addr,
+                Trigger::EthQueue { task_queue_addr } => task_queue_addr,
             }
         }
     }

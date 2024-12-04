@@ -10,50 +10,41 @@ mod e2e {
     use std::{path::PathBuf, sync::Arc, time::Duration};
 
     use alloy::node_bindings::{Anvil, AnvilInstance};
-    use anyhow::{bail, Context, Result};
+    use anyhow::bail;
     use eth::EthTestApp;
     use http::HttpClient;
     use lavs_apis::{
         events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
-        id::TaskId,
         tasks as task_queue,
     };
     use layer::LayerTestApp;
-    use layer_climb::{prelude::*, proto::abci::TxResponse};
-    use serde::{de::DeserializeOwned, Deserialize, Serialize};
-    use utils::{
-        eigen_client::EigenClient,
-        eth_client::{EthClientBuilder, EthClientConfig},
-        hello_world::{HelloWorldClient, HelloWorldClientBuilder},
-    };
+    use layer_climb::prelude::*;
+    use serde::{Deserialize, Serialize};
+    use wavs::{apis::ID, test_utils::app::TestApp};
     use wavs::{
-        apis::{dispatcher::AllowedHostPermission, ChainKind},
-        config::Config,
-        context::AppContext,
-        dispatcher::CoreDispatcher,
-        http::handlers::service::{
-            add::{AddServiceRequest, ServiceRequest},
-            upload::UploadServiceResponse,
-        },
-        Digest,
-    };
-    use wavs::{
-        apis::{dispatcher::Permissions, ID},
-        http::{
-            handlers::service::test::{TestAppRequest, TestAppResponse},
-            types::TriggerRequest,
-        },
-        test_utils::app::TestApp,
+        config::Config, context::AppContext, dispatcher::CoreDispatcher,
+        triggers::core::TEMP_ETHEREUM_EVENT_COUNT, Digest,
     };
 
     #[test]
     fn e2e_tests() {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "e2e_tests_ethereum")] {
+                let anvil = Some(Anvil::new().spawn());
+            } else {
+                let mut anvil = None;
+            }
+        }
         let mut config = {
             tokio::runtime::Runtime::new().unwrap().block_on({
                 async {
                     let mut cli_args = TestApp::default_cli_args();
                     cli_args.dotenv = None;
                     cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
+                    if let Some(anvil) = anvil.as_ref() {
+                        cli_args.chain_config.ws_endpoint = Some(anvil.ws_endpoint().to_string());
+                        cli_args.chain_config.http_endpoint = Some(anvil.endpoint().to_string());
+                    }
                     TestApp::new_with_args(cli_args)
                         .await
                         .config
@@ -130,7 +121,8 @@ mod e2e {
                                 run_tests_layer(http_client, config, wasm_digest).await
                             }
                             (false, true) => {
-                                run_tests_ethereum(http_client, config, wasm_digest).await
+                                run_tests_ethereum(anvil.unwrap(), http_client, config, wasm_digest)
+                                    .await
                             }
                             (true, true) => {
                                 run_tests_crosschain(http_client, config, wasm_digest).await
@@ -149,18 +141,51 @@ mod e2e {
         wavs_handle.join().unwrap();
     }
 
-    async fn run_tests_ethereum(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
+    async fn run_tests_ethereum(
+        anvil: AnvilInstance,
+        http_client: HttpClient,
+        _config: Config,
+        wasm_digest: Digest,
+    ) {
         tracing::info!("Running e2e ethereum tests");
 
-        let app = EthTestApp::new(_config).await;
+        let app = EthTestApp::new(_config, anvil).await;
 
-        let new_task = app
-            .avs_client
+        let service_id = ID::new("test-service").unwrap();
+
+        let _ = http_client
+            .create_service(
+                service_id.clone(),
+                wasm_digest,
+                Address::Eth(AddrEth::new(
+                    app.avs_client
+                        .hello_world
+                        .addresses
+                        .hello_world_service_manager
+                        .into(),
+                )),
+            )
+            .await
+            .unwrap();
+
+        tracing::info!("Service created: {}, submitting task...", service_id);
+
+        app.avs_client
             .create_new_task("foo".to_owned())
             .await
             .unwrap();
-        assert_eq!(new_task.taskIndex, 0);
-        assert_eq!(new_task.task.name, "foo");
+
+        tokio::time::timeout(Duration::from_secs(10), async move {
+            loop {
+                if TEMP_ETHEREUM_EVENT_COUNT.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                    break;
+                }
+                // still open, waiting...
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .unwrap();
     }
 
     async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
@@ -176,12 +201,7 @@ mod e2e {
         let service_id = ID::new("test-service").unwrap();
 
         let _ = http_client
-            .create_service(
-                service_id.clone(),
-                wasm_digest,
-                &app.task_queue.addr,
-                ChainKind::Layer,
-            )
+            .create_service(service_id.clone(), wasm_digest, app.task_queue.addr.clone())
             .await
             .unwrap();
 

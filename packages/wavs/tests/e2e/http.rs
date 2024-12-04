@@ -1,9 +1,10 @@
 use anyhow::Result;
+use layer_climb::prelude::Address;
 use serde::{de::DeserializeOwned, Serialize};
 use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions},
-        ChainKind, ID,
+        ID,
     },
     config::Config,
     http::{
@@ -46,11 +47,10 @@ impl HttpClient {
         &self,
         id: ID,
         digest: Digest,
-        task_queue_addr: impl ToString,
-        chain_kind: ChainKind,
+        task_queue_addr: Address,
     ) -> Result<()> {
         let service = ServiceRequest {
-            trigger: TriggerRequest::queue(task_queue_addr, 1000, 0),
+            trigger: TriggerRequest::eth_queue(task_queue_addr),
             id,
             digest: digest.into(),
             permissions: Permissions {
@@ -59,7 +59,6 @@ impl HttpClient {
             },
             envs: Vec::new(),
             testable: Some(true),
-            chain_kind,
         };
 
         let body = serde_json::to_string(&AddServiceRequest {

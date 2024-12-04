@@ -5,8 +5,9 @@ use std::{
 
 use crate::{
     apis::{
+        dispatcher::Submit,
         submission::{ChainMessage, Submission, SubmissionError},
-        ChainKind, Trigger,
+        Trigger,
     },
     config::{Config, WavsCosmosChainConfig},
     context::AppContext,
@@ -186,12 +187,13 @@ impl Submission for CoreSubmission {
                     } => {
                         while let Some(msg) = rx.recv().await {
                             tracing::debug!("Received message to submit: {:?}", msg);
-                            match msg.chain_kind {
-                                ChainKind::Ethereum => {
+                            match msg.submit {
+                                Submit::EthAggregatorTx{} => {
+
                                     // TODO!
                                 },
-                                ChainKind::Layer => {
-                                    let client = match _self.get_layer_client(msg.hd_index).await {
+                                Submit::LayerVerifierTx { hd_index, verifier_addr} => {
+                                    let client = match _self.get_layer_client(hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -200,7 +202,7 @@ impl Submission for CoreSubmission {
                                     };
 
                                     if let Err(err) = _self.maybe_tap_layer_faucet(&client).await {
-                                        tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, msg.hd_index, err);
+                                        tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, hd_index, err);
                                     }
 
                                     let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
@@ -219,24 +221,29 @@ impl Submission for CoreSubmission {
                                         }
                                     };
 
-                                    let contract_msg = match msg.trigger_data.trigger {
-                                        Trigger::Queue { task_queue_addr, .. } => {
-                                            VerifierExecuteMsg::ExecutedTask {
+                                    match msg.trigger_data.trigger {
+                                        Trigger::LayerQueue { task_queue_addr, .. } => {
+                                            let contract_msg = VerifierExecuteMsg::ExecutedTask {
                                                 task_queue_contract: task_queue_addr.to_string(),
                                                 task_id: msg.task_id,
                                                 result,
+                                            };
+
+                                            match client.contract_execute(&verifier_addr, &contract_msg, Vec::new(), None).await {
+                                                Ok(_) => {
+                                                    tracing::debug!("Submission successful");
+                                                },
+                                                Err(e) => {
+                                                    tracing::error!("Submission failed: {:?}", e);
+                                                }
                                             }
                                         }
-                                    };
 
-                                    match client.contract_execute(&msg.verifier_addr, &contract_msg, Vec::new(), None).await {
-                                        Ok(_) => {
-                                            tracing::debug!("Submission successful");
-                                        },
-                                        Err(e) => {
-                                            tracing::error!("Submission failed: {:?}", e);
+                                        Trigger::EthQueue { .. } => {
+                                           // TODO 
                                         }
                                     }
+
                                 }
                             }
                         }

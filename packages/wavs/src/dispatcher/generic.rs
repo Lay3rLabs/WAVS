@@ -321,7 +321,7 @@ mod tests {
             dispatcher::{Component, ServiceStatus, Submit},
             submission::ChainMessage,
             trigger::TriggerResult,
-            ChainKind, Trigger,
+            Trigger,
         },
         engine::{
             identity::IdentityEngine,
@@ -347,7 +347,7 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            trigger: TriggerData::queue("service1", "workflow1", rand_address(), 5).unwrap(),
+            trigger: TriggerData::eth_queue("service1", "workflow1", rand_address()).unwrap(),
             result: TriggerResult::queue(task_id, payload),
         };
 
@@ -362,8 +362,6 @@ mod tests {
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
         let component_id = ID::new("component1").unwrap();
-        let hd_index = 2;
-        let verifier_addr = rand_address();
         let service = Service {
             id: action.trigger.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -372,9 +370,8 @@ mod tests {
                 action.trigger.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::queue(rand_address(), 5),
-                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr.clone())),
-                    chain_kind: ChainKind::Ethereum,
+                    trigger: Trigger::eth_queue(rand_address()),
+                    submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
             .into(),
@@ -395,9 +392,7 @@ mod tests {
             trigger_data: action.trigger,
             task_id,
             wasm_result: payload.into(),
-            hd_index,
-            verifier_addr,
-            chain_kind: ChainKind::Ethereum,
+            submit: Submit::eth_aggregator_tx(),
         };
         assert_eq!(processed[0], expected);
     }
@@ -416,17 +411,16 @@ mod tests {
         let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::queue(
+                trigger: TriggerData::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
-                    5,
                 )
                 .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
+                trigger: TriggerData::eth_queue(&service_id, &workflow_id, task_queue_address)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
@@ -447,8 +441,6 @@ mod tests {
 
         // Register a service to handle this action
         let component_id = ID::new("component1").unwrap();
-        let hd_index = 2;
-        let verifier_addr = rand_address();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -457,9 +449,8 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::queue(rand_address(), 5),
-                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
-                    chain_kind: ChainKind::Ethereum,
+                    trigger: Trigger::eth_queue(rand_address()),
+                    submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
             .into(),
@@ -498,17 +489,16 @@ mod tests {
         let task_queue_address = rand_address();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::queue(
+                trigger: TriggerData::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
-                    5,
                 )
                 .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::queue(&service_id, &workflow_id, task_queue_address, 5)
+                trigger: TriggerData::eth_queue(&service_id, &workflow_id, task_queue_address)
                     .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
@@ -529,8 +519,6 @@ mod tests {
 
         // Register a service to handle this action
         let component_id = ID::new("component1").unwrap();
-        let hd_index = 2;
-        let verifier_addr = rand_address();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -539,9 +527,8 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::queue(rand_address(), 5),
-                    submit: Some(Submit::verifier_tx(hd_index, verifier_addr)),
-                    chain_kind: ChainKind::Ethereum,
+                    trigger: Trigger::eth_queue(rand_address()),
+                    submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
             .into(),

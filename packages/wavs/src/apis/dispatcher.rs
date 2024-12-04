@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, ops::Bound};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 
-use super::{submission::ChainMessage, trigger::TriggerAction, ChainKind, Trigger, ID};
+use super::{submission::ChainMessage, trigger::TriggerAction, Trigger, ID};
 use crate::{context::AppContext, Digest};
 
 /// This is the highest-level container for the system.
@@ -91,8 +91,6 @@ pub struct Workflow {
     /// A reference to which component to run with this data - for now, always "default"
     pub component: ID,
 
-    /// The kind of chain this workflow is on
-    pub chain_kind: ChainKind,
     /// How to submit the result of the component.
     /// May be unset for eg cron jobs that just update internal state and don't submit anything
     pub submit: Option<Submit>,
@@ -101,9 +99,9 @@ pub struct Workflow {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Submit {
-    /// Writing a transaction directly to the verifier contract on the main chain
+    /// Writing a transaction directly to the verifier contract on the layer chain
     /// the node is configured for.
-    VerifierTx {
+    LayerVerifierTx {
         /// The hd index of the mnemonic to sign with
         hd_index: u32,
         // The address of the verifier contract to submit to
@@ -111,14 +109,19 @@ pub enum Submit {
         // I want to break these hard dependencies internally, so Dispatcher doesn't assume those connections between contracts
         verifier_addr: Address,
     }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
+    /// Sending a message to the aggregator on eth chain
+    EthAggregatorTx {},
 }
 
 impl Submit {
-    pub fn verifier_tx(hd_index: u32, verifier_addr: Address) -> Self {
-        Submit::VerifierTx {
+    pub fn layer_verifier_tx(hd_index: u32, verifier_addr: Address) -> Self {
+        Submit::LayerVerifierTx {
             hd_index,
             verifier_addr,
         }
+    }
+    pub fn eth_aggregator_tx() -> Self {
+        Submit::EthAggregatorTx {}
     }
 }
 

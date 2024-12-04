@@ -93,7 +93,7 @@ mod test {
     use lavs_apis::id::TaskId;
 
     use crate::{
-        apis::{trigger::TriggerData, ChainKind},
+        apis::{dispatcher::Submit, trigger::TriggerData},
         test_utils::address::rand_address,
     };
 
@@ -101,12 +101,10 @@ mod test {
 
     fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_data: TriggerData::queue(service, service, rand_address(), 5).unwrap(),
+            trigger_data: TriggerData::eth_queue(service, service, rand_address()).unwrap(),
             task_id: TaskId::new(task_id),
             wasm_result: payload.as_bytes().to_vec(),
-            hd_index: 0,
-            verifier_addr: rand_address(),
-            chain_kind: ChainKind::Ethereum,
+            submit: Submit::eth_aggregator_tx(),
         }
     }
 

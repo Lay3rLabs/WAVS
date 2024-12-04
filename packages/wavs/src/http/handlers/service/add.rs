@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         dispatcher::{Component, Permissions, Service, ServiceStatus, Submit, Workflow},
-        ChainKind, Trigger, ID,
+        Trigger, ID,
     },
     http::{
         error::HttpResult,
@@ -41,23 +41,19 @@ pub struct ServiceRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub envs: Vec<(String, String)>,
     pub testable: Option<bool>,
-    // TODO for 0.3, make this required
-    #[serde(default = "default_chain_kind")]
-    pub chain_kind: ChainKind,
-}
-
-// just for backwards-compat
-fn default_chain_kind() -> ChainKind {
-    ChainKind::Layer
 }
 
 impl TriggerRequest {
-    pub fn queue(task_queue_addr: impl ToString, poll_interval: u32, hd_index: u32) -> Self {
-        TriggerRequest::Queue {
-            task_queue_addr: task_queue_addr.to_string(),
+    pub fn layer_queue(task_queue_addr: Address, poll_interval: u32, hd_index: u32) -> Self {
+        TriggerRequest::LayerQueue {
+            task_queue_addr,
             poll_interval,
             hd_index,
         }
+    }
+
+    pub fn eth_queue(task_queue_addr: Address) -> Self {
+        TriggerRequest::EthQueue { task_queue_addr }
     }
 }
 
@@ -124,19 +120,11 @@ impl ServiceRequestParser {
         let components = BTreeMap::from([(component_id.clone(), component)]);
 
         let (trigger, submit) = match req.trigger {
-            TriggerRequest::Queue {
+            TriggerRequest::LayerQueue {
                 task_queue_addr,
                 poll_interval,
                 hd_index,
             } => {
-                let task_queue_addr = match &self.state {
-                    Some(state) => {
-                        let chain_config: ChainConfig = state.config.layer_chain_config()?.into();
-                        chain_config.parse_address(&task_queue_addr)?
-                    }
-                    None => Address::new_cosmos_string(&task_queue_addr, None)?,
-                };
-
                 let verifier_addr = match &self.state {
                     Some(state) if !state.is_mock_chain_client => {
                         let chain_config: ChainConfig = state.config.layer_chain_config()?.into();
@@ -145,8 +133,15 @@ impl ServiceRequestParser {
                     _ => rand_address(),
                 };
 
-                let trigger = Trigger::queue(task_queue_addr, poll_interval);
-                let submit = Some(Submit::verifier_tx(hd_index, verifier_addr));
+                let trigger = Trigger::layer_queue(task_queue_addr, poll_interval);
+                let submit = Some(Submit::layer_verifier_tx(hd_index, verifier_addr));
+
+                (trigger, submit)
+            }
+
+            TriggerRequest::EthQueue { task_queue_addr } => {
+                let trigger = Trigger::eth_queue(task_queue_addr);
+                let submit = Some(Submit::eth_aggregator_tx());
 
                 (trigger, submit)
             }
@@ -158,7 +153,6 @@ impl ServiceRequestParser {
                 trigger,
                 component: component_id,
                 submit,
-                chain_kind: req.chain_kind,
             },
         )]);
 
@@ -191,12 +185,13 @@ async fn query_verifier_addr(
 
 #[cfg(test)]
 mod test {
+    use layer_climb::prelude::Address;
     use serde::{Deserialize, Serialize};
 
     use crate::{
         apis::{
             dispatcher::{Permissions, ServiceStatus},
-            ChainKind, ID,
+            ID,
         },
         http::{
             handlers::service::add::{AddServiceRequest, TriggerRequest},
@@ -240,7 +235,7 @@ mod test {
                 name: "test-name".to_string(),
                 status: None,
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::queue(rand_address(), 5, 0),
+                trigger: TriggerRequest::eth_queue(rand_address()),
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
@@ -265,24 +260,19 @@ mod test {
 
     #[tokio::test]
     async fn add_service_validation() {
-        fn make_service_req(addr: impl ToString) -> ServiceRequest {
+        fn make_service_req(addr: Address) -> ServiceRequest {
             ServiceRequest {
                 id: ID::new("test-name").unwrap(),
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::queue(addr, 5, 0),
+                trigger: TriggerRequest::eth_queue(addr),
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
-                chain_kind: ChainKind::Ethereum,
             }
         }
 
         ServiceRequestParser::new(None)
-            .parse(make_service_req("not-a-valid-addr"))
-            .await
-            .unwrap_err();
-        ServiceRequestParser::new(None)
-            .parse(make_service_req(rand_address().to_string()))
+            .parse(make_service_req(rand_address()))
             .await
             .unwrap();
     }

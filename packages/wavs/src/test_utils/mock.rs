@@ -5,7 +5,7 @@ use crate::{
     apis::{
         dispatcher::{DispatchManager, Permissions},
         engine::EngineError,
-        ChainKind, ID,
+        ID,
     },
     context::AppContext,
     dispatcher::Dispatcher,
@@ -126,13 +126,12 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: TriggerRequest::queue(task_queue_address, 5, 0),
+                trigger: TriggerRequest::eth_queue(task_queue_address.clone()),
                 id: service_id,
                 digest: digest.into(),
                 permissions,
                 envs,
                 testable: None,
-                chain_kind: ChainKind::Ethereum,
             },
             wasm_url: None,
         })
