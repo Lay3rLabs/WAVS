@@ -1,4 +1,4 @@
-use config::HelloWorldDeployment;
+use config::HelloWorldAddresses;
 
 use crate::{eigen_client::config::CoreAVSAddresses, eth_client::EthSigningClient};
 
@@ -29,5 +29,5 @@ impl HelloWorldClientBuilder {
 pub struct HelloWorldClient {
     pub eth: EthSigningClient,
     pub core: CoreAVSAddresses,
-    pub hello_world: HelloWorldDeployment,
+    pub hello_world: HelloWorldAddresses,
 }

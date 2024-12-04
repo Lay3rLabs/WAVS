@@ -14,7 +14,7 @@ use crate::{
     },
     eth_client::EthSigningClient,
     hello_world::{
-        config::HelloWorldAddressesConfig,
+        config::HelloWorldAddresses,
         solidity_types::{
             hello_world::HelloWorldServiceManager,
             stake_registry::ECDSAStakeRegistry::{self, Quorum, StrategyParams},
@@ -23,10 +23,7 @@ use crate::{
     },
 };
 
-use super::{
-    config::HelloWorldDeployment, solidity_types::token::LayerToken, HelloWorldClient,
-    HelloWorldClientBuilder,
-};
+use super::{solidity_types::token::LayerToken, HelloWorldClient, HelloWorldClientBuilder};
 use anyhow::{Context, Result};
 
 struct SetupAddrs {
@@ -130,13 +127,11 @@ impl HelloWorldClientBuilder {
         Ok(HelloWorldClient {
             eth: self.eth,
             core,
-            hello_world: HelloWorldDeployment {
-                addresses: HelloWorldAddressesConfig {
-                    proxy_admin: *proxies.admin.address(),
-                    hello_world_service_manager: proxies.hello_world,
-                    stake_registry: proxies.ecdsa_stake_registry,
-                    token: setup.token,
-                },
+            hello_world: HelloWorldAddresses {
+                proxy_admin: *proxies.admin.address(),
+                hello_world_service_manager: proxies.hello_world,
+                stake_registry: proxies.ecdsa_stake_registry,
+                token: setup.token,
             },
         })
     }

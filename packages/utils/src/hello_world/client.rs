@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 impl HelloWorldClient {
     pub async fn create_new_task(&self, task_name: String) -> Result<NewTaskCreated> {
         let hello_world_service_manager = HelloWorldServiceManager::new(
-            self.hello_world.addresses.hello_world_service_manager,
+            self.hello_world.hello_world_service_manager,
             self.eth.http_provider.clone(),
         );
 
@@ -31,7 +31,7 @@ impl HelloWorldClient {
 
     pub async fn sign_and_respond_to_task(&self, new_task_event: NewTaskCreated) -> Result<()> {
         let hello_world_service_manager = HelloWorldServiceManager::new(
-            self.hello_world.addresses.hello_world_service_manager,
+            self.hello_world.hello_world_service_manager,
             self.eth.http_provider.clone(),
         );
 

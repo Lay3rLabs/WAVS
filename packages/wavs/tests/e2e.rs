@@ -160,7 +160,6 @@ mod e2e {
                 Address::Eth(AddrEth::new(
                     app.avs_client
                         .hello_world
-                        .addresses
                         .hello_world_service_manager
                         .into(),
                 )),
