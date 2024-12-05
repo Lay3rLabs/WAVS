@@ -19,12 +19,18 @@ async fn deploy_hello_world_avs() {
         anvil,
     } = EigenTestInit::new().await;
 
+    eigen_client
+        .register_operator(&core_contracts)
+        .await
+        .unwrap();
+
     let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts)
         .build()
         .await
-        .unwrap()
-        .into_simple();
+        .unwrap();
+    hello_world_client.register_operator().await.unwrap();
+    let hello_world_client = hello_world_client.into_simple();
 
     // Create and respond first task
     let new_task = hello_world_client
