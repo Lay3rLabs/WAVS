@@ -5,7 +5,7 @@ use wavs::{
     apis::ID,
     context::AppContext,
     test_utils::{
-        address::rand_address,
+        address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},
     },
     Digest,
@@ -16,7 +16,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let service_id = ID::new("default").unwrap();
     let workflow_id = ID::new("default").unwrap();
-    let task_queue_address = rand_address();
+    let task_queue_address = rand_address_eth();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({

@@ -510,7 +510,7 @@ mod tests {
             Trigger, ID,
         },
         config::{Config, WavsChainConfig, WavsCosmosChainConfig},
-        test_utils::address::rand_address,
+        test_utils::address::rand_address_eth,
     };
 
     use layer_climb::prelude::*;
@@ -547,10 +547,10 @@ mod tests {
         let service_id_2 = ID::new("service-2").unwrap();
         let workflow_id_2 = ID::new("workflow-2").unwrap();
 
-        let task_queue_addr_1_1 = rand_address();
-        let task_queue_addr_1_2 = rand_address();
-        let task_queue_addr_2_1 = rand_address();
-        let task_queue_addr_2_2 = rand_address();
+        let task_queue_addr_1_1 = rand_address_eth();
+        let task_queue_addr_1_2 = rand_address_eth();
+        let task_queue_addr_2_1 = rand_address_eth();
+        let task_queue_addr_2_2 = rand_address_eth();
 
         let trigger_1_1 =
             TriggerData::eth_queue(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
