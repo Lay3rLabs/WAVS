@@ -22,8 +22,18 @@ use crate::{
 
 #[derive(Clone)]
 pub struct EthQueryClient {
+    pub config: EthClientConfig,
     pub ws_provider: RootProvider<PubSubFrontend>,
     pub http_provider: RootProvider<Http<Client>>,
+}
+
+impl std::fmt::Debug for EthQueryClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EthQueryClient")
+            .field("ws_endpoint", &self.config.ws_endpoint)
+            .field("http_endpoint", &self.config.http_endpoint)
+            .finish()
+    }
 }
 
 #[derive(Clone)]
@@ -41,6 +51,16 @@ pub struct EthSigningClient {
     pub signer: Arc<LocalSigner<SigningKey>>,
 }
 
+impl std::fmt::Debug for EthSigningClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EthSigningClient")
+            .field("ws_endpoint", &self.config.ws_endpoint)
+            .field("http_endpoint", &self.config.http_endpoint)
+            .field("address", &self.address())
+            .finish()
+    }
+}
+
 impl EthSigningClient {
     pub fn address(&self) -> Address {
         self.signer.address()
@@ -52,6 +72,7 @@ pub struct EthClientConfig {
     pub ws_endpoint: String,
     pub http_endpoint: String,
     pub mnemonic: Option<String>,
+    pub hd_index: Option<u32>,
 }
 
 pub struct EthClientBuilder {
@@ -72,7 +93,7 @@ impl EthClientBuilder {
     }
 
     pub async fn build_query(self) -> Result<EthQueryClient> {
-        let ws = WsConnect::new(self.config.ws_endpoint);
+        let ws = WsConnect::new(&self.config.ws_endpoint);
         let ws_provider = self.ws_provider_builder.on_ws(ws).await?;
 
         let http_provider = self
@@ -80,6 +101,7 @@ impl EthClientBuilder {
             .on_http(self.config.http_endpoint.parse()?);
 
         Ok(EthQueryClient {
+            config: self.config,
             ws_provider,
             http_provider,
         })
@@ -94,6 +116,7 @@ impl EthClientBuilder {
 
         let signer = MnemonicBuilder::<English>::default()
             .phrase(mnemonic)
+            .index(self.config.hd_index.unwrap_or(0))?
             .build()?;
 
         let wallet: EthereumWallet = signer.clone().into();

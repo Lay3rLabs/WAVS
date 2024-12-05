@@ -1,7 +1,7 @@
 use crate::{
     apis::{
         trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult},
-        Trigger, ID,
+        EthHelloWorldTaskJson, Trigger, ID,
     },
     config::Config,
     context::AppContext,
@@ -211,11 +211,12 @@ impl CoreTriggerManager {
                         // TODO really we should query the contract, but hello world doesn't actually have a payload pipeline
                         // rather, it's derived from the task name
                         // let contract = HelloWorldServiceManager::new(log.address(), ethereum_client.as_ref().unwrap().http_provider.clone());
-                        let message = format!("Hello, {}", event.task.name);
 
-                        let payload =
-                            serde_json::to_vec(&serde_json::json!({ "message": message }))
-                                .map_err(|e| TriggerError::ParseAvsPayload(e.into()))?;
+                        let payload = serde_json::to_vec(&EthHelloWorldTaskJson {
+                            name: event.task.name,
+                            created_block: event.task.taskCreatedBlock,
+                        })
+                        .map_err(|e| TriggerError::ParseAvsPayload(e.into()))?;
 
                         self.handle_trigger(&action_sender, &contract_address, task_id, payload)
                             .await;

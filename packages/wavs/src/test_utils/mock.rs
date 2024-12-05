@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::http::{map_response, TestHttpApp};
 use crate::{
     apis::{
-        dispatcher::{DispatchManager, Permissions},
+        dispatcher::{DispatchManager, Permissions, Submit},
         engine::EngineError,
         ID,
     },
@@ -132,6 +132,7 @@ impl MockE2ETestRunner {
                 permissions,
                 envs,
                 testable: None,
+                submit: Submit::eth_aggregator_tx(),
             },
             wasm_url: None,
         })

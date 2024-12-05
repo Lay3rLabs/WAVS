@@ -78,6 +78,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                             .map(|s| match s {
                                 Submit::LayerVerifierTx { hd_index, .. } => *hd_index,
                                 Submit::EthAggregatorTx { .. } => 0,
+                                Submit::EthSignedMessage { hd_index } => *hd_index,
                             })
                             .unwrap_or(0);
 

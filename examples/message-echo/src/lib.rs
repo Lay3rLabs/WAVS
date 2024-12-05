@@ -1,25 +1,9 @@
 #[allow(warnings)]
 mod bindings;
 
-use std::{
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-};
-
-use anyhow::{anyhow, Context, Result};
-use bindings::{
-    wasi::{
-        http::{
-            outgoing_handler,
-            types::{Headers, InputStream, OutgoingRequest, Scheme},
-        },
-        io::streams::StreamError,
-    },
-    Guest, Output, TaskQueueInput,
-};
+use anyhow::{Context, Result};
+use bindings::{Guest, Output, TaskQueueInput};
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 struct Component;
 

@@ -93,6 +93,10 @@ pub struct OptionalWavsChainConfig {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub http_endpoint: Option<String>,
+    /// To override the chosen eth chain's submission mnemonic
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submission_mnemonic: Option<String>,
     /// To override the chosen layer chain's chain_id
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]

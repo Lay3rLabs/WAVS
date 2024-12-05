@@ -20,11 +20,11 @@ mod e2e {
     use layer::LayerTestApp;
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
-    use wavs::{apis::ID, test_utils::app::TestApp};
     use wavs::{
-        config::Config, context::AppContext, dispatcher::CoreDispatcher,
-        submission::core::TEMP_ETHEREUM_EVENT_COUNT, Digest,
+        apis::{dispatcher::Submit, ID},
+        test_utils::app::TestApp,
     };
+    use wavs::{config::Config, context::AppContext, dispatcher::CoreDispatcher, Digest};
 
     #[test]
     fn e2e_tests() {
@@ -117,14 +117,14 @@ mod e2e {
                             }
                         };
 
-                        let message_echo_wasm_digest =
-                            std::env::var("WAVS_E2E_MESSAGE_ECHO_WASM_DIGEST");
+                        let hello_world_wasm_digest =
+                            std::env::var("WAVS_E2E_HELLO_WORLD_WASM_DIGEST");
 
-                        let message_echo_wasm_digest: Digest = match message_echo_wasm_digest {
+                        let hello_world_wasm_digest: Digest = match hello_world_wasm_digest {
                             Ok(digest) => digest.parse().unwrap(),
                             Err(_) => {
                                 let wasm_bytes =
-                                    include_bytes!("../../../components/message_echo.wasm");
+                                    include_bytes!("../../../components/hello_world.wasm");
                                 http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
                             }
                         };
@@ -138,7 +138,7 @@ mod e2e {
                                     anvil.unwrap(),
                                     http_client,
                                     config,
-                                    message_echo_wasm_digest,
+                                    hello_world_wasm_digest,
                                 )
                                 .await
                             }
@@ -182,22 +182,36 @@ mod e2e {
                         .hello_world_service_manager
                         .into(),
                 )),
+                Submit::EthSignedMessage { hd_index: 0 },
             )
             .await
             .unwrap();
 
         tracing::info!("Service created: {}, submitting task...", service_id);
 
-        app.avs_client
+        let avs_simple_client = app.avs_client.into_simple();
+        let task_index = avs_simple_client
             .create_new_task("foo".to_owned())
             .await
-            .unwrap();
+            .unwrap()
+            .taskIndex;
 
         tokio::time::timeout(Duration::from_secs(10), async move {
             loop {
-                // Once we actually submit the response on chain, we can get rid of this and check the contract properly
-                if TEMP_ETHEREUM_EVENT_COUNT.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                let task_response_hash = avs_simple_client
+                    .task_responded_hash(task_index)
+                    .await
+                    .unwrap();
+                if task_response_hash.len() > 0 {
+                    tracing::info!("GOT THE TASK RESPONSE HASH!");
+                    tracing::info!("{}", hex::encode(task_response_hash));
                     break;
+                } else {
+                    tracing::info!(
+                        "Waiting for task response on {} for index {}...",
+                        avs_simple_client.contract_address,
+                        task_index
+                    );
                 }
                 // still open, waiting...
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -220,7 +234,15 @@ mod e2e {
         let service_id = ID::new("test-service").unwrap();
 
         let _ = http_client
-            .create_service(service_id.clone(), wasm_digest, app.task_queue.addr.clone())
+            .create_service(
+                service_id.clone(),
+                wasm_digest,
+                app.task_queue.addr.clone(),
+                Submit::LayerVerifierTx {
+                    hd_index: 0,
+                    verifier_addr: app.verifier_addr.clone(),
+                },
+            )
             .await
             .unwrap();
 

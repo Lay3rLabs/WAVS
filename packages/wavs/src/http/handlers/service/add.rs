@@ -14,7 +14,6 @@ use crate::{
         state::HttpState,
         types::{ShaDigest, TriggerRequest},
     },
-    test_utils::address::rand_address_eth,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -41,6 +40,7 @@ pub struct ServiceRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub envs: Vec<(String, String)>,
     pub testable: Option<bool>,
+    pub submit: Submit,
 }
 
 impl TriggerRequest {
@@ -97,6 +97,7 @@ async fn add_service_inner(
     })
 }
 
+#[allow(dead_code)]
 struct ServiceRequestParser {
     state: Option<HttpState>,
 }
@@ -119,32 +120,14 @@ impl ServiceRequestParser {
 
         let components = BTreeMap::from([(component_id.clone(), component)]);
 
-        let (trigger, submit) = match req.trigger {
+        let trigger = match req.trigger {
             TriggerRequest::LayerQueue {
                 task_queue_addr,
                 poll_interval,
-                hd_index,
-            } => {
-                let verifier_addr = match &self.state {
-                    Some(state) if !state.is_mock_chain_client => {
-                        let chain_config: ChainConfig = state.config.layer_chain_config()?.into();
-                        query_verifier_addr(chain_config, &task_queue_addr).await?
-                    }
-                    _ => rand_address_eth(),
-                };
+                hd_index: _,
+            } => Trigger::layer_queue(task_queue_addr, poll_interval),
 
-                let trigger = Trigger::layer_queue(task_queue_addr, poll_interval);
-                let submit = Some(Submit::layer_verifier_tx(hd_index, verifier_addr));
-
-                (trigger, submit)
-            }
-
-            TriggerRequest::EthQueue { task_queue_addr } => {
-                let trigger = Trigger::eth_queue(task_queue_addr);
-                let submit = Some(Submit::eth_aggregator_tx());
-
-                (trigger, submit)
-            }
+            TriggerRequest::EthQueue { task_queue_addr } => Trigger::eth_queue(task_queue_addr),
         };
 
         let workflows = BTreeMap::from([(
@@ -152,7 +135,7 @@ impl ServiceRequestParser {
             Workflow {
                 trigger,
                 component: component_id,
-                submit,
+                submit: Some(req.submit),
             },
         )]);
 
@@ -167,22 +150,6 @@ impl ServiceRequestParser {
     }
 }
 
-async fn query_verifier_addr(
-    chain_config: ChainConfig,
-    task_queue_addr: &Address,
-) -> anyhow::Result<Address> {
-    let query_client = QueryClient::new(chain_config).await?;
-
-    let resp: lavs_apis::tasks::ConfigResponse = query_client
-        .contract_smart(
-            task_queue_addr,
-            &lavs_apis::tasks::QueryMsg::Custom(lavs_apis::tasks::CustomQueryMsg::Config {}),
-        )
-        .await?;
-
-    query_client.chain_config.parse_address(&resp.verifier)
-}
-
 #[cfg(test)]
 mod test {
     use layer_climb::prelude::Address;
@@ -190,7 +157,7 @@ mod test {
 
     use crate::{
         apis::{
-            dispatcher::{Permissions, ServiceStatus},
+            dispatcher::{Permissions, ServiceStatus, Submit},
             ID,
         },
         http::{
@@ -268,6 +235,7 @@ mod test {
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
+                submit: Submit::eth_aggregator_tx(),
             }
         }
 

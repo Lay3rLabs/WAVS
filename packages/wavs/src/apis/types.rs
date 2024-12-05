@@ -18,6 +18,7 @@ pub enum Trigger {
     },
     EthQueue {
         // FIXME: add some chain name. right now all triggers are on one chain
+        // For right now this is NOT actually a generic task queue, it's AVS-specific
         task_queue_addr: Address,
     },
 }
@@ -33,6 +34,14 @@ impl Trigger {
     pub fn eth_queue(task_queue_addr: Address) -> Self {
         Trigger::EthQueue { task_queue_addr }
     }
+}
+
+// The native Solidity type isn't Serialize, so we have this intermediary type for now
+// when we have a proper generic AVS contract, this should go away
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct EthHelloWorldTaskJson {
+    pub name: String,
+    pub created_block: u32,
 }
 
 /// ID is meant to identify a component or a service (I don't think we need to enforce the distinction there, do we?)

@@ -1,4 +1,6 @@
+use alloy::primitives::Address;
 use config::HelloWorldAddresses;
+use solidity_types::HelloWorldServiceManagerT;
 
 use crate::{eigen_client::CoreAVSAddresses, eth_client::EthSigningClient};
 
@@ -7,12 +9,12 @@ pub mod client;
 pub mod config;
 pub mod solidity_types;
 
-pub struct HelloWorldClientBuilder {
+pub struct HelloWorldFullClientBuilder {
     pub eth: EthSigningClient,
     pub core_avs_addrs: Option<CoreAVSAddresses>,
 }
 
-impl HelloWorldClientBuilder {
+impl HelloWorldFullClientBuilder {
     pub fn new(eth: EthSigningClient) -> Self {
         Self {
             eth,
@@ -26,8 +28,14 @@ impl HelloWorldClientBuilder {
     }
 }
 
-pub struct HelloWorldClient {
+pub struct HelloWorldFullClient {
     pub eth: EthSigningClient,
     pub core: CoreAVSAddresses,
     pub hello_world: HelloWorldAddresses,
+}
+
+pub struct HelloWorldSimpleClient {
+    pub eth: EthSigningClient,
+    pub contract_address: Address,
+    pub contract: HelloWorldServiceManagerT,
 }

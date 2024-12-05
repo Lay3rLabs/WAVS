@@ -2,7 +2,7 @@ use alloy::node_bindings::{Anvil, AnvilInstance};
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::HelloWorldClientBuilder,
+    hello_world::HelloWorldFullClientBuilder,
     init_tracing_tests,
 };
 
@@ -19,34 +19,34 @@ async fn deploy_hello_world_avs() {
         anvil,
     } = EigenTestInit::new().await;
 
-    let hello_world_client = HelloWorldClientBuilder::new(eigen_client.eth.clone());
-    let hello_world_full_client = hello_world_client
+    let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts)
         .build()
         .await
-        .unwrap();
+        .unwrap()
+        .into_simple();
 
     // Create and respond first task
-    let new_task = hello_world_full_client
+    let new_task = hello_world_client
         .create_new_task("foo".to_owned())
         .await
         .unwrap();
     assert_eq!(new_task.taskIndex, 0);
     assert_eq!(new_task.task.name, "foo");
-    hello_world_full_client
-        .sign_and_respond_to_task(new_task)
+    hello_world_client
+        .sign_and_submit_task(new_task.task, new_task.taskIndex)
         .await
         .unwrap();
 
     // Create and respond second task
-    let new_task = hello_world_full_client
+    let new_task = hello_world_client
         .create_new_task("bar".to_owned())
         .await
         .unwrap();
     assert_eq!(new_task.taskIndex, 1);
     assert_eq!(new_task.task.name, "bar");
-    hello_world_full_client
-        .sign_and_respond_to_task(new_task)
+    hello_world_client
+        .sign_and_submit_task(new_task.task, new_task.taskIndex)
         .await
         .unwrap();
 
@@ -88,6 +88,7 @@ impl EigenTestInit {
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),
+            hd_index: None,
         };
 
         let builder = EthClientBuilder::new(config);

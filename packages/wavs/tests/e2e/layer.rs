@@ -8,6 +8,7 @@ use wavs::config::Config;
 pub struct LayerTestApp {
     pub layer_client: SigningClient,
     pub task_queue: LayerTaskQueueContract,
+    pub verifier_addr: Address,
 }
 
 impl LayerTestApp {
@@ -31,6 +32,17 @@ impl LayerTestApp {
         );
         let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
 
+        let resp: lavs_apis::tasks::ConfigResponse = signing_client
+            .querier
+            .contract_smart(
+                &task_queue_addr,
+                &lavs_apis::tasks::QueryMsg::Custom(lavs_apis::tasks::CustomQueryMsg::Config {}),
+            )
+            .await
+            .unwrap();
+
+        let verifier_addr = chain_config.parse_address(&resp.verifier).unwrap();
+
         let task_queue = LayerTaskQueueContract::new(signing_client.clone(), task_queue_addr)
             .await
             .unwrap();
@@ -38,6 +50,7 @@ impl LayerTestApp {
         Self {
             layer_client: signing_client,
             task_queue,
+            verifier_addr,
         }
     }
 }

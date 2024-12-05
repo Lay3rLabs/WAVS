@@ -24,7 +24,7 @@ use crate::{
     },
 };
 
-use super::{solidity_types::token::LayerToken, HelloWorldClient, HelloWorldClientBuilder};
+use super::{solidity_types::token::LayerToken, HelloWorldFullClient, HelloWorldFullClientBuilder};
 use anyhow::{Context, Result};
 
 struct SetupAddrs {
@@ -32,7 +32,7 @@ struct SetupAddrs {
     pub quorum: Quorum,
 }
 
-impl HelloWorldClientBuilder {
+impl HelloWorldFullClientBuilder {
     async fn set_up(&self, strategy_factory: Address) -> Result<SetupAddrs> {
         let token = LayerToken::deploy(self.eth.http_provider.clone()).await?;
         let strategy_factory =
@@ -61,7 +61,7 @@ impl HelloWorldClientBuilder {
         })
     }
 
-    pub async fn build(mut self) -> Result<HelloWorldClient> {
+    pub async fn build(mut self) -> Result<HelloWorldFullClient> {
         let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
         let proxies = Proxies::new(&self.eth).await?;
         let setup = self.set_up(core.strategy_factory).await?;
@@ -122,7 +122,7 @@ impl HelloWorldClientBuilder {
         tracing::debug!("underlying strategy token addr: {}", underlying_token);
 
         // Upgrade contracts
-        Ok(HelloWorldClient {
+        Ok(HelloWorldFullClient {
             eth: self.eth,
             core,
             hello_world: HelloWorldAddresses {

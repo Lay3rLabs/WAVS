@@ -69,6 +69,7 @@ impl Config {
             ws_endpoint: self.ws_endpoint.clone(),
             http_endpoint: self.http_endpoint.clone(),
             mnemonic,
+            hd_index: None,
         };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)
