@@ -4,7 +4,10 @@ use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySig
 use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
 use serde::{Deserialize, Serialize};
-use utils::eth_client::{EthClientBuilder, EthClientConfig, EthClientError, EthSigningClient};
+use utils::{
+    error::EthClientError,
+    eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
+};
 
 use crate::args::CliArgs;
 
@@ -33,7 +36,10 @@ pub struct Config {
     pub chain: String,
 
     /// Websocket eth endpoint
-    pub endpoint: String,
+    pub ws_endpoint: String,
+
+    /// Http eth endpoint
+    pub http_endpoint: String,
 
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
@@ -49,7 +55,8 @@ impl Default for Config {
             host: "localhost".to_string(),
             cors_allowed_origins: Vec::new(),
             chain: String::new(),
-            endpoint: "ws://127.0.0.1:8545".to_string(),
+            ws_endpoint: "ws://127.0.0.1:8545".to_string(),
+            http_endpoint: "http://127.0.0.1:8545".to_string(),
             mnemonic: None,
         }
     }
@@ -57,9 +64,12 @@ impl Default for Config {
 
 impl Config {
     pub async fn signing_client(&self) -> Result<EthSigningClient> {
-        let endpoint = self.endpoint.clone();
         let mnemonic = self.mnemonic.clone();
-        let eth_client = EthClientConfig { endpoint, mnemonic };
+        let eth_client = EthClientConfig {
+            ws_endpoint: self.ws_endpoint.clone(),
+            http_endpoint: self.http_endpoint.clone(),
+            mnemonic,
+        };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)
     }

@@ -10,20 +10,28 @@ pub enum Trigger {
     // #[serde(rename_all = "camelCase")]
     // Cron { schedule: String },
     #[serde(rename_all = "camelCase")]
-    Queue {
+    LayerQueue {
         // FIXME: add some chain name. right now all triggers are on one chain
         task_queue_addr: Address,
         /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
         poll_interval: u32,
     },
+    EthQueue {
+        // FIXME: add some chain name. right now all triggers are on one chain
+        task_queue_addr: Address,
+    },
 }
 
 impl Trigger {
-    pub fn queue(task_queue_addr: Address, poll_interval: u32) -> Self {
-        Trigger::Queue {
+    pub fn layer_queue(task_queue_addr: Address, poll_interval: u32) -> Self {
+        Trigger::LayerQueue {
             task_queue_addr,
             poll_interval,
         }
+    }
+
+    pub fn eth_queue(task_queue_addr: Address) -> Self {
+        Trigger::EthQueue { task_queue_addr }
     }
 }
 

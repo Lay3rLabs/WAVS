@@ -12,6 +12,8 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 rust-version = "1.80.0"
 
 [workspace.dependencies]
+utils = { path = "packages/utils" }
+wavs = { path = "packages/wavs" }
 clap = { version = "4.5.20", features = ["derive", "env"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }
@@ -56,8 +58,4 @@ url = "2.5.3"
 bip39 = "2.0.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
-
 alloy = { version = "0.6.4", features = ["full", "signer-mnemonic"] }
-
-wavs = { path = "packages/wavs" }
-utils = { path = "packages/utils" }

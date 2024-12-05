@@ -169,7 +169,7 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
-                trigger: TriggerData::queue(service_id, workflow_id, task_queue_addr.clone(), 5)
+                trigger: TriggerData::eth_queue(service_id, workflow_id, task_queue_addr.clone())
                     .unwrap(),
                 result: TriggerResult::queue(
                     task_id,
@@ -229,17 +229,17 @@ mod tests {
 
     use lavs_apis::id::TaskId;
 
-    use crate::{apis::trigger::TriggerResult, test_utils::address::rand_address};
+    use crate::{apis::trigger::TriggerResult, test_utils::address::rand_address_eth};
 
     use super::*;
 
     #[test]
     fn mock_trigger_sends() {
-        let task_queue_addr = rand_address();
+        let task_queue_addr = rand_address_eth();
 
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::queue("service1", "workflow1", task_queue_addr.clone(), 5)
+                trigger: TriggerData::eth_queue("service1", "workflow1", task_queue_addr.clone())
                     .unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(2),
@@ -247,7 +247,7 @@ mod tests {
                 },
             },
             TriggerAction {
-                trigger: TriggerData::queue("service2", "workflow2", task_queue_addr, 5).unwrap(),
+                trigger: TriggerData::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
@@ -268,7 +268,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerData::queue("abcd", "abcd", rand_address(), 5).unwrap();
+        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -279,7 +279,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerData::queue("abcd", "abcd", rand_address(), 5).unwrap();
+        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }

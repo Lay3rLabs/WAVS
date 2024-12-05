@@ -13,13 +13,15 @@ use crate::{
         mock::{Function, MockEngine},
         runner::{EngineRunner, SingleEngineRunner},
     },
-    http::handlers::service::{
-        add::{AddServiceRequest, ServiceRequest},
-        delete::DeleteServices,
-        list::ListServicesResponse,
-        test::{TestAppRequest, TestAppResponse},
+    http::{
+        handlers::service::{
+            add::{AddServiceRequest, ServiceRequest},
+            delete::DeleteServices,
+            list::ListServicesResponse,
+            test::{TestAppRequest, TestAppResponse},
+        },
+        types::TriggerRequest,
     },
-    http::types::TriggerRequest,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
     Digest,
@@ -124,7 +126,7 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: TriggerRequest::queue(task_queue_address, 5, 0),
+                trigger: TriggerRequest::eth_queue(task_queue_address.clone()),
                 id: service_id,
                 digest: digest.into(),
                 permissions,

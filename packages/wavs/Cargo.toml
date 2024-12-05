@@ -9,8 +9,11 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [features]
 e2e_tests = []
+e2e_tests_layer = ["e2e_tests"]
+e2e_tests_ethereum = ["e2e_tests"]
 
 [dependencies]
+utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
@@ -48,11 +51,13 @@ rayon = { workspace = true }
 walkdir = { workspace = true }
 url = { workspace = true }
 bip39 = { workspace = true }
+alloy = {workspace = true}
 
 [dev-dependencies]
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true }
+alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
 
 [[bench]]
 name = "mock_bench"

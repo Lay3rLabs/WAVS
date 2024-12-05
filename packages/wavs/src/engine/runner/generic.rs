@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
 
-use crate::apis::dispatcher::{Service, Submit};
+use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::{TriggerAction, TriggerResult};
 use crate::context::AppContext;
@@ -49,22 +49,12 @@ pub trait EngineRunner: Send + Sync {
                 let timestamp = 1234567890;
                 let wasm_result = self.engine().execute_queue(component, payload, timestamp)?;
 
-                // TODO: we need to sent these off to the submission engine
-                if let Some(Submit::VerifierTx {
-                    hd_index,
-                    verifier_addr,
-                }) = workflow.submit.as_ref()
-                {
-                    Ok(Some(ChainMessage {
-                        trigger_data: action.trigger,
-                        task_id,
-                        wasm_result,
-                        hd_index: *hd_index,
-                        verifier_addr: verifier_addr.clone(),
-                    }))
-                } else {
-                    Ok(None)
-                }
+                Ok(workflow.submit.clone().map(|submit| ChainMessage {
+                    trigger_data: action.trigger,
+                    task_id,
+                    wasm_result,
+                    submit,
+                }))
             }
         }
     }

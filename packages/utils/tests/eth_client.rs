@@ -1,13 +1,19 @@
 use alloy::{node_bindings::Anvil, providers::Provider, signers::Signer};
 use futures::StreamExt;
-use utils::eth_client::{EthClientBuilder, EthClientConfig};
+use utils::{
+    eth_client::{EthClientBuilder, EthClientConfig},
+    init_tracing_tests,
+};
 
 #[tokio::test]
 async fn client_stream_blocks() {
-    let anvil = Anvil::new().block_time(1).try_spawn().unwrap();
+    init_tracing_tests();
+    // seems to be we need to set a block time to get new blocks without explicit transactions?
+    let anvil = Anvil::new().block_time_f64(0.02).try_spawn().unwrap();
 
     let config = EthClientConfig {
-        endpoint: anvil.ws_endpoint().to_string(),
+        ws_endpoint: anvil.ws_endpoint().to_string(),
+        http_endpoint: anvil.endpoint().to_string(),
         ..Default::default()
     };
 
@@ -15,7 +21,7 @@ async fn client_stream_blocks() {
     let client = builder.build_query().await.unwrap();
 
     let mut stream = client
-        .provider
+        .ws_provider
         .subscribe_blocks()
         .await
         .unwrap()
@@ -31,10 +37,12 @@ async fn client_stream_blocks() {
 
 #[tokio::test]
 async fn client_sign_message() {
-    let anvil = Anvil::new().block_time(1).try_spawn().unwrap();
+    init_tracing_tests();
+    let anvil = Anvil::new().try_spawn().unwrap();
 
     let config = EthClientConfig {
-        endpoint: anvil.ws_endpoint().to_string(),
+        ws_endpoint: anvil.ws_endpoint().to_string(),
+        http_endpoint: anvil.endpoint().to_string(),
         mnemonic: Some(
             "work man father plunge mystery proud hollow address reunion sauce theory bonus"
                 .to_string(),

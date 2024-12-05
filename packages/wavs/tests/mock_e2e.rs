@@ -10,7 +10,7 @@ use wavs::{
     context::AppContext,
     engine::runner::EngineRunner,
     test_utils::{
-        address::rand_address,
+        address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
     },
     Digest,
@@ -22,7 +22,7 @@ fn mock_e2e_trigger_flow() {
 
     let service_id = ID::new("service1").unwrap();
     let workflow_id = ID::new("default").unwrap();
-    let task_queue_address = rand_address();
+    let task_queue_address = rand_address_eth();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
@@ -96,7 +96,7 @@ fn mock_e2e_service_lifecycle() {
             assert!(services.services.is_empty());
             assert!(services.digests.is_empty());
 
-            let task_queue_address = rand_address();
+            let task_queue_address = rand_address_eth();
 
             // add services in order
             let service_id1 = ID::new("service1").unwrap();
@@ -182,7 +182,7 @@ fn mock_e2e_service_test() {
             // add services in order
             let service_id = ID::new("service").unwrap();
             let digest = Digest::new(b"wasm");
-            let task_queue_address = rand_address();
+            let task_queue_address = rand_address_eth();
 
             runner
                 .create_service_simple(
@@ -223,7 +223,7 @@ fn mock_e2e_service_settings() {
                 .create_service(
                     service_id.clone(),
                     digest.clone(),
-                    &rand_address(),
+                    &rand_address_eth(),
                     permissions.clone(),
                     envs.clone(),
                     BigSquare,

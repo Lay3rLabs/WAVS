@@ -1,8 +1,23 @@
+use alloy::signers::local::{coins_bip39::English, MnemonicBuilder};
 use bip39::Mnemonic;
 use layer_climb::prelude::*;
 use rand::prelude::*;
 
-pub fn rand_address() -> Address {
+pub fn rand_address_eth() -> Address {
+    let mut rng = rand::thread_rng();
+
+    let entropy: [u8; 32] = rng.gen();
+    let mnemonic = Mnemonic::from_entropy(&entropy).unwrap();
+
+    let signer = MnemonicBuilder::<English>::default()
+        .phrase(mnemonic.words().collect::<Vec<&str>>().join(" "))
+        .build()
+        .unwrap();
+
+    Address::Eth(AddrEth::new(signer.address().into()))
+}
+
+pub fn rand_address_layer() -> Address {
     let mut rng = rand::thread_rng();
 
     let entropy: [u8; 32] = rng.gen();

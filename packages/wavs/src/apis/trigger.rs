@@ -34,7 +34,7 @@ pub struct TriggerData {
 }
 
 impl TriggerData {
-    pub fn queue(
+    pub fn layer_queue(
         service_id: impl TryInto<ID, Error = IDError>,
         workflow_id: impl TryInto<ID, Error = IDError>,
         task_queue_addr: Address,
@@ -43,7 +43,19 @@ impl TriggerData {
         Ok(Self {
             service_id: service_id.try_into()?,
             workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::queue(task_queue_addr, poll_interval),
+            trigger: Trigger::layer_queue(task_queue_addr, poll_interval),
+        })
+    }
+
+    pub fn eth_queue(
+        service_id: impl TryInto<ID, Error = IDError>,
+        workflow_id: impl TryInto<ID, Error = IDError>,
+        task_queue_addr: Address,
+    ) -> Result<Self, IDError> {
+        Ok(Self {
+            service_id: service_id.try_into()?,
+            workflow_id: workflow_id.try_into()?,
+            trigger: Trigger::eth_queue(task_queue_addr),
         })
     }
 }
@@ -82,6 +94,8 @@ impl TriggerResult {
 pub enum TriggerError {
     #[error("climb: {0}")]
     Climb(anyhow::Error),
+    #[error("ethereum: {0}")]
+    Ethereum(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ID),
     #[error("Cannot find workflow: {0} / {1}")]

@@ -134,7 +134,7 @@ mod tests {
             dispatcher::{Component, Service, ServiceStatus, Workflow},
             Trigger, ID,
         },
-        test_utils::address::rand_address,
+        test_utils::address::rand_address_eth,
         Digest,
     };
 
@@ -213,7 +213,7 @@ mod tests {
             (
                 ID::new("workflow-id-1").unwrap(),
                 Workflow {
-                    trigger: Trigger::queue(rand_address(), 5),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     component: ID::new("component-id-1").unwrap(),
                     submit: None,
                 },
@@ -221,7 +221,7 @@ mod tests {
             (
                 ID::new("workflow-id-2").unwrap(),
                 Workflow {
-                    trigger: Trigger::queue(rand_address(), 5),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     component: ID::new("component-id-2").unwrap(),
                     submit: None,
                 },

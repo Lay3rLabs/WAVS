@@ -18,7 +18,7 @@ jobs:
         with:
           profile: minimal
           toolchain: 1.80.0
-        #   target: wasm32-unknown-unknown
+          #   target: wasm32-unknown-unknown
           override: true
 
       - name: Set up cargo cache
@@ -30,10 +30,17 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/            
+            target/
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
-  
+
+      #   # copies artifacts to a directory that can be used by deploy tests
+      #   - name: Prepare artifacts (wasm contracts)
+      #     run: bash ./scripts/collect_wasm.sh
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Check compilation
         uses: actions-rs/cargo@v1
         with:
@@ -42,13 +49,6 @@ jobs:
           args: --workspace --locked --no-run
         env:
           RUST_BACKTRACE: 1
-
-    #   # copies artifacts to a directory that can be used by deploy tests
-    #   - name: Prepare artifacts (wasm contracts)
-    #     run: bash ./scripts/collect_wasm.sh
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -59,14 +59,13 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-
   lints:
     name: Lints
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
-            
+
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -84,10 +83,13 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/            
+            target/
           key: ${{ runner.os }}-cargo-lint-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-lint-
-  
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
         with:

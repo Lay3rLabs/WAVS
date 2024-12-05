@@ -23,4 +23,4 @@ gas_denom = "uperm"
 [chains.local-eth]
 chain_kind = "ethereum"
 ws_endpoint = "ws://localhost:8545"
-rpc_endpoint = "http://localhost:8545"
+http_endpoint = "http://localhost:8545"

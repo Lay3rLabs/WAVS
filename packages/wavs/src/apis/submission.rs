@@ -1,12 +1,11 @@
 use lavs_apis::id::TaskId;
-use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::trigger::TriggerData;
+use super::{dispatcher::Submit, trigger::TriggerData};
 
 pub trait Submission: Send + Sync {
     /// Start running the submission manager
@@ -23,11 +22,9 @@ pub trait Submission: Send + Sync {
 pub struct ChainMessage {
     /// Identify which trigger this came from
     pub trigger_data: TriggerData,
-
     pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
-    pub hd_index: u32,
-    pub verifier_addr: Address,
+    pub submit: Submit,
 }
 
 #[derive(Error, Debug)]
@@ -42,4 +39,6 @@ pub enum SubmissionError {
     Reqwest(reqwest::Error),
     #[error("faucet: {0}")]
     Faucet(String),
+    #[error("missing layer chain")]
+    MissingLayerChain,
 }

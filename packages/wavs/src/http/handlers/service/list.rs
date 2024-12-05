@@ -76,7 +76,8 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                             .submit
                             .as_ref()
                             .map(|s| match s {
-                                Submit::VerifierTx { hd_index, .. } => *hd_index,
+                                Submit::LayerVerifierTx { hd_index, .. } => *hd_index,
+                                Submit::EthAggregatorTx { .. } => 0,
                             })
                             .unwrap_or(0);
 
@@ -104,7 +105,7 @@ mod test {
             handlers::service::list::ListServicesResponse,
             types::{ShaDigest, TriggerResponse},
         },
-        test_utils::address::rand_address,
+        test_utils::address::rand_address_eth,
         Digest,
     };
 
@@ -137,7 +138,7 @@ mod test {
                     name: "test-name-1".to_string(),
                     status: Some(ServiceStatus::Active),
                     digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::queue(rand_address(), 5, 0),
+                    trigger: TriggerResponse::eth_queue(rand_address_eth()),
                     permissions: Permissions::default(),
                     envs: vec![],
                     testable: Some(true),
@@ -146,7 +147,7 @@ mod test {
                     name: "test-name-2".to_string(),
                     status: Some(ServiceStatus::Active),
                     digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::queue(rand_address(), 5, 0),
+                    trigger: TriggerResponse::eth_queue(rand_address_eth()),
                     permissions: Permissions::default(),
                     envs: vec![],
                     testable: Some(true),
@@ -155,7 +156,7 @@ mod test {
                     name: "test-name-3".to_string(),
                     status: Some(ServiceStatus::Active),
                     digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::queue(rand_address(), 5, 0),
+                    trigger: TriggerResponse::eth_queue(rand_address_eth()),
                     permissions: Permissions::default(),
                     envs: vec![],
                     testable: Some(true),

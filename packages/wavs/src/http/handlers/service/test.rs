@@ -43,6 +43,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
     let services = state
         .dispatcher
         .list_services(Bound::Included(&req.name), Bound::Included(&req.name))?;
+
     let service = services
         .first()
         .context(format!("Service {} not found", req.name))?;
@@ -61,7 +62,10 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
             trigger: workflow.trigger.clone(),
         },
         result: match workflow.trigger {
-            Trigger::Queue { .. } => {
+            Trigger::LayerQueue { .. } => {
+                TriggerResult::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
+            }
+            Trigger::EthQueue { .. } => {
                 TriggerResult::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
             }
         },
