@@ -1,6 +1,6 @@
 use alloy::node_bindings::{Anvil, AnvilInstance};
 use utils::{
-    eigen_client::{config::CoreAVSAddresses, EigenClient},
+    eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
     hello_world::HelloWorldClientBuilder,
     init_tracing_tests,

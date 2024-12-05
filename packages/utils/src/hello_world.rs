@@ -1,6 +1,6 @@
 use config::HelloWorldAddresses;
 
-use crate::{eigen_client::config::CoreAVSAddresses, eth_client::EthSigningClient};
+use crate::{eigen_client::CoreAVSAddresses, eth_client::EthSigningClient};
 
 pub mod builder;
 pub mod client;
