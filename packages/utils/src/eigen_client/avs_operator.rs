@@ -3,9 +3,8 @@ use alloy::{providers::Provider, rpc::types::TransactionReceipt};
 use crate::error::EthClientError;
 
 use super::{
-    config::CoreAVSAddresses,
     solidity_types::delegation_manager::{DelegationManager, IDelegationManager::OperatorDetails},
-    EigenClient,
+    CoreAVSAddresses, EigenClient,
 };
 use anyhow::{Context, Result};
 

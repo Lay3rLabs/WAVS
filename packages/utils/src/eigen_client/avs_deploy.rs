@@ -1,5 +1,4 @@
 use super::{
-    config::CoreAVSAddresses,
     solidity_types::{
         delegation_manager::DelegationManager,
         misc::{
@@ -9,7 +8,7 @@ use super::{
         proxy::{EmptyContract, ProxyAdmin, TransparentUpgradeableProxy},
         EmptyContractT, ProxyAdminT, TransparentProxyContractT,
     },
-    EigenClient,
+    CoreAVSAddresses, EigenClient,
 };
 use crate::eth_client::EthSigningClient;
 use alloy::primitives::{Address, FixedBytes, U256};
