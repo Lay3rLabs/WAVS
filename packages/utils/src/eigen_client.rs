@@ -32,7 +32,7 @@ impl EigenClient {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CoreAVSAddresses {
     pub proxy_admin: Address,
     pub delegation_manager: Address,
