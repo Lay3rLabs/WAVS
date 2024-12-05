@@ -31,6 +31,3 @@ utils = { workspace = true }
 temp-env = { workspace = true }
 alloy = { version = "0.5.4", features = ["full", "node-bindings"] }
 serde_json = { workspace = true }
-eigen-utils = { workspace = true }
-eigen-client-elcontracts = { version = "0.1.1" }
-eigen-logging = { version = "0.1.1" }
