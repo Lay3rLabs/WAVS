@@ -107,4 +107,13 @@ contract HelloWorldServiceManager is
         // emitting event
         emit TaskResponded(referenceTaskIndex, task, msg.sender);
     }
+    function isValidAggregatedSignature(
+        bytes32 _ethSignedMessageHash,
+        bytes memory _signatureData
+    ) external view returns (bool) {
+        return ECDSAStakeRegistry(stakeRegistry).isValidSignature(
+            _ethSignedMessageHash,
+            _signatureData
+        );
+    }
 }
