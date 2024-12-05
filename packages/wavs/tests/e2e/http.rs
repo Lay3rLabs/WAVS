@@ -35,7 +35,7 @@ impl HttpClient {
 
     pub async fn get_config(&self) -> Result<Config> {
         self.inner
-            .get(&format!("{}/config", self.endpoint))
+            .get(format!("{}/config", self.endpoint))
             .send()
             .await?
             .json()
@@ -69,7 +69,7 @@ impl HttpClient {
         })?;
 
         self.inner
-            .post(&format!("{}/app", self.endpoint))
+            .post(format!("{}/app", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -91,7 +91,7 @@ impl HttpClient {
 
         let response: TestAppResponse = self
             .inner
-            .post(&format!("{}/test", self.endpoint))
+            .post(format!("{}/test", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -105,7 +105,7 @@ impl HttpClient {
     pub async fn upload_wasm(&self, wasm_bytes: Vec<u8>) -> Result<Digest> {
         let response: UploadServiceResponse = self
             .inner
-            .post(&format!("{}/upload", self.endpoint))
+            .post(format!("{}/upload", self.endpoint))
             .body(wasm_bytes)
             .send()
             .await?
