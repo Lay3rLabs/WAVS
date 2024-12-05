@@ -172,7 +172,7 @@ mod e2e {
 
         let service_id = ID::new("test-service").unwrap();
 
-        let _ = http_client
+        http_client
             .create_service(
                 service_id.clone(),
                 wasm_digest,
@@ -202,7 +202,7 @@ mod e2e {
                     .task_responded_hash(task_index)
                     .await
                     .unwrap();
-                if task_response_hash.len() > 0 {
+                if !task_response_hash.is_empty() {
                     tracing::info!("GOT THE TASK RESPONSE HASH!");
                     tracing::info!("{}", hex::encode(task_response_hash));
                     break;
@@ -234,7 +234,7 @@ mod e2e {
 
         let service_id = ID::new("test-service").unwrap();
 
-        let _ = http_client
+        http_client
             .create_service(
                 service_id.clone(),
                 wasm_digest,
