@@ -35,7 +35,6 @@ struct SetupAddrs {
 impl HelloWorldClientBuilder {
     async fn set_up(&self, strategy_factory: Address) -> Result<SetupAddrs> {
         let token = LayerToken::deploy(self.eth.http_provider.clone()).await?;
-        tracing::debug!("deployed token: {}", token.address());
         let strategy_factory =
             StrategyFactory::new(strategy_factory, self.eth.http_provider.clone());
 
@@ -63,7 +62,6 @@ impl HelloWorldClientBuilder {
     }
 
     pub async fn build(mut self) -> Result<HelloWorldClient> {
-        tracing::debug!("Building");
         let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
         let proxies = Proxies::new(&self.eth).await?;
         let setup = self.set_up(core.strategy_factory).await?;

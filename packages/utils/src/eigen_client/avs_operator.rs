@@ -1,4 +1,4 @@
-use alloy::{providers::Provider, rpc::types::TransactionReceipt};
+use alloy::rpc::types::TransactionReceipt;
 
 use crate::error::EthClientError;
 
@@ -6,7 +6,7 @@ use super::{
     solidity_types::delegation_manager::{DelegationManager, IDelegationManager::OperatorDetails},
     CoreAVSAddresses, EigenClient,
 };
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 impl EigenClient {
     pub async fn register_operator(&self, avs_addresses: &CoreAVSAddresses) -> Result<String> {
