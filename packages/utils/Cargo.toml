@@ -16,6 +16,9 @@ thiserror = { workspace = true }
 futures = { workspace = true }
 tracing-subscriber = { workspace = true }
 
+rand = "0.8.5"
+chrono = "0.4.38"
+
 [dev-dependencies]
 tokio = { workspace = true }
 alloy = { version = "0.6.4", features = ["full", "node-bindings"] }

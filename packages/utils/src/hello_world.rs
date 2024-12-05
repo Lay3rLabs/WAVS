@@ -1,6 +1,7 @@
 use alloy::primitives::Address;
 use config::HelloWorldAddresses;
 use solidity_types::HelloWorldServiceManagerT;
+mod avs_operator;
 
 use crate::{eigen_client::CoreAVSAddresses, eth_client::EthSigningClient};
 
