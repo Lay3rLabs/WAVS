@@ -51,7 +51,7 @@ rayon = { workspace = true }
 walkdir = { workspace = true }
 url = { workspace = true }
 bip39 = { workspace = true }
-alloy = {workspace = true}
+alloy = { workspace = true }
 
 [dev-dependencies]
 temp-env = { workspace = true }

@@ -1,9 +1,9 @@
 [profile.default]
 libs = ["lib", "lib/eigenlayer-middleware/lib"]
 remappings = [
-    "@eigenlayer/contracts=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts",
-    "@eigenlayer/middleware=lib/eigenlayer-middleware",
-    "@eigenlayer/test=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/test",
+  "@eigenlayer/contracts=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts",
+  "@eigenlayer/middleware=lib/eigenlayer-middleware",
+  "@eigenlayer/test=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/test",
 ]
 git_protocol = "ssh"
 src = "contracts"
