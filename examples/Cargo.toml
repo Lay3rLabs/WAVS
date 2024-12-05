@@ -6,6 +6,7 @@ members = [
   "permissions",
   "ai-bouncer",
   "message-echo",
+  "hello-world",
 ]
 resolver = "2"
 

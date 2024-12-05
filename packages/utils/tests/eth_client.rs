@@ -47,6 +47,7 @@ async fn client_sign_message() {
             "work man father plunge mystery proud hollow address reunion sauce theory bonus"
                 .to_string(),
         ),
+        hd_index: None,
     };
 
     let builder = EthClientBuilder::new(config);

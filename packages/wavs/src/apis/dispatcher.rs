@@ -111,6 +111,11 @@ pub enum Submit {
     }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
     /// Sending a message to the aggregator on eth chain
     EthAggregatorTx {},
+    /// Sending a message to the aggregator on eth chain
+    EthSignedMessage {
+        /// The hd index of the mnemonic to sign with
+        hd_index: u32,
+    },
 }
 
 impl Submit {
@@ -122,6 +127,9 @@ impl Submit {
     }
     pub fn eth_aggregator_tx() -> Self {
         Submit::EthAggregatorTx {}
+    }
+    pub fn eth_signed_message(hd_index: u32) -> Self {
+        Submit::EthSignedMessage { hd_index }
     }
 }
 

@@ -41,4 +41,10 @@ pub enum SubmissionError {
     Faucet(String),
     #[error("missing layer chain")]
     MissingLayerChain,
+    #[error("ethereum: {0}")]
+    Ethereum(anyhow::Error),
+    #[error("missing ethereum chain")]
+    MissingEthereumChain,
+    #[error("cross-chain submissions are not supported yet")]
+    NoCrossChainSubmissions,
 }

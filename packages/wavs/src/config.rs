@@ -153,11 +153,14 @@ impl Config {
             pub http_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             pub ws_endpoint: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub submission_mnemonic: Option<String>,
         }
 
         let config_override = ConfigOverride {
             http_endpoint: self.chain_config_override.http_endpoint.clone(),
             ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
+            submission_mnemonic: self.chain_config_override.submission_mnemonic.clone(),
         };
 
         let config_merged = Figment::new()
@@ -201,6 +204,8 @@ pub struct WavsCosmosChainConfig {
 pub struct WavsEthereumChainConfig {
     pub ws_endpoint: String,
     pub http_endpoint: String,
+    /// mnemonic for the submission client (usually leave this as None and override in env)
+    pub submission_mnemonic: Option<String>,
 }
 
 impl WavsCosmosChainConfig {
@@ -238,7 +243,8 @@ impl From<WavsEthereumChainConfig> for EthClientConfig {
         Self {
             ws_endpoint: config.ws_endpoint,
             http_endpoint: config.http_endpoint,
-            mnemonic: None,
+            mnemonic: config.submission_mnemonic,
+            hd_index: None,
         }
     }
 }

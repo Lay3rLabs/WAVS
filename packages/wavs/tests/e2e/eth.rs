@@ -2,14 +2,14 @@ use alloy::node_bindings::AnvilInstance;
 use utils::{
     eigen_client::EigenClient,
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::{HelloWorldClient, HelloWorldClientBuilder},
+    hello_world::{HelloWorldFullClient, HelloWorldFullClientBuilder},
 };
 use wavs::config::Config;
 
 #[allow(dead_code)]
 pub struct EthTestApp {
     pub eigen_client: EigenClient,
-    pub avs_client: HelloWorldClient,
+    pub avs_client: HelloWorldFullClient,
     anvil: AnvilInstance,
 }
 
@@ -21,6 +21,7 @@ impl EthTestApp {
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),
+            hd_index: None,
         };
 
         tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);
@@ -30,7 +31,7 @@ impl EthTestApp {
 
         let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-        let hello_world_client = HelloWorldClientBuilder::new(eigen_client.eth.clone())
+        let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
             .avs_addresses(core_contracts)
             .build()
             .await

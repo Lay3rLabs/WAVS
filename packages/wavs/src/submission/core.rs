@@ -1,15 +1,15 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicUsize, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use crate::{
     apis::{
         dispatcher::Submit,
         submission::{ChainMessage, Submission, SubmissionError},
-        Trigger,
+        EthHelloWorldTaskJson, Trigger,
     },
-    config::{Config, WavsCosmosChainConfig},
+    config::{Config, WavsCosmosChainConfig, WavsEthereumChainConfig},
     context::AppContext,
 };
 use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
@@ -17,11 +17,18 @@ use layer_climb::prelude::*;
 use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
+use utils::hello_world::solidity_types::hello_world::Task as HelloWorldTask;
+use utils::{
+    eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
+    hello_world::HelloWorldSimpleClient,
+};
 
 #[derive(Clone)]
 pub struct CoreSubmission {
-    clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
+    layer_clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
     layer_chain: Option<ChainLayerSubmission>,
+    eth_clients: Arc<Mutex<HashMap<u32, EthSigningClient>>>,
+    eth_chain: Option<ChainEthSubmission>,
     http_client: reqwest::Client,
 }
 
@@ -54,6 +61,25 @@ impl ChainLayerSubmission {
     }
 }
 
+#[derive(Clone)]
+struct ChainEthSubmission {
+    client_config: EthClientConfig,
+    faucet_url: Option<Url>,
+}
+
+impl ChainEthSubmission {
+    #[instrument(level = "debug", fields(subsys = "Submission"))]
+    fn new(config: WavsEthereumChainConfig) -> Result<Self, SubmissionError> {
+        let client_config = config.into();
+
+        Ok(Self {
+            client_config,
+            // TODO: Ethereum faucet
+            faucet_url: None,
+        })
+    }
+}
+
 impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
@@ -64,9 +90,17 @@ impl CoreSubmission {
             .map(ChainLayerSubmission::new)
             .transpose()?;
 
+        let eth_chain = config
+            .try_ethereum_chain_config()
+            .map_err(SubmissionError::Ethereum)?
+            .map(ChainEthSubmission::new)
+            .transpose()?;
+
         Ok(Self {
-            clients: Arc::new(Mutex::new(HashMap::new())),
+            layer_clients: Arc::new(Mutex::new(HashMap::new())),
             layer_chain,
+            eth_clients: Arc::new(Mutex::new(HashMap::new())),
+            eth_chain,
             http_client: reqwest::Client::new(),
         })
     }
@@ -77,10 +111,16 @@ impl CoreSubmission {
             .ok_or(SubmissionError::MissingLayerChain)
     }
 
+    fn get_eth_chain(&self) -> Result<&ChainEthSubmission, SubmissionError> {
+        self.eth_chain
+            .as_ref()
+            .ok_or(SubmissionError::MissingEthereumChain)
+    }
+
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn get_layer_client(&self, hd_index: u32) -> Result<SigningClient, SubmissionError> {
         {
-            let lock = self.clients.lock().unwrap();
+            let lock = self.layer_clients.lock().unwrap();
 
             if let Some(client) = lock.get(&hd_index) {
                 return Ok(client.clone());
@@ -98,7 +138,34 @@ impl CoreSubmission {
             .map_err(SubmissionError::Climb)?;
 
         {
-            let mut lock = self.clients.lock().unwrap();
+            let mut lock = self.layer_clients.lock().unwrap();
+            lock.insert(hd_index, client.clone());
+        }
+
+        Ok(client)
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    async fn get_eth_client(&self, hd_index: u32) -> Result<EthSigningClient, SubmissionError> {
+        {
+            let lock = self.eth_clients.lock().unwrap();
+
+            if let Some(client) = lock.get(&hd_index) {
+                return Ok(client.clone());
+            }
+        }
+
+        let mut client_config = self.get_eth_chain()?.client_config.clone();
+
+        client_config.hd_index = Some(hd_index);
+
+        let client = EthClientBuilder::new(client_config)
+            .build_signing()
+            .await
+            .map_err(SubmissionError::Ethereum)?;
+
+        {
+            let mut lock = self.eth_clients.lock().unwrap();
             lock.insert(hd_index, client.clone());
         }
 
@@ -165,10 +232,20 @@ impl CoreSubmission {
 
         Ok(())
     }
-}
 
-// Once we actually submit the response on chain, we can get rid of this
-pub static TEMP_ETHEREUM_EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    async fn maybe_tap_eth_faucet(&self, client: &EthSigningClient) -> Result<(), SubmissionError> {
+        let _faucet_url = match self.get_eth_chain()?.faucet_url.clone() {
+            Some(url) => url,
+            None => {
+                tracing::debug!("No faucet configured, skipping");
+                return Ok(());
+            }
+        };
+
+        todo!()
+    }
+}
 
 impl Submission for CoreSubmission {
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Submission"))]
@@ -190,13 +267,38 @@ impl Submission for CoreSubmission {
                     } => {
                         while let Some(msg) = rx.recv().await {
                             tracing::debug!("Received message to submit: {:?}", msg);
-                            match msg.submit {
-                                Submit::EthAggregatorTx{} => {
+                            let eth_client = match msg.submit {
+                                Submit::EthSignedMessage{hd_index} => {
+                                    let client = match _self.get_eth_client(hd_index).await {
+                                        Ok(client) => client,
+                                        Err(e) => {
+                                            tracing::error!("Failed to get client: {:?}", e);
+                                            continue;
+                                        }
+                                    };
 
-                                    TEMP_ETHEREUM_EVENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                                    // TODO!
+                                    if let Err(err) = _self.maybe_tap_eth_faucet(&client).await {
+                                        tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.address(), hd_index, err);
+                                    }
+
+                                    Some(client)
                                 },
-                                Submit::LayerVerifierTx { hd_index, verifier_addr} => {
+                                Submit::EthAggregatorTx{} => {
+                                    None
+                                },
+                                Submit::LayerVerifierTx { .. } => {
+                                    None
+                                }
+                            };
+
+                            let layer_client = match msg.submit {
+                                Submit::EthSignedMessage{..} => {
+                                    None
+                                },
+                                Submit::EthAggregatorTx{} => {
+                                    None
+                                },
+                                Submit::LayerVerifierTx { hd_index, .. } => {
                                     let client = match _self.get_layer_client(hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
@@ -209,31 +311,105 @@ impl Submission for CoreSubmission {
                                         tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, hd_index, err);
                                     }
 
-                                    let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
-                                        Ok(result) => result,
-                                        Err(e) => {
-                                            tracing::error!("Failed to parse wasm result into json value: {:?}", e);
-                                            continue;
-                                        }
-                                    };
+                                    Some(client)
+                                }
+                            };
 
-                                    let result = match serde_json::to_string(&result) {
-                                        Ok(result) => result,
-                                        Err(e) => {
-                                            tracing::error!("Failed to serialize json value into string: {:?}", e);
-                                            continue;
-                                        }
-                                    };
 
+                            match msg.submit {
+                                Submit::EthSignedMessage{.. } => {
+                                    match msg.trigger_data.trigger {
+                                        Trigger::LayerQueue { .. } => {
+                                            tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
+                                            continue;
+                                        },
+                                        Trigger::EthQueue { task_queue_addr } => {
+                                            let eth_client = eth_client.unwrap();
+
+                                            let contract_address = match task_queue_addr {
+                                                Address::Eth(addr) => {
+                                                    addr.as_bytes().into()
+                                                },
+                                                Address::Cosmos { .. } => {
+                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", task_queue_addr);
+                                                    continue;
+                                                }
+                                            };
+
+                                            let avs_client = HelloWorldSimpleClient::new(eth_client, contract_address);
+
+                                            let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
+                                                Ok(result) => result,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to parse wasm result into json value: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+
+                                            let task: EthHelloWorldTaskJson = match serde_json::from_value(result.clone()) {
+                                                Ok(task) => task,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to parse wasm result into json value: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+
+                                            let task = HelloWorldTask {
+                                                name: task.name,
+                                                taskCreatedBlock: task.created_block,
+                                            };
+
+                                            let task_index = match msg.task_id.u64().try_into() {
+                                                Ok(task_index) => task_index,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to convert task id to u32: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+
+                                            match avs_client.sign_and_submit_task(task, task_index).await {
+                                                Ok(_) => {
+                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                                },
+                                                Err(e) => {
+                                                    tracing::error!("Submission failed: {:?}", e);
+                                                }
+                                            }
+                                        },
+                                    }
+
+
+                                },
+                                Submit::EthAggregatorTx{} => {
+                                    tracing::warn!("Aggregator submission not implemented yet!");
+                                },
+                                Submit::LayerVerifierTx { verifier_addr, ..} => {
                                     match msg.trigger_data.trigger {
                                         Trigger::LayerQueue { task_queue_addr, .. } => {
+
+                                            let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
+                                                Ok(result) => result,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to parse wasm result into json value: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+
+                                            let result = match serde_json::to_string(&result) {
+                                                Ok(result) => result,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to serialize json value into string: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+
                                             let contract_msg = VerifierExecuteMsg::ExecutedTask {
                                                 task_queue_contract: task_queue_addr.to_string(),
                                                 task_id: msg.task_id,
                                                 result,
                                             };
 
-                                            match client.contract_execute(&verifier_addr, &contract_msg, Vec::new(), None).await {
+                                            match layer_client.unwrap().contract_execute(&verifier_addr, &contract_msg, Vec::new(), None).await {
                                                 Ok(_) => {
                                                     tracing::debug!("Submission successful");
                                                 },
@@ -244,10 +420,10 @@ impl Submission for CoreSubmission {
                                         }
 
                                         Trigger::EthQueue { .. } => {
-                                           // TODO 
+                                            tracing::error!("Cross chain from Ethereum trigger to Layer submission is not supported yet");
+                                            continue;
                                         }
                                     }
-
                                 }
                             }
                         }
