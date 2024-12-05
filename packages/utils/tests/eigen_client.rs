@@ -29,7 +29,10 @@ async fn deploy_hello_world_avs() {
         .build()
         .await
         .unwrap();
-    hello_world_client.register_operator().await.unwrap();
+    hello_world_client
+        .register_operator(&mut rand::rngs::OsRng)
+        .await
+        .unwrap();
     let hello_world_client = hello_world_client.into_simple();
 
     // Create and respond first task

@@ -1,6 +1,6 @@
 use alloy::primitives::{FixedBytes, TxHash, U256};
 use chrono::Utc;
-use rand::RngCore;
+use rand::Rng;
 
 use crate::hello_world::solidity_types::stake_registry::{
     ECDSAStakeRegistry, ISignatureUtils::SignatureWithSaltAndExpiry,
@@ -12,9 +12,9 @@ use super::HelloWorldFullClient;
 use anyhow::Result;
 
 impl HelloWorldFullClient {
-    pub async fn register_operator(&self) -> Result<TxHash> {
+    pub async fn register_operator(&self, rng: &mut impl Rng) -> Result<TxHash> {
         let mut salt = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut salt);
+        rng.fill_bytes(&mut salt);
 
         let salt = FixedBytes::from_slice(&salt);
         let now = Utc::now().timestamp();

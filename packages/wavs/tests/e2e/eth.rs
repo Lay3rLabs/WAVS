@@ -40,7 +40,10 @@ impl EthTestApp {
             .build()
             .await
             .unwrap();
-        hello_world_client.register_operator().await.unwrap();
+        hello_world_client
+            .register_operator(&mut rand::rngs::OsRng)
+            .await
+            .unwrap();
 
         Self {
             eigen_client,
