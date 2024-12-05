@@ -135,6 +135,7 @@ mod e2e {
                             }
                             (false, true) => {
                                 run_tests_ethereum(
+                                    #[allow(clippy::unnecessary_literal_unwrap)]
                                     anvil.unwrap(),
                                     http_client,
                                     config,
