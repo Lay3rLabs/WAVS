@@ -30,12 +30,17 @@ impl EthTestApp {
         let eigen_client = EigenClient::new(eth_client);
 
         let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
+        eigen_client
+            .register_operator(&core_contracts)
+            .await
+            .unwrap();
 
         let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
             .avs_addresses(core_contracts)
             .build()
             .await
             .unwrap();
+        hello_world_client.register_operator().await.unwrap();
 
         Self {
             eigen_client,

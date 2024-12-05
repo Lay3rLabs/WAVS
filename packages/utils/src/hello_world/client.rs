@@ -15,7 +15,7 @@ use alloy::{
     dyn_abi::DynSolValue,
     primitives::{eip191_hash_message, keccak256, Address, FixedBytes, U256},
     providers::Provider,
-    signers::{Signer, SignerSync},
+    signers::SignerSync,
     sol_types::SolValue,
 };
 use anyhow::{ensure, Context, Result};
