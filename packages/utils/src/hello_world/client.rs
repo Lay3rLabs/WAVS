@@ -12,9 +12,10 @@ use super::{
 };
 
 use alloy::{
-    primitives::{keccak256, Address, FixedBytes},
+    dyn_abi::DynSolValue,
+    primitives::{eip191_hash_message, keccak256, Address, FixedBytes, U256},
     providers::Provider,
-    signers::Signer,
+    signers::{Signer, SignerSync},
     sol_types::SolValue,
 };
 use anyhow::{ensure, Context, Result};
@@ -76,16 +77,21 @@ impl HelloWorldSimpleClient {
 
     pub async fn sign_task_result(&self, name: &str) -> Result<Vec<u8>> {
         let message = format!("Hello, {}", name);
-        let message_hash = keccak256(message);
-        let message_bytes = message_hash.as_slice();
+        let message_hash = eip191_hash_message(keccak256(message.abi_encode_packed()));
         // TODO: Sign hash or sign message?
-        let signature = self.eth.signer.sign_message(message_bytes).await?;
-        let operators = vec![self.eth.address()];
-        let signatures = vec![signature.as_bytes().to_vec()];
+        let operators: Vec<DynSolValue> = vec![DynSolValue::Address(self.eth.address())];
+        let signature: Vec<DynSolValue> = vec![DynSolValue::Bytes(
+            self.eth.signer.sign_hash_sync(&message_hash)?.into(),
+        )];
 
-        let reference_block = self.eth.http_provider.get_block_number().await?;
+        let current_block = U256::from(self.eth.http_provider.get_block_number().await?);
 
-        let signed_task = (operators, signatures, reference_block).abi_encode();
+        let signed_task = DynSolValue::Tuple(vec![
+            DynSolValue::Array(operators),
+            DynSolValue::Array(signature),
+            DynSolValue::Uint(current_block, 32),
+        ])
+        .abi_encode_params();
 
         Ok(signed_task)
     }
