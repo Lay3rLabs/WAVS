@@ -55,7 +55,7 @@ impl Serialize for Digest {
 
 struct StrVisitor;
 
-impl<'de> Visitor<'de> for StrVisitor {
+impl Visitor<'_> for StrVisitor {
     type Value = Digest;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

@@ -105,7 +105,7 @@ impl Serialize for ShaDigest {
 
 struct StrVisitor;
 
-impl<'de> Visitor<'de> for StrVisitor {
+impl Visitor<'_> for StrVisitor {
     type Value = ShaDigest;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

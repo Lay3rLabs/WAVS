@@ -93,11 +93,13 @@ impl<T> Value for JSON<T>
 where
     T: std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
 {
-    type SelfType<'a> = T
+    type SelfType<'a>
+        = T
     where
         Self: 'a;
 
-    type AsBytes<'a> = Vec<u8>
+    type AsBytes<'a>
+        = Vec<u8>
     where
         Self: 'a;
 
