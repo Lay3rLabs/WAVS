@@ -160,10 +160,7 @@ mod test {
             dispatcher::{Permissions, ServiceStatus, Submit},
             ID,
         },
-        http::{
-            handlers::service::add::{AddServiceRequest, TriggerRequest},
-            types::ShaDigest,
-        },
+        http::{handlers::service::add::TriggerRequest, types::ShaDigest},
         test_utils::address::rand_address_eth,
         Digest,
     };
@@ -192,37 +189,6 @@ mod test {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         pub envs: Vec<(String, String)>,
         pub testable: Option<bool>,
-    }
-
-    #[tokio::test]
-    async fn add_service_backwards_compat() {
-        let old = OldRegisterAppRequest {
-            wasm_url: None,
-            app: OldApp {
-                name: "test-name".to_string(),
-                status: None,
-                digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::eth_queue(rand_address_eth()),
-                permissions: Permissions::default(),
-                envs: vec![],
-                testable: Some(true),
-            },
-        };
-
-        let old_str = serde_json::to_string(&old).unwrap();
-
-        let updated: AddServiceRequest = serde_json::from_str(&old_str).unwrap();
-
-        ServiceRequestParser::new(None)
-            .parse(updated.service.clone())
-            .await
-            .unwrap();
-
-        let updated_str = serde_json::to_string(&updated).unwrap();
-
-        let old_roundtrip: OldRegisterAppRequest = serde_json::from_str(&updated_str).unwrap();
-
-        assert_eq!(old, old_roundtrip);
     }
 
     #[tokio::test]
