@@ -1,10 +1,12 @@
 use crate::{config::Config, context::AppContext};
-use axum::routing::get;
+use axum::routing::{get, post};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use wildmatch::WildMatch;
 
 use super::{
-    handlers::{handle_config, handle_info, handle_not_found},
+    handlers::{
+        handle_config, handle_info, handle_not_found, service::add_msg::handle_add_message,
+    },
     state::HttpState,
 };
 
@@ -44,6 +46,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
         .route("/info", get(handle_info))
+        .route("/app", post(handle_add_message))
         .fallback(handle_not_found)
         .with_state(state);
 
