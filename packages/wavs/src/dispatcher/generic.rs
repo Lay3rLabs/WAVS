@@ -330,7 +330,7 @@ mod tests {
         },
         init_tracing_tests,
         submission::mock::MockSubmission,
-        test_utils::{address::rand_address, mock::BigSquare},
+        test_utils::{address::rand_address_eth, mock::BigSquare},
         triggers::mock::MockTriggerManagerVec,
         Digest,
     };
@@ -347,7 +347,7 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            trigger: TriggerData::eth_queue("service1", "workflow1", rand_address()).unwrap(),
+            trigger: TriggerData::eth_queue("service1", "workflow1", rand_address_eth()).unwrap(),
             result: TriggerResult::queue(task_id, payload),
         };
 
@@ -370,7 +370,7 @@ mod tests {
                 action.trigger.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address()),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
@@ -408,7 +408,7 @@ mod tests {
         let service_id = ID::new("service1").unwrap();
         let workflow_id = ID::new("workflow1").unwrap();
 
-        let task_queue_address = rand_address();
+        let task_queue_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
                 trigger: TriggerData::eth_queue(
@@ -449,7 +449,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address()),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
@@ -486,7 +486,7 @@ mod tests {
         // Prepare two actions to be squared
         let service_id = ID::new("service1").unwrap();
         let workflow_id = ID::new("workflow1").unwrap();
-        let task_queue_address = rand_address();
+        let task_queue_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
                 trigger: TriggerData::eth_queue(
@@ -527,7 +527,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address()),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]

@@ -229,13 +229,13 @@ mod tests {
 
     use lavs_apis::id::TaskId;
 
-    use crate::{apis::trigger::TriggerResult, test_utils::address::rand_address};
+    use crate::{apis::trigger::TriggerResult, test_utils::address::rand_address_eth};
 
     use super::*;
 
     #[test]
     fn mock_trigger_sends() {
-        let task_queue_addr = rand_address();
+        let task_queue_addr = rand_address_eth();
 
         let actions = vec![
             TriggerAction {
@@ -268,7 +268,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerData::eth_queue("abcd", "abcd", rand_address()).unwrap();
+        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -279,7 +279,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerData::eth_queue("abcd", "abcd", rand_address()).unwrap();
+        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }

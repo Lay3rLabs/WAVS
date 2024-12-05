@@ -14,7 +14,7 @@ use crate::{
         state::HttpState,
         types::{ShaDigest, TriggerRequest},
     },
-    test_utils::address::rand_address,
+    test_utils::address::rand_address_eth,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -130,7 +130,7 @@ impl ServiceRequestParser {
                         let chain_config: ChainConfig = state.config.layer_chain_config()?.into();
                         query_verifier_addr(chain_config, &task_queue_addr).await?
                     }
-                    _ => rand_address(),
+                    _ => rand_address_eth(),
                 };
 
                 let trigger = Trigger::layer_queue(task_queue_addr, poll_interval);
@@ -197,7 +197,7 @@ mod test {
             handlers::service::add::{AddServiceRequest, TriggerRequest},
             types::ShaDigest,
         },
-        test_utils::address::rand_address,
+        test_utils::address::rand_address_eth,
         Digest,
     };
 
@@ -235,7 +235,7 @@ mod test {
                 name: "test-name".to_string(),
                 status: None,
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::eth_queue(rand_address()),
+                trigger: TriggerRequest::eth_queue(rand_address_eth()),
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
@@ -272,7 +272,7 @@ mod test {
         }
 
         ServiceRequestParser::new(None)
-            .parse(make_service_req(rand_address()))
+            .parse(make_service_req(rand_address_eth()))
             .await
             .unwrap();
     }
