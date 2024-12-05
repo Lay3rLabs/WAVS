@@ -68,6 +68,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mnemonic: Option<String>,
+
+    /// Hd index
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hd_index: Option<u32>,
 }
 
 impl CliArgs {
