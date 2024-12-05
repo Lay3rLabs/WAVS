@@ -15,12 +15,12 @@ pub struct HelloWorldPayload {
 
 impl Guest for Component {
     fn run_task(input: TaskQueueInput) -> Output {
-        match serde_json::from_slice::<HelloWorldPayload>(&input.request)
-            .context("Failed to parse request")
-        {
-            Ok(response) => serde_json::to_vec(&response).map_err(|x| x.to_string()),
-            Err(e) => Err(e.to_string()),
-        }
+        // TODO: don't use json in, rather abi / rlp
+        let request = serde_json::from_slice::<HelloWorldPayload>(&input.request)
+            .context("Failed to parse request").map_err(|e| e.to_string())?;
+        let response = format!("Hello World, {request.name}");
+        // TODO: don't use json out, rather abi /rlp
+        serde_json::to_vec(&response).map_err(|x| x.to_string())
     }
 }
 

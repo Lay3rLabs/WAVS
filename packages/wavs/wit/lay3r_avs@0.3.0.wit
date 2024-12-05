@@ -10,6 +10,7 @@ interface types {
     request: serialized-json,
   }
 
+
   type error = string;
   type output = result<serialized-json, error>;
 }
@@ -24,6 +25,28 @@ world task-queue {
   use types.{task-queue-input, output};
 
   export run-task: func(request: task-queue-input) -> output;
+}
+
+world eth-event {
+  import wasi:io/poll@0.2.0;
+  import wasi:clocks/monotonic-clock@0.2.0;
+  import wasi:io/error@0.2.0;
+  import wasi:io/streams@0.2.0;
+  import wasi:http/types@0.2.0;
+  import wasi:http/outgoing-handler@0.2.0;
+  use types.{task-queue-input, output};
+
+  record eth-input {
+    address: string,
+    topic: string, // eg. Transfer
+    attributes: list<(string, string)> // ?? how to tuple in wit
+  }
+
+  record eth-data {
+    response: list<u8>, // ethereum / abi encoded data to prove to service provider contract
+  }
+
+  export process-eth-event: func(request: eth-input) -> result<eth-data, string>;
 }
 
 world cron-job {

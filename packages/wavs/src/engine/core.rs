@@ -109,6 +109,9 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
         // conditionally allow fs access
         if wasi.permissions.file_system {
+            // TODO: from ethan - this is incorrect, we need to use the service_id here
+            // so we share data by service. 
+            // Many different services can run the same digest, so current code is dangerous.
             let app_cache_path = self.app_data_dir.join(digest.to_string());
             if !app_cache_path.is_dir() {
                 std::fs::create_dir(&app_cache_path)?;
