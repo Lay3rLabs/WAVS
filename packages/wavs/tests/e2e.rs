@@ -208,7 +208,8 @@ mod e2e {
                     break;
                 } else {
                     tracing::info!(
-                        "Waiting for task response on {} for index {}...",
+                        "Waiting for task response by {} on {} for index {}...",
+                        avs_simple_client.eth.address(),
                         avs_simple_client.contract_address,
                         task_index
                     );
