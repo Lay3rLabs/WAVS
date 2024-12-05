@@ -6829,6 +6829,8 @@ dependencies = [
  "anyhow",
  "clap 4.5.20",
  "dotenvy",
+ "lavs-apis",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
