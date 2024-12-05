@@ -12,18 +12,6 @@ use anyhow::{Context, Result};
 impl EigenClient {
     pub async fn register_operator(&self, avs_addresses: &CoreAVSAddresses) -> Result<String> {
         let delegation_manager_address = avs_addresses.delegation_manager;
-        let delegation_code = self
-            .eth
-            .http_provider
-            .get_code_at(delegation_manager_address)
-            .await?;
-
-        if delegation_code.is_empty() {
-            return Err(EthClientError::ContractNotDeployed(
-                delegation_manager_address,
-            ))
-            .context("Eigenlayer delegation is not deployed")?;
-        }
 
         let contract =
             DelegationManager::new(delegation_manager_address, self.eth.http_provider.clone());
