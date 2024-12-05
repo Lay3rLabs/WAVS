@@ -34,7 +34,6 @@ struct SetupAddrs {
 
 impl HelloWorldClientBuilder {
     async fn set_up(&self, strategy_factory: Address) -> Result<SetupAddrs> {
-        tracing::debug!("setting up");
         let token = LayerToken::deploy(self.eth.http_provider.clone()).await?;
         tracing::debug!("deployed token: {}", token.address());
         let strategy_factory =
