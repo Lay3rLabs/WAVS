@@ -34,11 +34,8 @@ impl HelloWorldClient {
             self.hello_world.hello_world_service_manager,
             self.eth.http_provider.clone(),
         );
-
         let message = format!("Hello, {}", new_task_event.task.name);
-        // Check this if 2 different strings
         let message_hash = keccak256(message);
-        // Check if this is the same as toEthSignedMessageHash
         let message_bytes = message_hash.as_slice();
         // TODO: Sign hash or sign message?
         let signature = self.eth.signer.sign_message(message_bytes).await?;
