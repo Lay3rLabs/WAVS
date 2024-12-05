@@ -1,0 +1,20 @@
+[package]
+name = "wavs-cli"
+description = "Lay3r Labs WAVS CLI"
+edition = "2021"
+version = "0.2.0-rc1"
+authors = ["Lay3r Labs Team"]
+rust-version = "1.80.0"
+repository = "https://github.com/Lay3rLabs/wasmatic"
+
+[dependencies]
+utils = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+alloy = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dotenvy = { workspace = true }
+tokio = { workspace = true }
