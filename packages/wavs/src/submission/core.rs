@@ -315,7 +315,6 @@ impl Submission for CoreSubmission {
                                 }
                             };
 
-
                             match msg.submit {
                                 Submit::EthSignedMessage{.. } => {
                                     match msg.trigger_data.trigger {

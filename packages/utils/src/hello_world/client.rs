@@ -5,7 +5,7 @@ use crate::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};
 
 use super::{
     solidity_types::hello_world::{
-        HelloWorldServiceManager::{self, NewTaskCreated},
+        HelloWorldServiceManager::{self, NewTaskCreated, TaskResponded},
         IHelloWorldServiceManager::Task,
     },
     HelloWorldFullClient, HelloWorldSimpleClient,
@@ -17,7 +17,7 @@ use alloy::{
     signers::Signer,
     sol_types::SolValue,
 };
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 
 impl HelloWorldFullClient {
     pub fn into_simple(self) -> HelloWorldSimpleClient {
@@ -99,14 +99,26 @@ impl HelloWorldSimpleClient {
         let contract =
             HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
 
-        let tx_hash = contract
+        let receipt = contract
             .respondToTask(task, task_index, signature.into())
             .gas(500000)
             .send()
             .await?
             .get_receipt()
-            .await?
-            .transaction_hash;
+            .await?;
+
+        ensure!(receipt.status(), "Failed to submit task");
+
+        let task_responded: TaskResponded = receipt
+            .solidity_event()
+            .context("Expected TaskResponded event")?;
+        tracing::debug!(
+            "Responded to a task: {}, by {}",
+            task_responded.taskIndex,
+            task_responded.operator
+        );
+
+        let tx_hash = receipt.transaction_hash;
 
         Ok(tx_hash)
     }
