@@ -6822,6 +6822,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "wavs-cli"
+version = "0.2.0-rc1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "clap 4.5.20",
+ "dotenvy",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "utils",
+]
+
+[[package]]
 name = "web-sys"
 version = "0.3.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
