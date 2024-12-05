@@ -15,9 +15,8 @@ alloy = { workspace = true }
 thiserror = { workspace = true } 
 futures = { workspace = true }
 tracing-subscriber = { workspace = true }
-
-rand = "0.8.5"
-chrono = "0.4.38"
+rand = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
