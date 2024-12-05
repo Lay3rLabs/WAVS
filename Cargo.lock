@@ -7303,19 +7303,12 @@ dependencies = [
  "anyhow",
  "clap 4.5.20",
  "dotenvy",
- "hex",
- "lavs-apis",
- "layer-climb",
- "rand",
- "reqwest",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "utils",
- "uuid",
- "wavs",
 ]
 
 [[package]]
