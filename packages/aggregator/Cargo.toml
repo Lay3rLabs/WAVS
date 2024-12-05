@@ -29,5 +29,5 @@ utils = { workspace = true }
 
 [dev-dependencies]
 temp-env = { workspace = true }
-alloy = { version = "0.5.4", features = ["full", "node-bindings"] }
+alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
 serde_json = { workspace = true }

@@ -43,6 +43,9 @@ pub struct Config {
 
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
+
+    /// The hd index of the mnemonic to sign with
+    pub hd_index: Option<u32>,
 }
 
 /// Default values for the config struct
@@ -58,6 +61,7 @@ impl Default for Config {
             ws_endpoint: "ws://127.0.0.1:8545".to_string(),
             http_endpoint: "http://127.0.0.1:8545".to_string(),
             mnemonic: None,
+            hd_index: None,
         }
     }
 }
@@ -69,7 +73,7 @@ impl Config {
             ws_endpoint: self.ws_endpoint.clone(),
             http_endpoint: self.http_endpoint.clone(),
             mnemonic,
-            hd_index: None,
+            hd_index: self.hd_index,
         };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)
