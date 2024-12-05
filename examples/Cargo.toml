@@ -5,6 +5,7 @@ members = [
   "square",
   "permissions",
   "ai-bouncer",
+  "message-echo",
 ]
 resolver = "2"
 

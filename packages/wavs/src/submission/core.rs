@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicUsize, Arc, Mutex},
 };
 
 use crate::{
@@ -167,6 +167,9 @@ impl CoreSubmission {
     }
 }
 
+// Once we actually submit the response on chain, we can get rid of this
+pub static TEMP_ETHEREUM_EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 impl Submission for CoreSubmission {
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Submission"))]
     fn start(
@@ -190,6 +193,7 @@ impl Submission for CoreSubmission {
                             match msg.submit {
                                 Submit::EthAggregatorTx{} => {
 
+                                    TEMP_ETHEREUM_EVENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                                     // TODO!
                                 },
                                 Submit::LayerVerifierTx { hd_index, verifier_addr} => {
