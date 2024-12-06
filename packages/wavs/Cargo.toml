@@ -9,7 +9,7 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [features]
 e2e_tests = []
-e2e_tests_layer = ["e2e_tests"]
+e2e_tests_cosmos = ["e2e_tests"]
 e2e_tests_ethereum = ["e2e_tests"]
 
 [dependencies]

@@ -178,32 +178,29 @@ async fn config_dotenv() {
 async fn config_chains() {
     let config = TestApp::new().await.config;
 
-    let chain_config = config.layer_chain_config().unwrap();
-    assert_eq!(chain_config.chain_id, "slay3r-local".parse().unwrap());
+    let chain_config = config.cosmos_chain_config().unwrap();
+    assert_eq!(chain_config.chain_id, "layer-local");
 
     // change the target chain via cli
     let mut cli_args = TestApp::default_cli_args();
-    cli_args.layer_chain = Some("testnet".to_string());
+    cli_args.cosmos_chain = Some("layer-hacknet".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.layer_chain_config().unwrap();
-    assert_eq!(
-        chain_config.chain_id,
-        "layer-permissionless-3".parse().unwrap()
-    );
+    let chain_config = config.cosmos_chain_config().unwrap();
+    assert_eq!(chain_config.chain_id, "layer-hack-1");
 
     // change the rpc endpoint for cosmos
     let mut cli_args = TestApp::default_cli_args();
-    cli_args.chain_config.layer_rpc_endpoint = Some("http://example.com:1234".to_string());
+    cli_args.chain_config.cosmos_rpc_endpoint = Some("http://example.com:1234".to_string());
     cli_args.chain_config.http_endpoint = Some("THIS-ISN'T-USED".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.layer_chain_config().unwrap();
+    let chain_config = config.cosmos_chain_config().unwrap();
     assert_eq!(chain_config.rpc_endpoint, "http://example.com:1234");
 
     // change the http endpoint for ethereum
     let mut cli_args = TestApp::default_cli_args();
-    cli_args.chain_config.layer_rpc_endpoint = Some("THIS-ISN'T-USED".to_string());
+    cli_args.chain_config.cosmos_rpc_endpoint = Some("THIS-ISN'T-USED".to_string());
     cli_args.chain_config.http_endpoint = Some("http://example.com:1234".to_string());
-    cli_args.chain = Some("local-eth".to_string());
+    cli_args.chain = Some("local".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
     let chain_config = config.ethereum_chain_config().unwrap();
     assert_eq!(chain_config.http_endpoint, "http://example.com:1234");

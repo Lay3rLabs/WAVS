@@ -25,14 +25,15 @@ cors_allowed_origins = [
 # the directory to store the data. Default is "/var/wavs"
 # data = "~/wavs/data"
 
-# chosen chain name 
-# chain = "localnode"
+# chosen eth chain name 
+chain = "local"
 
-# chain config
-# localhost is local testing when you run the image outside of the docker-compose network
-[chains.localhost]
-chain_kind = "cosmos"
+# chosen cosmos chain name 
+cosmos_chain = "layer-local"
+
+[chains.cosmos.layer-local]
 chain_id = "layer-local"
+bech32_prefix = "layer"
 rpc_endpoint = "http://localhost:26657"
 grpc_endpoint = "http://localhost:9090"
 gas_price = 0.025
@@ -40,9 +41,9 @@ gas_denom = "ulayer"
 faucet_endpoint = "http://localhost:8000"
 
 # localnode is local testing inside localnode docker-compose network
-[chains.localnode]
-chain_kind = "cosmos"
+[chains.cosmos.layer-localnode]
 chain_id = "layer-local"
+bech32_prefix = "layer"
 rpc_endpoint = "http://layer:26657"
 grpc_endpoint = "http://layer:9090"
 gas_price = 0.025
@@ -50,26 +51,34 @@ gas_denom = "ulayer"
 faucet_endpoint = "http://faucet:8000"
 
 # hacknet is our public facing pseudo-testnet for hackathons
-[chains.hacknet]
-chain_kind = "cosmos"
+[chains.cosmos.layer-hacknet]
 chain_id = "layer-hack-1"
+bech32_prefix = "layer"
 rpc_endpoint = "https://rpc.hack.layer.xyz:443"
 grpc_endpoint = "https://grpc.hack.layer.xyz:443"
 gas_price = 0.025
 gas_denom = "ulayer"
 faucet_endpoint = "https://rabbit.hack.layer.xyz"
 
-# hacknet is our public facing pseudo-testnet for hackathons
-[chains.demonet]
-chain_kind = "cosmos"
-chain_id = "layer-demo-1"
-rpc_endpoint = "https://rpc.demo.layer.xyz:443"
-grpc_endpoint = "https://grpc.demo.layer.xyz:443"
-gas_price = 0.025
-gas_denom = "ulayer"
-faucet_endpoint = "https://faucet.demo.layer.xyz"
+[chains.cosmos.neutron]
+chain_id = "pion-1"
+bech32_prefix = "neutron"
+rpc_endpoint = "https://rpc-falcron.pion-1.ntrn.tech"
+grpc_endpoint = "http://grpc-falcron.pion-1.ntrn.tech:80"
+gas_price = 0.0053
+gas_denom = "untrn"
 
-[chains.local-eth]
-chain_kind = "ethereum"
+[chains.eth.local]
+chain_id = "31337"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
+
+[chains.eth.sepolia]
+chain_id = "11155111"
+ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
+http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
+
+[chains.eth.holesky]
+chain_id = "17000"
+ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
+http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"

@@ -35,14 +35,14 @@ pub struct Config {
     pub wasm_lru_size: usize,
     pub wasm_threads: usize,
 
-    /// The chosen layer chain name
-    pub layer_chain: Option<String>,
-
     /// The chosen ethereum chain name
     pub chain: Option<String>,
 
-    /// A lookup of chain configs, keyed by a "chain name"
-    pub chains: HashMap<String, WavsChainConfig>,
+    /// The chosen cosmos chain name
+    pub cosmos_chain: Option<String>,
+
+    /// All the available chains
+    pub chains: ChainConfigs,
 
     #[serde(flatten)]
     pub chain_config_override: OptionalWavsChainConfig,
@@ -58,9 +58,12 @@ impl Default for Config {
             host: "localhost".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
-            layer_chain: None,
+            cosmos_chain: None,
             chain: None,
-            chains: HashMap::new(),
+            chains: ChainConfigs {
+                cosmos: HashMap::new(),
+                eth: HashMap::new(),
+            },
             chain_config_override: OptionalWavsChainConfig::default(),
             wasm_lru_size: 20,
             wasm_threads: 4,
@@ -69,31 +72,33 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn layer_chain_config(&self) -> Result<WavsCosmosChainConfig> {
-        let chain_name = self.layer_chain.as_deref();
-        self.try_layer_chain_config()?.ok_or(anyhow!(
-            "No chain config found for \"{}\"",
+    pub fn cosmos_chain_config(&self) -> Result<CosmosChainConfig> {
+        let chain_name = self.cosmos_chain.as_deref();
+        self.try_cosmos_chain_config()?.ok_or(anyhow!(
+            "No chain config found for cosmos chain \"{}\"",
             chain_name.unwrap_or_default()
         ))
     }
-    pub fn try_layer_chain_config(&self) -> Result<Option<WavsCosmosChainConfig>> {
-        let chain_name = self.layer_chain.as_deref();
+    pub fn try_cosmos_chain_config(&self) -> Result<Option<CosmosChainConfig>> {
+        let chain_name = self.cosmos_chain.as_deref();
 
-        let config = match chain_name.and_then(|chain_name| self.chains.get(chain_name)) {
+        let config = match chain_name.and_then(|chain_name| self.chains.cosmos.get(chain_name)) {
             None => return Ok(None),
-            Some(WavsChainConfig::Ethereum(_)) => {
-                bail!("Expected Cosmos chain config, found Ethereum")
-            }
-            Some(WavsChainConfig::Cosmos(config)) => config,
+            Some(config) => config,
         };
 
         // The optional overrides use a prefix to distinguish between layer and ethereum fields
+        // since in the CLI they get flattened and would conflict without a prefix
         // in order to cleanly merge it with our final, real chain config
-        // we need to strip that prefix in order for the fields to match
+        // we need to strip that prefix so that the fields match
         #[derive(Clone, Debug, Serialize, Deserialize, Default)]
         struct ConfigOverride {
             #[serde(skip_serializing_if = "Option::is_none")]
             pub chain_id: Option<ChainId>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub bech32_prefix: Option<ChainId>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub rpc_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             pub grpc_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -104,18 +109,20 @@ impl Config {
             pub faucet_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             pub submission_mnemonic: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub rpc_endpoint: Option<String>,
         }
 
         let config_override = ConfigOverride {
-            chain_id: self.chain_config_override.layer_chain_id.clone(),
-            grpc_endpoint: self.chain_config_override.layer_grpc_endpoint.clone(),
-            gas_price: self.chain_config_override.layer_gas_price,
-            gas_denom: self.chain_config_override.layer_gas_denom.clone(),
-            faucet_endpoint: self.chain_config_override.layer_faucet_endpoint.clone(),
-            submission_mnemonic: self.chain_config_override.layer_submission_mnemonic.clone(),
-            rpc_endpoint: self.chain_config_override.layer_rpc_endpoint.clone(),
+            chain_id: self.chain_config_override.cosmos_chain_id.clone(),
+            bech32_prefix: self.chain_config_override.cosmos_bech32_prefix.clone(),
+            grpc_endpoint: self.chain_config_override.cosmos_grpc_endpoint.clone(),
+            gas_price: self.chain_config_override.cosmos_gas_price,
+            gas_denom: self.chain_config_override.cosmos_gas_denom.clone(),
+            faucet_endpoint: self.chain_config_override.cosmos_faucet_endpoint.clone(),
+            submission_mnemonic: self
+                .chain_config_override
+                .cosmos_submission_mnemonic
+                .clone(),
+            rpc_endpoint: self.chain_config_override.cosmos_rpc_endpoint.clone(),
         };
 
         let config_merged = Figment::new()
@@ -126,41 +133,45 @@ impl Config {
         Ok(Some(config_merged))
     }
 
-    pub fn ethereum_chain_config(&self) -> Result<WavsEthereumChainConfig> {
+    pub fn ethereum_chain_config(&self) -> Result<EthereumChainConfig> {
         let chain_name = self.chain.as_deref();
         self.try_ethereum_chain_config()?.ok_or(anyhow!(
-            "No chain config found for \"{}\"",
+            "No chain config found for ethereum \"{}\"",
             chain_name.unwrap_or_default()
         ))
     }
-    pub fn try_ethereum_chain_config(&self) -> Result<Option<WavsEthereumChainConfig>> {
+    pub fn try_ethereum_chain_config(&self) -> Result<Option<EthereumChainConfig>> {
         let chain_name = self.chain.as_deref();
 
-        let config = match chain_name.and_then(|chain_name| self.chains.get(chain_name)) {
+        let config = match chain_name.and_then(|chain_name| self.chains.eth.get(chain_name)) {
             None => return Ok(None),
-            Some(WavsChainConfig::Cosmos(_)) => {
-                bail!("Expected Ethereum chain config, found Cosmos")
-            }
-            Some(WavsChainConfig::Ethereum(config)) => config,
+            Some(config) => config,
         };
 
         // The optional overrides use a prefix to distinguish between layer and ethereum fields
+        // since in the CLI they get flattened and would conflict without a prefix
         // in order to cleanly merge it with our final, real chain config
-        // we need to strip that prefix in order for the fields to match
+        // we need to strip that prefix so that the fields match
         #[derive(Clone, Debug, Serialize, Deserialize, Default)]
         struct ConfigOverride {
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub http_endpoint: Option<String>,
+            pub chain_id: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             pub ws_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
+            pub http_endpoint: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             pub submission_mnemonic: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub faucet_endpoint: Option<String>,
         }
 
         let config_override = ConfigOverride {
+            chain_id: self.chain_config_override.chain_id.clone(),
             http_endpoint: self.chain_config_override.http_endpoint.clone(),
             ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
             submission_mnemonic: self.chain_config_override.submission_mnemonic.clone(),
+            faucet_endpoint: self.chain_config_override.faucet_endpoint.clone(),
         };
 
         let config_merged = Figment::new()
@@ -172,60 +183,41 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "chain_kind")]
-pub enum WavsChainConfig {
-    Cosmos(WavsCosmosChainConfig),
-    Ethereum(WavsEthereumChainConfig),
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ChainConfigs {
+    /// Cosmos-style chains (including Layer-SDK)
+    pub cosmos: HashMap<String, CosmosChainConfig>,
+    /// Ethereum-style chains
+    pub eth: HashMap<String, EthereumChainConfig>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WavsCosmosChainConfig {
-    pub chain_id: ChainId,
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CosmosChainConfig {
+    pub chain_id: String,
+    pub bech32_prefix: String,
     pub rpc_endpoint: String,
     pub grpc_endpoint: String,
-    /// not micro-units, e.g. 0.025 would be a typical value
-    /// if not specified, defaults to 0.025
-    #[serde(default = "WavsCosmosChainConfig::default_gas_price")]
     pub gas_price: f32,
-    /// if not specified, defaults to "uslay"
-    #[serde(default = "WavsCosmosChainConfig::default_gas_denom")]
     pub gas_denom: String,
-    /// if not specified, defaults to "layer"
-    #[serde(default = "WavsCosmosChainConfig::default_bech32_prefix")]
-    pub bech32_prefix: String,
-    /// optional faucet endpoint for this chain
     pub faucet_endpoint: Option<String>,
     /// mnemonic for the submission client (usually leave this as None and override in env)
     pub submission_mnemonic: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WavsEthereumChainConfig {
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EthereumChainConfig {
+    pub chain_id: String,
     pub ws_endpoint: String,
     pub http_endpoint: String,
+    pub faucet_endpoint: Option<String>,
     /// mnemonic for the submission client (usually leave this as None and override in env)
     pub submission_mnemonic: Option<String>,
 }
 
-impl WavsCosmosChainConfig {
-    const fn default_gas_price() -> f32 {
-        0.025
-    }
-
-    fn default_gas_denom() -> String {
-        "uslay".to_string()
-    }
-
-    fn default_bech32_prefix() -> String {
-        "layer".to_string()
-    }
-}
-
-impl From<WavsCosmosChainConfig> for ChainConfig {
-    fn from(config: WavsCosmosChainConfig) -> Self {
+impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
+    fn from(config: CosmosChainConfig) -> Self {
         Self {
-            chain_id: config.chain_id,
+            chain_id: ChainId::new(config.chain_id),
             rpc_endpoint: config.rpc_endpoint,
             grpc_endpoint: config.grpc_endpoint,
             grpc_web_endpoint: None,
@@ -238,8 +230,8 @@ impl From<WavsCosmosChainConfig> for ChainConfig {
     }
 }
 
-impl From<WavsEthereumChainConfig> for EthClientConfig {
-    fn from(config: WavsEthereumChainConfig) -> Self {
+impl From<EthereumChainConfig> for EthClientConfig {
+    fn from(config: EthereumChainConfig) -> Self {
         Self {
             ws_endpoint: config.ws_endpoint,
             http_endpoint: config.http_endpoint,

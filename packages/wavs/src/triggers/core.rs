@@ -29,7 +29,7 @@ use utils::{
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
-    pub layer_chain_config: Option<ChainConfig>,
+    pub cosmos_chain_config: Option<layer_climb::prelude::ChainConfig>,
     pub chain_config: Option<EthClientConfig>,
     pub channel_bound: usize,
     lookup_maps: Arc<LookupMaps>,
@@ -63,8 +63,8 @@ impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
-        let layer_chain_config = config
-            .try_layer_chain_config()
+        let cosmos_chain_config = config
+            .try_cosmos_chain_config()
             .map_err(TriggerError::Climb)?
             .map(|chain_config| chain_config.into());
 
@@ -74,7 +74,7 @@ impl CoreTriggerManager {
             .map(|chain_config| chain_config.into());
 
         Ok(Self {
-            layer_chain_config,
+            cosmos_chain_config,
             chain_config,
             channel_bound: 100, // TODO: get from config
             lookup_maps: Arc::new(LookupMaps::new()),
@@ -99,7 +99,7 @@ impl CoreTriggerManager {
             },
         }
 
-        let layer_client = match self.layer_chain_config.clone() {
+        let cosmos_client = match self.cosmos_chain_config.clone() {
             Some(chain_config) => Some(
                 QueryClient::new(chain_config)
                     .await
@@ -121,9 +121,9 @@ impl CoreTriggerManager {
             None => None,
         };
 
-        if let Some(query_client) = layer_client.clone() {
+        if let Some(query_client) = cosmos_client.clone() {
             tracing::debug!(
-                "Trigger Manager for Layer chain started on {}",
+                "Trigger Manager for Cosmos chain started on {}",
                 query_client.chain_config.chain_id
             );
 
@@ -225,7 +225,7 @@ impl CoreTriggerManager {
                 Ok(BlockTriggers::Layer { triggers }) => {
                     for (contract_address, task_ids) in triggers {
                         for task_id in task_ids {
-                            let resp: Result<task_queue::TaskResponse> = layer_client
+                            let resp: Result<task_queue::TaskResponse> = cosmos_client
                                 .as_ref()
                                 .unwrap() // safe - only way we got this is by having a client in the first place
                                 .contract_smart(
@@ -510,7 +510,7 @@ mod tests {
             trigger::{TriggerData, TriggerManager},
             Trigger, ID,
         },
-        config::{Config, WavsChainConfig, WavsCosmosChainConfig},
+        config::{ChainConfigs, Config, CosmosChainConfig, EthereumChainConfig},
         test_utils::address::rand_address_eth,
     };
 
@@ -521,22 +521,36 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            layer_chain: Some("test".to_string()),
-            chains: vec![(
-                "test".to_string(),
-                WavsChainConfig::Cosmos(WavsCosmosChainConfig {
-                    chain_id: "slay3r-local".parse().unwrap(),
-                    rpc_endpoint: "http://localhost:26657".to_string(),
-                    grpc_endpoint: "http://localhost:9090".to_string(),
-                    gas_price: 0.025,
-                    gas_denom: "uslay".to_string(),
-                    bech32_prefix: "layer".to_string(),
-                    faucet_endpoint: None,
-                    submission_mnemonic: None,
-                }),
-            )]
-            .into_iter()
-            .collect(),
+            chain: Some("test".to_string()),
+            chains: ChainConfigs {
+                eth: [(
+                    "test-eth".to_string(),
+                    EthereumChainConfig {
+                        chain_id: "eth-local".parse().unwrap(),
+                        ws_endpoint: "ws://localhost:26657".to_string(),
+                        http_endpoint: "http://localhost:26657".to_string(),
+                        faucet_endpoint: None,
+                        submission_mnemonic: None,
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                cosmos: [(
+                    "test-cosmos".to_string(),
+                    CosmosChainConfig {
+                        chain_id: "layer-local".parse().unwrap(),
+                        rpc_endpoint: "http://localhost:26657".to_string(),
+                        grpc_endpoint: "http://localhost:9090".to_string(),
+                        gas_price: 0.025,
+                        gas_denom: "uslay".to_string(),
+                        bech32_prefix: "layer".to_string(),
+                        faucet_endpoint: None,
+                        submission_mnemonic: None,
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
             ..Default::default()
         };
 

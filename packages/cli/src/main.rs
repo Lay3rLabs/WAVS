@@ -10,9 +10,8 @@ use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
     hello_world::{
-        config::HelloWorldAddresses,
         solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
-        HelloWorldFullClient, HelloWorldFullClientBuilder, HelloWorldSimpleClient,
+        HelloWorldFullClient, HelloWorldFullClientBuilder,
     },
 };
 
