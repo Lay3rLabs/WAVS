@@ -35,7 +35,6 @@ pub async fn add_message(
     // TODO: add to an actual db. For now we just send it
     let signing_client = state.config.signing_client().await?;
     // Searching signature param index
-    dbg!(&req.function);
     let signature_index = req
         .function
         .inputs
@@ -43,11 +42,11 @@ pub async fn add_message(
         .enumerate()
         .find_map(|(idx, param)| param.name.eq("signature").then(|| idx))
         .context("signature")?;
-    let mut args = req.function.abi_decode_input(&req.function_input, true)?;
+    let mut args = req.function.abi_decode_input(&req.function_input, false)?;
     let DynSolValue::Bytes(bytes) = &mut args[signature_index] else {
         return Err(anyhow::anyhow!("Signature supposed to be bytes").into());
     };
-    bytes.copy_from_slice(&req.signature);
+    *bytes = req.signature;
     let avl = ContractInstance::new(
         req.avl,
         signing_client.http_provider,
@@ -61,7 +60,6 @@ pub async fn add_message(
         .get_receipt()
         .await?;
 
-    tracing::debug!("receipt: {:?}", receipt);
     if !receipt.status() {
         return Err(anyhow::anyhow!("Failed to submit task").into());
     }
