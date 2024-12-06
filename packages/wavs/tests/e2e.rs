@@ -164,12 +164,12 @@ mod e2e {
     async fn run_tests_ethereum(
         anvil: AnvilInstance,
         http_client: HttpClient,
-        _config: Config,
+        config: Config,
         wasm_digest: Digest,
     ) {
         tracing::info!("Running e2e ethereum tests");
 
-        let app = EthTestApp::new(_config, anvil).await;
+        let app = EthTestApp::new(config, anvil).await;
 
         let service_id = ServiceID::new("test-service").unwrap();
 

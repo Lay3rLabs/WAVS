@@ -8,7 +8,7 @@ use aggregator::{
 };
 use std::{path::PathBuf, sync::LazyLock};
 
-// this test is confiming the user overrides for filepath work as expected
+// this test is confirming the user overrides for filepath work as expected
 // but it does not test the complete list of fallbacks past those first few common cases
 // because the complete list will change depending on the platform, global env vars, etc.
 #[tokio::test]
