@@ -9,7 +9,7 @@ use crate::{
         submission::{ChainMessage, Submission, SubmissionError},
         EthHelloWorldTaskJson, Trigger,
     },
-    config::{Config, WavsCosmosChainConfig, WavsEthereumChainConfig},
+    config::{Config, CosmosChainConfig, EthereumChainConfig},
     context::AppContext,
 };
 use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
@@ -25,23 +25,23 @@ use utils::{
 
 #[derive(Clone)]
 pub struct CoreSubmission {
-    layer_clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
-    layer_chain: Option<ChainLayerSubmission>,
+    cosmos_clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
+    cosmos_chain: Option<ChainCosmosSubmission>,
     eth_clients: Arc<Mutex<HashMap<u32, EthSigningClient>>>,
     eth_chain: Option<ChainEthSubmission>,
     http_client: reqwest::Client,
 }
 
 #[derive(Clone)]
-struct ChainLayerSubmission {
+struct ChainCosmosSubmission {
     chain_config: ChainConfig,
     mnemonic: String,
     faucet_url: Option<Url>,
 }
 
-impl ChainLayerSubmission {
+impl ChainCosmosSubmission {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
-    fn new(config: WavsCosmosChainConfig) -> Result<Self, SubmissionError> {
+    fn new(config: CosmosChainConfig) -> Result<Self, SubmissionError> {
         let mnemonic = config
             .submission_mnemonic
             .clone()
@@ -69,7 +69,7 @@ struct ChainEthSubmission {
 
 impl ChainEthSubmission {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
-    fn new(config: WavsEthereumChainConfig) -> Result<Self, SubmissionError> {
+    fn new(config: EthereumChainConfig) -> Result<Self, SubmissionError> {
         let client_config = config.into();
 
         Ok(Self {
@@ -84,10 +84,10 @@ impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
-        let layer_chain = config
-            .try_layer_chain_config()
+        let cosmos_chain = config
+            .try_cosmos_chain_config()
             .map_err(SubmissionError::Climb)?
-            .map(ChainLayerSubmission::new)
+            .map(ChainCosmosSubmission::new)
             .transpose()?;
 
         let eth_chain = config
@@ -97,18 +97,18 @@ impl CoreSubmission {
             .transpose()?;
 
         Ok(Self {
-            layer_clients: Arc::new(Mutex::new(HashMap::new())),
-            layer_chain,
+            cosmos_clients: Arc::new(Mutex::new(HashMap::new())),
+            cosmos_chain,
             eth_clients: Arc::new(Mutex::new(HashMap::new())),
             eth_chain,
             http_client: reqwest::Client::new(),
         })
     }
 
-    fn get_layer_chain(&self) -> Result<&ChainLayerSubmission, SubmissionError> {
-        self.layer_chain
+    fn get_cosmos_chain(&self) -> Result<&ChainCosmosSubmission, SubmissionError> {
+        self.cosmos_chain
             .as_ref()
-            .ok_or(SubmissionError::MissingLayerChain)
+            .ok_or(SubmissionError::MissingCosmosChain)
     }
 
     fn get_eth_chain(&self) -> Result<&ChainEthSubmission, SubmissionError> {
@@ -118,9 +118,9 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn get_layer_client(&self, hd_index: u32) -> Result<SigningClient, SubmissionError> {
+    async fn get_cosmos_client(&self, hd_index: u32) -> Result<SigningClient, SubmissionError> {
         {
-            let lock = self.layer_clients.lock().unwrap();
+            let lock = self.cosmos_clients.lock().unwrap();
 
             if let Some(client) = lock.get(&hd_index) {
                 return Ok(client.clone());
@@ -130,15 +130,15 @@ impl CoreSubmission {
         let derivation = cosmos_hub_derivation(hd_index).map_err(SubmissionError::Climb)?;
 
         let signer =
-            KeySigner::new_mnemonic_str(&self.get_layer_chain()?.mnemonic, Some(&derivation))
+            KeySigner::new_mnemonic_str(&self.get_cosmos_chain()?.mnemonic, Some(&derivation))
                 .map_err(SubmissionError::Climb)?;
 
-        let client = SigningClient::new(self.get_layer_chain()?.chain_config.clone(), signer)
+        let client = SigningClient::new(self.get_cosmos_chain()?.chain_config.clone(), signer)
             .await
             .map_err(SubmissionError::Climb)?;
 
         {
-            let mut lock = self.layer_clients.lock().unwrap();
+            let mut lock = self.cosmos_clients.lock().unwrap();
             lock.insert(hd_index, client.clone());
         }
 
@@ -173,8 +173,8 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn maybe_tap_layer_faucet(&self, client: &SigningClient) -> Result<(), SubmissionError> {
-        let faucet_url = match self.get_layer_chain()?.faucet_url.clone() {
+    async fn maybe_tap_cosmos_faucet(&self, client: &SigningClient) -> Result<(), SubmissionError> {
+        let faucet_url = match self.get_cosmos_chain()?.faucet_url.clone() {
             Some(url) => url,
             None => {
                 tracing::debug!("No faucet configured, skipping");
@@ -192,7 +192,7 @@ impl CoreSubmission {
         tracing::debug!("Client {} has balance: {}", client.addr, balance);
 
         let required_funds =
-            (10_000_000f32 * self.get_layer_chain()?.chain_config.gas_price).round() as u128;
+            (10_000_000f32 * self.get_cosmos_chain()?.chain_config.gas_price).round() as u128;
 
         if balance > required_funds {
             return Ok(());
@@ -200,7 +200,7 @@ impl CoreSubmission {
 
         let body = serde_json::json!({
             "address": client.addr.to_string(),
-            "denom": self.get_layer_chain()?.chain_config.gas_denom.clone()
+            "denom": self.get_cosmos_chain()?.chain_config.gas_denom.clone()
         })
         .to_string();
 
@@ -299,7 +299,7 @@ impl Submission for CoreSubmission {
                                     None
                                 },
                                 Submit::LayerVerifierTx { hd_index, .. } => {
-                                    let client = match _self.get_layer_client(hd_index).await {
+                                    let client = match _self.get_cosmos_client(hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -307,7 +307,7 @@ impl Submission for CoreSubmission {
                                         }
                                     };
 
-                                    if let Err(err) = _self.maybe_tap_layer_faucet(&client).await {
+                                    if let Err(err) = _self.maybe_tap_cosmos_faucet(&client).await {
                                         tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, hd_index, err);
                                     }
 

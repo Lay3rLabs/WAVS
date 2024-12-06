@@ -3,21 +3,21 @@
 
 #[cfg(feature = "e2e_tests")]
 mod e2e {
+    mod cosmos;
     mod eth;
     mod http;
-    mod layer;
 
     use std::{path::PathBuf, sync::Arc, time::Duration};
 
     use alloy::node_bindings::{Anvil, AnvilInstance};
     use anyhow::bail;
+    use cosmos::CosmosTestApp;
     use eth::EthTestApp;
     use http::HttpClient;
     use lavs_apis::{
         events::{task_queue_events::TaskCreatedEvent, traits::TypedEvent},
         tasks as task_queue,
     };
-    use layer::LayerTestApp;
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
     use wavs::{
@@ -55,10 +55,10 @@ mod e2e {
         };
 
         cfg_if::cfg_if! {
-            if #[cfg(feature = "e2e_tests_layer")] {
-                config.layer_chain = Some(config.layer_chain.clone().unwrap());
+            if #[cfg(feature = "e2e_tests_cosmos")] {
+                config.cosmos_chain = Some(config.cosmos_chain.clone().unwrap());
             } else {
-                config.layer_chain = None;
+                config.cosmos_chain = None;
             }
         }
 
@@ -129,9 +129,9 @@ mod e2e {
                             }
                         };
 
-                        match (config.layer_chain.is_some(), config.chain.is_some()) {
+                        match (config.cosmos_chain.is_some(), config.chain.is_some()) {
                             (true, false) => {
-                                run_tests_layer(http_client, config, permissions_wasm_digest).await
+                                run_tests_cosmos(http_client, config, permissions_wasm_digest).await
                             }
                             (false, true) => {
                                 run_tests_ethereum(
@@ -228,10 +228,10 @@ mod e2e {
         // TODO!
     }
 
-    async fn run_tests_layer(http_client: HttpClient, config: Config, wasm_digest: Digest) {
-        tracing::info!("Running e2e layer tests");
+    async fn run_tests_cosmos(http_client: HttpClient, config: Config, wasm_digest: Digest) {
+        tracing::info!("Running e2e cosmos tests");
 
-        let app = LayerTestApp::new(config).await;
+        let app = CosmosTestApp::new(config).await;
 
         let service_id = ID::new("test-service").unwrap();
 
