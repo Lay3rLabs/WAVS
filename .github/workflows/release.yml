@@ -1,16 +1,15 @@
 name: Publish Docker Image
 
-# You can enable the below to build on each PR push for testing,
-# or stop publishing latest off main
 on:
   push:
     tags:
       - 'v*'
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+  # You can enable the below to build on each PR push for testing,
+  # pull_request:
+  #   branches:
+  #     - main
 
 env:
   REGISTRY: ghcr.io
