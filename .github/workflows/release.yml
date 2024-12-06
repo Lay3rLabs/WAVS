@@ -8,15 +8,13 @@ on:
       - 'v*'
     branches:
       - main
-      - dev
-  # pull_request:
-  #   branches:
-  #     - main
-  #     - dev
+  pull_request:
+    branches:
+      - main
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: lay3rlabs/wasmatic
+  IMAGE_NAME: lay3rlabs/wavs
 
 jobs:
   build_amd64:
