@@ -16,6 +16,7 @@ pub enum HttpError {
 }
 
 // Make our own error that wraps `anyhow::Error`.
+#[derive(Debug)]
 pub struct AnyError(anyhow::Error);
 
 impl IntoResponse for AnyError {

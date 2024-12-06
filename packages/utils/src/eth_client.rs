@@ -144,3 +144,15 @@ impl EthClientBuilder {
         })
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AddMessageRequest {
+    // TODO: Maybe redundant
+    pub operators: Vec<Address>,
+    pub signature: Vec<u8>,
+    pub task_name: String,
+    pub avl: Address,
+    pub function: alloy::json_abi::Function,
+    pub function_input: Vec<u8>,
+}
