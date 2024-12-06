@@ -360,7 +360,7 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
-                                            match avs_client.sign_and_submit_task(task, task_index).await {
+                                            match avs_client.submit_task_request(task, task_index).await {
                                                 Ok(_) => {
                                                     tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
                                                 },

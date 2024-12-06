@@ -67,7 +67,7 @@ impl HelloWorldSimpleClient {
         Ok(new_task_created)
     }
 
-    pub async fn sign_and_submit_task(
+    pub async fn submit_task_request(
         &self,
         task: Task,
         task_index: u32,
@@ -92,7 +92,8 @@ impl HelloWorldSimpleClient {
             // Filled by aggregator
             signature: Default::default(),
         };
-        let function_input = call.abi_encode();
+        let mut function_input = Vec::with_capacity(call.abi_encoded_size());
+        call.abi_encode_raw(&mut function_input);
 
         Ok(AddMessageRequest {
             operators: vec![self.eth.address()],
