@@ -30,7 +30,7 @@ pub mod hello_world {
 
     sol!(
         #[allow(missing_docs)]
-        #[sol(rpc)]
+        #[sol(rpc, abi)]
         HelloWorldServiceManager,
         "../../contracts/abi/HelloWorldServiceManager.sol/HelloWorldServiceManager.json"
     );

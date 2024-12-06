@@ -9,27 +9,9 @@ use alloy::{
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
+use utils::eth_client::AddMessageRequest;
 
 use crate::http::{error::HttpResult, state::HttpState};
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AddMessageRequest {
-    #[serde(flatten)]
-    pub message: MessageRequest,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageRequest {
-    // TODO: Maybe redundant
-    pub operators: Vec<Address>,
-    pub signature: Vec<u8>,
-    pub task_name: String,
-    pub avl: Address,
-    pub function: Function,
-    pub function_input: Vec<u8>,
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -46,36 +28,33 @@ pub async fn handle_add_message(
     }
 }
 
-async fn add_message(state: HttpState, req: AddMessageRequest) -> HttpResult<AddMessageResponse> {
+pub async fn add_message(
+    state: HttpState,
+    req: AddMessageRequest,
+) -> HttpResult<AddMessageResponse> {
     // TODO: add to an actual db. For now we just send it
-
     let signing_client = state.config.signing_client().await?;
     // Searching signature param index
+    dbg!(&req.function);
     let signature_index = req
-        .message
         .function
         .inputs
         .iter()
         .enumerate()
         .find_map(|(idx, param)| param.name.eq("signature").then(|| idx))
         .context("signature")?;
-    let mut args = req
-        .message
-        .function
-        .abi_decode_input(&req.message.function_input, true)?;
+    let mut args = req.function.abi_decode_input(&req.function_input, true)?;
     let DynSolValue::Bytes(bytes) = &mut args[signature_index] else {
         return Err(anyhow::anyhow!("Signature supposed to be bytes").into());
     };
-    bytes.copy_from_slice(&req.message.signature);
+    bytes.copy_from_slice(&req.signature);
     let avl = ContractInstance::new(
-        req.message.avl,
+        req.avl,
         signing_client.http_provider,
-        Interface::new(JsonAbi::from_iter(iter::once(
-            req.message.function.clone().into(),
-        ))),
+        Interface::new(JsonAbi::from_iter(iter::once(req.function.clone().into()))),
     );
     let receipt = avl
-        .function(&req.message.function.name, &args)?
+        .function(&req.function.name, &args)?
         .gas(500000)
         .send()
         .await?
@@ -83,5 +62,9 @@ async fn add_message(state: HttpState, req: AddMessageRequest) -> HttpResult<Add
         .await?;
 
     tracing::debug!("receipt: {:?}", receipt);
+    if !receipt.status() {
+        return Err(anyhow::anyhow!("Failed to submit task").into());
+    }
+
     Ok(AddMessageResponse {})
 }
