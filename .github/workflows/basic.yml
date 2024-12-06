@@ -55,7 +55,7 @@ jobs:
         with:
           toolchain: 1.83.0
           command: test
-          args: --workspace --locked
+          args: test --workspace --locked --features e2e_tests_ethereum
         env:
           RUST_BACKTRACE: 1
 
