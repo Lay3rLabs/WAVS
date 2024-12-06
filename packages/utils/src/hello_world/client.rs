@@ -1,7 +1,10 @@
 //! Hello world client implementations
 //!
 
-use crate::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};
+use crate::{
+    alloy_helpers::SolidityEventFinder,
+    eth_client::{AddMessageRequest, EthSigningClient},
+};
 
 use super::{
     solidity_types::hello_world::{
@@ -13,10 +16,11 @@ use super::{
 
 use alloy::{
     dyn_abi::DynSolValue,
+    json_abi::Function,
     primitives::{eip191_hash_message, keccak256, Address, FixedBytes, U256},
     providers::Provider,
     signers::SignerSync,
-    sol_types::SolValue,
+    sol_types::{SolCall, SolValue},
 };
 use anyhow::{ensure, Context, Result};
 
@@ -67,12 +71,37 @@ impl HelloWorldSimpleClient {
         &self,
         task: Task,
         task_index: u32,
-    ) -> Result<FixedBytes<32>> {
+    ) -> Result<AddMessageRequest> {
         tracing::debug!("Signing and responding to task index {}", task_index);
 
         let signature = self.sign_task_result(&task.name).await?;
 
-        self.submit_task(task, task_index, signature).await
+        let contract =
+            HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
+
+        let function = HelloWorldServiceManager::abi::functions()
+            .get("respondToTask")
+            .unwrap()
+            .first()
+            .unwrap()
+            .clone();
+        let task_name = task.name.clone();
+        let call = HelloWorldServiceManager::respondToTaskCall {
+            task,
+            referenceTaskIndex: task_index,
+            // Filled by aggregator
+            signature: Default::default(),
+        };
+        let function_input = call.abi_encode();
+
+        Ok(AddMessageRequest {
+            operators: vec![self.eth.address()],
+            signature,
+            task_name,
+            avl: *contract.address(),
+            function,
+            function_input,
+        })
     }
 
     pub async fn sign_task_result(&self, name: &str) -> Result<Vec<u8>> {
@@ -101,31 +130,8 @@ impl HelloWorldSimpleClient {
         task: Task,
         task_index: u32,
         signature: Vec<u8>,
-    ) -> Result<FixedBytes<32>> {
-        let contract =
-            HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
-
-        let receipt = contract
-            .respondToTask(task, task_index, signature.into())
-            .gas(500000)
-            .send()
-            .await?
-            .get_receipt()
-            .await?;
-
-        ensure!(receipt.status(), "Failed to submit task");
-
-        let task_responded: TaskResponded = receipt
-            .solidity_event()
-            .context("Expected TaskResponded event")?;
-        tracing::debug!(
-            "Responded to a task: {}, by {}",
-            task_responded.taskIndex,
-            task_responded.operator
-        );
-
-        let tx_hash = receipt.transaction_hash;
-
-        Ok(tx_hash)
+        aggregator_endpoint: String,
+    ) -> Result<AddMessageRequest> {
+        todo!()
     }
 }

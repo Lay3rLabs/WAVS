@@ -10,4 +10,4 @@ data
 cache
 broadcast
 out
-**/deployments
+deployments

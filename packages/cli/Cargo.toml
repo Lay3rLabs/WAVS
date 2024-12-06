@@ -9,6 +9,7 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [dependencies]
 utils = { workspace = true }
+aggregator = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
