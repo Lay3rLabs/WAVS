@@ -41,14 +41,8 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Check compilation
-        uses: actions-rs/cargo@v1
-        with:
-          toolchain: 1.83.0
-          command: test
-          args: --workspace --locked --no-run
-        env:
-          RUST_BACKTRACE: 1
+      - name: Set env
+        run: echo "WAVS_SUBMISSION_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
 
       - name: Run tests
         uses: actions-rs/cargo@v1
