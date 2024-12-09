@@ -42,6 +42,7 @@ pub async fn add_message(state: HttpState, req: AddTaskRequest) -> HttpResult<Ad
     if aggregator_state.contains_key(&req.task_name) {
         return Err(anyhow::anyhow!("Task already exists").into());
     }
+    let client = state.config.signing_client().await?;
     let mut task = Task {
         signatures: HashMap::new(),
         operators: req.operators,
@@ -51,54 +52,59 @@ pub async fn add_message(state: HttpState, req: AddTaskRequest) -> HttpResult<Ad
         input: req.input,
         erc1271: req.erc1271,
     };
-    let client = state.config.signing_client().await?;
 
     add_signature(&mut task, req.signature);
-    let erc1271 = IERC1271Instance::new(task.erc1271, &client.http_provider);
-    let hash = eip191_hash_message(keccak256(req.task_name));
+
+    let erc1271 = IERC1271Instance::new(task.erc1271, client.http_provider.clone());
+    let hash = eip191_hash_message(keccak256(req.task_name.clone()));
     let signature_bytes = signature_bytes(task.signatures.clone(), task.reference_block);
 
     // Check if we have enough weight
     // TODO: what if we get invalid signatures?
     if let Ok(valid_signature) = erc1271
         .isValidSignature(hash, signature_bytes.clone().into())
+        .call()
         .await
     {
         if valid_signature.magicValue == IERC1271::isValidSignatureCall::SELECTOR {
             let avl_contract = ContractInstance::new(
                 task.avl,
-                client.http_provider,
+                &client.http_provider,
                 Interface::new(JsonAbi::from_iter(iter::once(task.function.clone().into()))),
             );
 
-            aggregator_state.insert(req.task_name, task);
             // Searching signature param index
-            let signature_index = req
+            let signature_index = task
                 .function
                 .inputs
                 .iter()
                 .enumerate()
                 .find_map(|(idx, param)| param.name.eq("signature").then(|| idx))
                 .context("signature")?;
-            let mut args = req.function.abi_decode_input(&req.input, false)?;
+            let mut args = task.function.abi_decode_input(&task.input, false)?;
             let DynSolValue::Bytes(bytes) = &mut args[signature_index] else {
                 return Err(anyhow::anyhow!("Signature supposed to be bytes").into());
             };
             *bytes = signature_bytes;
 
             let receipt = avl_contract
-                .function(&req.function.name, &args)?
+                .function(&task.function.name, &args)?
                 .gas(500000)
                 .send()
                 .await?
                 .get_receipt()
                 .await?;
 
-            if !receipt.status() {
-                return Err(anyhow::anyhow!("Failed to submit task").into());
-            }
+            // One operator is enough for submission, no need to store task
+            return match receipt.status() {
+                true => Ok(AddMessageResponse {
+                    submitted: Some(receipt.transaction_hash),
+                }),
+                false => Err(anyhow::anyhow!("Failed to submit task").into()),
+            };
         }
-    }
+    };
+    aggregator_state.insert(req.task_name.clone(), task);
     Ok(AddMessageResponse { submitted: None })
 }
 
