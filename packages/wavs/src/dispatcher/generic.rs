@@ -347,7 +347,13 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            trigger: TriggerData::eth_queue("service1", "workflow1", rand_address_eth()).unwrap(),
+            trigger: TriggerData::eth_queue(
+                "service1",
+                "workflow1",
+                rand_address_eth(),
+                rand_address_eth(),
+            )
+            .unwrap(),
             result: TriggerResult::queue(task_id, payload),
         };
 
@@ -370,7 +376,7 @@ mod tests {
                 action.trigger.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
@@ -409,19 +415,26 @@ mod tests {
         let workflow_id = ID::new("workflow1").unwrap();
 
         let task_queue_address = rand_address_eth();
+        let task_queue_erc1271 = rand_address_eth();
         let actions = vec![
             TriggerAction {
                 trigger: TriggerData::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
+                    task_queue_erc1271.clone(),
                 )
                 .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::eth_queue(&service_id, &workflow_id, task_queue_address)
-                    .unwrap(),
+                trigger: TriggerData::eth_queue(
+                    &service_id,
+                    &workflow_id,
+                    task_queue_address,
+                    task_queue_erc1271,
+                )
+                .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];
@@ -449,7 +462,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
@@ -487,19 +500,26 @@ mod tests {
         let service_id = ID::new("service1").unwrap();
         let workflow_id = ID::new("workflow1").unwrap();
         let task_queue_address = rand_address_eth();
+        let task_queue_erc1271 = rand_address_eth();
         let actions = vec![
             TriggerAction {
                 trigger: TriggerData::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
+                    task_queue_erc1271.clone(),
                 )
                 .unwrap(),
                 result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::eth_queue(&service_id, &workflow_id, task_queue_address)
-                    .unwrap(),
+                trigger: TriggerData::eth_queue(
+                    &service_id,
+                    &workflow_id,
+                    task_queue_address,
+                    task_queue_erc1271,
+                )
+                .unwrap(),
                 result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];
@@ -527,7 +547,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]

@@ -160,6 +160,7 @@ impl MockTriggerManagerChannel {
         service_id: impl TryInto<ID, Error = IDError> + std::fmt::Debug,
         workflow_id: impl TryInto<ID, Error = IDError> + std::fmt::Debug,
         task_queue_addr: &Address,
+        task_queue_erc1271: &Address,
         data: &(impl Serialize + std::fmt::Debug),
     ) {
         let task_id = TaskId::new(
@@ -169,8 +170,13 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
-                trigger: TriggerData::eth_queue(service_id, workflow_id, task_queue_addr.clone())
-                    .unwrap(),
+                trigger: TriggerData::eth_queue(
+                    service_id,
+                    workflow_id,
+                    task_queue_addr.clone(),
+                    task_queue_erc1271.clone(),
+                )
+                .unwrap(),
                 result: TriggerResult::queue(
                     task_id,
                     serde_json::to_string(data).unwrap().as_bytes(),
@@ -236,18 +242,30 @@ mod tests {
     #[test]
     fn mock_trigger_sends() {
         let task_queue_addr = rand_address_eth();
+        let task_queue_erc1271 = rand_address_eth();
 
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::eth_queue("service1", "workflow1", task_queue_addr.clone())
-                    .unwrap(),
+                trigger: TriggerData::eth_queue(
+                    "service1",
+                    "workflow1",
+                    task_queue_addr.clone(),
+                    task_queue_erc1271.clone(),
+                )
+                .unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
-                trigger: TriggerData::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
+                trigger: TriggerData::eth_queue(
+                    "service2",
+                    "workflow2",
+                    task_queue_addr,
+                    task_queue_erc1271,
+                )
+                .unwrap(),
                 result: TriggerResult::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
@@ -268,7 +286,8 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
+        let data =
+            TriggerData::eth_queue("abcd", "abcd", rand_address_eth(), rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -279,7 +298,8 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
+        let data =
+            TriggerData::eth_queue("abcd", "abcd", rand_address_eth(), rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }

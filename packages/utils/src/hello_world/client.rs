@@ -3,40 +3,43 @@
 
 use crate::{
     alloy_helpers::SolidityEventFinder,
-    eth_client::{AddMessageRequest, EthSigningClient},
+    eth_client::{AddTaskRequest, EthSigningClient, OperatorSignature},
 };
 
 use super::{
     solidity_types::hello_world::{
-        HelloWorldServiceManager::{self, NewTaskCreated, TaskResponded},
+        HelloWorldServiceManager::{self, NewTaskCreated},
         IHelloWorldServiceManager::Task,
     },
     HelloWorldFullClient, HelloWorldSimpleClient,
 };
 
 use alloy::{
-    dyn_abi::DynSolValue,
-    json_abi::Function,
-    primitives::{eip191_hash_message, keccak256, Address, FixedBytes, U256},
+    primitives::{eip191_hash_message, keccak256, Address},
     providers::Provider,
     signers::SignerSync,
     sol_types::{SolCall, SolValue},
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 
 impl HelloWorldFullClient {
     pub fn into_simple(self) -> HelloWorldSimpleClient {
-        HelloWorldSimpleClient::new(self.eth, self.hello_world.hello_world_service_manager)
+        HelloWorldSimpleClient::new(
+            self.eth,
+            self.hello_world.hello_world_service_manager,
+            self.hello_world.stake_registry,
+        )
     }
 }
 
 impl HelloWorldSimpleClient {
-    pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
+    pub fn new(eth: EthSigningClient, contract_address: Address, erc1271: Address) -> Self {
         let contract = HelloWorldServiceManager::new(contract_address, eth.http_provider.clone());
         Self {
             eth,
             contract_address,
             contract,
+            erc1271,
         }
     }
 
@@ -67,14 +70,10 @@ impl HelloWorldSimpleClient {
         Ok(new_task_created)
     }
 
-    pub async fn submit_task_request(
-        &self,
-        task: Task,
-        task_index: u32,
-    ) -> Result<AddMessageRequest> {
+    pub async fn submit_task_request(&self, task: Task, task_index: u32) -> Result<AddTaskRequest> {
         tracing::debug!("Signing and responding to task index {}", task_index);
 
-        let signature = self.sign_task_result(&task.name).await?;
+        let signature = self.sign_task(&task.name).await?;
 
         let contract =
             HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
@@ -95,44 +94,30 @@ impl HelloWorldSimpleClient {
         let mut function_input = Vec::with_capacity(call.abi_encoded_size());
         call.abi_encode_raw(&mut function_input);
 
-        Ok(AddMessageRequest {
-            operators: vec![self.eth.address()],
-            signature,
+        let operator = self.eth.address();
+        let reference_block = self.eth.http_provider.get_block_number().await?;
+        Ok(AddTaskRequest {
             task_name,
             avl: *contract.address(),
             function,
-            function_input,
+            input: function_input,
+            reference_block,
+            // TODO: fill other operators
+            operators: vec![operator],
+            signature: OperatorSignature {
+                address: operator,
+                signature,
+            },
+            erc1271: self.erc1271,
         })
     }
 
-    pub async fn sign_task_result(&self, name: &str) -> Result<Vec<u8>> {
-        let message = format!("Hello, {}", name);
+    pub async fn sign_task(&self, name: &str) -> Result<Vec<u8>> {
+        let message = format!("Hello, {name}");
         let message_hash = eip191_hash_message(keccak256(message.abi_encode_packed()));
         // TODO: Sign hash or sign message?
-        let operators: Vec<DynSolValue> = vec![DynSolValue::Address(self.eth.address())];
-        let signature: Vec<DynSolValue> = vec![DynSolValue::Bytes(
-            self.eth.signer.sign_hash_sync(&message_hash)?.into(),
-        )];
+        let signature: Vec<u8> = self.eth.signer.sign_hash_sync(&message_hash)?.into();
 
-        let current_block = U256::from(self.eth.http_provider.get_block_number().await?);
-
-        let signed_task = DynSolValue::Tuple(vec![
-            DynSolValue::Array(operators),
-            DynSolValue::Array(signature),
-            DynSolValue::Uint(current_block, 32),
-        ])
-        .abi_encode_params();
-
-        Ok(signed_task)
-    }
-
-    pub async fn submit_task(
-        &self,
-        task: Task,
-        task_index: u32,
-        signature: Vec<u8>,
-        aggregator_endpoint: String,
-    ) -> Result<AddMessageRequest> {
-        todo!()
+        Ok(signature)
     }
 }

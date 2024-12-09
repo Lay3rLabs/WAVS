@@ -362,7 +362,10 @@ impl TriggerManager for CoreTriggerManager {
                     .unwrap()
                     .insert(task_queue_addr.clone(), lookup_id);
             }
-            Trigger::EthQueue { task_queue_addr } => {
+            Trigger::EthQueue {
+                task_queue_addr,
+                task_queue_erc1271: _,
+            } => {
                 self.lookup_maps
                     .triggers_by_task_queue
                     .write()
@@ -493,7 +496,10 @@ fn remove_trigger_data(
                 TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
             )?;
         }
-        Trigger::EthQueue { task_queue_addr } => {
+        Trigger::EthQueue {
+            task_queue_addr,
+            task_queue_erc1271: _,
+        } => {
             triggers_by_task_queue.remove(task_queue_addr).ok_or(
                 TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
             )?;
@@ -567,18 +573,39 @@ mod tests {
         let task_queue_addr_2_1 = rand_address_eth();
         let task_queue_addr_2_2 = rand_address_eth();
 
-        let trigger_1_1 =
-            TriggerData::eth_queue(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
-                .unwrap();
-        let trigger_1_2 =
-            TriggerData::eth_queue(&service_id_1, &workflow_id_2, task_queue_addr_1_2.clone())
-                .unwrap();
-        let trigger_2_1 =
-            TriggerData::eth_queue(&service_id_2, &workflow_id_1, task_queue_addr_2_1.clone())
-                .unwrap();
-        let trigger_2_2 =
-            TriggerData::eth_queue(&service_id_2, &workflow_id_2, task_queue_addr_2_2.clone())
-                .unwrap();
+        let task_queue_erc1271_1_1 = rand_address_eth();
+        let task_queue_erc1271_1_2 = rand_address_eth();
+        let task_queue_erc1271_2_1 = rand_address_eth();
+        let task_queue_erc1271_2_2 = rand_address_eth();
+
+        let trigger_1_1 = TriggerData::eth_queue(
+            &service_id_1,
+            &workflow_id_1,
+            task_queue_addr_1_1.clone(),
+            task_queue_erc1271_1_1.clone(),
+        )
+        .unwrap();
+        let trigger_1_2 = TriggerData::eth_queue(
+            &service_id_1,
+            &workflow_id_2,
+            task_queue_addr_1_2.clone(),
+            task_queue_erc1271_1_2.clone(),
+        )
+        .unwrap();
+        let trigger_2_1 = TriggerData::eth_queue(
+            &service_id_2,
+            &workflow_id_1,
+            task_queue_addr_2_1.clone(),
+            task_queue_erc1271_2_1.clone(),
+        )
+        .unwrap();
+        let trigger_2_2 = TriggerData::eth_queue(
+            &service_id_2,
+            &workflow_id_2,
+            task_queue_addr_2_2.clone(),
+            task_queue_erc1271_2_2.clone(),
+        )
+        .unwrap();
 
         manager.add_trigger(trigger_1_1).unwrap();
         manager.add_trigger(trigger_1_2).unwrap();
@@ -636,7 +663,10 @@ mod tests {
                     task_queue_addr,
                     poll_interval: _,
                 } => task_queue_addr,
-                Trigger::EthQueue { task_queue_addr } => task_queue_addr,
+                Trigger::EthQueue {
+                    task_queue_addr,
+                    task_queue_erc1271: _,
+                } => task_queue_addr,
             }
         }
     }

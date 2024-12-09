@@ -215,7 +215,7 @@ mod tests {
             (
                 ID::new("workflow-id-1").unwrap(),
                 Workflow {
-                    trigger: Trigger::eth_queue(rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
                     component: ID::new("component-id-1").unwrap(),
                     submit: None,
                 },
@@ -223,7 +223,7 @@ mod tests {
             (
                 ID::new("workflow-id-2").unwrap(),
                 Workflow {
-                    trigger: Trigger::eth_queue(rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
                     component: ID::new("component-id-2").unwrap(),
                     submit: None,
                 },

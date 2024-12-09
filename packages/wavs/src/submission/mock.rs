@@ -101,7 +101,13 @@ mod test {
 
     fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_data: TriggerData::eth_queue(service, service, rand_address_eth()).unwrap(),
+            trigger_data: TriggerData::eth_queue(
+                service,
+                service,
+                rand_address_eth(),
+                rand_address_eth(),
+            )
+            .unwrap(),
             task_id: TaskId::new(task_id),
             wasm_result: payload.as_bytes().to_vec(),
             submit: Submit::eth_aggregator_tx(),

@@ -20,6 +20,8 @@ pub enum Trigger {
         // FIXME: add some chain name. right now all triggers are on one chain
         // For right now this is NOT actually a generic task queue, it's AVS-specific
         task_queue_addr: Address,
+        // Address for validating signatures
+        task_queue_erc1271: Address,
     },
 }
 
@@ -31,8 +33,11 @@ impl Trigger {
         }
     }
 
-    pub fn eth_queue(task_queue_addr: Address) -> Self {
-        Trigger::EthQueue { task_queue_addr }
+    pub fn eth_queue(task_queue_addr: Address, task_queue_erc1271: Address) -> Self {
+        Trigger::EthQueue {
+            task_queue_addr,
+            task_queue_erc1271,
+        }
     }
 }
 
