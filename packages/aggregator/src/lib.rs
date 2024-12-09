@@ -2,6 +2,7 @@ pub mod args;
 pub mod config;
 pub mod context;
 pub mod http;
+pub mod solidity_types;
 pub mod test_utils;
 
 use context::AppContext;

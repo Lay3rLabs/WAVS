@@ -168,6 +168,7 @@ impl MockTriggerManagerChannel {
         service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
         workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
         task_queue_addr: &Address,
+        task_queue_erc1271: &Address,
         data: &(impl Serialize + std::fmt::Debug),
     ) {
         let task_id = TaskId::new(
@@ -245,6 +246,7 @@ mod tests {
     #[test]
     fn mock_trigger_sends() {
         let task_queue_addr = rand_address_eth();
+        let task_queue_erc1271 = rand_address_eth();
 
         let actions = vec![
             TriggerAction {
