@@ -299,8 +299,10 @@ impl ConfigBuilder {
             .join(figment::providers::Serialized::defaults(Config::default()))
             .extract()?;
 
-        Ok(Config{
-            data: shellexpand::tilde(&config.data.to_string_lossy()).to_string().into(),
+        Ok(Config {
+            data: shellexpand::tilde(&config.data.to_string_lossy())
+                .to_string()
+                .into(),
             ..config
         })
     }
