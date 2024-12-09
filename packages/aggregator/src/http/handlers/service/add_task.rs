@@ -7,7 +7,7 @@ use alloy::{
     primitives::{eip191_hash_message, keccak256, Address, TxHash, U256},
     sol_types::SolCall,
 };
-use anyhow::{bail, ensure, Context};
+use anyhow::{ensure, Context};
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use utils::eth_client::{AddTaskRequest, OperatorSignature};
@@ -31,18 +31,13 @@ pub async fn handle_add_message(
     State(state): State<HttpState>,
     Json(req): Json<AddTaskRequest>,
 ) -> impl IntoResponse {
-    match add_message(state, req).await {
+    match add_task(state, req).await {
         Ok(resp) => Json(resp).into_response(),
         Err(e) => e.into_response(),
     }
 }
 
-pub async fn add_message(state: HttpState, req: AddTaskRequest) -> HttpResult<AddMessageResponse> {
-    let mut aggregator_state = state.aggregator_state.write().unwrap();
-    if aggregator_state.contains_key(&req.task_name) {
-        return Err(anyhow::anyhow!("Task already exists").into());
-    }
-    let client = state.config.signing_client().await?;
+pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddMessageResponse> {
     let mut task = Task {
         signatures: HashMap::new(),
         operators: req.operators,
@@ -53,9 +48,12 @@ pub async fn add_message(state: HttpState, req: AddTaskRequest) -> HttpResult<Ad
         erc1271: req.erc1271,
     };
 
-    add_signature(&mut task, req.signature);
+    add_signature(&mut task, req.signature)?;
 
-    let erc1271 = IERC1271Instance::new(task.erc1271, client.http_provider.clone());
+    let erc1271 = IERC1271Instance::new(
+        task.erc1271,
+        state.config.signing_client().await?.http_provider.clone(),
+    );
     let hash = eip191_hash_message(keccak256(req.task_name.clone()));
     let signature_bytes = signature_bytes(task.signatures.clone(), task.reference_block);
 
@@ -69,7 +67,7 @@ pub async fn add_message(state: HttpState, req: AddTaskRequest) -> HttpResult<Ad
         if valid_signature.magicValue == IERC1271::isValidSignatureCall::SELECTOR {
             let avl_contract = ContractInstance::new(
                 task.avl,
-                &client.http_provider,
+                state.config.signing_client().await?.http_provider,
                 Interface::new(JsonAbi::from_iter(iter::once(task.function.clone().into()))),
             );
 
@@ -104,6 +102,10 @@ pub async fn add_message(state: HttpState, req: AddTaskRequest) -> HttpResult<Ad
             };
         }
     };
+    let mut aggregator_state = state.aggregator_state.write().unwrap();
+    if aggregator_state.contains_key(&req.task_name) {
+        return Err(anyhow::anyhow!("Task already exists").into());
+    }
     aggregator_state.insert(req.task_name.clone(), task);
     Ok(AddMessageResponse { submitted: None })
 }
