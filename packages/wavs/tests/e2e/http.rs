@@ -48,10 +48,11 @@ impl HttpClient {
         id: ServiceID,
         digest: Digest,
         task_queue_addr: Address,
+        task_queue_erc1271: Address,
         submit: Submit,
     ) -> Result<()> {
         let service = ServiceRequest {
-            trigger: TriggerRequest::eth_queue(task_queue_addr),
+            trigger: TriggerRequest::eth_queue(task_queue_addr, task_queue_erc1271),
             id,
             digest: digest.into(),
             permissions: Permissions {

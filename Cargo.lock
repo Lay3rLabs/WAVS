@@ -6248,6 +6248,7 @@ name = "utils"
 version = "0.2.0-rc1"
 dependencies = [
  "alloy",
+ "alloy-rlp",
  "anyhow",
  "chrono",
  "futures",
@@ -6818,6 +6819,7 @@ name = "wavs"
 version = "0.2.0-rc1"
 dependencies = [
  "alloy",
+ "alloy-rlp",
  "anyhow",
  "axum",
  "bip39",
@@ -6935,7 +6937,7 @@ dependencies = [
  "heck 0.4.1",
  "proc-macro2",
  "quote",
- "shellexpand",
+ "shellexpand 2.1.2",
  "syn 2.0.90",
  "witx",
 ]

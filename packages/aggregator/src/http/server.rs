@@ -5,7 +5,7 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
-        handle_config, handle_info, handle_not_found, service::add_msg::handle_add_message,
+        handle_config, handle_info, handle_not_found, service::add_task::handle_add_message,
     },
     state::HttpState,
 };
@@ -39,7 +39,7 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
 
 // this is called from main and tests
 pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone()).await?;
+    let state = HttpState::new(config.clone())?;
 
     // build our application with a single route
     let mut router = axum::Router::new()

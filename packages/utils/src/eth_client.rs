@@ -147,12 +147,26 @@ impl EthClientBuilder {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct AddMessageRequest {
-    // TODO: Maybe redundant
-    pub operators: Vec<Address>,
-    pub signature: Vec<u8>,
+pub struct AddTaskRequest {
     pub task_name: String,
+    /// Address of the avl
     pub avl: Address,
+    pub reference_block: u64,
+    // TODO: Seems like there is no standard where `signature` arguments will be.
+    // It's not even consistent over standards (ERC1271 - last, EIP712 - first)
+    // Using `function` to find and override it. If there's standard we should use selector instead
     pub function: alloy::json_abi::Function,
-    pub function_input: Vec<u8>,
+    /// Function input without a signature
+    pub input: Vec<u8>,
+    // TODO: Can we get it directly from the contract somehow?
+    pub operators: Vec<Address>,
+    pub signature: OperatorSignature,
+    pub erc1271: Address,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorSignature {
+    pub address: Address,
+    pub signature: Vec<u8>,
 }
