@@ -14,11 +14,13 @@ Finally, run things in this order:
 
 This kitchen-sink command will go through all the steps of:
 
-1. Deploying core eigenlayer contracts
-2. Deploying hello-world AVS contracts
-3. Creating a service on WAVS
-4. Submitting a task to the hello-world on-chain contract
-5. Waiting for WAVS to do its thing and get the result back on-chain
+1. Deploying core Eigenlayer contracts
+2. Registering as an Eigenlayer operator
+3. Deploying hello-world AVS contracts
+4. Registering as a hello-world AVS operator
+5. Creating a service on WAVS
+6. Submitting a task to the hello-world on-chain contract
+7. Waiting for WAVS to do its thing and get the result back on-chain
 
 Other commands are available to fine-tune this and run specific steps.
 
