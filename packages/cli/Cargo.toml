@@ -21,3 +21,8 @@ tokio = { workspace = true }
 rand = { workspace = true }
 lavs-apis = { workspace = true }
 hex = { workspace = true }
+reqwest = { workspace = true }
+wavs = { workspace = true }
+layer-climb = { workspace = true }
+
+uuid = { version = "1.11.0", features = ["v7", "serde"] }
