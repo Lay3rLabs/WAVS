@@ -20,3 +20,4 @@ dotenvy = { workspace = true }
 tokio = { workspace = true }
 rand = { workspace = true }
 lavs-apis = { workspace = true }
+hex = { workspace = true }

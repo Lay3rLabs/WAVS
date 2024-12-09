@@ -6829,6 +6829,7 @@ dependencies = [
  "anyhow",
  "clap 4.5.20",
  "dotenvy",
+ "hex",
  "lavs-apis",
  "rand",
  "serde",
