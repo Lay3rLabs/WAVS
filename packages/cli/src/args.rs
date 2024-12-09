@@ -20,5 +20,10 @@ pub enum Command {
     KitchenSink {
         #[clap(long, default_value = "world")]
         task_message: String,
+
+        /// If set, will immediately submit the result to the chain
+        /// leave false to let WAVS handle it
+        #[clap(long, default_value_t = false)]
+        submit_result: bool,
     },
 }

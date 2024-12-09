@@ -1,5 +1,7 @@
 mod args;
 
+use std::time::Duration;
+
 use anyhow::Result;
 use args::{CliArgs, Command};
 use clap::Parser;
@@ -37,7 +39,7 @@ async fn main() {
             DeployData::new(&args).await.unwrap();
         }
 
-        Command::KitchenSink { task_message } => {
+        Command::KitchenSink { task_message, submit_result } => {
             let DeployData {
                 core_addresses,
                 hello_world_client,
@@ -73,14 +75,41 @@ async fn main() {
 
             println!("Task submitted with id: {}", TaskId::new(taskIndex as u64));
 
-            tracing::info!("Submitting the hello world result");
+            if submit_result {
+                tracing::info!("Submitting the hello world result");
 
-            let tx_hash = hello_world_client
-                .sign_and_submit_task(task, taskIndex)
-                .await
-                .unwrap();
+                let tx_hash = hello_world_client
+                    .sign_and_submit_task(task, taskIndex)
+                    .await
+                    .unwrap();
 
-            println!("Task result submitted with tx hash: {}", tx_hash);
+                println!("Task result submitted with tx hash: {}", tx_hash);
+            }
+
+            tokio::time::timeout(Duration::from_secs(10), async move {
+                loop {
+                    let task_response_hash = hello_world_client 
+                        .task_responded_hash(taskIndex)
+                        .await
+                        .unwrap();
+
+                    if !task_response_hash.is_empty() {
+                        println!("Task response hash: {}", hex::encode(task_response_hash));
+                        break;
+                    } else {
+                        tracing::info!(
+                            "Waiting for task response by {} on {} for index {}...",
+                            hello_world_client.eth.address(),
+                            hello_world_client.contract_address,
+                            taskIndex
+                        );
+                    }
+                    // still open, waiting...
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            })
+            .await
+            .unwrap();
         }
     }
 }
