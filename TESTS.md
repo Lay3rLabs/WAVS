@@ -59,4 +59,4 @@ _Tip!_: For setting env vars, all the tooling is `.env` file aware, from whereve
     - deploy the contracts: `cargo run -- --target=local deploy -m verifier-simple contracts --operators wasmatic`
     - take the LOCAL_TASK_QUEUE_ADDRESS value, and set it in the `WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS` env var
 6. Kill the localnode's wasmatic instance to make sure we're hitting the test instance only: `docker stop localnode-wasmatic-1`
-7. In this repo, run the tests: `cargo test --features e2e_tests,e2e_tests_layer`
+7. In this repo, run the tests: `cargo test --features e2e_tests,e2e_tests_cosmos`

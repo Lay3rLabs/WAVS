@@ -99,8 +99,7 @@ pub struct Workflow {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Submit {
-    /// Writing a transaction directly to the verifier contract on the layer chain
-    /// the node is configured for.
+    /// Writing a transaction directly to the layer verifier contract
     LayerVerifierTx {
         /// The hd index of the mnemonic to sign with
         hd_index: u32,

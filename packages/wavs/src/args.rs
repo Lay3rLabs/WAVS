@@ -65,17 +65,17 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wasm_threads: Option<usize>,
 
-    /// The ethereum chain to use for the application
+    /// The Ethereum-style chain to use for the application
     /// will load from the config file
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain: Option<String>,
 
-    /// The layer chain to use for the application
+    /// The Cosmos-style chain to use for the application
     /// will load from the config file
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_chain: Option<String>,
+    pub cosmos_chain: Option<String>,
 
     #[clap(flatten)]
     #[serde(flatten)]
@@ -83,8 +83,13 @@ pub struct CliArgs {
 }
 
 // used in both config and cli/env args
+// because it is flattened, we need to use prefixes to avoid conflicts
 #[derive(Parser, Clone, Debug, Serialize, Deserialize, Default)]
 pub struct OptionalWavsChainConfig {
+    /// To override the chosen eth chain's chain_id
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_id: Option<String>,
     /// To override the chosen eth chain's ws_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -97,34 +102,43 @@ pub struct OptionalWavsChainConfig {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub submission_mnemonic: Option<String>,
-    /// To override the chosen layer chain's chain_id
+    /// To override the chosen eth chain's submission mnemonic
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_chain_id: Option<ChainId>,
-    /// To override the chosen layer chain's rpc_endpoint
+    pub faucet_endpoint: Option<String>,
+
+    /// To override the chosen cosmos chain's chain_id
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_rpc_endpoint: Option<String>,
-    /// To override the chosen layer chain's grpc_endpoint
+    pub cosmos_chain_id: Option<ChainId>,
+    /// To override the chosen cosmos chain's bech32_prefix
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_grpc_endpoint: Option<String>,
-    /// To override the chosen layer chain's gas_price
+    pub cosmos_bech32_prefix: Option<ChainId>,
+    /// To override the chosen cosmos chain's rpc_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_gas_price: Option<f32>,
-    /// To override the chosen layer chain's gas_denom
+    pub cosmos_rpc_endpoint: Option<String>,
+    /// To override the chosen cosmos chain's grpc_endpoint
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_gas_denom: Option<String>,
-    /// To override the chosen layer chain's faucet_endpoint
+    pub cosmos_grpc_endpoint: Option<String>,
+    /// To override the chosen cosmos chain's gas_price
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_faucet_endpoint: Option<String>,
-    /// To override the chosen layer chain's submission mnemonic
+    pub cosmos_gas_price: Option<f32>,
+    /// To override the chosen cosmos chain's gas_denom
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub layer_submission_mnemonic: Option<String>,
+    pub cosmos_gas_denom: Option<String>,
+    /// To override the chosen cosmos chain's faucet_endpoint
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cosmos_faucet_endpoint: Option<String>,
+    /// To override the chosen cosmos chain's submission mnemonic
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cosmos_submission_mnemonic: Option<String>,
 }
 
 impl CliArgs {

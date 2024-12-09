@@ -39,8 +39,8 @@ pub enum SubmissionError {
     Reqwest(reqwest::Error),
     #[error("faucet: {0}")]
     Faucet(String),
-    #[error("missing layer chain")]
-    MissingLayerChain,
+    #[error("missing cosmos chain")]
+    MissingCosmosChain,
     #[error("ethereum: {0}")]
     Ethereum(anyhow::Error),
     #[error("missing ethereum chain")]
