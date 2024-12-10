@@ -8,8 +8,7 @@ help:
 docker-build:
     {{SUDO}} docker build . -t ghcr.io/lay3rlabs/wavs:latest
 
-# push wavs:latest to ghcr
-# note: if you set TAG environmental variable, it will also tag latest with that tag and push it
+# push wavs:latest to ghcr with optional TAG environment variable
 docker-push:
     {{SUDO}} docker push ghcr.io/lay3rlabs/wavs:latest
     if [ "{{TAG}}" != "" ]; then \
@@ -35,8 +34,7 @@ docker-stop:
 # compile all WASI components, places the output in components dir
 wasi-build:
     #!/usr/bin/env bash
-    OUTDIR="components"
-    echo "Building WASI components in $OUTDIR"
+    OUTDIR="./components"
 
     rm -rf examples/target/wasm32-wasip1/release/*.wasm "$OUTDIR"
     mkdir -p "$OUTDIR"
