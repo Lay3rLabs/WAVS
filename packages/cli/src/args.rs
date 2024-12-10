@@ -65,6 +65,10 @@ pub enum Command {
         #[clap(long, env = "CLI_EIGEN_SERVICE_MANAGER")]
         contract_address: alloy::primitives::Address,
 
+        /// The contract address for the verifying signature
+        #[clap(long, env = "CLI_EIGEN_SERVICE_ERC1271")]
+        erc1271: alloy::primitives::Address,
+
         /// The name of the task
         /// if not set, will be a random string
         #[clap(long)]
