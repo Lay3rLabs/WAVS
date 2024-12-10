@@ -183,6 +183,9 @@ mod e2e {
                         .hello_world_service_manager
                         .into(),
                 )),
+                Address::Eth(AddrEth::new(
+                    app.avs_client.hello_world.stake_registry.into(),
+                )),
                 Submit::EthSignedMessage { hd_index: 0 },
             )
             .await
@@ -240,6 +243,7 @@ mod e2e {
                 service_id.clone(),
                 wasm_digest,
                 app.task_queue.addr.clone(),
+                app.task_queue.erc1271.clone(),
                 Submit::LayerVerifierTx {
                     hd_index: 0,
                     verifier_addr: app.verifier_addr.clone(),
