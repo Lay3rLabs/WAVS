@@ -1,8 +1,9 @@
-First, open up 3 different terminals:
+First, open up 4 different terminals:
 
 1. (local-only, from anywhere) - to run Anvil, the local Ethereum chain emulator 
 2. in `packages/wavs` to run wavs
-3. in `packages/cli` to run the CLI
+3. in `packages/aggregator` to run aggregator
+4. in `packages/cli` to run the CLI
 
 Next, make sure you set the required `env` vars. An easy way is copy the `.env.example` file in each directory to `.env` and edit from there
 
@@ -10,7 +11,8 @@ Finally, run things in this order:
 
 1. (local-only) `anvil`
 2. `cargo run` (in `packages/wavs`)
-3. `cargo run kitchen-sink --wavs` (in `packages/cli`)
+3. `cargo run` (in `packages/aggregator`)
+4. `cargo run kitchen-sink --wavs` (in `packages/cli`)
 
 This kitchen-sink command will go through all the steps of:
 
