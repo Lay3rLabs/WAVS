@@ -17,17 +17,25 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let service_id = ServiceID::new("default").unwrap();
     let workflow_id = WorkflowID::new("default").unwrap();
     let task_queue_address = rand_address_eth();
+    let task_queue_erc1271 = rand_address_eth();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
         let runner = runner.clone();
         let service_id = service_id.clone();
         let task_queue_address = task_queue_address.clone();
+        let task_queue_erc1271 = task_queue_erc1271.clone();
 
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(service_id.clone(), digest, &task_queue_address, BigSquare)
+                .create_service_simple(
+                    service_id.clone(),
+                    digest,
+                    &task_queue_address,
+                    &task_queue_erc1271,
+                    BigSquare,
+                )
                 .await;
         }
     });
@@ -44,6 +52,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 let service_id = service_id.clone();
                 let workflow_id = workflow_id.clone();
                 let task_queue_address = task_queue_address.clone();
+                let task_queue_erc1271 = task_queue_erc1271.clone();
                 async move {
                     for i in 1..=N_TRIGGERS {
                         runner
@@ -53,6 +62,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                                 &service_id,
                                 &workflow_id,
                                 &task_queue_address,
+                                &task_queue_erc1271,
                                 &SquareIn { x: i as u64 },
                             )
                             .await;
