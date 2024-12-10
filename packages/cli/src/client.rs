@@ -40,13 +40,11 @@ pub async fn get_avs_client(
     eigen_client: &EigenClient,
     core_contracts: CoreAVSAddresses,
 ) -> HelloWorldFullClient {
-    let avs_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
+    HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts)
         .build()
         .await
-        .unwrap();
-
-    avs_client
+        .unwrap()
 }
 
 pub struct HttpClient {
@@ -84,15 +82,12 @@ impl HttpClient {
         address: alloy::primitives::Address,
         digest: Digest,
     ) -> ID {
-        let service_id = self
-            .create_service(
-                digest,
-                Address::Eth(AddrEth::new(address.into())),
-                Submit::EthSignedMessage { hd_index: 0 },
-            )
-            .await;
-
-        service_id
+        self.create_service(
+            digest,
+            Address::Eth(AddrEth::new(address.into())),
+            Submit::EthSignedMessage { hd_index: 0 },
+        )
+        .await
     }
 
     async fn create_service(&self, digest: Digest, task_queue_addr: Address, submit: Submit) -> ID {
