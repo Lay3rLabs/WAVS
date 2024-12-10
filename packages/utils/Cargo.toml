@@ -12,6 +12,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 alloy = { workspace = true }
+alloy-rlp = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
 tracing-subscriber = { workspace = true }

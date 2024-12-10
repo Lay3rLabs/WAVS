@@ -7,9 +7,8 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
 anyhow = { workspace = true }
+alloy-rlp = { workspace = true }
 layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", version = "0.1.1" }
 wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
 url = "2.5.3"

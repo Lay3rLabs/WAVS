@@ -7,11 +7,12 @@ use crate::{
     apis::{
         dispatcher::Submit,
         submission::{ChainMessage, Submission, SubmissionError},
-        EthHelloWorldTaskJson, Trigger,
+        EthHelloWorldTaskRlp, Trigger,
     },
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     context::AppContext,
 };
+use alloy_rlp::Decodable;
 use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
 use layer_climb::prelude::*;
 use reqwest::Url;
@@ -337,20 +338,12 @@ impl Submission for CoreSubmission {
 
                                             let avs_client = HelloWorldSimpleClient::new(eth_client, contract_address);
 
-                                            let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
-                                                Ok(result) => result,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to parse wasm result into json value: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
-
-                                            let task: EthHelloWorldTaskJson = match serde_json::from_value(result.clone()) {
+                                            let task = match EthHelloWorldTaskRlp::decode(&mut msg.wasm_result.as_slice()) {
                                                 Ok(task) => task,
                                                 Err(e) => {
-                                                    tracing::error!("Failed to parse wasm result into json value: {:?}", e);
+                                                    tracing::error!("Failed to parse wasm result into rlp value: {:?}", e);
                                                     continue;
-                                                }
+                                                },
                                             };
 
                                             let task = HelloWorldTask {

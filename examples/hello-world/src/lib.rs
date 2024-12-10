@@ -1,24 +1,28 @@
 #[allow(warnings)]
 mod bindings;
 
+use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use anyhow::Context;
 use bindings::{Guest, Output, TaskQueueInput};
-use serde::{Deserialize, Serialize};
 
 struct Component;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct HelloWorldPayload {
+#[derive(Debug, PartialEq, Eq, Clone, RlpEncodable, RlpDecodable)]
+pub struct HelloWorldTaskRlp {
     pub name: String,
     pub created_block: u32,
 }
 
 impl Guest for Component {
     fn run_task(input: TaskQueueInput) -> Output {
-        match serde_json::from_slice::<HelloWorldPayload>(&input.request)
+        match HelloWorldTaskRlp::decode(&mut input.request.as_slice())
             .context("Failed to parse request")
         {
-            Ok(response) => serde_json::to_vec(&response).map_err(|x| x.to_string()),
+            Ok(response) => {
+                let mut output = Vec::new();
+                response.encode(&mut output);
+                Ok(output)
+            }
             Err(e) => Err(e.to_string()),
         }
     }
