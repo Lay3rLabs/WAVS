@@ -1,7 +1,7 @@
 use crate::{
     apis::{
         trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult},
-        EthHelloWorldTaskRlp, Trigger, ID,
+        Trigger, ID,
     },
     config::Config,
     context::AppContext,
@@ -213,16 +213,29 @@ impl CoreTriggerManager {
                         // rather, it's derived from the task name
                         // let contract = HelloWorldServiceManager::new(log.address(), ethereum_client.as_ref().unwrap().http_provider.clone());
 
-                        let mut payload = Vec::new();
+                        // let mut payload = Vec::new();
 
-                        EthHelloWorldTaskRlp {
-                            name: event.task.name,
-                            created_block: event.task.taskCreatedBlock,
-                        }
-                        .encode(&mut payload);
+                        // EthHelloWorldTaskRlp {
+                        //     name: event.task.name,
+                        //     created_block: event.task.taskCreatedBlock,
+                        // }
+                        // .encode(&mut payload);
 
-                        self.handle_trigger(&action_sender, &contract_address, task_id, payload)
-                            .await;
+                        self.handle_trigger(
+                            &action_sender,
+                            &contract_address,
+                            TriggerResult::EthEvent {
+                                task_id,
+                                log_address: log.address(),
+                                event_topics: event
+                                    .encode_topics()
+                                    .into_iter()
+                                    .map(|t| t.0.to_vec())
+                                    .collect(),
+                                event_data: event.encode_data(),
+                            },
+                        )
+                        .await;
                     }
                 }
                 Ok(BlockTriggers::Layer { triggers }) => {
@@ -259,8 +272,7 @@ impl CoreTriggerManager {
                             self.handle_trigger(
                                 &action_sender,
                                 &contract_address,
-                                task_id,
-                                payload,
+                                TriggerResult::CosmosQueue { task_id, payload },
                             )
                             .await;
                         }
@@ -278,8 +290,7 @@ impl CoreTriggerManager {
         &self,
         action_sender: &mpsc::Sender<TriggerAction>,
         contract_address: &Address,
-        task_id: TaskId,
-        payload: Vec<u8>,
+        result: TriggerResult,
     ) {
         let lookup_id = {
             let triggers_by_task_queue_lock =
@@ -307,10 +318,7 @@ impl CoreTriggerManager {
         match trigger {
             Ok(trigger) => {
                 action_sender
-                    .send(TriggerAction {
-                        trigger,
-                        result: TriggerResult::Queue { task_id, payload },
-                    })
+                    .send(TriggerAction { trigger, result })
                     .await
                     .unwrap();
             }

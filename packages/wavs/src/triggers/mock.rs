@@ -241,14 +241,14 @@ mod tests {
             TriggerAction {
                 trigger: TriggerData::eth_queue("service1", "workflow1", task_queue_addr.clone())
                     .unwrap(),
-                result: TriggerResult::Queue {
+                result: TriggerResult::CosmosQueue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
                 trigger: TriggerData::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
-                result: TriggerResult::Queue {
+                result: TriggerResult::CosmosQueue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
                 },

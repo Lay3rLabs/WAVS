@@ -1,3 +1,4 @@
+use alloy::primitives::Address;
 use thiserror::Error;
 
 use crate::{storage::CAStorageError, Digest};
@@ -14,9 +15,27 @@ pub trait Engine: Send + Sync {
     fn execute_queue(
         &self,
         component: &Component,
-        request: Vec<u8>,
-        timestamp: u64,
+        request: EngineRequest,
     ) -> Result<Vec<u8>, EngineError>;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EngineRequest {
+    CosmosTaskQueue {
+        input: Vec<u8>,
+        timestamp: u64,
+    },
+    EthEvent {
+        log_address: Address,
+        event_topics: Vec<Vec<u8>>,
+        event_data: Vec<u8>,
+    },
+}
+
+impl EngineRequest {
+    pub fn cosmos_task_queue(input: Vec<u8>, timestamp: u64) -> Self {
+        Self::CosmosTaskQueue { input, timestamp }
+    }
 }
 
 impl<E: Engine> Engine for std::sync::Arc<E> {
@@ -31,10 +50,9 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
     fn execute_queue(
         &self,
         component: &Component,
-        request: Vec<u8>,
-        timestamp: u64,
+        request: EngineRequest,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute_queue(component, request, timestamp)
+        self.as_ref().execute_queue(component, request)
     }
 }
 

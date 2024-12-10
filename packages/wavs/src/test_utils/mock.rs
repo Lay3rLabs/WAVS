@@ -4,7 +4,7 @@ use super::http::{map_response, TestHttpApp};
 use crate::{
     apis::{
         dispatcher::{DispatchManager, Permissions, Submit},
-        engine::EngineError,
+        engine::{EngineError, EngineRequest},
         ID,
     },
     context::AppContext,
@@ -231,7 +231,12 @@ pub struct SquareOut {
 }
 
 impl Function for BigSquare {
-    fn execute(&self, request: Vec<u8>, _timestamp: u64) -> Result<Vec<u8>, EngineError> {
+    fn execute(&self, request: EngineRequest) -> Result<Vec<u8>, EngineError> {
+        let request = match request {
+            EngineRequest::CosmosTaskQueue { input, .. } => input,
+            _ => panic!("Unexpected request type in big square"),
+        };
+
         let SquareIn { x } = serde_json::from_slice(&request).unwrap();
         let output = SquareOut { y: x * x };
         Ok(serde_json::to_vec(&output).unwrap())

@@ -13,8 +13,13 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::AllowedHostPermission;
+use crate::apis::engine::EngineRequest;
 use crate::storage::{CAStorage, CAStorageError};
-use crate::{apis, task_bindings, Digest};
+use crate::{
+    apis,
+    bindings::{cosmos_task, eth_event},
+    Digest,
+};
 
 use super::{Engine, EngineError};
 
@@ -74,13 +79,12 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         Ok(digests?)
     }
 
-    /// This will execute a contract that implements the layer_avs:task-queue wit interface
+    /// This will execute a contract that implements a wit interface
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute_queue(
         &self,
         wasi: &apis::dispatcher::Component,
-        request: Vec<u8>,
-        timestamp: u64,
+        request: EngineRequest,
     ) -> Result<Vec<u8>, EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
@@ -140,17 +144,51 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             .unwrap();
         rt.block_on({
             async {
-                let bindings =
-                    task_bindings::TaskQueue::instantiate_async(&mut store, &component, &linker)
+                match request {
+                    EngineRequest::CosmosTaskQueue { input, timestamp } => {
+                        let bindings = cosmos_task::TaskQueue::instantiate_async(
+                            &mut store, &component, &linker,
+                        )
                         .await
                         .context("Wasm instantiate failed")?;
-                let input = task_bindings::lay3r::avs::types::TaskQueueInput { timestamp, request };
-                let result = bindings
-                    .call_run_task(&mut store, &input)
-                    .await
-                    .context("Failed to run task")?
-                    .map_err(EngineError::ComponentError)?;
-                Ok::<Vec<u8>, EngineError>(result)
+                        let input = cosmos_task::lay3r::avs::types::TaskQueueInput {
+                            timestamp,
+                            request: input,
+                        };
+                        let result = bindings
+                            .call_run_task(&mut store, &input)
+                            .await
+                            .context("Failed to run task")?
+                            .map_err(EngineError::ComponentError)?;
+                        Ok::<Vec<u8>, EngineError>(result)
+                    }
+                    EngineRequest::EthEvent {
+                        event_data,
+                        event_topics,
+                        log_address,
+                    } => {
+                        let bindings =
+                            eth_event::EthEvent::instantiate_async(&mut store, &component, &linker)
+                                .await
+                                .context("Wasm instantiate failed")?;
+                        let input = eth_event::EthInput {
+                            log: eth_event::Log {
+                                address: log_address.to_vec(),
+                                event: eth_event::Event {
+                                    topics: event_topics,
+                                    data: event_data,
+                                },
+                            },
+                        };
+                        let result = bindings
+                            .call_process_eth_event(&mut store, &input)
+                            .await
+                            .context("Failed to run task")?
+                            .map_err(EngineError::ComponentError)?;
+
+                        Ok::<Vec<u8>, EngineError>(result.response)
+                    }
+                }
             }
         })
     }
@@ -239,7 +277,10 @@ mod tests {
 
         // execute it and get square
         let result = engine
-            .execute_queue(&component, br#"{"x":12}"#.into(), 12345)
+            .execute_queue(
+                &component,
+                EngineRequest::cosmos_task_queue(br#"{"x":12}"#.into(), 12345),
+            )
             .unwrap();
         assert_eq!(&result, br#"{"y":144}"#);
     }

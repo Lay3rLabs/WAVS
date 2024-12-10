@@ -1,5 +1,6 @@
 pub mod apis;
 pub mod args;
+pub mod bindings;
 pub mod config;
 pub mod context;
 mod digest;
@@ -8,7 +9,6 @@ pub mod engine; // where we manage and execute wasm
 pub mod http;
 pub mod storage;
 pub mod submission; // where we submit the results to the chain
-pub mod task_bindings;
 pub mod test_utils;
 pub mod triggers; // where we handle the trigger runtime
 

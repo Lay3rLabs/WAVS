@@ -73,17 +73,25 @@ pub struct TriggerAction {
 /// This is the actual data we got from the trigger, used to feed into the component
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum TriggerResult {
-    Queue {
+    CosmosQueue {
         /// The id from the task queue
         task_id: TaskId,
         /// The input data associated with that task
         payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
     },
+    EthEvent {
+        /// The id from the task queue
+        task_id: TaskId,
+        /// The event data associated with that task
+        log_address: alloy::primitives::Address,
+        event_topics: Vec<Vec<u8>>,
+        event_data: Vec<u8>,
+    },
 }
 
 impl TriggerResult {
     pub fn queue(task_id: TaskId, payload: &[u8]) -> Self {
-        TriggerResult::Queue {
+        TriggerResult::CosmosQueue {
             task_id,
             payload: payload.to_vec(),
         }

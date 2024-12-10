@@ -1,7 +1,7 @@
 use tracing::instrument;
 
 use crate::apis::dispatcher::Component;
-use crate::apis::engine::{Engine, EngineError};
+use crate::apis::engine::{Engine, EngineError, EngineRequest};
 
 use crate::Digest;
 
@@ -31,15 +31,18 @@ impl Engine for IdentityEngine {
     fn execute_queue(
         &self,
         _component: &Component,
-        request: Vec<u8>,
-        _timestamp: u64,
+        request: EngineRequest,
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(request)
+        match request {
+            EngineRequest::CosmosTaskQueue { input, .. } => Ok(input),
+            EngineRequest::EthEvent { event_data, .. } => Ok(event_data),
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
+
     use super::*;
 
     #[test]
@@ -58,7 +61,10 @@ mod test {
         let request = b"this is only a test".to_vec();
         let component = Component::new(&d1);
         let result = engine
-            .execute_queue(&component, request.clone(), 1234567890)
+            .execute_queue(
+                &component,
+                EngineRequest::cosmos_task_queue(request.clone(), 1234567890),
+            )
             .unwrap();
         assert_eq!(request, result);
     }
