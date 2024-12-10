@@ -58,7 +58,7 @@ async fn submit_to_chain() {
         .unwrap();
 
     let request = hello_world_client
-        .submit_task_request(task, taskIndex)
+        .task_request(task, taskIndex)
         .await
         .unwrap();
 

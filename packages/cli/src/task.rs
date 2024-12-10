@@ -1,5 +1,6 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
+use aggregator::http::state::Task;
 use lavs_apis::id::TaskId;
 use utils::{
     eth_client::EthSigningClient,
@@ -18,7 +19,7 @@ pub async fn run_hello_world_task(
 ) -> String {
     let client = HelloWorldSimpleClient::new(eth_signing_client, contract_address, erc1271);
 
-    let NewTaskCreated { task, taskIndex } = client.create_new_task(name).await.unwrap();
+    let NewTaskCreated { task, taskIndex } = client.create_new_task(name.clone()).await.unwrap();
 
     println!("Task submitted with id: {}", TaskId::new(taskIndex as u64));
 
@@ -26,7 +27,22 @@ pub async fn run_hello_world_task(
         tracing::info!("Submitting the task result directly");
 
         // TODO:
-        let add_task_request = client.submit_task_request(task, taskIndex).await.unwrap();
+        let add_task_request = client.task_request(task, taskIndex).await.unwrap();
+        let task = Task {
+            signatures: HashMap::from([(
+                add_task_request.signature.address,
+                add_task_request.signature.signature,
+            )]),
+            operators: add_task_request.operators,
+            avl: add_task_request.avl,
+            reference_block: add_task_request.reference_block,
+            function: add_task_request.function,
+            input: add_task_request.input,
+            erc1271: add_task_request.erc1271,
+        };
+        task.try_completing(&add_task_request.task_name, &client.eth.http_provider)
+            .await
+            .unwrap();
     }
 
     tracing::info!("Waiting for the chain to see the result");
