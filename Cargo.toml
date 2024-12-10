@@ -1,6 +1,5 @@
 [workspace]
 members = ["packages/*"]
-default-members = ["packages/wavs"]
 resolver = "2"
 
 [workspace.package]
