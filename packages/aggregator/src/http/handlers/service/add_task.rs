@@ -10,7 +10,7 @@ use alloy::{
 use anyhow::{ensure, Context};
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
-use utils::eth_client::{AddTaskRequest, OperatorSignature};
+use utils::eth_client::{AddTaskRequest, AddTaskResponse, OperatorSignature};
 
 use crate::{
     http::{
@@ -19,12 +19,6 @@ use crate::{
     },
     solidity_types::erc1271::IERC1271::{self, IERC1271Instance},
 };
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AddMessageResponse {
-    pub submitted: Option<TxHash>,
-}
 
 #[axum::debug_handler]
 pub async fn handle_add_message(
@@ -37,7 +31,7 @@ pub async fn handle_add_message(
     }
 }
 
-pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddMessageResponse> {
+pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTaskResponse> {
     let mut task = Task {
         signatures: HashMap::new(),
         operators: req.operators,
@@ -59,61 +53,69 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddMe
 
     // Check if we have enough weight
     // TODO: what if we get invalid signatures?
-    if let Ok(valid_signature) = erc1271
+    match erc1271
         .isValidSignature(hash, signature_bytes.clone().into())
         .call()
         .await
     {
-        if valid_signature.magicValue == IERC1271::isValidSignatureCall::SELECTOR {
-            let avl_contract = ContractInstance::new(
-                task.avl,
-                state.config.signing_client().await?.http_provider,
-                Interface::new(JsonAbi::from_iter(iter::once(task.function.clone().into()))),
-            );
+        Ok(valid_signature) => {
+            if valid_signature.magicValue == IERC1271::isValidSignatureCall::SELECTOR {
+                tracing::info!("Got enough signatures, submitting tx");
+                let avl_contract = ContractInstance::new(
+                    task.avl,
+                    state.config.signing_client().await?.http_provider,
+                    Interface::new(JsonAbi::from_iter(iter::once(task.function.clone().into()))),
+                );
 
-            // Searching signature param index
-            let signature_index = task
-                .function
-                .inputs
-                .iter()
-                .enumerate()
-                .find_map(|(idx, param)| param.name.eq("signature").then(|| idx))
-                .context("signature")?;
-            let mut args = task.function.abi_decode_input(&task.input, false)?;
-            let DynSolValue::Bytes(bytes) = &mut args[signature_index] else {
-                return Err(anyhow::anyhow!("Signature supposed to be bytes").into());
-            };
-            *bytes = signature_bytes;
+                // Searching signature param index
+                let signature_index = task
+                    .function
+                    .inputs
+                    .iter()
+                    .enumerate()
+                    .find_map(|(idx, param)| param.name.eq("signature").then(|| idx))
+                    .context("signature")?;
+                let mut args = task.function.abi_decode_input(&task.input, false)?;
+                let DynSolValue::Bytes(bytes) = &mut args[signature_index] else {
+                    return Err(anyhow::anyhow!("Signature supposed to be bytes").into());
+                };
+                *bytes = signature_bytes;
 
-            let receipt = avl_contract
-                .function(&task.function.name, &args)?
-                .gas(500000)
-                .send()
-                .await?
-                .get_receipt()
-                .await?;
-
-            // One operator is enough for submission, no need to store task
-            return match receipt.status() {
-                true => Ok(AddMessageResponse {
-                    submitted: Some(receipt.transaction_hash),
-                }),
-                false => Err(anyhow::anyhow!("Failed to submit task").into()),
-            };
+                let receipt = avl_contract
+                    .function(&task.function.name, &args)?
+                    .gas(500000)
+                    .send()
+                    .await?
+                    .get_receipt()
+                    .await?;
+                // One operator is enough for submission, no need to store task
+                return match receipt.status() {
+                    true => Ok(AddTaskResponse {
+                        hash: Some(receipt.transaction_hash),
+                    }),
+                    false => Err(anyhow::anyhow!("Failed to submit task").into()),
+                };
+            } else {
+                tracing::info!("Invalid signature(yet?)");
+            }
+        }
+        Err(e) => {
+            panic!("{e:?}");
         }
     };
+
     let mut aggregator_state = state.aggregator_state.write().unwrap();
     if aggregator_state.contains_key(&req.task_name) {
         return Err(anyhow::anyhow!("Task already exists").into());
     }
     aggregator_state.insert(req.task_name.clone(), task);
-    Ok(AddMessageResponse { submitted: None })
+    Ok(AddTaskResponse { hash: None })
 }
 
 pub fn add_signature(task: &mut Task, signature: OperatorSignature) -> anyhow::Result<()> {
     let OperatorSignature { address, signature } = signature;
     ensure!(
-        !task.operators.contains(&address),
+        task.operators.contains(&address),
         "Cannot sign not as an operator"
     );
     task.signatures.insert(address, signature);
