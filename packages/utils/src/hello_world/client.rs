@@ -70,7 +70,7 @@ impl HelloWorldSimpleClient {
         Ok(new_task_created)
     }
 
-    pub async fn submit_task_request(&self, task: Task, task_index: u32) -> Result<AddTaskRequest> {
+    pub async fn task_request(&self, task: Task, task_index: u32) -> Result<AddTaskRequest> {
         tracing::debug!("Signing and responding to task index {}", task_index);
 
         let signature = self.sign_task(&task.name).await?;

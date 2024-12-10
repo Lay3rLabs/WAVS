@@ -43,7 +43,7 @@ async fn deploy_hello_world_avs() {
     assert_eq!(new_task.taskIndex, 0);
     assert_eq!(new_task.task.name, "foo");
     hello_world_client
-        .submit_task_request(new_task.task, new_task.taskIndex)
+        .task_request(new_task.task, new_task.taskIndex)
         .await
         .unwrap();
 
@@ -55,7 +55,7 @@ async fn deploy_hello_world_avs() {
     assert_eq!(new_task.taskIndex, 1);
     assert_eq!(new_task.task.name, "bar");
     hello_world_client
-        .submit_task_request(new_task.task, new_task.taskIndex)
+        .task_request(new_task.task, new_task.taskIndex)
         .await
         .unwrap();
 

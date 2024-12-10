@@ -399,7 +399,7 @@ impl Submission for CoreSubmission {
                                             };
 
                                             // Generate request if possible
-                                            let request = match avs_client.submit_task_request(task, task_index).await {
+                                            let request = match avs_client.task_request(task, task_index).await {
                                                 Ok(request) => {
                                                     request
                                                 },
