@@ -4,12 +4,11 @@ use alloy::{
     contract::{ContractInstance, Interface},
     dyn_abi::{DynSolValue, JsonAbiExt},
     json_abi::JsonAbi,
-    primitives::{eip191_hash_message, keccak256, Address, TxHash, U256},
+    primitives::{eip191_hash_message, keccak256, Address, U256},
     sol_types::SolCall,
 };
 use anyhow::{ensure, Context};
 use axum::{extract::State, response::IntoResponse, Json};
-use serde::{Deserialize, Serialize};
 use utils::eth_client::{AddTaskRequest, AddTaskResponse, OperatorSignature};
 
 use crate::{
@@ -73,7 +72,7 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
                     .inputs
                     .iter()
                     .enumerate()
-                    .find_map(|(idx, param)| param.name.eq("signature").then(|| idx))
+                    .find_map(|(idx, param)| param.name.eq("signature").then_some(idx))
                     .context("signature")?;
                 let mut args = task.function.abi_decode_input(&task.input, false)?;
                 let DynSolValue::Bytes(bytes) = &mut args[signature_index] else {
@@ -100,7 +99,7 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
             }
         }
         Err(e) => {
-            panic!("{e:?}");
+            tracing::error!("Signature check failed {e:?}");
         }
     };
 
