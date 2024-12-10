@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use alloy::{
     network::EthereumWallet,
-    primitives::Address,
+    primitives::{Address, TxHash},
     providers::{Identity, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     signers::{
@@ -162,6 +162,12 @@ pub struct AddTaskRequest {
     pub operators: Vec<Address>,
     pub signature: OperatorSignature,
     pub erc1271: Address,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AddTaskResponse {
+    pub hash: Option<TxHash>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

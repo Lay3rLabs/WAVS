@@ -13,7 +13,7 @@ pub struct HttpState {
     pub aggregator_state: Arc<RwLock<HashMap<String, Task>>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Task {
     pub signatures: HashMap<Address, Vec<u8>>,
     pub operators: Vec<Address>,

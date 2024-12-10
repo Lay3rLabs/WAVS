@@ -544,6 +544,7 @@ mod tests {
                         chain_id: "eth-local".parse().unwrap(),
                         ws_endpoint: "ws://localhost:26657".to_string(),
                         http_endpoint: "http://localhost:26657".to_string(),
+                        aggregator_endpoint: "http://localhost:8001".to_string(),
                         faucet_endpoint: None,
                         submission_mnemonic: None,
                     },

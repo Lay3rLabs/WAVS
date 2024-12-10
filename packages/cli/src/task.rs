@@ -26,7 +26,7 @@ pub async fn run_hello_world_task(
         tracing::info!("Submitting the task result directly");
 
         // TODO:
-        // client.sign_and_submit_task(task, taskIndex).await.unwrap();
+        let add_task_request = client.submit_task_request(task, taskIndex).await.unwrap();
     }
 
     tracing::info!("Waiting for the chain to see the result");

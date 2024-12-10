@@ -62,10 +62,8 @@ async fn submit_to_chain() {
         .await
         .unwrap();
 
-    // let state = HttpState {
-    //     config: (*aggregator.config).clone(),
-    // };
-    // let _ = aggregator::http::handlers::service::add_task::add_message(state, request)
-    //     .await
-    //     .unwrap();
+    let state = HttpState::new((*aggregator.config).clone()).unwrap();
+    let _ = aggregator::http::handlers::service::add_task::add_task(state, request)
+        .await
+        .unwrap();
 }
