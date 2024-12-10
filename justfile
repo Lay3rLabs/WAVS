@@ -1,11 +1,5 @@
 
-# run unit test
-test-unit:
-    cargo test --lib
 
-# mock integration
-test-mock-integration:
-    cargo test
 
 # on-chain integration test
 test-wavs-e2e-ethereum:
@@ -14,9 +8,8 @@ test-wavs-e2e-ethereum:
 update-submodules:
     git submodule update --init --recursive
 
-build:
-    cargo build --release
 
 
 lint:
-    cargo fmt --all
+    cargo fmt --all -- --check
+    cargo clippy --all-targets -- -D warnings
