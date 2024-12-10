@@ -1,4 +1,3 @@
-#!/usr/bin/just
 
 # run unit test
 test-unit:
