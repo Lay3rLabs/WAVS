@@ -17,8 +17,6 @@ update-submodules:
 build:
     cargo build --release
 
-run-build:
-    ( cd ./packages/wavs; ../../target/release/wavs )
 
 lint:
     cargo fmt --all
