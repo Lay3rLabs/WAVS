@@ -80,21 +80,29 @@ impl HttpClient {
     pub async fn create_hello_world_service(
         &self,
         address: alloy::primitives::Address,
+        erc1271: alloy::primitives::Address,
         digest: Digest,
     ) -> ID {
         self.create_service(
             digest,
             Address::Eth(AddrEth::new(address.into())),
+            Address::Eth(AddrEth::new(erc1271.into())),
             Submit::EthSignedMessage { hd_index: 0 },
         )
         .await
     }
 
-    async fn create_service(&self, digest: Digest, task_queue_addr: Address, submit: Submit) -> ID {
+    async fn create_service(
+        &self,
+        digest: Digest,
+        task_queue_addr: Address,
+        task_queue_erc1271: Address,
+        submit: Submit,
+    ) -> ID {
         let id = ID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
-            trigger: TriggerRequest::eth_queue(task_queue_addr),
+            trigger: TriggerRequest::eth_queue(task_queue_addr, task_queue_erc1271),
             id: id.clone(),
             digest: digest.into(),
             permissions: Permissions {

@@ -13,9 +13,10 @@ pub async fn run_hello_world_task(
     eth_signing_client: EthSigningClient,
     wavs: bool,
     contract_address: alloy::primitives::Address,
+    erc1271: alloy::primitives::Address,
     name: String,
 ) -> String {
-    let client = HelloWorldSimpleClient::new(eth_signing_client, contract_address);
+    let client = HelloWorldSimpleClient::new(eth_signing_client, contract_address, erc1271);
 
     let NewTaskCreated { task, taskIndex } = client.create_new_task(name).await.unwrap();
 
@@ -24,7 +25,8 @@ pub async fn run_hello_world_task(
     if !wavs {
         tracing::info!("Submitting the task result directly");
 
-        client.sign_and_submit_task(task, taskIndex).await.unwrap();
+        // TODO:
+        // client.sign_and_submit_task(task, taskIndex).await.unwrap();
     }
 
     tracing::info!("Waiting for the chain to see the result");
