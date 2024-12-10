@@ -1,7 +1,7 @@
 use crate::{
     apis::{
         trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult},
-        EthHelloWorldTaskJson, Trigger, ID,
+        EthHelloWorldTaskRlp, Trigger, ID,
     },
     config::Config,
     context::AppContext,
@@ -11,6 +11,7 @@ use alloy::{
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
 };
+use alloy_rlp::Encodable;
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
@@ -212,11 +213,13 @@ impl CoreTriggerManager {
                         // rather, it's derived from the task name
                         // let contract = HelloWorldServiceManager::new(log.address(), ethereum_client.as_ref().unwrap().http_provider.clone());
 
-                        let payload = serde_json::to_vec(&EthHelloWorldTaskJson {
+                        let mut payload = Vec::new();
+
+                        EthHelloWorldTaskRlp {
                             name: event.task.name,
                             created_block: event.task.taskCreatedBlock,
-                        })
-                        .map_err(|e| TriggerError::ParseAvsPayload(e.into()))?;
+                        }
+                        .encode(&mut payload);
 
                         self.handle_trigger(&action_sender, &contract_address, task_id, payload)
                             .await;
