@@ -79,6 +79,7 @@ async fn main() {
                 let service_id = http_client
                     .create_hello_world_service(
                         avs_client.hello_world.hello_world_service_manager,
+                        avs_client.hello_world.stake_registry,
                         digest,
                     )
                     .await;
@@ -125,6 +126,7 @@ async fn main() {
                 let service_id = http_client
                     .create_hello_world_service(
                         avs_client.hello_world.hello_world_service_manager,
+                        avs_client.hello_world.stake_registry,
                         digest,
                     )
                     .await;
@@ -138,13 +140,15 @@ async fn main() {
         Command::AddTask {
             wavs,
             contract_address,
+            erc1271,
             name,
         } => {
             let eigen_client = get_eigen_client(&args).await;
 
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
 
-            let hash = run_hello_world_task(eigen_client.eth, wavs, contract_address, name).await;
+            let hash =
+                run_hello_world_task(eigen_client.eth, wavs, contract_address, erc1271, name).await;
 
             display_task_response_hash(&hash);
         }
@@ -187,6 +191,7 @@ async fn main() {
                 let service_id = http_client
                     .create_hello_world_service(
                         avs_client.hello_world.hello_world_service_manager,
+                        avs_client.hello_world.stake_registry,
                         digest,
                     )
                     .await;
@@ -201,6 +206,7 @@ async fn main() {
                 eigen_client.eth,
                 wavs,
                 avs_client.hello_world.hello_world_service_manager,
+                avs_client.hello_world.stake_registry,
                 name,
             )
             .await;
