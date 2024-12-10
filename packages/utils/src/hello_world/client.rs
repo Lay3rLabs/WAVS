@@ -84,7 +84,7 @@ impl HelloWorldSimpleClient {
             .first()
             .unwrap()
             .clone();
-        let task_name = task.name.clone();
+        let task_name = format!("Hello, {}", task.name);
         let call = HelloWorldServiceManager::respondToTaskCall {
             task,
             referenceTaskIndex: task_index,
@@ -95,7 +95,7 @@ impl HelloWorldSimpleClient {
         call.abi_encode_raw(&mut function_input);
 
         let operator = self.eth.address();
-        let reference_block = self.eth.http_provider.get_block_number().await?;
+        let reference_block = self.eth.http_provider.get_block_number().await? - 1;
         Ok(AddTaskRequest {
             task_name,
             avl: *contract.address(),

@@ -17,7 +17,10 @@ use layer_climb::prelude::*;
 use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::hello_world::solidity_types::hello_world::Task as HelloWorldTask;
+use utils::{
+    eth_client::{AddTaskRequest, AddTaskResponse},
+    hello_world::solidity_types::hello_world::Task as HelloWorldTask,
+};
 use utils::{
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
     hello_world::HelloWorldSimpleClient,
@@ -64,16 +67,22 @@ impl ChainCosmosSubmission {
 #[derive(Clone)]
 struct ChainEthSubmission {
     client_config: EthClientConfig,
+    aggregator_url: Url,
     faucet_url: Option<Url>,
 }
 
 impl ChainEthSubmission {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     fn new(config: EthereumChainConfig) -> Result<Self, SubmissionError> {
+        let aggregator_url = config
+            .aggregator_endpoint
+            .parse()
+            .map_err(SubmissionError::FaucetUrl)?;
         let client_config = config.into();
 
         Ok(Self {
             client_config,
+            aggregator_url,
             // TODO: Ethereum faucet
             faucet_url: None,
         })
@@ -245,6 +254,25 @@ impl CoreSubmission {
 
         todo!()
     }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    async fn add_task_to_aggregator(
+        &self,
+        client: &EthSigningClient,
+        task: &AddTaskRequest,
+    ) -> Result<AddTaskResponse, SubmissionError> {
+        let aggregator_app_url = self.get_eth_chain()?.aggregator_url.join("/app").unwrap();
+        let response = self
+            .http_client
+            .post(aggregator_app_url)
+            .header("Content-Type", "application/json")
+            .json(task)
+            .send()
+            .await
+            .map_err(SubmissionError::Reqwest)?;
+        let response: AddTaskResponse = response.json().await.map_err(SubmissionError::Reqwest)?;
+        Ok(response)
+    }
 }
 
 impl Submission for CoreSubmission {
@@ -345,7 +373,7 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
-                                            let avs_client = HelloWorldSimpleClient::new(eth_client, contract_address, task_queue_erc1271);
+                                            let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address, task_queue_erc1271);
 
                                             let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
                                                 Ok(result) => result,
@@ -376,12 +404,22 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
-                                            match avs_client.submit_task_request(task, task_index).await {
-                                                Ok(_) => {
-                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                            // Generate request if possible
+                                            let request = match avs_client.submit_task_request(task, task_index).await {
+                                                Ok(request) => {
+                                                    request
                                                 },
                                                 Err(e) => {
                                                     tracing::error!("Submission failed: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+                                            match _self.add_task_to_aggregator(&eth_client, &request).await {
+                                                Ok(_) => {
+                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                                },
+                                                Err(e) => {
+                                                    tracing::error!("Aggregation failed: {:?}", e);
                                                 }
                                             }
                                         },
