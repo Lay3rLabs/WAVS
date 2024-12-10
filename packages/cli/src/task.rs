@@ -29,7 +29,7 @@ pub async fn run_hello_world_task(
 
     tracing::info!("Waiting for the chain to see the result");
 
-    let task_response_hash = tokio::time::timeout(Duration::from_secs(10), async move {
+    tokio::time::timeout(Duration::from_secs(10), async move {
         loop {
             let task_response_hash = client.task_responded_hash(taskIndex).await.unwrap();
 
@@ -48,7 +48,5 @@ pub async fn run_hello_world_task(
         }
     })
     .await
-    .unwrap();
-
-    return task_response_hash;
+    .unwrap()
 }
