@@ -24,46 +24,14 @@ Before using Eigenlayer ensure you have the following tools installed:
    git submodule update --init --recursive
    ```
 
+## Generating ABI 
 
-## Initial Setup
+Eigenlayer ABI is needed for everything to work correctly. While it's already checked in to the repo, it can be regenerated via:
 
-1. **Create Environment Configuration**  
-   Copy the example environment file to create your `.env` configuration:
-
-    ```bash
-    cp .env.example .env
-     ```
-
-2. **Start Anvil**  
-   Launch a local Anvil blockchain instance by running:
-
-     ```bash
-     anvil
-     ```
-
-3. **Configure Deployment Key**  
-   - Anvil will display a list of private and public keys upon startup. Choose one of the private keys and add it to your `.env` file under `DEPLOYER_PRIVATE_KEY`.
-   - **Note**: The default address provided in `.env.example` is an Anvil-generated address, so it should work without changes if you're using the default Anvil setup.
-
-## Setup
-
-1. **Start Anvil**  
-   Launch a local Anvil blockchain instance by running:
-
-     ```bash
-     anvil
-     ```
-
-   Note: anvil starts at block 0 by default
-
-## Available Scripts
-
-- Deploy EigenLayer: `./scripts/deploy_el.sh`
-  - EigenLayer is a set of smart contracts that enable restaking of assets to secure new Actively Validated Services ("AVS")
-- Deploy hello-world: `./scripts/deploy_avl.sh`
-  - Simplest AVS contract
-- Deploy all contracts above: `./scripts/deploy_el_full.sh`
+```bash
+./scripts/build_solidity.sh
+```
 
 ## Source
 
-Contracts were copied from hello-world avs: https://github.com/Layr-Labs/hello-world-avs/tree/001dc6e944280559dfb44f75faf5102349a61d8e/contracts
+Example AVS contracts were copied from hello-world avs: https://github.com/Layr-Labs/hello-world-avs/tree/001dc6e944280559dfb44f75faf5102349a61d8e/contracts

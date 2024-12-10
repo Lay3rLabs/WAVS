@@ -1,6 +1,5 @@
 [workspace]
 members = ["packages/*"]
-default-members = ["packages/wavs"]
 resolver = "2"
 
 [workspace.package]
@@ -59,5 +58,6 @@ bip39 = "2.0.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
 alloy = { version = "0.6.4", features = ["full", "signer-mnemonic"] }
+alloy-rlp = {version = "0.3.10", features = ["derive"]}
 chrono = "0.4.38"
 shellexpand = "3.1.0"

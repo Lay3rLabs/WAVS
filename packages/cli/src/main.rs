@@ -1,25 +1,27 @@
 mod args;
+mod client;
+mod display;
+mod task;
 
-use anyhow::Result;
 use args::{CliArgs, Command};
 use clap::Parser;
-use lavs_apis::id::TaskId;
-use rand::rngs::OsRng;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::{
-    eigen_client::{CoreAVSAddresses, EigenClient},
-    eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::{
-        solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
-        HelloWorldFullClient, HelloWorldFullClientBuilder,
-    },
+use client::{get_avs_client, get_eigen_client, HttpClient};
+use display::{
+    display_core_contracts, display_hello_world_digest, display_hello_world_service_contracts,
+    display_hello_world_service_id, display_task_response_hash,
 };
+use rand::{
+    distributions::{Alphanumeric, DistString},
+    rngs::OsRng,
+};
+use task::run_hello_world_task;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
-    let args = CliArgs::parse();
-
     let _ = dotenvy::dotenv();
+
+    let args = CliArgs::parse();
 
     // setup tracing
     tracing_subscriber::registry()
@@ -33,99 +35,177 @@ async fn main() {
         .unwrap();
 
     match args.command.clone() {
-        Command::Deploy => {
-            DeployData::new(&args).await.unwrap();
+        Command::DeployCore { register_operator } => {
+            let eigen_client = get_eigen_client(&args).await;
+            let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
+
+            if register_operator {
+                eigen_client
+                    .register_operator(&core_contracts)
+                    .await
+                    .unwrap();
+            }
+
+            display_core_contracts(&core_contracts);
         }
 
-        Command::KitchenSink { task_message } => {
-            let DeployData {
-                core_addresses,
-                hello_world_client,
-                eigen_client,
-            } = DeployData::new(&args).await.unwrap();
+        Command::DeployService {
+            wavs,
+            core_contracts,
+            register_operator,
+            digests,
+        } => {
+            let core_contracts = core_contracts.into();
 
-            tracing::info!("Registering as core operator");
+            let eigen_client = get_eigen_client(&args).await;
+            let avs_client = get_avs_client(&eigen_client, core_contracts).await;
 
-            eigen_client
-                .register_operator(&core_addresses)
-                .await
-                .unwrap();
+            if register_operator {
+                avs_client.register_operator(&mut OsRng).await.unwrap();
+            }
 
-            tracing::info!("Registering as avs operator");
-            hello_world_client
-                .register_operator(&mut OsRng)
-                .await
-                .unwrap();
+            if wavs {
+                let http_client = HttpClient::new(&args);
 
-            println!(
-                "Registered as operator with address {}",
-                eigen_client.eth.address()
-            );
+                let digest = match digests.digest_hello_world {
+                    None => {
+                        let digest = http_client.upload_hello_world_digest().await;
+                        display_hello_world_digest(&digest);
+                        digest
+                    }
+                    Some(digest) => digest,
+                };
 
-            tracing::info!("Submitting a hello world task");
+                let service_id = http_client
+                    .create_hello_world_service(
+                        avs_client.hello_world.hello_world_service_manager,
+                        digest,
+                    )
+                    .await;
+                display_hello_world_service_id(&service_id);
+            }
 
-            let hello_world_client = hello_world_client.into_simple();
-
-            let NewTaskCreated { task, taskIndex } = hello_world_client
-                .create_new_task(task_message)
-                .await
-                .unwrap();
-
-            println!("Task submitted with id: {}", TaskId::new(taskIndex as u64));
-
-            tracing::info!("Submitting the hello world result");
-
-            let tx_hash = hello_world_client
-                .sign_and_submit_task(task, taskIndex)
-                .await
-                .unwrap();
-
-            println!("Task result submitted with tx hash: {}", tx_hash);
+            display_hello_world_service_contracts(&avs_client.hello_world);
         }
-    }
-}
 
-struct DeployData {
-    pub core_addresses: CoreAVSAddresses,
-    pub hello_world_client: HelloWorldFullClient,
-    pub eigen_client: EigenClient,
-}
+        Command::DeployAll {
+            wavs,
+            register_core_operator,
+            register_service_operator,
+            digests,
+        } => {
+            let eigen_client = get_eigen_client(&args).await;
+            let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-impl DeployData {
-    async fn new(args: &CliArgs) -> Result<Self> {
-        let mnemonic =
-            std::env::var("CLI_ETH_MNEMONIC").expect("CLI_ETH_MNEMONIC env var is required");
+            if register_core_operator {
+                eigen_client
+                    .register_operator(&core_contracts)
+                    .await
+                    .unwrap();
+            }
 
-        let config = EthClientConfig {
-            ws_endpoint: args.ws_endpoint.clone(),
-            http_endpoint: args.http_endpoint.clone(),
-            mnemonic: Some(mnemonic),
-            hd_index: None,
-        };
+            let avs_client = get_avs_client(&eigen_client, core_contracts.clone()).await;
 
-        tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);
+            if register_service_operator {
+                avs_client.register_operator(&mut OsRng).await.unwrap();
+            }
 
-        let eth_client = EthClientBuilder::new(config).build_signing().await.unwrap();
-        let eigen_client = EigenClient::new(eth_client);
+            if wavs {
+                let http_client = HttpClient::new(&args);
 
-        let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
+                let digest = match digests.digest_hello_world {
+                    None => {
+                        let digest = http_client.upload_hello_world_digest().await;
+                        display_hello_world_digest(&digest);
+                        digest
+                    }
+                    Some(digest) => digest,
+                };
 
-        println!("--- CORE CONTRACTS ---");
-        println!("{:#?}", core_contracts);
+                let service_id = http_client
+                    .create_hello_world_service(
+                        avs_client.hello_world.hello_world_service_manager,
+                        digest,
+                    )
+                    .await;
+                display_hello_world_service_id(&service_id);
+            }
 
-        let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
-            .avs_addresses(core_contracts.clone())
-            .build()
-            .await
-            .unwrap();
+            display_core_contracts(&core_contracts);
+            display_hello_world_service_contracts(&avs_client.hello_world);
+        }
 
-        println!("--- HELLO WORLD AVS CONTRACTS ---");
-        println!("{:#?}", hello_world_client.hello_world);
+        Command::AddTask {
+            wavs,
+            contract_address,
+            name,
+        } => {
+            let eigen_client = get_eigen_client(&args).await;
 
-        Ok(Self {
-            core_addresses: core_contracts,
-            hello_world_client: hello_world_client,
-            eigen_client,
-        })
+            let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
+
+            let hash = run_hello_world_task(eigen_client.eth, wavs, contract_address, name).await;
+
+            display_task_response_hash(&hash);
+        }
+
+        Command::KitchenSink {
+            wavs,
+            register_core_operator,
+            register_service_operator,
+            digests,
+            name,
+        } => {
+            let eigen_client = get_eigen_client(&args).await;
+            let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
+
+            if register_core_operator {
+                eigen_client
+                    .register_operator(&core_contracts)
+                    .await
+                    .unwrap();
+            }
+
+            let avs_client = get_avs_client(&eigen_client, core_contracts.clone()).await;
+
+            if register_service_operator {
+                avs_client.register_operator(&mut OsRng).await.unwrap();
+            }
+
+            if wavs {
+                let http_client = HttpClient::new(&args);
+
+                let digest = match digests.digest_hello_world {
+                    None => {
+                        let digest = http_client.upload_hello_world_digest().await;
+                        display_hello_world_digest(&digest);
+                        digest
+                    }
+                    Some(digest) => digest,
+                };
+
+                let service_id = http_client
+                    .create_hello_world_service(
+                        avs_client.hello_world.hello_world_service_manager,
+                        digest,
+                    )
+                    .await;
+                display_hello_world_service_id(&service_id);
+            }
+
+            display_core_contracts(&core_contracts);
+            display_hello_world_service_contracts(&avs_client.hello_world);
+
+            let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
+            let hash = run_hello_world_task(
+                eigen_client.eth,
+                wavs,
+                avs_client.hello_world.hello_world_service_manager,
+                name,
+            )
+            .await;
+
+            display_task_response_hash(&hash);
+        }
     }
 }

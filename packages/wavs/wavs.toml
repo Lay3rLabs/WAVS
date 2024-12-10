@@ -29,7 +29,7 @@ cors_allowed_origins = [
 chain = "local"
 
 # chosen cosmos chain name 
-cosmos_chain = "layer-local"
+# cosmos_chain = "layer-local"
 
 [chains.cosmos.layer-local]
 chain_id = "layer-local"
