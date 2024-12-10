@@ -112,6 +112,7 @@ impl MockE2ETestRunner {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_service(
         &self,
         service_id: ServiceID,
