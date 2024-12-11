@@ -11,3 +11,5 @@ cache
 broadcast
 out
 deployments
+# local-interchain
+configs/logs.json
