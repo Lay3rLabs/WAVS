@@ -116,57 +116,16 @@ pub mod misc {
     );
 }
 
-pub type EmptyContractT = proxy::EmptyContract::EmptyContractInstance<
-    Http<Client>,
-    FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider<Http<Client>>,
-        Http<Client>,
-        Ethereum,
-    >,
->;
+pub type EmptyContractT =
+    proxy::EmptyContract::EmptyContractInstance<Http<Client>, HttpSigningProvider>;
 
 pub type TransparentProxyContractT =
     proxy::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance<
         Http<Client>,
-        FillProvider<
-            JoinFill<
-                JoinFill<
-                    Identity,
-                    JoinFill<
-                        GasFiller,
-                        JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
-                    >,
-                >,
-                WalletFiller<EthereumWallet>,
-            >,
-            RootProvider<Http<Client>>,
-            Http<Client>,
-            Ethereum,
-        >,
+        HttpSigningProvider,
     >;
 
-pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<
-    Http<Client>,
-    FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider<Http<Client>>,
-        Http<Client>,
-        Ethereum,
-    >,
->;
+pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<Http<Client>, HttpSigningProvider>;
 
 pub type WsSigningProvider = FillProvider<
     JoinFill<
