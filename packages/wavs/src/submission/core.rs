@@ -416,7 +416,12 @@ impl Submission for CoreSubmission {
                                             };
                                             match _self.add_task_to_aggregator(&eth_client, &request).await {
                                                 Ok(r) => {
-                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful: {r:?}", avs_client.contract_address, task_index);
+                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful: {:?}", avs_client.contract_address, task_index, r);
+                                                    let b = avs_client
+                                                        .task_responded_hash(task_index)
+                                                        .await
+                                                        .unwrap();
+                                                    tracing::debug!("Task hash: {:?}", b);
                                                 },
                                                 Err(e) => {
                                                     tracing::error!("Aggregation failed: {:?}", e);

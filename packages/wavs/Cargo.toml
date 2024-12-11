@@ -59,6 +59,7 @@ tempfile = { workspace = true }
 criterion = { workspace = true }
 alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
 aggregator = { workspace = true }
+
 [[bench]]
 name = "mock_bench"
 harness = false

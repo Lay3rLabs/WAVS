@@ -149,8 +149,8 @@ impl EthClientBuilder {
 #[serde(rename_all = "camelCase")]
 pub struct AddTaskRequest {
     pub task_name: String,
-    /// Address of the avl
-    pub avl: Address,
+    /// Address of the avs
+    pub service: Address,
     pub reference_block: u64,
     // TODO: Seems like there is no standard where `signature` arguments will be.
     // It's not even consistent over standards (ERC1271 - last, EIP712 - first)

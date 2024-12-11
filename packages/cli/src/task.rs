@@ -26,7 +26,6 @@ pub async fn run_hello_world_task(
     if !wavs {
         tracing::info!("Submitting the task result directly");
 
-        // TODO:
         let add_task_request = client.task_request(task, taskIndex).await.unwrap();
         let task = Task {
             signatures: HashMap::from([(
@@ -34,7 +33,7 @@ pub async fn run_hello_world_task(
                 add_task_request.signature.signature,
             )]),
             operators: add_task_request.operators,
-            avl: add_task_request.avl,
+            service: add_task_request.service,
             reference_block: add_task_request.reference_block,
             function: add_task_request.function,
             input: add_task_request.input,
