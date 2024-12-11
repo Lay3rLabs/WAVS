@@ -20,16 +20,11 @@ pub async fn handle_add_message(
 }
 
 pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTaskResponse> {
-    let mut task = Task {
-        signatures: HashMap::new(),
-        operators: req.operators,
-        service: req.service,
-        reference_block: req.reference_block,
-        function: req.function,
-        input: req.input,
-        erc1271: req.erc1271,
-    };
-
+    let mut task = Task::new(req.operator, req.new_data, req.signature);
+    let key = (req.task_id, req.service);
+    let tasks = state.load(&key);
+    tasks.push(task);
+    if tasks.len() > state.config.tasks_for_trigger {}
     task.add_signature(req.signature)?;
 
     // Try to complete, we need to check signatures and broadcast in case this operator have enough weight to sign by himself
@@ -52,3 +47,41 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
         Err(e) => Err(e.into()),
     }
 }
+
+// @dakom reference
+// // Operator signs data and sends to aggregator:
+// // - task_id
+// // - contract_address
+// // - operator_address
+// // - new_data
+// // - new_signature
+
+// let lookup_id = (contract_address, task_id);
+// let contract = HelloWorldSimpleClient::new(contract_address).contract;
+// let mut stuff:Vec<(operator_address, data, signature)> = Storage::new(lookup_id).load();
+
+// // Followup issue, this check is against a local DB, registered via endpoint
+// check_if_operator(lookup_id, operator_address, new_signature);
+
+// stuff.push((operator, new_data, new_signature));
+
+// // Step 1:
+// // this should be configurable
+// // test with 1 and 3
+// //
+// // Step 2:
+// // this should be precisely the operators registered via endpoint
+// if signatures.len() >= quorum_needed(config) {
+//     let calls = stuff
+//         .iter()
+//         .map(|(_operator_address, data, signature)| {
+//             contract.respondToTask(data, signature)
+//         })
+//         .collect::<Vec<_>>();
+
+//     // how to do in alloy??
+//     send_batch_transaction(calls).await?;
+//     Storage::new(lookup_id).clear();
+// } else {
+//     Storage::new(lookup_id).save(operator_address, new_data, new_signature);
+// }

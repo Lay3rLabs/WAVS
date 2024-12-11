@@ -3,7 +3,7 @@
 
 use crate::{
     alloy_helpers::SolidityEventFinder,
-    eth_client::{AddTaskRequest, EthSigningClient, OperatorSignature},
+    eth_client::{AddTaskRequest, EthSigningClient},
 };
 
 use super::{
@@ -15,7 +15,8 @@ use super::{
 };
 
 use alloy::{
-    primitives::{eip191_hash_message, keccak256, Address},
+    dyn_abi::DynSolValue,
+    primitives::{eip191_hash_message, keccak256, Address, U256},
     providers::Provider,
     signers::SignerSync,
     sol_types::{SolCall, SolValue},
@@ -78,37 +79,23 @@ impl HelloWorldSimpleClient {
         let contract =
             HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
 
-        let function = HelloWorldServiceManager::abi::functions()
-            .get("respondToTask")
-            .unwrap()
-            .first()
-            .unwrap()
-            .clone();
-        let task_name = format!("Hello, {}", task.name);
         let call = HelloWorldServiceManager::respondToTaskCall {
             task,
             referenceTaskIndex: task_index,
             // Filled by aggregator
             signature: Default::default(),
         };
-        let mut function_input = Vec::with_capacity(call.abi_encoded_size());
-        call.abi_encode_raw(&mut function_input);
+        let new_data = call.abi_encode();
 
         let operator = self.eth.address();
-        let reference_block = self.eth.http_provider.get_block_number().await? - 1;
+        let service = *contract.address();
+        let task_id = format!("respond_to_task");
         Ok(AddTaskRequest {
-            task_name,
             service: *contract.address(),
-            function,
-            input: function_input,
-            reference_block,
-            // TODO: fill other operators
-            operators: vec![operator],
-            signature: OperatorSignature {
-                address: operator,
-                signature,
-            },
-            erc1271: self.erc1271,
+            task_id,
+            operator,
+            new_data,
+            signature,
         })
     }
 
@@ -116,7 +103,17 @@ impl HelloWorldSimpleClient {
         let message = format!("Hello, {name}");
         let message_hash = eip191_hash_message(keccak256(message.abi_encode_packed()));
         // TODO: Sign hash or sign message?
-        let signature: Vec<u8> = self.eth.signer.sign_hash_sync(&message_hash)?.into();
+        let operator_signature =
+            DynSolValue::Bytes(self.eth.signer.sign_hash_sync(&message_hash)?.into());
+
+        let operator = DynSolValue::Address(self.eth.address());
+        let reference_block = self.eth.http_provider.get_block_number().await?;
+        let signature = DynSolValue::Tuple(vec![
+            DynSolValue::Array(vec![operator]),
+            DynSolValue::Array(vec![operator_signature]),
+            DynSolValue::Uint(U256::from(reference_block), 32),
+        ])
+        .abi_encode_params();
 
         Ok(signature)
     }
