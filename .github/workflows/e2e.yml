@@ -66,6 +66,9 @@ jobs:
 
       - name: Run Task
         # working-directory: ./packages/wavs # we cd in after we get the contract address
+        env:
+          # ./packages/cli/.env.example
+          CLI_ETH_MNEMONIC: "test test test test test test test test test test test junk"
         run: |
           CONTRACT_ADDR=`cat chains/state/hello_world_service.json | jq -r .hello_world_service_manager`
           (cd ./packages/cli && cargo run add-task --wavs --contract-address ${CONTRACT_ADDR})
