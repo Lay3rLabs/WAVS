@@ -12,7 +12,7 @@ concurrency:
 
 env:
     GO_VERSION: 1.22
-    LOCALIC_BIN_URL: https://github.com/strangelove-ventures/interchaintest/releases/download/v8.8.0/local-ic
+    LOCALIC_BIN_URL: https://github.com/strangelove-ventures/interchaintest/releases/download/v8.8.1/local-ic
 
 jobs:
   contract-e2e:
@@ -48,13 +48,15 @@ jobs:
       - name: Start background local-interchain
         run: ICTEST_HOME=./interchaintest /tmp/local-ic start eth --api-port 8080 &
 
-    #   - name: Run WAVS
-        # working-directory: ./packages/wavs
-        # run: cargo run &
+      - name: Run WAVS
+        working-directory: ./packages/wavs
+        run: cargo run &
 
-    #   - name: Run Task
-        # working-directory: ./packages/wavs
-        # run: cargo run add-task --wavs --contract-address TODO
+      - name: Run Task
+        # working-directory: ./packages/wavs # we cd in after we get the contract address
+        run: |
+          CONTRACT_ADDR=`cat chains/state/hello_world_service.json | jq -r .hello_world_service_manager`
+          (cd ./packages/cli && cargo run add-task --wavs --contract-address ${CONTRACT_ADDR})
 
       - name: Cleanup
-        run: killall local-ic && exit 0
+        run: killall local-ic; killall cargo; exit 0

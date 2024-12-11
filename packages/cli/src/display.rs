@@ -1,7 +1,9 @@
+use std;
+
 use utils::{eigen_client::CoreAVSAddresses, hello_world::config::HelloWorldAddresses};
 use wavs::{apis::ID, Digest};
 
-pub fn display_core_contracts(core_contracts: &CoreAVSAddresses) {
+pub fn display_core_contracts(core_contracts: &CoreAVSAddresses, output_file: Option<&str>) {
     println!("\n--- CORE AVS CONTRACTS ---");
     println!(
         "CLI_EIGEN_CORE_PROXY_ADMIN=\"{}\"",
@@ -43,9 +45,16 @@ pub fn display_core_contracts(core_contracts: &CoreAVSAddresses) {
         "CLI_EIGEN_CORE_REWARDS_COORDINATOR=\"{}\"",
         core_contracts.rewards_coordinator
     );
+
+    if let Some(name) = output_file {
+        let curr_dir = std::env::current_dir().unwrap();
+        let root = curr_dir.ancestors().nth(2).unwrap();
+        let file = std::fs::File::create(root.join(name)).unwrap();
+        serde_json::to_writer_pretty(&file, core_contracts).unwrap();
+    }
 }
 
-pub fn display_hello_world_service_contracts(hello_world_service_contracts: &HelloWorldAddresses) {
+pub fn display_hello_world_service_contracts(hello_world_service_contracts: &HelloWorldAddresses, output_file: Option<&str>) {
     println!("\n--- HELLO WORLD AVS CONTRACTS ---");
     println!(
         "CLI_EIGEN_SERVICE_PROXY_ADMIN=\"{}\"",
@@ -63,6 +72,14 @@ pub fn display_hello_world_service_contracts(hello_world_service_contracts: &Hel
         "CLI_EIGEN_SERVICE_STAKE_TOKEN=\"{}\"",
         hello_world_service_contracts.token
     );
+
+
+    if let Some(name) = output_file {
+        let curr_dir = std::env::current_dir().unwrap();
+        let root = curr_dir.ancestors().nth(2).unwrap();
+        let file = std::fs::File::create(root.join(name)).unwrap();
+        serde_json::to_writer_pretty(&file, hello_world_service_contracts).unwrap();
+    }
 }
 
 pub fn display_hello_world_service_id(id: &ID) {
