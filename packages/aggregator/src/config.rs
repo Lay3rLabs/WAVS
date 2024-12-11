@@ -41,6 +41,9 @@ pub struct Config {
     /// Http eth endpoint
     pub http_endpoint: String,
 
+    /// Number of tasks to trigger transactions
+    pub tasks_for_trigger: u32,
+
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
 
