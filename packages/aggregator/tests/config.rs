@@ -1,6 +1,5 @@
 use aggregator::test_utils::app::TestApp;
 use alloy::primitives::Address;
-use temp_env::async_with_vars;
 
 use aggregator::{
     args::CliArgs,
@@ -71,7 +70,7 @@ async fn config_filepath() {
 #[tokio::test]
 async fn config_default() {
     // port is *not* set in the test toml file
-    assert_eq!(TestApp::new().await.config.port, Config::default().port);
+    assert_eq!(TestApp::new().config.port, Config::default().port);
 }
 
 // tests that we can configure array-strings, and it overrides as expected
@@ -89,15 +88,14 @@ async fn config_array_string() {
     });
 
     // it's set in the file too for other tests, but here we need to be explicit
-    let get_config = || async { TestApp::new().await.config };
-    let config = async_with_vars(
+    let get_config = || TestApp::new().config;
+    let config = temp_env::with_vars(
         [(
             format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
             Some("info, aggregator=debug, just_to_confirm_test=debug"),
         )],
-        get_config(),
-    )
-    .await;
+        get_config,
+    );
 
     assert_eq!(
         config.log_level,
@@ -107,9 +105,9 @@ async fn config_array_string() {
     // replace the var and check that it is now what we expect
     // env replacement needs to be in an async function
     {
-        let check = || async {
+        let check = || {
             // first - if we don't set a CLI var, it should use the env var
-            let config = TestApp::new().await.config;
+            let config = TestApp::new().config;
             assert_eq!(
                 config.tracing_env_filter().unwrap().to_string(),
                 TRACING_ENV_FILTER_ENV.to_string()
@@ -123,7 +121,7 @@ async fn config_array_string() {
                 .map(|s| s.to_string())
                 .collect();
 
-            let config = TestApp::new_with_args(cli_args).await.config;
+            let config = TestApp::new_with_args(cli_args).config;
 
             assert_eq!(
                 config.tracing_env_filter().unwrap().to_string(),
@@ -131,14 +129,13 @@ async fn config_array_string() {
             );
         };
 
-        temp_env::async_with_vars(
+        temp_env::with_vars(
             [(
                 format!("{}_{}", CliArgs::ENV_VAR_PREFIX, "LOG_LEVEL"),
                 Some("debug, foo=trace"),
             )],
-            check(),
-        )
-        .await;
+            check,
+        );
     }
 }
 
@@ -154,7 +151,7 @@ async fn config_dotenv() {
             .join("testdotenv"),
     );
 
-    let _ = TestApp::new_with_args(cli_args).await;
+    let _ = TestApp::new_with_args(cli_args);
 
     // if we try to check against meaningful env vars, we may conflict with other tests and/or user settings
     // so just check for a dummy value since this test only cares about the dotenv file itself
@@ -171,7 +168,7 @@ async fn config_dotenv() {
 // tests that we load chain config section correctly
 #[tokio::test]
 async fn config_mnemonic() {
-    let config = TestApp::new().await.config;
+    let config = TestApp::new().config;
 
     let signer = config.signer().unwrap();
     assert_eq!(
@@ -187,7 +184,7 @@ async fn config_mnemonic() {
     let mut cli_args = TestApp::default_cli_args();
     let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_owned();
     cli_args.mnemonic = Some(mnemonic);
-    let config = TestApp::new_with_args(cli_args).await.config;
+    let config = TestApp::new_with_args(cli_args).config;
     let signer2 = config.signer().unwrap();
     assert_eq!(
         signer2.address(),
@@ -201,7 +198,7 @@ async fn config_mnemonic() {
     cli_args.ws_endpoint = Some("ws://localhost:1234".to_owned());
     cli_args.http_endpoint = Some("http://localhost:4321".to_owned());
     cli_args.chain = Some("notanvil".to_owned());
-    let config = TestApp::new_with_args(cli_args).await.config;
+    let config = TestApp::new_with_args(cli_args).config;
     assert_eq!(config.ws_endpoint, "ws://localhost:1234");
     assert_eq!(config.http_endpoint, "http://localhost:4321");
     assert_eq!(config.chain, "notanvil");

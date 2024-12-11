@@ -5,6 +5,7 @@ use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::{TriggerAction, TriggerData};
 use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
+use crate::AppContext;
 
 pub trait EngineRunner: Send + Sync {
     type Engine: Engine;

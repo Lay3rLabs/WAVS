@@ -5,8 +5,8 @@ use tracing::instrument;
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::TriggerAction;
-use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
+use crate::AppContext;
 
 use super::{submit_result, EngineRunner};
 

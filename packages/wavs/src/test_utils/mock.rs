@@ -7,7 +7,6 @@ use crate::{
         engine::EngineError,
         ServiceID,
     },
-    context::AppContext,
     dispatcher::Dispatcher,
     engine::{
         mock::{Function, MockEngine},
@@ -24,7 +23,7 @@ use crate::{
     },
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerChannel,
-    Digest,
+    AppContext, Digest,
 };
 use axum::{
     body::Body,

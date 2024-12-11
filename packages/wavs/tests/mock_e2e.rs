@@ -7,13 +7,12 @@ use wavs::{
         dispatcher::{AllowedHostPermission, Permissions},
         ServiceID, WorkflowID,
     },
-    context::AppContext,
     engine::runner::EngineRunner,
     test_utils::{
         address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
     },
-    Digest,
+    AppContext, Digest,
 };
 
 #[test]

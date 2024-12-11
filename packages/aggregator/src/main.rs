@@ -1,7 +1,7 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use aggregator::{args::CliArgs, config::ConfigBuilder, context::AppContext, run_server};
+use aggregator::{args::CliArgs, config::ConfigBuilder, run_server, AppContext};
 
 fn main() {
     let args = CliArgs::parse();
