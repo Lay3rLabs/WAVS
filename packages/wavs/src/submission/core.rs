@@ -11,7 +11,7 @@ use crate::{
         EthHelloWorldTaskRlp,
     },
     config::{Config, CosmosChainConfig, EthereumChainConfig},
-    context::AppContext,
+    AppContext,
 };
 use alloy_rlp::Decodable;
 use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
@@ -409,8 +409,8 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
                                             match _self.add_task_to_aggregator(&eth_client, &request).await {
-                                                Ok(_) => {
-                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                                Ok(r) => {
+                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful: {r:?}", avs_client.contract_address, task_index);
                                                 },
                                                 Err(e) => {
                                                     tracing::error!("Aggregation failed: {:?}", e);

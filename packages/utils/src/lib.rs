@@ -1,4 +1,5 @@
 pub mod alloy_helpers;
+pub mod context;
 pub mod eigen_client;
 pub mod error;
 pub mod eth_client;

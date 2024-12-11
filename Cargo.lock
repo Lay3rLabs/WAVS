@@ -6818,6 +6818,7 @@ dependencies = [
 name = "wavs"
 version = "0.2.0-rc1"
 dependencies = [
+ "aggregator",
  "alloy",
  "alloy-rlp",
  "anyhow",

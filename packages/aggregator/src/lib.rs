@@ -1,22 +1,20 @@
 pub mod args;
 pub mod config;
-pub mod context;
 pub mod http;
 pub mod solidity_types;
 pub mod test_utils;
 
-use context::AppContext;
+pub use utils::context::AppContext;
 
 /// Entry point to start up the server
 /// Called from main
 pub fn run_server(ctx: AppContext, config: config::Config) {
-    ctrlc::set_handler({
+    let _ = ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {
             ctx.kill();
         }
-    })
-    .unwrap();
+    });
 
     // start the http server in its own thread
     http::server::start(ctx, config).unwrap();

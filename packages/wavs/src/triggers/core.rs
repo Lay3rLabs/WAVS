@@ -6,7 +6,7 @@ use crate::{
         EthHelloWorldTaskRlp, ServiceID, WorkflowID,
     },
     config::Config,
-    context::AppContext,
+    AppContext,
 };
 use alloy::{
     providers::Provider,

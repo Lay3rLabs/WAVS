@@ -8,7 +8,7 @@ use wavs::{
         address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},
     },
-    Digest,
+    AppContext, Digest,
 };
 
 pub fn criterion_benchmark(c: &mut Criterion) {

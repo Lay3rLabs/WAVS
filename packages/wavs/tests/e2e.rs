@@ -24,7 +24,7 @@ mod e2e {
         apis::{dispatcher::Submit, ServiceID},
         test_utils::app::TestApp,
     };
-    use wavs::{config::Config, context::AppContext, dispatcher::CoreDispatcher, Digest};
+    use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};
 
     #[test]
     fn e2e_tests() {
@@ -53,6 +53,17 @@ mod e2e {
                 }
             })
         };
+        let mut aggregator_config: aggregator::config::Config = {
+            let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
+            cli_args.dotenv = None;
+            if let Some(anvil) = anvil.as_ref() {
+                cli_args.ws_endpoint = Some(anvil.ws_endpoint().to_string());
+                cli_args.http_endpoint = Some(anvil.endpoint().to_string());
+            }
+            aggregator::config::ConfigBuilder::new(cli_args)
+                .build()
+                .unwrap()
+        };
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_cosmos")] {
@@ -64,7 +75,8 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.chain= Some(config.chain.clone().unwrap());
+                config.chain = Some(config.chain.clone().unwrap());
+                aggregator_config.chain = config.chain.clone().unwrap();
             } else {
                 config.chain = None;
             }
@@ -80,6 +92,14 @@ mod e2e {
             let config = config.clone();
             move || {
                 wavs::run_server(ctx, config, dispatcher);
+            }
+        });
+
+        let aggregator_handle = std::thread::spawn({
+            let config = aggregator_config.clone();
+            let ctx = ctx.clone();
+            move || {
+                aggregator::run_server(ctx, config);
             }
         });
 
@@ -159,6 +179,7 @@ mod e2e {
 
         test_handle.join().unwrap();
         wavs_handle.join().unwrap();
+        aggregator_handle.join().unwrap();
     }
 
     async fn run_tests_ethereum(
