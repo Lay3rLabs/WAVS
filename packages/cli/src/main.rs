@@ -132,7 +132,10 @@ async fn main() {
             }
 
             display_core_contracts(&core_contracts, Some("chains/state/core_contracts.json"));
-            display_hello_world_service_contracts(&avs_client.hello_world, Some("chains/state/hello_world_service.json"));
+            display_hello_world_service_contracts(
+                &avs_client.hello_world,
+                Some("chains/state/hello_world_service.json"),
+            );
         }
 
         Command::AddTask {
@@ -194,7 +197,10 @@ async fn main() {
             }
 
             display_core_contracts(&core_contracts, Some("core_contracts.json"));
-            display_hello_world_service_contracts(&avs_client.hello_world, Some("hello_world_service.json"));
+            display_hello_world_service_contracts(
+                &avs_client.hello_world,
+                Some("hello_world_service.json"),
+            );
 
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
             let hash = run_hello_world_task(

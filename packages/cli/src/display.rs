@@ -1,5 +1,3 @@
-use std;
-
 use utils::{eigen_client::CoreAVSAddresses, hello_world::config::HelloWorldAddresses};
 use wavs::{apis::ID, Digest};
 
@@ -54,7 +52,10 @@ pub fn display_core_contracts(core_contracts: &CoreAVSAddresses, output_file: Op
     }
 }
 
-pub fn display_hello_world_service_contracts(hello_world_service_contracts: &HelloWorldAddresses, output_file: Option<&str>) {
+pub fn display_hello_world_service_contracts(
+    hello_world_service_contracts: &HelloWorldAddresses,
+    output_file: Option<&str>,
+) {
     println!("\n--- HELLO WORLD AVS CONTRACTS ---");
     println!(
         "CLI_EIGEN_SERVICE_PROXY_ADMIN=\"{}\"",
@@ -72,7 +73,6 @@ pub fn display_hello_world_service_contracts(hello_world_service_contracts: &Hel
         "CLI_EIGEN_SERVICE_STAKE_TOKEN=\"{}\"",
         hello_world_service_contracts.token
     );
-
 
     if let Some(name) = output_file {
         let curr_dir = std::env::current_dir().unwrap();

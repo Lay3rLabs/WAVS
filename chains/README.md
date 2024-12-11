@@ -5,7 +5,7 @@ A Cosmos-SDK and Ethereum based e2e dockerized testing environment. [github repo
 ## Install
 
 ```bash
-git clone --depth 1 --branch v8.8.0 https://github.com/strangelove-ventures/interchaintest.git ./ict
+git clone --depth 1 --branch v8.8.1 https://github.com/strangelove-ventures/interchaintest.git ./ict
 (cd ict/local-interchain && make install)
 rm -rf ./ict/
 ```
