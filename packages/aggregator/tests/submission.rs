@@ -24,7 +24,7 @@ async fn submit_to_chain() {
         ws_endpoint: anvil.ws_endpoint(),
         http_endpoint: anvil.endpoint(),
         mnemonic: Some(ANVIL_DEFAULT_MNEMONIC.to_owned()),
-        hd_index: Some(0),
+        hd_index: None,
     })
     .build_signing()
     .await

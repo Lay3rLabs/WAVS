@@ -38,8 +38,7 @@ impl TestApp {
             chain: None,
             ws_endpoint: None,
             http_endpoint: None,
-            // Just make sure operator != aggregator wallet
-            hd_index: Some(1),
+            hd_index: None,
         }
     }
 
