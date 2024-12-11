@@ -27,6 +27,34 @@
                     }
                 }
             ]
+        },
+        {
+            "name": "ethereum",
+            "chain_id": "32337",
+            "denom": "wei",
+            "binary": "anvil",
+            "bech32_prefix": "0x",
+            "docker_image": {
+                "repository": "ghcr.io/foundry-rs/foundry",
+                "version": "nightly"
+            },
+            "gas_prices": "0",
+            "chain_type": "ethereum",
+            "coin_type": 60,
+            "trusting_period": "0",
+            "gas_adjustment": 0,
+            "debugging": true,
+            "host_port_override": {
+                "8545": "8645"
+            },
+            "additional_start_args": ["--disable-min-priority-fee", "--block-base-fee-per-gas", "0"],
+            "config_file_overrides": [
+                {
+                    "paths": {
+                        "--load-state": "chains/state/eigenlayer-deployed-anvil-state.json"
+                    }
+                }
+            ]
         }
     ]
 }
