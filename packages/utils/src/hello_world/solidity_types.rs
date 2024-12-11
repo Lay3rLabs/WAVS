@@ -1,16 +1,10 @@
 use alloy::{
-    network::{Ethereum, EthereumWallet},
-    providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-            WalletFiller,
-        },
-        Identity, RootProvider,
-    },
     sol,
     transports::http::{Client, Http},
 };
 use hello_world::HelloWorldServiceManager::HelloWorldServiceManagerInstance;
+
+use crate::eigen_client::solidity_types::HttpSigningProvider;
 
 pub mod stake_registry {
     use super::*;
@@ -54,18 +48,5 @@ pub mod token {
     );
 }
 
-pub type HelloWorldServiceManagerT = HelloWorldServiceManagerInstance<
-    Http<Client>,
-    FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider<Http<Client>>,
-        Http<Client>,
-        Ethereum,
-    >,
->;
+pub type HelloWorldServiceManagerT =
+    HelloWorldServiceManagerInstance<Http<Client>, HttpSigningProvider>;
