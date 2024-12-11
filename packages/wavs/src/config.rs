@@ -299,7 +299,12 @@ impl ConfigBuilder {
             .join(figment::providers::Serialized::defaults(Config::default()))
             .extract()?;
 
-        Ok(config)
+        Ok(Config {
+            data: shellexpand::tilde(&config.data.to_string_lossy())
+                .to_string()
+                .into(),
+            ..config
+        })
     }
 
     /// finds the filepath through a series of fallbacks

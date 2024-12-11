@@ -15,9 +15,15 @@ pub struct FileStorage {
 impl FileStorage {
     #[instrument(level = "debug", skip(data_dir), fields(subsys = "CaStorage"))]
     pub fn new(data_dir: impl Into<PathBuf>) -> Result<Self, CAStorageError> {
-        let data_dir = data_dir.into();
+        let data_dir: PathBuf = data_dir.into();
         if !data_dir.exists() {
-            std::fs::create_dir_all(&data_dir)?;
+            std::fs::create_dir_all(&data_dir).map_err(|e| {
+                CAStorageError::Other(format!(
+                    "Error creating data dir {}: {}",
+                    data_dir.to_string_lossy(),
+                    e
+                ))
+            })?;
         }
         // TODO: else check this is a valid dir we can write to
         Ok(FileStorage { data_dir })
