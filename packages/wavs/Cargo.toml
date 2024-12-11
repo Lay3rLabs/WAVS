@@ -52,6 +52,7 @@ walkdir = { workspace = true }
 url = { workspace = true }
 bip39 = { workspace = true }
 alloy = { workspace = true }
+shellexpand = { workspace = true }
 alloy-rlp = { workspace = true }
 
 [dev-dependencies]
