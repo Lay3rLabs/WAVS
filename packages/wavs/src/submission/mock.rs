@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
-use crate::context::AppContext;
+use crate::AppContext;
 
 #[derive(Clone)]
 pub struct MockSubmission {

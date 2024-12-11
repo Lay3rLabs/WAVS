@@ -43,11 +43,11 @@ impl TestApp {
         }
     }
 
-    pub async fn new() -> Self {
-        Self::new_with_args(Self::default_cli_args()).await
+    pub fn new() -> Self {
+        Self::new_with_args(Self::default_cli_args())
     }
 
-    pub async fn new_with_args(cli_args: CliArgs) -> Self {
+    pub fn new_with_args(cli_args: CliArgs) -> Self {
         let config = Arc::new(ConfigBuilder::new(cli_args).build().unwrap());
 
         crate::init_tracing_tests();

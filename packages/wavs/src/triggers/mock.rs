@@ -6,7 +6,7 @@ use crate::apis::trigger::{
     TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
 };
 use crate::apis::{IDError, ID};
-use crate::context::AppContext;
+use crate::AppContext;
 
 use lavs_apis::id::TaskId;
 use layer_climb::prelude::Address;

@@ -19,8 +19,7 @@ async fn submit_to_chain() {
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: Some(anvil.endpoint()),
         ..TestApp::default_cli_args()
-    })
-    .await;
+    });
     let eth_client = EthClientBuilder::new(EthClientConfig {
         ws_endpoint: anvil.ws_endpoint(),
         http_endpoint: anvil.endpoint(),

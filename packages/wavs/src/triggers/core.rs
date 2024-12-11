@@ -4,7 +4,7 @@ use crate::{
         EthHelloWorldTaskJson, Trigger, ID,
     },
     config::Config,
-    context::AppContext,
+    AppContext,
 };
 use alloy::{
     providers::Provider,

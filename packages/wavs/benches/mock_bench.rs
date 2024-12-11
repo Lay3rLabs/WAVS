@@ -3,12 +3,11 @@ use std::time::Duration;
 use criterion::{criterion_group, criterion_main, Criterion};
 use wavs::{
     apis::ID,
-    context::AppContext,
     test_utils::{
         address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},
     },
-    Digest,
+    AppContext, Digest,
 };
 
 pub fn criterion_benchmark(c: &mut Criterion) {

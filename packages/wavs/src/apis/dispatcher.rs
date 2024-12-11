@@ -4,7 +4,7 @@ use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 
 use super::{submission::ChainMessage, trigger::TriggerAction, Trigger, ID};
-use crate::{context::AppContext, Digest};
+use crate::{AppContext, Digest};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".

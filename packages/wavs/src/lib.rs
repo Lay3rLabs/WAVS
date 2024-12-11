@@ -1,7 +1,6 @@
 pub mod apis;
 pub mod args;
 pub mod config;
-pub mod context;
 mod digest;
 pub mod dispatcher; // where we have the high-level dispatcher
 pub mod engine; // where we manage and execute wasm
@@ -14,8 +13,8 @@ pub mod triggers; // where we handle the trigger runtime
 
 use apis::dispatcher::DispatchManager;
 use config::Config;
-use context::AppContext;
 pub use digest::Digest;
+pub use utils::context::AppContext;
 
 // This section is called from both main and end-to-end tests
 use dispatcher::CoreDispatcher;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wavs::{args::CliArgs, config::ConfigBuilder, context::AppContext, dispatcher::CoreDispatcher};
+use wavs::{args::CliArgs, config::ConfigBuilder, dispatcher::CoreDispatcher, AppContext};
 
 fn main() {
     let args = CliArgs::parse();

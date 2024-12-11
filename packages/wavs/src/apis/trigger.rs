@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 
-use crate::context::AppContext;
+use crate::AppContext;
 
 use super::{IDError, Trigger, ID};
 

@@ -3,8 +3,8 @@ use tokio::sync::mpsc;
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::{TriggerAction, TriggerResult};
-use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
+use crate::AppContext;
 
 pub trait EngineRunner: Send + Sync {
     type Engine: Engine;
