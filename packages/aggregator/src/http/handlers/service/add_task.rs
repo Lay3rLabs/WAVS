@@ -23,7 +23,7 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
     let mut task = Task {
         signatures: HashMap::new(),
         operators: req.operators,
-        avl: req.avl,
+        service: req.service,
         reference_block: req.reference_block,
         function: req.function,
         input: req.input,
