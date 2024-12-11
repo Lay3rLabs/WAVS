@@ -98,7 +98,7 @@ impl HelloWorldSimpleClient {
         let reference_block = self.eth.http_provider.get_block_number().await? - 1;
         Ok(AddTaskRequest {
             task_name,
-            avl: *contract.address(),
+            service: *contract.address(),
             function,
             input: function_input,
             reference_block,

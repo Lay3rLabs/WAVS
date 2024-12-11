@@ -41,7 +41,7 @@ impl HttpState {
 pub struct Task {
     pub signatures: HashMap<Address, Vec<u8>>,
     pub operators: Vec<Address>,
-    pub avl: Address,
+    pub service: Address,
     pub reference_block: u64,
     pub function: alloy::json_abi::Function,
     /// Function input without a signature
@@ -54,7 +54,7 @@ impl From<AddTaskRequest> for Task {
         Self {
             signatures: Default::default(),
             operators: value.operators,
-            avl: value.avl,
+            service: value.service,
             reference_block: value.reference_block,
             function: value.function,
             input: value.input,
@@ -106,8 +106,8 @@ impl Task {
                 }
                 if valid_signature.magicValue == IERC1271::isValidSignatureCall::SELECTOR {
                     tracing::info!("Got enough signatures, submitting tx");
-                    let avl_contract = ContractInstance::new(
-                        self.avl,
+                    let avs_contract = ContractInstance::new(
+                        self.service,
                         provider,
                         Interface::new(JsonAbi::from_iter(iter::once(
                             self.function.clone().into(),
@@ -128,7 +128,7 @@ impl Task {
                     };
                     *bytes = signature_bytes;
 
-                    let receipt = avl_contract
+                    let receipt = avs_contract
                         .function(&self.function.name, &args)?
                         .gas(500000)
                         .send()
