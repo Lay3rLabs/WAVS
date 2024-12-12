@@ -98,10 +98,9 @@ impl TriggerManager for MockTriggerManagerVec {
     fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError> {
         self.store_error()?;
 
-        self.triggers
-            .write()
-            .unwrap()
-            .retain(|t| t.trigger.service_id != service_id && t.trigger.workflow_id != workflow_id);
+        self.triggers.write().unwrap().retain(|t| {
+            t.trigger_meta.service_id != service_id && t.trigger_meta.workflow_id != workflow_id
+        });
         Ok(())
     }
 
@@ -111,7 +110,7 @@ impl TriggerManager for MockTriggerManagerVec {
         self.triggers
             .write()
             .unwrap()
-            .retain(|t| t.trigger.service_id != service_id);
+            .retain(|t| t.trigger_meta.service_id != service_id);
 
         Ok(())
     }
@@ -123,8 +122,8 @@ impl TriggerManager for MockTriggerManagerVec {
             .read()
             .unwrap()
             .iter()
-            .filter(|t| t.trigger.service_id == service_id)
-            .map(|t| Ok(t.trigger.clone()))
+            .filter(|t| t.trigger_meta.service_id == service_id)
+            .map(|t| Ok(t.trigger_meta.clone()))
             .collect()
     }
 }
@@ -167,8 +166,12 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
-                trigger: TriggerMeta::eth_queue(service_id, workflow_id, task_queue_addr.clone())
-                    .unwrap(),
+                trigger_meta: TriggerMeta::eth_queue(
+                    service_id,
+                    workflow_id,
+                    task_queue_addr.clone(),
+                )
+                .unwrap(),
                 result: TriggerData::queue(
                     task_id,
                     serde_json::to_string(data).unwrap().as_bytes(),
@@ -237,15 +240,20 @@ mod tests {
 
         let actions = vec![
             TriggerAction {
-                trigger: TriggerMeta::eth_queue("service1", "workflow1", task_queue_addr.clone())
-                    .unwrap(),
+                trigger_meta: TriggerMeta::eth_queue(
+                    "service1",
+                    "workflow1",
+                    task_queue_addr.clone(),
+                )
+                .unwrap(),
                 result: TriggerData::Queue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
-                trigger: TriggerMeta::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
+                trigger_meta: TriggerMeta::eth_queue("service2", "workflow2", task_queue_addr)
+                    .unwrap(),
                 result: TriggerData::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),

@@ -80,11 +80,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         while let Some(action) = actions_in.blocking_recv() {
             let service = match self
                 .storage
-                .get(SERVICE_TABLE, action.trigger.service_id.as_ref())?
+                .get(SERVICE_TABLE, action.trigger_meta.service_id.as_ref())?
             {
                 Some(service) => service.value(),
                 None => {
-                    let err = DispatcherError::UnknownService(action.trigger.service_id.clone());
+                    let err =
+                        DispatcherError::UnknownService(action.trigger_meta.service_id.clone());
                     tracing::error!("{}", err);
                     continue;
                 }
@@ -119,9 +120,9 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     ) -> Result<Option<crate::apis::submission::ChainMessage>, Self::Error> {
         let service = self
             .storage
-            .get(SERVICE_TABLE, action.trigger.service_id.as_ref())?
+            .get(SERVICE_TABLE, action.trigger_meta.service_id.as_ref())?
             .ok_or(DispatcherError::UnknownService(
-                action.trigger.service_id.clone(),
+                action.trigger_meta.service_id.clone(),
             ))?
             .value();
 
@@ -346,7 +347,8 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            trigger: TriggerMeta::eth_queue("service1", "workflow1", rand_address_eth()).unwrap(),
+            trigger_meta: TriggerMeta::eth_queue("service1", "workflow1", rand_address_eth())
+                .unwrap(),
             result: TriggerData::queue(task_id, payload),
         };
 
@@ -362,11 +364,11 @@ mod tests {
         let digest = Digest::new(b"wasm1");
         let component_id = ID::new("component1").unwrap();
         let service = Service {
-            id: action.trigger.service_id.clone(),
+            id: action.trigger_meta.service_id.clone(),
             name: "My awesome service".to_string(),
             components: [(component_id.clone(), Component::new(&digest))].into(),
             workflows: [(
-                action.trigger.workflow_id.clone(),
+                action.trigger_meta.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_queue(rand_address_eth()),
@@ -388,7 +390,7 @@ mod tests {
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 1);
         let expected = ChainMessage {
-            trigger_data: action.trigger,
+            trigger_meta: action.trigger_meta,
             task_id,
             wasm_result: payload.into(),
             submit: Submit::eth_aggregator_tx(),
@@ -410,7 +412,7 @@ mod tests {
         let task_queue_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerMeta::eth_queue(
+                trigger_meta: TriggerMeta::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
@@ -419,7 +421,7 @@ mod tests {
                 result: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerMeta::eth_queue(&service_id, &workflow_id, task_queue_address)
+                trigger_meta: TriggerMeta::eth_queue(&service_id, &workflow_id, task_queue_address)
                     .unwrap(),
                 result: TriggerData::queue(TaskId::new(2), br#"{"x":21}"#),
             },
@@ -488,7 +490,7 @@ mod tests {
         let task_queue_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerMeta::eth_queue(
+                trigger_meta: TriggerMeta::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
@@ -497,7 +499,7 @@ mod tests {
                 result: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerMeta::eth_queue(&service_id, &workflow_id, task_queue_address)
+                trigger_meta: TriggerMeta::eth_queue(&service_id, &workflow_id, task_queue_address)
                     .unwrap(),
                 result: TriggerData::queue(TaskId::new(2), br#"{"x":21}"#),
             },

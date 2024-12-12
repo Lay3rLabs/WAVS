@@ -72,8 +72,8 @@ impl Submission for MockSubmission {
             while let Some(msg) = rx.recv().await {
                 tracing::debug!(
                     "Received message: {} / {}",
-                    msg.trigger_data.service_id,
-                    msg.trigger_data.workflow_id
+                    msg.trigger_meta.service_id,
+                    msg.trigger_meta.workflow_id
                 );
                 mock.inbox.lock().unwrap().push(msg);
             }
@@ -101,7 +101,7 @@ mod test {
 
     fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_data: TriggerMeta::eth_queue(service, service, rand_address_eth()).unwrap(),
+            trigger_meta: TriggerMeta::eth_queue(service, service, rand_address_eth()).unwrap(),
             task_id: TaskId::new(task_id),
             wasm_result: payload.as_bytes().to_vec(),
             submit: Submit::eth_aggregator_tx(),

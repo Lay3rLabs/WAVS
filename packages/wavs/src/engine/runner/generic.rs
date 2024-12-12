@@ -30,11 +30,11 @@ pub trait EngineRunner: Send + Sync {
         // look up the proper workflow
         let workflow = service
             .workflows
-            .get(&action.trigger.workflow_id)
+            .get(&action.trigger_meta.workflow_id)
             .ok_or_else(|| {
                 EngineError::UnknownWorkflow(
-                    action.trigger.service_id.clone(),
-                    action.trigger.workflow_id.clone(),
+                    action.trigger_meta.service_id.clone(),
+                    action.trigger_meta.workflow_id.clone(),
                 )
             })?;
 
@@ -50,7 +50,7 @@ pub trait EngineRunner: Send + Sync {
                 let wasm_result = self.engine().execute_queue(component, payload, timestamp)?;
 
                 Ok(workflow.submit.clone().map(|submit| ChainMessage {
-                    trigger_data: action.trigger,
+                    trigger_meta: action.trigger_meta,
                     task_id,
                     wasm_result,
                     submit,

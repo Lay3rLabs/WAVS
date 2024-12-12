@@ -53,7 +53,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
         .context("No workflows found")?;
 
     let action = TriggerAction {
-        trigger: TriggerMeta {
+        trigger_meta: TriggerMeta {
             service_id: service.id.clone(),
             workflow_id: workflow_id.clone(),
             trigger: workflow.trigger.clone(),

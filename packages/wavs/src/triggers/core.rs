@@ -309,7 +309,7 @@ impl CoreTriggerManager {
             Ok(trigger) => {
                 action_sender
                     .send(TriggerAction {
-                        trigger,
+                        trigger_meta: trigger,
                         result: TriggerData::Queue { task_id, payload },
                     })
                     .await

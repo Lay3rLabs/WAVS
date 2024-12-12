@@ -21,7 +21,7 @@ pub trait Submission: Send + Sync {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChainMessage {
     /// Identify which trigger this came from
-    pub trigger_data: TriggerMeta,
+    pub trigger_meta: TriggerMeta,
     pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
     pub submit: Submit,

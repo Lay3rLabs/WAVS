@@ -97,7 +97,7 @@ impl TriggerMeta {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
     /// Identify which trigger this came from
-    pub trigger: TriggerMeta,
+    pub trigger_meta: TriggerMeta,
 
     /// The data that's required for the trigger to be processed
     pub result: TriggerData,
