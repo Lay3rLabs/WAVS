@@ -1,3 +1,6 @@
+use alloy::rpc::types::Log;
+use lavs_apis::id::TaskId;
+use layer_climb::prelude::Address;
 use thiserror::Error;
 
 use crate::{storage::CAStorageError, Digest};
@@ -15,8 +18,17 @@ pub trait Engine: Send + Sync {
         &self,
         component: &Component,
         service_id: &ServiceID,
+        task_id: TaskId,
         request: Vec<u8>,
         timestamp: u64,
+    ) -> Result<Vec<u8>, EngineError>;
+
+    /// This will execute a contract that implements the layer_avs:eth-event wit interface
+    fn execute_eth_event(
+        &self,
+        component: &Component,
+        service_id: &ServiceID,
+        log: Log,
     ) -> Result<Vec<u8>, EngineError>;
 }
 
@@ -33,11 +45,21 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
         &self,
         component: &Component,
         service_id: &ServiceID,
+        task_id: TaskId,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
         self.as_ref()
-            .execute_queue(component, service_id, request, timestamp)
+            .execute_queue(component, service_id, task_id, request, timestamp)
+    }
+
+    fn execute_eth_event(
+        &self,
+        component: &Component,
+        service_id: &ServiceID,
+        log: Log,
+    ) -> Result<Vec<u8>, EngineError> {
+        self.as_ref().execute_eth_event(component, service_id, log)
     }
 }
 
@@ -69,6 +91,9 @@ pub enum EngineError {
 
     #[error("Component returned an error: {0}")]
     ComponentError(String),
+
+    #[error{"invalid address: {0}"}]
+    InvalidAddress(Address),
 
     #[error{"{0}"}]
     Other(#[from] anyhow::Error),

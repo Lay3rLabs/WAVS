@@ -1,5 +1,4 @@
 use anyhow::Result;
-use layer_climb::prelude::Address;
 use serde::{de::DeserializeOwned, Serialize};
 use wavs::{
     apis::{
@@ -47,11 +46,11 @@ impl HttpClient {
         &self,
         id: ServiceID,
         digest: Digest,
-        task_queue_addr: Address,
+        trigger: TriggerRequest,
         submit: Submit,
     ) -> Result<()> {
         let service = ServiceRequest {
-            trigger: TriggerRequest::eth_queue(task_queue_addr),
+            trigger,
             id,
             digest: digest.into(),
             permissions: Permissions {

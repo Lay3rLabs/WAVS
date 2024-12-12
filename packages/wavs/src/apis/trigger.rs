@@ -1,3 +1,4 @@
+use alloy::rpc::types::Log;
 use lavs_apis::id::TaskId;
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -22,10 +23,8 @@ pub enum Trigger {
         /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
         poll_interval: u32,
     },
-    EthQueue {
-        // FIXME: add some chain name. right now all triggers are on one chain
-        // For right now this is NOT actually a generic task queue, it's AVS-specific
-        task_queue_addr: Address,
+    EthEvent {
+        contract_address: Address,
     },
 }
 
@@ -37,8 +36,8 @@ impl Trigger {
         }
     }
 
-    pub fn eth_queue(task_queue_addr: Address) -> Self {
-        Trigger::EthQueue { task_queue_addr }
+    pub fn eth_event(contract_address: Address) -> Self {
+        Trigger::EthEvent { contract_address }
     }
 }
 pub trait TriggerManager: Send + Sync {
@@ -84,15 +83,15 @@ impl TriggerConfig {
         })
     }
 
-    pub fn eth_queue(
+    pub fn eth_event(
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-        task_queue_addr: Address,
+        contract_address: Address,
     ) -> Result<Self, IDError> {
         Ok(Self {
             service_id: service_id.try_into()?,
             workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::eth_queue(task_queue_addr),
+            trigger: Trigger::eth_event(contract_address),
         })
     }
 }
@@ -115,6 +114,9 @@ pub enum TriggerData {
         task_id: TaskId,
         /// The input data associated with that task
         payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
+    },
+    EthEvent {
+        log: Log,
     },
 }
 

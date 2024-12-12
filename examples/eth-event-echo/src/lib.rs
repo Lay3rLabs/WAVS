@@ -2,24 +2,28 @@
 mod bindings;
 
 use alloy_rlp::{Encodable, RlpEncodable};
-use bindings::{EthInput, EthOutput, Guest};
+use bindings::{EthLog, Guest};
 
 struct Component;
 
 #[derive(RlpEncodable)]
-struct EthEventEcho {
-    eth_event_data: Vec<u8>,
+pub struct EthOutput {
+    pub address: Vec<u8>,
+    pub log_topics: Vec<Vec<u8>>,
+    pub log_data: Vec<u8>,
 }
 
 impl Guest for Component {
-    fn process_eth_event(request: EthInput) -> Result<EthOutput, String> {
+    fn process_eth_event(log: EthLog) -> Result<Vec<u8>, String> {
         let mut output = Vec::new();
-        EthEventEcho {
-            eth_event_data: request.event.data,
+        EthOutput {
+            address: log.address,
+            log_topics: log.log_topics,
+            log_data: log.log_data,
         }
         .encode(&mut output);
 
-        Ok(EthOutput { response: output })
+        Ok(output)
     }
 }
 

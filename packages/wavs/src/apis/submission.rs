@@ -1,4 +1,3 @@
-use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -22,7 +21,6 @@ pub trait Submission: Send + Sync {
 pub struct ChainMessage {
     /// Identify which trigger this came from
     pub trigger_config: TriggerConfig,
-    pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
     pub submit: Submit,
 }

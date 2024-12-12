@@ -1,10 +1,12 @@
+use alloy::rpc::types::Log;
+use anyhow::Context;
+use lavs_apis::id::TaskId;
+use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-
-use anyhow::Context;
-use lru::LruCache;
 use tracing::instrument;
+use wasmtime::Store;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -15,7 +17,7 @@ use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use crate::apis::dispatcher::AllowedHostPermission;
 use crate::apis::ServiceID;
 use crate::storage::{CAStorage, CAStorageError};
-use crate::{apis, task_bindings, Digest};
+use crate::{apis, bindings, Digest};
 
 use super::{Engine, EngineError};
 
@@ -81,9 +83,85 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         &self,
         wasi: &apis::dispatcher::Component,
         service_id: &ServiceID,
+        task_id: TaskId,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
+        let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
+
+        self.block_on_run(async move {
+            let instance =
+                bindings::task_queue::TaskQueue::instantiate_async(&mut store, &component, &linker)
+                    .await
+                    .context("Wasm instantiate failed")?;
+            let input = bindings::task_queue::TaskQueueInput { timestamp, request };
+
+            let response = instance
+                .call_run_task(&mut store, &input)
+                .await
+                .context("Failed to run task")?
+                .map_err(EngineError::ComponentError)?;
+
+            Ok::<Vec<u8>, EngineError>(response)
+        })
+    }
+
+    /// This will execute a contract that implements the layer_avs:eth-event wit interface
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    fn execute_eth_event(
+        &self,
+        wasi: &apis::dispatcher::Component,
+        service_id: &ServiceID,
+        log: Log,
+    ) -> Result<Vec<u8>, EngineError> {
+        let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
+
+        self.block_on_run(async move {
+            let instance =
+                bindings::eth_event::EthEvent::instantiate_async(&mut store, &component, &linker)
+                    .await
+                    .context("Wasm instantiate failed")?;
+
+            let address = log.address().to_vec();
+            let (log_topics, log_data) = log.inner.data.split();
+
+            let input = bindings::eth_event::EthLog {
+                address,
+                log_topics: log_topics.iter().map(|t| t.to_vec()).collect(),
+                log_data: log_data.to_vec(),
+            };
+
+            let response = instance
+                .call_process_eth_event(&mut store, &input)
+                .await
+                .context("Failed to run task")?
+                .map_err(EngineError::ComponentError)?;
+
+            Ok::<Vec<u8>, EngineError>(response)
+        })
+    }
+}
+
+impl<S: CAStorage> WasmEngine<S> {
+    fn block_on_run<F, T>(&self, fut: F) -> T
+    where
+        F: std::future::Future<Output = T>,
+    {
+        // This feels like an ugly hack.
+        // I cannot figure out how to add wasi http support and keep this sync
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(fut)
+    }
+
+    fn get_instance_deps<L: WasiView + WasiHttpView>(
+        &self,
+        wasi: &apis::dispatcher::Component,
+        service_id: &ServiceID,
+    ) -> Result<(Store<Host>, Component, Linker<L>), EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
         let digest = wasi.wasm.clone();
@@ -132,29 +210,10 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             ctx,
             http: WasiHttpCtx::new(),
         };
-        let mut store = wasmtime::Store::new(&self.wasm_engine, host);
 
-        // This feels like an ugly hack.
-        // I cannot figure out how to add wasi http support and keep this sync
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        rt.block_on({
-            async {
-                let bindings =
-                    task_bindings::TaskQueue::instantiate_async(&mut store, &component, &linker)
-                        .await
-                        .context("Wasm instantiate failed")?;
-                let input = task_bindings::lay3r::avs::types::TaskQueueInput { timestamp, request };
-                let result = bindings
-                    .call_run_task(&mut store, &input)
-                    .await
-                    .context("Failed to run task")?
-                    .map_err(EngineError::ComponentError)?;
-                Ok::<Vec<u8>, EngineError>(result)
-            }
-        })
+        let store = wasmtime::Store::new(&self.wasm_engine, host);
+
+        Ok((store, component, linker))
     }
 }
 
@@ -244,6 +303,7 @@ mod tests {
             .execute_queue(
                 &component,
                 &ServiceID::new("foobar").unwrap(),
+                TaskId::new(12345),
                 br#"{"x":12}"#.into(),
                 12345,
             )

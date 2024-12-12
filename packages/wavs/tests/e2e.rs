@@ -22,6 +22,7 @@ mod e2e {
     use serde::{Deserialize, Serialize};
     use wavs::{
         apis::{dispatcher::Submit, ServiceID},
+        http::types::TriggerRequest,
         test_utils::app::TestApp,
     };
     use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};
@@ -137,14 +138,14 @@ mod e2e {
                             }
                         };
 
-                        let hello_world_wasm_digest =
-                            std::env::var("WAVS_E2E_HELLO_WORLD_WASM_DIGEST");
+                        let eth_event_echo_wasm_digest =
+                            std::env::var("WAVS_E2E_ETH_EVENT_ECHO_WASM_DIGEST");
 
-                        let hello_world_wasm_digest: Digest = match hello_world_wasm_digest {
+                        let eth_event_echo_wasm_digest: Digest = match eth_event_echo_wasm_digest {
                             Ok(digest) => digest.parse().unwrap(),
                             Err(_) => {
                                 let wasm_bytes =
-                                    include_bytes!("../../../components/hello_world.wasm");
+                                    include_bytes!("../../../components/eth_event_echo.wasm");
                                 http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
                             }
                         };
@@ -159,7 +160,7 @@ mod e2e {
                                     anvil.unwrap(),
                                     http_client,
                                     config,
-                                    hello_world_wasm_digest,
+                                    eth_event_echo_wasm_digest,
                                 )
                                 .await
                             }
@@ -195,18 +196,16 @@ mod e2e {
         let service1_id = ServiceID::new("test-1-service").unwrap();
         let service2_id = ServiceID::new("test-2-service").unwrap();
 
-        let task_queue_addr = Address::Eth(AddrEth::new(
-            app.avs_client
-                .hello_world
-                .hello_world_service_manager
-                .into(),
-        ));
-
         http_client
             .create_service(
                 service1_id.clone(),
-                wasm_digest.clone(),
-                task_queue_addr.clone(),
+                wasm_digest,
+                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
+                    app.avs_client
+                        .hello_world
+                        .hello_world_service_manager
+                        .into(),
+                ))),
                 Submit::EthSignedMessage { hd_index: 0 },
             )
             .await
@@ -290,7 +289,11 @@ mod e2e {
             .create_service(
                 service_id.clone(),
                 wasm_digest,
-                app.task_queue.addr.clone(),
+                TriggerRequest::LayerQueue {
+                    task_queue_addr: app.task_queue.addr.clone(),
+                    poll_interval: 1000,
+                    hd_index: 0,
+                },
                 Submit::LayerVerifierTx {
                     hd_index: 0,
                     verifier_addr: app.verifier_addr.clone(),

@@ -46,22 +46,18 @@ world eth-event {
   import wasi:http/types@0.2.0;
   import wasi:http/outgoing-handler@0.2.0;
 
-  record eth-input {
+  // An alloy log can be recreated with the info here 
+  // block height is extra
+  record eth-log {
+    // the address that emitted an event
     address: list<u8>,
-    block-height: u64,
-    event: event,
+    // the raw log topics that can be decoded into an event
+    log-topics: list<list<u8>>,
+    // the raw log data that can be decoded into an event
+    log-data: list<u8>,
   }
 
-  record eth-output {
-    // should be rlp-encoded
-    response: list<u8>,
-  }
+  type eth-output = list<u8>;
 
-  // it's up to the component to decode the event using something like alloy
-  record event {
-    topics: list<list<u8>>,
-    data: list<u8>,
-  }
-
-  export process-eth-event: func(request: eth-input) -> result<eth-output, string>;
+  export process-eth-event: func(log: eth-log) -> result<eth-output, string>;
 }

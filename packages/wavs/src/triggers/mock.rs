@@ -167,7 +167,7 @@ impl MockTriggerManagerChannel {
         &self,
         service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
         workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
-        task_queue_addr: &Address,
+        contract_address: &Address,
         data: &(impl Serialize + std::fmt::Debug),
     ) {
         let task_id = TaskId::new(
@@ -177,7 +177,7 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
-                config: TriggerConfig::eth_queue(service_id, workflow_id, task_queue_addr.clone())
+                config: TriggerConfig::eth_event(service_id, workflow_id, contract_address.clone())
                     .unwrap(),
                 data: TriggerData::queue(task_id, serde_json::to_string(data).unwrap().as_bytes()),
             })
@@ -244,11 +244,11 @@ mod tests {
 
     #[test]
     fn mock_trigger_sends() {
-        let task_queue_addr = rand_address_eth();
+        let contract_address = rand_address_eth();
 
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_queue("service1", "workflow1", task_queue_addr.clone())
+                config: TriggerConfig::eth_event("service1", "workflow1", contract_address.clone())
                     .unwrap(),
                 data: TriggerData::Queue {
                     task_id: TaskId::new(2),
@@ -256,7 +256,8 @@ mod tests {
                 },
             },
             TriggerAction {
-                config: TriggerConfig::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
+                config: TriggerConfig::eth_event("service2", "workflow2", contract_address)
+                    .unwrap(),
                 data: TriggerData::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
@@ -277,7 +278,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerConfig::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = TriggerConfig::eth_event("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -288,7 +289,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerConfig::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = TriggerConfig::eth_event("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }
