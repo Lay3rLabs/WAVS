@@ -6,13 +6,13 @@ use crate::apis::trigger::{
     TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
 use crate::apis::{IDError, ServiceID, WorkflowID};
-use crate::context::AppContext;
 
 use lavs_apis::id::TaskId;
 use layer_climb::prelude::Address;
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
+use utils::context::AppContext;
 
 pub struct MockTriggerManagerVec {
     triggers: RwLock<Vec<TriggerAction>>,

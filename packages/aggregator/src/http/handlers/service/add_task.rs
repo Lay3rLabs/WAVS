@@ -38,8 +38,7 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
         // - Use eip-7702, doubt it's possible to do exactly what we're trying to achieve here
 
         // Send "batch" txs
-        let hello_world_service =
-            HelloWorldServiceManager::new(key.1.clone(), &eth_client.http_provider);
+        let hello_world_service = HelloWorldServiceManager::new(key.1, &eth_client.http_provider);
         let mut txs = Vec::with_capacity(tasks.len());
         for task in tasks {
             let mut call =

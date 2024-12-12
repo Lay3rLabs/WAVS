@@ -3,7 +3,6 @@ use std::time::Duration;
 use criterion::{criterion_group, criterion_main, Criterion};
 use wavs::{
     apis::{ServiceID, WorkflowID},
-    context::AppContext,
     test_utils::{
         address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},

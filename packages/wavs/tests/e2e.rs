@@ -95,7 +95,7 @@ mod e2e {
             }
         });
 
-        let aggregator_handle = std::thread::spawn({
+        let _aggregator_handle = std::thread::spawn({
             let config = aggregator_config.clone();
             let ctx = ctx.clone();
             move || {
@@ -180,7 +180,7 @@ mod e2e {
         test_handle.join().unwrap();
         wavs_handle.join().unwrap();
         // TODO: figure out why it deadlocks on join
-        // aggregator_handle.join().unwrap();
+        // _aggregator_handle.join().unwrap();
     }
 
     async fn run_tests_ethereum(
