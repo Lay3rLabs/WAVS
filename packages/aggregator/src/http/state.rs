@@ -7,10 +7,12 @@ use alloy::primitives::Address;
 
 use crate::config::Config;
 
+pub type TasksMap = HashMap<(String, Address), Vec<Task>>;
+
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
-    pub aggregator_state: Arc<RwLock<HashMap<(String, Address), Vec<Task>>>>,
+    pub aggregator_state: Arc<RwLock<TasksMap>>,
 }
 
 impl HttpState {

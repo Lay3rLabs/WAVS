@@ -8,7 +8,7 @@ use super::{
     trigger::{Trigger, TriggerAction},
     ComponentID, ServiceID, WorkflowID,
 };
-use crate::{context::AppContext, Digest};
+use crate::{AppContext, Digest};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".

@@ -3,7 +3,6 @@ use tokio::sync::mpsc;
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::{TriggerAction, TriggerData};
-use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
 use crate::AppContext;
 
