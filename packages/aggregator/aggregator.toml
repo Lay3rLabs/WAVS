@@ -10,3 +10,4 @@ chain = "local"
 
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
+tasks_quorum = 1
