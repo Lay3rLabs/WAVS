@@ -48,6 +48,7 @@ world eth-event {
 
   record eth-input {
     address: list<u8>,
+    block-height: u64,
     event: event,
   }
 
