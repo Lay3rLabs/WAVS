@@ -42,7 +42,9 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
             HelloWorldServiceManager::new(key.1.clone(), &eth_client.http_provider);
         let mut txs = Vec::with_capacity(tasks.len());
         for task in tasks {
-            let call = HelloWorldServiceManager::respondToTaskCall::abi_decode(&task.data, true)?;
+            let mut call =
+                HelloWorldServiceManager::respondToTaskCall::abi_decode(&task.data, true)?;
+            call.signature = task.signature.clone().into();
             let pending_tx = hello_world_service.call_builder(&call).send().await?;
             txs.push(pending_tx);
         }
