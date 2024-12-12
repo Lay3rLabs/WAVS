@@ -1,7 +1,6 @@
 pub mod args;
 pub mod config;
 pub mod http;
-pub mod solidity_types;
 pub mod test_utils;
 
 pub use utils::context::AppContext;

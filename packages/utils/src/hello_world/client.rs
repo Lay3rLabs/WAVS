@@ -25,22 +25,17 @@ use anyhow::{Context, Result};
 
 impl HelloWorldFullClient {
     pub fn into_simple(self) -> HelloWorldSimpleClient {
-        HelloWorldSimpleClient::new(
-            self.eth,
-            self.hello_world.hello_world_service_manager,
-            self.hello_world.stake_registry,
-        )
+        HelloWorldSimpleClient::new(self.eth, self.hello_world.hello_world_service_manager)
     }
 }
 
 impl HelloWorldSimpleClient {
-    pub fn new(eth: EthSigningClient, contract_address: Address, erc1271: Address) -> Self {
+    pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
         let contract = HelloWorldServiceManager::new(contract_address, eth.http_provider.clone());
         Self {
             eth,
             contract_address,
             contract,
-            erc1271,
         }
     }
 
@@ -89,9 +84,9 @@ impl HelloWorldSimpleClient {
 
         let operator = self.eth.address();
         let service = *contract.address();
-        let task_id = format!("respond_to_task");
+        let task_id = "respond_to_task".to_owned();
         Ok(AddTaskRequest {
-            service: *contract.address(),
+            service,
             task_id,
             operator,
             new_data,

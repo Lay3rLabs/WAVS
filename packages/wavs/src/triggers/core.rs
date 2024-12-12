@@ -368,10 +368,7 @@ impl TriggerManager for CoreTriggerManager {
                     .unwrap()
                     .insert(task_queue_addr.clone(), lookup_id);
             }
-            Trigger::EthQueue {
-                task_queue_addr,
-                task_queue_erc1271: _,
-            } => {
+            Trigger::EthQueue { task_queue_addr } => {
                 self.lookup_maps
                     .triggers_by_task_queue
                     .write()
@@ -505,10 +502,7 @@ fn remove_trigger_data(
                 TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
             )?;
         }
-        Trigger::EthQueue {
-            task_queue_addr,
-            task_queue_erc1271: _,
-        } => {
+        Trigger::EthQueue { task_queue_addr } => {
             triggers_by_task_queue.remove(task_queue_addr).ok_or(
                 TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
             )?;
@@ -652,10 +646,7 @@ mod tests {
                     task_queue_addr,
                     poll_interval: _,
                 } => task_queue_addr,
-                Trigger::EthQueue {
-                    task_queue_addr,
-                    task_queue_erc1271: _,
-                } => task_queue_addr,
+                Trigger::EthQueue { task_queue_addr } => task_queue_addr,
             }
         }
     }

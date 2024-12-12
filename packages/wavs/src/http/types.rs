@@ -26,7 +26,6 @@ pub enum TriggerRequest {
     EthQueue {
         // FIXME: add some chain name. right now all triggers are on one chain
         task_queue_addr: Address,
-        task_queue_erc1271: Address,
     },
 }
 
@@ -43,13 +42,7 @@ impl Trigger {
                 poll_interval,
                 hd_index,
             },
-            Trigger::EthQueue {
-                task_queue_addr,
-                task_queue_erc1271,
-            } => TriggerResponse::EthQueue {
-                task_queue_addr,
-                task_queue_erc1271,
-            },
+            Trigger::EthQueue { task_queue_addr } => TriggerResponse::EthQueue { task_queue_addr },
         }
     }
 }

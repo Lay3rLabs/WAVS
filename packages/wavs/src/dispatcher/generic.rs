@@ -370,7 +370,7 @@ mod tests {
                 action.config.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
@@ -409,14 +409,12 @@ mod tests {
         let workflow_id = WorkflowID::new("workflow1").unwrap();
 
         let task_queue_address = rand_address_eth();
-        let task_queue_erc1271 = rand_address_eth();
         let actions = vec![
             TriggerAction {
                 config: TriggerConfig::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
-                    task_queue_erc1271.clone(),
                 )
                 .unwrap(),
                 data: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
@@ -451,7 +449,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
@@ -489,14 +487,12 @@ mod tests {
         let service_id = ServiceID::new("service1").unwrap();
         let workflow_id = WorkflowID::new("workflow1").unwrap();
         let task_queue_address = rand_address_eth();
-        let task_queue_erc1271 = rand_address_eth();
         let actions = vec![
             TriggerAction {
                 config: TriggerConfig::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
-                    task_queue_erc1271.clone(),
                 )
                 .unwrap(),
                 data: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
@@ -531,7 +527,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth(), rand_address_eth()),
+                    trigger: Trigger::eth_queue(rand_address_eth()),
                     submit: Some(Submit::eth_aggregator_tx()),
                 },
             )]
