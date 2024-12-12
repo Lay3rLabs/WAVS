@@ -81,7 +81,7 @@ CLI_EIGEN_SERVICE_STAKE_TOKEN="0x66F625B8c4c635af8b74ECe2d7eD0D58b4af3C3d"
 4. Copy the address associated with the `CLI_EIGEN_SERVICE_MANAGER` address and use it in the following command:
 
 ```
-cargo run add-task --contract-address="0xB2b580ce436E6F77A5713D80887e14788Ef49c9A" --wavs
+cargo run add-task --contract-address="<service-manager-address>" --wavs
 ```
 
 This will add a task to be run. If the task has been run successfully, you will see a task response hash in your terminal. 
