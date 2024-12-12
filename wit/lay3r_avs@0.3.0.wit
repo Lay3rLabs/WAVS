@@ -37,3 +37,30 @@ world cron-job {
 
   export run-cron: func() -> output;
 }
+
+world eth-event {
+  import wasi:io/poll@0.2.0;
+  import wasi:clocks/monotonic-clock@0.2.0;
+  import wasi:io/error@0.2.0;
+  import wasi:io/streams@0.2.0;
+  import wasi:http/types@0.2.0;
+  import wasi:http/outgoing-handler@0.2.0;
+
+  record eth-input {
+    address: list<u8>,
+    event: event,
+  }
+
+  record eth-output {
+    // should be rlp-encoded
+    response: list<u8>,
+  }
+
+  // it's up to the component to decode the event using something like alloy
+  record event {
+    topics: list<list<u8>>,
+    data: list<u8>,
+  }
+
+  export process-eth-event: func(request: eth-input) -> result<eth-output, string>;
+}
