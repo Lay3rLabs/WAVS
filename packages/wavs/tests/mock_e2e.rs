@@ -5,7 +5,7 @@
 use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions},
-        ID,
+        ServiceID, WorkflowID,
     },
     context::AppContext,
     engine::runner::EngineRunner,
@@ -20,8 +20,8 @@ use wavs::{
 fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
-    let service_id = ID::new("service1").unwrap();
-    let workflow_id = ID::new("default").unwrap();
+    let service_id = ServiceID::new("service1").unwrap();
+    let workflow_id = WorkflowID::new("default").unwrap();
     let task_queue_address = rand_address_eth();
 
     // block and wait for creating the service
@@ -99,13 +99,13 @@ fn mock_e2e_service_lifecycle() {
             let task_queue_address = rand_address_eth();
 
             // add services in order
-            let service_id1 = ID::new("service1").unwrap();
+            let service_id1 = ServiceID::new("service1").unwrap();
             let digest1 = Digest::new(b"wasm1");
 
-            let service_id2 = ID::new("service2").unwrap();
+            let service_id2 = ServiceID::new("service2").unwrap();
             let digest2 = Digest::new(b"wasm2");
 
-            let service_id3 = ID::new("service3").unwrap();
+            let service_id3 = ServiceID::new("service3").unwrap();
             let digest3 = Digest::new(b"wasm3");
 
             for (service_id, digest) in [
@@ -180,7 +180,7 @@ fn mock_e2e_service_test() {
 
         async move {
             // add services in order
-            let service_id = ID::new("service").unwrap();
+            let service_id = ServiceID::new("service").unwrap();
             let digest = Digest::new(b"wasm");
             let task_queue_address = rand_address_eth();
 
@@ -209,7 +209,7 @@ fn mock_e2e_service_settings() {
         let runner = runner.clone();
 
         async move {
-            let service_id = ID::new("service").unwrap();
+            let service_id = ServiceID::new("service").unwrap();
             let digest = Digest::new(b"wasm");
 
             let permissions = Permissions {

@@ -4,7 +4,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions, Submit},
-        ID,
+        ServiceID,
     },
     config::Config,
     http::{
@@ -45,7 +45,7 @@ impl HttpClient {
 
     pub async fn create_service(
         &self,
-        id: ID,
+        id: ServiceID,
         digest: Digest,
         task_queue_addr: Address,
         submit: Submit,

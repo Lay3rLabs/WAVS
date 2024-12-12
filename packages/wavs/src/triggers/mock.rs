@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::apis::trigger::{
     TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
 };
-use crate::apis::{IDError, ID};
+use crate::apis::{IDError, ServiceID, WorkflowID};
 use crate::context::AppContext;
 
 use lavs_apis::id::TaskId;
@@ -57,14 +57,18 @@ impl MockTriggerManagerVec {
 
     fn start_error(&self) -> Result<(), TriggerError> {
         match self.error_on_start {
-            true => Err(TriggerError::NoSuchService(ID::new("cant-start").unwrap())),
+            true => Err(TriggerError::NoSuchService(
+                ServiceID::new("cant-start").unwrap(),
+            )),
             false => Ok(()),
         }
     }
 
     fn store_error(&self) -> Result<(), TriggerError> {
         match self.error_on_store {
-            true => Err(TriggerError::NoSuchService(ID::new("cant-store").unwrap())),
+            true => Err(TriggerError::NoSuchService(
+                ServiceID::new("cant-store").unwrap(),
+            )),
             false => Ok(()),
         }
     }
@@ -97,7 +101,11 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(())
     }
 
-    fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError> {
+    fn remove_trigger(
+        &self,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+    ) -> Result<(), TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -107,7 +115,7 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(())
     }
 
-    fn remove_service(&self, service_id: ID) -> Result<(), TriggerError> {
+    fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -118,7 +126,7 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(())
     }
 
-    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
+    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerData>, TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -157,8 +165,8 @@ impl MockTriggerManagerChannel {
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     pub async fn send_trigger(
         &self,
-        service_id: impl TryInto<ID, Error = IDError> + std::fmt::Debug,
-        workflow_id: impl TryInto<ID, Error = IDError> + std::fmt::Debug,
+        service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
         task_queue_addr: &Address,
         data: &(impl Serialize + std::fmt::Debug),
     ) {
@@ -195,7 +203,11 @@ impl TriggerManager for MockTriggerManagerChannel {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError> {
+    fn remove_trigger(
+        &self,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+    ) -> Result<(), TriggerError> {
         self.trigger_datas
             .lock()
             .unwrap()
@@ -204,7 +216,7 @@ impl TriggerManager for MockTriggerManagerChannel {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: ID) -> Result<(), TriggerError> {
+    fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
         self.trigger_datas
             .lock()
             .unwrap()
@@ -213,7 +225,7 @@ impl TriggerManager for MockTriggerManagerChannel {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError> {
+    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerData>, TriggerError> {
         let triggers = self.trigger_datas.lock().unwrap();
         let triggers = triggers
             .iter()
