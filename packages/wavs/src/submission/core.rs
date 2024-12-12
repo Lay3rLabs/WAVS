@@ -413,8 +413,6 @@ impl Submission for CoreSubmission {
                                             }
                                         },
                                     }
-
-
                                 },
                                 Submit::EthAggregatorTx{} => {
                                     tracing::warn!("Aggregator submission not implemented yet!");
