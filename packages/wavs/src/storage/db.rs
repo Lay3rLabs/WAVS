@@ -202,11 +202,11 @@ mod tests {
         let components: BTreeMap<ID, Component> = [
             (
                 ID::new("component-id-1").unwrap(),
-                Component::new(&Digest::new(b"digest-1"), service_id.clone()),
+                Component::new(&Digest::new(b"digest-1")),
             ),
             (
                 ID::new("component-id-2").unwrap(),
-                Component::new(&Digest::new(b"digest-2"), service_id.clone()),
+                Component::new(&Digest::new(b"digest-2")),
             ),
         ]
         .into();
