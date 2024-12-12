@@ -6320,25 +6320,6 @@ pub mod wasi {
             static __FORCE_SECTION_REF: fn() =
                 super::super::super::__link_custom_section_describing_imports;
             use super::super::super::_rt;
-            /// A resource which represents some error information.
-            ///
-            /// The only method provided by this resource is `to-debug-string`,
-            /// which provides some human-readable information about the error.
-            ///
-            /// In the `wasi:io` package, this resource is returned through the
-            /// `wasi:io/streams/stream-error` type.
-            ///
-            /// To provide more specific error information, other interfaces may
-            /// provide functions to further "downcast" this error into more specific
-            /// error information. For example, `error`s returned in streams derived
-            /// from filesystem types to be described using the filesystem's own
-            /// error-code type, using the function
-            /// `wasi:filesystem/types/filesystem-error-code`, which takes a parameter
-            /// `borrow<error>` and returns
-            /// `option<wasi:filesystem/types/error-code>`.
-            ///
-            /// The set of functions which can "downcast" an `error` into a more
-            /// concrete type is open.
             #[derive(Debug)]
             #[repr(transparent)]
             pub struct Error {
@@ -6378,13 +6359,6 @@ pub mod wasi {
             }
             impl Error {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Returns a string that is suitable to assist humans in debugging
-                /// this error.
-                ///
-                /// WARNING: The returned string should not be consumed mechanically!
-                /// It may change across platforms, hosts, or other implementation
-                /// details. Parsing this string is a major platform-compatibility
-                /// hazard.
                 pub fn to_debug_string(&self) -> _rt::String {
                     unsafe {
                         #[repr(align(4))]
@@ -6420,15 +6394,8 @@ pub mod wasi {
             use super::super::super::_rt;
             pub type Error = super::super::super::wasi::io::error::Error;
             pub type Pollable = super::super::super::wasi::io::poll::Pollable;
-            /// An error for input-stream and output-stream operations.
             pub enum StreamError {
-                /// The last operation (a write or flush) failed before completion.
-                ///
-                /// More information is available in the `error` payload.
                 LastOperationFailed(Error),
-                /// The stream is closed: no more input will be accepted by the
-                /// stream. A closed output-stream will return this error on all
-                /// future operations.
                 Closed,
             }
             impl ::core::fmt::Debug for StreamError {
@@ -6448,14 +6415,6 @@ pub mod wasi {
                 }
             }
             impl std::error::Error for StreamError {}
-            /// An input bytestream.
-            ///
-            /// `input-stream`s are *non-blocking* to the extent practical on underlying
-            /// platforms. I/O operations always return promptly; if fewer bytes are
-            /// promptly available than requested, they return the number of bytes promptly
-            /// available, which could even be zero. To wait for data to be available,
-            /// use the `subscribe` function to obtain a `pollable` which can be polled
-            /// for using `wasi:io/poll`.
             #[derive(Debug)]
             #[repr(transparent)]
             pub struct InputStream {
@@ -6493,14 +6452,6 @@ pub mod wasi {
                     }
                 }
             }
-            /// An output bytestream.
-            ///
-            /// `output-stream`s are *non-blocking* to the extent practical on
-            /// underlying platforms. Except where specified otherwise, I/O operations also
-            /// always return promptly, after the number of bytes that can be written
-            /// promptly, which could even be zero. To wait for the stream to be ready to
-            /// accept data, the `subscribe` function to obtain a `pollable` which can be
-            /// polled for using `wasi:io/poll`.
             #[derive(Debug)]
             #[repr(transparent)]
             pub struct OutputStream {
@@ -6540,32 +6491,6 @@ pub mod wasi {
             }
             impl InputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Perform a non-blocking read from the stream.
-                ///
-                /// When the source of a `read` is binary data, the bytes from the source
-                /// are returned verbatim. When the source of a `read` is known to the
-                /// implementation to be text, bytes containing the UTF-8 encoding of the
-                /// text are returned.
-                ///
-                /// This function returns a list of bytes containing the read data,
-                /// when successful. The returned list will contain up to `len` bytes;
-                /// it may return fewer than requested, but not more. The list is
-                /// empty when no bytes are available for reading at this time. The
-                /// pollable given by `subscribe` will be ready when more bytes are
-                /// available.
-                ///
-                /// This function fails with a `stream-error` when the operation
-                /// encounters an error, giving `last-operation-failed`, or when the
-                /// stream is closed, giving `closed`.
-                ///
-                /// When the caller gives a `len` of 0, it represents a request to
-                /// read 0 bytes. If the stream is still open, this call should
-                /// succeed and return an empty list, or otherwise fail with `closed`.
-                ///
-                /// The `len` parameter is a `u64`, which could represent a list of u8 which
-                /// is not possible to allocate in wasm32, or not desirable to allocate as
-                /// as a return value by the callee. The callee may return a list of bytes
-                /// less than `len` in size while more bytes are available for reading.
                 pub fn read(&self, len: u64) -> Result<_rt::Vec<u8>, StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -6623,8 +6548,6 @@ pub mod wasi {
             }
             impl InputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Read bytes from a stream, after blocking until at least one byte can
-                /// be read. Except for blocking, behavior is identical to `read`.
                 pub fn blocking_read(&self, len: u64) -> Result<_rt::Vec<u8>, StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -6682,10 +6605,6 @@ pub mod wasi {
             }
             impl InputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Skip bytes from a stream. Returns number of bytes skipped.
-                ///
-                /// Behaves identical to `read`, except instead of returning a list
-                /// of bytes, returns the number of bytes consumed from the stream.
                 pub fn skip(&self, len: u64) -> Result<u64, StreamError> {
                     unsafe {
                         #[repr(align(8))]
@@ -6741,8 +6660,6 @@ pub mod wasi {
             }
             impl InputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Skip bytes from a stream, after blocking until at least one byte
-                /// can be skipped. Except for blocking behavior, identical to `skip`.
                 pub fn blocking_skip(&self, len: u64) -> Result<u64, StreamError> {
                     unsafe {
                         #[repr(align(8))]
@@ -6798,12 +6715,6 @@ pub mod wasi {
             }
             impl InputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Create a `pollable` which will resolve once either the specified stream
-                /// has bytes available to read or the other end of the stream has been
-                /// closed.
-                /// The created `pollable` is a child resource of the `input-stream`.
-                /// Implementations may trap if the `input-stream` is dropped before
-                /// all derived `pollable`s created with this function are dropped.
                 pub fn subscribe(&self) -> Pollable {
                     unsafe {
                         #[cfg(target_arch = "wasm32")]
@@ -6823,15 +6734,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Check readiness for writing. This function never blocks.
-                ///
-                /// Returns the number of bytes permitted for the next call to `write`,
-                /// or an error. Calling `write` with more bytes than this function has
-                /// permitted will trap.
-                ///
-                /// When this function returns 0 bytes, the `subscribe` pollable will
-                /// become ready when this function will report at least 1 byte, or an
-                /// error.
                 pub fn check_write(&self) -> Result<u64, StreamError> {
                     unsafe {
                         #[repr(align(8))]
@@ -6887,19 +6789,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Perform a write. This function never blocks.
-                ///
-                /// When the destination of a `write` is binary data, the bytes from
-                /// `contents` are written verbatim. When the destination of a `write` is
-                /// known to the implementation to be text, the bytes of `contents` are
-                /// transcoded from UTF-8 into the encoding of the destination and then
-                /// written.
-                ///
-                /// Precondition: check-write gave permit of Ok(n) and contents has a
-                /// length of less than or equal to n. Otherwise, this function will trap.
-                ///
-                /// returns Err(closed) without writing if the stream has closed since
-                /// the last call to check-write provided a permit.
                 pub fn write(&self, contents: &[u8]) -> Result<(), StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -6955,30 +6844,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Perform a write of up to 4096 bytes, and then flush the stream. Block
-                /// until all of these operations are complete, or an error occurs.
-                ///
-                /// This is a convenience wrapper around the use of `check-write`,
-                /// `subscribe`, `write`, and `flush`, and is implemented with the
-                /// following pseudo-code:
-                ///
-                /// ```text
-                /// let pollable = this.subscribe();
-                /// while !contents.is_empty() {
-                /// // Wait for the stream to become writable
-                /// pollable.block();
-                /// let Ok(n) = this.check-write(); // eliding error handling
-                /// let len = min(n, contents.len());
-                /// let (chunk, rest) = contents.split_at(len);
-                /// this.write(chunk  );            // eliding error handling
-                /// contents = rest;
-                /// }
-                /// this.flush();
-                /// // Wait for completion of `flush`
-                /// pollable.block();
-                /// // Check for any errors that arose during `flush`
-                /// let _ = this.check-write();         // eliding error handling
-                /// ```
                 pub fn blocking_write_and_flush(&self, contents: &[u8]) -> Result<(), StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -7034,16 +6899,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Request to flush buffered output. This function never blocks.
-                ///
-                /// This tells the output-stream that the caller intends any buffered
-                /// output to be flushed. the output which is expected to be flushed
-                /// is all that has been passed to `write` prior to this call.
-                ///
-                /// Upon calling this function, the `output-stream` will not accept any
-                /// writes (`check-write` will return `ok(0)`) until the flush has
-                /// completed. The `subscribe` pollable will become ready when the
-                /// flush has completed and the stream can accept more writes.
                 pub fn flush(&self) -> Result<(), StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -7096,8 +6951,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Request to flush buffered output, and block until flush completes
-                /// and stream is ready for writing again.
                 pub fn blocking_flush(&self) -> Result<(), StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -7150,16 +7003,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Create a `pollable` which will resolve once the output-stream
-                /// is ready for more writing, or an error has occured. When this
-                /// pollable is ready, `check-write` will return `ok(n)` with n>0, or an
-                /// error.
-                ///
-                /// If the stream is closed, this pollable is always ready immediately.
-                ///
-                /// The created `pollable` is a child resource of the `output-stream`.
-                /// Implementations may trap if the `output-stream` is dropped before
-                /// all derived `pollable`s created with this function are dropped.
                 pub fn subscribe(&self) -> Pollable {
                     unsafe {
                         #[cfg(target_arch = "wasm32")]
@@ -7179,12 +7022,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Write zeroes to a stream.
-                ///
-                /// This should be used precisely like `write` with the exact same
-                /// preconditions (must use check-write first), but instead of
-                /// passing a list of bytes, you simply pass the number of zero-bytes
-                /// that should be written.
                 pub fn write_zeroes(&self, len: u64) -> Result<(), StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -7237,30 +7074,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Perform a write of up to 4096 zeroes, and then flush the stream.
-                /// Block until all of these operations are complete, or an error
-                /// occurs.
-                ///
-                /// This is a convenience wrapper around the use of `check-write`,
-                /// `subscribe`, `write-zeroes`, and `flush`, and is implemented with
-                /// the following pseudo-code:
-                ///
-                /// ```text
-                /// let pollable = this.subscribe();
-                /// while num_zeroes != 0 {
-                /// // Wait for the stream to become writable
-                /// pollable.block();
-                /// let Ok(n) = this.check-write(); // eliding error handling
-                /// let len = min(n, num_zeroes);
-                /// this.write-zeroes(len);         // eliding error handling
-                /// num_zeroes -= len;
-                /// }
-                /// this.flush();
-                /// // Wait for completion of `flush`
-                /// pollable.block();
-                /// // Check for any errors that arose during `flush`
-                /// let _ = this.check-write();         // eliding error handling
-                /// ```
                 pub fn blocking_write_zeroes_and_flush(&self, len: u64) -> Result<(), StreamError> {
                     unsafe {
                         #[repr(align(4))]
@@ -7313,19 +7126,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Read from one stream and write to another.
-                ///
-                /// The behavior of splice is equivelant to:
-                /// 1. calling `check-write` on the `output-stream`
-                /// 2. calling `read` on the `input-stream` with the smaller of the
-                /// `check-write` permitted length and the `len` provided to `splice`
-                /// 3. calling `write` on the `output-stream` with that read data.
-                ///
-                /// Any error reported by the call to `check-write`, `read`, or
-                /// `write` ends the splice and reports that error.
-                ///
-                /// This function returns the number of bytes transferred; it may be less
-                /// than `len`.
                 pub fn splice(&self, src: &InputStream, len: u64) -> Result<u64, StreamError> {
                     unsafe {
                         #[repr(align(8))]
@@ -7386,11 +7186,6 @@ pub mod wasi {
             }
             impl OutputStream {
                 #[allow(unused_unsafe, clippy::all)]
-                /// Read from one stream and write to another, with blocking.
-                ///
-                /// This is similar to `splice`, except that it blocks until the
-                /// `output-stream` is ready for writing, and the `input-stream`
-                /// is ready for reading, before performing the `splice`.
                 pub fn blocking_splice(
                     &self,
                     src: &InputStream,
