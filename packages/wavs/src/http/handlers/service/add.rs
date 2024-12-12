@@ -113,6 +113,7 @@ impl ServiceRequestParser {
         let service_id = req.id;
 
         let component = Component {
+            service_id: service_id.clone(),
             wasm: req.digest.into(),
             permissions: req.permissions,
             env: req.envs,
