@@ -1,4 +1,4 @@
-SUDO := if `groups | grep docker` != "" { "" } else { "sudo" }
+SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" } 
 TAG := env_var_or_default("TAG", "")
 WASI_OUT_DIR := "./components"
 REPO_ROOT := `git rev-parse --show-toplevel`

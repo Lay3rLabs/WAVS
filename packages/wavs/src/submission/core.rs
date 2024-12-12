@@ -7,7 +7,8 @@ use crate::{
     apis::{
         dispatcher::Submit,
         submission::{ChainMessage, Submission, SubmissionError},
-        EthHelloWorldTaskRlp, Trigger,
+        trigger::Trigger,
+        EthHelloWorldTaskRlp,
     },
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     context::AppContext,
@@ -318,7 +319,7 @@ impl Submission for CoreSubmission {
 
                             match msg.submit {
                                 Submit::EthSignedMessage{.. } => {
-                                    match msg.trigger_data.trigger {
+                                    match msg.trigger_config.trigger {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
@@ -376,7 +377,7 @@ impl Submission for CoreSubmission {
                                     tracing::warn!("Aggregator submission not implemented yet!");
                                 },
                                 Submit::LayerVerifierTx { verifier_addr, ..} => {
-                                    match msg.trigger_data.trigger {
+                                    match msg.trigger_config.trigger {
                                         Trigger::LayerQueue { task_queue_addr, .. } => {
 
                                             let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {

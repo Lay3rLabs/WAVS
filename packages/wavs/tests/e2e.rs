@@ -21,7 +21,7 @@ mod e2e {
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
     use wavs::{
-        apis::{dispatcher::Submit, ID},
+        apis::{dispatcher::Submit, ServiceID},
         test_utils::app::TestApp,
     };
     use wavs::{config::Config, context::AppContext, dispatcher::CoreDispatcher, Digest};
@@ -171,7 +171,7 @@ mod e2e {
 
         let app = EthTestApp::new(_config, anvil).await;
 
-        let service_id = ID::new("test-service").unwrap();
+        let service_id = ServiceID::new("test-service").unwrap();
 
         http_client
             .create_service(
@@ -233,7 +233,7 @@ mod e2e {
 
         let app = CosmosTestApp::new(config).await;
 
-        let service_id = ID::new("test-service").unwrap();
+        let service_id = ServiceID::new("test-service").unwrap();
 
         http_client
             .create_service(

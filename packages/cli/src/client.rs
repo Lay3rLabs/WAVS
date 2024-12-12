@@ -8,7 +8,7 @@ use utils::{
 use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions, Submit},
-        ID,
+        ServiceID,
     },
     http::{
         handlers::service::{
@@ -81,7 +81,7 @@ impl HttpClient {
         &self,
         address: alloy::primitives::Address,
         digest: Digest,
-    ) -> ID {
+    ) -> ServiceID {
         self.create_service(
             digest,
             Address::Eth(AddrEth::new(address.into())),
@@ -90,8 +90,13 @@ impl HttpClient {
         .await
     }
 
-    async fn create_service(&self, digest: Digest, task_queue_addr: Address, submit: Submit) -> ID {
-        let id = ID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
+    async fn create_service(
+        &self,
+        digest: Digest,
+        task_queue_addr: Address,
+        submit: Submit,
+    ) -> ServiceID {
+        let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
             trigger: TriggerRequest::eth_queue(task_queue_addr),
