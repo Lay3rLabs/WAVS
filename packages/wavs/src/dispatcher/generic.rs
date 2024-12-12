@@ -365,11 +365,7 @@ mod tests {
         let service = Service {
             id: action.trigger.service_id.clone(),
             name: "My awesome service".to_string(),
-            components: [(
-                component_id.clone(),
-                Component::new(&digest, action.trigger.service_id.clone()),
-            )]
-            .into(),
+            components: [(component_id.clone(), Component::new(&digest))].into(),
             workflows: [(
                 action.trigger.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
@@ -448,11 +444,7 @@ mod tests {
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
-            components: [(
-                component_id.clone(),
-                Component::new(&digest, service_id.clone()),
-            )]
-            .into(),
+            components: [(component_id.clone(), Component::new(&digest))].into(),
             workflows: [(
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
@@ -530,11 +522,7 @@ mod tests {
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
-            components: [(
-                component_id.clone(),
-                Component::new(&digest, service_id.clone()),
-            )]
-            .into(),
+            components: [(component_id.clone(), Component::new(&digest))].into(),
             workflows: [(
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {

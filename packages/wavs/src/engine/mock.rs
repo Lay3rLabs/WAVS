@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use tracing::instrument;
 
+use crate::apis::ID;
 use crate::Digest;
 
 use super::{Engine, EngineError};
@@ -51,6 +52,7 @@ impl Engine for MockEngine {
     fn execute_queue(
         &self,
         component: &crate::apis::dispatcher::Component,
+        _service_id: &ID,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -70,8 +72,6 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use crate::apis::ID;
-
     use super::*;
 
     #[test]
@@ -113,21 +113,25 @@ mod test {
         engine.register(&d1, FixedResult(r1.clone()));
         engine.register(&d2, FixedResult(r2.clone()));
 
-        let service_id = ID::new("321").unwrap();
-
         // d1 call gets r1
-        let c1 = crate::apis::dispatcher::Component::new(&d1, service_id.clone());
-        let res = engine.execute_queue(&c1, b"123".into(), 1234).unwrap();
+        let c1 = crate::apis::dispatcher::Component::new(&d1);
+        let res = engine
+            .execute_queue(&c1, &ID::new("321").unwrap(), b"123".into(), 1234)
+            .unwrap();
         assert_eq!(res, r1);
 
         // d2 call gets r2
-        let c2 = crate::apis::dispatcher::Component::new(&d2, service_id.clone());
-        let res = engine.execute_queue(&c2, b"123".into(), 1234).unwrap();
+        let c2 = crate::apis::dispatcher::Component::new(&d2);
+        let res = engine
+            .execute_queue(&c2, &ID::new("321").unwrap(), b"123".into(), 1234)
+            .unwrap();
         assert_eq!(res, r2);
 
         // d3 call returns missing error
-        let c3 = crate::apis::dispatcher::Component::new(&d3, service_id.clone());
-        let err = engine.execute_queue(&c3, b"123".into(), 1234).unwrap_err();
+        let c3 = crate::apis::dispatcher::Component::new(&d3);
+        let err = engine
+            .execute_queue(&c3, &ID::new("321").unwrap(), b"123".into(), 1234)
+            .unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));
     }
 }

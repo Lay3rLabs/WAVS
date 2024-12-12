@@ -13,6 +13,7 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::AllowedHostPermission;
+use crate::apis::ID;
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{apis, task_bindings, Digest};
 
@@ -79,6 +80,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     fn execute_queue(
         &self,
         wasi: &apis::dispatcher::Component,
+        service_id: &ID,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -109,7 +111,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
         // conditionally allow fs access
         if wasi.permissions.file_system {
-            let app_cache_path = self.app_data_dir.join(wasi.service_id.as_ref());
+            let app_cache_path = self.app_data_dir.join(service_id.as_ref());
             if !app_cache_path.is_dir() {
                 std::fs::create_dir(&app_cache_path)?;
             }
@@ -186,8 +188,6 @@ impl WasiHttpView for Host {
 
 #[cfg(test)]
 mod tests {
-    use apis::ID;
-
     use crate::storage::memory::MemoryStorage;
 
     use super::*;
@@ -237,12 +237,16 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
-        let service_id = ID::new("foobar").unwrap();
-        let component = crate::apis::dispatcher::Component::new(&digest, service_id);
+        let component = crate::apis::dispatcher::Component::new(&digest);
 
         // execute it and get square
         let result = engine
-            .execute_queue(&component, br#"{"x":12}"#.into(), 12345)
+            .execute_queue(
+                &component,
+                &ID::new("foobar").unwrap(),
+                br#"{"x":12}"#.into(),
+                12345,
+            )
             .unwrap();
         assert_eq!(&result, br#"{"y":144}"#);
     }
