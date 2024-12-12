@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{IDError, ServiceID, Trigger, WorkflowID};
+use super::{IDError, ServiceID, WorkflowID};
 
 // The TriggerManager reacts to these triggers
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -65,8 +65,9 @@ pub trait TriggerManager: Send + Sync {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 // Trigger with metadata so it can be identified in relation to services and workflows
 pub struct TriggerConfig {
-    pub service_id: ID,
-    pub workflow_id: ID,
+    pub service_id: ServiceID,
+    pub workflow_id: WorkflowID,
+    pub trigger: Trigger,
 }
 
 impl TriggerConfig {
@@ -100,10 +101,10 @@ impl TriggerConfig {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
     /// Identify which trigger this came from
-    pub trigger_config: TriggerConfig,
+    pub config: TriggerConfig,
 
     /// The data that's required for the trigger to be processed
-    pub result: TriggerData,
+    pub data: TriggerData,
 }
 
 /// This is the actual data we got from the trigger, used to feed into the component

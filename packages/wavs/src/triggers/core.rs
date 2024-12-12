@@ -1,8 +1,9 @@
 use crate::{
     apis::{
-        trigger::Trigger,
-        trigger::{TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager},
-        EthHelloWorldTaskRlp, ID,
+        trigger::{
+            Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
+        },
+        EthHelloWorldTaskRlp, ServiceID, WorkflowID,
     },
     config::Config,
     context::AppContext,
@@ -310,8 +311,8 @@ impl CoreTriggerManager {
             Ok(trigger) => {
                 action_sender
                     .send(TriggerAction {
-                        trigger_config: trigger,
-                        result: TriggerData::Queue { task_id, payload },
+                        config: trigger,
+                        data: TriggerData::Queue { task_id, payload },
                     })
                     .await
                     .unwrap();
@@ -515,9 +516,8 @@ fn remove_trigger_data(
 mod tests {
     use crate::{
         apis::{
-            trigger::Trigger,
-            trigger::{TriggerConfig, TriggerManager},
-            ID,
+            trigger::{Trigger, TriggerConfig, TriggerManager},
+            ServiceID, WorkflowID,
         },
         config::{ChainConfigs, Config, CosmosChainConfig, EthereumChainConfig},
         test_utils::address::rand_address_eth,

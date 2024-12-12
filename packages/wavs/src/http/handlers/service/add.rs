@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         dispatcher::{Component, Permissions, Service, ServiceStatus, Submit, Workflow},
-        ComponentID, ServiceID, Trigger, WorkflowID,
+        trigger::Trigger,
+        ComponentID, ServiceID, WorkflowID,
     },
     http::{
         error::HttpResult,

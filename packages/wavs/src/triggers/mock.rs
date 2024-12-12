@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::apis::trigger::{
     TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
-use crate::apis::{IDError, ID};
+use crate::apis::{IDError, ServiceID, WorkflowID};
 use crate::context::AppContext;
 
 use lavs_apis::id::TaskId;
@@ -108,9 +108,10 @@ impl TriggerManager for MockTriggerManagerVec {
     ) -> Result<(), TriggerError> {
         self.store_error()?;
 
-        self.triggers.write().unwrap().retain(|t| {
-            t.trigger_config.service_id != service_id && t.trigger_config.workflow_id != workflow_id
-        });
+        self.triggers
+            .write()
+            .unwrap()
+            .retain(|t| t.config.service_id != service_id && t.config.workflow_id != workflow_id);
         Ok(())
     }
 
@@ -120,7 +121,7 @@ impl TriggerManager for MockTriggerManagerVec {
         self.triggers
             .write()
             .unwrap()
-            .retain(|t| t.trigger_config.service_id != service_id);
+            .retain(|t| t.config.service_id != service_id);
 
         Ok(())
     }
@@ -132,8 +133,8 @@ impl TriggerManager for MockTriggerManagerVec {
             .read()
             .unwrap()
             .iter()
-            .filter(|t| t.trigger_config.service_id == service_id)
-            .map(|t| Ok(t.trigger_config.clone()))
+            .filter(|t| t.config.service_id == service_id)
+            .map(|t| Ok(t.config.clone()))
             .collect()
     }
 }
@@ -176,16 +177,9 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
-                trigger_config: TriggerConfig::eth_queue(
-                    service_id,
-                    workflow_id,
-                    task_queue_addr.clone(),
-                )
-                .unwrap(),
-                result: TriggerData::queue(
-                    task_id,
-                    serde_json::to_string(data).unwrap().as_bytes(),
-                ),
+                config: TriggerConfig::eth_queue(service_id, workflow_id, task_queue_addr.clone())
+                    .unwrap(),
+                data: TriggerData::queue(task_id, serde_json::to_string(data).unwrap().as_bytes()),
             })
             .await
             .unwrap();
@@ -254,21 +248,16 @@ mod tests {
 
         let actions = vec![
             TriggerAction {
-                trigger_config: TriggerConfig::eth_queue(
-                    "service1",
-                    "workflow1",
-                    task_queue_addr.clone(),
-                )
-                .unwrap(),
-                result: TriggerData::Queue {
+                config: TriggerConfig::eth_queue("service1", "workflow1", task_queue_addr.clone())
+                    .unwrap(),
+                data: TriggerData::Queue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
-                trigger_config: TriggerConfig::eth_queue("service2", "workflow2", task_queue_addr)
-                    .unwrap(),
-                result: TriggerData::Queue {
+                config: TriggerConfig::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
+                data: TriggerData::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
                 },

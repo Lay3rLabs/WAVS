@@ -30,11 +30,11 @@ pub trait EngineRunner: Send + Sync {
         // look up the proper workflow
         let workflow = service
             .workflows
-            .get(&action.trigger_config.workflow_id)
+            .get(&action.config.workflow_id)
             .ok_or_else(|| {
                 EngineError::UnknownWorkflow(
-                    action.trigger_config.service_id.clone(),
-                    action.trigger_config.workflow_id.clone(),
+                    action.config.service_id.clone(),
+                    action.config.workflow_id.clone(),
                 )
             })?;
 
@@ -43,7 +43,7 @@ pub trait EngineRunner: Send + Sync {
             .get(&workflow.component)
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
-        match action.result {
+        match action.data {
             TriggerData::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
@@ -52,7 +52,7 @@ pub trait EngineRunner: Send + Sync {
                         .execute_queue(component, &service.id, payload, timestamp)?;
 
                 Ok(workflow.submit.clone().map(|submit| ChainMessage {
-                    trigger_config: action.trigger_config,
+                    trigger_config: action.config,
                     task_id,
                     wasm_result,
                     submit,

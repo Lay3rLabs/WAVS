@@ -53,12 +53,12 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
         .context("No workflows found")?;
 
     let action = TriggerAction {
-        trigger_config: TriggerConfig {
+        config: TriggerConfig {
             service_id: service.id.clone(),
             workflow_id: workflow_id.clone(),
             trigger: workflow.trigger.clone(),
         },
-        result: match workflow.trigger {
+        data: match workflow.trigger {
             Trigger::LayerQueue { .. } => {
                 TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
             }
