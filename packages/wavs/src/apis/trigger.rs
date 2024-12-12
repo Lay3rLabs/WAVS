@@ -46,7 +46,7 @@ pub trait TriggerManager: Send + Sync {
     /// This should only be called once in the lifetime of the object
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
 
-    fn add_trigger(&self, trigger: TriggerMeta) -> Result<(), TriggerError>;
+    fn add_trigger(&self, trigger: TriggerConfig) -> Result<(), TriggerError>;
 
     /// Remove one particular trigger
     fn remove_trigger(
@@ -59,17 +59,17 @@ pub trait TriggerManager: Send + Sync {
     fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError>;
 
     /// List all registered triggers, by service ID
-    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerData>, TriggerError>;
+    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 // Trigger with metadata so it can be identified in relation to services and workflows
-pub struct TriggerMeta {
+pub struct TriggerConfig {
     pub service_id: ID,
     pub workflow_id: ID,
 }
 
-impl TriggerMeta {
+impl TriggerConfig {
     pub fn layer_queue(
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
@@ -100,7 +100,7 @@ impl TriggerMeta {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
     /// Identify which trigger this came from
-    pub trigger_meta: TriggerMeta,
+    pub trigger_config: TriggerConfig,
 
     /// The data that's required for the trigger to be processed
     pub result: TriggerData,

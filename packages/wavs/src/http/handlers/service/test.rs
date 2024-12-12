@@ -6,7 +6,7 @@ use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    apis::trigger::{Trigger, TriggerAction, TriggerData, TriggerMeta},
+    apis::trigger::{Trigger, TriggerAction, TriggerConfig, TriggerData},
     http::{error::HttpResult, state::HttpState},
 };
 
@@ -53,7 +53,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
         .context("No workflows found")?;
 
     let action = TriggerAction {
-        trigger_meta: TriggerMeta {
+        trigger_config: TriggerConfig {
             service_id: service.id.clone(),
             workflow_id: workflow_id.clone(),
             trigger: workflow.trigger.clone(),

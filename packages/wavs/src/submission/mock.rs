@@ -72,8 +72,8 @@ impl Submission for MockSubmission {
             while let Some(msg) = rx.recv().await {
                 tracing::debug!(
                     "Received message: {} / {}",
-                    msg.trigger_meta.service_id,
-                    msg.trigger_meta.workflow_id
+                    msg.trigger_config.service_id,
+                    msg.trigger_config.workflow_id
                 );
                 mock.inbox.lock().unwrap().push(msg);
             }
@@ -93,7 +93,7 @@ mod test {
     use lavs_apis::id::TaskId;
 
     use crate::{
-        apis::{dispatcher::Submit, trigger::TriggerMeta},
+        apis::{dispatcher::Submit, trigger::TriggerConfig},
         test_utils::address::rand_address_eth,
     };
 
@@ -101,7 +101,7 @@ mod test {
 
     fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_meta: TriggerMeta::eth_queue(service, service, rand_address_eth()).unwrap(),
+            trigger_config: TriggerConfig::eth_queue(service, service, rand_address_eth()).unwrap(),
             task_id: TaskId::new(task_id),
             wasm_result: payload.as_bytes().to_vec(),
             submit: Submit::eth_aggregator_tx(),

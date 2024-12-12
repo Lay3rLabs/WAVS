@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{dispatcher::Submit, trigger::TriggerMeta};
+use super::{dispatcher::Submit, trigger::TriggerConfig};
 
 pub trait Submission: Send + Sync {
     /// Start running the submission manager
@@ -21,7 +21,7 @@ pub trait Submission: Send + Sync {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChainMessage {
     /// Identify which trigger this came from
-    pub trigger_meta: TriggerMeta,
+    pub trigger_config: TriggerConfig,
     pub task_id: TaskId,
     pub wasm_result: Vec<u8>,
     pub submit: Submit,
