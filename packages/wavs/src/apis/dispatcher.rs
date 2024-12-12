@@ -146,6 +146,7 @@ pub enum ServiceStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Component {
+    pub service_id: ID,
     pub wasm: Digest,
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
@@ -154,8 +155,9 @@ pub struct Component {
 }
 
 impl Component {
-    pub fn new(digest: &Digest) -> Self {
+    pub fn new(digest: &Digest, service_id: ID) -> Self {
         Self {
+            service_id,
             wasm: digest.clone(),
             permissions: Default::default(),
             env: vec![],
