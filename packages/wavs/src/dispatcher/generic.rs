@@ -10,7 +10,7 @@ use tracing::instrument;
 use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
-use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
+use crate::apis::trigger::{TriggerAction, TriggerError, TriggerManager, TriggerMeta};
 use crate::apis::{IDError, ID};
 
 use crate::context::AppContext;
@@ -271,7 +271,7 @@ fn add_service_to_trigger_manager(
     triggers: &impl TriggerManager,
 ) -> Result<(), DispatcherError> {
     for (id, workflow) in service.workflows {
-        let trigger = TriggerData {
+        let trigger = TriggerMeta {
             service_id: service.id.clone(),
             workflow_id: id,
             trigger: workflow.trigger,
@@ -320,8 +320,7 @@ mod tests {
         apis::{
             dispatcher::{Component, ServiceStatus, Submit},
             submission::ChainMessage,
-            trigger::TriggerResult,
-            Trigger,
+            trigger::{Trigger, TriggerData},
         },
         engine::{
             identity::IdentityEngine,
@@ -347,8 +346,8 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            trigger: TriggerData::eth_queue("service1", "workflow1", rand_address_eth()).unwrap(),
-            result: TriggerResult::queue(task_id, payload),
+            trigger: TriggerMeta::eth_queue("service1", "workflow1", rand_address_eth()).unwrap(),
+            result: TriggerData::queue(task_id, payload),
         };
 
         let dispatcher = Dispatcher::new(
@@ -411,18 +410,18 @@ mod tests {
         let task_queue_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::eth_queue(
+                trigger: TriggerMeta::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
                 )
                 .unwrap(),
-                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
+                result: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::eth_queue(&service_id, &workflow_id, task_queue_address)
+                trigger: TriggerMeta::eth_queue(&service_id, &workflow_id, task_queue_address)
                     .unwrap(),
-                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
+                result: TriggerData::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];
 
@@ -489,18 +488,18 @@ mod tests {
         let task_queue_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::eth_queue(
+                trigger: TriggerMeta::eth_queue(
                     &service_id,
                     &workflow_id,
                     task_queue_address.clone(),
                 )
                 .unwrap(),
-                result: TriggerResult::queue(TaskId::new(1), br#"{"x":3}"#),
+                result: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                trigger: TriggerData::eth_queue(&service_id, &workflow_id, task_queue_address)
+                trigger: TriggerMeta::eth_queue(&service_id, &workflow_id, task_queue_address)
                     .unwrap(),
-                result: TriggerResult::queue(TaskId::new(2), br#"{"x":21}"#),
+                result: TriggerData::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];
 

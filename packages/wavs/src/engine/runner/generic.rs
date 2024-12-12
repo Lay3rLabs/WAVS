@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
-use crate::apis::trigger::{TriggerAction, TriggerResult};
+use crate::apis::trigger::{TriggerAction, TriggerData};
 use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
 
@@ -44,7 +44,7 @@ pub trait EngineRunner: Send + Sync {
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
         match action.result {
-            TriggerResult::Queue { task_id, payload } => {
+            TriggerData::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
                 let wasm_result = self.engine().execute_queue(component, payload, timestamp)?;

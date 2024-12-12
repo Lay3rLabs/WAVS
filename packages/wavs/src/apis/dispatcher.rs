@@ -3,7 +3,11 @@ use std::{collections::BTreeMap, ops::Bound};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 
-use super::{submission::ChainMessage, trigger::TriggerAction, Trigger, ID};
+use super::{
+    submission::ChainMessage,
+    trigger::{Trigger, TriggerAction},
+    ID,
+};
 use crate::{context::AppContext, Digest};
 
 /// This is the highest-level container for the system.

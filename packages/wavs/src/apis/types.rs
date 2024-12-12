@@ -1,41 +1,7 @@
 use alloy_rlp::{RlpDecodable, RlpEncodable};
-use layer_climb::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{fmt, ops::Deref};
 use thiserror::Error;
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum Trigger {
-    // TODO: add this variant later, not for now
-    // #[serde(rename_all = "camelCase")]
-    // Cron { schedule: String },
-    #[serde(rename_all = "camelCase")]
-    LayerQueue {
-        // FIXME: add some chain name. right now all triggers are on one chain
-        task_queue_addr: Address,
-        /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
-        poll_interval: u32,
-    },
-    EthQueue {
-        // FIXME: add some chain name. right now all triggers are on one chain
-        // For right now this is NOT actually a generic task queue, it's AVS-specific
-        task_queue_addr: Address,
-    },
-}
-
-impl Trigger {
-    pub fn layer_queue(task_queue_addr: Address, poll_interval: u32) -> Self {
-        Trigger::LayerQueue {
-            task_queue_addr,
-            poll_interval,
-        }
-    }
-
-    pub fn eth_queue(task_queue_addr: Address) -> Self {
-        Trigger::EthQueue { task_queue_addr }
-    }
-}
 
 // The native Solidity type isn't Serialize, so we have this intermediary type for now
 // when we have a proper generic AVS contract, this should go away

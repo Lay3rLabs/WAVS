@@ -6,14 +6,47 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{IDError, Trigger, ID};
+use super::{IDError, ID};
 
+// The TriggerManager reacts to these triggers
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Trigger {
+    // TODO: add this variant later, not for now
+    // #[serde(rename_all = "camelCase")]
+    // Cron { schedule: String },
+    #[serde(rename_all = "camelCase")]
+    LayerQueue {
+        // FIXME: add some chain name. right now all triggers are on one chain
+        task_queue_addr: Address,
+        /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
+        poll_interval: u32,
+    },
+    EthQueue {
+        // FIXME: add some chain name. right now all triggers are on one chain
+        // For right now this is NOT actually a generic task queue, it's AVS-specific
+        task_queue_addr: Address,
+    },
+}
+
+impl Trigger {
+    pub fn layer_queue(task_queue_addr: Address, poll_interval: u32) -> Self {
+        Trigger::LayerQueue {
+            task_queue_addr,
+            poll_interval,
+        }
+    }
+
+    pub fn eth_queue(task_queue_addr: Address) -> Self {
+        Trigger::EthQueue { task_queue_addr }
+    }
+}
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
     /// This should only be called once in the lifetime of the object
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
 
-    fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError>;
+    fn add_trigger(&self, trigger: TriggerMeta) -> Result<(), TriggerError>;
 
     /// Remove one particular trigger
     fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError>;
@@ -22,18 +55,18 @@ pub trait TriggerManager: Send + Sync {
     fn remove_service(&self, service_id: ID) -> Result<(), TriggerError>;
 
     /// List all registered triggers, by service ID
-    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerData>, TriggerError>;
+    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerMeta>, TriggerError>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-/// Internal description of a registered trigger, to be indexed by associated IDs
-pub struct TriggerData {
+// Trigger with metadata so it can be identified in relation to services and workflows
+pub struct TriggerMeta {
     pub service_id: ID,
     pub workflow_id: ID,
     pub trigger: Trigger,
 }
 
-impl TriggerData {
+impl TriggerMeta {
     pub fn layer_queue(
         service_id: impl TryInto<ID, Error = IDError>,
         workflow_id: impl TryInto<ID, Error = IDError>,
@@ -60,19 +93,19 @@ impl TriggerData {
     }
 }
 
-/// The data returned from a trigger action
+/// A bundle of the trigger and the associated data needed to take action on it
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TriggerAction {
     /// Identify which trigger this came from
-    pub trigger: TriggerData,
+    pub trigger: TriggerMeta,
 
-    /// The data we got from the trigger
-    pub result: TriggerResult,
+    /// The data that's required for the trigger to be processed
+    pub result: TriggerData,
 }
 
 /// This is the actual data we got from the trigger, used to feed into the component
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum TriggerResult {
+pub enum TriggerData {
     Queue {
         /// The id from the task queue
         task_id: TaskId,
@@ -81,9 +114,9 @@ pub enum TriggerResult {
     },
 }
 
-impl TriggerResult {
+impl TriggerData {
     pub fn queue(task_id: TaskId, payload: &[u8]) -> Self {
-        TriggerResult::Queue {
+        TriggerData::Queue {
             task_id,
             payload: payload.to_vec(),
         }

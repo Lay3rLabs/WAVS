@@ -7,7 +7,8 @@ use crate::{
     apis::{
         dispatcher::Submit,
         submission::{ChainMessage, Submission, SubmissionError},
-        EthHelloWorldTaskRlp, Trigger,
+        trigger::Trigger,
+        EthHelloWorldTaskRlp,
     },
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     context::AppContext,

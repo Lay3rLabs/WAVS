@@ -134,7 +134,8 @@ mod tests {
     use crate::{
         apis::{
             dispatcher::{Component, Service, ServiceStatus, Workflow},
-            Trigger, ID,
+            trigger::Trigger,
+            ID,
         },
         test_utils::address::rand_address_eth,
         Digest,
