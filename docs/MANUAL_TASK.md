@@ -35,13 +35,8 @@ WAVS should be running. Keep this terminal open.
 
 **Note**: Your `.env` file should already be present from when you ran the [Quickstart guide](../QUICKSTART.md). 
 
-2. Copy the example `.env` file to the root of the `/cli` directory.
 
-```bash
-cp .env.example .env
-```
-
-3. Run the following command to deploy the necessary service contracts. 
+2. Run the following command to deploy the necessary service contracts. 
 
 ```
 cargo run deploy-all --wavs
