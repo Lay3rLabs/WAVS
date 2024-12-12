@@ -53,11 +53,8 @@ impl TriggerRequest {
         }
     }
 
-    pub fn eth_queue(task_queue_addr: Address, task_queue_erc1271: Address) -> Self {
-        TriggerRequest::EthQueue {
-            task_queue_addr,
-            task_queue_erc1271,
-        }
+    pub fn eth_queue(task_queue_addr: Address) -> Self {
+        TriggerRequest::EthQueue { task_queue_addr }
     }
 }
 
@@ -131,10 +128,7 @@ impl ServiceRequestParser {
                 hd_index: _,
             } => Trigger::layer_queue(task_queue_addr, poll_interval),
 
-            TriggerRequest::EthQueue {
-                task_queue_addr,
-                task_queue_erc1271,
-            } => Trigger::eth_queue(task_queue_addr, task_queue_erc1271),
+            TriggerRequest::EthQueue { task_queue_addr } => Trigger::eth_queue(task_queue_addr),
         };
 
         let workflows = BTreeMap::from([(
@@ -200,11 +194,11 @@ mod test {
 
     #[tokio::test]
     async fn add_service_validation() {
-        fn make_service_req(addr: Address, erc1271: Address) -> ServiceRequest {
+        fn make_service_req(addr: Address) -> ServiceRequest {
             ServiceRequest {
                 id: ServiceID::new("test-name").unwrap(),
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::eth_queue(addr, erc1271),
+                trigger: TriggerRequest::eth_queue(addr),
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
@@ -213,7 +207,7 @@ mod test {
         }
 
         ServiceRequestParser::new(None)
-            .parse(make_service_req(rand_address_eth(), rand_address_eth()))
+            .parse(make_service_req(rand_address_eth()))
             .await
             .unwrap();
     }

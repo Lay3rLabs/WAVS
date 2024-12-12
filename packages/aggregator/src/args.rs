@@ -73,6 +73,9 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hd_index: Option<u32>,
+
+    /// Number of tasks before submitting transaction
+    pub tasks_quorum: Option<u32>,
 }
 
 impl CliArgs {

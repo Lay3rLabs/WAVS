@@ -18,8 +18,6 @@ impl CosmosTestApp {
             std::env::var("WAVS_E2E_LAYER_MNEMONIC").expect("WAVS_E2E_LAYER_MNEMONIC not set");
         let task_queue_addr = std::env::var("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS")
             .expect("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS not set");
-        let task_queue_erc1271 = std::env::var("WAVS_E2E_LAYER_TASK_ERC1271")
-            .expect("WAVS_E2E_LAYER_TASK_ERC1271 not set");
 
         let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().into();
 
@@ -33,7 +31,6 @@ impl CosmosTestApp {
             task_queue_addr
         );
         let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
-        let task_queue_erc1271 = chain_config.parse_address(&task_queue_erc1271).unwrap();
 
         let resp: lavs_apis::tasks::ConfigResponse = signing_client
             .querier
@@ -46,13 +43,9 @@ impl CosmosTestApp {
 
         let verifier_addr = chain_config.parse_address(&resp.verifier).unwrap();
 
-        let task_queue = LayerTaskQueueContract::new(
-            signing_client.clone(),
-            task_queue_addr,
-            task_queue_erc1271,
-        )
-        .await
-        .unwrap();
+        let task_queue = LayerTaskQueueContract::new(signing_client.clone(), task_queue_addr)
+            .await
+            .unwrap();
 
         Self {
             layer_client: signing_client,
@@ -65,13 +58,12 @@ impl CosmosTestApp {
 pub struct LayerTaskQueueContract {
     pub client: SigningClient,
     pub addr: Address,
-    pub erc1271: Address,
     pub _verifier: LayerVerifierContract,
     pub task_cost: Option<Coin>,
 }
 
 impl LayerTaskQueueContract {
-    pub async fn new(client: SigningClient, addr: Address, erc1271: Address) -> Result<Self> {
+    pub async fn new(client: SigningClient, addr: Address) -> Result<Self> {
         let resp: task_queue::ConfigResponse = client
             .querier
             .contract_smart(
@@ -94,7 +86,6 @@ impl LayerTaskQueueContract {
         Ok(Self {
             client,
             addr,
-            erc1271,
             _verifier: verifier,
             task_cost,
         })

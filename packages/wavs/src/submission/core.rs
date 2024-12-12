@@ -352,7 +352,7 @@ impl Submission for CoreSubmission {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
-                                        Trigger::EthQueue { task_queue_addr,task_queue_erc1271 } => {
+                                        Trigger::EthQueue { task_queue_addr } => {
                                             let eth_client = eth_client.unwrap();
 
                                             let contract_address = match task_queue_addr {
@@ -365,17 +365,7 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
-                                            let task_queue_erc1271 = match task_queue_erc1271 {
-                                                Address::Eth(addr) => {
-                                                    addr.as_bytes().into()
-                                                },
-                                                _ => {
-                                                    tracing::error!("Expected Ethereum address, got {:?}", task_queue_erc1271);
-                                                    continue;
-                                                }
-                                            };
-
-                                            let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address, task_queue_erc1271);
+                                            let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
 
                                             let task = match EthHelloWorldTaskRlp::decode(&mut msg.wasm_result.as_slice()) {
                                                 Ok(task) => task,

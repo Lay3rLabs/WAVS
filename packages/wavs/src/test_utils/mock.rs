@@ -96,14 +96,12 @@ impl MockE2ETestRunner {
         service_id: ServiceID,
         digest: Digest,
         task_queue_address: &Address,
-        task_queue_erc1271: &Address,
         function: impl Function,
     ) {
         self.create_service(
             service_id,
             digest,
             task_queue_address,
-            task_queue_erc1271,
             Permissions::default(),
             Vec::new(),
             function,
@@ -117,7 +115,6 @@ impl MockE2ETestRunner {
         service_id: ServiceID,
         digest: Digest,
         task_queue_address: &Address,
-        task_queue_erc1271: &Address,
         permissions: Permissions,
         envs: Vec<(String, String)>,
         function: impl Function,
@@ -129,10 +126,7 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: TriggerRequest::eth_queue(
-                    task_queue_address.clone(),
-                    task_queue_erc1271.clone(),
-                ),
+                trigger: TriggerRequest::eth_queue(task_queue_address.clone()),
                 id: service_id,
                 digest: digest.into(),
                 permissions,

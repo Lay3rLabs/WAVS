@@ -45,6 +45,7 @@ impl TestApp {
             ws_endpoint: None,
             http_endpoint: None,
             hd_index: None,
+            tasks_quorum: Some(1),
         }
     }
 

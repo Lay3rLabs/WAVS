@@ -1,11 +1,11 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
-use aggregator::http::state::Task;
+use alloy::sol_types::SolCall;
 use lavs_apis::id::TaskId;
 use utils::{
     eth_client::EthSigningClient,
     hello_world::{
-        solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
+        solidity_types::hello_world::HelloWorldServiceManager::{self, NewTaskCreated},
         HelloWorldSimpleClient,
     },
 };
@@ -14,10 +14,9 @@ pub async fn run_hello_world_task(
     eth_signing_client: EthSigningClient,
     wavs: bool,
     contract_address: alloy::primitives::Address,
-    erc1271: alloy::primitives::Address,
     name: String,
 ) -> String {
-    let client = HelloWorldSimpleClient::new(eth_signing_client, contract_address, erc1271);
+    let client = HelloWorldSimpleClient::new(eth_signing_client, contract_address);
 
     let NewTaskCreated { task, taskIndex } = client.create_new_task(name.clone()).await.unwrap();
 
@@ -27,21 +26,20 @@ pub async fn run_hello_world_task(
         tracing::info!("Submitting the task result directly");
 
         let add_task_request = client.task_request(task, taskIndex).await.unwrap();
-        let task = Task {
-            signatures: HashMap::from([(
-                add_task_request.signature.address,
-                add_task_request.signature.signature,
-            )]),
-            operators: add_task_request.operators,
-            service: add_task_request.service,
-            reference_block: add_task_request.reference_block,
-            function: add_task_request.function,
-            input: add_task_request.input,
-            erc1271: add_task_request.erc1271,
-        };
-        task.try_completing(&add_task_request.task_name, &client.eth.http_provider)
+        let hello_world_service = &client.contract;
+
+        let call = HelloWorldServiceManager::respondToTaskCall::abi_decode(
+            &add_task_request.new_data,
+            true,
+        )
+        .unwrap();
+        let pending_tx = hello_world_service
+            .call_builder(&call)
+            .send()
             .await
             .unwrap();
+        tracing::debug!("Sent transaction: {}", pending_tx.tx_hash());
+        let _ = pending_tx.watch().await.unwrap();
     }
 
     tracing::info!("Waiting for the chain to see the result");

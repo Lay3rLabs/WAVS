@@ -1,7 +1,9 @@
-use std::collections::HashMap;
-
+use alloy::sol_types::SolCall;
 use axum::{extract::State, response::IntoResponse, Json};
-use utils::eth_client::{AddTaskRequest, AddTaskResponse};
+use utils::{
+    eth_client::{AddTaskRequest, AddTaskResponse},
+    hello_world::solidity_types::hello_world::HelloWorldServiceManager,
+};
 
 use crate::http::{
     error::HttpResult,
@@ -20,68 +22,45 @@ pub async fn handle_add_message(
 }
 
 pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTaskResponse> {
-    let mut task = Task::new(req.operator, req.new_data, req.signature);
+    let task = Task::new(req.operator, req.new_data, req.signature);
     let key = (req.task_id, req.service);
-    let tasks = state.load(&key);
+    let mut tasks = state.load(&key);
     tasks.push(task);
-    if tasks.len() > state.config.tasks_for_trigger {}
-    task.add_signature(req.signature)?;
 
-    // Try to complete, we need to check signatures and broadcast in case this operator have enough weight to sign by himself
-    let provider = state.config.signing_client().await?;
-    match task
-        .try_completing(&req.task_name, &provider.http_provider)
-        .await
-    {
-        Ok(Some(tx_hash)) => Ok(AddTaskResponse {
-            hash: Some(tx_hash),
-        }),
-        Ok(None) => {
-            let mut aggregator_state = state.aggregator_state.write().unwrap();
-            if aggregator_state.contains_key(&req.task_name) {
-                return Err(anyhow::anyhow!("Task already exists").into());
-            }
-            aggregator_state.insert(req.task_name.clone(), task);
-            Ok(AddTaskResponse { hash: None })
+    if tasks.len() >= state.config.tasks_quorum as usize {
+        let eth_client = state.config.signing_client().await?;
+        // TODO: decide how to batch it. It seems like a complex topic with many options
+        // Current options require something from node, extra contract dependency or uncertainty
+        // Options:
+        // - Use `Multicall` contract, tracking issue: https://github.com/alloy-rs/alloy/issues/328,
+        //      non-official implementation: https://crates.io/crates/alloy-multicall (there is no send, how to even use it)
+        // - trace_call_many, check note: https://docs.rs/alloy/0.8.0/alloy/providers/ext/trait.TraceApi.html#tymethod.trace_call_many
+        // - Use eip-7702, doubt it's possible to do exactly what we're trying to achieve here
+
+        // Send "batch" txs
+        let hello_world_service =
+            HelloWorldServiceManager::new(key.1.clone(), &eth_client.http_provider);
+        let mut txs = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            let call = HelloWorldServiceManager::respondToTaskCall::abi_decode(&task.data, true)?;
+            let pending_tx = hello_world_service.call_builder(&call).send().await?;
+            txs.push(pending_tx);
         }
-        Err(e) => Err(e.into()),
+        let tx_hashes: Vec<_> = txs.iter().map(|tx| tx.tx_hash().to_owned()).collect();
+        tracing::debug!("Sent transactions: {tx_hashes:?}");
+
+        let mut last_tx = None;
+        for pending_tx in txs {
+            last_tx = Some(pending_tx.watch().await?);
+        }
+        tracing::debug!("Transactions included in a block");
+        state.remove(&key);
+        Ok(AddTaskResponse { hash: last_tx })
+    } else {
+        state.save(key, tasks);
+        Ok(AddTaskResponse { hash: None })
     }
 }
 
-// @dakom reference
-// // Operator signs data and sends to aggregator:
-// // - task_id
-// // - contract_address
-// // - operator_address
-// // - new_data
-// // - new_signature
-
-// let lookup_id = (contract_address, task_id);
-// let contract = HelloWorldSimpleClient::new(contract_address).contract;
-// let mut stuff:Vec<(operator_address, data, signature)> = Storage::new(lookup_id).load();
-
 // // Followup issue, this check is against a local DB, registered via endpoint
 // check_if_operator(lookup_id, operator_address, new_signature);
-
-// stuff.push((operator, new_data, new_signature));
-
-// // Step 1:
-// // this should be configurable
-// // test with 1 and 3
-// //
-// // Step 2:
-// // this should be precisely the operators registered via endpoint
-// if signatures.len() >= quorum_needed(config) {
-//     let calls = stuff
-//         .iter()
-//         .map(|(_operator_address, data, signature)| {
-//             contract.respondToTask(data, signature)
-//         })
-//         .collect::<Vec<_>>();
-
-//     // how to do in alloy??
-//     send_batch_transaction(calls).await?;
-//     Storage::new(lookup_id).clear();
-// } else {
-//     Storage::new(lookup_id).save(operator_address, new_data, new_signature);
-// }

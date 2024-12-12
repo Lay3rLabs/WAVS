@@ -88,12 +88,11 @@ impl TriggerConfig {
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         task_queue_addr: Address,
-        task_queue_erc1271: Address,
     ) -> Result<Self, IDError> {
         Ok(Self {
             service_id: service_id.try_into()?,
             workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::eth_queue(task_queue_addr, task_queue_erc1271),
+            trigger: Trigger::eth_queue(task_queue_addr),
         })
     }
 }

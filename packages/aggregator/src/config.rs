@@ -42,7 +42,7 @@ pub struct Config {
     pub http_endpoint: String,
 
     /// Number of tasks to trigger transactions
-    pub tasks_for_trigger: u32,
+    pub tasks_quorum: u32,
 
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
@@ -65,6 +65,7 @@ impl Default for Config {
             http_endpoint: "http://127.0.0.1:8545".to_string(),
             mnemonic: None,
             hd_index: None,
+            tasks_quorum: 3,
         }
     }
 }

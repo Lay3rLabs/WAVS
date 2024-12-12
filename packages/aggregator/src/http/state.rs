@@ -33,6 +33,10 @@ impl HttpState {
     pub fn save(&self, key: (String, Address), value: Vec<Task>) {
         self.aggregator_state.write().unwrap().insert(key, value);
     }
+
+    pub fn remove(&self, key: &(String, Address)) {
+        self.aggregator_state.write().unwrap().remove(key);
+    }
 }
 
 #[derive(Clone, Debug)]

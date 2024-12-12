@@ -39,5 +39,4 @@ pub struct HelloWorldSimpleClient {
     pub eth: EthSigningClient,
     pub contract_address: Address,
     pub contract: HelloWorldServiceManagerT,
-    pub erc1271: Address,
 }
