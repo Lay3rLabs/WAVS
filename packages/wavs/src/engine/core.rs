@@ -91,11 +91,10 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
 
         self.block_on_run(async move {
-            let instance = bindings::task_queue::TaskQueueWorld::instantiate_async(
-                &mut store, &component, &linker,
-            )
-            .await
-            .context("Wasm instantiate failed")?;
+            let instance =
+                bindings::task_queue::TaskQueueWorld::instantiate_async(&mut store, &component, &linker)
+                    .await
+                    .context("Wasm instantiate failed")?;
             let input = bindings::task_queue::TaskQueueInput { timestamp, request };
 
             let response = instance
@@ -119,19 +118,15 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
 
         self.block_on_run(async move {
-            // For right now, we use the hello-world pipeline (contract and component)
-            // eventually this will be a more generic system
-
-            let instance = bindings::hello_world::HelloWorldWorld::instantiate_async(
-                &mut store, &component, &linker,
-            )
-            .await
-            .context("Wasm instantiate failed")?;
+            let instance =
+                bindings::eth_event::EthEvent::instantiate_async(&mut store, &component, &linker)
+                    .await
+                    .context("Wasm instantiate failed")?;
 
             let address = log.address().to_vec();
             let (log_topics, log_data) = log.inner.data.split();
 
-            let input = bindings::hello_world::EthLog {
+            let input = bindings::eth_event::EthLog {
                 address,
                 log_topics: log_topics.iter().map(|t| t.to_vec()).collect(),
                 log_data: log_data.to_vec(),
@@ -142,8 +137,6 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 .await
                 .context("Failed to run task")?
                 .map_err(EngineError::ComponentError)?;
-
-            let response = temp_serialize_hello_world_component_response(response);
 
             Ok::<Vec<u8>, EngineError>(response)
         })

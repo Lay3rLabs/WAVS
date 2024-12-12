@@ -43,21 +43,18 @@ interface eth-event-types {
 world eth-event-world {
   use eth-event-types.{eth-log};
 
-  export process-eth-event: func(log: eth-log) -> result<list<u8>, string>;
-}
-
-interface hello-world-types {
-  record response {
-    message-hash: list<u8>,
-    task-name: string,
-    task-created-block: u32,
-    task-index: u32,
+  // An alloy log can be recreated with the info here 
+  // block height is extra
+  record eth-log {
+    // the address that emitted an event
+    address: list<u8>,
+    // the raw log topics that can be decoded into an event
+    log-topics: list<list<u8>>,
+    // the raw log data that can be decoded into an event
+    log-data: list<u8>,
   }
-}
 
-world hello-world-world {
-  use eth-event-types.{eth-log};
-  use hello-world-types.{response};
+  type eth-output = list<u8>;
 
-  export process-eth-event: func(log: eth-log) -> result<response, string>;
+  export process-eth-event: func(log: eth-log) -> result<eth-output, string>;
 }
