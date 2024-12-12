@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         dispatcher::{Permissions, ServiceStatus, Submit},
-        ID,
+        ServiceID,
     },
     http::{
         error::HttpResult,
@@ -32,7 +32,7 @@ pub struct ServiceResponse {
     /// In 0.2 this is called "name"
     /// This is the ID of the service
     #[serde(rename = "name")]
-    pub id: ID,
+    pub id: ServiceID,
     pub status: ServiceStatus,
     pub digest: ShaDigest,
     // for 0.3, it might be nice to make this just Trigger, but the address type breaks backwards compat

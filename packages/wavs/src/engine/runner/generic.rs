@@ -47,7 +47,9 @@ pub trait EngineRunner: Send + Sync {
             TriggerData::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
-                let wasm_result = self.engine().execute_queue(component, payload, timestamp)?;
+                let wasm_result =
+                    self.engine()
+                        .execute_queue(component, &service.id, payload, timestamp)?;
 
                 Ok(workflow.submit.clone().map(|submit| ChainMessage {
                     trigger_meta: action.trigger_meta,

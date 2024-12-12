@@ -4,9 +4,7 @@ use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    submission::ChainMessage,
-    trigger::{Trigger, TriggerAction},
-    ID,
+    submission::ChainMessage, trigger::TriggerAction, ComponentID, ServiceID, Trigger, WorkflowID,
 };
 use crate::{context::AppContext, Digest};
 
@@ -32,7 +30,7 @@ pub trait DispatchManager: Send + Sync {
 
     fn add_service(&self, service: Service) -> Result<(), Self::Error>;
 
-    fn remove_service(&self, id: ID) -> Result<(), Self::Error>;
+    fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error>;
 
     fn list_services(
         &self,
@@ -68,18 +66,18 @@ pub enum WasmSource {
 #[serde(rename_all = "camelCase")]
 pub struct Service {
     // Public identifier. Must be unique for all services
-    pub id: ID,
+    pub id: ServiceID,
 
     /// This is any utf-8 string, for human-readable display.
     pub name: String,
 
     /// We will supoort multiple components in one service with unique service-scoped IDs. For now, just add one called "default".
     /// This allows clean mapping from backwards-compatible API endpoints.
-    pub components: BTreeMap<ID, Component>,
+    pub components: BTreeMap<ComponentID, Component>,
 
     /// We will support multiple workflows in one service with unique service-scoped IDs. For now, only one called "default".
     /// The workflows reference components by name (for now, always "default").
-    pub workflows: BTreeMap<ID, Workflow>,
+    pub workflows: BTreeMap<WorkflowID, Workflow>,
 
     pub status: ServiceStatus,
 
@@ -93,7 +91,7 @@ pub struct Service {
 pub struct Workflow {
     pub trigger: Trigger,
     /// A reference to which component to run with this data - for now, always "default"
-    pub component: ID,
+    pub component: ComponentID,
 
     /// How to submit the result of the component.
     /// May be unset for eg cron jobs that just update internal state and don't submit anything

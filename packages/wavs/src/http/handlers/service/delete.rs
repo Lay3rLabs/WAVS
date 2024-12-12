@@ -2,7 +2,7 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    apis::ID,
+    apis::ServiceID,
     http::{error::HttpResult, state::HttpState},
 };
 
@@ -13,7 +13,7 @@ pub struct DeleteServices {
     // however, internally we repurpose this as the ID
     // so we'll just treat it as an ID for here, and keep "apps" field for backwards compat
     #[serde(rename = "apps")]
-    pub service_ids: Vec<ID>,
+    pub service_ids: Vec<ServiceID>,
 }
 
 #[axum::debug_handler]
@@ -27,7 +27,7 @@ pub async fn handle_delete_service(
     }
 }
 
-async fn delete_service_inner(state: HttpState, service_ids: Vec<ID>) -> HttpResult<()> {
+async fn delete_service_inner(state: HttpState, service_ids: Vec<ServiceID>) -> HttpResult<()> {
     for id in service_ids {
         state.dispatcher.remove_service(id)?;
     }

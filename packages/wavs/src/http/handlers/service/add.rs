@@ -7,8 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         dispatcher::{Component, Permissions, Service, ServiceStatus, Submit, Workflow},
-        trigger::Trigger,
-        ID,
+        ComponentID, ServiceID, Trigger, WorkflowID,
     },
     http::{
         error::HttpResult,
@@ -34,7 +33,7 @@ pub struct ServiceRequest {
     // however, internally we repurpose this as the ID
     // so we'll just treat it as an ID for here, and keep "name" field for backwards compat
     #[serde(rename = "name")]
-    pub id: ID,
+    pub id: ServiceID,
     pub digest: ShaDigest,
     pub trigger: TriggerRequest,
     pub permissions: Permissions,
@@ -65,7 +64,7 @@ pub struct AddServiceResponse {
     // however, internally we repurpose this as the ID
     // so we'll just treat it as an ID for here, and keep "name" field for backwards compat
     #[serde(rename = "name")]
-    pub id: ID,
+    pub id: ServiceID,
     // TODO for 0.3, not sure why this is needed, it's always "Active"
     pub status: ServiceStatus,
 }
@@ -109,8 +108,8 @@ impl ServiceRequestParser {
     }
 
     async fn parse(&self, req: ServiceRequest) -> anyhow::Result<Service> {
-        let component_id = ID::new("default")?;
-        let workflow_id = ID::new("default")?;
+        let component_id = ComponentID::new("default")?;
+        let workflow_id = WorkflowID::new("default")?;
         let service_id = req.id;
 
         let component = Component {
@@ -159,7 +158,7 @@ mod test {
     use crate::{
         apis::{
             dispatcher::{Permissions, ServiceStatus, Submit},
-            ID,
+            ServiceID,
         },
         http::{handlers::service::add::TriggerRequest, types::ShaDigest},
         test_utils::address::rand_address_eth,
@@ -196,7 +195,7 @@ mod test {
     async fn add_service_validation() {
         fn make_service_req(addr: Address) -> ServiceRequest {
             ServiceRequest {
-                id: ID::new("test-name").unwrap(),
+                id: ServiceID::new("test-name").unwrap(),
                 digest: Digest::new(&[0; 32]).into(),
                 trigger: TriggerRequest::eth_queue(addr),
                 permissions: Permissions::default(),

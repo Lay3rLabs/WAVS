@@ -1,8 +1,7 @@
 use crate::{
     apis::{
-        trigger::Trigger,
-        trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerMeta},
-        EthHelloWorldTaskRlp, ID,
+        trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult},
+        EthHelloWorldTaskRlp, ServiceID, Trigger, WorkflowID,
     },
     config::Config,
     context::AppContext,
@@ -43,7 +42,8 @@ struct LookupMaps {
     /// lookup id by task queue address
     pub triggers_by_task_queue: Arc<RwLock<HashMap<Address, LookupId>>>,
     /// lookup id by service id -> workflow id
-    pub triggers_by_service_workflow: Arc<RwLock<BTreeMap<ID, BTreeMap<ID, LookupId>>>>,
+    pub triggers_by_service_workflow:
+        Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
     /// latest lookup_id
     pub lookup_id: Arc<AtomicUsize>,
 }
@@ -395,8 +395,8 @@ impl TriggerManager for CoreTriggerManager {
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_trigger(
         &self,
-        service_id: crate::apis::ID,
-        workflow_id: crate::apis::ID,
+        service_id: crate::apis::ServiceID,
+        workflow_id: crate::apis::WorkflowID,
     ) -> Result<(), TriggerError> {
         let mut service_lock = self
             .lookup_maps
@@ -423,7 +423,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: crate::apis::ID) -> Result<(), TriggerError> {
+    fn remove_service(&self, service_id: crate::apis::ServiceID) -> Result<(), TriggerError> {
         let mut all_trigger_data_lock = self.lookup_maps.all_trigger_data.write().unwrap();
         let mut triggers_by_task_queue_lock =
             self.lookup_maps.triggers_by_task_queue.write().unwrap();
@@ -452,7 +452,10 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn list_triggers(&self, service_id: crate::apis::ID) -> Result<Vec<TriggerMeta>, TriggerError> {
+    fn list_triggers(
+        &self,
+        service_id: crate::apis::ServiceID,
+    ) -> Result<Vec<TriggerMeta>, TriggerError> {
         let mut triggers = Vec::new();
 
         let triggers_by_service_workflow_lock = self
@@ -511,9 +514,8 @@ fn remove_trigger_data(
 mod tests {
     use crate::{
         apis::{
-            trigger::Trigger,
-            trigger::{TriggerManager, TriggerMeta},
-            ID,
+            trigger::{TriggerData, TriggerManager},
+            ServiceID, Trigger, WorkflowID,
         },
         config::{ChainConfigs, Config, CosmosChainConfig, EthereumChainConfig},
         test_utils::address::rand_address_eth,
@@ -561,11 +563,11 @@ mod tests {
 
         let manager = CoreTriggerManager::new(&config).unwrap();
 
-        let service_id_1 = ID::new("service-1").unwrap();
-        let workflow_id_1 = ID::new("workflow-1").unwrap();
+        let service_id_1 = ServiceID::new("service-1").unwrap();
+        let workflow_id_1 = WorkflowID::new("workflow-1").unwrap();
 
-        let service_id_2 = ID::new("service-2").unwrap();
-        let workflow_id_2 = ID::new("workflow-2").unwrap();
+        let service_id_2 = ServiceID::new("service-2").unwrap();
+        let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
 
         let task_queue_addr_1_1 = rand_address_eth();
         let task_queue_addr_1_2 = rand_address_eth();

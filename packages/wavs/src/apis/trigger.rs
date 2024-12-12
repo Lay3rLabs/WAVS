@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::context::AppContext;
 
-use super::{IDError, ID};
+use super::{IDError, ServiceID, Trigger, WorkflowID};
 
 // The TriggerManager reacts to these triggers
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -49,13 +49,17 @@ pub trait TriggerManager: Send + Sync {
     fn add_trigger(&self, trigger: TriggerMeta) -> Result<(), TriggerError>;
 
     /// Remove one particular trigger
-    fn remove_trigger(&self, service_id: ID, workflow_id: ID) -> Result<(), TriggerError>;
+    fn remove_trigger(
+        &self,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+    ) -> Result<(), TriggerError>;
 
     /// Remove all workflows for one service
-    fn remove_service(&self, service_id: ID) -> Result<(), TriggerError>;
+    fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError>;
 
     /// List all registered triggers, by service ID
-    fn list_triggers(&self, service_id: ID) -> Result<Vec<TriggerMeta>, TriggerError>;
+    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerData>, TriggerError>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -63,13 +67,12 @@ pub trait TriggerManager: Send + Sync {
 pub struct TriggerMeta {
     pub service_id: ID,
     pub workflow_id: ID,
-    pub trigger: Trigger,
 }
 
 impl TriggerMeta {
     pub fn layer_queue(
-        service_id: impl TryInto<ID, Error = IDError>,
-        workflow_id: impl TryInto<ID, Error = IDError>,
+        service_id: impl TryInto<ServiceID, Error = IDError>,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         task_queue_addr: Address,
         poll_interval: u32,
     ) -> Result<Self, IDError> {
@@ -81,8 +84,8 @@ impl TriggerMeta {
     }
 
     pub fn eth_queue(
-        service_id: impl TryInto<ID, Error = IDError>,
-        workflow_id: impl TryInto<ID, Error = IDError>,
+        service_id: impl TryInto<ServiceID, Error = IDError>,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         task_queue_addr: Address,
     ) -> Result<Self, IDError> {
         Ok(Self {
@@ -132,15 +135,15 @@ pub enum TriggerError {
     #[error("parse avs payload: {0}")]
     ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]
-    NoSuchService(ID),
+    NoSuchService(ServiceID),
     #[error("Cannot find workflow: {0} / {1}")]
-    NoSuchWorkflow(ID, ID),
+    NoSuchWorkflow(ServiceID, WorkflowID),
     #[error("Cannot find trigger data: {0}")]
     NoSuchTriggerData(usize),
     #[error("Cannot find trigger data: {0}")]
     NoSuchTaskQueueTrigger(Address),
     #[error("Service exists, cannot register again: {0}")]
-    ServiceAlreadyExists(ID),
+    ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
-    WorkflowAlreadyExists(ID, ID),
+    WorkflowAlreadyExists(ServiceID, WorkflowID),
 }
