@@ -3,7 +3,7 @@ use tracing::instrument;
 use crate::apis::dispatcher::Component;
 use crate::apis::engine::{Engine, EngineError};
 
-use crate::apis::ID;
+use crate::apis::ServiceID;
 use crate::Digest;
 
 /// Simply returns the request as the result.
@@ -32,7 +32,7 @@ impl Engine for IdentityEngine {
     fn execute_queue(
         &self,
         _component: &Component,
-        _service_id: &ID,
+        _service_id: &ServiceID,
         request: Vec<u8>,
         _timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -62,7 +62,7 @@ mod test {
         let result = engine
             .execute_queue(
                 &component,
-                &ID::new("foobar").unwrap(),
+                &ServiceID::new("foobar").unwrap(),
                 request.clone(),
                 1234567890,
             )

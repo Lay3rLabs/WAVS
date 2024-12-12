@@ -1,5 +1,5 @@
 use utils::{eigen_client::CoreAVSAddresses, hello_world::config::HelloWorldAddresses};
-use wavs::{apis::ID, Digest};
+use wavs::{apis::ServiceID, Digest};
 
 pub fn display_core_contracts(core_contracts: &CoreAVSAddresses) {
     println!("\n--- CORE AVS CONTRACTS ---");
@@ -65,7 +65,7 @@ pub fn display_hello_world_service_contracts(hello_world_service_contracts: &Hel
     );
 }
 
-pub fn display_hello_world_service_id(id: &ID) {
+pub fn display_hello_world_service_id(id: &ServiceID) {
     println!("\n--- HELLO WORLD SERVICE ID ---");
     println!("{}", id);
 }

@@ -13,7 +13,7 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::AllowedHostPermission;
-use crate::apis::ID;
+use crate::apis::ServiceID;
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{apis, task_bindings, Digest};
 
@@ -80,7 +80,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     fn execute_queue(
         &self,
         wasi: &apis::dispatcher::Component,
-        service_id: &ID,
+        service_id: &ServiceID,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -243,7 +243,7 @@ mod tests {
         let result = engine
             .execute_queue(
                 &component,
-                &ID::new("foobar").unwrap(),
+                &ServiceID::new("foobar").unwrap(),
                 br#"{"x":12}"#.into(),
                 12345,
             )

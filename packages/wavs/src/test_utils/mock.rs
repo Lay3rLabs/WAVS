@@ -5,7 +5,7 @@ use crate::{
     apis::{
         dispatcher::{DispatchManager, Permissions, Submit},
         engine::EngineError,
-        ID,
+        ServiceID,
     },
     context::AppContext,
     dispatcher::Dispatcher,
@@ -94,7 +94,7 @@ impl MockE2ETestRunner {
 
     pub async fn create_service_simple(
         &self,
-        service_id: ID,
+        service_id: ServiceID,
         digest: Digest,
         task_queue_address: &Address,
         function: impl Function,
@@ -112,7 +112,7 @@ impl MockE2ETestRunner {
 
     pub async fn create_service(
         &self,
-        service_id: ID,
+        service_id: ServiceID,
         digest: Digest,
         task_queue_address: &Address,
         permissions: Permissions,
@@ -157,7 +157,7 @@ impl MockE2ETestRunner {
         assert!(response.status().is_success());
     }
 
-    pub async fn delete_services(&self, service_ids: Vec<ID>) {
+    pub async fn delete_services(&self, service_ids: Vec<ServiceID>) {
         let body = serde_json::to_string(&DeleteServices { service_ids }).unwrap();
 
         let req = Request::builder()
@@ -181,7 +181,7 @@ impl MockE2ETestRunner {
 
     pub async fn test_service<D: DeserializeOwned>(
         &self,
-        service_id: ID,
+        service_id: ServiceID,
         input: impl Serialize,
     ) -> D {
         let body = serde_json::to_string(&TestAppRequest {

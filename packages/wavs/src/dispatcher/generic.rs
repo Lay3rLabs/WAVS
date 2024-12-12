@@ -11,7 +11,7 @@ use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
 use crate::apis::trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager};
-use crate::apis::{IDError, ID};
+use crate::apis::{IDError, ServiceID};
 
 use crate::context::AppContext;
 use crate::engine::runner::EngineRunner;
@@ -164,7 +164,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn remove_service(&self, id: ID) -> Result<(), Self::Error> {
+    fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error> {
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.triggers.remove_service(id)?;
 
@@ -285,10 +285,10 @@ fn add_service_to_trigger_manager(
 #[derive(Error, Debug)]
 pub enum DispatcherError {
     #[error("Service {0} already registered")]
-    ServiceRegistered(ID),
+    ServiceRegistered(ServiceID),
 
     #[error("Unknown Service {0}")]
-    UnknownService(ID),
+    UnknownService(ServiceID),
 
     #[error("Invalid ID: {0}")]
     ID(#[from] IDError),
@@ -321,7 +321,7 @@ mod tests {
             dispatcher::{Component, ServiceStatus, Submit},
             submission::ChainMessage,
             trigger::TriggerResult,
-            Trigger,
+            ComponentID, Trigger, WorkflowID,
         },
         engine::{
             identity::IdentityEngine,
@@ -361,7 +361,7 @@ mod tests {
 
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
-        let component_id = ID::new("component1").unwrap();
+        let component_id = ComponentID::new("component1").unwrap();
         let service = Service {
             id: action.trigger.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -405,8 +405,8 @@ mod tests {
         let db_file = tempfile::NamedTempFile::new().unwrap();
 
         // Prepare two actions to be squared
-        let service_id = ID::new("service1").unwrap();
-        let workflow_id = ID::new("workflow1").unwrap();
+        let service_id = ServiceID::new("service1").unwrap();
+        let workflow_id = WorkflowID::new("workflow1").unwrap();
 
         let task_queue_address = rand_address_eth();
         let actions = vec![
@@ -440,7 +440,7 @@ mod tests {
         dispatcher.engine.engine().register(&digest, BigSquare);
 
         // Register a service to handle this action
-        let component_id = ID::new("component1").unwrap();
+        let component_id = ComponentID::new("component1").unwrap();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -484,8 +484,8 @@ mod tests {
         let db_file = tempfile::NamedTempFile::new().unwrap();
 
         // Prepare two actions to be squared
-        let service_id = ID::new("service1").unwrap();
-        let workflow_id = ID::new("workflow1").unwrap();
+        let service_id = ServiceID::new("service1").unwrap();
+        let workflow_id = WorkflowID::new("workflow1").unwrap();
         let task_queue_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
@@ -518,7 +518,7 @@ mod tests {
         dispatcher.engine.engine().register(&digest, BigSquare);
 
         // Register a service to handle this action
-        let component_id = ID::new("component1").unwrap();
+        let component_id = ComponentID::new("component1").unwrap();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),

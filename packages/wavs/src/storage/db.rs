@@ -134,7 +134,7 @@ mod tests {
     use crate::{
         apis::{
             dispatcher::{Component, Service, ServiceStatus, Workflow},
-            Trigger, ID,
+            ComponentID, ServiceID, Trigger, WorkflowID,
         },
         test_utils::address::rand_address_eth,
         Digest,
@@ -197,34 +197,34 @@ mod tests {
 
         const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("temp-services");
 
-        let service_id = ID::new("service-id-1").unwrap();
+        let service_id = ServiceID::new("service-id-1").unwrap();
 
-        let components: BTreeMap<ID, Component> = [
+        let components: BTreeMap<ComponentID, Component> = [
             (
-                ID::new("component-id-1").unwrap(),
+                ComponentID::new("component-id-1").unwrap(),
                 Component::new(&Digest::new(b"digest-1")),
             ),
             (
-                ID::new("component-id-2").unwrap(),
+                ComponentID::new("component-id-2").unwrap(),
                 Component::new(&Digest::new(b"digest-2")),
             ),
         ]
         .into();
 
-        let workflows: BTreeMap<ID, Workflow> = [
+        let workflows: BTreeMap<WorkflowID, Workflow> = [
             (
-                ID::new("workflow-id-1").unwrap(),
+                WorkflowID::new("workflow-id-1").unwrap(),
                 Workflow {
                     trigger: Trigger::eth_queue(rand_address_eth()),
-                    component: ID::new("component-id-1").unwrap(),
+                    component: ComponentID::new("component-id-1").unwrap(),
                     submit: None,
                 },
             ),
             (
-                ID::new("workflow-id-2").unwrap(),
+                WorkflowID::new("workflow-id-2").unwrap(),
                 Workflow {
                     trigger: Trigger::eth_queue(rand_address_eth()),
-                    component: ID::new("component-id-2").unwrap(),
+                    component: ComponentID::new("component-id-2").unwrap(),
                     submit: None,
                 },
             ),
