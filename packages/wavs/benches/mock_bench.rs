@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use wavs::{
-    apis::ID,
+    apis::{ServiceID, WorkflowID},
     context::AppContext,
     test_utils::{
         address::rand_address_eth,
@@ -14,8 +14,8 @@ use wavs::{
 pub fn criterion_benchmark(c: &mut Criterion) {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
-    let service_id = ID::new("default").unwrap();
-    let workflow_id = ID::new("default").unwrap();
+    let service_id = ServiceID::new("default").unwrap();
+    let workflow_id = WorkflowID::new("default").unwrap();
     let task_queue_address = rand_address_eth();
 
     // block and wait for creating the service

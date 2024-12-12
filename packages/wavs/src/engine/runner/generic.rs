@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
-use crate::apis::trigger::{TriggerAction, TriggerResult};
+use crate::apis::trigger::{TriggerAction, TriggerData};
 use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
 
@@ -30,11 +30,11 @@ pub trait EngineRunner: Send + Sync {
         // look up the proper workflow
         let workflow = service
             .workflows
-            .get(&action.trigger.workflow_id)
+            .get(&action.config.workflow_id)
             .ok_or_else(|| {
                 EngineError::UnknownWorkflow(
-                    action.trigger.service_id.clone(),
-                    action.trigger.workflow_id.clone(),
+                    action.config.service_id.clone(),
+                    action.config.workflow_id.clone(),
                 )
             })?;
 
@@ -43,8 +43,8 @@ pub trait EngineRunner: Send + Sync {
             .get(&workflow.component)
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
-        match action.result {
-            TriggerResult::Queue { task_id, payload } => {
+        match action.data {
+            TriggerData::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
                 let wasm_result =
@@ -52,7 +52,7 @@ pub trait EngineRunner: Send + Sync {
                         .execute_queue(component, &service.id, payload, timestamp)?;
 
                 Ok(workflow.submit.clone().map(|submit| ChainMessage {
-                    trigger_data: action.trigger,
+                    trigger_config: action.config,
                     task_id,
                     wasm_result,
                     submit,

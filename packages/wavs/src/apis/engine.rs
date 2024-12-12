@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{storage::CAStorageError, Digest};
 
-use super::{dispatcher::Component, ID};
+use super::{dispatcher::Component, ComponentID, ServiceID, WorkflowID};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
@@ -14,7 +14,7 @@ pub trait Engine: Send + Sync {
     fn execute_queue(
         &self,
         component: &Component,
-        service_id: &ID,
+        service_id: &ServiceID,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError>;
@@ -32,7 +32,7 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
     fn execute_queue(
         &self,
         component: &Component,
-        service_id: &ID,
+        service_id: &ServiceID,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -53,10 +53,10 @@ pub enum EngineError {
     IO(#[from] std::io::Error),
 
     #[error("Unknown Workflow {0} / {1}")]
-    UnknownWorkflow(ID, ID),
+    UnknownWorkflow(ServiceID, WorkflowID),
 
     #[error("Unknown Component {0}")]
-    UnknownComponent(ID),
+    UnknownComponent(ComponentID),
 
     #[error("Invalid Wasm bytecode")]
     InvalidWasmCode,
