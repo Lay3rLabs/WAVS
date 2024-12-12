@@ -14,6 +14,7 @@ pub trait Engine: Send + Sync {
     fn execute_queue(
         &self,
         component: &Component,
+        service_id: &ID,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError>;
@@ -31,10 +32,12 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
     fn execute_queue(
         &self,
         component: &Component,
+        service_id: &ID,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute_queue(component, request, timestamp)
+        self.as_ref()
+            .execute_queue(component, service_id, request, timestamp)
     }
 }
 
