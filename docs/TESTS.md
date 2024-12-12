@@ -1,35 +1,34 @@
-We have 3 levels of tests: unit, mock-integration, and e2e
+# Tests
+
+ There are currently three levels of tests: unit, mock-integration, and e2e. 
 
 Unit and mock-integration tests run with regular `cargo test`. e2e tests are more involved and are gated behind the `e2e_tests` and `e2e_tests_*` features.
 
-The logging level is set via `RUST_LOG` env var, see [LOGGING.md](./LOGGING.md) for more info 
+The logging level is set via `RUST_LOG` env var, see [LOGGING.md](../LOGGING.md) for more info 
 
 ## Unit tests
 
-These are generally written in the same file as the code they're testing
+These tests are generally written in the same file as the code that they are testing. 
 
-You can run them faster, skipping other tests, by running `cargo test --lib`
+You can run them faster, skipping other tests, by running `cargo test --lib`. 
 
 ## Mock-integration
 
 These are written in the `tests` folder and use mock structures to test both the whole flow (mock_e2e_*) and how different parts of the system connect.
 
-You can run them with `cargo test`
+You can run them with `cargo test`. 
 
 ## e2e (a.k.a. "on-chain")
 
-This is where it gets complicated. These tests require that a real chain be running, with the core contracts deployed, and then it tests live functionality by creating a service, submitting a task, and waiting for it to complete on-chain.
+End-to-end (e2e) testing is more complicated. These tests require that a real chain be running, with the core contracts deployed, and then it tests live functionality by creating a service, submitting a task, and waiting for it to be completed on-chain.
 
 ### Ethereum e2e tests
 
 There are various ways to get a real chain with the contracts deployed, the following is one workable approach.
 
-1. Follow the steps in [EIGENLAYER.md](./EIGENLAYER.md)
+1. Follow the steps in [EIGENLAYER.md](EIGENLAYER.md)
 2. Copy the wallet mnemonic to `WAVS_E2E_ETHEREUM_MNEMONIC` env var (probably to "test test test test test test test test test test test junk")
 3. `cargo test --features e2e_tests,e2e_tests_ethereum e2e_tests`
-
-
-
 
 ### Layer e2e tests
 
@@ -37,7 +36,7 @@ There are various ways to get a real chain with the contracts deployed, the foll
 
 First make sure you've cloned the [my-layer](https://github.com/Lay3rLabs/my-layer) and [avs-toolkit](https://github.com/Lay3rLabs/avs-toolkit) repos
 
-_Tip!_: It may be helpful to have 3 different terminals open: for this repo, `my-layer`, and `avs-toolkit`, since we will be running commands in each of them separately.
+_Tip!_: It may be helpful to have 3 different terminals open: one for this repo,  `my-layer`, and `avs-toolkit`, since we will be running commands in each of them separately.
 
 _Tip!_: For setting env vars, all the tooling is `.env` file aware, from wherever the command is run, so you can use that to set env vars if you prefer. 
 
