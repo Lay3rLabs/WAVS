@@ -3,7 +3,7 @@ use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
 use crate::apis::trigger::{
-    TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult,
+    TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
 use crate::apis::{IDError, ServiceID, WorkflowID};
 use crate::context::AppContext;
@@ -94,7 +94,7 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(receiver)
     }
 
-    fn add_trigger(&self, _trigger: TriggerData) -> Result<(), TriggerError> {
+    fn add_trigger(&self, _trigger: TriggerConfig) -> Result<(), TriggerError> {
         self.store_error()?;
 
         // MockTriggerManagerVec doesn't allow adding new triggers, since they need their data too
@@ -111,7 +111,7 @@ impl TriggerManager for MockTriggerManagerVec {
         self.triggers
             .write()
             .unwrap()
-            .retain(|t| t.trigger.service_id != service_id && t.trigger.workflow_id != workflow_id);
+            .retain(|t| t.config.service_id != service_id && t.config.workflow_id != workflow_id);
         Ok(())
     }
 
@@ -121,20 +121,20 @@ impl TriggerManager for MockTriggerManagerVec {
         self.triggers
             .write()
             .unwrap()
-            .retain(|t| t.trigger.service_id != service_id);
+            .retain(|t| t.config.service_id != service_id);
 
         Ok(())
     }
 
-    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerData>, TriggerError> {
+    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
         self.store_error()?;
 
         self.triggers
             .read()
             .unwrap()
             .iter()
-            .filter(|t| t.trigger.service_id == service_id)
-            .map(|t| Ok(t.trigger.clone()))
+            .filter(|t| t.config.service_id == service_id)
+            .map(|t| Ok(t.config.clone()))
             .collect()
     }
 }
@@ -145,7 +145,7 @@ pub struct MockTriggerManagerChannel {
     trigger_count: AtomicU64,
     sender: mpsc::Sender<TriggerAction>,
     receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
-    trigger_datas: Mutex<Vec<TriggerData>>,
+    trigger_datas: Mutex<Vec<TriggerConfig>>,
 }
 
 impl MockTriggerManagerChannel {
@@ -177,12 +177,9 @@ impl MockTriggerManagerChannel {
 
         self.sender
             .send(TriggerAction {
-                trigger: TriggerData::eth_queue(service_id, workflow_id, task_queue_addr.clone())
+                config: TriggerConfig::eth_queue(service_id, workflow_id, task_queue_addr.clone())
                     .unwrap(),
-                result: TriggerResult::queue(
-                    task_id,
-                    serde_json::to_string(data).unwrap().as_bytes(),
-                ),
+                data: TriggerData::queue(task_id, serde_json::to_string(data).unwrap().as_bytes()),
             })
             .await
             .unwrap();
@@ -197,7 +194,7 @@ impl TriggerManager for MockTriggerManagerChannel {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn add_trigger(&self, trigger: TriggerData) -> Result<(), TriggerError> {
+    fn add_trigger(&self, trigger: TriggerConfig) -> Result<(), TriggerError> {
         self.trigger_datas.lock().unwrap().push(trigger);
         Ok(())
     }
@@ -225,7 +222,7 @@ impl TriggerManager for MockTriggerManagerChannel {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerData>, TriggerError> {
+    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
         let triggers = self.trigger_datas.lock().unwrap();
         let triggers = triggers
             .iter()
@@ -241,7 +238,7 @@ mod tests {
 
     use lavs_apis::id::TaskId;
 
-    use crate::{apis::trigger::TriggerResult, test_utils::address::rand_address_eth};
+    use crate::{apis::trigger::TriggerData, test_utils::address::rand_address_eth};
 
     use super::*;
 
@@ -251,16 +248,16 @@ mod tests {
 
         let actions = vec![
             TriggerAction {
-                trigger: TriggerData::eth_queue("service1", "workflow1", task_queue_addr.clone())
+                config: TriggerConfig::eth_queue("service1", "workflow1", task_queue_addr.clone())
                     .unwrap(),
-                result: TriggerResult::Queue {
+                data: TriggerData::Queue {
                     task_id: TaskId::new(2),
                     payload: "foobar".into(),
                 },
             },
             TriggerAction {
-                trigger: TriggerData::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
-                result: TriggerResult::Queue {
+                config: TriggerConfig::eth_queue("service2", "workflow2", task_queue_addr).unwrap(),
+                data: TriggerData::Queue {
                     task_id: TaskId::new(4),
                     payload: "zoomba".into(),
                 },
@@ -280,7 +277,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = TriggerConfig::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -291,7 +288,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerData::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = TriggerConfig::eth_queue("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }

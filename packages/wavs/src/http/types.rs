@@ -3,7 +3,7 @@ use std::{fmt, ops::Deref, str::FromStr};
 use layer_climb::prelude::*;
 use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{apis::Trigger, Digest};
+use crate::{apis::trigger::Trigger, Digest};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

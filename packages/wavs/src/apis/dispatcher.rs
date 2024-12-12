@@ -4,7 +4,9 @@ use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    submission::ChainMessage, trigger::TriggerAction, ComponentID, ServiceID, Trigger, WorkflowID,
+    submission::ChainMessage,
+    trigger::{Trigger, TriggerAction},
+    ComponentID, ServiceID, WorkflowID,
 };
 use crate::{context::AppContext, Digest};
 

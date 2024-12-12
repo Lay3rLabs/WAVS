@@ -1,7 +1,9 @@
 use crate::{
     apis::{
-        trigger::{TriggerAction, TriggerData, TriggerError, TriggerManager, TriggerResult},
-        EthHelloWorldTaskRlp, ServiceID, Trigger, WorkflowID,
+        trigger::{
+            Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
+        },
+        EthHelloWorldTaskRlp, ServiceID, WorkflowID,
     },
     config::Config,
     context::AppContext,
@@ -38,7 +40,7 @@ pub struct CoreTriggerManager {
 
 struct LookupMaps {
     /// single lookup for all triggers (in theory, can be more than just task queue addr)
-    pub all_trigger_data: Arc<RwLock<BTreeMap<LookupId, TriggerData>>>,
+    pub all_trigger_data: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
     /// lookup id by task queue address
     pub triggers_by_task_queue: Arc<RwLock<HashMap<Address, LookupId>>>,
     /// lookup id by service id -> workflow id
@@ -309,8 +311,8 @@ impl CoreTriggerManager {
             Ok(trigger) => {
                 action_sender
                     .send(TriggerAction {
-                        trigger,
-                        result: TriggerResult::Queue { task_id, payload },
+                        config: trigger,
+                        data: TriggerData::Queue { task_id, payload },
                     })
                     .await
                     .unwrap();
@@ -348,7 +350,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn add_trigger(&self, data: TriggerData) -> Result<(), TriggerError> {
+    fn add_trigger(&self, data: TriggerConfig) -> Result<(), TriggerError> {
         // get the next lookup id
         let lookup_id = self
             .lookup_maps
@@ -455,7 +457,7 @@ impl TriggerManager for CoreTriggerManager {
     fn list_triggers(
         &self,
         service_id: crate::apis::ServiceID,
-    ) -> Result<Vec<TriggerData>, TriggerError> {
+    ) -> Result<Vec<TriggerConfig>, TriggerError> {
         let mut triggers = Vec::new();
 
         let triggers_by_service_workflow_lock = self
@@ -481,7 +483,7 @@ impl TriggerManager for CoreTriggerManager {
 }
 
 fn remove_trigger_data(
-    all_trigger_data: &mut BTreeMap<usize, TriggerData>,
+    all_trigger_data: &mut BTreeMap<usize, TriggerConfig>,
     triggers_by_task_queue: &mut HashMap<Address, LookupId>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
@@ -514,8 +516,8 @@ fn remove_trigger_data(
 mod tests {
     use crate::{
         apis::{
-            trigger::{TriggerData, TriggerManager},
-            ServiceID, Trigger, WorkflowID,
+            trigger::{Trigger, TriggerConfig, TriggerManager},
+            ServiceID, WorkflowID,
         },
         config::{ChainConfigs, Config, CosmosChainConfig, EthereumChainConfig},
         test_utils::address::rand_address_eth,
@@ -575,16 +577,16 @@ mod tests {
         let task_queue_addr_2_2 = rand_address_eth();
 
         let trigger_1_1 =
-            TriggerData::eth_queue(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
+            TriggerConfig::eth_queue(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
                 .unwrap();
         let trigger_1_2 =
-            TriggerData::eth_queue(&service_id_1, &workflow_id_2, task_queue_addr_1_2.clone())
+            TriggerConfig::eth_queue(&service_id_1, &workflow_id_2, task_queue_addr_1_2.clone())
                 .unwrap();
         let trigger_2_1 =
-            TriggerData::eth_queue(&service_id_2, &workflow_id_1, task_queue_addr_2_1.clone())
+            TriggerConfig::eth_queue(&service_id_2, &workflow_id_1, task_queue_addr_2_1.clone())
                 .unwrap();
         let trigger_2_2 =
-            TriggerData::eth_queue(&service_id_2, &workflow_id_2, task_queue_addr_2_2.clone())
+            TriggerConfig::eth_queue(&service_id_2, &workflow_id_2, task_queue_addr_2_2.clone())
                 .unwrap();
 
         manager.add_trigger(trigger_1_1).unwrap();
