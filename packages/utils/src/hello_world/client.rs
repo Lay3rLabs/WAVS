@@ -96,10 +96,12 @@ impl HelloWorldSimpleClient {
 
     pub async fn sign_task(&self, name: &str) -> Result<Vec<u8>> {
         let message = format!("Hello, {name}");
-        let message_hash = eip191_hash_message(keccak256(message.abi_encode_packed()));
-        // TODO: Sign hash or sign message?
-        let operator_signature =
-            DynSolValue::Bytes(self.eth.signer.sign_hash_sync(&message_hash)?.into());
+        let operator_signature = DynSolValue::Bytes(
+            self.eth
+                .signer
+                .sign_message_sync(keccak256(message.abi_encode_packed()).as_slice())?
+                .into(),
+        );
 
         let operator = DynSolValue::Address(self.eth.address());
         let reference_block = self.eth.http_provider.get_block_number().await?;
