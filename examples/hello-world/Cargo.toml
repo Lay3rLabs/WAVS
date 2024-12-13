@@ -8,7 +8,9 @@ repository.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-alloy-rlp = { workspace = true }
+alloy-primitives = {workspace = true} 
+alloy-sol-macro = {workspace = true} 
+alloy-sol-types = {workspace = true} 
 layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", version = "0.1.1" }
 wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
 url = "2.5.3"
@@ -25,6 +27,13 @@ lto = true
 
 [package.metadata.component]
 package = "component:hello-world"
-target = "lay3r:avs/task-queue@0.3.0"
 
-[package.metadata.component.dependencies]
+[package.metadata.component.target]
+path = "../../wit"
+world = "hello-world-world"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = "=0.2.0"
+"wasi:clocks" = "=0.2.0"
+"wasi:http" = "=0.2.0"
+"wasi:random" = "=0.2.0"

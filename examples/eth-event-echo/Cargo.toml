@@ -28,7 +28,7 @@ package = "component:eth-event-echo"
 
 [package.metadata.component.target]
 path = "../../wit"
-world = "eth-event"
+world = "eth-event-world"
 
 [package.metadata.component.target.dependencies]
 "wasi:io" = "=0.2.0"

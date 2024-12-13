@@ -138,14 +138,14 @@ mod e2e {
                             }
                         };
 
-                        let eth_event_echo_wasm_digest =
-                            std::env::var("WAVS_E2E_ETH_EVENT_ECHO_WASM_DIGEST");
+                        let hello_world_wasm_digest =
+                            std::env::var("WAVS_E2E_HELLO_WORLD_WASM_DIGEST");
 
-                        let eth_event_echo_wasm_digest: Digest = match eth_event_echo_wasm_digest {
+                        let hello_world_wasm_digest: Digest = match hello_world_wasm_digest {
                             Ok(digest) => digest.parse().unwrap(),
                             Err(_) => {
                                 let wasm_bytes =
-                                    include_bytes!("../../../components/eth_event_echo.wasm");
+                                    include_bytes!("../../../components/hello_world.wasm");
                                 http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
                             }
                         };
@@ -160,7 +160,7 @@ mod e2e {
                                     anvil.unwrap(),
                                     http_client,
                                     config,
-                                    eth_event_echo_wasm_digest,
+                                    hello_world_wasm_digest,
                                 )
                                 .await
                             }

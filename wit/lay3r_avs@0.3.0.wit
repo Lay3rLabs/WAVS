@@ -1,6 +1,13 @@
 package lay3r:avs@0.3.0;
 
-interface types {
+use wasi:io/poll@0.2.0;
+use wasi:clocks/monotonic-clock@0.2.0;
+use wasi:io/error@0.2.0;
+use wasi:io/streams@0.2.0;
+use wasi:http/types@0.2.0 as http-types;
+use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
+
+interface task-queue-types {
   /// serialized json, avs wasi and lay3r contract must agree on the types
   /// the runner is agnostic to the data format
   type serialized-json = list<u8>;
@@ -14,38 +21,13 @@ interface types {
   type output = result<serialized-json, error>;
 }
 
-world task-queue {
-  import wasi:io/poll@0.2.0;
-  import wasi:clocks/monotonic-clock@0.2.0;
-  import wasi:io/error@0.2.0;
-  import wasi:io/streams@0.2.0;
-  import wasi:http/types@0.2.0;
-  import wasi:http/outgoing-handler@0.2.0;
-  use types.{task-queue-input, output};
+world task-queue-world {
+  use task-queue-types.{task-queue-input, output};
 
   export run-task: func(request: task-queue-input) -> output;
 }
 
-world cron-job {
-  import wasi:io/poll@0.2.0;
-  import wasi:clocks/monotonic-clock@0.2.0;
-  import wasi:io/error@0.2.0;
-  import wasi:io/streams@0.2.0;
-  import wasi:http/types@0.2.0;
-  import wasi:http/outgoing-handler@0.2.0;
-  use types.{output};
-
-  export run-cron: func() -> output;
-}
-
-world eth-event {
-  import wasi:io/poll@0.2.0;
-  import wasi:clocks/monotonic-clock@0.2.0;
-  import wasi:io/error@0.2.0;
-  import wasi:io/streams@0.2.0;
-  import wasi:http/types@0.2.0;
-  import wasi:http/outgoing-handler@0.2.0;
-
+interface eth-event-types {
   // An alloy log can be recreated with the info here 
   // block height is extra
   record eth-log {
@@ -56,8 +38,26 @@ world eth-event {
     // the raw log data that can be decoded into an event
     log-data: list<u8>,
   }
+}
 
-  type eth-output = list<u8>;
+world eth-event-world {
+  use eth-event-types.{eth-log};
 
-  export process-eth-event: func(log: eth-log) -> result<eth-output, string>;
+  export process-eth-event: func(log: eth-log) -> result<list<u8>, string>;
+}
+
+interface hello-world-types {
+  record response {
+    message-hash: list<u8>,
+    task-name: string,
+    task-created-block: u32,
+    task-index: u32,
+  }
+}
+
+world hello-world-world {
+  use eth-event-types.{eth-log};
+  use hello-world-types.{response};
+
+  export process-eth-event: func(log: eth-log) -> result<response, string>;
 }

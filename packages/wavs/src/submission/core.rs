@@ -9,11 +9,10 @@ use crate::{
         submission::{ChainMessage, Submission, SubmissionError},
         trigger::Trigger,
     },
+    bindings::hello_world::temp_deserialize_hello_world_component_response,
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     AppContext,
 };
-use alloy::{primitives::Log, sol_types::SolEvent};
-use alloy_rlp::{Decodable, RlpDecodable};
 use lavs_apis::{id::TaskId, verifier_simple::ExecuteMsg as VerifierExecuteMsg};
 use layer_climb::prelude::*;
 use reqwest::Url;
@@ -385,47 +384,26 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
-                                            #[derive(RlpDecodable)]
-                                            pub struct EthOutput {
-                                                pub address: Vec<u8>,
-                                                pub log_topics: Vec<Vec<u8>>,
-                                                pub log_data: Vec<u8>,
-                                            }
+                                            // The Hello world contract needs to know about the Task in its API for some reason
+                                            // this will eventually get more generic
+                                            let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
 
-                                            let EthOutput { address, log_topics, log_data } = match EthOutput::decode(&mut msg.wasm_result.as_slice()) {
-                                                Ok(output) => output,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to parse wasm result into rlp event output: {:?}", e);
-                                                    continue;
-                                                },
-                                            };
-
-                                            let address = alloy::primitives::Address::from_slice(address.as_slice());
-                                            let log_topics = log_topics.into_iter().map(|t| alloy::primitives::FixedBytes::<32>::from_slice(t.as_slice())).collect();
-                                            let log = match Log::new(address, log_topics, log_data.into()) {
-                                                Some(log) => log,
-                                                None => {
-                                                    tracing::error!("Failed to create log from rlp event output");
-                                                    continue;
-                                                }
-                                            };
-
-                                            // This part is all specific to hello-world submission
-                                            // TODO: Make this more generic
-                                            let hello_world_event = match NewTaskCreated::decode_log(&log, false) {
-                                                Ok(log) => log.data,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to parse log data into NewTaskCreated event: {:?}", e);
-                                                    continue;
-                                                }
+                                            let task = Task {
+                                                name: response.task_name,
+                                                taskCreatedBlock: response.task_created_block,
                                             };
 
                                             let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
 
-                                            let task_index = hello_world_event.taskIndex;
-                                            match avs_client.sign_and_submit_task(hello_world_event.task, task_index).await {
+                                            // but at least we can check the hash for now and not submit if it changed :D
+                                            if avs_client.message_hash(&task.name).to_vec() != response.message_hash {
+                                                tracing::error!("Message hash mismatch");
+                                                continue;
+                                            }
+
+                                            match avs_client.sign_and_submit_task(task, response.task_index).await {
                                                 Ok(_) => {
-                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, response.task_index);
                                                 },
                                                 Err(e) => {
                                                     tracing::error!("Submission failed: {:?}", e);
