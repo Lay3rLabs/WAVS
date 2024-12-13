@@ -147,8 +147,9 @@ impl<S: CAStorage> WasmEngine<S> {
     where
         F: std::future::Future<Output = T>,
     {
-        // This feels like an ugly hack.
-        // I cannot figure out how to add wasi http support and keep this sync
+        // Is this necessary? It's a very nuanced and hairy question... see https://github.com/Lay3rLabs/WAVS/issues/224 for details
+        // In the meantime, it's reasonable and maybe even optimal even *IF* it's not 100% strictly necessary.
+        // TODO: revisit when we have the capability for properly testing throughput under load in different scenarios
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
