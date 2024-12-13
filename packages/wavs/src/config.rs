@@ -212,7 +212,7 @@ pub struct EthereumChainConfig {
     pub chain_id: String,
     pub ws_endpoint: String,
     pub http_endpoint: String,
-    pub aggregator_endpoint: String,
+    pub aggregator_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
     /// mnemonic for the submission client (usually leave this as None and override in env)
     pub submission_mnemonic: Option<String>,

@@ -47,4 +47,6 @@ pub enum SubmissionError {
     MissingEthereumChain,
     #[error("cross-chain submissions are not supported yet")]
     NoCrossChainSubmissions,
+    #[error("missing aggregator endpoint")]
+    MissingAggregatorEndpoint,
 }

@@ -4,6 +4,7 @@
 use crate::{
     alloy_helpers::SolidityEventFinder,
     eth_client::{AddTaskRequest, EthSigningClient},
+    hello_world::solidity_types::hello_world::HelloWorldServiceManager::TaskResponded,
 };
 
 use super::{
@@ -16,12 +17,12 @@ use super::{
 
 use alloy::{
     dyn_abi::DynSolValue,
-    primitives::{eip191_hash_message, keccak256, Address, U256},
+    primitives::{keccak256, Address, FixedBytes, U256},
     providers::Provider,
     signers::SignerSync,
     sol_types::{SolCall, SolValue},
 };
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 
 impl HelloWorldFullClient {
     pub fn into_simple(self) -> HelloWorldSimpleClient {
@@ -64,6 +65,51 @@ impl HelloWorldSimpleClient {
             .solidity_event()
             .context("Not found new task creation event")?;
         Ok(new_task_created)
+    }
+
+    pub async fn sign_and_submit_task(
+        &self,
+        task: Task,
+        task_index: u32,
+    ) -> Result<FixedBytes<32>> {
+        tracing::debug!("Signing and responding to task index {}", task_index);
+
+        let signature = self.sign_task(&task.name).await?;
+
+        self.submit_task(task, task_index, signature).await
+    }
+
+    pub async fn submit_task(
+        &self,
+        task: Task,
+        task_index: u32,
+        signature: Vec<u8>,
+    ) -> Result<FixedBytes<32>> {
+        let contract =
+            HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
+
+        let receipt = contract
+            .respondToTask(task, task_index, signature.into())
+            .gas(500000)
+            .send()
+            .await?
+            .get_receipt()
+            .await?;
+
+        ensure!(receipt.status(), "Failed to submit task");
+
+        let task_responded: TaskResponded = receipt
+            .solidity_event()
+            .context("Expected TaskResponded event")?;
+        tracing::debug!(
+            "Responded to a task: {}, by {}",
+            task_responded.taskIndex,
+            task_responded.operator
+        );
+
+        let tx_hash = receipt.transaction_hash;
+
+        Ok(tx_hash)
     }
 
     pub async fn task_request(&self, task: Task, task_index: u32) -> Result<AddTaskRequest> {

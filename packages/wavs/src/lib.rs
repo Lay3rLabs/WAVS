@@ -23,13 +23,12 @@ use std::sync::Arc;
 /// Entry point to start up the whole server
 /// Called from main and end-to-end tests
 pub fn run_server(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatcher>) {
-    ctrlc::set_handler({
+    let _ = ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {
             ctx.kill();
         }
-    })
-    .unwrap();
+    });
 
     // start the http server in its own thread
     let server_handle = std::thread::spawn({

@@ -190,11 +190,21 @@ mod e2e {
         wasm_digest: Digest,
     ) {
         tracing::info!("Running e2e ethereum tests");
+        let chain_config = config
+            .chains
+            .eth
+            .get(config.chain.as_ref().unwrap())
+            .unwrap();
+        let with_aggregator = chain_config.aggregator_endpoint.is_some();
 
         let app = EthTestApp::new(config, anvil).await;
 
         let service_id = ServiceID::new("test-service").unwrap();
 
+        let submit_msg = match with_aggregator {
+            true => Submit::EthAggregatorTx {},
+            false => Submit::EthSignedMessage { hd_index: 0 },
+        };
         http_client
             .create_service(
                 service_id.clone(),
@@ -205,7 +215,7 @@ mod e2e {
                         .hello_world_service_manager
                         .into(),
                 )),
-                Submit::EthSignedMessage { hd_index: 0 },
+                submit_msg,
             )
             .await
             .unwrap();

@@ -69,7 +69,7 @@ impl ChainCosmosSubmission {
 #[derive(Clone)]
 struct ChainEthSubmission {
     client_config: EthClientConfig,
-    aggregator_url: Url,
+    aggregator_url: Option<Url>,
     faucet_url: Option<Url>,
 }
 
@@ -78,7 +78,9 @@ impl ChainEthSubmission {
     fn new(config: EthereumChainConfig) -> Result<Self, SubmissionError> {
         let aggregator_url = config
             .aggregator_endpoint
-            .parse()
+            .as_ref()
+            .map(|endpoint| endpoint.parse())
+            .transpose()
             .map_err(SubmissionError::FaucetUrl)?;
         let client_config = config.into();
 
@@ -263,7 +265,13 @@ impl CoreSubmission {
         client: &EthSigningClient,
         task: &AddTaskRequest,
     ) -> Result<AddTaskResponse, SubmissionError> {
-        let aggregator_app_url = self.get_eth_chain()?.aggregator_url.join("/app").unwrap();
+        let aggregator_app_url = self
+            .get_eth_chain()?
+            .aggregator_url
+            .as_ref()
+            .ok_or(SubmissionError::MissingAggregatorEndpoint)?
+            .join("/app")
+            .unwrap();
         let response = self
             .http_client
             .post(aggregator_app_url)
@@ -314,7 +322,20 @@ impl Submission for CoreSubmission {
                                     Some(client)
                                 },
                                 Submit::EthAggregatorTx{} => {
-                                    None
+                                    let hd_index = 0;
+                                    let client = match _self.get_eth_client(hd_index).await {
+                                        Ok(client) => client,
+                                        Err(e) => {
+                                            tracing::error!("Failed to get client: {:?}", e);
+                                            continue;
+                                        }
+                                    };
+
+                                    if let Err(err) = _self.maybe_tap_eth_faucet(&client).await {
+                                        tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.address(), hd_index, err);
+                                    }
+
+                                    Some(client)
                                 },
                                 Submit::LayerVerifierTx { .. } => {
                                     None
@@ -388,6 +409,59 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
+                                            match avs_client.sign_and_submit_task(task, task_index).await {
+                                                Ok(_) => {
+                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                                },
+                                                Err(e) => {
+                                                    tracing::error!("Submission failed: {:?}", e);
+                                                }
+                                            }
+                                        },
+                                    }
+                                },
+                                Submit::EthAggregatorTx{} => {
+                                    match msg.trigger_config.trigger  {
+                                        Trigger::LayerQueue { .. } => {
+                                            tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
+                                            continue;
+                                        },
+                                        Trigger::EthQueue { task_queue_addr } => {
+                                            let eth_client = eth_client.unwrap();
+
+                                            let contract_address = match task_queue_addr {
+                                                Address::Eth(addr) => {
+                                                    addr.as_bytes().into()
+                                                },
+                                                Address::Cosmos { .. } => {
+                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", task_queue_addr);
+                                                    continue;
+                                                }
+                                            };
+
+                                            let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
+
+                                            let task = match EthHelloWorldTaskRlp::decode(&mut msg.wasm_result.as_slice()) {
+                                                Ok(task) => task,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to parse wasm result into rlp value: {:?}", e);
+                                                    continue;
+                                                },
+                                            };
+
+                                            let task = HelloWorldTask {
+                                                name: task.name,
+                                                taskCreatedBlock: task.created_block,
+                                            };
+
+                                            let task_index = match msg.task_id.u64().try_into() {
+                                                Ok(task_index) => task_index,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to convert task id to u32: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+
                                             // Generate request if possible
                                             let request = match avs_client.task_request(task, task_index).await {
                                                 Ok(request) => {
@@ -413,9 +487,6 @@ impl Submission for CoreSubmission {
                                             }
                                         },
                                     }
-                                },
-                                Submit::EthAggregatorTx{} => {
-                                    tracing::warn!("Aggregator submission not implemented yet!");
                                 },
                                 Submit::LayerVerifierTx { verifier_addr, ..} => {
                                     match msg.trigger_config.trigger {
