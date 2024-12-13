@@ -1,3 +1,5 @@
+# Logging
+
 Logging uses the `tracing` crate and sets filters via the EnvFilter directives
 
 Details on the full syntax are covered in the tracing cargo docs: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#filtering-with-span-field-values

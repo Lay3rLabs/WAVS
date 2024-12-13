@@ -3,7 +3,7 @@
 ```mermaid
 ---
 config:
-  look: classic 
+  look: classic
   theme: neutral
 ---
 flowchart TB
@@ -49,7 +49,7 @@ flowchart TB
   classDef grey fill:#bfbfbf
 ```
 
-## Channel kinds 
+## Channel kinds
 
 1. Crossbeam channels for sending to sync contexts (every non-http subsystem, in its own thread)
 2. Tokio channels for sending to async contexts (http-server)

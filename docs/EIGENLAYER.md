@@ -2,7 +2,7 @@
 
 ## Requirements
 
-Before using Eigenlayer ensure you have the following tools installed:
+Before using Eigenlayer, ensure you have the following tools installed:
 
 1. **Foundry**
    Foundry is needed for contract development, compilation, and testing. It includes:
