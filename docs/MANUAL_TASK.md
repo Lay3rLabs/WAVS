@@ -1,25 +1,25 @@
 ## Run a task manually
 
-This guide shows you how to run WAVS locally and manually add a task manually using the hello-world AVS example. 
+This guide shows you how to run WAVS locally and manually add a task manually using the hello-world AVS example.
 
-**Note**: Before starting this guide, you'll need to follow the steps in the [Quickstart guide](../QUICKSTART.md) first. Make sure your `/wavs-data` directory is empty before starting this guide. 
+**Note**: Before starting this guide, you'll need to follow the steps in the [Quickstart guide](./QUICKSTART.md) first. Make sure your `/wavs-data` directory is empty before starting this guide.
 
 ## Start Anvil
 
-Open a new terminal and run the following command to start Anvil: 
+Open a new terminal and run the following command to start Anvil:
 
 ```bash
-Anvil
+anvil
 ```
 
-Your local chain will start running. Keep this terminal open. 
+Your local chain will start running. Keep this terminal open.
 
 ## Start WAVS
 
 
-1. Open a second terminal in the `packages/wavs` directory of the WAVS repo. 
+1. Open a second terminal in the `packages/wavs` directory of the WAVS repo.
 
-Note: Your `.env` file should already be present from when you ran the [Quickstart guide](../QUICKSTART.md). 
+Note: Your `.env` file should already be present from when you ran the [Quickstart guide](./QUICKSTART.md).
 
 2. Start WAVS by running the following command:
 
@@ -27,24 +27,24 @@ Note: Your `.env` file should already be present from when you ran the [Quicksta
 cargo run
 ```
 
-WAVS should be running. Keep this terminal open. 
+WAVS should be running. Keep this terminal open.
 
 ## Deploy contracts and add a task
 
-1. Open a third terminal in the `packages/cli` directory of the WAVS repo. 
+1. Open a third terminal in the `packages/cli` directory of the WAVS repo.
 
-**Note**: Your `.env` file should already be present from when you ran the [Quickstart guide](../QUICKSTART.md). 
+**Note**: Your `.env` file should already be present from when you ran the [Quickstart guide](./QUICKSTART.md).
 
 
-2. Run the following command to deploy the necessary service contracts. 
+2. Run the following command to deploy the necessary service contracts.
 
 ```
 cargo run deploy-all --wavs
-``` 
+```
 
 This command deploys all of the necessary contracts for the hello-world AVS without adding a task.
 
-The output of your terminal should look like the following: 
+The output of your terminal should look like the following:
 
 ```
 --- HELLO WORLD DIGEST ---
@@ -79,6 +79,6 @@ CLI_EIGEN_SERVICE_STAKE_TOKEN="0x66F625B8c4c635af8b74ECe2d7eD0D58b4af3C3d"
 cargo run add-task --contract-address="<service-manager-address>" --wavs
 ```
 
-This will add a task to be run. If the task has been run successfully, you will see a task response hash in your terminal. 
+This will add a task to be run. If the task has been run successfully, you will see a task response hash in your terminal.
 
-If you submit a task without WAVS running, you'll notice that the task will time out and no result will be submitted onchain. 
+If you submit a task without WAVS running, you'll notice that the task will time out and no result will be submitted onchain.

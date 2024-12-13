@@ -10,7 +10,7 @@ By default, the operator API will be listen on `http://0.0.0.0:8081`.
 
 ### Authoring new applicatons
 
-See [authoring components doc](docs/AUTHORING_COMPONENTS.md).
+See [authoring components doc](./AUTHORING_COMPONENTS.md).
 
 ### Using the Operator API
 

@@ -48,7 +48,7 @@ cargo component build
 ```
 
 It is helpful to add the `layer-wasi` crate to make outgoing HTTP requests easily. See the
-[oracle example](https://github.com/Lay3rLabs/example-avs-oracle/tree/main/oracle-example).
+[oracle example](https://github.com/Lay3rLabs/example-avs-oracle/tree/main/wasi/oracle-example).
 
 
 ```bash
@@ -56,7 +56,7 @@ cargo add --git https://github.com/Lay3rLabs/example-avs-oracle layer-wasi
 ```
 
 Then start developing your application. Start by editing the `src/lib.rs` file. Also, see
-the [oracle example](https://github.com/Lay3rLabs/example-avs-oracle/tree/main/oracle-example)
+the [oracle example](https://github.com/Lay3rLabs/example-avs-oracle/tree/main/wasi/oracle-example)
 and [square example](https://github.com/Lay3rLabs/avs-toolkit/tree/main/wasi/square).
 
 
