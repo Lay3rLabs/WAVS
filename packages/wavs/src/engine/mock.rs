@@ -74,7 +74,7 @@ impl Engine for MockEngine {
         _service_id: &ServiceID,
         log: Log,
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(log.inner.data.split().1.to_vec())
+        Ok(log.inner.data.data.to_vec())
     }
 }
 
