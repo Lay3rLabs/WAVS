@@ -1,4 +1,4 @@
-use alloy::sol_types::SolCall;
+use alloy::{primitives::Bytes, sol_types::SolCall};
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
     eth_client::{AddTaskRequest, AddTaskResponse},
@@ -24,10 +24,10 @@ pub async fn handle_add_message(
 pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTaskResponse> {
     let task = Task::new(req.operator, req.new_data, req.signature);
     let key = (req.task_id, req.service);
-    let mut tasks = state.load(&key);
-    tasks.push(task);
+    let mut queue = state.load(&key);
+    queue.push(task);
 
-    if tasks.len() >= state.config.tasks_quorum as usize {
+    if queue.len() >= state.config.tasks_quorum as usize {
         let eth_client = state.config.signing_client().await?;
         // TODO: decide how to batch it. It seems like a complex topic with many options
         // Current options require something from node, extra contract dependency or uncertainty
@@ -36,29 +36,35 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
         //      non-official implementation: https://crates.io/crates/alloy-multicall (there is no send, how to even use it)
         // - trace_call_many, check note: https://docs.rs/alloy/0.8.0/alloy/providers/ext/trait.TraceApi.html#tymethod.trace_call_many
         // - Use eip-7702, doubt it's possible to do exactly what we're trying to achieve here
+        // ✅(currently implemented) Add respond many on AVS endpoint
 
-        // Send "batch" txs
+        // Send batch txs
         let hello_world_service = HelloWorldServiceManager::new(key.1, &eth_client.http_provider);
-        let mut txs = Vec::with_capacity(tasks.len());
-        for task in tasks {
-            let mut call =
-                HelloWorldServiceManager::respondToTaskCall::abi_decode(&task.data, true)?;
-            call.signature = task.signature.clone().into();
-            let pending_tx = hello_world_service.call_builder(&call).send().await?;
-            txs.push(pending_tx);
+        let mut tasks = vec![];
+        let mut indexes = vec![];
+        let mut signatures = vec![];
+        for item in queue {
+            let call = HelloWorldServiceManager::respondToTaskCall::abi_decode(&item.data, true)?;
+            tasks.push(call.task);
+            indexes.push(call.referenceTaskIndex);
+            signatures.push(Bytes::from(item.signature));
         }
-        let tx_hashes: Vec<_> = txs.iter().map(|tx| tx.tx_hash().to_owned()).collect();
-        tracing::debug!("Sent transactions: {tx_hashes:?}");
 
-        let mut last_tx = None;
-        for pending_tx in txs {
-            last_tx = Some(pending_tx.watch().await?);
-        }
+        let pending_tx = hello_world_service
+            .respondToTasks(tasks, indexes, signatures)
+            .send()
+            .await?;
+        let tx_hash = pending_tx.tx_hash();
+        tracing::debug!("Sent transaction: {}", tx_hash);
+
+        let tx_hash = pending_tx.watch().await?;
         tracing::debug!("Transactions included in a block");
         state.remove(&key);
-        Ok(AddTaskResponse { hash: last_tx })
+        Ok(AddTaskResponse {
+            hash: Some(tx_hash),
+        })
     } else {
-        state.save(key, tasks);
+        state.save(key, queue);
         Ok(AddTaskResponse { hash: None })
     }
 }
