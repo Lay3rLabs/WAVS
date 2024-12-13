@@ -107,4 +107,19 @@ contract HelloWorldServiceManager is
         // emitting event
         emit TaskResponded(referenceTaskIndex, task, msg.sender);
     }
+
+    /// Same as respondToTask but in a loop
+    function respondToTasks(
+        Task[] calldata tasks,
+        uint32[] calldata referenceTaskIndexes,
+        bytes[] memory signatures
+    ) external {
+        for (uint i = 0; i < tasks.length; i++) {
+            HelloWorldServiceManager(address(this)).respondToTask(
+                tasks[i],
+                referenceTaskIndexes[i],
+                signatures[i]
+            );
+        }
+    }
 }

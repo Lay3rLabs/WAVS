@@ -41,13 +41,23 @@ impl HelloWorldSimpleClient {
     }
 
     pub async fn task_responded_hash(&self, task_index: u32) -> Result<Vec<u8>> {
-        let resp = self
+        let mut resp = self
             .contract
             .allTaskResponses(self.eth.address(), task_index)
             .call()
             .await
             .context("Failed to query task responses")?
             ._0;
+        // If response is empty, check for self multicall
+        if resp.is_empty() {
+            resp = self
+                .contract
+                .allTaskResponses(self.contract_address, task_index)
+                .call()
+                .await
+                .context("Failed to query task responses")?
+                ._0;
+        }
 
         Ok(resp.to_vec())
     }

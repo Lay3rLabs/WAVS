@@ -27,4 +27,10 @@ interface IHelloWorldServiceManager {
         uint32 referenceTaskIndex,
         bytes calldata signature
     ) external;
+
+    function respondToTasks(
+        Task[] calldata tasks,
+        uint32[] calldata referenceTaskIndexes,
+        bytes[] calldata signatures
+    ) external;
 }
