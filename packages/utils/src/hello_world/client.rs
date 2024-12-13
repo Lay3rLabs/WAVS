@@ -92,6 +92,32 @@ impl HelloWorldSimpleClient {
         let batch_signature = Self::batch_signature(signature, self.eth.address(), reference_block);
 
         self.submit_task(task, task_index, batch_signature).await
+        self.submit_task(task, task_index, signature).await
+    }
+
+    pub fn message_hash(&self, name: &str) -> FixedBytes<32> {
+        let message = format!("Hello, {}", name);
+        eip191_hash_message(keccak256(message.abi_encode_packed()))
+    }
+
+    pub async fn sign_task_result(&self, name: &str) -> Result<Vec<u8>> {
+        let message_hash = self.message_hash(name);
+        // TODO: Sign hash or sign message?
+        let operators: Vec<DynSolValue> = vec![DynSolValue::Address(self.eth.address())];
+        let signature: Vec<DynSolValue> = vec![DynSolValue::Bytes(
+            self.eth.signer.sign_hash_sync(&message_hash)?.into(),
+        )];
+
+        let current_block = U256::from(self.eth.http_provider.get_block_number().await?);
+
+        let signed_task = DynSolValue::Tuple(vec![
+            DynSolValue::Array(operators),
+            DynSolValue::Array(signature),
+            DynSolValue::Uint(current_block, 32),
+        ])
+        .abi_encode_params();
+
+        Ok(signed_task)
     }
 
     pub async fn submit_task(
