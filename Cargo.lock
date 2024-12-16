@@ -66,6 +66,7 @@ dependencies = [
  "serde",
  "serde_json",
  "temp-env",
+ "tempfile",
  "thiserror",
  "tokio",
  "tower-http",
