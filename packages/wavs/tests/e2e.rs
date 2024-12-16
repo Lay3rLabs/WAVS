@@ -190,24 +190,31 @@ mod e2e {
         wasm_digest: Digest,
     ) {
         tracing::info!("Running e2e ethereum tests");
-        let chain_config = config
-            .chains
-            .eth
-            .get(config.chain.as_ref().unwrap())
-            .unwrap();
-        let with_aggregator = chain_config.aggregator_endpoint.is_some();
 
         let app = EthTestApp::new(config, anvil).await;
 
-        let service_id = ServiceID::new("test-service").unwrap();
+        let service1_id = ServiceID::new("test-1-service").unwrap();
+        let service2_id = ServiceID::new("test-2-service").unwrap();
 
-        let submit_msg = match with_aggregator {
-            true => Submit::EthAggregatorTx {},
-            false => Submit::EthSignedMessage { hd_index: 0 },
-        };
         http_client
             .create_service(
-                service_id.clone(),
+                service1_id.clone(),
+                wasm_digest.clone(),
+                Address::Eth(AddrEth::new(
+                    app.avs_client
+                        .hello_world
+                        .hello_world_service_manager
+                        .into(),
+                )),
+                Submit::EthSignedMessage { hd_index: 0 },
+            )
+            .await
+            .unwrap();
+        tracing::info!("Service created: {}, submitting task...", service1_id);
+
+        http_client
+            .create_service(
+                service2_id.clone(),
                 wasm_digest,
                 Address::Eth(AddrEth::new(
                     app.avs_client
@@ -215,36 +222,47 @@ mod e2e {
                         .hello_world_service_manager
                         .into(),
                 )),
-                submit_msg,
+                Submit::EthAggregatorTx {},
             )
             .await
             .unwrap();
-
-        tracing::info!("Service created: {}, submitting task...", service_id);
+        tracing::info!("Service created: {}, submitting task...", service2_id);
 
         let avs_simple_client = app.avs_client.into_simple();
-        let task_index = avs_simple_client
+        let task1_index = avs_simple_client
             .create_new_task("foo".to_owned())
+            .await
+            .unwrap()
+            .taskIndex;
+        let task2_index = avs_simple_client
+            .create_new_task("bar".to_owned())
             .await
             .unwrap()
             .taskIndex;
 
         tokio::time::timeout(Duration::from_secs(10), async move {
             loop {
-                let task_response_hash = avs_simple_client
-                    .task_responded_hash(task_index)
-                    .await
-                    .unwrap();
-                if !task_response_hash.is_empty() {
-                    tracing::info!("GOT THE TASK RESPONSE HASH!");
-                    tracing::info!("{}", hex::encode(task_response_hash));
+                let (task1_response_hash, task2_response_hash) = (
+                    avs_simple_client
+                        .task_responded_hash(task1_index)
+                        .await
+                        .unwrap(),
+                    avs_simple_client
+                        .task_responded_hash(task1_index)
+                        .await
+                        .unwrap(),
+                );
+                if !task1_response_hash.is_empty() && !task2_response_hash.is_empty() {
+                    tracing::info!("GOT THE TASKS RESPONSE HASH!");
+                    tracing::info!("foo: {}", hex::encode(task1_response_hash));
+                    tracing::info!("bar: {}", hex::encode(task2_response_hash));
                     break;
                 } else {
                     tracing::info!(
-                        "Waiting for task response by {} on {} for index {}...",
+                        "Waiting for task response by {} on {} for indexes {:?}...",
                         avs_simple_client.eth.address(),
                         avs_simple_client.contract_address,
-                        task_index
+                        [task1_index, task2_index]
                     );
                 }
                 // still open, waiting...
