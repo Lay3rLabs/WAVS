@@ -25,4 +25,4 @@ and thus have no access to their system.
 
 Start by looking at this overview diagram of the various components of the system
 
-![Architecture Overview](./docs/images/ArchOverview.svg)
+![Architecture Overview](../images/ArchOverview.svg)
