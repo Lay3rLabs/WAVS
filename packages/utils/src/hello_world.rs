@@ -67,3 +67,16 @@ pub struct TaskData {
 pub struct AddTaskResponse {
     pub hash: Option<TxHash>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AddServiceRequest {
+    pub task_id: String,
+    /// Address of the avs
+    pub service: Address,
+}
+
+/// Returns hash in case there if threshold reached
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AddServiceResponse {}
