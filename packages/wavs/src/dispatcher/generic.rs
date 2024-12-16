@@ -315,6 +315,7 @@ pub enum DispatcherError {
 #[cfg(test)]
 mod tests {
     use lavs_apis::id::TaskId;
+    use utils::layer_contract_client::TriggerId;
 
     use crate::{
         apis::{
@@ -343,12 +344,16 @@ mod tests {
         init_tracing_tests();
 
         let db_file = tempfile::NamedTempFile::new().unwrap();
-        let task_id = TaskId::new(2);
         let payload = b"foobar";
 
         let action = TriggerAction {
             config: TriggerConfig::eth_event("service1", "workflow1", rand_address_eth()).unwrap(),
-            data: TriggerData::queue(task_id, payload),
+            data: TriggerData::EthEvent {
+                service_id: ServiceID::new("service1").unwrap(),
+                workflow_id: WorkflowID::new("workflow1").unwrap(),
+                trigger_id: TriggerId::new(2),
+                payload: payload.to_vec(),
+            },
         };
 
         let dispatcher = Dispatcher::new(
@@ -388,9 +393,10 @@ mod tests {
         dispatcher.submission.wait_for_messages(1).unwrap();
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 1);
-        let expected = ChainMessage {
+        let expected = ChainMessage::Eth {
             trigger_config: action.config,
             wasm_result: payload.into(),
+            trigger_id: TriggerId::new(2),
             submit: Submit::eth_aggregator_tx(),
         };
         assert_eq!(processed[0], expected);

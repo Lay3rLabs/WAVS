@@ -2,14 +2,14 @@ use alloy::node_bindings::AnvilInstance;
 use utils::{
     eigen_client::EigenClient,
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::{HelloWorldFullClient, HelloWorldFullClientBuilder},
+    layer_contract_client::{LayerContractClientFull, LayerContractClientFullBuilder},
 };
 use wavs::config::Config;
 
 #[allow(dead_code)]
 pub struct EthTestApp {
     pub eigen_client: EigenClient,
-    pub avs_client: HelloWorldFullClient,
+    pub avs_client: LayerContractClientFull,
     anvil: AnvilInstance,
 }
 
@@ -36,19 +36,20 @@ impl EthTestApp {
             .await
             .unwrap();
 
-        let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
+        let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
             .avs_addresses(core_contracts)
             .build()
             .await
             .unwrap();
-        hello_world_client
+
+        avs_client
             .register_operator(&mut rand::rngs::OsRng)
             .await
             .unwrap();
 
         Self {
             eigen_client,
-            avs_client: hello_world_client,
+            avs_client,
             anvil,
         }
     }

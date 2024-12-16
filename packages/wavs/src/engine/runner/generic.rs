@@ -43,24 +43,47 @@ pub trait EngineRunner: Send + Sync {
             .get(&workflow.component)
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
-        let wasm_result = match action.data {
+        match action.data {
             TriggerData::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
-                self.engine()
-                    .execute_queue(component, &service.id, task_id, payload, timestamp)?
-            }
-            TriggerData::EthEvent { log } => {
-                self.engine()
-                    .execute_eth_event(component, &service.id, log)?
-            }
-        };
 
-        Ok(workflow.submit.clone().map(|submit| ChainMessage {
-            trigger_config: action.config,
-            wasm_result,
-            submit,
-        }))
+                let wasm_result = self.engine().execute_queue(
+                    component,
+                    &service.id,
+                    task_id,
+                    payload,
+                    timestamp,
+                )?;
+
+                Ok(workflow.submit.clone().map(|submit| ChainMessage::Cosmos {
+                    trigger_config: action.config,
+                    wasm_result,
+                    submit,
+                }))
+            }
+            TriggerData::EthEvent {
+                trigger_id,
+                workflow_id,
+                service_id,
+                payload,
+            } => {
+                let wasm_result = self.engine().execute_eth_event(
+                    component,
+                    &service_id,
+                    &workflow_id,
+                    trigger_id,
+                    payload,
+                )?;
+
+                Ok(workflow.submit.clone().map(|submit| ChainMessage::Eth {
+                    trigger_config: action.config,
+                    wasm_result,
+                    trigger_id,
+                    submit,
+                }))
+            }
+        }
     }
 }
 

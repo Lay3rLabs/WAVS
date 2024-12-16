@@ -1,7 +1,7 @@
-use alloy::rpc::types::Log;
 use lavs_apis::id::TaskId;
 use layer_climb::prelude::Address;
 use thiserror::Error;
+use utils::layer_contract_client::TriggerId;
 
 use crate::{storage::CAStorageError, Digest};
 
@@ -28,7 +28,9 @@ pub trait Engine: Send + Sync {
         &self,
         component: &Component,
         service_id: &ServiceID,
-        log: Log,
+        workflow_id: &WorkflowID,
+        trigger_id: TriggerId,
+        payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError>;
 }
 
@@ -57,9 +59,12 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
         &self,
         component: &Component,
         service_id: &ServiceID,
-        log: Log,
+        workflow_id: &WorkflowID,
+        trigger_id: TriggerId,
+        payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute_eth_event(component, service_id, log)
+        self.as_ref()
+            .execute_eth_event(component, service_id, workflow_id, trigger_id, payload)
     }
 }
 

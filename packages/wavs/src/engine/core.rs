@@ -1,4 +1,3 @@
-use alloy::rpc::types::Log;
 use anyhow::Context;
 use lavs_apis::id::TaskId;
 use lru::LruCache;
@@ -6,6 +5,7 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::instrument;
+use utils::layer_contract_client::TriggerId;
 use wasmtime::Store;
 use wasmtime::{
     component::{Component, Linker},
@@ -15,8 +15,7 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::AllowedHostPermission;
-use crate::apis::ServiceID;
-use crate::bindings::hello_world::temp_serialize_hello_world_component_response;
+use crate::apis::{ServiceID, WorkflowID};
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{apis, bindings, Digest};
 
@@ -114,7 +113,9 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         &self,
         wasi: &apis::dispatcher::Component,
         service_id: &ServiceID,
-        log: Log,
+        workflow_id: &WorkflowID,
+        trigger_id: TriggerId,
+        payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError> {
         let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
 
@@ -122,28 +123,17 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             // For right now, we use the hello-world pipeline (contract and component)
             // eventually this will be a more generic system
 
-            let instance = bindings::hello_world::HelloWorldWorld::instantiate_async(
+            let instance = bindings::eth_trigger::EthTriggerWorld::instantiate_async(
                 &mut store, &component, &linker,
             )
             .await
             .context("Wasm instantiate failed")?;
 
-            let address = log.address().to_vec();
-            let (log_topics, log_data) = log.inner.data.split();
-
-            let input = bindings::hello_world::EthLog {
-                address,
-                log_topics: log_topics.iter().map(|t| t.to_vec()).collect(),
-                log_data: log_data.to_vec(),
-            };
-
             let response = instance
-                .call_process_eth_event(&mut store, &input)
+                .call_process_eth_trigger(&mut store, &payload)
                 .await
                 .context("Failed to run task")?
                 .map_err(EngineError::ComponentError)?;
-
-            let response = temp_serialize_hello_world_component_response(response);
 
             Ok::<Vec<u8>, EngineError>(response)
         })

@@ -1,63 +1,56 @@
 use std::time::Duration;
 
-use alloy::providers::Provider;
-use lavs_apis::id::TaskId;
-use utils::{
-    eth_client::EthSigningClient,
-    hello_world::{
-        solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
-        HelloWorldSimpleClient,
-    },
-};
+use utils::{eth_client::EthSigningClient, layer_contract_client::LayerContractClientSimple};
+use wavs::apis::{ServiceID, WorkflowID};
 
-pub async fn run_hello_world_task(
+pub async fn run_eth_trigger_echo_task(
     eth_signing_client: EthSigningClient,
     wavs: bool,
-    contract_address: alloy::primitives::Address,
+    service_id: ServiceID,
+    workflow_id: WorkflowID,
+    trigger_address: alloy::primitives::Address,
+    service_manager_address: alloy::primitives::Address,
     name: String,
 ) -> String {
-    let client = HelloWorldSimpleClient::new(eth_signing_client, contract_address);
+    let client = LayerContractClientSimple::new(
+        eth_signing_client,
+        service_manager_address,
+        trigger_address,
+    );
 
-    let NewTaskCreated { task, taskIndex } = client.create_new_task(name.clone()).await.unwrap();
+    let data = name.as_bytes().to_vec();
 
-    println!("Task submitted with id: {}", TaskId::new(taskIndex as u64));
+    let trigger_id = client
+        .trigger
+        .add_trigger(
+            service_id.to_string(),
+            workflow_id.to_string(),
+            data.clone(),
+        )
+        .await
+        .unwrap();
+
+    println!("Task submitted with id: {}", trigger_id);
 
     if !wavs {
         tracing::info!("Submitting the task result directly");
 
-        let signature = client.sign_task(&name).unwrap();
-        let reference_block = client.eth.provider.get_block_number().await.unwrap() as u32 - 1;
-        let signature = HelloWorldSimpleClient::batch_signature(
-            signature,
-            client.eth.address(),
-            reference_block,
-        );
-        let hello_world_service = &client.contract;
-
-        let pending_tx = hello_world_service
-            .respondToTask(task, taskIndex, signature.into())
-            .send()
+        client
+            .add_signed_trigger_data(trigger_id, data)
             .await
             .unwrap();
-        tracing::debug!("Sent transaction: {}", pending_tx.tx_hash());
-        let _ = pending_tx.watch().await.unwrap();
     }
 
     tracing::info!("Waiting for the chain to see the result");
 
     tokio::time::timeout(Duration::from_secs(10), async move {
         loop {
-            let task_response_hash = client.task_responded_hash(taskIndex).await.unwrap();
+            let signature = client.get_signed_data(trigger_id).await.unwrap().signature;
 
-            if !task_response_hash.is_empty() {
-                return hex::encode(task_response_hash);
+            if !signature.is_empty() {
+                return hex::encode(signature);
             } else {
-                tracing::info!(
-                    "Waiting for task response by {} on {} for index {}...",
-                    client.eth.address(),
-                    client.contract_address,
-                    taskIndex
-                );
+                tracing::info!("Waiting for task response on {}", trigger_id);
             }
             // still open, waiting...
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;

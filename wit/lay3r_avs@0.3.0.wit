@@ -46,18 +46,6 @@ world eth-event-world {
   export process-eth-event: func(log: eth-log) -> result<list<u8>, string>;
 }
 
-interface hello-world-types {
-  record response {
-    message-hash: list<u8>,
-    task-name: string,
-    task-created-block: u32,
-    task-index: u32,
-  }
-}
-
-world hello-world-world {
-  use eth-event-types.{eth-log};
-  use hello-world-types.{response};
-
-  export process-eth-event: func(log: eth-log) -> result<response, string>;
+world eth-trigger-world {
+  export process-eth-trigger: func(input: list<u8>) -> result<list<u8>, string>;
 }

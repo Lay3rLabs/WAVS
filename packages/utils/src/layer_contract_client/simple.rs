@@ -1,11 +1,5 @@
-use std::ops::Deref;
-
-use super::layer_trigger::LayerTrigger;
-use super::{
-    layer_service_manager::{ILayerServiceManager::Payload, LayerServiceManager},
-    layer_trigger::LayerTrigger::NewTrigger,
-};
-use super::{LayerContractClientFull, LayerServiceManagerT, LayerTriggerT};
+use super::layer_service_manager::{ILayerServiceManager::Payload, LayerServiceManager};
+use super::{LayerContractClientFull, LayerContractClientTrigger, LayerServiceManagerT, TriggerId};
 use crate::{
     alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient,
     layer_contract_client::layer_service_manager::LayerServiceManager::AddedSignedDataForTrigger,
@@ -18,13 +12,12 @@ use alloy::{
     sol_types::SolValue,
 };
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct LayerContractClientSimple {
     pub eth: EthSigningClient,
-    pub trigger_contract_address: Address,
+    pub trigger: LayerContractClientTrigger,
     pub service_manager_contract_address: Address,
-    pub trigger_contract: LayerTriggerT,
     pub service_manager_contract: LayerServiceManagerT,
 }
 
@@ -42,19 +35,17 @@ impl LayerContractClientSimple {
     ) -> Self {
         let service_manager_contract =
             LayerServiceManager::new(service_manager_contract_address, eth.http_provider.clone());
-        let trigger_contract =
-            LayerTrigger::new(trigger_contract_address, eth.http_provider.clone());
+        let trigger = LayerContractClientTrigger::new(eth.clone(), trigger_contract_address);
 
         Self {
             eth,
+            trigger,
             service_manager_contract_address,
             service_manager_contract,
-            trigger_contract_address,
-            trigger_contract,
         }
     }
 
-    pub async fn get_signed_data(&self, trigger_id: TriggerId) -> Result<Vec<u8>> {
+    pub async fn get_signed_data(&self, trigger_id: TriggerId) -> Result<SignedData> {
         let resp = self
             .service_manager_contract
             .getSignedDataByTriggerId(*trigger_id)
@@ -63,38 +54,9 @@ impl LayerContractClientSimple {
             .context("Failed to get signed data")?
             ._0;
 
-        Ok(resp.data.to_vec())
-    }
-
-    // TODO - bring all newtypes into utils
-    pub async fn add_trigger(&self, service_id: String, data: Vec<u8>) -> Result<TriggerId> {
-        let event: NewTrigger = self
-            .trigger_contract
-            .addTrigger(service_id, data.into())
-            .send()
-            .await?
-            .get_receipt()
-            .await?
-            .solidity_event()
-            .context("Not found new task creation event")?;
-
-        Ok(TriggerId::new(event.triggerId))
-    }
-
-    pub async fn get_trigger(&self, trigger_id: TriggerId) -> Result<TriggerResponse> {
-        let resp = self
-            .trigger_contract
-            .getTrigger(*trigger_id)
-            .call()
-            .await
-            .context("Failed to get trigger")?
-            ._0;
-
-        Ok(TriggerResponse {
-            trigger_id: TriggerId::new(resp.triggerId),
-            service_id: resp.serviceId,
-            creator: resp.creator,
+        Ok(SignedData {
             data: resp.data.to_vec(),
+            signature: resp.signature.to_vec(),
         })
     }
 
@@ -135,7 +97,7 @@ impl LayerContractClientSimple {
             triggerId: *trigger_id,
             data: data.into(),
         };
-        let message_hash = eip191_hash_message(keccak256(&payload.abi_encode()));
+        let message_hash = eip191_hash_message(keccak256(payload.abi_encode()));
         let operators: Vec<DynSolValue> = vec![DynSolValue::Address(self.eth.address())];
         let signature: Vec<DynSolValue> = vec![DynSolValue::Bytes(
             self.eth.signer.sign_hash_sync(&message_hash)?.into(),
@@ -154,40 +116,7 @@ impl LayerContractClientSimple {
     }
 }
 
-// Rust-friendly API around types
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
-pub struct TriggerId(u64);
-
-impl TriggerId {
-    pub fn new(val: u64) -> Self {
-        Self(val)
-    }
-}
-
-impl Deref for TriggerId {
-    type Target = u64;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for TriggerId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::fmt::Debug for TriggerId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-pub struct TriggerResponse {
-    pub trigger_id: TriggerId,
-    pub service_id: String,
-    pub creator: Address,
+pub struct SignedData {
     pub data: Vec<u8>,
+    pub signature: Vec<u8>,
 }

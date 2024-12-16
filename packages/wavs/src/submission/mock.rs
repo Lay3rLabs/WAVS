@@ -72,8 +72,8 @@ impl Submission for MockSubmission {
             while let Some(msg) = rx.recv().await {
                 tracing::debug!(
                     "Received message: {} / {}",
-                    msg.trigger_config.service_id,
-                    msg.trigger_config.workflow_id
+                    msg.trigger_config().service_id,
+                    msg.trigger_config().workflow_id
                 );
                 mock.inbox.lock().unwrap().push(msg);
             }
@@ -90,6 +90,9 @@ impl Submission for MockSubmission {
 mod test {
     use std::{thread::sleep, time::Duration};
 
+    use rand::Rng;
+    use utils::layer_contract_client::TriggerId;
+
     use crate::{
         apis::{dispatcher::Submit, trigger::TriggerConfig},
         test_utils::address::rand_address_eth,
@@ -98,8 +101,9 @@ mod test {
     use super::*;
 
     fn dummy_message(service: &str, payload: &str) -> ChainMessage {
-        ChainMessage {
+        ChainMessage::Eth {
             trigger_config: TriggerConfig::eth_event(service, service, rand_address_eth()).unwrap(),
+            trigger_id: TriggerId::new(rand::thread_rng().gen::<u64>()),
             wasm_result: payload.as_bytes().to_vec(),
             submit: Submit::eth_aggregator_tx(),
         }

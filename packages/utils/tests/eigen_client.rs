@@ -39,13 +39,22 @@ async fn deploy_layer_avs() {
 
     // Create and respond first task
     let new_trigger_id = layer_client
-        .add_trigger("foo-id".to_string(), b"foo-data".to_vec())
+        .trigger
+        .add_trigger(
+            "foo-service-id".to_string(),
+            "foo-workflow-id".to_string(),
+            b"foo-data".to_vec(),
+        )
         .await
         .unwrap();
 
     assert_eq!(*new_trigger_id, 1);
 
-    let trigger = layer_client.get_trigger(new_trigger_id).await.unwrap();
+    let trigger = layer_client
+        .trigger
+        .get_trigger(new_trigger_id)
+        .await
+        .unwrap();
     // just to make sure we keep anvil alive
 
     assert_eq!(trigger.data, b"foo-data");
@@ -57,12 +66,21 @@ async fn deploy_layer_avs() {
 
     // Create and respond second task
     let new_trigger_id = layer_client
-        .add_trigger("bar-id".to_string(), b"bar-data".to_vec())
+        .trigger
+        .add_trigger(
+            "bar-service-id".to_string(),
+            "bar-workflow-id".to_string(),
+            b"bar-data".to_vec(),
+        )
         .await
         .unwrap();
 
     assert_eq!(*new_trigger_id, 2);
-    let trigger = layer_client.get_trigger(new_trigger_id).await.unwrap();
+    let trigger = layer_client
+        .trigger
+        .get_trigger(new_trigger_id)
+        .await
+        .unwrap();
 
     assert_eq!(trigger.data, b"bar-data");
     layer_client

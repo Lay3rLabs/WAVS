@@ -116,6 +116,7 @@ pub enum Submit {
     EthAggregatorTx {},
     /// Sending a message to the aggregator on eth chain
     EthSignedMessage {
+        service_manager_addr: Address,
         /// The hd index of the mnemonic to sign with
         hd_index: u32,
     },
@@ -131,8 +132,11 @@ impl Submit {
     pub fn eth_aggregator_tx() -> Self {
         Submit::EthAggregatorTx {}
     }
-    pub fn eth_signed_message(hd_index: u32) -> Self {
-        Submit::EthSignedMessage { hd_index }
+    pub fn eth_signed_message(hd_index: u32, service_manager_addr: Address) -> Self {
+        Submit::EthSignedMessage {
+            hd_index,
+            service_manager_addr,
+        }
     }
 }
 

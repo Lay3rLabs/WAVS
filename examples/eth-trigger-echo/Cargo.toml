@@ -1,5 +1,5 @@
 [package]
-name = "message-echo"
+name = "eth-trigger-echo"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
@@ -7,12 +7,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-anyhow = { workspace = true }
-layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", version = "0.1.1" }
 wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
-url = "2.5.3"
 
 [lib]
 crate-type = ["cdylib"]
@@ -25,7 +20,14 @@ strip = true
 lto = true
 
 [package.metadata.component]
-package = "component:message-echo"
-target = "lay3r:avs/task-queue@0.3.0"
+package = "component:eth-trigger-echo"
 
-[package.metadata.component.dependencies]
+[package.metadata.component.target]
+path = "../../wit"
+world = "eth-trigger-world"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = "=0.2.0"
+"wasi:clocks" = "=0.2.0"
+"wasi:http" = "=0.2.0"
+"wasi:random" = "=0.2.0"

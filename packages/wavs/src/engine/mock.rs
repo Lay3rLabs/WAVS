@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::ServiceID;
+use crate::apis::{ServiceID, WorkflowID};
 use crate::Digest;
-use alloy::rpc::types::Log;
 use lavs_apis::id::TaskId;
 use tracing::instrument;
+use utils::layer_contract_client::TriggerId;
 
 use super::{Engine, EngineError};
 
@@ -72,9 +72,11 @@ impl Engine for MockEngine {
         &self,
         _component: &crate::apis::dispatcher::Component,
         _service_id: &ServiceID,
-        log: Log,
+        _workflow_id: &WorkflowID,
+        _trigger_id: TriggerId,
+        payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(log.inner.data.data.to_vec())
+        Ok(payload)
     }
 }
 

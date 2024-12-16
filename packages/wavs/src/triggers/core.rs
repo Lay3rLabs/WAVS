@@ -26,7 +26,10 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
+    layer_contract_client::{
+        layer_trigger::LayerTrigger::{self, NewTrigger},
+        TriggerId,
+    },
 };
 
 #[derive(Clone)]
@@ -185,7 +188,7 @@ impl CoreTriggerManager {
             tracing::debug!("Trigger Manager for Ethereum chain started");
 
             // Start the event stream
-            let filter = Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
+            let filter = Filter::new().event_signature(NewTrigger::SIGNATURE_HASH);
 
             let stream = query_client
                 .provider
@@ -209,13 +212,42 @@ impl CoreTriggerManager {
                     tracing::error!("{:?}", err);
                 }
                 Ok(BlockTriggers::EthereumLog { log }) => {
-                    if log.log_decode::<NewTaskCreated>().is_ok() {
-                        self.handle_trigger(
-                            &action_sender,
-                            &Address::Eth(AddrEth::new(log.address().into())),
-                            TriggerData::EthEvent { log },
-                        )
-                        .await;
+                    if let Ok(log) = log.log_decode::<NewTrigger>() {
+                        let service_id = log.data().serviceId.to_string();
+                        let workflow_id = log.data().workflowId.to_string();
+                        let trigger_id = log.data().triggerId;
+                        match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
+                            (Ok(service_id), Ok(workflow_id)) => {
+                                let trigger_id = TriggerId::new(trigger_id);
+
+                                let contract = LayerTrigger::new(
+                                    log.address(),
+                                    ethereum_client.as_ref().unwrap().http_provider.clone(),
+                                );
+
+                                if let Ok(payload) = contract
+                                    .getTrigger(*trigger_id)
+                                    .call()
+                                    .await
+                                    .map(|resp| resp._0.data.to_vec())
+                                {
+                                    self.handle_trigger(
+                                        &action_sender,
+                                        &Address::Eth(AddrEth::new(log.address().into())),
+                                        TriggerData::EthEvent {
+                                            service_id,
+                                            workflow_id,
+                                            payload,
+                                            trigger_id,
+                                        },
+                                    )
+                                    .await;
+                                }
+                            }
+                            _ => {
+                                tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
+                            }
+                        }
                     }
                 }
                 Ok(BlockTriggers::Layer { triggers }) => {
@@ -274,16 +306,40 @@ impl CoreTriggerManager {
         contract_address: &Address,
         data: TriggerData,
     ) {
-        let lookup_id = {
-            let triggers_by_task_queue_lock =
-                self.lookup_maps.triggers_by_task_queue.read().unwrap();
+        let lookup_id = match &data {
+            TriggerData::Queue { .. } => {
+                let triggers_by_task_queue_lock =
+                    self.lookup_maps.triggers_by_task_queue.read().unwrap();
 
-            match triggers_by_task_queue_lock.get(contract_address) {
-                Some(lookup_id) => *lookup_id,
-                None => {
-                    tracing::debug!("not our task queue: {:?}", contract_address);
+                match triggers_by_task_queue_lock.get(contract_address) {
+                    Some(lookup_id) => *lookup_id,
+                    None => {
+                        tracing::debug!("not our task queue: {:?}", contract_address);
 
-                    return;
+                        return;
+                    }
+                }
+            }
+            TriggerData::EthEvent {
+                service_id,
+                workflow_id,
+                ..
+            } => {
+                let triggers_by_service_workflow_lock = self
+                    .lookup_maps
+                    .triggers_by_service_workflow
+                    .read()
+                    .unwrap();
+
+                match triggers_by_service_workflow_lock
+                    .get(service_id)
+                    .and_then(|map| map.get(workflow_id))
+                {
+                    Some(lookup_id) => *lookup_id,
+                    None => {
+                        tracing::debug!("not our service/workflow: {}/{}", service_id, workflow_id);
+                        return;
+                    }
                 }
             }
         };

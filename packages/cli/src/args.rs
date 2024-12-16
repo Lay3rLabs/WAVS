@@ -1,5 +1,5 @@
 use clap::{arg, Parser, Subcommand};
-use utils::{eigen_client::CoreAVSAddresses, hello_world::config::HelloWorldAddresses};
+use utils::{eigen_client::CoreAVSAddresses, layer_contract_client::LayerAddresses};
 use wavs::Digest;
 
 #[derive(Parser)]
@@ -61,9 +61,19 @@ pub enum Command {
         #[clap(long, default_value_t = false)]
         wavs: bool,
 
+        /// The contract address for the trigger
+        #[clap(long, env = "CLI_EIGEN_SERVICE_TRIGGER")]
+        trigger_addr: alloy::primitives::Address,
+
         /// The contract address for the service manager
         #[clap(long, env = "CLI_EIGEN_SERVICE_MANAGER")]
-        contract_address: alloy::primitives::Address,
+        service_manager_addr: alloy::primitives::Address,
+
+        #[clap(long)]
+        service_id: String,
+
+        #[clap(long)]
+        workflow_id: Option<String>,
 
         /// The name of the task
         /// if not set, will be a random string
@@ -166,17 +176,22 @@ pub struct EnvServiceAddresses {
     pub service_stake_registry: Option<alloy::primitives::Address>,
     #[arg(long, env = "CLI_EIGEN_SERVICE_TOKEN")]
     pub service_token: Option<alloy::primitives::Address>,
+    #[arg(long, env = "CLI_EIGEN_SERVICE_TRIGGER")]
+    pub service_trigger: Option<alloy::primitives::Address>,
 }
 
-impl From<EnvServiceAddresses> for HelloWorldAddresses {
+impl From<EnvServiceAddresses> for LayerAddresses {
     fn from(opt: EnvServiceAddresses) -> Self {
         Self {
             proxy_admin: opt
                 .service_proxy_admin
                 .expect("set --service-proxy-admin or CLI_EIGEN_SERVICE_PROXY_ADMIN"),
-            hello_world_service_manager: opt
+            service_manager: opt
                 .service_manager
                 .expect("set --service-manager or CLI_EIGEN_SERVICE_MANAGER"),
+            trigger: opt
+                .service_trigger
+                .expect("set --service-trigger or CLI_EIGEN_SERVICE_TRIGGER"),
             stake_registry: opt
                 .service_stake_registry
                 .expect("set --service-stake-registry or CLI_EIGEN_SERVICE_STAKE_REGISTRY"),

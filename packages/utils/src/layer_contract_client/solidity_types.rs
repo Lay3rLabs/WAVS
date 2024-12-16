@@ -1,11 +1,10 @@
+use crate::eigen_client::solidity_types::HttpSigningProvider;
 use alloy::{
     sol,
     transports::BoxTransport
 };
 use layer_service_manager::LayerServiceManager::LayerServiceManagerInstance;
 use layer_trigger::LayerTrigger::LayerTriggerInstance;
-
-use crate::eigen_client::solidity_types::BoxSigningProvider;
 
 pub mod stake_registry {
     use super::*;
@@ -38,7 +37,6 @@ pub mod token {
 
 pub mod layer_service_manager {
     use super::*;
-
     pub use ILayerServiceManager::SignedData;
 
     sol!(
@@ -51,7 +49,6 @@ pub mod layer_service_manager {
 
 pub mod layer_trigger {
     use super::*;
-
     pub use ILayerTrigger::TriggerResponse;
 
     sol!(
