@@ -16,12 +16,12 @@ WAVS is a next-generation AVS platform, making it easy to create, manage, and op
 
 ## Overview
 
-WAVS is a node software for operators that runs an AVS [WASI](https://wasi.dev/) runtime which is easily configurable and can serve multiple AVSs. The logic for each AVS is deployed as a WASI component. These WASI components have limited access to system resources and are sandboxed from each other and from the node's operating system. This way, operators and AVS services maintain a clean separation, with AVS builders uploading components and operators having to opt-in to each service.
+WAVS is a node software for operators that runs an AVS [WASI](https://wasi.dev/) runtime which is easily configurable and can serve multiple AVSs. The logic for each AVS is deployed as a WASI component. These WASI components are sandboxed from each other and from the node's operating system. This way, operators and AVS services maintain a clean separation, with AVS builders uploading components and operators having to opt-in to each service.
 
 
 ![WAVS overview](./docs/images/flow.png)
 
-Onchain events can trigger a service's WASI components, which are run by operators in the AVS WASI runtime. Results are then verified and brought back onchain, enabling the decentralized execution of offchain services which are verifiable onchain.
+Onchain events can trigger a service's WASI components, which are run offchain by operators in the AVS WASI runtime. Results are then verified and brought back onchain, enabling the decentralized execution of offchain services which are verifiable onchain.
 
 1. An AVS uploads their WASI component containing their service logic.
 2. Operators listen for onchain events.
