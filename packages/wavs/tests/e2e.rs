@@ -56,6 +56,7 @@ mod e2e {
         let aggregator_config: aggregator::config::Config = {
             let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
             cli_args.dotenv = None;
+            cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
             if let Some(anvil) = anvil.as_ref() {
                 cli_args.ws_endpoint = Some(anvil.ws_endpoint().to_string());
                 cli_args.http_endpoint = Some(anvil.endpoint().to_string());

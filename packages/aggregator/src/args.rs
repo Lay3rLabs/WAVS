@@ -35,6 +35,12 @@ pub struct CliArgs {
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub log_level: Vec<String>,
 
+    /// The directory to store all internal data files
+    /// See example config file for more info
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<PathBuf>,
+
     /// The host to bind the server to
     /// See example config file for more info
     #[arg(long)]

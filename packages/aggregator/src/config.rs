@@ -28,6 +28,9 @@ pub struct Config {
     /// The host to bind the server to
     /// Default is `localhost`
     pub host: String,
+    /// The directory to store all internal data files
+    /// Default is `/var/aggregator`
+    pub data: PathBuf,
     /// The allowed cors origins
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
@@ -56,6 +59,7 @@ impl Default for Config {
             port: 8001,
             log_level: vec!["info".to_string()],
             host: "localhost".to_string(),
+            data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
             ws_endpoint: "ws://127.0.0.1:8545".to_string(),
             http_endpoint: "http://127.0.0.1:8545".to_string(),
