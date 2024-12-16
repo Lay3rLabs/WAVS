@@ -1,8 +1,9 @@
-use alloy::{
-    primitives::{aliases::U96, Address, U256},
-    sol_types::SolCall,
+use super::solidity_types::{
+    layer_service_manager::LayerServiceManager,
+    layer_trigger::LayerTrigger,
+    stake_registry::ECDSAStakeRegistry::{self, Quorum, StrategyParams},
+    token::{IStrategy, LayerToken},
 };
-
 use crate::{
     alloy_helpers::SolidityEventFinder,
     eigen_client::{
@@ -12,27 +13,109 @@ use crate::{
             proxy::ProxyAdmin,
             ProxyAdminT,
         },
+        CoreAVSAddresses,
     },
     eth_client::EthSigningClient,
-    hello_world::{
-        config::HelloWorldAddresses,
-        solidity_types::{
-            hello_world::HelloWorldServiceManager,
-            stake_registry::ECDSAStakeRegistry::{self, Quorum, StrategyParams},
-            token::IStrategy,
-        },
-    },
+    layer_contract_client::stake_registry::ISignatureUtils::SignatureWithSaltAndExpiry,
 };
-
-use super::{solidity_types::token::LayerToken, HelloWorldFullClient, HelloWorldFullClientBuilder};
+use alloy::{
+    primitives::{aliases::U96, Address, FixedBytes, TxHash, U256},
+    signers::SignerSync,
+    sol_types::SolCall,
+};
 use anyhow::{Context, Result};
+use chrono::Utc;
+use rand::prelude::*;
+use serde::{Deserialize, Serialize};
+
+pub struct LayerContractClientFull {
+    pub eth: EthSigningClient,
+    pub core: CoreAVSAddresses,
+    pub layer: LayerAddresses,
+}
+
+impl LayerContractClientFull {
+    pub async fn register_operator(&self, rng: &mut impl Rng) -> Result<TxHash> {
+        let mut salt = [0u8; 32];
+        rng.fill_bytes(&mut salt);
+
+        let salt = FixedBytes::from_slice(&salt);
+        let now = Utc::now().timestamp();
+        let expiry: U256 = U256::from(now + 3600);
+
+        let digest_hash = self
+            .core
+            .calculate_operator_avs_registration_digest_hash(
+                self.eth.address(),
+                self.layer.service_manager,
+                salt,
+                expiry,
+                self.eth.http_provider.clone(),
+            )
+            .await?;
+
+        let signature = self.eth.signer.sign_hash_sync(&digest_hash)?;
+        let operator_signature = SignatureWithSaltAndExpiry {
+            signature: signature.as_bytes().into(),
+            salt,
+            expiry,
+        };
+
+        let contract_ecdsa_stake_registry =
+            ECDSAStakeRegistry::new(self.layer.stake_registry, self.eth.http_provider.clone());
+
+        let register_operator_hash = contract_ecdsa_stake_registry
+            .registerOperatorWithSignature(operator_signature, self.eth.signer.clone().address())
+            .gas(500000)
+            .send()
+            .await?
+            .get_receipt()
+            .await?
+            .transaction_hash;
+
+        tracing::debug!(
+            "Operator registered on AVS successfully :{} , tx_hash :{}",
+            self.eth.signer.address(),
+            register_operator_hash
+        );
+        Ok(register_operator_hash)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LayerAddresses {
+    pub proxy_admin: Address,
+    pub service_manager: Address,
+    pub trigger: Address,
+    pub stake_registry: Address,
+    pub token: Address,
+}
+
+pub struct LayerContractClientFullBuilder {
+    pub eth: EthSigningClient,
+    pub core_avs_addrs: Option<CoreAVSAddresses>,
+}
+
+impl LayerContractClientFullBuilder {
+    pub fn new(eth: EthSigningClient) -> Self {
+        Self {
+            eth,
+            core_avs_addrs: None,
+        }
+    }
+
+    pub fn avs_addresses(mut self, addresses: CoreAVSAddresses) -> Self {
+        self.core_avs_addrs = Some(addresses);
+        self
+    }
+}
 
 struct SetupAddrs {
     pub token: Address,
     pub quorum: Quorum,
 }
 
-impl HelloWorldFullClientBuilder {
+impl LayerContractClientFullBuilder {
     async fn set_up(&self, strategy_factory: Address) -> Result<SetupAddrs> {
         let token = LayerToken::deploy(self.eth.provider.clone()).await?;
         let strategy_factory = StrategyFactory::new(strategy_factory, self.eth.provider.clone());
@@ -60,7 +143,7 @@ impl HelloWorldFullClientBuilder {
         })
     }
 
-    pub async fn build(mut self) -> Result<HelloWorldFullClient> {
+    pub async fn build(mut self) -> Result<LayerContractClientFull> {
         let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
         let proxies = Proxies::new(&self.eth).await?;
         let setup = self.set_up(core.strategy_factory).await?;
@@ -78,7 +161,7 @@ impl HelloWorldFullClientBuilder {
             ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager).await?;
 
         tracing::debug!("deploying Hello world registry");
-        let hello_world_impl = HelloWorldServiceManager::deploy(
+        let service_manager_impl = LayerServiceManager::deploy(
             self.eth.provider.clone(),
             core.avs_directory,
             proxies.ecdsa_stake_registry,
@@ -88,7 +171,7 @@ impl HelloWorldFullClientBuilder {
         .await?;
 
         let upgrade_call = ECDSAStakeRegistry::initializeCall {
-            _serviceManager: proxies.hello_world,
+            _serviceManager: proxies.service_manager,
             _thresholdWeight: U256::ZERO,
             _quorum: setup.quorum,
         };
@@ -109,7 +192,7 @@ impl HelloWorldFullClientBuilder {
         tracing::debug!("Upgrading hello world");
         proxies
             .admin
-            .upgrade(proxies.hello_world, *hello_world_impl.address())
+            .upgrade(proxies.service_manager, *service_manager_impl.address())
             .send()
             .await?
             .watch()
@@ -119,15 +202,19 @@ impl HelloWorldFullClientBuilder {
         assert_ne!(underlying_token, Address::ZERO);
         tracing::debug!("underlying strategy token addr: {}", underlying_token);
 
+        let trigger = LayerTrigger::deploy(self.eth.http_provider.clone()).await?;
+        let trigger_address = *trigger.address();
+
         // Upgrade contracts
-        Ok(HelloWorldFullClient {
+        Ok(LayerContractClientFull {
             eth: self.eth,
             core,
-            hello_world: HelloWorldAddresses {
+            layer: LayerAddresses {
                 proxy_admin: *proxies.admin.address(),
-                hello_world_service_manager: proxies.hello_world,
+                service_manager: proxies.service_manager,
                 stake_registry: proxies.ecdsa_stake_registry,
                 token: setup.token,
+                trigger: trigger_address,
             },
         })
     }
@@ -135,7 +222,7 @@ impl HelloWorldFullClientBuilder {
 
 struct Proxies {
     pub admin: ProxyAdminT,
-    pub hello_world: Address,
+    pub service_manager: Address,
     pub ecdsa_stake_registry: Address,
 }
 
@@ -147,7 +234,7 @@ impl Proxies {
 
         Ok(Self {
             ecdsa_stake_registry: setup_empty_proxy(eth, &admin).await?,
-            hello_world: setup_empty_proxy(eth, &admin).await?,
+            service_manager: setup_empty_proxy(eth, &admin).await?,
             admin,
         })
     }

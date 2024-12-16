@@ -4,8 +4,8 @@ pub mod digest;
 pub mod eigen_client;
 pub mod error;
 pub mod eth_client;
-pub mod hello_world;
 pub mod storage;
+pub mod layer_contract_client;
 
 // the test version of init_tracing does not take a config
 // since config itself is tested and modified from different parallel tests
