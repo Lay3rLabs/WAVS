@@ -33,6 +33,7 @@ impl TestApp {
                     .join(ConfigBuilder::DIRNAME)
                     .join("non-existant-file"),
             ),
+            data: None,
             port: None,
             log_level: Vec::new(),
             host: None,

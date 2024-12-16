@@ -32,11 +32,13 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
 
     check_operator_registered(req.service, req.operator, &eth_client.http_provider).await?;
     let task = Task::new(req.operator, req.new_data, req.signature);
-    let key = (req.task_id, req.service);
-    let mut queue = state.load(&key);
+    let mut tasks_map = state.load_tasks(&req.task_id)?;
+    let queue = tasks_map
+        .get_mut(&req.service)
+        .ok_or(anyhow::anyhow!("Service not registered"))?;
     queue.push(task);
 
-    if queue.len() >= state.config.tasks_quorum as usize {
+    let hash = if queue.len() >= state.config.tasks_quorum as usize {
         // TODO: decide how to batch it. It seems like a complex topic with many options
         // Current options require something from node, extra contract dependency or uncertainty
         // Options:
@@ -48,18 +50,18 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
 
         // Send batch txs
         let hello_world_service =
-            hello_world::HelloWorldServiceManager::new(key.1, &eth_client.http_provider);
+            hello_world::HelloWorldServiceManager::new(req.service, &eth_client.http_provider);
         let mut tasks = vec![];
         let mut indexes = vec![];
         let mut signatures = vec![];
-        for item in queue {
-            let task_data = item.data;
+        for item in queue.iter() {
+            let task_data = item.data.clone();
             tasks.push(hello_world::Task {
                 name: task_data.name,
                 taskCreatedBlock: task_data.task_created_block,
             });
             indexes.push(task_data.task_index);
-            signatures.push(Bytes::from(item.signature));
+            signatures.push(Bytes::from(item.signature.clone()));
         }
 
         let pending_tx = hello_world_service
@@ -71,14 +73,14 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
 
         let tx_hash = pending_tx.watch().await?;
         tracing::debug!("Transactions included in a block");
-        state.remove(&key);
-        Ok(AddTaskResponse {
-            hash: Some(tx_hash),
-        })
+        // Clear tasks
+        queue.clear();
+        Some(tx_hash)
     } else {
-        state.save(key, queue);
-        Ok(AddTaskResponse { hash: None })
-    }
+        None
+    };
+    state.save_tasks(&req.task_id, tasks_map)?;
+    Ok(AddTaskResponse { hash })
 }
 
 pub async fn check_operator_registered(
@@ -95,7 +97,7 @@ pub async fn check_operator_registered(
         .await?
         ._0;
     if operator_status != OperatorAVSRegistrationStatus::REGISTERED().into() {
-        return Err(anyhow::anyhow!("Operator is not registered: {}", operator).into());
+        return Err(anyhow::anyhow!("Operator {operator} is not registered in {service}").into());
     }
     Ok(())
 }

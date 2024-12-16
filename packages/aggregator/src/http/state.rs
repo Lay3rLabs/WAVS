@@ -1,49 +1,48 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use alloy::primitives::Address;
-use utils::hello_world::TaskData;
+use serde::{Deserialize, Serialize};
+use utils::{
+    hello_world::TaskData,
+    storage::db::{DBError, RedbStorage, Table, JSON},
+};
 
 use crate::config::Config;
 
-pub type TasksMap = HashMap<(String, Address), Vec<Task>>;
+// Service address -> Tasks
+pub type TasksMap = HashMap<Address, Vec<Task>>;
+
+const TASKS: Table<&str, JSON<TasksMap>> = Table::new("tasks");
 
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
-    pub aggregator_state: Arc<RwLock<TasksMap>>,
+    pub storage: Arc<RedbStorage>,
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
     pub fn new(config: Config) -> anyhow::Result<Self> {
+        let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
         Ok(Self {
             config,
-            aggregator_state: Default::default(),
+            storage: storage,
         })
     }
 
-    pub fn load(&self, key: &(String, Address)) -> Vec<Task> {
-        self.aggregator_state
-            .read()
-            .unwrap()
-            .get(key)
-            .cloned()
-            .unwrap_or_default()
+    pub fn load_tasks(&self, task_id: &str) -> anyhow::Result<TasksMap> {
+        match self.storage.get(TASKS, task_id)? {
+            Some(tasks) => Ok(tasks.value()),
+            None => Err(anyhow::anyhow!("Task not registered")),
+        }
     }
 
-    pub fn save(&self, key: (String, Address), value: Vec<Task>) {
-        self.aggregator_state.write().unwrap().insert(key, value);
-    }
-
-    pub fn remove(&self, key: &(String, Address)) {
-        self.aggregator_state.write().unwrap().remove(key);
+    pub fn save_tasks(&self, task_id: &str, tasks: TasksMap) -> Result<(), DBError> {
+        self.storage.set(TASKS, task_id, &tasks)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Task {
     pub operator: Address,
     pub data: TaskData,
