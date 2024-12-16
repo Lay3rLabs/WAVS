@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use alloy::primitives::Address;
+use anyhow::bail;
 use serde::{Deserialize, Serialize};
 use utils::{
     hello_world::TaskData,
@@ -12,6 +13,7 @@ use crate::config::Config;
 // Service address -> Tasks
 pub type TasksMap = HashMap<Address, Vec<Task>>;
 
+// Note: If task and service exists in db it's considered registered
 const TASKS: Table<&str, JSON<TasksMap>> = Table::new("tasks");
 
 #[derive(Clone)]
@@ -24,10 +26,7 @@ pub struct HttpState {
 impl HttpState {
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
-        Ok(Self {
-            config,
-            storage: storage,
-        })
+        Ok(Self { config, storage })
     }
 
     pub fn load_tasks(&self, task_id: &str) -> anyhow::Result<TasksMap> {
@@ -39,6 +38,24 @@ impl HttpState {
 
     pub fn save_tasks(&self, task_id: &str, tasks: TasksMap) -> Result<(), DBError> {
         self.storage.set(TASKS, task_id, &tasks)
+    }
+
+    pub fn register_service(&self, task_id: &str, service: Address) -> anyhow::Result<()> {
+        match self.storage.get(TASKS, task_id)? {
+            Some(tasks) => {
+                let mut tasks = tasks.value();
+                if tasks.contains_key(&service) {
+                    bail!("Service is already registered");
+                }
+                tasks.insert(service, vec![]);
+                self.storage.set(TASKS, task_id, &tasks)?;
+            }
+            None => {
+                self.storage
+                    .set(TASKS, task_id, &HashMap::from([(service, vec![])]))?;
+            }
+        }
+        Ok(())
     }
 }
 
