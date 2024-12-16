@@ -70,7 +70,7 @@ pub struct AddTaskResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct AddServiceRequest {
+pub struct AddAggregatorServiceRequest {
     /// Address of the avs
     pub service: Address,
 }

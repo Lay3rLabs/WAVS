@@ -5,7 +5,7 @@ use utils::{
     eth_client::{EthClientBuilder, EthClientConfig},
     hello_world::{
         solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
-        HelloWorldFullClientBuilder,
+        AddAggregatorServiceRequest, HelloWorldFullClientBuilder,
     },
 };
 
@@ -15,9 +15,12 @@ const ANVIL_DEFAULT_MNEMONIC: &str = "test test test test test test test test te
 async fn submit_to_chain() {
     tracing::info!("Running e2e aggregator");
     let anvil = Anvil::new().spawn();
+    let data_path = tempfile::tempdir().unwrap().path().to_path_buf();
+    let _ = utils::storage::fs::FileStorage::new(data_path.clone());
     let aggregator = TestApp::new_with_args(aggregator::args::CliArgs {
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: Some(anvil.endpoint()),
+        data: Some(data_path),
         ..TestApp::default_cli_args()
     });
     let eth_client = EthClientBuilder::new(EthClientConfig {
@@ -62,6 +65,15 @@ async fn submit_to_chain() {
         .unwrap();
 
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
+    aggregator::http::handlers::service::add_service::add_service(
+        state.clone(),
+        AddAggregatorServiceRequest {
+            service: hello_world_client.contract_address,
+        },
+    )
+    .await
+    .unwrap();
+
     let response = aggregator::http::handlers::service::add_task::add_task(state, request)
         .await
         .unwrap();
@@ -72,10 +84,13 @@ async fn submit_to_chain() {
 async fn submit_to_chain_three() {
     tracing::info!("Running e2e aggregator");
     let anvil = Anvil::new().spawn();
+    let data_path = tempfile::tempdir().unwrap().path().to_path_buf();
+    let _ = utils::storage::fs::FileStorage::new(data_path.clone());
     let aggregator = TestApp::new_with_args(aggregator::args::CliArgs {
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: Some(anvil.endpoint()),
         tasks_quorum: Some(3),
+        data: Some(data_path),
         ..TestApp::default_cli_args()
     });
     let eth_client = EthClientBuilder::new(EthClientConfig {
@@ -108,6 +123,14 @@ async fn submit_to_chain_three() {
 
     let hello_world_client = hello_world_client.into_simple();
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
+    aggregator::http::handlers::service::add_service::add_service(
+        state.clone(),
+        AddAggregatorServiceRequest {
+            service: hello_world_client.contract_address,
+        },
+    )
+    .await
+    .unwrap();
 
     // First we just add task
     let task_message = "world".to_owned();

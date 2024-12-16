@@ -96,7 +96,7 @@ impl HttpClient {
         self.inner
             .post(format!("{}/service", aggregator_app_url))
             .header("Content-Type", "application/json")
-            .json(&utils::eth_client::AddServiceRequest {
+            .json(&utils::hello_world::AddAggregatorServiceRequest {
                 service: service.as_bytes().into(),
             })
             .send()
