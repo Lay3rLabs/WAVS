@@ -10,10 +10,10 @@ use utils::{
 
 use crate::config::Config;
 
-// Service address -> Tasks
-pub type TasksMap = HashMap<Address, Vec<Task>>;
+// Task Id -> Tasks
+pub type TasksMap = HashMap<String, Vec<Task>>;
 
-// Note: If task and service exists in db it's considered registered
+// Note: If service exists in db it's considered registered
 const TASKS: Table<&str, JSON<TasksMap>> = Table::new("tasks");
 
 #[derive(Clone)]
@@ -29,30 +29,25 @@ impl HttpState {
         Ok(Self { config, storage })
     }
 
-    pub fn load_tasks(&self, task_id: &str) -> anyhow::Result<TasksMap> {
-        match self.storage.get(TASKS, task_id)? {
+    pub fn load_tasks(&self, service: Address) -> anyhow::Result<TasksMap> {
+        match self.storage.get(TASKS, &service.to_string())? {
             Some(tasks) => Ok(tasks.value()),
             None => Err(anyhow::anyhow!("Task not registered")),
         }
     }
 
-    pub fn save_tasks(&self, task_id: &str, tasks: TasksMap) -> Result<(), DBError> {
-        self.storage.set(TASKS, task_id, &tasks)
+    pub fn save_tasks(&self, service: Address, tasks: TasksMap) -> Result<(), DBError> {
+        self.storage.set(TASKS, &service.to_string(), &tasks)
     }
 
-    pub fn register_service(&self, task_id: &str, service: Address) -> anyhow::Result<()> {
-        match self.storage.get(TASKS, task_id)? {
-            Some(tasks) => {
-                let mut tasks = tasks.value();
-                if tasks.contains_key(&service) {
-                    bail!("Service is already registered");
-                }
-                tasks.insert(service, vec![]);
-                self.storage.set(TASKS, task_id, &tasks)?;
+    pub fn register_service(&self, service: Address) -> anyhow::Result<()> {
+        let service = service.to_string();
+        match self.storage.get(TASKS, &service)? {
+            Some(_) => {
+                bail!("Service is already registered");
             }
             None => {
-                self.storage
-                    .set(TASKS, task_id, &HashMap::from([(service, vec![])]))?;
+                self.storage.set(TASKS, &service, &HashMap::default())?;
             }
         }
         Ok(())

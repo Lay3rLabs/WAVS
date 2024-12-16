@@ -264,16 +264,16 @@ impl CoreSubmission {
         client: &EthSigningClient,
         task: &AddTaskRequest,
     ) -> Result<AddTaskResponse, SubmissionError> {
-        let aggregator_app_url = self
+        let aggregator_msg_url = self
             .get_eth_chain()?
             .aggregator_url
             .as_ref()
             .ok_or(SubmissionError::MissingAggregatorEndpoint)?
-            .join("/app")
+            .join("/msg")
             .unwrap();
         let response = self
             .http_client
-            .post(aggregator_app_url)
+            .post(aggregator_msg_url)
             .header("Content-Type", "application/json")
             .json(task)
             .send()

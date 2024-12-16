@@ -4,10 +4,14 @@ pub mod http;
 pub mod test_utils;
 
 pub use utils::context::AppContext;
+use wavs::storage::fs::FileStorage;
 
 /// Entry point to start up the server
 /// Called from main
 pub fn run_server(ctx: AppContext, config: config::Config) {
+    // Make sure we have file storage first
+    let _file_storage = FileStorage::new(&config.data).unwrap();
+
     let _ = ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {

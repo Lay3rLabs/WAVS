@@ -5,7 +5,8 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
-        handle_config, handle_info, handle_not_found, service::add_task::handle_add_message,
+        handle_config, handle_info, handle_not_found,
+        service::{add_service::handle_add_service, add_task::handle_add_message},
     },
     state::HttpState,
 };
@@ -47,7 +48,8 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
         .route("/info", get(handle_info))
-        .route("/app", post(handle_add_message))
+        .route("/msg", post(handle_add_message))
+        .route("/service", post(handle_add_service))
         .fallback(handle_not_found)
         .with_state(state);
 

@@ -79,6 +79,32 @@ impl HttpClient {
         Ok(())
     }
 
+    pub async fn register_service_on_aggregator(
+        &self,
+        task_queue_addr: Address,
+        config: &Config,
+    ) -> Result<()> {
+        let service = match task_queue_addr {
+            Address::Eth(addr_eth) => addr_eth,
+            Address::Cosmos { .. } => unimplemented!(),
+        };
+        let aggregator_app_url = config
+            .ethereum_chain_config()
+            .unwrap()
+            .aggregator_endpoint
+            .unwrap();
+        self.inner
+            .post(format!("{}/service", aggregator_app_url))
+            .header("Content-Type", "application/json")
+            .json(&utils::eth_client::AddServiceRequest {
+                service: service.as_bytes().into(),
+            })
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn test_service<D: DeserializeOwned>(
         &self,
         name: impl ToString,
