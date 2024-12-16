@@ -59,7 +59,7 @@ impl Default for Config {
             port: 8001,
             log_level: vec!["info".to_string()],
             host: "localhost".to_string(),
-            data: PathBuf::from("/var/wavs"),
+            data: PathBuf::from("/var/aggregator"),
             cors_allowed_origins: Vec::new(),
             ws_endpoint: "ws://127.0.0.1:8545".to_string(),
             http_endpoint: "http://127.0.0.1:8545".to_string(),

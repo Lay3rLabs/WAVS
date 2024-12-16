@@ -71,7 +71,6 @@ pub struct AddTaskResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AddServiceRequest {
-    pub task_id: String,
     /// Address of the avs
     pub service: Address,
 }

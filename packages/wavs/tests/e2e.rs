@@ -190,21 +190,23 @@ mod e2e {
     ) {
         tracing::info!("Running e2e ethereum tests");
 
-        let app = EthTestApp::new(config, anvil).await;
+        let app = EthTestApp::new(config.clone(), anvil).await;
 
         let service1_id = ServiceID::new("test-1-service").unwrap();
         let service2_id = ServiceID::new("test-2-service").unwrap();
+
+        let task_queue_addr = Address::Eth(AddrEth::new(
+            app.avs_client
+                .hello_world
+                .hello_world_service_manager
+                .into(),
+        ));
 
         http_client
             .create_service(
                 service1_id.clone(),
                 wasm_digest.clone(),
-                Address::Eth(AddrEth::new(
-                    app.avs_client
-                        .hello_world
-                        .hello_world_service_manager
-                        .into(),
-                )),
+                task_queue_addr.clone(),
                 Submit::EthSignedMessage { hd_index: 0 },
             )
             .await
@@ -215,14 +217,13 @@ mod e2e {
             .create_service(
                 service2_id.clone(),
                 wasm_digest,
-                Address::Eth(AddrEth::new(
-                    app.avs_client
-                        .hello_world
-                        .hello_world_service_manager
-                        .into(),
-                )),
+                task_queue_addr.clone(),
                 Submit::EthAggregatorTx {},
             )
+            .await
+            .unwrap();
+        http_client
+            .register_service_on_aggregator(task_queue_addr, &config)
             .await
             .unwrap();
         tracing::info!("Service created: {}, submitting task...", service2_id);

@@ -32,10 +32,10 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
 
     check_operator_registered(req.service, req.operator, &eth_client.http_provider).await?;
     let task = Task::new(req.operator, req.new_data, req.signature);
-    let mut tasks_map = state.load_tasks(&req.task_id)?;
+    let mut tasks_map = state.load_tasks(req.service)?;
     let queue = tasks_map
-        .get_mut(&req.service)
-        .ok_or(anyhow::anyhow!("Service not registered"))?;
+        .entry(req.task_id)
+        .or_insert_with(Default::default);
     queue.push(task);
 
     let hash = if queue.len() >= state.config.tasks_quorum as usize {
@@ -79,7 +79,7 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
     } else {
         None
     };
-    state.save_tasks(&req.task_id, tasks_map)?;
+    state.save_tasks(req.service, tasks_map)?;
     Ok(AddTaskResponse { hash })
 }
 

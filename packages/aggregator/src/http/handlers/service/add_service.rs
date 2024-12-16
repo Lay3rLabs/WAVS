@@ -18,6 +18,6 @@ pub async fn add_service(
     state: HttpState,
     req: AddServiceRequest,
 ) -> HttpResult<AddServiceResponse> {
-    state.register_service(&req.task_id, req.service)?;
+    state.register_service(req.service)?;
     Ok(AddServiceResponse {})
 }
