@@ -1,6 +1,15 @@
-use alloy::primitives::Bytes;
+use alloy::primitives::{Address, Bytes};
 use axum::{extract::State, response::IntoResponse, Json};
-use utils::hello_world::{solidity_types::hello_world, AddTaskRequest, AddTaskResponse};
+use utils::{
+    eigen_client::solidity_types::{
+        misc::{AVSDirectory, IAVSDirectory::OperatorAVSRegistrationStatus},
+        HttpSigningProvider,
+    },
+    hello_world::{
+        solidity_types::hello_world::{self, HelloWorldServiceManager},
+        AddTaskRequest, AddTaskResponse,
+    },
+};
 
 use crate::http::{
     error::HttpResult,
@@ -19,13 +28,15 @@ pub async fn handle_add_message(
 }
 
 pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTaskResponse> {
+    let eth_client = state.config.signing_client().await?;
+
+    check_operator_registered(req.service, req.operator, &eth_client.http_provider).await?;
     let task = Task::new(req.operator, req.new_data, req.signature);
     let key = (req.task_id, req.service);
     let mut queue = state.load(&key);
     queue.push(task);
 
     if queue.len() >= state.config.tasks_quorum as usize {
-        let eth_client = state.config.signing_client().await?;
         // TODO: decide how to batch it. It seems like a complex topic with many options
         // Current options require something from node, extra contract dependency or uncertainty
         // Options:
@@ -70,5 +81,21 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
     }
 }
 
-// // Followup issue, this check is against a local DB, registered via endpoint
-// check_if_operator(lookup_id, operator_address, new_signature);
+pub async fn check_operator_registered(
+    service: Address,
+    operator: Address,
+    provider: &HttpSigningProvider,
+) -> HttpResult<()> {
+    let hello_world_service = HelloWorldServiceManager::new(service, provider);
+    let avs_directory_address = hello_world_service.avsDirectory().call().await?._0;
+    let avs_directory = AVSDirectory::new(avs_directory_address, provider);
+    let operator_status = avs_directory
+        .avsOperatorStatus(service, operator)
+        .call()
+        .await?
+        ._0;
+    if operator_status != OperatorAVSRegistrationStatus::REGISTERED().into() {
+        return Err(anyhow::anyhow!("Operator is not registered: {}", operator).into());
+    }
+    Ok(())
+}
