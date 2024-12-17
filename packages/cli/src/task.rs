@@ -1,11 +1,10 @@
 use std::time::Duration;
 
-use alloy::sol_types::SolCall;
 use lavs_apis::id::TaskId;
 use utils::{
     eth_client::EthSigningClient,
     hello_world::{
-        solidity_types::hello_world::HelloWorldServiceManager::{self, NewTaskCreated},
+        solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
         HelloWorldSimpleClient,
     },
 };
@@ -25,16 +24,11 @@ pub async fn run_hello_world_task(
     if !wavs {
         tracing::info!("Submitting the task result directly");
 
-        let add_task_request = client.task_request(task, taskIndex).await.unwrap();
+        let signature = client.sign_task(&format!("Hello, {name}")).await.unwrap();
         let hello_world_service = &client.contract;
 
-        let call = HelloWorldServiceManager::respondToTaskCall::abi_decode(
-            &add_task_request.new_data,
-            true,
-        )
-        .unwrap();
         let pending_tx = hello_world_service
-            .call_builder(&call)
+            .respondToTask(task, taskIndex, signature.into())
             .send()
             .await
             .unwrap();

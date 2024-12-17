@@ -4,6 +4,7 @@ use std::{
 };
 
 use alloy::primitives::Address;
+use utils::hello_world::TaskData;
 
 use crate::config::Config;
 
@@ -45,12 +46,12 @@ impl HttpState {
 #[derive(Clone, Debug)]
 pub struct Task {
     pub operator: Address,
-    pub data: Vec<u8>,
+    pub data: TaskData,
     pub signature: Vec<u8>,
 }
 
 impl Task {
-    pub fn new(operator: Address, data: Vec<u8>, signature: Vec<u8>) -> Self {
+    pub fn new(operator: Address, data: TaskData, signature: Vec<u8>) -> Self {
         Self {
             operator,
             data,
