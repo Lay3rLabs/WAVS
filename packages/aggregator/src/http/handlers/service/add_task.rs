@@ -120,6 +120,7 @@ pub async fn check_operator(
         return Err(anyhow!("Operator is not registered {operator} in {service}").into());
     }
 
+    // Check operator signature matches
     let stake_registry = hello_world_service.stakeRegistry().call().await?._0;
     let ecdsa_signature = ECDSAStakeRegistry::new(stake_registry, provider);
     let expected_address = ecdsa_signature

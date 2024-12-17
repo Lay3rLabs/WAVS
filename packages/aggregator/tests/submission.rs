@@ -85,7 +85,16 @@ async fn submit_to_chain() {
     let response = aggregator::http::handlers::service::add_task::add_task(state, request)
         .await
         .unwrap();
-    assert!(response.hash.is_some())
+    assert!(response.hash.is_some());
+
+    // Ensure it's landed!
+    let response = hello_world_client
+        .contract
+        .allTaskResponses(hello_world_client.eth.address(), taskIndex)
+        .call()
+        .await
+        .unwrap();
+    assert!(!response._0.is_empty())
 }
 
 #[tokio::test]
@@ -188,6 +197,15 @@ async fn submit_to_chain_three() {
         .await
         .unwrap();
     assert!(response.hash.is_some());
+
+    // Ensure it's landed!
+    let response = hello_world_client
+        .contract
+        .allTaskResponses(hello_world_client.contract_address, taskIndex)
+        .call()
+        .await
+        .unwrap();
+    assert!(!response._0.is_empty())
 }
 
 #[tokio::test]
@@ -229,10 +247,7 @@ async fn invalid_operator_signature() {
         .await
         .unwrap();
     let invalid_signer = MnemonicBuilder::<English>::default()
-        .phrase("test test test test test test test test test test test junk")
-        .index(1337)
-        .unwrap()
-        .build()
+        .build_random_with(&mut OsRng)
         .unwrap();
 
     let hello_world_client = hello_world_client.into_simple();
