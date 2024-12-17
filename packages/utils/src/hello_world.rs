@@ -49,8 +49,16 @@ pub struct AddTaskRequest {
     /// Address of the avs
     pub service: Address,
     pub operator: Address,
-    pub new_data: Vec<u8>,
+    pub new_data: TaskData,
     pub signature: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskData {
+    pub name: String,
+    pub task_index: u32,
+    pub task_created_block: u32,
 }
 
 /// Returns hash in case there if threshold reached

@@ -6,6 +6,7 @@ use crate::{
     eth_client::EthSigningClient,
     hello_world::{
         solidity_types::hello_world::HelloWorldServiceManager::TaskResponded, AddTaskRequest,
+        TaskData,
     },
 };
 
@@ -22,7 +23,7 @@ use alloy::{
     primitives::{keccak256, Address, FixedBytes, U256},
     providers::Provider,
     signers::SignerSync,
-    sol_types::{SolCall, SolValue},
+    sol_types::SolValue,
 };
 use anyhow::{ensure, Context, Result};
 
@@ -132,13 +133,11 @@ impl HelloWorldSimpleClient {
         let contract =
             HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
 
-        let call = HelloWorldServiceManager::respondToTaskCall {
-            task,
-            referenceTaskIndex: task_index,
-            // Filled by aggregator
-            signature: Default::default(),
+        let new_data = TaskData {
+            name: task.name,
+            task_index,
+            task_created_block: task.taskCreatedBlock,
         };
-        let new_data = call.abi_encode();
 
         let operator = self.eth.address();
         let service = *contract.address();

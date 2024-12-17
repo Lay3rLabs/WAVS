@@ -1,8 +1,6 @@
-use alloy::{primitives::Bytes, sol_types::SolCall};
+use alloy::primitives::Bytes;
 use axum::{extract::State, response::IntoResponse, Json};
-use utils::hello_world::{
-    solidity_types::hello_world::HelloWorldServiceManager, AddTaskRequest, AddTaskResponse,
-};
+use utils::hello_world::{solidity_types::hello_world, AddTaskRequest, AddTaskResponse};
 
 use crate::http::{
     error::HttpResult,
@@ -38,14 +36,18 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
         // ✅(currently implemented) Add respond many on AVS endpoint
 
         // Send batch txs
-        let hello_world_service = HelloWorldServiceManager::new(key.1, &eth_client.http_provider);
+        let hello_world_service =
+            hello_world::HelloWorldServiceManager::new(key.1, &eth_client.http_provider);
         let mut tasks = vec![];
         let mut indexes = vec![];
         let mut signatures = vec![];
         for item in queue {
-            let call = HelloWorldServiceManager::respondToTaskCall::abi_decode(&item.data, true)?;
-            tasks.push(call.task);
-            indexes.push(call.referenceTaskIndex);
+            let task_data = item.data;
+            tasks.push(hello_world::Task {
+                name: task_data.name,
+                taskCreatedBlock: task_data.task_created_block,
+            });
+            indexes.push(task_data.task_index);
             signatures.push(Bytes::from(item.signature));
         }
 
