@@ -3,6 +3,7 @@ pub mod config;
 pub mod http;
 pub mod test_utils;
 
+use tokio::sync::broadcast::Receiver;
 pub use utils::context::AppContext;
 
 /// Entry point to start up the server
@@ -15,8 +16,30 @@ pub fn run_server(ctx: AppContext, config: config::Config) {
         }
     });
 
-    // start the http server in its own thread
-    http::server::start(ctx, config).unwrap();
+    // Create a future that completes when kill signal is received
+    let mut kill_signal: Receiver<()> = ctx.get_kill_receiver();
+
+    // Start the http server with shutdown signal
+    ctx.rt.block_on(async {
+        let server = http::server::start(ctx.clone(), config)?;
+
+        // Wait for either server error or kill signal
+        tokio::select! {
+            _ = kill_signal.recv() => {
+                tracing::info!("Aggregator received shutdown signal");
+                Ok(())
+            }
+            result = server => {
+                match result {
+                    Ok(inner_result) => inner_result,
+                    Err(e) => {
+                        tracing::error!("Server join error: {}", e);
+                        Err(anyhow::anyhow!("Server join error: {}", e))
+                    }
+                }
+            }
+        }
+    }).expect("Runtime error");
 }
 
 // the test version of init_tracing does not take a config
