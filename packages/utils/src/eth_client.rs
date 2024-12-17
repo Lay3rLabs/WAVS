@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use alloy::{
     network::EthereumWallet,
-    primitives::{Address, TxHash},
+    primitives::Address,
     providers::{Identity, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     signers::{
@@ -143,22 +143,4 @@ impl EthClientBuilder {
             signer: Arc::new(signer),
         })
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AddTaskRequest {
-    pub task_id: String,
-    /// Address of the avs
-    pub service: Address,
-    pub operator: Address,
-    pub new_data: Vec<u8>,
-    pub signature: Vec<u8>,
-}
-
-/// Returns hash in case there if threshold reached
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AddTaskResponse {
-    pub hash: Option<TxHash>,
 }

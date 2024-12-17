@@ -15,6 +15,7 @@ pub struct HttpState {
     pub aggregator_state: Arc<RwLock<TasksMap>>,
 }
 
+// Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
     pub fn new(config: Config) -> anyhow::Result<Self> {
         Ok(Self {

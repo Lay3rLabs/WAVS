@@ -20,12 +20,11 @@ use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    eth_client::{AddTaskRequest, AddTaskResponse},
-    hello_world::solidity_types::hello_world::Task as HelloWorldTask,
-};
-use utils::{
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
-    hello_world::HelloWorldSimpleClient,
+    hello_world::{
+        solidity_types::hello_world::Task as HelloWorldTask, AddTaskRequest, AddTaskResponse,
+        HelloWorldSimpleClient,
+    },
 };
 
 #[derive(Clone)]
@@ -81,7 +80,7 @@ impl ChainEthSubmission {
             .as_ref()
             .map(|endpoint| endpoint.parse())
             .transpose()
-            .map_err(SubmissionError::FaucetUrl)?;
+            .map_err(SubmissionError::AggregatorUrl)?;
         let client_config = config.into();
 
         Ok(Self {
@@ -473,13 +472,11 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
                                             match _self.add_task_to_aggregator(&eth_client, &request).await {
-                                                Ok(r) => {
-                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful: {:?}", avs_client.contract_address, task_index, r);
-                                                    let b = avs_client
-                                                        .task_responded_hash(task_index)
-                                                        .await
-                                                        .unwrap();
-                                                    tracing::debug!("Task hash: {:?}", b);
+                                                Ok(response) => {
+                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                                    if let Some(hash) = response.hash {
+                                                        tracing::debug!("Task hash: {}", hash);
+                                                    }
                                                 },
                                                 Err(e) => {
                                                     tracing::error!("Aggregation failed: {:?}", e);

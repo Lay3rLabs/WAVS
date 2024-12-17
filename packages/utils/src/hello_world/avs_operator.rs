@@ -12,7 +12,6 @@ use super::HelloWorldFullClient;
 use anyhow::Result;
 
 impl HelloWorldFullClient {
-    // TODO: could be done by aggregator
     pub async fn register_operator(&self, rng: &mut impl Rng) -> Result<TxHash> {
         let mut salt = [0u8; 32];
         rng.fill_bytes(&mut salt);
