@@ -14,7 +14,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use alloy_rlp::Encodable;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
 use layer_climb::prelude::*;
@@ -33,7 +33,7 @@ use utils::{
 #[derive(Clone)]
 pub struct CoreTriggerManager {
     pub cosmos_chain_config: Option<layer_climb::prelude::ChainConfig>,
-    pub chain_config: Option<EthClientConfig>,
+    pub ethereum_chain_config: Option<EthClientConfig>,
     pub channel_bound: usize,
     lookup_maps: Arc<LookupMaps>,
 }
@@ -67,19 +67,39 @@ impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
-        let cosmos_chain_config = config
-            .try_cosmos_chain_config()
-            .map_err(TriggerError::Climb)?
-            .map(|chain_config| chain_config.into());
+        let enabled_configs = match config.enabled_chain_configs() {
+            Ok(enabled) => enabled,
+            Err(e) => return Err(TriggerError::ChainConfig(e)),
+        };
 
-        let chain_config = config
-            .try_ethereum_chain_config()
-            .map_err(TriggerError::Ethereum)?
-            .map(|chain_config| chain_config.into());
+        // TODO: change this to support multiple, not just this hacky 1 off
+        let mut ethereum_chain_config: Option<EthClientConfig> = None;
+        let mut cosmos_chain_config: Option<layer_climb::prelude::ChainConfig> = None;
+        for (chain_id, eth_cfg) in enabled_configs.eth.iter() {
+            tracing::debug!(
+                "Ethereum chain config: {} -> {}",
+                chain_id,
+                eth_cfg.ws_endpoint
+            );
+            let ec: EthClientConfig = eth_cfg.clone().into();
+            ethereum_chain_config = Some(ec);
+            break;
+        }
+
+        for (chain_id, cosmos_cfg) in enabled_configs.cosmos.iter() {
+            tracing::debug!(
+                "Cosmos chain config: {} -> {}",
+                chain_id,
+                cosmos_cfg.rpc_endpoint
+            );
+            let cc: layer_climb::prelude::ChainConfig = cosmos_cfg.clone().into();
+            cosmos_chain_config = Some(cc.clone());
+            break;
+        }
 
         Ok(Self {
             cosmos_chain_config,
-            chain_config,
+            ethereum_chain_config,
             channel_bound: 100, // TODO: get from config
             lookup_maps: Arc::new(LookupMaps::new()),
         })
@@ -112,7 +132,7 @@ impl CoreTriggerManager {
             None => None,
         };
 
-        let ethereum_client = match self.chain_config.clone() {
+        let ethereum_client = match self.ethereum_chain_config.clone() {
             Some(chain_config) => {
                 tracing::debug!("Ethereum client started on {}", chain_config.ws_endpoint);
                 Some(
@@ -530,7 +550,8 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            chain: Some("test".to_string()),
+            enabled_cosmos: vec!["test-cosmos".to_string()],
+            enabled_ethereum: vec!["test-eth".to_string()],
             chains: ChainConfigs {
                 eth: [(
                     "test-eth".to_string(),

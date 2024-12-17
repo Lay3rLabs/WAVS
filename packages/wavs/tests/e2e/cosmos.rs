@@ -19,7 +19,10 @@ impl CosmosTestApp {
         let task_queue_addr = std::env::var("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS")
             .expect("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS not set");
 
-        let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().into();
+        let chain_config: ChainConfig = config
+            .try_cosmos_chain_config(&config.enabled_cosmos[0])
+            .unwrap()
+            .into();
 
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
         let signing_client = SigningClient::new(chain_config.clone(), key_signer)

@@ -174,18 +174,19 @@ async fn config_dotenv() {
 }
 
 // tests that we load chain config section correctly
+// TODO: fix this test / cli args & overrides for the new generic support
 #[tokio::test]
 async fn config_chains() {
     let config = TestApp::new().await.config;
 
-    let chain_config = config.cosmos_chain_config().unwrap();
+    let chain_config = config.cosmos_chain_config("layer-local").unwrap();
     assert_eq!(chain_config.chain_id, "layer-local");
 
     // change the target chain via cli
     let mut cli_args = TestApp::default_cli_args();
     cli_args.cosmos_chain = Some("layer-hacknet".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.cosmos_chain_config().unwrap();
+    let chain_config = config.cosmos_chain_config("layer-hacknet").unwrap();
     assert_eq!(chain_config.chain_id, "layer-hack-1");
 
     // change the rpc endpoint for cosmos
@@ -193,7 +194,7 @@ async fn config_chains() {
     cli_args.chain_config.cosmos_rpc_endpoint = Some("http://example.com:1234".to_string());
     cli_args.chain_config.http_endpoint = Some("THIS-ISN'T-USED".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.cosmos_chain_config().unwrap();
+    let chain_config = config.cosmos_chain_config("layer-hacknet").unwrap();
     assert_eq!(chain_config.rpc_endpoint, "http://example.com:1234");
 
     // change the http endpoint for ethereum
@@ -202,6 +203,6 @@ async fn config_chains() {
     cli_args.chain_config.http_endpoint = Some("http://example.com:1234".to_string());
     cli_args.chain = Some("local".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.ethereum_chain_config().unwrap();
+    let chain_config = config.ethereum_chain_config("local").unwrap();
     assert_eq!(chain_config.http_endpoint, "http://example.com:1234");
 }

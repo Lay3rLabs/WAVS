@@ -1,4 +1,7 @@
-use crate::http::{error::HttpResult, state::HttpState};
+use crate::{
+    config::CosmosChainConfig,
+    http::{error::HttpResult, state::HttpState},
+};
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use layer_climb::prelude::*;
@@ -21,7 +24,13 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     // TODO - get the operators from the dispatcher, and/or Eigenlayer?
 
-    let cosmos_chain_config = state.config.cosmos_chain_config()?;
+    // let cosmos_chain_config = state.config.cosmos_chain_config()?;
+
+    // TODO: fix this to actually be dynamic
+    let cosmos_chain_config = state
+        .config
+        .cosmos_chain_config(&state.config.enabled_cosmos[0])
+        .unwrap();
 
     let mnemonic = cosmos_chain_config
         .submission_mnemonic

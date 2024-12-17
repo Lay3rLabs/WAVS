@@ -96,17 +96,39 @@ impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
-        let cosmos_chain = config
-            .try_cosmos_chain_config()
-            .map_err(SubmissionError::Climb)?
-            .map(ChainCosmosSubmission::new)
-            .transpose()?;
+        let enabled_configs = match config.enabled_chain_configs() {
+            Ok(enabled) => enabled,
+            Err(e) => return Err(SubmissionError::ChainConfig(e)),
+        };
 
-        let eth_chain = config
-            .try_ethereum_chain_config()
-            .map_err(SubmissionError::Ethereum)?
-            .map(ChainEthSubmission::new)
-            .transpose()?;
+        // TODO: change this to support multiple, not just this hacky 1 off
+        let mut eth_chain: Option<ChainEthSubmission> = None;
+        let mut cosmos_chain: Option<ChainCosmosSubmission> = None;
+        for (chain_id, eth_cfg) in enabled_configs.eth.iter() {
+            tracing::debug!(
+                "Ethereum chain config: {} -> {}",
+                chain_id,
+                eth_cfg.ws_endpoint
+            );
+            eth_chain = match ChainEthSubmission::new(eth_cfg.to_owned()) {
+                Ok(chain) => Some(chain),
+                Err(e) => return Err(SubmissionError::ChainConfig(e.into())),
+            };
+            break;
+        }
+
+        for (chain_id, cosmos_cfg) in enabled_configs.cosmos.iter() {
+            tracing::debug!(
+                "Cosmos chain config: {} -> {}",
+                chain_id,
+                cosmos_cfg.rpc_endpoint
+            );
+            cosmos_chain = match ChainCosmosSubmission::new(cosmos_cfg.to_owned()) {
+                Ok(chain) => Some(chain),
+                Err(e) => return Err(SubmissionError::ChainConfig(e.into())),
+            };
+            break;
+        }
 
         Ok(Self {
             cosmos_clients: Arc::new(Mutex::new(HashMap::new())),

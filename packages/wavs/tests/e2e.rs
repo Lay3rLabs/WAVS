@@ -22,6 +22,7 @@ mod e2e {
     use serde::{Deserialize, Serialize};
     use wavs::{
         apis::{dispatcher::Submit, ServiceID},
+        config::{CosmosChainConfig, EthereumChainConfig},
         test_utils::app::TestApp,
     };
     use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};
@@ -32,7 +33,7 @@ mod e2e {
             if #[cfg(feature = "e2e_tests_ethereum")] {
                 let anvil = Some(Anvil::new().spawn());
             } else {
-                let mut anvil = None;
+                let anvil: Option<AnvilInstance> = None;
             }
         }
         let mut config = {
@@ -65,19 +66,24 @@ mod e2e {
                 .unwrap()
         };
 
+        // let mut cosmos_chain_name: String = "".to_string();
         cfg_if::cfg_if! {
+            // TODO:
             if #[cfg(feature = "e2e_tests_cosmos")] {
-                config.cosmos_chain = Some(config.cosmos_chain.clone().unwrap());
+                // config.cosmos_chain = Some(config.cosmos_chain.clone().unwrap());
+                config.enabled_cosmos = vec!["31337".to_string()];
             } else {
-                config.cosmos_chain = None;
+                config.enabled_cosmos = vec![];
             }
         }
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.chain = Some(config.chain.clone().unwrap());
+                // TODO:
+                // config.chain = Some(config.chain.clone().unwrap());
+                config.enabled_ethereum = vec!["local".to_string()];
             } else {
-                config.chain = None;
+                config.enabled_ethereum = vec![];
             }
         }
 
@@ -148,7 +154,16 @@ mod e2e {
                             }
                         };
 
-                        match (config.cosmos_chain.is_some(), config.chain.is_some()) {
+                        let cosmos_config: Result<CosmosChainConfig, _> = config
+                            .try_cosmos_chain_config(
+                                &config.enabled_cosmos.get(0).unwrap_or(&"".to_string()),
+                            );
+                        let eth_config: Result<EthereumChainConfig, _> = config
+                            .try_ethereum_chain_config(
+                                &config.enabled_ethereum.get(0).unwrap_or(&"".to_string()),
+                            );
+
+                        match (cosmos_config.is_ok(), eth_config.is_ok()) {
                             (true, false) => {
                                 run_tests_cosmos(http_client, config, permissions_wasm_digest).await
                             }

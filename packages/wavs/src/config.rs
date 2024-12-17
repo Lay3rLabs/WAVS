@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, ops::Deref, path::PathBuf};
 use utils::eth_client::EthClientConfig;
 
 use crate::args::{CliArgs, OptionalWavsChainConfig};
@@ -35,11 +35,9 @@ pub struct Config {
     pub wasm_lru_size: usize,
     pub wasm_threads: usize,
 
-    /// The chosen ethereum chain name
-    pub chain: Option<String>,
-
-    /// The chosen cosmos chain name
-    pub cosmos_chain: Option<String>,
+    /// TODO: ideally merge these or do within the chain configs themselves (seems like bad ux there)
+    pub enabled_ethereum: Vec<String>,
+    pub enabled_cosmos: Vec<String>,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -58,8 +56,8 @@ impl Default for Config {
             host: "localhost".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
-            cosmos_chain: None,
-            chain: None,
+            enabled_ethereum: Vec::new(),
+            enabled_cosmos: Vec::new(),
             chains: ChainConfigs {
                 cosmos: HashMap::new(),
                 eth: HashMap::new(),
@@ -72,18 +70,40 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn cosmos_chain_config(&self) -> Result<CosmosChainConfig> {
-        let chain_name = self.cosmos_chain.as_deref();
-        self.try_cosmos_chain_config()?.ok_or(anyhow!(
-            "No chain config found for cosmos chain \"{}\"",
-            chain_name.unwrap_or_default()
-        ))
-    }
-    pub fn try_cosmos_chain_config(&self) -> Result<Option<CosmosChainConfig>> {
-        let chain_name = self.cosmos_chain.as_deref();
+    pub fn enabled_chain_configs(&self) -> Result<ChainConfigs> {
+        let mut cc = ChainConfigs::new();
 
-        let config = match chain_name.and_then(|chain_name| self.chains.cosmos.get(chain_name)) {
-            None => return Ok(None),
+        for name in &self.enabled_cosmos {
+            self.cosmos_chain_config(name).map(|cfg| {
+                cc.cosmos.insert(cfg.chain_id.to_string(), cfg);
+            })?;
+        }
+
+        for name in &self.enabled_ethereum {
+            self.ethereum_chain_config(name).map(|cfg| {
+                cc.eth.insert(cfg.chain_id.to_string(), cfg);
+            })?;
+        }
+
+        Ok(cc)
+    }
+
+    pub fn cosmos_chain_config(&self, chain_name: &str) -> Result<CosmosChainConfig> {
+        let config = match self.chains.cosmos.get(chain_name) {
+            None => {
+                let k: String = self
+                    .chains
+                    .eth
+                    .keys()
+                    .map(|k| k.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(anyhow!(
+                    "No cosmos chain config found: {} in {}",
+                    chain_name,
+                    k
+                ));
+            }
             Some(config) => config,
         };
 
@@ -130,21 +150,22 @@ impl Config {
             .merge(figment::providers::Serialized::defaults(config_override))
             .extract()?;
 
-        Ok(Some(config_merged))
+        Ok(config_merged)
     }
 
-    pub fn ethereum_chain_config(&self) -> Result<EthereumChainConfig> {
-        let chain_name = self.chain.as_deref();
-        self.try_ethereum_chain_config()?.ok_or(anyhow!(
-            "No chain config found for ethereum \"{}\"",
-            chain_name.unwrap_or_default()
-        ))
-    }
-    pub fn try_ethereum_chain_config(&self) -> Result<Option<EthereumChainConfig>> {
-        let chain_name = self.chain.as_deref();
+    pub fn ethereum_chain_config(&self, name: &str) -> Result<EthereumChainConfig> {
+        let config = match self.chains.eth.get(name) {
+            None => {
+                let k: String = self
+                    .chains
+                    .eth
+                    .keys()
+                    .map(|k| k.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
-        let config = match chain_name.and_then(|chain_name| self.chains.eth.get(chain_name)) {
-            None => return Ok(None),
+                return Err(anyhow!("No ethereum chain config found: {} in {}", name, k));
+            }
             Some(config) => config,
         };
 
@@ -182,7 +203,7 @@ impl Config {
             .merge(figment::providers::Serialized::defaults(config_override))
             .extract()?;
 
-        Ok(Some(config_merged))
+        Ok(config_merged)
     }
 }
 
@@ -192,6 +213,15 @@ pub struct ChainConfigs {
     pub cosmos: HashMap<String, CosmosChainConfig>,
     /// Ethereum-style chains
     pub eth: HashMap<String, EthereumChainConfig>,
+}
+
+impl ChainConfigs {
+    pub fn new() -> Self {
+        Self {
+            cosmos: HashMap::new(),
+            eth: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

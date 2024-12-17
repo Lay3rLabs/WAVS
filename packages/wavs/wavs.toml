@@ -25,11 +25,9 @@ cors_allowed_origins = [
 # the directory to store the data. Default is "/var/wavs"
 # data = "~/wavs/data"
 
-# chosen eth chain name 
-chain = "local"
-
-# chosen cosmos chain name 
-# cosmos_chain = "layer-local"
+# The enabled chain names for this instance
+enabled_ethereum = ["local"]
+enabled_cosmos = []
 
 [chains.cosmos.layer-local]
 chain_id = "layer-local"

@@ -51,4 +51,6 @@ pub enum SubmissionError {
     MissingAggregatorEndpoint,
     #[error("aggregator url: {0}")]
     AggregatorUrl(url::ParseError),
+    #[error("ChainConfig error loading: {0}")]
+    ChainConfig(anyhow::Error),
 }

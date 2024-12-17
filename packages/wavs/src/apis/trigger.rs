@@ -147,4 +147,6 @@ pub enum TriggerError {
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
+    #[error("ChainConfig error loading: {0}")]
+    ChainConfig(anyhow::Error),
 }
