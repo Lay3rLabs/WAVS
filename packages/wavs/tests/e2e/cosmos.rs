@@ -20,7 +20,7 @@ impl CosmosTestApp {
             .expect("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS not set");
 
         let chain_config: ChainConfig = config
-            .try_cosmos_chain_config(&config.enabled_cosmos[0])
+            .cosmos_chain_config(&config.enabled_cosmos[0])
             .unwrap()
             .into();
 

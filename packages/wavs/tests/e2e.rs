@@ -155,11 +155,11 @@ mod e2e {
                         };
 
                         let cosmos_config: Result<CosmosChainConfig, _> = config
-                            .try_cosmos_chain_config(
+                            .cosmos_chain_config(
                                 &config.enabled_cosmos.get(0).unwrap_or(&"".to_string()),
                             );
                         let eth_config: Result<EthereumChainConfig, _> = config
-                            .try_ethereum_chain_config(
+                            .ethereum_chain_config(
                                 &config.enabled_ethereum.get(0).unwrap_or(&"".to_string()),
                             );
 
