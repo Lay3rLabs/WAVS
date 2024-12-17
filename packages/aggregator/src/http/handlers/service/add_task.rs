@@ -119,7 +119,7 @@ pub async fn check_operator(
         .await?
         ._0;
     if operator_status != OperatorAVSRegistrationStatus::REGISTERED().into() {
-        return Err(anyhow!("Operator {operator} is not registered in {service}").into());
+        return Err(anyhow!("Operator is not registered {operator} in {service}").into());
     }
 
     let stake_registry = hello_world_service.stakeRegistry().call().await?._0;
