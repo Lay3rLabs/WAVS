@@ -11,12 +11,11 @@ use super::{
 };
 
 // this is called from main
-pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
-    // The server runs within the tokio runtime
-    ctx.rt.clone().block_on(async move {
+pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
+    let mut shutdown_signal = ctx.get_kill_receiver();
+    let handle = ctx.rt.spawn(async move {
         let (host, port) = (config.host.clone(), config.port);
 
-        let mut shutdown_signal = ctx.get_kill_receiver();
         let router = make_router(config).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
@@ -26,15 +25,14 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
         axum::serve(listener, router)
             .with_graceful_shutdown(async move {
                 shutdown_signal.recv().await.ok();
-
                 tracing::debug!("Http server shutting down");
             })
             .await?;
 
         anyhow::Ok(())
-    })?;
+    });
 
-    Ok(())
+    Ok(handle)
 }
 
 // this is called from main and tests
