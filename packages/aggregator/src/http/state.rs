@@ -59,14 +59,21 @@ pub struct Task {
     pub operator: Address,
     pub data: TaskData,
     pub signature: Vec<u8>,
+    pub reference_block: u32,
 }
 
 impl Task {
-    pub fn new(operator: Address, data: TaskData, signature: Vec<u8>) -> Self {
+    pub fn new(
+        operator: Address,
+        data: TaskData,
+        signature: Vec<u8>,
+        reference_block: u32,
+    ) -> Self {
         Self {
             operator,
             data,
             signature,
+            reference_block,
         }
     }
 }

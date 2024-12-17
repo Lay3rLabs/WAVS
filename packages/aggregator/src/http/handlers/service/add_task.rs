@@ -1,4 +1,8 @@
-use alloy::primitives::{Address, Bytes};
+use alloy::{
+    primitives::{keccak256, Bytes, PrimitiveSignature, U256},
+    sol_types::SolValue,
+};
+use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
     eigen_client::solidity_types::{
@@ -6,8 +10,11 @@ use utils::{
         HttpSigningProvider,
     },
     hello_world::{
-        solidity_types::hello_world::{self, HelloWorldServiceManager},
-        AddTaskRequest, AddTaskResponse,
+        solidity_types::{
+            hello_world::{self, HelloWorldServiceManager},
+            stake_registry::ECDSAStakeRegistry,
+        },
+        AddTaskRequest, AddTaskResponse, HelloWorldSimpleClient,
     },
 };
 
@@ -30,8 +37,13 @@ pub async fn handle_add_message(
 pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTaskResponse> {
     let eth_client = state.config.signing_client().await?;
 
-    check_operator_registered(req.service, req.operator, &eth_client.http_provider).await?;
-    let task = Task::new(req.operator, req.new_data, req.signature);
+    check_operator(&req, &eth_client.http_provider).await?;
+    let task = Task::new(
+        req.operator,
+        req.new_data,
+        req.signature,
+        req.reference_block,
+    );
     let mut tasks_map = state.load_tasks(req.service)?;
     let queue = tasks_map
         .entry(req.task_id)
@@ -61,7 +73,13 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
                 taskCreatedBlock: task_data.task_created_block,
             });
             indexes.push(task_data.task_index);
-            signatures.push(Bytes::from(item.signature.clone()));
+            let signature = HelloWorldSimpleClient::batch_signature(
+                item.signature.clone(),
+                item.operator,
+                item.reference_block,
+            );
+
+            signatures.push(Bytes::from(signature));
         }
 
         let pending_tx = hello_world_service
@@ -83,12 +101,16 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
     Ok(AddTaskResponse { hash })
 }
 
-pub async fn check_operator_registered(
-    service: Address,
-    operator: Address,
+pub async fn check_operator(
+    task_request: &AddTaskRequest,
     provider: &HttpSigningProvider,
 ) -> HttpResult<()> {
+    let service = task_request.service;
+    let operator = task_request.operator;
+
     let hello_world_service = HelloWorldServiceManager::new(service, provider);
+
+    // Check Operator is registered
     let avs_directory_address = hello_world_service.avsDirectory().call().await?._0;
     let avs_directory = AVSDirectory::new(avs_directory_address, provider);
     let operator_status = avs_directory
@@ -97,7 +119,26 @@ pub async fn check_operator_registered(
         .await?
         ._0;
     if operator_status != OperatorAVSRegistrationStatus::REGISTERED().into() {
-        return Err(anyhow::anyhow!("Operator {operator} is not registered in {service}").into());
+        return Err(anyhow!("Operator {operator} is not registered in {service}").into());
     }
+
+    let stake_registry = hello_world_service.stakeRegistry().call().await?._0;
+    let ecdsa_signature = ECDSAStakeRegistry::new(stake_registry, provider);
+    let expected_address = ecdsa_signature
+        .getOperatorSigningKeyAtBlock(operator, U256::from(task_request.reference_block))
+        .call()
+        .await?
+        ._0;
+    let msg = keccak256(
+        format!("Hello, {}", task_request.new_data.name)
+            .abi_encode_packed()
+            .as_slice(),
+    );
+    let signature_address = PrimitiveSignature::try_from(task_request.signature.as_slice())?
+        .recover_address_from_msg(msg)?;
+    if expected_address != signature_address {
+        return Err(anyhow!("Operator signature does not match").into());
+    }
+
     Ok(())
 }

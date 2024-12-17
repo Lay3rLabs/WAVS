@@ -87,9 +87,11 @@ impl HelloWorldSimpleClient {
     ) -> Result<FixedBytes<32>> {
         tracing::debug!("Signing and responding to task index {}", task_index);
 
-        let signature = self.sign_task(&task.name).await?;
+        let signature = self.sign_task(&task.name)?;
+        let reference_block = self.eth.http_provider.get_block_number().await? as u32 - 1;
+        let batch_signature = Self::batch_signature(signature, self.eth.address(), reference_block);
 
-        self.submit_task(task, task_index, signature).await
+        self.submit_task(task, task_index, batch_signature).await
     }
 
     pub async fn submit_task(
@@ -128,7 +130,7 @@ impl HelloWorldSimpleClient {
     pub async fn task_request(&self, task: Task, task_index: u32) -> Result<AddTaskRequest> {
         tracing::debug!("Signing and responding to task index {}", task_index);
 
-        let signature = self.sign_task(&task.name).await?;
+        let signature = self.sign_task(&task.name)?;
 
         let contract =
             HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
@@ -141,6 +143,7 @@ impl HelloWorldSimpleClient {
 
         let operator = self.eth.address();
         let service = *contract.address();
+        let reference_block = self.eth.http_provider.get_block_number().await? as u32 - 1;
         let task_id = "respond_to_task".to_owned();
         Ok(AddTaskRequest {
             service,
@@ -148,27 +151,36 @@ impl HelloWorldSimpleClient {
             operator,
             new_data,
             signature,
+            reference_block,
         })
     }
 
-    pub async fn sign_task(&self, name: &str) -> Result<Vec<u8>> {
+    pub fn sign_task(&self, name: &str) -> Result<Vec<u8>> {
         let message = format!("Hello, {name}");
-        let operator_signature = DynSolValue::Bytes(
-            self.eth
-                .signer
-                .sign_message_sync(keccak256(message.abi_encode_packed()).as_slice())?
-                .into(),
-        );
 
-        let operator = DynSolValue::Address(self.eth.address());
-        let reference_block = self.eth.http_provider.get_block_number().await?;
-        let signature = DynSolValue::Tuple(vec![
+        let signature = self
+            .eth
+            .signer
+            .sign_message_sync(keccak256(message.abi_encode_packed()).as_slice())?
+            .into();
+
+        Ok(signature)
+    }
+
+    /// Returns signatures as batch of ECDSA signatures
+    pub fn batch_signature(
+        operator_signature: Vec<u8>,
+        operator: Address,
+        reference_block: u32,
+    ) -> Vec<u8> {
+        let operator_signature = DynSolValue::Bytes(operator_signature);
+
+        let operator = DynSolValue::Address(operator);
+        DynSolValue::Tuple(vec![
             DynSolValue::Array(vec![operator]),
             DynSolValue::Array(vec![operator_signature]),
             DynSolValue::Uint(U256::from(reference_block), 32),
         ])
-        .abi_encode_params();
-
-        Ok(signature)
+        .abi_encode_params()
     }
 }
