@@ -11,7 +11,10 @@ use super::{
 };
 
 // this is called from main
-pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
+pub fn start(
+    ctx: AppContext,
+    config: Config,
+) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
     let mut shutdown_signal = ctx.get_kill_receiver();
     let handle = ctx.rt.spawn(async move {
         let (host, port) = (config.host.clone(), config.port);

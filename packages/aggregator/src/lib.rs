@@ -3,7 +3,6 @@ pub mod config;
 pub mod http;
 pub mod test_utils;
 
-use tokio::sync::broadcast::Receiver;
 pub use utils::context::AppContext;
 
 /// Entry point to start up the server
