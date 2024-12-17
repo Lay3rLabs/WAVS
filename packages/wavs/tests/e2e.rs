@@ -94,7 +94,7 @@ mod e2e {
             }
         });
 
-        let _aggregator_handle = std::thread::spawn({
+        let aggregator_handle = std::thread::spawn({
             let config = aggregator_config.clone();
             let ctx = ctx.clone();
             move || {
@@ -178,7 +178,7 @@ mod e2e {
 
         test_handle.join().unwrap();
         wavs_handle.join().unwrap();
-        _aggregator_handle.join().unwrap();
+        aggregator_handle.join().unwrap();
     }
 
     async fn run_tests_ethereum(
