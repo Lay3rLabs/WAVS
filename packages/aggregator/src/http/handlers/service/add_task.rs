@@ -66,15 +66,15 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
         let mut tasks = vec![];
         let mut indexes = vec![];
         let mut signatures = vec![];
-        for item in queue.iter() {
-            let task_data = item.data.clone();
+        for item in queue.drain(..) {
+            let task_data = item.data;
             tasks.push(hello_world::Task {
                 name: task_data.name,
                 taskCreatedBlock: task_data.task_created_block,
             });
             indexes.push(task_data.task_index);
             let signature = HelloWorldSimpleClient::batch_signature(
-                item.signature.clone(),
+                item.signature,
                 item.operator,
                 item.reference_block,
             );
@@ -91,8 +91,6 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
 
         let tx_hash = pending_tx.watch().await?;
         tracing::debug!("Transactions included in a block");
-        // Clear tasks
-        queue.clear();
         Some(tx_hash)
     } else {
         None
