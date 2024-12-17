@@ -53,7 +53,7 @@ mod e2e {
                 }
             })
         };
-        let mut aggregator_config: aggregator::config::Config = {
+        let aggregator_config: aggregator::config::Config = {
             let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
             cli_args.dotenv = None;
             if let Some(anvil) = anvil.as_ref() {
@@ -76,7 +76,6 @@ mod e2e {
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
                 config.chain = Some(config.chain.clone().unwrap());
-                aggregator_config.chain = config.chain.clone().unwrap();
             } else {
                 config.chain = None;
             }
@@ -248,11 +247,12 @@ mod e2e {
                         .await
                         .unwrap(),
                     avs_simple_client
-                        .task_responded_hash(task1_index)
+                        .task_responded_hash(task2_index)
                         .await
                         .unwrap(),
                 );
                 if !task1_response_hash.is_empty() && !task2_response_hash.is_empty() {
+                    assert_ne!(task1_response_hash, task2_response_hash);
                     tracing::info!("GOT THE TASKS RESPONSE HASH!");
                     tracing::info!("foo: {}", hex::encode(task1_response_hash));
                     tracing::info!("bar: {}", hex::encode(task2_response_hash));

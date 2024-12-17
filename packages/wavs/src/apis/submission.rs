@@ -49,4 +49,6 @@ pub enum SubmissionError {
     NoCrossChainSubmissions,
     #[error("missing aggregator endpoint")]
     MissingAggregatorEndpoint,
+    #[error("aggregator url: {0}")]
+    AggregatorUrl(url::ParseError),
 }

@@ -1,8 +1,7 @@
 use alloy::{primitives::Bytes, sol_types::SolCall};
 use axum::{extract::State, response::IntoResponse, Json};
-use utils::{
-    eth_client::{AddTaskRequest, AddTaskResponse},
-    hello_world::solidity_types::hello_world::HelloWorldServiceManager,
+use utils::hello_world::{
+    solidity_types::hello_world::HelloWorldServiceManager, AddTaskRequest, AddTaskResponse,
 };
 
 use crate::http::{

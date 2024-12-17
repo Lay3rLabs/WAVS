@@ -1,5 +1,6 @@
-use alloy::primitives::Address;
+use alloy::primitives::{Address, TxHash};
 use config::HelloWorldAddresses;
+use serde::{Deserialize, Serialize};
 use solidity_types::HelloWorldServiceManagerT;
 mod avs_operator;
 
@@ -39,4 +40,22 @@ pub struct HelloWorldSimpleClient {
     pub eth: EthSigningClient,
     pub contract_address: Address,
     pub contract: HelloWorldServiceManagerT,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AddTaskRequest {
+    pub task_id: String,
+    /// Address of the avs
+    pub service: Address,
+    pub operator: Address,
+    pub new_data: Vec<u8>,
+    pub signature: Vec<u8>,
+}
+
+/// Returns hash in case there if threshold reached
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AddTaskResponse {
+    pub hash: Option<TxHash>,
 }

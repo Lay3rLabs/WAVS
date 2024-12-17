@@ -3,8 +3,10 @@
 
 use crate::{
     alloy_helpers::SolidityEventFinder,
-    eth_client::{AddTaskRequest, EthSigningClient},
-    hello_world::solidity_types::hello_world::HelloWorldServiceManager::TaskResponded,
+    eth_client::EthSigningClient,
+    hello_world::{
+        solidity_types::hello_world::HelloWorldServiceManager::TaskResponded, AddTaskRequest,
+    },
 };
 
 use super::{

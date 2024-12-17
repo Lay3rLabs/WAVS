@@ -32,9 +32,6 @@ pub struct Config {
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
 
-    /// The chosen chain name
-    pub chain: String,
-
     /// Websocket eth endpoint
     pub ws_endpoint: String,
 
@@ -60,7 +57,6 @@ impl Default for Config {
             log_level: vec!["info".to_string()],
             host: "localhost".to_string(),
             cors_allowed_origins: Vec::new(),
-            chain: String::new(),
             ws_endpoint: "ws://127.0.0.1:8545".to_string(),
             http_endpoint: "http://127.0.0.1:8545".to_string(),
             mnemonic: None,
