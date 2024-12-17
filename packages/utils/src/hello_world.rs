@@ -51,6 +51,7 @@ pub struct AddTaskRequest {
     pub operator: Address,
     pub new_data: TaskData,
     pub signature: Vec<u8>,
+    pub reference_block: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

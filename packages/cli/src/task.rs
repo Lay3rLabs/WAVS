@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use alloy::providers::Provider;
 use lavs_apis::id::TaskId;
 use utils::{
     eth_client::EthSigningClient,
@@ -24,7 +25,13 @@ pub async fn run_hello_world_task(
     if !wavs {
         tracing::info!("Submitting the task result directly");
 
-        let signature = client.sign_task(&format!("Hello, {name}")).await.unwrap();
+        let signature = client.sign_task(&format!("Hello, {name}")).unwrap();
+        let reference_block = client.eth.http_provider.get_block_number().await.unwrap() as u32 - 1;
+        let signature = HelloWorldSimpleClient::batch_signature(
+            signature,
+            client.eth.address(),
+            reference_block,
+        );
         let hello_world_service = &client.contract;
 
         let pending_tx = hello_world_service
