@@ -32,7 +32,7 @@ mod e2e {
             if #[cfg(feature = "e2e_tests_ethereum")] {
                 let anvil = Some(Anvil::new().spawn());
             } else {
-                let mut anvil = None;
+                let anvil: Option<AnvilInstance> = None;
             }
         }
         let mut config = {
@@ -178,8 +178,7 @@ mod e2e {
 
         test_handle.join().unwrap();
         wavs_handle.join().unwrap();
-        // TODO: figure out why it deadlocks on join
-        // _aggregator_handle.join().unwrap();
+        _aggregator_handle.join().unwrap();
     }
 
     async fn run_tests_ethereum(
