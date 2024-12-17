@@ -16,30 +16,14 @@ pub fn run_server(ctx: AppContext, config: config::Config) {
         }
     });
 
-    // Create a future that completes when kill signal is received
-    let mut kill_signal: Receiver<()> = ctx.get_kill_receiver();
-
-    // Start the http server with shutdown signal
-    ctx.rt.block_on(async {
-        let server = http::server::start(ctx.clone(), config)?;
-
-        // Wait for either server error or kill signal
-        tokio::select! {
-            _ = kill_signal.recv() => {
-                tracing::info!("Aggregator received shutdown signal");
-                Ok(())
-            }
-            result = server => {
-                match result {
-                    Ok(inner_result) => inner_result,
-                    Err(e) => {
-                        tracing::error!("Server join error: {}", e);
-                        Err(anyhow::anyhow!("Server join error: {}", e))
-                    }
-                }
-            }
+    let server_handle = std::thread::spawn({
+        let ctx = ctx.clone();
+        move || {
+            http::server::start(ctx.clone(), config).unwrap();
         }
-    }).expect("Runtime error");
+    });
+
+    server_handle.join().unwrap();
 }
 
 // the test version of init_tracing does not take a config
