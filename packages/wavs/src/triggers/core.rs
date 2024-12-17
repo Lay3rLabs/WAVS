@@ -14,7 +14,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use alloy_rlp::Encodable;
-use anyhow::{bail, Result};
+use anyhow::Result;
 use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
 use layer_climb::prelude::*;

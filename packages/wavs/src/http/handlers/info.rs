@@ -1,7 +1,4 @@
-use crate::{
-    config::CosmosChainConfig,
-    http::{error::HttpResult, state::HttpState},
-};
+use crate::http::{error::HttpResult, state::HttpState};
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use layer_climb::prelude::*;

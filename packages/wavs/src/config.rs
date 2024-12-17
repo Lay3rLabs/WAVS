@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ops::Deref, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 use utils::eth_client::EthClientConfig;
 
 use crate::args::{CliArgs, OptionalWavsChainConfig};
