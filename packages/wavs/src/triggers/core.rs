@@ -19,7 +19,7 @@ use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
 use layer_climb::prelude::*;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     pin::Pin,
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
@@ -32,10 +32,22 @@ use utils::{
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
-    pub cosmos_chain_config: Option<layer_climb::prelude::ChainConfig>,
-    pub ethereum_chain_config: Option<EthClientConfig>,
+    // key: ChainID
+    pub cosmos_chain_configs: HashMap<String, layer_climb::prelude::ChainConfig>,
+    // key: ChainID
+    pub ethereum_chain_configs: HashMap<String, EthClientConfig>,
     pub channel_bound: usize,
     lookup_maps: Arc<LookupMaps>,
+}
+
+pub enum BlockTriggers {
+    EthereumLog {
+        log: Log,
+    },
+    Layer {
+        // TODO: this feels very inefficient but works for now (i.e. make it contract based?).
+        triggers: HashMap<Address, HashMap<TaskId, QueryClient>>,
+    },
 }
 
 struct LookupMaps {
@@ -72,9 +84,9 @@ impl CoreTriggerManager {
             Err(e) => return Err(TriggerError::ChainConfig(e)),
         };
 
-        // TODO: change this to support multiple, not just this hacky 1 off
-        let mut ethereum_chain_config: Option<EthClientConfig> = None;
-        let mut cosmos_chain_config: Option<layer_climb::prelude::ChainConfig> = None;
+        let mut ethereum_chain_configs = HashMap::new();
+        let mut cosmos_chain_configs = HashMap::new();
+
         for (chain_id, eth_cfg) in enabled_configs.eth.iter() {
             tracing::debug!(
                 "Ethereum chain config: {} -> {}",
@@ -82,8 +94,7 @@ impl CoreTriggerManager {
                 eth_cfg.ws_endpoint
             );
             let ec: EthClientConfig = eth_cfg.clone().into();
-            ethereum_chain_config = Some(ec);
-            break;
+            ethereum_chain_configs.insert(eth_cfg.chain_id.to_string(), ec);
         }
 
         for (chain_id, cosmos_cfg) in enabled_configs.cosmos.iter() {
@@ -93,13 +104,12 @@ impl CoreTriggerManager {
                 cosmos_cfg.rpc_endpoint
             );
             let cc: layer_climb::prelude::ChainConfig = cosmos_cfg.clone().into();
-            cosmos_chain_config = Some(cc.clone());
-            break;
+            cosmos_chain_configs.insert(chain_id.to_string(), cc);
         }
 
         Ok(Self {
-            cosmos_chain_config,
-            ethereum_chain_config,
+            cosmos_chain_configs,
+            ethereum_chain_configs,
             channel_bound: 100, // TODO: get from config
             lookup_maps: Arc::new(LookupMaps::new()),
         })
@@ -114,108 +124,99 @@ impl CoreTriggerManager {
         let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<BlockTriggers>> + Send>>> =
             Vec::new();
 
-        enum BlockTriggers {
-            EthereumLog {
-                log: Log,
-            },
-            Layer {
-                triggers: HashMap<Address, HashSet<TaskId>>,
-            },
-        }
+        // Create clients for each Cosmos chain
+        for (_chain_id, chain_config) in self.cosmos_chain_configs.iter() {
+            if let Ok(query_client) = QueryClient::new(chain_config.clone()).await {
+                tracing::debug!(
+                    "Trigger Manager for Cosmos chain started on {} at {}",
+                    query_client.chain_config.chain_id, query_client.chain_config.rpc_endpoint,
+                );
 
-        let cosmos_client = match self.cosmos_chain_config.clone() {
-            Some(chain_config) => Some(
-                QueryClient::new(chain_config)
-                    .await
-                    .map_err(TriggerError::Climb)?,
-            ),
-            None => None,
-        };
+                let chain_config = query_client.chain_config.clone();
+                let query_client_clone = query_client.clone();
+                let event_stream: Pin<Box<dyn Stream<Item = Result<BlockTriggers>> + Send>> =
+                    Box::pin(
+                        query_client
+                            .stream_block_events(None)
+                            .await
+                            .map_err(TriggerError::Climb)?
+                            .map(move |block_events| {
+                                let mut task_created_events: HashMap<
+                                    Address,
+                                    HashMap<TaskId, QueryClient>,
+                                > = HashMap::new();
 
-        let ethereum_client = match self.ethereum_chain_config.clone() {
-            Some(chain_config) => {
-                tracing::debug!("Ethereum client started on {}", chain_config.ws_endpoint);
-                Some(
-                    EthClientBuilder::new(chain_config)
-                        .build_query()
-                        .await
-                        .map_err(TriggerError::Ethereum)?,
-                )
-            }
-            None => None,
-        };
-
-        if let Some(query_client) = cosmos_client.clone() {
-            tracing::debug!(
-                "Trigger Manager for Cosmos chain started on {}",
-                query_client.chain_config.chain_id
-            );
-
-            let chain_config = query_client.chain_config.clone();
-            let event_stream = Box::pin(
-                query_client
-                    .stream_block_events(None)
-                    .await
-                    .map_err(TriggerError::Climb)?
-                    .map(move |block_events| {
-                        let mut task_created_events: HashMap<Address, HashSet<TaskId>> =
-                            HashMap::new();
-
-                        match block_events {
-                            Ok(block_events) => {
-                                let events = CosmosTxEvents::from(block_events.events);
-
-                                for event in events.events_iter().map(cosmwasm_std::Event::from) {
-                                    if let Ok(task_event) = TaskCreatedEvent::try_from(&event) {
-                                        let contract_address =
-                                            event.attributes.iter().find_map(|attr| {
-                                                if attr.key == "_contract_address" {
-                                                    chain_config.parse_address(&attr.value).ok()
-                                                } else {
-                                                    None
+                                match block_events {
+                                    Ok(block_events) => {
+                                        let events = CosmosTxEvents::from(block_events.events);
+                                        for event in
+                                            events.events_iter().map(cosmwasm_std::Event::from)
+                                        {
+                                            if let Ok(task_event) =
+                                                TaskCreatedEvent::try_from(&event)
+                                            {
+                                                if let Some(contract_address) =
+                                                    event.attributes.iter().find_map(|attr| {
+                                                        if attr.key == "_contract_address" {
+                                                            chain_config
+                                                                .parse_address(&attr.value)
+                                                                .ok()
+                                                        } else {
+                                                            None
+                                                        }
+                                                    })
+                                                {
+                                                    task_created_events
+                                                        .entry(contract_address.clone())
+                                                        .or_default()
+                                                        .insert(
+                                                            task_event.task_id,
+                                                            query_client_clone.clone(),
+                                                        );
                                                 }
-                                            });
-
-                                        if let Some(contract_address) = contract_address {
-                                            task_created_events
-                                                .entry(contract_address)
-                                                .or_default()
-                                                .insert(task_event.task_id);
+                                            }
                                         }
                                     }
+                                    Err(err) => {
+                                        tracing::error!("Error: {:?}", err);
+                                    }
                                 }
-                            }
-                            Err(err) => {
-                                tracing::error!("Error: {:?}", err);
-                            }
-                        }
 
-                        Ok(BlockTriggers::Layer {
-                            triggers: task_created_events,
-                        })
-                    }),
-            );
+                                Ok(BlockTriggers::Layer {
+                                    triggers: task_created_events,
+                                })
+                            }),
+                    );
 
-            streams.push(event_stream);
+                streams.push(event_stream);
+            }
         }
 
-        if let Some(query_client) = ethereum_client.clone() {
-            tracing::debug!("Trigger Manager for Ethereum chain started");
-
-            // Start the event stream
-            let filter = Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
-
-            let stream = query_client
-                .ws_provider
-                .subscribe_logs(&filter)
+        // Create clients for each Ethereum chain
+        for (_chain_id, chain_config) in self.ethereum_chain_configs.iter() {
+            if let Ok(query_client) = EthClientBuilder::new(chain_config.clone())
+                .build_query()
                 .await
-                .map_err(|e| TriggerError::Ethereum(e.into()))?
-                .into_stream();
+            {
+                tracing::debug!(
+                    "Trigger Manager for Ethereum chain started on {}",
+                    chain_config.ws_endpoint
+                );
 
-            let event_stream =
-                Box::pin(stream.map(move |log| Ok(BlockTriggers::EthereumLog { log })));
+                let filter = Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
 
-            streams.push(event_stream);
+                let stream = query_client
+                    .ws_provider
+                    .subscribe_logs(&filter)
+                    .await
+                    .map_err(|e| TriggerError::Ethereum(e.into()))?
+                    .into_stream();
+
+                let event_stream =
+                    Box::pin(stream.map(move |log| Ok(BlockTriggers::EthereumLog { log })));
+
+                streams.push(event_stream);
+            }
         }
 
         // Multiplex all the stream of streams
@@ -250,10 +251,10 @@ impl CoreTriggerManager {
                 }
                 Ok(BlockTriggers::Layer { triggers }) => {
                     for (contract_address, task_ids) in triggers {
-                        for task_id in task_ids {
+                        for (task_id, cosmos_client) in task_ids {
                             let resp: Result<task_queue::TaskResponse> = cosmos_client
-                                .as_ref()
-                                .unwrap() // safe - only way we got this is by having a client in the first place
+                                // .as_ref()
+                                // .unwrap() // safe - only way we got this is by having a client in the first place
                                 .contract_smart(
                                     &contract_address,
                                     &task_queue::QueryMsg::Custom(
