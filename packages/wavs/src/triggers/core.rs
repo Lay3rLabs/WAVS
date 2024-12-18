@@ -120,7 +120,6 @@ impl CoreTriggerManager {
         &self,
         action_sender: mpsc::Sender<TriggerAction>,
     ) -> Result<(), TriggerError> {
-        // stream of streams, one for each chain
         let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<BlockTriggers>> + Send>>> =
             Vec::new();
 
@@ -129,7 +128,8 @@ impl CoreTriggerManager {
             if let Ok(query_client) = QueryClient::new(chain_config.clone()).await {
                 tracing::debug!(
                     "Trigger Manager for Cosmos chain started on {} at {}",
-                    query_client.chain_config.chain_id, query_client.chain_config.rpc_endpoint,
+                    query_client.chain_config.chain_id,
+                    query_client.chain_config.rpc_endpoint,
                 );
 
                 let chain_config = query_client.chain_config.clone();
@@ -192,106 +192,154 @@ impl CoreTriggerManager {
             }
         }
 
+        // let mut streams = futures::stream::select_all(streams);
+
         // Create clients for each Ethereum chain
         for (_chain_id, chain_config) in self.ethereum_chain_configs.iter() {
-            if let Ok(query_client) = EthClientBuilder::new(chain_config.clone())
-                .build_query()
-                .await
-            {
-                tracing::debug!(
-                    "Trigger Manager for Ethereum chain started on {}",
-                    chain_config.ws_endpoint
-                );
+            let config = chain_config.clone();
+            let action_sender = action_sender.clone();
+            let self_lookup_maps = Arc::clone(&self.lookup_maps);
+            let stream = tokio::spawn(async move {
+                loop {
+                    match EthClientBuilder::new(config.clone()).build_query().await {
+                        Ok(query_client) => {
+                            tracing::info!(
+                                "Trigger Manager for Ethereum chain started on {}",
+                                config.ws_endpoint
+                            );
 
-                let filter = Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
+                            let filter =
+                                Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
+                            tracing::debug!(
+                                "Created filter with signature: {:?}",
+                                NewTaskCreated::SIGNATURE_HASH
+                            );
 
-                let stream = query_client
-                    .ws_provider
-                    .subscribe_logs(&filter)
-                    .await
-                    .map_err(|e| TriggerError::Ethereum(e.into()))?
-                    .into_stream();
+                            match query_client.ws_provider.subscribe_logs(&filter).await {
+                                Ok(subscription) => {
+                                    tracing::info!("Successfully subscribed to logs with filter");
+                                    let stream = subscription.into_stream();
 
-                let event_stream =
-                    Box::pin(stream.map(move |log| Ok(BlockTriggers::EthereumLog { log })));
+                                    let mut stream =
+                                        stream.map(|log| -> Result<BlockTriggers, TriggerError> {
+                                            tracing::debug!("Received log: {:?}", log);
+                                            Ok(BlockTriggers::EthereumLog { log })
+                                        });
 
-                streams.push(event_stream);
-            }
-        }
+                                    while let Some(result) = stream.next().await {
+                                        match result {
+                                            Ok(trigger) => {
+                                                if let BlockTriggers::EthereumLog { log } = trigger
+                                                {
+                                                    if let Ok(event) = log
+                                                        .log_decode::<NewTaskCreated>()
+                                                        .map(|log| log.inner.data)
+                                                    {
+                                                        let contract_address = Address::Eth(
+                                                            AddrEth::new(log.address().into()),
+                                                        );
+                                                        let task_id =
+                                                            TaskId::new(event.taskIndex.into());
 
-        // Multiplex all the stream of streams
-        let mut streams = futures::stream::select_all(streams);
+                                                        let mut payload = Vec::new();
+                                                        EthHelloWorldTaskRlp {
+                                                            name: event.task.name,
+                                                            created_block: event
+                                                                .task
+                                                                .taskCreatedBlock,
+                                                        }
+                                                        .encode(&mut payload);
 
-        while let Some(res) = streams.next().await {
-            match res {
-                Err(err) => {
-                    tracing::error!("{:?}", err);
-                }
-                Ok(BlockTriggers::EthereumLog { log }) => {
-                    if let Ok(event) = log.log_decode::<NewTaskCreated>().map(|log| log.inner.data)
-                    {
-                        let contract_address = Address::Eth(AddrEth::new(log.address().into()));
-                        let task_id = TaskId::new(event.taskIndex.into());
+                                                        // Look up trigger data
+                                                        let lookup_id = {
+                                                            let triggers_by_task_queue_lock =
+                                                                self_lookup_maps
+                                                                    .triggers_by_task_queue
+                                                                    .read()
+                                                                    .unwrap();
 
-                        // TODO really we should query the contract, but hello world doesn't actually have a payload pipeline
-                        // rather, it's derived from the task name
-                        // let contract = HelloWorldServiceManager::new(log.address(), ethereum_client.as_ref().unwrap().http_provider.clone());
+                                                            match triggers_by_task_queue_lock
+                                                                .get(&contract_address)
+                                                            {
+                                                                Some(lookup_id) => *lookup_id,
+                                                                None => {
+                                                                    tracing::error!("No trigger found for task queue: {:?}", contract_address);
+                                                                    continue;
+                                                                }
+                                                            }
+                                                        };
 
-                        let mut payload = Vec::new();
+                                                        let trigger = {
+                                                            let all_trigger_data_lock =
+                                                                self_lookup_maps
+                                                                    .all_trigger_data
+                                                                    .read()
+                                                                    .unwrap();
 
-                        EthHelloWorldTaskRlp {
-                            name: event.task.name,
-                            created_block: event.task.taskCreatedBlock,
-                        }
-                        .encode(&mut payload);
+                                                            all_trigger_data_lock
+                                                                .get(&lookup_id)
+                                                                .ok_or(
+                                                                    TriggerError::NoSuchTriggerData(
+                                                                        lookup_id,
+                                                                    ),
+                                                                )
+                                                                .cloned()
+                                                        };
 
-                        self.handle_trigger(&action_sender, &contract_address, task_id, payload)
-                            .await;
-                    }
-                }
-                Ok(BlockTriggers::Layer { triggers }) => {
-                    for (contract_address, task_ids) in triggers {
-                        for (task_id, cosmos_client) in task_ids {
-                            let resp: Result<task_queue::TaskResponse> = cosmos_client
-                                // .as_ref()
-                                // .unwrap() // safe - only way we got this is by having a client in the first place
-                                .contract_smart(
-                                    &contract_address,
-                                    &task_queue::QueryMsg::Custom(
-                                        task_queue::CustomQueryMsg::Task { id: task_id },
-                                    ),
-                                )
-                                .await;
-
-                            let payload = match resp {
-                                Ok(resp) => {
-                                    if !matches!(resp.status, task_queue::Status::Open {}) {
-                                        tracing::debug!("task is not open: {:?}", resp);
-                                        continue;
+                                                        match trigger {
+                                                            Ok(trigger) => {
+                                                                if let Err(e) = action_sender
+                                                                    .send(TriggerAction {
+                                                                        config: trigger,
+                                                                        data: TriggerData::Queue {
+                                                                            task_id,
+                                                                            payload,
+                                                                        },
+                                                                    })
+                                                                    .await
+                                                                {
+                                                                    // If send fails, likely means receiver was dropped - exit loop
+                                                                    tracing::debug!("Action sender closed, exiting: {}", e);
+                                                                    return;
+                                                                }
+                                                            }
+                                                            Err(e) => {
+                                                                tracing::error!("Error getting trigger data: {:?}", e);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                tracing::error!("Error processing event: {:?}", e);
+                                                break;
+                                            }
+                                        }
                                     }
-                                    resp.payload
+                                    // Stream ended normally, exit the loop
+                                    tracing::debug!("WebSocket stream closed, exiting");
+                                    return;
                                 }
-                                Err(err) => {
-                                    tracing::error!("error querying task queue: {:?}", err);
-                                    continue;
+                                Err(e) => {
+                                    tracing::error!("Failed to subscribe to logs: {:?}", e);
                                 }
-                            };
-
-                            let payload = serde_json::to_vec(&payload)
-                                .map_err(|e| TriggerError::ParseAvsPayload(e.into()))?;
-
-                            self.handle_trigger(
-                                &action_sender,
-                                &contract_address,
-                                task_id,
-                                payload,
-                            )
-                            .await;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to build query client: {:?}", e);
                         }
                     }
+
+                    // Wait before reconnecting
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
-            }
+            });
         }
+
+
+
+        // Keep the watcher running
+        futures::future::pending::<()>().await;
 
         tracing::debug!("Trigger Manager watcher finished");
 
@@ -305,6 +353,13 @@ impl CoreTriggerManager {
         task_id: TaskId,
         payload: Vec<u8>,
     ) {
+        // Add debug logging
+        tracing::debug!(
+            "Handling trigger for contract: {:?}, task_id: {:?}",
+            contract_address,
+            task_id
+        );
+
         let lookup_id = {
             let triggers_by_task_queue_lock =
                 self.lookup_maps.triggers_by_task_queue.read().unwrap();
@@ -312,12 +367,14 @@ impl CoreTriggerManager {
             match triggers_by_task_queue_lock.get(contract_address) {
                 Some(lookup_id) => *lookup_id,
                 None => {
-                    tracing::debug!("not our task queue: {:?}", contract_address);
-
+                    tracing::error!("No trigger found for task queue: {:?}", contract_address);
                     return;
                 }
             }
         };
+
+        // Add more logging for trigger lookup
+        tracing::debug!("Found lookup_id: {} for contract", lookup_id);
 
         let trigger = {
             let all_trigger_data_lock = self.lookup_maps.all_trigger_data.read().unwrap();
@@ -330,16 +387,19 @@ impl CoreTriggerManager {
 
         match trigger {
             Ok(trigger) => {
-                action_sender
+                tracing::debug!("Sending trigger action for task_id: {:?}", task_id);
+                if let Err(e) = action_sender
                     .send(TriggerAction {
                         config: trigger,
                         data: TriggerData::Queue { task_id, payload },
                     })
                     .await
-                    .unwrap();
+                {
+                    tracing::error!("Failed to send trigger action: {:?}", e);
+                }
             }
             Err(err) => {
-                tracing::error!("error finding task: {:?}", err);
+                tracing::error!("Error finding trigger data: {:?}", err);
             }
         }
     }
