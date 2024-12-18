@@ -90,7 +90,7 @@ async fn submit_to_chain() {
     // Ensure it's landed!
     let response = hello_world_client
         .contract
-        .allTaskResponses(hello_world_client.eth.address(), taskIndex)
+        .allTaskResponses(hello_world_client.contract_address, taskIndex)
         .call()
         .await
         .unwrap();
