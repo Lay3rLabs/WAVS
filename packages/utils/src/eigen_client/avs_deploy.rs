@@ -339,7 +339,7 @@ pub async fn setup_empty_proxy_all(
         .as_slice()
         .try_into()?;
         let admin_address = eth
-            .http_provider
+            .provider
             .get_storage_at(*proxy.address(), admin_slot.into())
             .await?;
         let admin_address: Address = Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);

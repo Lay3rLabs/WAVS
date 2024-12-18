@@ -12,7 +12,10 @@ use alloy::{
     },
     pubsub::PubSubFrontend,
     sol,
-    transports::http::{Client, Http},
+    transports::{
+        http::{Client, Http},
+        BoxTransport,
+    },
 };
 
 pub mod delegation_manager {
@@ -150,5 +153,18 @@ pub type HttpSigningProvider = FillProvider<
     >,
     RootProvider<Http<Client>>,
     Http<Client>,
+    Ethereum,
+>;
+
+pub type BoxSigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<BoxTransport>,
+    BoxTransport,
     Ethereum,
 >;
