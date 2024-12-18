@@ -86,15 +86,23 @@ impl EthClientBuilder {
         Self { config }
     }
 
-    pub async fn build_query(self) -> Result<EthQueryClient> {
-        let provider = match (self.config.transport, &self.config.ws_endpoint) {
+    fn preferred_transport(&self) -> EthClientTransport {
+        match (self.config.transport, &self.config.ws_endpoint) {
             // Http preferred or no preference and no websocket
-            (Some(EthClientTransport::Http), _) | (None, None) => {
+            (Some(EthClientTransport::Http), _) | (None, None) => EthClientTransport::Http,
+            // Otherwise try to connect to websocket
+            _ => EthClientTransport::WebSocket,
+        }
+    }
+
+    pub async fn build_query(self) -> Result<EthQueryClient> {
+        let provider: RootProvider<BoxTransport> = match self.preferred_transport() {
+            // Http preferred or no preference and no websocket
+            EthClientTransport::Http => {
                 let endpoint_url = self.config.http_endpoint.parse()?;
                 ProviderBuilder::new().on_http(endpoint_url).boxed()
             }
-            // Otherwise try to connect to websocket
-            _ => {
+            EthClientTransport::WebSocket => {
                 let ws =
                     WsConnect::new(self.config.ws_endpoint.as_ref().context(
                         "Websocket is preferred transport, but endpoint was not provided",
@@ -134,5 +142,73 @@ impl EthClientBuilder {
             wallet: Arc::new(wallet),
             signer: Arc::new(signer),
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn preferred_transport() {
+        // Not specified preference, websocket provided
+        let transport = EthClientBuilder::new(EthClientConfig {
+            ws_endpoint: Some("foo".to_owned()),
+            http_endpoint: "bar".to_owned(),
+            transport: None,
+            ..Default::default()
+        })
+        .preferred_transport();
+        assert!(matches!(transport, EthClientTransport::WebSocket));
+
+        // Not specified preference, websocket not provided
+        let transport = EthClientBuilder::new(EthClientConfig {
+            ws_endpoint: None,
+            http_endpoint: "bar".to_owned(),
+            transport: None,
+            ..Default::default()
+        })
+        .preferred_transport();
+        assert!(matches!(transport, EthClientTransport::Http));
+
+        // Specified Http preference, websocket provided
+        let transport = EthClientBuilder::new(EthClientConfig {
+            ws_endpoint: Some("foo".to_owned()),
+            http_endpoint: "bar".to_owned(),
+            transport: Some(EthClientTransport::Http),
+            ..Default::default()
+        })
+        .preferred_transport();
+        assert!(matches!(transport, EthClientTransport::Http));
+
+        // Specified Http preference, websocket not provided
+        let transport = EthClientBuilder::new(EthClientConfig {
+            ws_endpoint: None,
+            http_endpoint: "bar".to_owned(),
+            transport: Some(EthClientTransport::Http),
+            ..Default::default()
+        })
+        .preferred_transport();
+        assert!(matches!(transport, EthClientTransport::Http));
+
+        // Specified Websocket preference, websocket provided
+        let transport = EthClientBuilder::new(EthClientConfig {
+            ws_endpoint: Some("foo".to_owned()),
+            http_endpoint: "bar".to_owned(),
+            transport: Some(EthClientTransport::WebSocket),
+            ..Default::default()
+        })
+        .preferred_transport();
+        assert!(matches!(transport, EthClientTransport::WebSocket));
+
+        // Specified Websocket preference, websocket not provided
+        let transport = EthClientBuilder::new(EthClientConfig {
+            ws_endpoint: None,
+            http_endpoint: "bar".to_owned(),
+            transport: Some(EthClientTransport::WebSocket),
+            ..Default::default()
+        })
+        .preferred_transport();
+        assert!(matches!(transport, EthClientTransport::WebSocket));
     }
 }
