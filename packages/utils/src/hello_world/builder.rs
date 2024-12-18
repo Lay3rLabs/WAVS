@@ -34,9 +34,8 @@ struct SetupAddrs {
 
 impl HelloWorldFullClientBuilder {
     async fn set_up(&self, strategy_factory: Address) -> Result<SetupAddrs> {
-        let token = LayerToken::deploy(self.eth.http_provider.clone()).await?;
-        let strategy_factory =
-            StrategyFactory::new(strategy_factory, self.eth.http_provider.clone());
+        let token = LayerToken::deploy(self.eth.provider.clone()).await?;
+        let strategy_factory = StrategyFactory::new(strategy_factory, self.eth.provider.clone());
 
         let tx_receipt = strategy_factory
             .deployNewStrategy(*token.address())
@@ -71,17 +70,16 @@ impl HelloWorldFullClientBuilder {
 
         let strategy = IStrategy::new(
             setup.quorum.strategies.first().as_ref().unwrap().strategy,
-            self.eth.http_provider.clone(),
+            self.eth.provider.clone(),
         );
 
         tracing::debug!("deploying ECDSA stake registry");
         let ecdsa_stake_registry_impl =
-            ECDSAStakeRegistry::deploy(self.eth.http_provider.clone(), core.delegation_manager)
-                .await?;
+            ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager).await?;
 
         tracing::debug!("deploying Hello world registry");
         let hello_world_impl = HelloWorldServiceManager::deploy(
-            self.eth.http_provider.clone(),
+            self.eth.provider.clone(),
             core.avs_directory,
             proxies.ecdsa_stake_registry,
             core.rewards_coordinator,
@@ -143,7 +141,7 @@ struct Proxies {
 
 impl Proxies {
     pub async fn new(eth: &EthSigningClient) -> Result<Self> {
-        let admin = ProxyAdmin::deploy(eth.http_provider.clone()).await?;
+        let admin = ProxyAdmin::deploy(eth.provider.clone()).await?;
 
         tracing::debug!("Eigen core proxy admin: {}", admin.address());
 

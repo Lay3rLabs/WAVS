@@ -13,7 +13,7 @@ impl EigenClient {
         let delegation_manager_address = avs_addresses.delegation_manager;
 
         let contract =
-            DelegationManager::new(delegation_manager_address, self.eth.http_provider.clone());
+            DelegationManager::new(delegation_manager_address, self.eth.provider.clone());
 
         let operator = OperatorDetails {
             __deprecated_earningsReceiver: self.eth.address(),

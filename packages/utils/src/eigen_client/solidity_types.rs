@@ -120,15 +120,15 @@ pub mod misc {
 }
 
 pub type EmptyContractT =
-    proxy::EmptyContract::EmptyContractInstance<Http<Client>, HttpSigningProvider>;
+    proxy::EmptyContract::EmptyContractInstance<BoxTransport, BoxSigningProvider>;
 
 pub type TransparentProxyContractT =
     proxy::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance<
-        Http<Client>,
-        HttpSigningProvider,
+        BoxTransport,
+        BoxSigningProvider,
     >;
 
-pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<Http<Client>, HttpSigningProvider>;
+pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<BoxTransport, BoxSigningProvider>;
 
 pub type WsSigningProvider = FillProvider<
     JoinFill<

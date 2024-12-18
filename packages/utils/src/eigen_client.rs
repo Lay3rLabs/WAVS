@@ -5,7 +5,7 @@ use std::fmt::{self, Debug, Formatter};
 
 use alloy::primitives::{Address, FixedBytes, U256};
 use serde::{Deserialize, Serialize};
-use solidity_types::{misc::AVSDirectory, HttpSigningProvider};
+use solidity_types::{misc::AVSDirectory, BoxSigningProvider};
 
 use crate::eth_client::EthSigningClient;
 
@@ -53,7 +53,7 @@ impl CoreAVSAddresses {
         avs: Address,
         salt: FixedBytes<32>,
         expiry: U256,
-        provider: HttpSigningProvider,
+        provider: BoxSigningProvider,
     ) -> Result<FixedBytes<32>> {
         let contract_avs_directory = AVSDirectory::new(self.avs_directory, provider);
 

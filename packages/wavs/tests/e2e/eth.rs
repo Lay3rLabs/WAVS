@@ -16,12 +16,13 @@ pub struct EthTestApp {
 impl EthTestApp {
     pub async fn new(_config: Config, anvil: AnvilInstance) -> Self {
         let config = EthClientConfig {
-            ws_endpoint: anvil.ws_endpoint().to_string(),
+            ws_endpoint: Some(anvil.ws_endpoint().to_string()),
             http_endpoint: anvil.endpoint().to_string(),
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),
             hd_index: None,
+            transport: None,
         };
 
         tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);

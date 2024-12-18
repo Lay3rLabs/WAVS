@@ -24,10 +24,11 @@ pub async fn get_eigen_client(args: &CliArgs) -> EigenClient {
     let mnemonic = std::env::var("CLI_ETH_MNEMONIC").expect("CLI_ETH_MNEMONIC env var is required");
 
     let config = EthClientConfig {
-        ws_endpoint: args.ws_endpoint.clone(),
+        ws_endpoint: Some(args.ws_endpoint.clone()),
         http_endpoint: args.http_endpoint.clone(),
         mnemonic: Some(mnemonic),
         hd_index: None,
+        transport: None,
     };
 
     tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);

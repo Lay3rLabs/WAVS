@@ -11,7 +11,7 @@ use alloy::{
     transports::BoxTransport,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::{eigen_client::solidity_types::BoxSigningProvider, error::EthClientError};
@@ -64,9 +64,17 @@ impl EthSigningClient {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EthClientConfig {
     pub ws_endpoint: Option<String>,
-    pub http_endpoint: Option<String>,
+    pub http_endpoint: String,
     pub mnemonic: Option<String>,
     pub hd_index: Option<u32>,
+    /// Preferred transport
+    pub transport: Option<EthClientTransport>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum EthClientTransport {
+    WebSocket,
+    Http,
 }
 
 pub struct EthClientBuilder {
@@ -79,16 +87,20 @@ impl EthClientBuilder {
     }
 
     pub async fn build_query(self) -> Result<EthQueryClient> {
-        let provider = match (&self.config.ws_endpoint, &self.config.http_endpoint) {
-            (Some(endpoint), _) => {
-                let ws = WsConnect::new(endpoint);
-                ProviderBuilder::new().on_ws(ws).await?.boxed()
-            }
-            (_, Some(endpoint)) => {
-                let endpoint_url = endpoint.parse()?;
+        let provider = match (self.config.transport, &self.config.ws_endpoint) {
+            // Http preferred or no preference and no websocket
+            (Some(EthClientTransport::Http), _) | (None, None) => {
+                let endpoint_url = self.config.http_endpoint.parse()?;
                 ProviderBuilder::new().on_http(endpoint_url).boxed()
             }
-            _ => bail!("Websocket or Http ethereum endpoint required"),
+            // Otherwise try to connect to websocket
+            _ => {
+                let ws =
+                    WsConnect::new(self.config.ws_endpoint.as_ref().context(
+                        "Websocket is preferred transport, but endpoint was not provided",
+                    )?);
+                ProviderBuilder::new().on_ws(ws).await?.boxed()
+            }
         };
 
         Ok(EthQueryClient {

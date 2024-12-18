@@ -92,12 +92,13 @@ impl EigenTestInit {
         let anvil = Anvil::new().spawn();
 
         let config = EthClientConfig {
-            ws_endpoint: anvil.ws_endpoint().to_string(),
+            ws_endpoint: Some(anvil.ws_endpoint().to_string()),
             http_endpoint: anvil.endpoint().to_string(),
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),
             hd_index: None,
+            transport: None,
         };
 
         let builder = EthClientBuilder::new(config);
@@ -138,8 +139,8 @@ async fn init() {
         let anvil = Anvil::new().spawn();
 
         let config = EthClientConfig {
-            ws_endpoint: anvil.ws_endpoint().to_string(),
-            http_endpoint: anvil.endpoint().to_string(),
+            ws_endpoint: Some(anvil.ws_endpoint().to_string()),
+            http_endpoint: Some(anvil.endpoint().to_string()),
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),

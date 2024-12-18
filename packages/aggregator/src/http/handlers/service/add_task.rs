@@ -7,7 +7,7 @@ use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
     eigen_client::solidity_types::{
         misc::{AVSDirectory, IAVSDirectory::OperatorAVSRegistrationStatus},
-        HttpSigningProvider,
+        BoxSigningProvider,
     },
     hello_world::{
         solidity_types::{
@@ -37,7 +37,7 @@ pub async fn handle_add_message(
 pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTaskResponse> {
     let eth_client = state.config.signing_client().await?;
 
-    check_operator(&req, &eth_client.http_provider).await?;
+    check_operator(&req, &eth_client.provider).await?;
     let task = Task::new(
         req.operator,
         req.new_data,
@@ -62,7 +62,7 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
 
         // Send batch txs
         let hello_world_service =
-            hello_world::HelloWorldServiceManager::new(req.service, &eth_client.http_provider);
+            hello_world::HelloWorldServiceManager::new(req.service, &eth_client.provider);
         let mut tasks = vec![];
         let mut indexes = vec![];
         let mut signatures = vec![];
@@ -101,7 +101,7 @@ pub async fn add_task(state: HttpState, req: AddTaskRequest) -> HttpResult<AddTa
 
 pub async fn check_operator(
     task_request: &AddTaskRequest,
-    provider: &HttpSigningProvider,
+    provider: &BoxSigningProvider,
 ) -> HttpResult<()> {
     let service = task_request.service;
     let operator = task_request.operator;
