@@ -196,16 +196,18 @@ mod e2e {
         let service1_id = ServiceID::new("test-1-service").unwrap();
         let service2_id = ServiceID::new("test-2-service").unwrap();
 
+        let trigger_addr = Address::Eth(AddrEth::new(
+            app.avs_client
+                .hello_world
+                .hello_world_service_manager
+                .into(),
+        ));
+
         http_client
             .create_service(
                 service1_id.clone(),
-                wasm_digest,
-                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
-                    app.avs_client
-                        .hello_world
-                        .hello_world_service_manager
-                        .into(),
-                ))),
+                wasm_digest.clone(),
+                TriggerRequest::eth_event(trigger_addr.clone()),
                 Submit::EthSignedMessage { hd_index: 0 },
             )
             .await
@@ -216,13 +218,13 @@ mod e2e {
             .create_service(
                 service2_id.clone(),
                 wasm_digest,
-                task_queue_addr.clone(),
+                TriggerRequest::eth_event(trigger_addr.clone()),
                 Submit::EthAggregatorTx {},
             )
             .await
             .unwrap();
         http_client
-            .register_service_on_aggregator(task_queue_addr, &config)
+            .register_service_on_aggregator(trigger_addr, &config)
             .await
             .unwrap();
         tracing::info!("Service created: {}, submitting task...", service2_id);

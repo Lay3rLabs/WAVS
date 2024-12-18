@@ -21,7 +21,7 @@ use tracing::instrument;
 use utils::{
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
     hello_world::{
-        solidity_types::hello_world::{HelloWorldServiceManager::NewTaskCreated, Task as HelloWorldTask}, AddTaskRequest, AddTaskResponse,
+        solidity_types::hello_world::Task as HelloWorldTask, AddTaskRequest, AddTaskResponse,
         HelloWorldSimpleClient,
     },
 };
@@ -388,18 +388,19 @@ impl Submission for CoreSubmission {
                                             // this will eventually get more generic
                                             let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
 
-                                            let task = Task {
+                                            let task = HelloWorldTask {
                                                 name: response.task_name,
                                                 taskCreatedBlock: response.task_created_block,
                                             };
 
                                             let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
 
-                                            // but at least we can check the hash for now and not submit if it changed :D
-                                            if avs_client.message_hash(&task.name).to_vec() != response.message_hash {
-                                                tracing::error!("Message hash mismatch");
-                                                continue;
-                                            }
+                                            // theoretically we can check the hash for now and not submit if it changed...
+                                            // but, this is more trouble than it's worth since it's going away in a follow-up PR
+                                            // if avs_client.message_hash(&task.name).to_vec() != response.message_hash {
+                                            //     tracing::error!("Message hash mismatch");
+                                            //     continue;
+                                            // }
 
                                             match avs_client.sign_and_submit_task(task, response.task_index).await {
                                                 Ok(_) => {
@@ -418,41 +419,29 @@ impl Submission for CoreSubmission {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
-                                        Trigger::EthQueue { task_queue_addr } => {
+                                        Trigger::EthEvent { contract_address } => {
                                             let eth_client = eth_client.unwrap();
 
-                                            let contract_address = match task_queue_addr {
+                                            let contract_address = match contract_address {
                                                 Address::Eth(addr) => {
                                                     addr.as_bytes().into()
                                                 },
                                                 Address::Cosmos { .. } => {
-                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", task_queue_addr);
+                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", contract_address);
                                                     continue;
                                                 }
                                             };
 
                                             let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
 
-                                            let task = match EthHelloWorldTaskRlp::decode(&mut msg.wasm_result.as_slice()) {
-                                                Ok(task) => task,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to parse wasm result into rlp value: {:?}", e);
-                                                    continue;
-                                                },
-                                            };
+                                            let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
 
                                             let task = HelloWorldTask {
-                                                name: task.name,
-                                                taskCreatedBlock: task.created_block,
+                                                name: response.task_name,
+                                                taskCreatedBlock: response.task_created_block,
                                             };
 
-                                            let task_index = match msg.task_id.u64().try_into() {
-                                                Ok(task_index) => task_index,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to convert task id to u32: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
+                                            let task_index = response.task_index;
 
                                             // Generate request if possible
                                             let request = match avs_client.task_request(task, task_index).await {

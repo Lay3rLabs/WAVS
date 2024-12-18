@@ -84,7 +84,7 @@ fn db_service_store() {
         (
             WorkflowID::new("workflow-id-1").unwrap(),
             Workflow {
-                trigger: Trigger::eth_queue(rand_address_eth()),
+                trigger: Trigger::eth_event(rand_address_eth()),
                 component: ComponentID::new("component-id-1").unwrap(),
                 submit: None,
             },
@@ -92,7 +92,7 @@ fn db_service_store() {
         (
             WorkflowID::new("workflow-id-2").unwrap(),
             Workflow {
-                trigger: Trigger::eth_queue(rand_address_eth()),
+                trigger: Trigger::eth_event(rand_address_eth()),
                 component: ComponentID::new("component-id-2").unwrap(),
                 submit: None,
             },
