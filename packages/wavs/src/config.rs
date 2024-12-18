@@ -93,7 +93,7 @@ impl Config {
             None => {
                 let k: String = self
                     .chains
-                    .eth
+                    .cosmos
                     .keys()
                     .map(|k| k.to_string())
                     .collect::<Vec<_>>()
