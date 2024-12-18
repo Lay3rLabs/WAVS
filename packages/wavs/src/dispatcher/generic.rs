@@ -471,7 +471,7 @@ mod tests {
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 2);
 
-        // Check the task_id and payloads
+        // Check the payloads
         assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
         assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
     }
