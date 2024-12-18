@@ -23,10 +23,7 @@ pub enum TriggerRequest {
         hd_index: u32,
     },
     #[serde(rename_all = "camelCase")]
-    EthQueue {
-        // FIXME: add some chain name. right now all triggers are on one chain
-        task_queue_addr: Address,
-    },
+    EthEvent { contract_address: Address },
 }
 
 pub type TriggerResponse = TriggerRequest;
@@ -42,7 +39,9 @@ impl Trigger {
                 poll_interval,
                 hd_index,
             },
-            Trigger::EthQueue { task_queue_addr } => TriggerResponse::EthQueue { task_queue_addr },
+            Trigger::EthEvent { contract_address } => {
+                TriggerResponse::EthEvent { contract_address }
+            }
         }
     }
 }

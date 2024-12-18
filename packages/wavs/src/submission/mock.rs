@@ -90,8 +90,6 @@ impl Submission for MockSubmission {
 mod test {
     use std::{thread::sleep, time::Duration};
 
-    use lavs_apis::id::TaskId;
-
     use crate::{
         apis::{dispatcher::Submit, trigger::TriggerConfig},
         test_utils::address::rand_address_eth,
@@ -99,10 +97,9 @@ mod test {
 
     use super::*;
 
-    fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
+    fn dummy_message(service: &str, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_config: TriggerConfig::eth_queue(service, service, rand_address_eth()).unwrap(),
-            task_id: TaskId::new(task_id),
+            trigger_config: TriggerConfig::eth_event(service, service, rand_address_eth()).unwrap(),
             wasm_result: payload.as_bytes().to_vec(),
             submit: Submit::eth_aggregator_tx(),
         }
@@ -118,9 +115,9 @@ mod test {
         let (send, rx) = mpsc::channel::<ChainMessage>(2);
         submission.start(ctx.clone(), rx).unwrap();
 
-        let msg1 = dummy_message("serv1", 1, "foo");
-        let msg2 = dummy_message("serv1", 2, "bar");
-        let msg3 = dummy_message("serv1", 3, "baz");
+        let msg1 = dummy_message("serv1", "foo");
+        let msg2 = dummy_message("serv1", "bar");
+        let msg3 = dummy_message("serv1", "baz");
 
         send.blocking_send(msg1.clone()).unwrap();
         // try waiting a bit. is there a way to block somehow?
@@ -143,9 +140,9 @@ mod test {
         let (send, rx) = mpsc::channel::<ChainMessage>(2);
         submission.start(ctx.clone(), rx).unwrap();
 
-        let msg1 = dummy_message("serv1", 1, "foo");
-        let msg2 = dummy_message("serv1", 2, "bar");
-        let msg3 = dummy_message("serv1", 3, "baz");
+        let msg1 = dummy_message("serv1", "foo");
+        let msg2 = dummy_message("serv1", "bar");
+        let msg3 = dummy_message("serv1", "baz");
 
         send.blocking_send(msg1.clone()).unwrap();
         submission.wait_for_messages(1).unwrap();

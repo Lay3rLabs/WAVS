@@ -22,6 +22,7 @@ mod e2e {
     use serde::{Deserialize, Serialize};
     use wavs::{
         apis::{dispatcher::Submit, ServiceID},
+        http::types::TriggerRequest,
         test_utils::app::TestApp,
     };
     use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};
@@ -195,7 +196,7 @@ mod e2e {
         let service1_id = ServiceID::new("test-1-service").unwrap();
         let service2_id = ServiceID::new("test-2-service").unwrap();
 
-        let task_queue_addr = Address::Eth(AddrEth::new(
+        let trigger_addr = Address::Eth(AddrEth::new(
             app.avs_client
                 .hello_world
                 .hello_world_service_manager
@@ -206,7 +207,7 @@ mod e2e {
             .create_service(
                 service1_id.clone(),
                 wasm_digest.clone(),
-                task_queue_addr.clone(),
+                TriggerRequest::eth_event(trigger_addr.clone()),
                 Submit::EthSignedMessage { hd_index: 0 },
             )
             .await
@@ -217,13 +218,13 @@ mod e2e {
             .create_service(
                 service2_id.clone(),
                 wasm_digest,
-                task_queue_addr.clone(),
+                TriggerRequest::eth_event(trigger_addr.clone()),
                 Submit::EthAggregatorTx {},
             )
             .await
             .unwrap();
         http_client
-            .register_service_on_aggregator(task_queue_addr, &config)
+            .register_service_on_aggregator(trigger_addr, &config)
             .await
             .unwrap();
         tracing::info!("Service created: {}, submitting task...", service2_id);
@@ -290,7 +291,11 @@ mod e2e {
             .create_service(
                 service_id.clone(),
                 wasm_digest,
-                app.task_queue.addr.clone(),
+                TriggerRequest::LayerQueue {
+                    task_queue_addr: app.task_queue.addr.clone(),
+                    poll_interval: 1000,
+                    hd_index: 0,
+                },
                 Submit::LayerVerifierTx {
                     hd_index: 0,
                     verifier_addr: app.verifier_addr.clone(),

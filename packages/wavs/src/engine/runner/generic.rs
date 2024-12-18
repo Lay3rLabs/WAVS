@@ -43,22 +43,24 @@ pub trait EngineRunner: Send + Sync {
             .get(&workflow.component)
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
-        match action.data {
+        let wasm_result = match action.data {
             TriggerData::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
-                let wasm_result =
-                    self.engine()
-                        .execute_queue(component, &service.id, payload, timestamp)?;
-
-                Ok(workflow.submit.clone().map(|submit| ChainMessage {
-                    trigger_config: action.config,
-                    task_id,
-                    wasm_result,
-                    submit,
-                }))
+                self.engine()
+                    .execute_queue(component, &service.id, task_id, payload, timestamp)?
             }
-        }
+            TriggerData::EthEvent { log } => {
+                self.engine()
+                    .execute_eth_event(component, &service.id, log)?
+            }
+        };
+
+        Ok(workflow.submit.clone().map(|submit| ChainMessage {
+            trigger_config: action.config,
+            wasm_result,
+            submit,
+        }))
     }
 }
 

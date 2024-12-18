@@ -62,7 +62,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
             Trigger::LayerQueue { .. } => {
                 TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
             }
-            Trigger::EthQueue { .. } => {
+            Trigger::EthEvent { .. } => {
                 TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
             }
         },

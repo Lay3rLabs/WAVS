@@ -94,13 +94,13 @@ impl HttpClient {
     async fn create_service(
         &self,
         digest: Digest,
-        task_queue_addr: Address,
+        contract_address: Address,
         submit: Submit,
     ) -> ServiceID {
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
-            trigger: TriggerRequest::eth_queue(task_queue_addr),
+            trigger: TriggerRequest::eth_event(contract_address),
             id: id.clone(),
             digest: digest.into(),
             permissions: Permissions {

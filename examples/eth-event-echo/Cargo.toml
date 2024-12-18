@@ -1,5 +1,5 @@
 [package]
-name = "hello-world"
+name = "eth-event-echo"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
@@ -7,10 +7,8 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+alloy-rlp = { workspace = true }
 anyhow = { workspace = true }
-alloy-primitives = {workspace = true} 
-alloy-sol-macro = {workspace = true} 
-alloy-sol-types = {workspace = true} 
 layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", version = "0.1.1" }
 wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
 url = "2.5.3"
@@ -26,11 +24,11 @@ strip = true
 lto = true
 
 [package.metadata.component]
-package = "component:hello-world"
+package = "component:eth-event-echo"
 
 [package.metadata.component.target]
 path = "../../wit"
-world = "hello-world-world"
+world = "eth-event-world"
 
 [package.metadata.component.target.dependencies]
 "wasi:io" = "=0.2.0"

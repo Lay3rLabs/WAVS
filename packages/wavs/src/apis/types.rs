@@ -1,15 +1,6 @@
-use alloy_rlp::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::ops::Deref;
 use thiserror::Error;
-
-// The native Solidity type isn't Serialize, so we have this intermediary type for now
-// when we have a proper generic AVS contract, this should go away
-#[derive(Debug, PartialEq, Eq, Clone, RlpEncodable, RlpDecodable)]
-pub struct EthHelloWorldTaskRlp {
-    pub name: String,
-    pub created_block: u32,
-}
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum IDError {

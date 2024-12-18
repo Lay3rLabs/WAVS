@@ -8,13 +8,12 @@ use crate::{
         dispatcher::Submit,
         submission::{ChainMessage, Submission, SubmissionError},
         trigger::Trigger,
-        EthHelloWorldTaskRlp,
     },
+    bindings::hello_world::temp_deserialize_hello_world_component_response,
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     AppContext,
 };
-use alloy_rlp::Decodable;
-use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
+use lavs_apis::{id::TaskId, verifier_simple::ExecuteMsg as VerifierExecuteMsg};
 use layer_climb::prelude::*;
 use reqwest::Url;
 use tokio::sync::mpsc;
@@ -372,45 +371,40 @@ impl Submission for CoreSubmission {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
-                                        Trigger::EthQueue { task_queue_addr } => {
+                                        Trigger::EthEvent { contract_address } => {
                                             let eth_client = eth_client.unwrap();
 
-                                            let contract_address = match task_queue_addr {
+                                            let contract_address = match contract_address {
                                                 Address::Eth(addr) => {
                                                     addr.as_bytes().into()
                                                 },
                                                 Address::Cosmos { .. } => {
-                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", task_queue_addr);
+                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", contract_address );
                                                     continue;
                                                 }
+                                            };
+
+                                            // The Hello world contract needs to know about the Task in its API for some reason
+                                            // this will eventually get more generic
+                                            let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
+
+                                            let task = HelloWorldTask {
+                                                name: response.task_name,
+                                                taskCreatedBlock: response.task_created_block,
                                             };
 
                                             let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
 
-                                            let task = match EthHelloWorldTaskRlp::decode(&mut msg.wasm_result.as_slice()) {
-                                                Ok(task) => task,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to parse wasm result into rlp value: {:?}", e);
-                                                    continue;
-                                                },
-                                            };
+                                            // theoretically we can check the hash for now and not submit if it changed...
+                                            // but, this is more trouble than it's worth since it's going away in a follow-up PR
+                                            // if avs_client.message_hash(&task.name).to_vec() != response.message_hash {
+                                            //     tracing::error!("Message hash mismatch");
+                                            //     continue;
+                                            // }
 
-                                            let task = HelloWorldTask {
-                                                name: task.name,
-                                                taskCreatedBlock: task.created_block,
-                                            };
-
-                                            let task_index = match msg.task_id.u64().try_into() {
-                                                Ok(task_index) => task_index,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to convert task id to u32: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
-
-                                            match avs_client.sign_and_submit_task(task, task_index).await {
+                                            match avs_client.sign_and_submit_task(task, response.task_index).await {
                                                 Ok(_) => {
-                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
+                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, response.task_index);
                                                 },
                                                 Err(e) => {
                                                     tracing::error!("Submission failed: {:?}", e);
@@ -425,41 +419,29 @@ impl Submission for CoreSubmission {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
-                                        Trigger::EthQueue { task_queue_addr } => {
+                                        Trigger::EthEvent { contract_address } => {
                                             let eth_client = eth_client.unwrap();
 
-                                            let contract_address = match task_queue_addr {
+                                            let contract_address = match contract_address {
                                                 Address::Eth(addr) => {
                                                     addr.as_bytes().into()
                                                 },
                                                 Address::Cosmos { .. } => {
-                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", task_queue_addr);
+                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", contract_address);
                                                     continue;
                                                 }
                                             };
 
                                             let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
 
-                                            let task = match EthHelloWorldTaskRlp::decode(&mut msg.wasm_result.as_slice()) {
-                                                Ok(task) => task,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to parse wasm result into rlp value: {:?}", e);
-                                                    continue;
-                                                },
-                                            };
+                                            let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
 
                                             let task = HelloWorldTask {
-                                                name: task.name,
-                                                taskCreatedBlock: task.created_block,
+                                                name: response.task_name,
+                                                taskCreatedBlock: response.task_created_block,
                                             };
 
-                                            let task_index = match msg.task_id.u64().try_into() {
-                                                Ok(task_index) => task_index,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to convert task id to u32: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
+                                            let task_index = response.task_index;
 
                                             // Generate request if possible
                                             let request = match avs_client.task_request(task, task_index).await {
@@ -497,6 +479,9 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
+                                            // TODO - TaskId is a TaskQueue concept, not all triggers will have it, should be part of result
+                                            let task_id = TaskId::new(result.get("task_id").unwrap().as_u64().unwrap());
+
                                             let result = match serde_json::to_string(&result) {
                                                 Ok(result) => result,
                                                 Err(e) => {
@@ -505,9 +490,10 @@ impl Submission for CoreSubmission {
                                                 }
                                             };
 
+
                                             let contract_msg = VerifierExecuteMsg::ExecutedTask {
                                                 task_queue_contract: task_queue_addr.to_string(),
-                                                task_id: msg.task_id,
+                                                task_id,
                                                 result,
                                             };
 
@@ -521,7 +507,7 @@ impl Submission for CoreSubmission {
                                             }
                                         }
 
-                                        Trigger::EthQueue { .. } => {
+                                        Trigger::EthEvent { .. } => {
                                             tracing::error!("Cross chain from Ethereum trigger to Layer submission is not supported yet");
                                             continue;
                                         }

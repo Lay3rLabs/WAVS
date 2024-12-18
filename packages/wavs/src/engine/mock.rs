@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use tracing::instrument;
-
 use crate::apis::ServiceID;
 use crate::Digest;
+use alloy::rpc::types::Log;
+use lavs_apis::id::TaskId;
+use tracing::instrument;
 
 use super::{Engine, EngineError};
 
@@ -53,6 +54,7 @@ impl Engine for MockEngine {
         &self,
         component: &crate::apis::dispatcher::Component,
         _service_id: &ServiceID,
+        _task_id: TaskId,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
@@ -63,6 +65,16 @@ impl Engine for MockEngine {
             .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
         let result = fx.execute(request, timestamp)?;
         Ok(result)
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    fn execute_eth_event(
+        &self,
+        _component: &crate::apis::dispatcher::Component,
+        _service_id: &ServiceID,
+        log: Log,
+    ) -> Result<Vec<u8>, EngineError> {
+        Ok(log.inner.data.data.to_vec())
     }
 }
 
@@ -116,21 +128,39 @@ mod test {
         // d1 call gets r1
         let c1 = crate::apis::dispatcher::Component::new(&d1);
         let res = engine
-            .execute_queue(&c1, &ServiceID::new("321").unwrap(), b"123".into(), 1234)
+            .execute_queue(
+                &c1,
+                &ServiceID::new("321").unwrap(),
+                TaskId::new(123),
+                b"123".into(),
+                1234,
+            )
             .unwrap();
         assert_eq!(res, r1);
 
         // d2 call gets r2
         let c2 = crate::apis::dispatcher::Component::new(&d2);
         let res = engine
-            .execute_queue(&c2, &ServiceID::new("321").unwrap(), b"123".into(), 1234)
+            .execute_queue(
+                &c2,
+                &ServiceID::new("321").unwrap(),
+                TaskId::new(123),
+                b"123".into(),
+                1234,
+            )
             .unwrap();
         assert_eq!(res, r2);
 
         // d3 call returns missing error
         let c3 = crate::apis::dispatcher::Component::new(&d3);
         let err = engine
-            .execute_queue(&c3, &ServiceID::new("321").unwrap(), b"123".into(), 1234)
+            .execute_queue(
+                &c3,
+                &ServiceID::new("321").unwrap(),
+                TaskId::new(123),
+                b"123".into(),
+                1234,
+            )
             .unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));
     }
