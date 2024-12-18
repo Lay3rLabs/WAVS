@@ -26,7 +26,7 @@ pub async fn run_hello_world_task(
         tracing::info!("Submitting the task result directly");
 
         let signature = client.sign_task(&name).unwrap();
-        let reference_block = client.eth.http_provider.get_block_number().await.unwrap() as u32 - 1;
+        let reference_block = client.eth.provider.get_block_number().await.unwrap() as u32 - 1;
         let signature = HelloWorldSimpleClient::batch_signature(
             signature,
             client.eth.address(),

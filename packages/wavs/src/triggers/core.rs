@@ -114,7 +114,10 @@ impl CoreTriggerManager {
 
         let ethereum_client = match self.chain_config.clone() {
             Some(chain_config) => {
-                tracing::debug!("Ethereum client started on {}", chain_config.ws_endpoint);
+                tracing::debug!(
+                    "Ethereum client started on {}",
+                    chain_config.ws_endpoint.as_ref().unwrap()
+                );
                 Some(
                     EthClientBuilder::new(chain_config)
                         .build_query()
@@ -186,7 +189,7 @@ impl CoreTriggerManager {
             let filter = Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
 
             let stream = query_client
-                .ws_provider
+                .provider
                 .subscribe_logs(&filter)
                 .await
                 .map_err(|e| TriggerError::Ethereum(e.into()))?

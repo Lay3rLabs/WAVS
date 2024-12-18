@@ -12,7 +12,10 @@ use alloy::{
     },
     pubsub::PubSubFrontend,
     sol,
-    transports::http::{Client, Http},
+    transports::{
+        http::{Client, Http},
+        BoxTransport,
+    },
 };
 
 pub mod delegation_manager {
@@ -117,15 +120,15 @@ pub mod misc {
 }
 
 pub type EmptyContractT =
-    proxy::EmptyContract::EmptyContractInstance<Http<Client>, HttpSigningProvider>;
+    proxy::EmptyContract::EmptyContractInstance<BoxTransport, BoxSigningProvider>;
 
 pub type TransparentProxyContractT =
     proxy::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance<
-        Http<Client>,
-        HttpSigningProvider,
+        BoxTransport,
+        BoxSigningProvider,
     >;
 
-pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<Http<Client>, HttpSigningProvider>;
+pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<BoxTransport, BoxSigningProvider>;
 
 pub type WsSigningProvider = FillProvider<
     JoinFill<
@@ -150,5 +153,18 @@ pub type HttpSigningProvider = FillProvider<
     >,
     RootProvider<Http<Client>>,
     Http<Client>,
+    Ethereum,
+>;
+
+pub type BoxSigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<BoxTransport>,
+    BoxTransport,
     Ethereum,
 >;

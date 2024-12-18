@@ -74,10 +74,11 @@ impl Config {
     pub async fn signing_client(&self) -> Result<EthSigningClient> {
         let mnemonic = self.mnemonic.clone();
         let eth_client = EthClientConfig {
-            ws_endpoint: self.ws_endpoint.clone(),
+            ws_endpoint: Some(self.ws_endpoint.clone()),
             http_endpoint: self.http_endpoint.clone(),
             mnemonic,
             hd_index: self.hd_index,
+            transport: None,
         };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)

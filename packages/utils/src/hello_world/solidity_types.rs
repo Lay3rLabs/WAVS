@@ -1,10 +1,7 @@
-use alloy::{
-    sol,
-    transports::http::{Client, Http},
-};
+use alloy::{sol, transports::BoxTransport};
 use hello_world::HelloWorldServiceManager::HelloWorldServiceManagerInstance;
 
-use crate::eigen_client::solidity_types::HttpSigningProvider;
+use crate::eigen_client::solidity_types::BoxSigningProvider;
 
 pub mod stake_registry {
     use super::*;
@@ -49,4 +46,4 @@ pub mod token {
 }
 
 pub type HelloWorldServiceManagerT =
-    HelloWorldServiceManagerInstance<Http<Client>, HttpSigningProvider>;
+    HelloWorldServiceManagerInstance<BoxTransport, BoxSigningProvider>;

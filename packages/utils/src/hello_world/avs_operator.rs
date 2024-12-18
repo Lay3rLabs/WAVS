@@ -27,7 +27,7 @@ impl HelloWorldFullClient {
                 self.hello_world.hello_world_service_manager,
                 salt,
                 expiry,
-                self.eth.http_provider.clone(),
+                self.eth.provider.clone(),
             )
             .await?;
 
@@ -37,10 +37,8 @@ impl HelloWorldFullClient {
             salt,
             expiry,
         };
-        let contract_ecdsa_stake_registry = ECDSAStakeRegistry::new(
-            self.hello_world.stake_registry,
-            self.eth.http_provider.clone(),
-        );
+        let contract_ecdsa_stake_registry =
+            ECDSAStakeRegistry::new(self.hello_world.stake_registry, self.eth.provider.clone());
 
         let register_hello_world_hash = contract_ecdsa_stake_registry
             .registerOperatorWithSignature(operator_signature, self.eth.signer.clone().address())

@@ -35,7 +35,7 @@ impl HelloWorldFullClient {
 
 impl HelloWorldSimpleClient {
     pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
-        let contract = HelloWorldServiceManager::new(contract_address, eth.http_provider.clone());
+        let contract = HelloWorldServiceManager::new(contract_address, eth.provider.clone());
         Self {
             eth,
             contract_address,
@@ -67,7 +67,7 @@ impl HelloWorldSimpleClient {
 
     pub async fn create_new_task(&self, task_name: String) -> Result<NewTaskCreated> {
         let hello_world_service_manager =
-            HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
+            HelloWorldServiceManager::new(self.contract_address, self.eth.provider.clone());
 
         let new_task_created: NewTaskCreated = hello_world_service_manager
             .createNewTask(task_name)
@@ -88,7 +88,7 @@ impl HelloWorldSimpleClient {
         tracing::debug!("Signing and responding to task index {}", task_index);
 
         let signature = self.sign_task(&task.name)?;
-        let reference_block = self.eth.http_provider.get_block_number().await? as u32 - 1;
+        let reference_block = self.eth.provider.get_block_number().await? as u32 - 1;
         let batch_signature = Self::batch_signature(signature, self.eth.address(), reference_block);
 
         self.submit_task(task, task_index, batch_signature).await
@@ -101,7 +101,7 @@ impl HelloWorldSimpleClient {
         signature: Vec<u8>,
     ) -> Result<FixedBytes<32>> {
         let contract =
-            HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
+            HelloWorldServiceManager::new(self.contract_address, self.eth.provider.clone());
 
         let receipt = contract
             .respondToTask(task, task_index, signature.into())
@@ -133,7 +133,7 @@ impl HelloWorldSimpleClient {
         let signature = self.sign_task(&task.name)?;
 
         let contract =
-            HelloWorldServiceManager::new(self.contract_address, self.eth.http_provider.clone());
+            HelloWorldServiceManager::new(self.contract_address, self.eth.provider.clone());
 
         let new_data = TaskData {
             name: task.name,
@@ -143,7 +143,7 @@ impl HelloWorldSimpleClient {
 
         let operator = self.eth.address();
         let service = *contract.address();
-        let reference_block = self.eth.http_provider.get_block_number().await? as u32 - 1;
+        let reference_block = self.eth.provider.get_block_number().await? as u32 - 1;
         let task_id = "respond_to_task".to_owned();
         Ok(AddTaskRequest {
             service,

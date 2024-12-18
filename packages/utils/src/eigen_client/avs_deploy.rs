@@ -29,7 +29,7 @@ impl EigenClient {
 
         tracing::debug!("deploying delegation manager");
         let delegation_manager_impl = DelegationManager::deploy(
-            self.eth.http_provider.clone(),
+            self.eth.provider.clone(),
             proxies.strategy_manager,
             Address::ZERO,
             proxies.eigen_pod_manager,
@@ -38,12 +38,11 @@ impl EigenClient {
 
         tracing::debug!("deploying avs directory");
         let avs_directory_impl =
-            AVSDirectory::deploy(self.eth.http_provider.clone(), proxies.delegation_manager)
-                .await?;
+            AVSDirectory::deploy(self.eth.provider.clone(), proxies.delegation_manager).await?;
 
         tracing::debug!("deploying strategy manager");
         let strategy_manager_impl = StrategyManager::deploy(
-            self.eth.http_provider.clone(),
+            self.eth.provider.clone(),
             proxies.delegation_manager,
             proxies.eigen_pod_manager,
             Address::ZERO,
@@ -52,8 +51,7 @@ impl EigenClient {
 
         tracing::debug!("deploying strategy factory");
         let strategy_factory_impl =
-            StrategyFactory::deploy(self.eth.http_provider.clone(), proxies.strategy_manager)
-                .await?;
+            StrategyFactory::deploy(self.eth.provider.clone(), proxies.strategy_manager).await?;
 
         let eth_deposit_addr = Address::ZERO;
 
@@ -67,7 +65,7 @@ impl EigenClient {
 
         tracing::debug!("deploying eigen pod manager");
         let eigen_pod_manager_impl = EigenPodManager::deploy(
-            self.eth.http_provider.clone(),
+            self.eth.provider.clone(),
             eth_deposit_addr,
             proxies.eigen_pod_beacon,
             proxies.strategy_manager,
@@ -78,7 +76,7 @@ impl EigenClient {
 
         tracing::debug!("deploying rewards coordinator");
         let rewards_coordinator_impl = RewardsCoordinator::deploy(
-            self.eth.http_provider.clone(),
+            self.eth.provider.clone(),
             proxies.delegation_manager,
             proxies.strategy_manager,
             // TODO: Get actual values
@@ -92,7 +90,7 @@ impl EigenClient {
 
         tracing::debug!("deploying eigen pod");
         let eigen_pod_impl = EigenPod::deploy(
-            self.eth.http_provider.clone(),
+            self.eth.provider.clone(),
             eth_deposit_addr,
             proxies.eigen_pod_manager,
             // TODO: Get actual genesis time
@@ -104,30 +102,25 @@ impl EigenClient {
         //
         // tracing::debug!("deploying eigen beacon");
         // let eigen_pod_beacon_impl = UpgradeableBeacon::deploy(
-        //     self.eth.http_provider.clone(),
+        //     self.eth.provider.clone(),
         //     *eigen_pod_impl.address(),
         // )
         // .await?;
 
         tracing::debug!("deploying strategy base");
         let base_strategy_impl =
-            StrategyBase::deploy(self.eth.http_provider.clone(), proxies.strategy_manager).await?;
+            StrategyBase::deploy(self.eth.provider.clone(), proxies.strategy_manager).await?;
 
         tracing::debug!("deploying pauser registry");
-        let pauser_registry_impl = PauserRegistry::deploy(
-            self.eth.http_provider.clone(),
-            vec![],
-            *proxies.admin.address(),
-        )
-        .await?;
+        let pauser_registry_impl =
+            PauserRegistry::deploy(self.eth.provider.clone(), vec![], *proxies.admin.address())
+                .await?;
 
         tracing::debug!("deploying upgradeable beacon");
-        proxies.strategy_beacon = *UpgradeableBeacon::deploy(
-            self.eth.http_provider.clone(),
-            *base_strategy_impl.address(),
-        )
-        .await?
-        .address();
+        proxies.strategy_beacon =
+            *UpgradeableBeacon::deploy(self.eth.provider.clone(), *base_strategy_impl.address())
+                .await?
+                .address();
 
         tracing::debug!("upgrading delegation manager");
         let upgrade_call = DelegationManager::initializeCall {
@@ -316,10 +309,10 @@ pub async fn setup_empty_proxy_all(
 ) -> Result<(EmptyContractT, TransparentProxyContractT)> {
     let proxy_admin_address = *proxy_admin.address();
 
-    let empty_contract = EmptyContract::deploy(eth.http_provider.clone()).await?;
+    let empty_contract = EmptyContract::deploy(eth.provider.clone()).await?;
     let empty_contract_address = *empty_contract.address();
     let proxy = TransparentUpgradeableProxy::deploy(
-        eth.http_provider.clone(),
+        eth.provider.clone(),
         empty_contract_address,
         proxy_admin_address,
         b"".into(),
@@ -339,7 +332,7 @@ pub async fn setup_empty_proxy_all(
         .as_slice()
         .try_into()?;
         let admin_address = eth
-            .http_provider
+            .provider
             .get_storage_at(*proxy.address(), admin_slot.into())
             .await?;
         let admin_address: Address = Address::from_slice(&admin_address.to_be_bytes::<32>()[12..]);
@@ -371,7 +364,7 @@ pub async fn setup_empty_proxy(
 
 impl Proxies {
     pub async fn new(eth: &EthSigningClient) -> Result<Self> {
-        let admin = ProxyAdmin::deploy(eth.http_provider.clone()).await?;
+        let admin = ProxyAdmin::deploy(eth.provider.clone()).await?;
 
         tracing::debug!("Eigen core proxy admin: {}", *admin.address());
         let (_, delegation_manager_proxy) = setup_empty_proxy_all(eth, &admin).await?;

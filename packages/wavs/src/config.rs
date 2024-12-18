@@ -237,10 +237,11 @@ impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
 impl From<EthereumChainConfig> for EthClientConfig {
     fn from(config: EthereumChainConfig) -> Self {
         Self {
-            ws_endpoint: config.ws_endpoint,
+            ws_endpoint: Some(config.ws_endpoint),
             http_endpoint: config.http_endpoint,
             mnemonic: config.submission_mnemonic,
             hd_index: None,
+            transport: None,
         }
     }
 }
