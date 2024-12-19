@@ -1,10 +1,10 @@
-use alloy::rpc::types::Log;
 use lavs_apis::id::TaskId;
 use tracing::instrument;
+use utils::layer_contract_client::TriggerId;
 
 use crate::apis::dispatcher::Component;
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::ServiceID;
+use crate::apis::{ServiceID, WorkflowID};
 use crate::Digest;
 
 /// Simply returns the request as the result.
@@ -46,9 +46,11 @@ impl Engine for IdentityEngine {
         &self,
         _component: &Component,
         _service_id: &ServiceID,
-        log: Log,
+        _workflow_id: &WorkflowID,
+        _trigger_id: TriggerId,
+        payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(log.inner.data.data.to_vec())
+        Ok(payload)
     }
 }
 

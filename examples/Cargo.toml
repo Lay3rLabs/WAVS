@@ -5,9 +5,9 @@ members = [
   "square",
   "permissions",
   "ai-bouncer",
-  "message-echo",
-  "hello-world",
   "eth-event-echo",
+  "eth-trigger-echo",
+  "eth-trigger-square",
 ]
 resolver = "2"
 

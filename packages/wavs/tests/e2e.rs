@@ -20,6 +20,7 @@ mod e2e {
     };
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
+    use utils::layer_contract_client::LayerContractClientSimple;
     use wavs::{
         apis::{dispatcher::Submit, ServiceID},
         http::types::TriggerRequest,
@@ -138,17 +139,32 @@ mod e2e {
                             }
                         };
 
-                        let hello_world_wasm_digest =
-                            std::env::var("WAVS_E2E_HELLO_WORLD_WASM_DIGEST");
+                        let eth_trigger_echo_wasm_digest =
+                            std::env::var("WAVS_E2E_ETH_TRIGGER_ECHO_WASM_DIGEST");
 
-                        let hello_world_wasm_digest: Digest = match hello_world_wasm_digest {
-                            Ok(digest) => digest.parse().unwrap(),
-                            Err(_) => {
-                                let wasm_bytes =
-                                    include_bytes!("../../../components/hello_world.wasm");
-                                http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
-                            }
-                        };
+                        let eth_trigger_echo_wasm_digest: Digest =
+                            match eth_trigger_echo_wasm_digest {
+                                Ok(digest) => digest.parse().unwrap(),
+                                Err(_) => {
+                                    let wasm_bytes =
+                                        include_bytes!("../../../components/eth_trigger_echo.wasm");
+                                    http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
+                                }
+                            };
+
+                        let eth_trigger_square_wasm_digest =
+                            std::env::var("WAVS_E2E_ETH_TRIGGER_SQUARE_WASM_DIGEST");
+
+                        let eth_trigger_square_wasm_digest: Digest =
+                            match eth_trigger_square_wasm_digest {
+                                Ok(digest) => digest.parse().unwrap(),
+                                Err(_) => {
+                                    let wasm_bytes = include_bytes!(
+                                        "../../../components/eth_trigger_square.wasm"
+                                    );
+                                    http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
+                                }
+                            };
 
                         match (config.cosmos_chain.is_some(), config.chain.is_some()) {
                             (true, false) => {
@@ -160,9 +176,10 @@ mod e2e {
                                     anvil.unwrap(),
                                     http_client,
                                     config,
-                                    hello_world_wasm_digest,
+                                    eth_trigger_echo_wasm_digest,
+                                    eth_trigger_square_wasm_digest,
                                 )
-                                .await
+                                .await;
                             }
                             (true, true) => {
                                 run_tests_crosschain(http_client, config, permissions_wasm_digest)
@@ -187,88 +204,231 @@ mod e2e {
         anvil: AnvilInstance,
         http_client: HttpClient,
         config: Config,
-        wasm_digest: Digest,
+        echo_wasm_digest: Digest,
+        square_wasm_digest: Digest,
     ) {
         tracing::info!("Running e2e ethereum tests");
 
         let app = EthTestApp::new(config.clone(), anvil).await;
 
-        let service1_id = ServiceID::new("test-1-service").unwrap();
-        let service2_id = ServiceID::new("test-2-service").unwrap();
-
-        let trigger_addr = Address::Eth(AddrEth::new(
-            app.avs_client
-                .hello_world
-                .hello_world_service_manager
-                .into(),
-        ));
+        let echo_service_id = ServiceID::new("echo-service").unwrap();
 
         http_client
             .create_service(
-                service1_id.clone(),
-                wasm_digest.clone(),
-                TriggerRequest::eth_event(trigger_addr.clone()),
-                Submit::EthSignedMessage { hd_index: 0 },
+                echo_service_id.clone(),
+                echo_wasm_digest.clone(),
+                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
+                    app.avs_client.layer.trigger.into(),
+                ))),
+                Submit::EthSignedMessage {
+                    hd_index: 0,
+                    service_manager_addr: Address::Eth(AddrEth::new(
+                        app.avs_client.layer.service_manager.into(),
+                    )),
+                },
             )
             .await
             .unwrap();
-        tracing::info!("Service created: {}, submitting task...", service1_id);
+        tracing::info!("Service created: {}", echo_service_id);
+
+        let square_service_id = ServiceID::new("square-service").unwrap();
 
         http_client
             .create_service(
-                service2_id.clone(),
-                wasm_digest,
-                TriggerRequest::eth_event(trigger_addr.clone()),
-                Submit::EthAggregatorTx {},
+                square_service_id.clone(),
+                square_wasm_digest,
+                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
+                    app.avs_client.layer.trigger.into(),
+                ))),
+                Submit::EthSignedMessage {
+                    hd_index: 0,
+                    service_manager_addr: Address::Eth(AddrEth::new(
+                        app.avs_client.layer.service_manager.into(),
+                    )),
+                },
             )
             .await
             .unwrap();
-        http_client
-            .register_service_on_aggregator(trigger_addr, &config)
+        tracing::info!("Service created: {}, submitting task...", square_service_id);
+
+        let avs_simple_client: LayerContractClientSimple = app.avs_client.into();
+
+        tracing::info!("Submitting echo task...");
+        let echo_trigger_id = avs_simple_client
+            .trigger
+            .add_trigger(
+                echo_service_id.to_string(),
+                "default".to_string(),
+                b"foo".to_vec(),
+            )
             .await
             .unwrap();
-        tracing::info!("Service created: {}, submitting task...", service2_id);
 
-        let avs_simple_client = app.avs_client.into_simple();
-        let task1_index = avs_simple_client
-            .create_new_task("foo".to_owned())
-            .await
-            .unwrap()
-            .taskIndex;
-        let task2_index = avs_simple_client
-            .create_new_task("bar".to_owned())
-            .await
-            .unwrap()
-            .taskIndex;
-
-        tokio::time::timeout(Duration::from_secs(10), async move {
-            loop {
-                let (task1_response_hash, task2_response_hash) = (
-                    avs_simple_client
-                        .task_responded_hash(task1_index)
+        tokio::time::timeout(Duration::from_secs(10), {
+            let avs_simple_client = avs_simple_client.clone();
+            async move {
+                loop {
+                    let signed_data = avs_simple_client
+                        .load_signed_data(echo_trigger_id)
                         .await
-                        .unwrap(),
-                    avs_simple_client
-                        .task_responded_hash(task2_index)
-                        .await
-                        .unwrap(),
-                );
-                if !task1_response_hash.is_empty() && !task2_response_hash.is_empty() {
-                    assert_ne!(task1_response_hash, task2_response_hash);
-                    tracing::info!("GOT THE TASKS RESPONSE HASH!");
-                    tracing::info!("foo: {}", hex::encode(task1_response_hash));
-                    tracing::info!("bar: {}", hex::encode(task2_response_hash));
-                    break;
-                } else {
-                    tracing::info!(
-                        "Waiting for task response by {} on {} for indexes {:?}...",
-                        avs_simple_client.eth.address(),
-                        avs_simple_client.contract_address,
-                        [task1_index, task2_index]
-                    );
+                        .unwrap();
+                    match signed_data {
+                        Some(signed_data) => {
+                            tracing::info!("GOT THE SIGNATURE!");
+                            tracing::info!("{}", hex::encode(signed_data.signature));
+                            break;
+                        }
+                        None => {
+                            tracing::info!(
+                                "Waiting for task response by {} on {} for trigger_id {}...",
+                                avs_simple_client.eth.address(),
+                                avs_simple_client.service_manager_contract_address,
+                                echo_trigger_id
+                            );
+                        }
+                    }
+                    // still open, waiting...
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
-                // still open, waiting...
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .unwrap();
+
+        tracing::info!("Submitting square task...");
+        let square_trigger_id = avs_simple_client
+            .trigger
+            .add_trigger(
+                square_service_id.to_string(),
+                "default".to_string(),
+                serde_json::to_vec(&SquareRequest { x: 3 }).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        tokio::time::timeout(Duration::from_secs(10), {
+            let avs_simple_client = avs_simple_client.clone();
+            async move {
+                loop {
+                    let signed_data = avs_simple_client
+                        .load_signed_data(square_trigger_id)
+                        .await
+                        .unwrap();
+                    match signed_data {
+                        Some(signed_data) => {
+                            tracing::info!("GOT THE SIGNATURE!");
+                            tracing::info!("{}", hex::encode(signed_data.signature));
+
+                            let response =
+                                serde_json::from_slice::<SquareResponse>(&signed_data.data)
+                                    .unwrap();
+
+                            tracing::info!("GOT THE RESPONSE!");
+                            tracing::info!("{:?}", response);
+                            break;
+                        }
+                        None => {
+                            tracing::info!(
+                                "Waiting for task response by {} on {} for trigger_id {}...",
+                                avs_simple_client.eth.address(),
+                                avs_simple_client.service_manager_contract_address,
+                                square_trigger_id
+                            );
+                        }
+                    }
+                    // still open, waiting...
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            }
+        })
+        .await
+        .unwrap();
+
+        // TODO - now with aggregator and multiple payloads within a service....
+
+        let echo_aggregate_service_id = ServiceID::new("echo-aggregate-service").unwrap();
+
+        http_client
+            .create_service(
+                echo_aggregate_service_id.clone(),
+                echo_wasm_digest,
+                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
+                    avs_simple_client.trigger.contract_address.into(),
+                ))),
+                Submit::EthAggregatorTx {
+                    service_manager_addr: Address::Eth(AddrEth::new(
+                        avs_simple_client.service_manager_contract_address.into(),
+                    )),
+                },
+            )
+            .await
+            .unwrap();
+
+        tracing::info!("Service created: {}", echo_aggregate_service_id);
+
+        http_client
+            .register_service_on_aggregator(
+                avs_simple_client.service_manager_contract_address,
+                echo_aggregate_service_id.clone(),
+                &config,
+            )
+            .await
+            .unwrap();
+
+        let echo_aggregate_trigger_id_1 = avs_simple_client
+            .trigger
+            .add_trigger(
+                echo_aggregate_service_id.to_string(),
+                "default".to_string(),
+                b"foo-aggregate".to_vec(),
+            )
+            .await
+            .unwrap();
+
+        let echo_aggregate_trigger_id_2 = avs_simple_client
+            .trigger
+            .add_trigger(
+                echo_aggregate_service_id.to_string(),
+                "default".to_string(),
+                b"bar-aggregate".to_vec(),
+            )
+            .await
+            .unwrap();
+
+        tokio::time::timeout(Duration::from_secs(10), {
+            let avs_simple_client = avs_simple_client.clone();
+            async move {
+                loop {
+                    let signed_data_1 = avs_simple_client
+                        .load_signed_data(echo_aggregate_trigger_id_1)
+                        .await
+                        .unwrap();
+
+                    let signed_data_2 = avs_simple_client
+                        .load_signed_data(echo_aggregate_trigger_id_2)
+                        .await
+                        .unwrap();
+
+                    match (signed_data_1, signed_data_2) {
+                        (Some(signed_data_1), Some(signed_data_2)) => {
+                            tracing::info!("GOT THE SIGNATURES!");
+                            tracing::info!("1: {}", hex::encode(signed_data_1.signature));
+                            tracing::info!("2: {}", hex::encode(signed_data_2.signature));
+                            break;
+                        }
+                        (None, Some(_)) => {
+                            tracing::info!("Got aggregation #1, waiting for #2...");
+                        }
+                        (Some(_), None) => {
+                            tracing::info!("Got aggregation #2, waiting for #1...");
+                        }
+                        (None, None) => {
+                            tracing::info!("Waiting for aggregation responses...");
+                        }
+                    }
+                    // still open, waiting...
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
             }
         })
         .await
@@ -378,5 +538,16 @@ mod e2e {
         pub filename: PathBuf,
         pub contents: String,
         pub filecount: usize,
+    }
+
+    #[derive(Serialize, Debug)]
+    pub struct SquareRequest {
+        pub x: u64,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[allow(dead_code)]
+    pub struct SquareResponse {
+        pub y: u64,
     }
 }

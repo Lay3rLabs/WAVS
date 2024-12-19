@@ -9,7 +9,6 @@ use crate::{
         submission::{ChainMessage, Submission, SubmissionError},
         trigger::Trigger,
     },
-    bindings::hello_world::temp_deserialize_hello_world_component_response,
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     AppContext,
 };
@@ -19,11 +18,9 @@ use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
+    aggregator::{AggregateAvsRequest, AggregateAvsResponse},
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
-    hello_world::{
-        solidity_types::hello_world::Task as HelloWorldTask, AddTaskRequest, AddTaskResponse,
-        HelloWorldSimpleClient,
-    },
+    layer_contract_client::LayerContractClientSimple,
 };
 
 #[derive(Clone)]
@@ -258,28 +255,105 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn add_task_to_aggregator(
+    async fn submit_to_ethereum(
         &self,
-        client: &EthSigningClient,
-        task: &AddTaskRequest,
-    ) -> Result<AddTaskResponse, SubmissionError> {
-        let aggregator_msg_url = self
-            .get_eth_chain()?
-            .aggregator_url
-            .as_ref()
-            .ok_or(SubmissionError::MissingAggregatorEndpoint)?
-            .join("/msg")
-            .unwrap();
-        let response = self
-            .http_client
-            .post(aggregator_msg_url)
-            .header("Content-Type", "application/json")
-            .json(task)
-            .send()
+        eth_client: EthSigningClient,
+        trigger_address: Address,
+        service_manager_address: Address,
+        msg: ChainMessage,
+        aggregate: bool,
+    ) -> Result<(), SubmissionError> {
+        let trigger_address = match trigger_address {
+            Address::Eth(addr) => addr.as_bytes().into(),
+            _ => {
+                return Err(SubmissionError::ExpectedEthAddress(
+                    trigger_address.to_string(),
+                ))
+            }
+        };
+
+        let service_manager_address = match service_manager_address {
+            Address::Eth(addr) => addr.as_bytes().into(),
+            _ => {
+                return Err(SubmissionError::ExpectedEthAddress(
+                    service_manager_address.to_string(),
+                ))
+            }
+        };
+
+        let avs_client =
+            LayerContractClientSimple::new(eth_client, service_manager_address, trigger_address);
+
+        let (trigger_id, wasm_result, service_id) = match msg {
+            ChainMessage::Eth {
+                trigger_id,
+                wasm_result,
+                trigger_config,
+                ..
+            } => (trigger_id, wasm_result, trigger_config.service_id),
+            _ => {
+                return Err(SubmissionError::ExpectedEthMessage);
+            }
+        };
+
+        let signed_payload = avs_client
+            .sign_payload(trigger_id, wasm_result)
             .await
-            .map_err(SubmissionError::Reqwest)?;
-        let response: AddTaskResponse = response.json().await.map_err(SubmissionError::Reqwest)?;
-        Ok(response)
+            .map_err(|_| SubmissionError::FailedToSignPayload)?;
+
+        if aggregate {
+            let request = AggregateAvsRequest::EthTrigger {
+                signed_payload,
+                service_manager_address,
+                service_id: service_id.to_string(),
+            };
+
+            let aggregator_msg_url = self
+                .get_eth_chain()?
+                .aggregator_url
+                .as_ref()
+                .ok_or(SubmissionError::MissingAggregatorEndpoint)?
+                .join("/add-payload")
+                .unwrap();
+
+            let response = self
+                .http_client
+                .post(aggregator_msg_url)
+                .header("Content-Type", "application/json")
+                .json(&request)
+                .send()
+                .await
+                .map_err(SubmissionError::Reqwest)?;
+
+            let response: AggregateAvsResponse =
+                response.json().await.map_err(SubmissionError::Reqwest)?;
+            match response {
+                AggregateAvsResponse::Sent { tx_hash, count } => {
+                    tracing::debug!(
+                        "Aggregator submitted with tx hash {} and payload count {}",
+                        tx_hash,
+                        count
+                    );
+                }
+                AggregateAvsResponse::Aggregated { count } => {
+                    tracing::debug!("Aggregated with current payload count {}", count);
+                }
+            }
+        } else {
+            match avs_client.add_signed_payload(signed_payload).await {
+                Ok(_) => {
+                    tracing::debug!(
+                        "Submission to Eth for trigger id {} successful!",
+                        trigger_id
+                    );
+                }
+                Err(e) => {
+                    return Err(SubmissionError::FailedToSubmitEthDirect(e));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -303,9 +377,9 @@ impl Submission for CoreSubmission {
                     } => {
                         while let Some(msg) = rx.recv().await {
                             tracing::debug!("Received message to submit: {:?}", msg);
-                            let eth_client = match msg.submit {
-                                Submit::EthSignedMessage{hd_index} => {
-                                    let client = match _self.get_eth_client(hd_index).await {
+                            let eth_client = match msg.submit() {
+                                Submit::EthSignedMessage{hd_index, .. } => {
+                                    let client = match _self.get_eth_client(*hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -319,7 +393,7 @@ impl Submission for CoreSubmission {
 
                                     Some(client)
                                 },
-                                Submit::EthAggregatorTx{} => {
+                                Submit::EthAggregatorTx{..} => {
                                     let hd_index = 0;
                                     let client = match _self.get_eth_client(hd_index).await {
                                         Ok(client) => client,
@@ -340,15 +414,15 @@ impl Submission for CoreSubmission {
                                 }
                             };
 
-                            let layer_client = match msg.submit {
+                            let layer_client = match msg.submit() {
                                 Submit::EthSignedMessage{..} => {
                                     None
                                 },
-                                Submit::EthAggregatorTx{} => {
+                                Submit::EthAggregatorTx{..} => {
                                     None
                                 },
                                 Submit::LayerVerifierTx { hd_index, .. } => {
-                                    let client = match _self.get_cosmos_client(hd_index).await {
+                                    let client = match _self.get_cosmos_client(*hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -364,114 +438,38 @@ impl Submission for CoreSubmission {
                                 }
                             };
 
-                            match msg.submit {
-                                Submit::EthSignedMessage{.. } => {
-                                    match msg.trigger_config.trigger {
+                            match msg.submit() {
+                                Submit::EthSignedMessage{service_manager_addr, ..} => {
+                                    match &msg.trigger_config().trigger {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
-                                        Trigger::EthEvent { contract_address } => {
-                                            let eth_client = eth_client.unwrap();
-
-                                            let contract_address = match contract_address {
-                                                Address::Eth(addr) => {
-                                                    addr.as_bytes().into()
-                                                },
-                                                Address::Cosmos { .. } => {
-                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", contract_address );
-                                                    continue;
-                                                }
-                                            };
-
-                                            // The Hello world contract needs to know about the Task in its API for some reason
-                                            // this will eventually get more generic
-                                            let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
-
-                                            let task = HelloWorldTask {
-                                                name: response.task_name,
-                                                taskCreatedBlock: response.task_created_block,
-                                            };
-
-                                            let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
-
-                                            // theoretically we can check the hash for now and not submit if it changed...
-                                            // but, this is more trouble than it's worth since it's going away in a follow-up PR
-                                            // if avs_client.message_hash(&task.name).to_vec() != response.message_hash {
-                                            //     tracing::error!("Message hash mismatch");
-                                            //     continue;
-                                            // }
-
-                                            match avs_client.sign_and_submit_task(task, response.task_index).await {
-                                                Ok(_) => {
-                                                    tracing::debug!("Submission to Eth addr {} for task {} successful", avs_client.contract_address, response.task_index);
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Submission failed: {:?}", e);
-                                                }
+                                        Trigger::EthEvent { contract_address: trigger_addr } => {
+                                            if let Err(e) = _self.submit_to_ethereum(eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, false).await {
+                                                tracing::error!("{:?}", e);
                                             }
                                         },
                                     }
                                 },
-                                Submit::EthAggregatorTx{} => {
-                                    match msg.trigger_config.trigger  {
+                                Submit::EthAggregatorTx{service_manager_addr} => {
+                                    match &msg.trigger_config().trigger  {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
-                                        Trigger::EthEvent { contract_address } => {
-                                            let eth_client = eth_client.unwrap();
-
-                                            let contract_address = match contract_address {
-                                                Address::Eth(addr) => {
-                                                    addr.as_bytes().into()
-                                                },
-                                                Address::Cosmos { .. } => {
-                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", contract_address);
-                                                    continue;
-                                                }
-                                            };
-
-                                            let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
-
-                                            let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
-
-                                            let task = HelloWorldTask {
-                                                name: response.task_name,
-                                                taskCreatedBlock: response.task_created_block,
-                                            };
-
-                                            let task_index = response.task_index;
-
-                                            // Generate request if possible
-                                            let request = match avs_client.task_request(task, task_index).await {
-                                                Ok(request) => {
-                                                    request
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Submission failed: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
-                                            match _self.add_task_to_aggregator(&eth_client, &request).await {
-                                                Ok(response) => {
-                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
-                                                    if let Some(hash) = response.hash {
-                                                        tracing::debug!("Task hash: {}", hash);
-                                                    }
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Aggregation failed: {:?}", e);
-                                                }
+                                        Trigger::EthEvent { contract_address: trigger_addr } => {
+                                            if let Err(e) = _self.submit_to_ethereum(eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, true).await {
+                                                tracing::error!("{:?}", e);
                                             }
                                         },
                                     }
                                 },
                                 Submit::LayerVerifierTx { verifier_addr, ..} => {
-                                    match msg.trigger_config.trigger {
+                                    match &msg.trigger_config().trigger {
                                         Trigger::LayerQueue { task_queue_addr, .. } => {
 
-                                            let result:serde_json::Value = match serde_json::from_slice(&msg.wasm_result) {
+                                            let result:serde_json::Value = match serde_json::from_slice(msg.wasm_result()) {
                                                 Ok(result) => result,
                                                 Err(e) => {
                                                     tracing::error!("Failed to parse wasm result into json value: {:?}", e);
@@ -497,7 +495,7 @@ impl Submission for CoreSubmission {
                                                 result,
                                             };
 
-                                            match layer_client.unwrap().contract_execute(&verifier_addr, &contract_msg, Vec::new(), None).await {
+                                            match layer_client.unwrap().contract_execute(verifier_addr, &contract_msg, Vec::new(), None).await {
                                                 Ok(_) => {
                                                     tracing::debug!("Submission successful");
                                                 },

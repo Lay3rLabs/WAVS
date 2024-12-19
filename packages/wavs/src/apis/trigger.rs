@@ -1,9 +1,9 @@
-use alloy::rpc::types::Log;
 use lavs_apis::id::TaskId;
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
+use utils::layer_contract_client::TriggerId;
 
 use crate::AppContext;
 
@@ -116,7 +116,10 @@ pub enum TriggerData {
         payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
     },
     EthEvent {
-        log: Log,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+        trigger_id: TriggerId,
+        payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
     },
 }
 

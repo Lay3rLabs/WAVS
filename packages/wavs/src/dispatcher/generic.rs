@@ -315,6 +315,7 @@ pub enum DispatcherError {
 #[cfg(test)]
 mod tests {
     use lavs_apis::id::TaskId;
+    use utils::layer_contract_client::TriggerId;
 
     use crate::{
         apis::{
@@ -343,12 +344,16 @@ mod tests {
         init_tracing_tests();
 
         let db_file = tempfile::NamedTempFile::new().unwrap();
-        let task_id = TaskId::new(2);
         let payload = b"foobar";
 
         let action = TriggerAction {
             config: TriggerConfig::eth_event("service1", "workflow1", rand_address_eth()).unwrap(),
-            data: TriggerData::queue(task_id, payload),
+            data: TriggerData::EthEvent {
+                service_id: ServiceID::new("service1").unwrap(),
+                workflow_id: WorkflowID::new("workflow1").unwrap(),
+                trigger_id: TriggerId::new(2),
+                payload: payload.to_vec(),
+            },
         };
 
         let dispatcher = Dispatcher::new(
@@ -362,6 +367,7 @@ mod tests {
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
         let component_id = ComponentID::new("component1").unwrap();
+        let service_manager_addr = rand_address_eth();
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -371,7 +377,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    submit: Some(Submit::eth_aggregator_tx(service_manager_addr.clone())),
                 },
             )]
             .into(),
@@ -388,10 +394,11 @@ mod tests {
         dispatcher.submission.wait_for_messages(1).unwrap();
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 1);
-        let expected = ChainMessage {
+        let expected = ChainMessage::Eth {
             trigger_config: action.config,
             wasm_result: payload.into(),
-            submit: Submit::eth_aggregator_tx(),
+            trigger_id: TriggerId::new(2),
+            submit: Submit::eth_aggregator_tx(service_manager_addr),
         };
         assert_eq!(processed[0], expected);
     }
@@ -453,7 +460,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
                 },
             )]
             .into(),
@@ -472,8 +479,8 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].wasm_result(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasm_result(), br#"{"y":441}"#);
     }
 
     /// Simulate big-square on a multi-threaded dispatcher
@@ -529,7 +536,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
                 },
             )]
             .into(),
@@ -548,7 +555,7 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].wasm_result(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasm_result(), br#"{"y":441}"#);
     }
 }

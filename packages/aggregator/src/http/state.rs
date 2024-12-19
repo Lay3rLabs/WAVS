@@ -1,20 +1,27 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 
 use alloy::primitives::Address;
 use anyhow::bail;
-use serde::{Deserialize, Serialize};
 use utils::{
-    hello_world::TaskData,
+    layer_contract_client::SignedPayload,
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 
 use crate::config::Config;
 
-// Task Id -> Tasks
-pub type TasksMap = HashMap<String, Vec<Task>>;
+// Hold a list of payloads for a given TriggerId
+// TODO - optimizations:
+// 1. maintain a count that doesn't need to load the whole thing
+// 2. re-assess to see if we need to store the whole payload
+// also, gotta move ServiceID to utils
+pub type PayloadsByServiceId = HashMap<String, Vec<SignedPayload>>;
 
 // Note: If service exists in db it's considered registered
-const TASKS: Table<&str, JSON<TasksMap>> = Table::new("tasks");
+const PAYLOADS_BY_SERVICE_ID: Table<&str, JSON<PayloadsByServiceId>> =
+    Table::new("payloads_by_service_id");
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -29,51 +36,62 @@ impl HttpState {
         Ok(Self { config, storage })
     }
 
-    pub fn load_tasks(&self, service: Address) -> anyhow::Result<TasksMap> {
-        match self.storage.get(TASKS, &service.to_string())? {
-            Some(tasks) => Ok(tasks.value()),
-            None => Err(anyhow::anyhow!("Task not registered")),
+    pub fn load_all_payloads(
+        &self,
+        service_manager: Address,
+    ) -> anyhow::Result<PayloadsByServiceId> {
+        match self
+            .storage
+            .get(PAYLOADS_BY_SERVICE_ID, &service_manager.to_string())?
+        {
+            Some(payloads) => Ok(payloads.value()),
+            None => Err(anyhow::anyhow!(
+                "Service manager at address {} is not registered",
+                service_manager
+            )),
         }
     }
 
-    pub fn save_tasks(&self, service: Address, tasks: TasksMap) -> Result<(), DBError> {
-        self.storage.set(TASKS, &service.to_string(), &tasks)
+    pub fn save_all_payloads(
+        &self,
+        service_manager: Address,
+        payloads: PayloadsByServiceId,
+    ) -> Result<(), DBError> {
+        self.storage.set(
+            PAYLOADS_BY_SERVICE_ID,
+            &service_manager.to_string(),
+            &payloads,
+        )
     }
 
-    pub fn register_service(&self, service: Address) -> anyhow::Result<()> {
-        let service = service.to_string();
-        match self.storage.get(TASKS, &service)? {
-            Some(_) => {
-                bail!("Service is already registered");
-            }
+    pub fn register_service(
+        &self,
+        service_manager: Address,
+        service_id: String,
+    ) -> anyhow::Result<()> {
+        let service_manager = service_manager.to_string();
+
+        match self.storage.get(PAYLOADS_BY_SERVICE_ID, &service_manager)? {
             None => {
-                self.storage.set(TASKS, &service, &HashMap::default())?;
+                let mut lookup = HashMap::new();
+                lookup.insert(service_id, Vec::new());
+                self.storage
+                    .set(PAYLOADS_BY_SERVICE_ID, &service_manager, &lookup)?;
             }
+            Some(table) => match table.value().entry(service_id.clone()) {
+                Entry::Vacant(entry) => {
+                    entry.insert(Vec::new());
+                }
+                Entry::Occupied(_) => {
+                    bail!(
+                        "Service manager at {} is already registered for service {}",
+                        service_manager,
+                        service_id
+                    );
+                }
+            },
         }
+
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Task {
-    pub operator: Address,
-    pub data: TaskData,
-    pub signature: Vec<u8>,
-    pub reference_block: u32,
-}
-
-impl Task {
-    pub fn new(
-        operator: Address,
-        data: TaskData,
-        signature: Vec<u8>,
-        reference_block: u32,
-    ) -> Self {
-        Self {
-            operator,
-            data,
-            signature,
-            reference_block,
-        }
     }
 }

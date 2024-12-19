@@ -5,5 +5,3 @@ bindgen!({
   path: "../../wit",
   async: true,
 });
-
-// require_store_data_send: true,
