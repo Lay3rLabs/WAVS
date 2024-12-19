@@ -67,16 +67,10 @@ WAVS is now running. Keep this terminal open.
 cp .env.example .env
 ```
 
-10. Install `wavs-cli`:
+10. Run the following command to deploy all of the contracts for the hello-world AVS:
 
 ```
-cargo install --path .
-```
-
-11. Run the following command to deploy all of the contracts for the hello-world AVS:
-
-```
-wavs-cli deploy-all
+cargo run deploy-all --wavs
 ```
 
 The output of your terminal should look like the following:
@@ -109,10 +103,10 @@ CLI_EIGEN_SERVICE_STAKE_TOKEN="0x74Cf9087AD26D541930BaC724B7ab21bA8F00a27"
 ```
 
 
-1.  Copy the values associated with `CLI_EIGEN_SERVICE_TRIGGER`, `CLI_EIGEN_SERVICE_MANAGER`, and `ETH_TRIGGER_ECHO SERVICE ID`, and use them in the following command:
+11.  Copy the values associated with `CLI_EIGEN_SERVICE_TRIGGER`, `CLI_EIGEN_SERVICE_MANAGER`, and `ETH_TRIGGER_ECHO SERVICE ID`, and use them in the following command:
 
 ```
-wavs-cli add-task --trigger-addr <TRIGGER_ADDR> --service-manager-addr <SERVICE_MANAGER_ADDR> --service-id <SERVICE_ID>
+cargo run add-task --trigger-addr <TRIGGER_ADDR> --service-manager-addr <SERVICE_MANAGER_ADDR> --service-id <SERVICE_ID>
 ```
 
 This adds a task to be run. If the task runs successfully, you will see a task response hash in your terminal.
@@ -140,7 +134,7 @@ This `kitchen-sink` command goes through all the steps of:
 
 ## Commands
 
-Other commands are available to fine-tune services or run specific steps. Executing `wavs-cli --help` will give more info on each command
+Other commands are available to fine-tune services or run specific steps. Executing `cargo run --help` will give more info on each command
 
 ## Local vs. Testnet/Mainnet/etc.
 
