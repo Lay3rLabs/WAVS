@@ -55,7 +55,6 @@ async fn deploy_layer_avs() {
         .get_trigger(new_trigger_id)
         .await
         .unwrap();
-    // just to make sure we keep anvil alive
 
     assert_eq!(trigger.data, b"foo-data");
 
