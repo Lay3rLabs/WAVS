@@ -54,11 +54,10 @@ impl LayerContractClientSimple {
     pub async fn load_signed_data(&self, trigger_id: TriggerId) -> Result<Option<SignedData>> {
         let resp = self
             .service_manager_contract
-            .getSignedDataByTriggerId(*trigger_id)
+            .signedDataByTriggerId(*trigger_id)
             .call()
             .await
-            .context("Failed to get signed data")?
-            ._0;
+            .context("Failed to get signed data")?;
 
         let data = SignedData {
             data: resp.data.to_vec(),
