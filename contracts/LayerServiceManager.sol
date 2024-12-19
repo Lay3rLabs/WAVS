@@ -73,7 +73,7 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
                     signedPayload.signature
                 ))
         ) {
-            revert("Invalid signature");
+            revert InvalidSignature();
         }
 
         SignedData memory signedData = SignedData({
