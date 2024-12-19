@@ -1,6 +1,6 @@
 # Quickstart
 
-This guide walks you through running [EigenLayer's Hello World AVS](https://docs.eigenlayer.xyz/developers/quickstart) example as a service using WAVS locally.
+This guide walks you through how to set up your environment, deploy an example service, and run a task.
 
 ## Setup
 
@@ -37,7 +37,7 @@ Your local chain is now running. Keep this terminal open.
 cp .env.example .env
 ```
 
-6. Open the `.env` from the previous step, uncomment the first line, and specify the absolute file path for your WAVS data directory.
+1. Open the `.env` from the previous step and specify the absolute file path for your WAVS data directory.
 
 > NOTE: The '~' symbol is expanded into your home directory, like `/home/username`.
 
@@ -57,7 +57,7 @@ cargo run
 
 WAVS is now running. Keep this terminal open.
 
-## Deploy and run the `hello-world` AVS
+## Deploy service contracts
 
 8. Open a third terminal in the `packages/cli` directory of the WAVS repo.
 
@@ -67,45 +67,52 @@ WAVS is now running. Keep this terminal open.
 cp .env.example .env
 ```
 
-10. Run the following command to deploy all of the contracts for the hello-world AVS:
+10. Install `wavs-cli`:
 
 ```
-cargo run deploy-all --wavs
+cargo install --path .
+```
+
+11. Run the following command to deploy all of the contracts for the hello-world AVS:
+
+```
+wavs-cli deploy-all
 ```
 
 The output of your terminal should look like the following:
 
 ```
---- HELLO WORLD DIGEST ---
-CLI_DIGEST_HELLO_WORLD="15e5e07adbb0be551772bc74fb182000f0efe7ea37a65622007042f47787d3b6"
+--- ETH TRIGGER ECHO DIGEST ---
+CLI_DIGEST_ETH_TRIGGER_ECHO="a8e29a6341054eb0b236ad6a15c613d3404e4831dbffa5c89cb593f291f3eae6"
 
---- HELLO WORLD SERVICE ID ---
-0193b811ae997243a97ac48156b13296
+--- ETH_TRIGGER_ECHO SERVICE ID ---
+0193dc8e7a82785197c43aeba077f17f
 
 --- CORE AVS CONTRACTS ---
-CLI_EIGEN_CORE_PROXY_ADMIN="0x3347B4d90ebe72BeFb30444C9966B2B990aE9FcB"
-CLI_EIGEN_CORE_DELEGATION_MANAGER="0x5bf5b11053e734690269C6B9D438F8C9d48F528A"
-CLI_EIGEN_CORE_STRATEGY_MANAGER="0x457cCf29090fe5A24c19c1bc95F492168C0EaFdb"
-CLI_EIGEN_CORE_POD_MANAGER="0x5fc748f1FEb28d7b76fa1c6B07D8ba2d5535177c"
-CLI_EIGEN_CORE_POD_BEACON="0xF32D39ff9f6Aa7a7A64d7a4F00a54826Ef791a55"
-CLI_EIGEN_CORE_PAUSER_REGISTRY="0x6F6f570F45833E249e27022648a26F4076F48f78"
-CLI_EIGEN_CORE_STRATEGY_FACTORY="0x5FeaeBfB4439F3516c74939A9D04e95AFE82C4ae"
-CLI_EIGEN_CORE_STRATEGY_BEACON="0xFD6F7A6a5c21A3f503EBaE7a473639974379c351"
-CLI_EIGEN_CORE_AVS_DIRECTORY="0xab16A69A5a8c12C732e0DEFF4BE56A70bb64c926"
-CLI_EIGEN_CORE_REWARDS_COORDINATOR="0xb9bEECD1A582768711dE1EE7B0A1d582D9d72a6C"
+CLI_EIGEN_CORE_PROXY_ADMIN="0x5bf5b11053e734690269C6B9D438F8C9d48F528A"
+CLI_EIGEN_CORE_DELEGATION_MANAGER="0x3aAde2dCD2Df6a8cAc689EE797591b2913658659"
+CLI_EIGEN_CORE_STRATEGY_MANAGER="0x38a024C0b412B9d1db8BC398140D00F5Af3093D4"
+CLI_EIGEN_CORE_POD_MANAGER="0x2a810409872AfC346F9B5b26571Fd6eC42EA4849"
+CLI_EIGEN_CORE_POD_BEACON="0x99dBE4AEa58E518C50a1c04aE9b48C9F6354612f"
+CLI_EIGEN_CORE_PAUSER_REGISTRY="0xB0f05d25e41FbC2b52013099ED9616f1206Ae21B"
+CLI_EIGEN_CORE_STRATEGY_FACTORY="0x19cEcCd6942ad38562Ee10bAfd44776ceB67e923"
+CLI_EIGEN_CORE_STRATEGY_BEACON="0x5302E909d1e93e30F05B5D6Eea766363D14F9892"
+CLI_EIGEN_CORE_AVS_DIRECTORY="0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82"
+CLI_EIGEN_CORE_REWARDS_COORDINATOR="0x40918Ba7f132E0aCba2CE4de4c4baF9BD2D7D849"
 
---- HELLO WORLD AVS CONTRACTS ---
-CLI_EIGEN_SERVICE_PROXY_ADMIN="0xefc1aB2475ACb7E60499Efb171D173be19928a05"
-CLI_EIGEN_SERVICE_MANAGER="0xB2b580ce436E6F77A5713D80887e14788Ef49c9A"
-CLI_EIGEN_SERVICE_STAKE_REGISTRY="0xD49a0e9A4CD5979aE36840f542D2d7f02C4817Be"
-CLI_EIGEN_SERVICE_STAKE_TOKEN="0x66F625B8c4c635af8b74ECe2d7eD0D58b4af3C3d"
+--- LAYER AVS CONTRACTS ---
+CLI_EIGEN_SERVICE_PROXY_ADMIN="0xD49a0e9A4CD5979aE36840f542D2d7f02C4817Be"
+CLI_EIGEN_SERVICE_MANAGER="0x66F625B8c4c635af8b74ECe2d7eD0D58b4af3C3d"
+CLI_EIGEN_SERVICE_TRIGGER="0x5D42EBdBBa61412295D7b0302d6F50aC449Ddb4F"
+CLI_EIGEN_SERVICE_STAKE_REGISTRY="0xc582Bc0317dbb0908203541971a358c44b1F3766"
+CLI_EIGEN_SERVICE_STAKE_TOKEN="0x74Cf9087AD26D541930BaC724B7ab21bA8F00a27"
 ```
 
 
-11. Copy the address associated with `CLI_EIGEN_SERVICE_MANAGER` and use it in the following command:
+1.  Copy the values associated with `CLI_EIGEN_SERVICE_TRIGGER`, `CLI_EIGEN_SERVICE_MANAGER`, and `ETH_TRIGGER_ECHO SERVICE ID`, and use them in the following command:
 
 ```
-cargo run add-task --contract-address="<service-manager-address>" --wavs
+wavs-cli add-task --trigger-addr <TRIGGER_ADDR> --service-manager-addr <SERVICE_MANAGER_ADDR> --service-id <SERVICE_ID>
 ```
 
 This adds a task to be run. If the task runs successfully, you will see a task response hash in your terminal.
@@ -125,15 +132,15 @@ This `kitchen-sink` command goes through all the steps of:
 
 1. Deploying core Eigenlayer contracts
 2. Registering as an Eigenlayer operator
-3. Deploying hello-world AVS contracts
-4. Registering as a hello-world AVS operator
+3. Deploying example AVS contracts
+4. Registering as an AVS operator
 5. Creating a service on WAVS
-6. Submitting a task to the hello-world on-chain contract
+6. Submitting a task to the on-chain example contract
 7. Waiting for WAVS to run the service and submit the result back on-chain
 
 ## Commands
 
-Other commands are available to fine-tune services or run specific steps. Executing `cargo run -- --help` in the `packages/cli` directory will give more info on each command
+Other commands are available to fine-tune services or run specific steps. Executing `wavs-cli --help` will give more info on each command
 
 ## Local vs. Testnet/Mainnet/etc.
 
