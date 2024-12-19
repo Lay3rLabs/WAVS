@@ -95,8 +95,4 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
             LayerServiceManager(address(this)).addSignedPayloadForTrigger(signedPayloads[i]);
         }
     }
-
-    function getSignedDataByTriggerId(ILayerTrigger.TriggerId triggerId) public view returns (SignedData memory) {
-        return signedDataByTriggerId[triggerId];
-    }
 }
