@@ -20,13 +20,11 @@ pub trait Submission: Send + Sync {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChainMessage {
     Cosmos {
-        /// Identify which trigger this came from
         trigger_config: TriggerConfig,
         wasm_result: Vec<u8>,
         submit: Submit,
     },
     Eth {
-        /// Identify which trigger this came from
         trigger_config: TriggerConfig,
         wasm_result: Vec<u8>,
         trigger_id: TriggerId,
