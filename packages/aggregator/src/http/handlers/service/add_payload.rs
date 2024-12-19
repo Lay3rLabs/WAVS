@@ -132,8 +132,8 @@ pub async fn check_operator(
 
     let signed_payload_signature = signed_payload.signature;
 
-    let signature_address = signed_payload_signature
-        .recover_address_from_msg(signed_payload.into_submission_abi().abi_encode())?;
+    let signature_address =
+        signed_payload_signature.recover_address_from_prehash(&signed_payload.payload_hash)?;
 
     if expected_address != signature_address {
         return Err(anyhow!(
