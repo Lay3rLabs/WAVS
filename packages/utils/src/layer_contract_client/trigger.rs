@@ -17,7 +17,7 @@ pub struct LayerContractClientTrigger {
 
 impl LayerContractClientTrigger {
     pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
-        let contract = LayerTrigger::new(contract_address, eth.http_provider.clone());
+        let contract = LayerTrigger::new(contract_address, eth.provider.clone());
 
         Self {
             eth,
@@ -29,13 +29,13 @@ impl LayerContractClientTrigger {
     // TODO - bring all newtypes into utils
     pub async fn add_trigger(
         &self,
-        service_id: String,
-        workflow_id: String,
+        service_id: impl ToString,
+        workflow_id: impl ToString,
         data: Vec<u8>,
     ) -> Result<TriggerId> {
         let event: NewTrigger = self
             .contract
-            .addTrigger(service_id, workflow_id, data.into())
+            .addTrigger(service_id.to_string(), workflow_id.to_string(), data.into())
             .send()
             .await?
             .get_receipt()

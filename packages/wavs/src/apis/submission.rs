@@ -81,4 +81,12 @@ pub enum SubmissionError {
     MissingAggregatorEndpoint,
     #[error("aggregator url: {0}")]
     AggregatorUrl(url::ParseError),
+    #[error("expected eth address, got: {0}")]
+    ExpectedEthAddress(String),
+    #[error("expected eth message")]
+    ExpectedEthMessage,
+    #[error("failed to sign payload")]
+    FailedToSignPayload,
+    #[error("failed to submit to eth directly: {0}")]
+    FailedToSubmitEthDirect(anyhow::Error),
 }

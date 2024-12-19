@@ -18,6 +18,7 @@ use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
+    aggregator::{AggregateAvsRequest, AggregateAvsResponse},
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
     layer_contract_client::LayerContractClientSimple,
 };
@@ -254,28 +255,103 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn add_task_to_aggregator(
+    async fn submit_to_ethereum(
         &self,
-        client: &EthSigningClient,
-        task: &AddTaskRequest,
-    ) -> Result<AddTaskResponse, SubmissionError> {
-        let aggregator_msg_url = self
-            .get_eth_chain()?
-            .aggregator_url
-            .as_ref()
-            .ok_or(SubmissionError::MissingAggregatorEndpoint)?
-            .join("/msg")
-            .unwrap();
-        let response = self
-            .http_client
-            .post(aggregator_msg_url)
-            .header("Content-Type", "application/json")
-            .json(task)
-            .send()
+        eth_client: EthSigningClient,
+        trigger_address: Address,
+        service_manager_address: Address,
+        msg: ChainMessage,
+        aggregate: bool,
+    ) -> Result<(), SubmissionError> {
+        let trigger_address = match trigger_address {
+            Address::Eth(addr) => addr.as_bytes().into(),
+            _ => {
+                return Err(SubmissionError::ExpectedEthAddress(
+                    trigger_address.to_string(),
+                ))
+            }
+        };
+
+        let service_manager_address = match service_manager_address {
+            Address::Eth(addr) => addr.as_bytes().into(),
+            _ => {
+                return Err(SubmissionError::ExpectedEthAddress(
+                    service_manager_address.to_string(),
+                ))
+            }
+        };
+
+        let avs_client =
+            LayerContractClientSimple::new(eth_client, service_manager_address, trigger_address);
+
+        let (trigger_id, wasm_result) = match msg {
+            ChainMessage::Eth {
+                trigger_id,
+                wasm_result,
+                ..
+            } => (trigger_id, wasm_result),
+            _ => {
+                return Err(SubmissionError::ExpectedEthMessage);
+            }
+        };
+
+        let signed_payload = avs_client
+            .sign_payload(trigger_id, wasm_result)
             .await
-            .map_err(SubmissionError::Reqwest)?;
-        let response: AddTaskResponse = response.json().await.map_err(SubmissionError::Reqwest)?;
-        Ok(response)
+            .map_err(|_| SubmissionError::FailedToSignPayload)?;
+
+        if aggregate {
+            let request = AggregateAvsRequest::EthTrigger {
+                signed_payload,
+                service_manager_address,
+            };
+
+            let aggregator_msg_url = self
+                .get_eth_chain()?
+                .aggregator_url
+                .as_ref()
+                .ok_or(SubmissionError::MissingAggregatorEndpoint)?
+                .join("/add-payload")
+                .unwrap();
+
+            let response = self
+                .http_client
+                .post(aggregator_msg_url)
+                .header("Content-Type", "application/json")
+                .json(&request)
+                .send()
+                .await
+                .map_err(SubmissionError::Reqwest)?;
+
+            let response: AggregateAvsResponse =
+                response.json().await.map_err(SubmissionError::Reqwest)?;
+            match response {
+                AggregateAvsResponse::Sent { tx_hash, count } => {
+                    tracing::debug!(
+                        "Aggregator submitted with tx hash {} and payload count {}",
+                        tx_hash,
+                        count
+                    );
+                }
+                AggregateAvsResponse::Aggregated { count } => {
+                    tracing::debug!("Aggregated with current payload count {}", count);
+                }
+            }
+        } else {
+            match avs_client.add_signed_payload(signed_payload).await {
+                Ok(_) => {
+                    tracing::debug!(
+                        "Submission to Eth for trigger id {} successful!",
+                        trigger_id
+                    );
+                }
+                Err(e) => {
+                    return Err(SubmissionError::FailedToSubmitEthDirect(e));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -315,7 +391,7 @@ impl Submission for CoreSubmission {
 
                                     Some(client)
                                 },
-                                Submit::EthAggregatorTx{} => {
+                                Submit::EthAggregatorTx{..} => {
                                     let hd_index = 0;
                                     let client = match _self.get_eth_client(hd_index).await {
                                         Ok(client) => client,
@@ -340,7 +416,7 @@ impl Submission for CoreSubmission {
                                 Submit::EthSignedMessage{..} => {
                                     None
                                 },
-                                Submit::EthAggregatorTx{} => {
+                                Submit::EthAggregatorTx{..} => {
                                     None
                                 },
                                 Submit::LayerVerifierTx { hd_index, .. } => {
@@ -368,90 +444,21 @@ impl Submission for CoreSubmission {
                                             continue;
                                         },
                                         Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            let eth_client = eth_client.unwrap();
-
-                                            let (trigger_addr, service_manager_addr) = match (trigger_addr, service_manager_addr) {
-                                                (Address::Eth(trigger_addr), Address::Eth(service_manager_addr)) => {
-                                                    (trigger_addr.as_bytes().into(), service_manager_addr.as_bytes().into())
-                                                },
-                                                _ => {
-                                                    tracing::error!("Expected Ethereum addresses, got cosmos! {:?} and {:?}", service_manager_addr, trigger_addr);
-                                                    continue;
-                                                }
-                                            };
-
-
-                                            let avs_client = LayerContractClientSimple::new(eth_client, service_manager_addr, trigger_addr);
-
-                                            let (trigger_id, wasm_result) = match msg {
-                                                ChainMessage::Eth { trigger_id, wasm_result, .. } => (trigger_id, wasm_result),
-                                                _ => {
-                                                    tracing::error!("Expected Eth message, got Cosmos");
-                                                    continue;
-                                                }
-                                            };
-
-                                            match avs_client.add_signed_trigger_data(trigger_id, wasm_result).await {
-                                                Ok(_) => {
-                                                    tracing::debug!("Submission to Eth for trigger id {} successful!", trigger_id);
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Submission failed: {:?}", e);
-                                                }
+                                            if let Err(e) = _self.submit_to_ethereum(eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, false).await {
+                                                tracing::error!("{:?}", e);
                                             }
                                         },
                                     }
                                 },
-                                Submit::EthAggregatorTx{} => {
-                                    match msg.trigger_config.trigger  {
+                                Submit::EthAggregatorTx{service_manager_addr} => {
+                                    match &msg.trigger_config().trigger  {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
-                                        Trigger::EthEvent { contract_address } => {
-                                            let eth_client = eth_client.unwrap();
-
-                                            let contract_address = match contract_address {
-                                                Address::Eth(addr) => {
-                                                    addr.as_bytes().into()
-                                                },
-                                                Address::Cosmos { .. } => {
-                                                    tracing::error!("Expected Ethereum address, got cosmos {:?}", contract_address);
-                                                    continue;
-                                                }
-                                            };
-
-                                            let avs_client = HelloWorldSimpleClient::new(eth_client.clone(), contract_address);
-
-                                            let response = temp_deserialize_hello_world_component_response(&msg.wasm_result);
-
-                                            let task = HelloWorldTask {
-                                                name: response.task_name,
-                                                taskCreatedBlock: response.task_created_block,
-                                            };
-
-                                            let task_index = response.task_index;
-
-                                            // Generate request if possible
-                                            let request = match avs_client.task_request(task, task_index).await {
-                                                Ok(request) => {
-                                                    request
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Submission failed: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
-                                            match _self.add_task_to_aggregator(&eth_client, &request).await {
-                                                Ok(response) => {
-                                                    tracing::debug!("Aggregation to Eth addr {} for task {} successful", avs_client.contract_address, task_index);
-                                                    if let Some(hash) = response.hash {
-                                                        tracing::debug!("Task hash: {}", hash);
-                                                    }
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Aggregation failed: {:?}", e);
-                                                }
+                                        Trigger::EthEvent { contract_address: trigger_addr } => {
+                                            if let Err(e) = _self.submit_to_ethereum(eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, true).await {
+                                                tracing::error!("{:?}", e);
                                             }
                                         },
                                     }

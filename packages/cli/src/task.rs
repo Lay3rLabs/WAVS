@@ -36,7 +36,7 @@ pub async fn run_eth_trigger_echo_task(
         tracing::info!("Submitting the task result directly");
 
         client
-            .add_signed_trigger_data(trigger_id, data)
+            .add_signed_payload(client.sign_payload(trigger_id, data).await.unwrap())
             .await
             .unwrap();
     }
@@ -45,12 +45,15 @@ pub async fn run_eth_trigger_echo_task(
 
     tokio::time::timeout(Duration::from_secs(10), async move {
         loop {
-            let signature = client.get_signed_data(trigger_id).await.unwrap().signature;
+            let resp = client.load_signed_data(trigger_id).await.unwrap();
 
-            if !signature.is_empty() {
-                return hex::encode(signature);
-            } else {
-                tracing::info!("Waiting for task response on {}", trigger_id);
+            match resp {
+                Some(resp) => {
+                    return hex::encode(resp.signature);
+                }
+                None => {
+                    tracing::info!("Waiting for task response on {}", trigger_id);
+                }
             }
             // still open, waiting...
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;

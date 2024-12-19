@@ -78,26 +78,24 @@ impl HttpClient {
         Ok(())
     }
 
-    pub async fn register_service_on_aggregator(
+    pub async fn _register_service_on_aggregator(
         &self,
-        task_queue_addr: Address,
+        service_manager_address: alloy::primitives::Address,
         config: &Config,
     ) -> Result<()> {
-        let service = match task_queue_addr {
-            Address::Eth(addr_eth) => addr_eth,
-            Address::Cosmos { .. } => unimplemented!(),
-        };
         let aggregator_app_url = config
             .ethereum_chain_config()
             .unwrap()
             .aggregator_endpoint
             .unwrap();
         self.inner
-            .post(format!("{}/service", aggregator_app_url))
+            .post(format!("{}/add-service", aggregator_app_url))
             .header("Content-Type", "application/json")
-            .json(&utils::hello_world::AddAggregatorServiceRequest {
-                service: service.as_bytes().into(),
-            })
+            .json(
+                &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
+                    service_manager_address,
+                },
+            )
             .send()
             .await?;
 

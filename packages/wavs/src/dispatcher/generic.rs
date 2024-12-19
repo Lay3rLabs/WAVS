@@ -376,7 +376,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
                 },
             )]
             .into(),
@@ -397,7 +397,7 @@ mod tests {
             trigger_config: action.config,
             wasm_result: payload.into(),
             trigger_id: TriggerId::new(2),
-            submit: Submit::eth_aggregator_tx(),
+            submit: Submit::eth_aggregator_tx(rand_address_eth()),
         };
         assert_eq!(processed[0], expected);
     }
@@ -459,7 +459,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
                 },
             )]
             .into(),
@@ -478,8 +478,8 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].wasm_result(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasm_result(), br#"{"y":441}"#);
     }
 
     /// Simulate big-square on a multi-threaded dispatcher
@@ -535,7 +535,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
                 },
             )]
             .into(),
@@ -554,7 +554,7 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].wasm_result(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasm_result(), br#"{"y":441}"#);
     }
 }

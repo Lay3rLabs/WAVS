@@ -1,7 +1,7 @@
 use aggregator::{http::state::HttpState, test_utils::app::TestApp};
 use alloy::{
     node_bindings::Anvil,
-    primitives::keccak256,
+    primitives::{eip191_hash_message, keccak256},
     signers::{
         k256::elliptic_curve::rand_core::OsRng,
         local::{coins_bip39::English, MnemonicBuilder},
@@ -10,11 +10,12 @@ use alloy::{
     sol_types::SolValue,
 };
 use utils::{
+    aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
     eigen_client::EigenClient,
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::{
-        solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
-        AddAggregatorServiceRequest, HelloWorldFullClientBuilder,
+    layer_contract_client::{
+        layer_service_manager::ILayerServiceManager::Payload, LayerContractClientFullBuilder,
+        LayerContractClientSimple,
     },
 };
 
@@ -44,7 +45,7 @@ async fn submit_to_chain() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
+    let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts.clone())
         .build()
         .await
@@ -55,47 +56,58 @@ async fn submit_to_chain() {
         .register_operator(&core_contracts)
         .await
         .unwrap();
-    hello_world_client
-        .register_operator(&mut OsRng)
-        .await
-        .unwrap();
 
-    let hello_world_client = hello_world_client.into_simple();
-    let task_message = "world".to_owned();
+    avs_client.register_operator(&mut OsRng).await.unwrap();
 
-    let NewTaskCreated { task, taskIndex } = hello_world_client
-        .create_new_task(task_message)
-        .await
-        .unwrap();
-
-    let request = hello_world_client
-        .task_request(task, taskIndex)
-        .await
-        .unwrap();
+    let avs_client: LayerContractClientSimple = avs_client.into();
 
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
+
     aggregator::http::handlers::service::add_service::add_service(
         state.clone(),
-        AddAggregatorServiceRequest {
-            service: hello_world_client.contract_address,
+        AddAggregatorServiceRequest::EthTrigger {
+            service_manager_address: avs_client.service_manager_contract_address,
         },
     )
     .await
     .unwrap();
 
-    let response = aggregator::http::handlers::service::add_task::add_task(state, request)
+    let task_message = b"world".to_vec();
+
+    let trigger_id = avs_client
+        .trigger
+        .add_trigger("default", "default", task_message.clone())
         .await
         .unwrap();
-    assert!(response.hash.is_some());
+
+    let signed_payload = avs_client
+        .sign_payload(trigger_id, task_message)
+        .await
+        .unwrap();
+
+    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+        state,
+        signed_payload,
+        avs_client.service_manager_contract_address,
+    )
+    .await
+    .unwrap();
+
+    match response {
+        AggregateAvsResponse::Sent { count, .. } => {
+            assert!(count > 0);
+        }
+        _ => {
+            panic!("Expected sent response");
+        }
+    }
 
     // Ensure it's landed!
-    let response = hello_world_client
-        .contract
-        .allTaskResponses(hello_world_client.contract_address, taskIndex)
-        .call()
+    avs_client
+        .load_signed_data(trigger_id)
         .await
+        .unwrap()
         .unwrap();
-    assert!(!response._0.is_empty())
 }
 
 #[tokio::test]
@@ -123,7 +135,7 @@ async fn submit_to_chain_three() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
+    let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts.clone())
         .build()
         .await
@@ -134,80 +146,107 @@ async fn submit_to_chain_three() {
         .register_operator(&core_contracts)
         .await
         .unwrap();
-    hello_world_client
-        .register_operator(&mut OsRng)
-        .await
-        .unwrap();
 
-    let hello_world_client = hello_world_client.into_simple();
+    avs_client.register_operator(&mut OsRng).await.unwrap();
+
+    let avs_client: LayerContractClientSimple = avs_client.into();
+
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
+
     aggregator::http::handlers::service::add_service::add_service(
         state.clone(),
-        AddAggregatorServiceRequest {
-            service: hello_world_client.contract_address,
+        AddAggregatorServiceRequest::EthTrigger {
+            service_manager_address: avs_client.service_manager_contract_address,
         },
     )
     .await
     .unwrap();
 
-    // First we just add task
-    let task_message = "world".to_owned();
-    let NewTaskCreated { task, taskIndex } = hello_world_client
-        .create_new_task(task_message)
-        .await
-        .unwrap();
-    let request = hello_world_client
-        .task_request(task, taskIndex)
+    // first task - should just aggregate
+    let task_message = b"foo".to_vec();
+
+    let trigger_id = avs_client
+        .trigger
+        .add_trigger("default", "default", task_message.clone())
         .await
         .unwrap();
 
-    let response = aggregator::http::handlers::service::add_task::add_task(state.clone(), request)
-        .await
-        .unwrap();
-    assert!(response.hash.is_none());
-
-    // Second we just add as well
-    let task_message = "bar".to_owned();
-    let NewTaskCreated { task, taskIndex } = hello_world_client
-        .create_new_task(task_message)
+    let signed_payload = avs_client
+        .sign_payload(trigger_id, task_message)
         .await
         .unwrap();
 
-    let request = hello_world_client
-        .task_request(task, taskIndex)
+    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+        state.clone(),
+        signed_payload,
+        avs_client.service_manager_contract_address,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(response, AggregateAvsResponse::Aggregated { .. }));
+
+    // Second - still aggregating
+    let task_message = b"hello".to_vec();
+
+    let trigger_id = avs_client
+        .trigger
+        .add_trigger("default", "default", task_message.clone())
         .await
         .unwrap();
 
-    let response = aggregator::http::handlers::service::add_task::add_task(state.clone(), request)
+    let signed_payload = avs_client
+        .sign_payload(trigger_id, task_message)
         .await
         .unwrap();
-    assert!(response.hash.is_none());
+
+    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+        state.clone(),
+        signed_payload,
+        avs_client.service_manager_contract_address,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(response, AggregateAvsResponse::Aggregated { .. }));
 
     // Third should get to the quorum
-    let task_message = "bar".to_owned();
-    let NewTaskCreated { task, taskIndex } = hello_world_client
-        .create_new_task(task_message)
+    let task_message = b"world".to_vec();
+
+    let trigger_id = avs_client
+        .trigger
+        .add_trigger("default", "default", task_message.clone())
         .await
         .unwrap();
 
-    let request = hello_world_client
-        .task_request(task, taskIndex)
+    let signed_payload = avs_client
+        .sign_payload(trigger_id, task_message)
         .await
         .unwrap();
 
-    let response = aggregator::http::handlers::service::add_task::add_task(state, request)
-        .await
-        .unwrap();
-    assert!(response.hash.is_some());
+    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+        state.clone(),
+        signed_payload,
+        avs_client.service_manager_contract_address,
+    )
+    .await
+    .unwrap();
+
+    match response {
+        AggregateAvsResponse::Sent { count, .. } => {
+            assert!(count > 0);
+        }
+        _ => {
+            panic!("Expected sent response");
+        }
+    }
 
     // Ensure it's landed!
-    let response = hello_world_client
-        .contract
-        .allTaskResponses(hello_world_client.contract_address, taskIndex)
-        .call()
+    avs_client
+        .load_signed_data(trigger_id)
         .await
+        .unwrap()
         .unwrap();
-    assert!(!response._0.is_empty())
 }
 
 #[tokio::test]
@@ -234,7 +273,7 @@ async fn invalid_operator_signature() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
+    let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts.clone())
         .build()
         .await
@@ -245,52 +284,46 @@ async fn invalid_operator_signature() {
         .register_operator(&core_contracts)
         .await
         .unwrap();
-    hello_world_client
-        .register_operator(&mut OsRng)
-        .await
-        .unwrap();
+
+    avs_client.register_operator(&mut OsRng).await.unwrap();
+
     let invalid_signer = MnemonicBuilder::<English>::default()
         .build_random_with(&mut OsRng)
         .unwrap();
 
-    let hello_world_client = hello_world_client.into_simple();
-    let task_message = "world".to_owned();
-
-    let msg = keccak256(
-        format!("Hello, {}", task_message)
-            .abi_encode_packed()
-            .as_slice(),
-    );
-    let invalid_operator = invalid_signer.address();
-    let invalid_signature = invalid_signer.sign_message_sync(msg.as_ref()).unwrap();
-
-    let NewTaskCreated { task, taskIndex } = hello_world_client
-        .create_new_task(task_message)
-        .await
-        .unwrap();
-
-    let request = hello_world_client
-        .task_request(task, taskIndex)
-        .await
-        .unwrap();
+    let avs_client: LayerContractClientSimple = avs_client.into();
 
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
     aggregator::http::handlers::service::add_service::add_service(
         state.clone(),
-        AddAggregatorServiceRequest {
-            service: hello_world_client.contract_address,
+        AddAggregatorServiceRequest::EthTrigger {
+            service_manager_address: avs_client.service_manager_contract_address,
         },
     )
     .await
     .unwrap();
 
+    let task_message = b"world".to_vec();
+
+    let trigger_id = avs_client
+        .trigger
+        .add_trigger("default", "default", task_message.clone())
+        .await
+        .unwrap();
+
+    let signed_payload = avs_client
+        .sign_payload(trigger_id, task_message)
+        .await
+        .unwrap();
+
     // Invalid operator
     {
-        let mut invalid_operator_request = request.clone();
-        invalid_operator_request.operator = invalid_operator;
-        let response = aggregator::http::handlers::service::add_task::add_task(
+        let mut invalid_operator_payload = signed_payload.clone();
+        invalid_operator_payload.operator = invalid_signer.address();
+        let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
             state.clone(),
-            invalid_operator_request,
+            invalid_operator_payload,
+            avs_client.service_manager_contract_address,
         )
         .await
         .unwrap_err();
@@ -299,11 +332,21 @@ async fn invalid_operator_signature() {
 
     // Invalid signature
     {
-        let mut invalid_signature_request = request.clone();
-        invalid_signature_request.signature = invalid_signature.into();
-        let response = aggregator::http::handlers::service::add_task::add_task(
+        let mut invalid_signature_payload = signed_payload.clone();
+        let payload = Payload {
+            triggerId: *trigger_id,
+            data: signed_payload.data.into(),
+        };
+
+        let payload_hash = eip191_hash_message(keccak256(payload.abi_encode()));
+
+        let signature = invalid_signer.sign_hash_sync(&payload_hash).unwrap();
+
+        invalid_signature_payload.signature = signature;
+        let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
             state,
-            invalid_signature_request,
+            invalid_signature_payload,
+            avs_client.service_manager_contract_address,
         )
         .await
         .unwrap_err();

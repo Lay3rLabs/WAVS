@@ -50,7 +50,7 @@ impl LayerContractClientFull {
                 self.layer.service_manager,
                 salt,
                 expiry,
-                self.eth.http_provider.clone(),
+                self.eth.provider.clone(),
             )
             .await?;
 
@@ -62,7 +62,7 @@ impl LayerContractClientFull {
         };
 
         let contract_ecdsa_stake_registry =
-            ECDSAStakeRegistry::new(self.layer.stake_registry, self.eth.http_provider.clone());
+            ECDSAStakeRegistry::new(self.layer.stake_registry, self.eth.provider.clone());
 
         let register_operator_hash = contract_ecdsa_stake_registry
             .registerOperatorWithSignature(operator_signature, self.eth.signer.clone().address())
@@ -202,7 +202,7 @@ impl LayerContractClientFullBuilder {
         assert_ne!(underlying_token, Address::ZERO);
         tracing::debug!("underlying strategy token addr: {}", underlying_token);
 
-        let trigger = LayerTrigger::deploy(self.eth.http_provider.clone()).await?;
+        let trigger = LayerTrigger::deploy(self.eth.provider.clone()).await?;
         let trigger_address = *trigger.address();
 
         // Upgrade contracts

@@ -27,12 +27,11 @@ fn mock_e2e_trigger_flow() {
     runner.ctx.rt.block_on({
         let runner = runner.clone();
         let service_id = service_id.clone();
-        let task_queue_address = task_queue_address.clone();
 
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(service_id.clone(), digest, &task_queue_address, BigSquare)
+                .create_service_simple(service_id.clone(), digest, BigSquare)
                 .await;
         }
     });
@@ -96,8 +95,6 @@ fn mock_e2e_service_lifecycle() {
             assert!(services.services.is_empty());
             assert!(services.digests.is_empty());
 
-            let task_queue_address = rand_address_eth();
-
             // add services in order
             let service_id1 = ServiceID::new("service1").unwrap();
             let digest1 = Digest::new(b"wasm1");
@@ -114,12 +111,7 @@ fn mock_e2e_service_lifecycle() {
                 (&service_id3, digest3),
             ] {
                 runner
-                    .create_service_simple(
-                        service_id.clone(),
-                        digest.clone(),
-                        &task_queue_address,
-                        BigSquare,
-                    )
+                    .create_service_simple(service_id.clone(), digest.clone(), BigSquare)
                     .await;
             }
 
@@ -182,15 +174,9 @@ fn mock_e2e_service_test() {
             // add services in order
             let service_id = ServiceID::new("service").unwrap();
             let digest = Digest::new(b"wasm");
-            let task_queue_address = rand_address_eth();
 
             runner
-                .create_service_simple(
-                    service_id.clone(),
-                    digest.clone(),
-                    &task_queue_address,
-                    BigSquare,
-                )
+                .create_service_simple(service_id.clone(), digest.clone(), BigSquare)
                 .await;
 
             let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3 }).await;
@@ -223,7 +209,6 @@ fn mock_e2e_service_settings() {
                 .create_service(
                     service_id.clone(),
                     digest.clone(),
-                    &rand_address_eth(),
                     permissions.clone(),
                     envs.clone(),
                     BigSquare,

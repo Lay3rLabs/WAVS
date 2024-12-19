@@ -49,7 +49,7 @@ wasi-build:
 solidity-build:
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/contracts/abi;
     forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware --out {{REPO_ROOT}}/contracts/abi;
-    forge build --root {{REPO_ROOT}}/lib/eigenlayer-contracts --out {{REPO_ROOT}}/contracts/abi;
+    forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/contracts/abi;
 
 # on-chain integration test
 test-wavs-e2e-ethereum:

@@ -60,7 +60,12 @@ async fn deploy_layer_avs() {
     assert_eq!(trigger.data, b"foo-data");
 
     layer_client
-        .add_signed_trigger_data(trigger.trigger_id, trigger.data)
+        .add_signed_payload(
+            layer_client
+                .sign_payload(trigger.trigger_id, trigger.data)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -84,7 +89,12 @@ async fn deploy_layer_avs() {
 
     assert_eq!(trigger.data, b"bar-data");
     layer_client
-        .add_signed_trigger_data(trigger.trigger_id, trigger.data)
+        .add_signed_payload(
+            layer_client
+                .sign_payload(trigger.trigger_id, trigger.data)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 

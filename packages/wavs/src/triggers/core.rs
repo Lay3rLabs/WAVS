@@ -222,7 +222,7 @@ impl CoreTriggerManager {
 
                                 let contract = LayerTrigger::new(
                                     log.address(),
-                                    ethereum_client.as_ref().unwrap().http_provider.clone(),
+                                    ethereum_client.as_ref().unwrap().provider.clone(),
                                 );
 
                                 if let Ok(payload) = contract

@@ -13,8 +13,8 @@ interface ILayerServiceManager {
         bytes data;
     }
 
-    struct SignedData {
-        bytes data;
+    struct SignedPayload {
+        Payload payload;
         bytes signature;
     }
 }
@@ -29,11 +29,20 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         _;
     }
 
+
+    // Structs
+
+    /* small optimization, no need to double-save the TriggerId */
+    struct SignedData {
+        bytes data;
+        bytes signature;
+    }
+
     // Storage
-    mapping(ILayerTrigger.TriggerId => ILayerServiceManager.SignedData) public signedDataByTriggerId;
+    mapping(ILayerTrigger.TriggerId => SignedData) public signedDataByTriggerId;
 
     // Events
-    event AddedSignedDataForTrigger(ILayerTrigger.TriggerId indexed triggerId);
+    event AddedSignedPayloadForTrigger(ILayerTrigger.TriggerId indexed triggerId);
 
     // Functions
     constructor(
@@ -50,11 +59,10 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         )
     {}
 
-    function addSignedDataForTrigger(
-        ILayerServiceManager.Payload calldata payload,
-        bytes calldata signature 
+    function addSignedPayloadForTrigger(
+        ILayerServiceManager.SignedPayload calldata signedPayload
     ) public {
-        bytes32 message = keccak256(abi.encode(payload));
+        bytes32 message = keccak256(abi.encode(signedPayload.payload));
         bytes32 ethSignedMessageHash = ECDSAUpgradeable.toEthSignedMessageHash(message);
         bytes4 magicValue = IERC1271Upgradeable.isValidSignature.selector;
 
@@ -62,25 +70,33 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
             !(magicValue ==
                 ECDSAStakeRegistry(stakeRegistry).isValidSignature(
                     ethSignedMessageHash,
-                    signature
+                    signedPayload.signature
                 ))
         ) {
-            revert();
+            revert("Invalid signature");
         }
 
-        ILayerServiceManager.SignedData memory signedData = ILayerServiceManager.SignedData({
-            data: payload.data,
-            signature: signature
+        SignedData memory signedData = SignedData({
+            data: signedPayload.payload.data,
+            signature: signedPayload.signature
         });
 
         // updating the storage with data responses 
-        signedDataByTriggerId[payload.triggerId] = signedData;
+        signedDataByTriggerId[signedPayload.payload.triggerId] = signedData;
 
         // emitting event
-        emit AddedSignedDataForTrigger(payload.triggerId);
+        emit AddedSignedPayloadForTrigger(signedPayload.payload.triggerId);
     }
 
-    function getSignedDataByTriggerId(ILayerTrigger.TriggerId triggerId) public view returns (ILayerServiceManager.SignedData memory) {
+    function addSignedPayloadForTriggerMulti(
+        ILayerServiceManager.SignedPayload[] calldata signedPayloads
+    ) public {
+        for (uint32 i = 0; i < signedPayloads.length; i++) {
+            LayerServiceManager(address(this)).addSignedPayloadForTrigger(signedPayloads[i]);
+        }
+    }
+
+    function getSignedDataByTriggerId(ILayerTrigger.TriggerId triggerId) public view returns (SignedData memory) {
         return signedDataByTriggerId[triggerId];
     }
 }

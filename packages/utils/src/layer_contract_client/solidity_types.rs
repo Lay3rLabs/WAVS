@@ -1,8 +1,5 @@
-use crate::eigen_client::solidity_types::HttpSigningProvider;
-use alloy::{
-    sol,
-    transports::BoxTransport
-};
+use crate::eigen_client::solidity_types::BoxSigningProvider;
+use alloy::{sol, transports::BoxTransport};
 use layer_service_manager::LayerServiceManager::LayerServiceManagerInstance;
 use layer_trigger::LayerTrigger::LayerTriggerInstance;
 
@@ -37,7 +34,6 @@ pub mod token {
 
 pub mod layer_service_manager {
     use super::*;
-    pub use ILayerServiceManager::SignedData;
 
     sol!(
         #[allow(missing_docs)]
@@ -59,6 +55,6 @@ pub mod layer_trigger {
     );
 }
 
-pub type LayerServiceManagerT = LayerServiceManagerInstance<BoxTransport, HttpSigningProvider>;
+pub type LayerServiceManagerT = LayerServiceManagerInstance<BoxTransport, BoxSigningProvider>;
 
-pub type LayerTriggerT = LayerTriggerInstance<BoxTransport, HttpSigningProvider>;
+pub type LayerTriggerT = LayerTriggerInstance<BoxTransport, BoxSigningProvider>;

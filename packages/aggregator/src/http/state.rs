@@ -2,19 +2,21 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy::primitives::Address;
 use anyhow::bail;
-use serde::{Deserialize, Serialize};
 use utils::{
-    hello_world::TaskData,
+    layer_contract_client::{SignedPayload, TriggerId},
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 
 use crate::config::Config;
 
-// Task Id -> Tasks
-pub type TasksMap = HashMap<String, Vec<Task>>;
+// Hold a list of payloads for a given TriggerId
+// TODO - optimizations:
+// 1. maintain a count that doesn't need to load the whole thing
+// 2. re-assess to see if we need to store the whole payload
+pub type TriggerPayloads = HashMap<TriggerId, Vec<SignedPayload>>;
 
 // Note: If service exists in db it's considered registered
-const TASKS: Table<&str, JSON<TasksMap>> = Table::new("tasks");
+const TRIGGER_PAYLOADS: Table<&str, JSON<TriggerPayloads>> = Table::new("trigger-payloads");
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -29,51 +31,45 @@ impl HttpState {
         Ok(Self { config, storage })
     }
 
-    pub fn load_tasks(&self, service: Address) -> anyhow::Result<TasksMap> {
-        match self.storage.get(TASKS, &service.to_string())? {
-            Some(tasks) => Ok(tasks.value()),
-            None => Err(anyhow::anyhow!("Task not registered")),
+    pub fn load_trigger_payloads(
+        &self,
+        service_manager: Address,
+    ) -> anyhow::Result<TriggerPayloads> {
+        match self
+            .storage
+            .get(TRIGGER_PAYLOADS, &service_manager.to_string())?
+        {
+            Some(payloads) => Ok(payloads.value()),
+            None => Err(anyhow::anyhow!(
+                "Service manager {} is not registered for triggers",
+                service_manager
+            )),
         }
     }
 
-    pub fn save_tasks(&self, service: Address, tasks: TasksMap) -> Result<(), DBError> {
-        self.storage.set(TASKS, &service.to_string(), &tasks)
+    pub fn save_trigger_payloads(
+        &self,
+        service_manager: Address,
+        tasks: TriggerPayloads,
+    ) -> Result<(), DBError> {
+        self.storage
+            .set(TRIGGER_PAYLOADS, &service_manager.to_string(), &tasks)
     }
 
-    pub fn register_service(&self, service: Address) -> anyhow::Result<()> {
-        let service = service.to_string();
-        match self.storage.get(TASKS, &service)? {
+    pub fn register_trigger_service(&self, service_manager: Address) -> anyhow::Result<()> {
+        let service_manager = service_manager.to_string();
+        match self.storage.get(TRIGGER_PAYLOADS, &service_manager)? {
             Some(_) => {
-                bail!("Service is already registered");
+                bail!(
+                    "Service manager at {} is already registered for triggers",
+                    service_manager
+                );
             }
             None => {
-                self.storage.set(TASKS, &service, &HashMap::default())?;
+                self.storage
+                    .set(TRIGGER_PAYLOADS, &service_manager, &HashMap::default())?;
             }
         }
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Task {
-    pub operator: Address,
-    pub data: TaskData,
-    pub signature: Vec<u8>,
-    pub reference_block: u32,
-}
-
-impl Task {
-    pub fn new(
-        operator: Address,
-        data: TaskData,
-        signature: Vec<u8>,
-        reference_block: u32,
-    ) -> Self {
-        Self {
-            operator,
-            data,
-            signature,
-            reference_block,
-        }
     }
 }

@@ -179,7 +179,7 @@ mod e2e {
                                     eth_trigger_echo_wasm_digest,
                                     eth_trigger_square_wasm_digest,
                                 )
-                                .await
+                                .await;
                             }
                             (true, true) => {
                                 run_tests_crosschain(http_client, config, permissions_wasm_digest)
@@ -203,7 +203,7 @@ mod e2e {
     async fn run_tests_ethereum(
         anvil: AnvilInstance,
         http_client: HttpClient,
-        _config: Config,
+        config: Config,
         echo_wasm_digest: Digest,
         square_wasm_digest: Digest,
     ) {
@@ -249,14 +249,7 @@ mod e2e {
             )
             .await
             .unwrap();
-        tracing::info!("Service created: {}, submitting task...", service1_id);
-
-        // TODO - should pass ServiceID
-        // should also test aggregator, multiple services, etc.
-        // http_client
-        //     .register_service_on_aggregator(trigger_addr, &config)
-        //     .await
-        //     .unwrap();
+        tracing::info!("Service created: {}, submitting task...", square_service_id);
 
         let avs_simple_client: LayerContractClientSimple = app.avs_client.into();
 
@@ -276,20 +269,23 @@ mod e2e {
             async move {
                 loop {
                     let signed_data = avs_simple_client
-                        .get_signed_data(echo_trigger_id)
+                        .load_signed_data(echo_trigger_id)
                         .await
                         .unwrap();
-                    if !signed_data.signature.is_empty() {
-                        tracing::info!("GOT THE SIGNATURE!");
-                        tracing::info!("{}", hex::encode(signed_data.signature));
-                        break;
-                    } else {
-                        tracing::info!(
-                            "Waiting for task response by {} on {} for trigger_id {}...",
-                            avs_simple_client.eth.address(),
-                            avs_simple_client.service_manager_contract_address,
-                            echo_trigger_id
-                        );
+                    match signed_data {
+                        Some(signed_data) => {
+                            tracing::info!("GOT THE SIGNATURE!");
+                            tracing::info!("{}", hex::encode(signed_data.signature));
+                            break;
+                        }
+                        None => {
+                            tracing::info!(
+                                "Waiting for task response by {} on {} for trigger_id {}...",
+                                avs_simple_client.eth.address(),
+                                avs_simple_client.service_manager_contract_address,
+                                echo_trigger_id
+                            );
+                        }
                     }
                     // still open, waiting...
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -314,26 +310,30 @@ mod e2e {
             async move {
                 loop {
                     let signed_data = avs_simple_client
-                        .get_signed_data(square_trigger_id)
+                        .load_signed_data(square_trigger_id)
                         .await
                         .unwrap();
-                    if !signed_data.signature.is_empty() {
-                        tracing::info!("GOT THE SIGNATURE!");
-                        tracing::info!("{}", hex::encode(signed_data.signature));
+                    match signed_data {
+                        Some(signed_data) => {
+                            tracing::info!("GOT THE SIGNATURE!");
+                            tracing::info!("{}", hex::encode(signed_data.signature));
 
-                        let response =
-                            serde_json::from_slice::<SquareResponse>(&signed_data.data).unwrap();
+                            let response =
+                                serde_json::from_slice::<SquareResponse>(&signed_data.data)
+                                    .unwrap();
 
-                        tracing::info!("GOT THE RESPONSE!");
-                        tracing::info!("{:?}", response);
-                        break;
-                    } else {
-                        tracing::info!(
-                            "Waiting for task response by {} on {} for trigger_id {}...",
-                            avs_simple_client.eth.address(),
-                            avs_simple_client.service_manager_contract_address,
-                            square_trigger_id
-                        );
+                            tracing::info!("GOT THE RESPONSE!");
+                            tracing::info!("{:?}", response);
+                            break;
+                        }
+                        None => {
+                            tracing::info!(
+                                "Waiting for task response by {} on {} for trigger_id {}...",
+                                avs_simple_client.eth.address(),
+                                avs_simple_client.service_manager_contract_address,
+                                square_trigger_id
+                            );
+                        }
                     }
                     // still open, waiting...
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -342,6 +342,8 @@ mod e2e {
         })
         .await
         .unwrap();
+
+        // TODO - now with aggregator and multiple payloads within each service....
     }
 
     async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
