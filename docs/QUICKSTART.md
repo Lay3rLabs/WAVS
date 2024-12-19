@@ -44,7 +44,7 @@ cp .env.example .env
 Example:
 
 ```
-WAVS_DATA=~/wavs/data
+WAVS_DATA="~/wavs/data"
 WAVS_SUBMISSION_MNEMONIC="test test test test test test test test test test test junk"
 WAVS_LOG_LEVEL="info, wavs[{subsys=TriggerManager}]=debug"
 ```
