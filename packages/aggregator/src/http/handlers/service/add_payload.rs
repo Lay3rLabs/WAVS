@@ -1,7 +1,4 @@
-use alloy::{
-    primitives::{Address, U256},
-    sol_types::SolValue,
-};
+use alloy::primitives::{Address, U256};
 use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
@@ -27,7 +24,8 @@ pub async fn handle_add_payload(
         AggregateAvsRequest::EthTrigger {
             signed_payload,
             service_manager_address,
-        } => add_payload_trigger(state, signed_payload, service_manager_address).await,
+            service_id,
+        } => add_payload_trigger(state, signed_payload, service_manager_address, service_id).await,
     };
 
     match resp {
@@ -40,6 +38,8 @@ pub async fn add_payload_trigger(
     state: HttpState,
     signed_payload: SignedPayload,
     service_manager_address: Address,
+    // TODO - move ServiceID to utils
+    service_id: String,
 ) -> HttpResult<AggregateAvsResponse> {
     let eth_client = state.config.signing_client().await?;
 
@@ -50,10 +50,10 @@ pub async fn add_payload_trigger(
     )
     .await?;
 
-    let mut payloads_map = state.load_trigger_payloads(service_manager_address)?;
+    let mut payloads_map = state.load_all_payloads(service_manager_address)?;
 
     let queue = payloads_map
-        .entry(signed_payload.trigger_id)
+        .entry(service_id)
         .or_insert_with(Default::default);
 
     queue.push(signed_payload);
@@ -94,7 +94,7 @@ pub async fn add_payload_trigger(
         AggregateAvsResponse::Aggregated { count }
     };
 
-    state.save_trigger_payloads(service_manager_address, payloads_map)?;
+    state.save_all_payloads(service_manager_address, payloads_map)?;
 
     Ok(resp)
 }

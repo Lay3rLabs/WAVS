@@ -216,7 +216,7 @@ mod e2e {
         http_client
             .create_service(
                 echo_service_id.clone(),
-                echo_wasm_digest,
+                echo_wasm_digest.clone(),
                 TriggerRequest::eth_event(Address::Eth(AddrEth::new(
                     app.avs_client.layer.trigger.into(),
                 ))),
@@ -307,6 +307,7 @@ mod e2e {
             .unwrap();
 
         tokio::time::timeout(Duration::from_secs(10), {
+            let avs_simple_client = avs_simple_client.clone();
             async move {
                 loop {
                     let signed_data = avs_simple_client
@@ -343,7 +344,95 @@ mod e2e {
         .await
         .unwrap();
 
-        // TODO - now with aggregator and multiple payloads within each service....
+        // TODO - now with aggregator and multiple payloads within a service....
+
+        let echo_aggregate_service_id = ServiceID::new("echo-aggregate-service").unwrap();
+
+        http_client
+            .create_service(
+                echo_aggregate_service_id.clone(),
+                echo_wasm_digest,
+                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
+                    avs_simple_client.trigger.contract_address.into(),
+                ))),
+                Submit::EthAggregatorTx {
+                    service_manager_addr: Address::Eth(AddrEth::new(
+                        avs_simple_client.service_manager_contract_address.into(),
+                    )),
+                },
+            )
+            .await
+            .unwrap();
+
+        tracing::info!("Service created: {}", echo_aggregate_service_id);
+
+        http_client
+            .register_service_on_aggregator(
+                avs_simple_client.service_manager_contract_address,
+                echo_aggregate_service_id.clone(),
+                &config,
+            )
+            .await
+            .unwrap();
+
+        let echo_aggregate_trigger_id_1 = avs_simple_client
+            .trigger
+            .add_trigger(
+                echo_aggregate_service_id.to_string(),
+                "default".to_string(),
+                b"foo-aggregate".to_vec(),
+            )
+            .await
+            .unwrap();
+
+        let echo_aggregate_trigger_id_2 = avs_simple_client
+            .trigger
+            .add_trigger(
+                echo_aggregate_service_id.to_string(),
+                "default".to_string(),
+                b"bar-aggregate".to_vec(),
+            )
+            .await
+            .unwrap();
+
+        tokio::time::timeout(Duration::from_secs(10), {
+            let avs_simple_client = avs_simple_client.clone();
+            async move {
+                loop {
+                    let signed_data_1 = avs_simple_client
+                        .load_signed_data(echo_aggregate_trigger_id_1)
+                        .await
+                        .unwrap();
+
+                    let signed_data_2 = avs_simple_client
+                        .load_signed_data(echo_aggregate_trigger_id_2)
+                        .await
+                        .unwrap();
+
+                    match (signed_data_1, signed_data_2) {
+                        (Some(signed_data_1), Some(signed_data_2)) => {
+                            tracing::info!("GOT THE SIGNATURES!");
+                            tracing::info!("1: {}", hex::encode(signed_data_1.signature));
+                            tracing::info!("2: {}", hex::encode(signed_data_2.signature));
+                            break;
+                        }
+                        (None, Some(_)) => {
+                            tracing::info!("Got aggregation #1, waiting for #2...");
+                        }
+                        (Some(_), None) => {
+                            tracing::info!("Got aggregation #2, waiting for #1...");
+                        }
+                        (None, None) => {
+                            tracing::info!("Waiting for aggregation responses...");
+                        }
+                    }
+                    // still open, waiting...
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            }
+        })
+        .await
+        .unwrap();
     }
 
     async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {

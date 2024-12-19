@@ -284,12 +284,13 @@ impl CoreSubmission {
         let avs_client =
             LayerContractClientSimple::new(eth_client, service_manager_address, trigger_address);
 
-        let (trigger_id, wasm_result) = match msg {
+        let (trigger_id, wasm_result, service_id) = match msg {
             ChainMessage::Eth {
                 trigger_id,
                 wasm_result,
+                trigger_config,
                 ..
-            } => (trigger_id, wasm_result),
+            } => (trigger_id, wasm_result, trigger_config.service_id),
             _ => {
                 return Err(SubmissionError::ExpectedEthMessage);
             }
@@ -304,6 +305,7 @@ impl CoreSubmission {
             let request = AggregateAvsRequest::EthTrigger {
                 signed_payload,
                 service_manager_address,
+                service_id: service_id.to_string(),
             };
 
             let aggregator_msg_url = self

@@ -67,6 +67,7 @@ async fn submit_to_chain() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
+            service_id: "default".to_string(),
         },
     )
     .await
@@ -89,6 +90,7 @@ async fn submit_to_chain() {
         state,
         signed_payload,
         avs_client.service_manager_contract_address,
+        "default".to_string(),
     )
     .await
     .unwrap();
@@ -157,6 +159,7 @@ async fn submit_to_chain_three() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
+            service_id: "default".to_string(),
         },
     )
     .await
@@ -180,11 +183,15 @@ async fn submit_to_chain_three() {
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
+        "default".to_string(),
     )
     .await
     .unwrap();
 
-    assert!(matches!(response, AggregateAvsResponse::Aggregated { .. }));
+    assert!(matches!(
+        response,
+        AggregateAvsResponse::Aggregated { count: 1 }
+    ));
 
     // Second - still aggregating
     let task_message = b"hello".to_vec();
@@ -204,11 +211,15 @@ async fn submit_to_chain_three() {
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
+        "default".to_string(),
     )
     .await
     .unwrap();
 
-    assert!(matches!(response, AggregateAvsResponse::Aggregated { .. }));
+    assert!(matches!(
+        response,
+        AggregateAvsResponse::Aggregated { count: 2 }
+    ));
 
     // Third should get to the quorum
     let task_message = b"world".to_vec();
@@ -228,16 +239,20 @@ async fn submit_to_chain_three() {
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
+        "default".to_string(),
     )
     .await
     .unwrap();
 
     match response {
         AggregateAvsResponse::Sent { count, .. } => {
-            assert!(count > 0);
+            assert_eq!(count, 3);
         }
-        _ => {
-            panic!("Expected sent response");
+        AggregateAvsResponse::Aggregated { count } => {
+            panic!(
+                "Expected sent response, instead got aggregated with count {}",
+                count
+            );
         }
     }
 
@@ -298,6 +313,7 @@ async fn invalid_operator_signature() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
+            service_id: "default".to_string(),
         },
     )
     .await
@@ -324,6 +340,7 @@ async fn invalid_operator_signature() {
             state.clone(),
             invalid_operator_payload,
             avs_client.service_manager_contract_address,
+            "default".to_string(),
         )
         .await
         .unwrap_err();
@@ -347,6 +364,7 @@ async fn invalid_operator_signature() {
             state,
             invalid_signature_payload,
             avs_client.service_manager_contract_address,
+            "default".to_string(),
         )
         .await
         .unwrap_err();

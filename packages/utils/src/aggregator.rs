@@ -12,6 +12,8 @@ pub enum AggregateAvsRequest {
     EthTrigger {
         signed_payload: SignedPayload,
         service_manager_address: Address,
+        // TODO - move ServiceID to utils
+        service_id: String,
     },
 }
 
@@ -44,5 +46,8 @@ pub enum AddAggregatorServiceRequest {
     EthTrigger {
         /// Address of the avs
         service_manager_address: Address,
+        /// ID of the service
+        /// TODO - bring ServiceID into utils
+        service_id: String,
     },
 }

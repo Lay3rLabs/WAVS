@@ -18,6 +18,7 @@ pub async fn add_service(state: HttpState, req: AddAggregatorServiceRequest) -> 
     match req {
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address,
-        } => state.register_trigger_service(service_manager_address),
+            service_id,
+        } => state.register_service(service_manager_address, service_id),
     }
 }

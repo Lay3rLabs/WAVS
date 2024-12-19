@@ -367,6 +367,7 @@ mod tests {
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
         let component_id = ComponentID::new("component1").unwrap();
+        let service_manager_addr = rand_address_eth();
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -376,7 +377,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
+                    submit: Some(Submit::eth_aggregator_tx(service_manager_addr.clone())),
                 },
             )]
             .into(),
@@ -397,7 +398,7 @@ mod tests {
             trigger_config: action.config,
             wasm_result: payload.into(),
             trigger_id: TriggerId::new(2),
-            submit: Submit::eth_aggregator_tx(rand_address_eth()),
+            submit: Submit::eth_aggregator_tx(service_manager_addr),
         };
         assert_eq!(processed[0], expected);
     }

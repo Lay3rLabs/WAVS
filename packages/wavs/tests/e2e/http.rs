@@ -78,9 +78,10 @@ impl HttpClient {
         Ok(())
     }
 
-    pub async fn _register_service_on_aggregator(
+    pub async fn register_service_on_aggregator(
         &self,
         service_manager_address: alloy::primitives::Address,
+        service_id: ServiceID,
         config: &Config,
     ) -> Result<()> {
         let aggregator_app_url = config
@@ -94,6 +95,7 @@ impl HttpClient {
             .json(
                 &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
                     service_manager_address,
+                    service_id: service_id.to_string(),
                 },
             )
             .send()
