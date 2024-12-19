@@ -1,4 +1,7 @@
-use alloy::primitives::{Address, U256};
+use alloy::{
+    primitives::{Address, U256},
+    sol_types::SolValue,
+};
 use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
@@ -42,7 +45,7 @@ pub async fn add_payload_trigger(
 
     check_operator(
         service_manager_address,
-        &signed_payload,
+        signed_payload.clone(),
         &eth_client.provider,
     )
     .await?;
@@ -98,7 +101,7 @@ pub async fn add_payload_trigger(
 
 pub async fn check_operator(
     service_manager_address: Address,
-    signed_payload: &SignedPayload,
+    signed_payload: SignedPayload,
     provider: &BoxSigningProvider,
 ) -> HttpResult<()> {
     let service_manager_contract = LayerServiceManager::new(service_manager_address, provider);
@@ -127,12 +130,18 @@ pub async fn check_operator(
         .await?
         ._0;
 
-    let signature_address = signed_payload
-        .signature
-        .recover_address_from_msg(&signed_payload.data)?;
+    let signed_payload_signature = signed_payload.signature;
+
+    let signature_address = signed_payload_signature
+        .recover_address_from_msg(signed_payload.into_submission_abi().abi_encode())?;
 
     if expected_address != signature_address {
-        return Err(anyhow!("Operator signature does not match").into());
+        return Err(anyhow!(
+            "Operator signature does not match (expected address {}, got {})",
+            expected_address,
+            signature_address
+        )
+        .into());
     }
 
     Ok(())
