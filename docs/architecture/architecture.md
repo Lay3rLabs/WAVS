@@ -8,7 +8,7 @@ To achieve this sandboxing, [WASI](https://wasi.dev/interfaces) components are u
 
 ## Persona
 
-This node should be run by an "Operator", which is a node participant that is very similar to "validator" on a PoS chain.
+This node should be run by an "Operator", which is a node participant that is very similar to "validator" on a proof of stake chain.
 Operators receive commitments (stake) on the chain, which provide it with voting power, and it performs
 some off-chain actions, which are submitted on-chain and verified.
 
