@@ -29,6 +29,9 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         _;
     }
 
+    // Errors
+
+    error InvalidSignature();
 
     // Structs
 
