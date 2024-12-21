@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use serde::{de::DeserializeOwned, Serialize};
 use wavs::{
@@ -5,7 +7,7 @@ use wavs::{
         dispatcher::{AllowedHostPermission, Permissions, Submit},
         ServiceID,
     },
-    config::Config,
+    config::{Config, EthereumChainConfig},
     http::{
         handlers::service::{
             add::{AddServiceRequest, ServiceRequest},
@@ -84,11 +86,10 @@ impl HttpClient {
         service_id: ServiceID,
         config: &Config,
     ) -> Result<()> {
-        let aggregator_app_url = config
-            .ethereum_chain_config()
-            .unwrap()
-            .aggregator_endpoint
-            .unwrap();
+        let v: Result<HashMap<String, EthereumChainConfig>> = config.ethereum_chain_configs();
+        let first: EthereumChainConfig = v.unwrap().into_values().next().unwrap();
+        let aggregator_app_url = first.aggregator_endpoint.unwrap();
+
         self.inner
             .post(format!("{}/add-service", aggregator_app_url))
             .header("Content-Type", "application/json")

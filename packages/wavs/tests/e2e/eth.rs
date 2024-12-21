@@ -16,6 +16,7 @@ pub struct EthTestApp {
 impl EthTestApp {
     pub async fn new(_config: Config, anvil: AnvilInstance) -> Self {
         let config = EthClientConfig {
+            chain_id: anvil.chain_id().to_string(),
             ws_endpoint: Some(anvil.ws_endpoint().to_string()),
             http_endpoint: anvil.endpoint().to_string(),
             mnemonic: Some(

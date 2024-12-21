@@ -9,7 +9,9 @@ mod e2e {
 
     use std::{path::PathBuf, sync::Arc, time::Duration};
 
-    use alloy::node_bindings::{Anvil, AnvilInstance};
+    #[cfg(feature = "e2e_tests_ethereum")]
+    use alloy::node_bindings::Anvil;
+    use alloy::node_bindings::AnvilInstance;
     use anyhow::bail;
     use cosmos::CosmosTestApp;
     use eth::EthTestApp;
@@ -78,9 +80,9 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.chain = Some(config.chain.clone().unwrap());
+                config.enabled_ethereum = vec!["local".to_string()];
             } else {
-                config.chain = None;
+                config.enabled_ethereum = vec![];
             }
         }
 
@@ -166,7 +168,9 @@ mod e2e {
                                 }
                             };
 
-                        match (config.cosmos_chain.is_some(), config.chain.is_some()) {
+                        let eth_chain = config.enabled_ethereum.first();
+
+                        match (config.cosmos_chain.is_some(), eth_chain.is_some()) {
                             (true, false) => {
                                 run_tests_cosmos(http_client, config, permissions_wasm_digest).await
                             }
