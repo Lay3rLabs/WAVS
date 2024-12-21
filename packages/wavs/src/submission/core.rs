@@ -12,6 +12,7 @@ use crate::{
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     AppContext,
 };
+use alloy::primitives::Address as EthAddress;
 use lavs_apis::{id::TaskId, verifier_simple::ExecuteMsg as VerifierExecuteMsg};
 use layer_climb::prelude::*;
 use reqwest::Url;
@@ -22,7 +23,6 @@ use utils::{
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
     layer_contract_client::LayerContractClientSimple,
 };
-use alloy::primitives::Address as EthAddress;
 
 #[derive(Clone)]
 pub struct CoreSubmission {
@@ -132,12 +132,18 @@ impl CoreSubmission {
             .ok_or(SubmissionError::MissingCosmosChain)
     }
 
-    fn get_eth_chain(&self, chain_id: impl AsRef<str>) -> Result<&ChainEthSubmission, SubmissionError> {
+    fn get_eth_chain(
+        &self,
+        chain_id: impl AsRef<str>,
+    ) -> Result<&ChainEthSubmission, SubmissionError> {
         // self.eth_chain
         //     .as_ref()
         //     .ok_or(SubmissionError::MissingEthereumChain)
 
-        let chain = self.eth_chains.get(chain_id.as_ref()).ok_or(SubmissionError::MissingEthereumChain)?;
+        let chain = self
+            .eth_chains
+            .get(chain_id.as_ref())
+            .ok_or(SubmissionError::MissingEthereumChain)?;
         Ok(chain)
     }
 
@@ -170,7 +176,11 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn get_eth_client(&self, chain_id: &str, hd_index: u32) -> Result<EthSigningClient, SubmissionError> {
+    async fn get_eth_client(
+        &self,
+        chain_id: &str,
+        hd_index: u32,
+    ) -> Result<EthSigningClient, SubmissionError> {
         {
             let lock = self.eth_clients.lock().unwrap();
 
@@ -259,7 +269,11 @@ impl CoreSubmission {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn maybe_tap_eth_faucet(&self, client: &EthSigningClient) -> Result<(), SubmissionError> {
-        let _faucet_url = match self.get_eth_chain(&client.config.chain_id)?.faucet_url.clone() {
+        let _faucet_url = match self
+            .get_eth_chain(&client.config.chain_id)?
+            .faucet_url
+            .clone()
+        {
             Some(url) => url,
             None => {
                 tracing::debug!("No faucet configured, skipping");
@@ -303,7 +317,6 @@ impl CoreSubmission {
             lock.insert(service_manager_address.to_string(), chain_id.clone());
             drop(lock);
         }
-
 
         let avs_client =
             LayerContractClientSimple::new(eth_client, service_manager_address, trigger_address);

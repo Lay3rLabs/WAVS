@@ -75,7 +75,6 @@ impl CoreTriggerManager {
             .map_err(TriggerError::Climb)?
             .map(|chain_config| chain_config.into());
 
-
         let mut eth_chain_configs = HashMap::new();
         if let Ok(m) = config.ethereum_chain_configs() {
             for (chain_id, eth_cfg) in m {
@@ -128,7 +127,10 @@ impl CoreTriggerManager {
             tracing::debug!(
                 "Ethereum client started on chain {} at {}",
                 chain_id,
-                chain_config.ws_endpoint.as_ref().unwrap_or(&chain_config.http_endpoint)
+                chain_config
+                    .ws_endpoint
+                    .as_ref()
+                    .unwrap_or(&chain_config.http_endpoint)
             );
             let client = EthClientBuilder::new(chain_config.clone())
                 .build_query()

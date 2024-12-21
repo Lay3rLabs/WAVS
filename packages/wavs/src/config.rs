@@ -136,11 +136,10 @@ impl Config {
     pub fn ethereum_chain_configs(&self) -> Result<HashMap<String, EthereumChainConfig>> {
         let mut chains = HashMap::new();
         for chain_name in &self.enabled_ethereum {
-            let config = self
-                .chains
-                .eth
-                .get(chain_name)
-                .ok_or_else(|| anyhow!("No chain config found for ethereum \"{}\"", chain_name))?;
+            let config =
+                self.chains.eth.get(chain_name).ok_or_else(|| {
+                    anyhow!("No chain config found for ethereum \"{}\"", chain_name)
+                })?;
 
             // The optional overrides use a prefix to distinguish between layer and ethereum fields
             // since in the CLI they get flattened and would conflict without a prefix
@@ -185,7 +184,6 @@ impl Config {
         }
 
         Ok(chains)
-
     }
 }
 
