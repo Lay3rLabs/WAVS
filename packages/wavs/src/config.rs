@@ -171,8 +171,10 @@ impl Config {
                 faucet_endpoint: self.chain_config_override.faucet_endpoint.clone(),
             };
 
-            // TODO(reece): unwrap
-            let chain_id = config_override.clone().chain_id.unwrap();
+            let chain_id: String = config_override.clone().chain_id.unwrap_or_default();
+            if chain_id.is_empty() {
+                return Err(anyhow!("Chain ID is required"));
+            }
 
             let config_merged: EthereumChainConfig = Figment::new()
                 .merge(figment::providers::Serialized::defaults(config))

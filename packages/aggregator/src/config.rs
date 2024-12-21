@@ -35,6 +35,9 @@ pub struct Config {
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
 
+    /// The chain id to use
+    pub chain_id: String,
+
     /// Websocket eth endpoint
     pub ws_endpoint: String,
 
@@ -56,6 +59,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            chain_id: "31337".to_string(),
             port: 8001,
             log_level: vec!["info".to_string()],
             host: "localhost".to_string(),
@@ -74,6 +78,7 @@ impl Config {
     pub async fn signing_client(&self) -> Result<EthSigningClient> {
         let mnemonic = self.mnemonic.clone();
         let eth_client = EthClientConfig {
+            chain_id: self.chain_id.clone(),
             ws_endpoint: Some(self.ws_endpoint.clone()),
             http_endpoint: self.http_endpoint.clone(),
             mnemonic,

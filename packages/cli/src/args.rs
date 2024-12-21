@@ -11,6 +11,10 @@ pub struct CliArgs {
     #[clap(long, default_value = "http://localhost:8545")]
     pub http_endpoint: String,
 
+    // TODO: how to get this from the configs?
+    #[clap(long, default_value = "31337")]
+    pub chain_id: String,
+
     #[clap(long, default_value = "http://localhost:8000")]
     pub wavs_endpoint: String,
 

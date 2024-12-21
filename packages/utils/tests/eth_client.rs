@@ -41,6 +41,7 @@ async fn client_sign_message() {
     let anvil = Anvil::new().try_spawn().unwrap();
 
     let config = EthClientConfig {
+        chain_id: anvil.chain_id().to_string(),
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),
         http_endpoint: anvil.endpoint().to_string(),
         mnemonic: Some(

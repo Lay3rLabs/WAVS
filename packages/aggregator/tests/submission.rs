@@ -33,6 +33,7 @@ async fn submit_to_chain() {
         ..TestApp::default_cli_args()
     });
     let eth_client = EthClientBuilder::new(EthClientConfig {
+        chain_id: anvil.chain_id().to_string(),
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: anvil.endpoint(),
         mnemonic: Some(ANVIL_DEFAULT_MNEMONIC.to_owned()),
@@ -125,6 +126,7 @@ async fn submit_to_chain_three() {
         ..TestApp::default_cli_args()
     });
     let eth_client = EthClientBuilder::new(EthClientConfig {
+        chain_id: anvil.chain_id().to_string(),
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: anvil.endpoint(),
         mnemonic: Some(ANVIL_DEFAULT_MNEMONIC.to_owned()),
@@ -276,6 +278,7 @@ async fn invalid_operator_signature() {
         ..TestApp::default_cli_args()
     });
     let eth_client = EthClientBuilder::new(EthClientConfig {
+        chain_id: anvil.chain_id().to_string(),
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: anvil.endpoint(),
         mnemonic: Some(ANVIL_DEFAULT_MNEMONIC.to_owned()),

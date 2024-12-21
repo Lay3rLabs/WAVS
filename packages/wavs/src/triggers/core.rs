@@ -77,7 +77,7 @@ impl CoreTriggerManager {
 
 
         let mut eth_chain_configs = HashMap::new();
-        for m in config.ethereum_chain_configs() {
+        if let Ok(m) = config.ethereum_chain_configs() {
             for (chain_id, eth_cfg) in m {
                 tracing::debug!(
                     "Ethereum chain config: {} -> {}",
@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            enabled_ethereum: Some("test-eth".to_string()),
+            enabled_ethereum: vec!["test-eth".to_string()],
             chains: ChainConfigs {
                 eth: [(
                     "test-eth".to_string(),

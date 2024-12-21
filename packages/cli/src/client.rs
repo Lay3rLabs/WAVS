@@ -24,6 +24,7 @@ pub async fn get_eigen_client(args: &CliArgs) -> EigenClient {
     let mnemonic = std::env::var("CLI_ETH_MNEMONIC").expect("CLI_ETH_MNEMONIC env var is required");
 
     let config = EthClientConfig {
+        chain_id: args.chain_id.clone(),
         ws_endpoint: Some(args.ws_endpoint.clone()),
         http_endpoint: args.http_endpoint.clone(),
         mnemonic: Some(mnemonic),

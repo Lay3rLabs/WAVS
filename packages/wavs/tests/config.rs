@@ -201,7 +201,10 @@ async fn config_chains() {
     cli_args.chain_config.cosmos_rpc_endpoint = Some("THIS-ISN'T-USED".to_string());
     cli_args.chain_config.http_endpoint = Some("http://example.com:1234".to_string());
     cli_args.chain = Some("local".to_string());
+
     let config = TestApp::new_with_args(cli_args).await.config;
-    let chain_config = config.ethereum_chain_config().unwrap();
-    assert_eq!(chain_config.http_endpoint, "http://example.com:1234");
+    let chain_config = config.ethereum_chain_configs().unwrap();
+    for (_, chain_config) in chain_config {
+        assert_eq!(chain_config.http_endpoint, "http://example.com:1234");
+    }
 }
