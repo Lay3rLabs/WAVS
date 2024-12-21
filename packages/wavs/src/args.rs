@@ -67,9 +67,9 @@ pub struct CliArgs {
 
     /// The Ethereum-style chain to use for the application
     /// will load from the config file
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub enabled_ethereum: Vec<String>,
 
     /// The Cosmos-style chain to use for the application
     /// will load from the config file

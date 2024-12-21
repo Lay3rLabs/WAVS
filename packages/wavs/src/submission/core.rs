@@ -140,10 +140,11 @@ impl CoreSubmission {
         //     .as_ref()
         //     .ok_or(SubmissionError::MissingEthereumChain)
 
-        let chain = self
-            .eth_chains
-            .get(chain_id.as_ref())
-            .ok_or(SubmissionError::MissingEthereumChain)?;
+        let chain = self.eth_chains.get(chain_id.as_ref()).ok_or(
+            SubmissionError::MissingEthereumChain {
+                0: chain_id.as_ref().to_string(),
+            },
+        )?;
         Ok(chain)
     }
 
@@ -416,7 +417,14 @@ impl Submission for CoreSubmission {
                             tracing::debug!("Received message to submit: {:?}", msg);
                             let eth_client = match msg.submit() {
                                 Submit::EthSignedMessage{service_manager_addr, hd_index } => {
-                                    let client = match _self.get_eth_client(&service_manager_addr.to_string(), *hd_index).await {
+                                    let addr = service_manager_addr.to_string();
+                                    let chain_id = {
+                                        let lock = _self.service_manager_chain_id.lock().unwrap();
+                                        let chain_id = lock.get(&addr).unwrap();
+                                        chain_id.clone()
+                                    };
+
+                                    let client = match _self.get_eth_client(chain_id.as_str(), *hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -432,7 +440,13 @@ impl Submission for CoreSubmission {
                                 },
                                 Submit::EthAggregatorTx{service_manager_addr} => {
                                     let hd_index = 0;
-                                    let client = match _self.get_eth_client(&service_manager_addr.to_string(), hd_index).await {
+                                    let addr = service_manager_addr.to_string();
+                                    let chain_id = {
+                                        let lock = _self.service_manager_chain_id.lock().unwrap();
+                                        let chain_id = lock.get(&addr).unwrap();
+                                        chain_id.clone()
+                                    };
+                                    let client = match _self.get_eth_client(chain_id.as_str(), hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);

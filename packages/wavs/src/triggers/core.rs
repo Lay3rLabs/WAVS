@@ -4,9 +4,7 @@ use crate::{
             Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
         },
         ServiceID, WorkflowID,
-    },
-    config::Config,
-    AppContext,
+    }, config::Config, AppContext
 };
 use alloy::{
     providers::Provider,
@@ -14,6 +12,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::Result;
+use core::fmt;
 use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
 use layer_climb::prelude::*;
@@ -39,6 +38,29 @@ pub struct CoreTriggerManager {
     pub eth_chain_configs: HashMap<String, EthClientConfig>,
     pub channel_bound: usize,
     lookup_maps: Arc<LookupMaps>,
+}
+pub enum BlockTriggers {
+    EthereumLog {
+        log: Log,
+    },
+    Layer {
+        triggers: HashMap<Address, HashSet<TaskId>>,
+    },
+}
+
+impl fmt::Display for BlockTriggers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlockTriggers::EthereumLog { log } => write!(f, "EthereumLog: {:?}", log),
+            BlockTriggers::Layer { triggers } => write!(f, "Layer: {:?}", triggers),
+        }
+    }
+}
+
+impl fmt::Debug for BlockTriggers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 struct LookupMaps {
@@ -103,15 +125,6 @@ impl CoreTriggerManager {
         // stream of streams, one for each chain
         let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<BlockTriggers>> + Send>>> =
             Vec::new();
-
-        enum BlockTriggers {
-            EthereumLog {
-                log: Log,
-            },
-            Layer {
-                triggers: HashMap<Address, HashSet<TaskId>>,
-            },
-        }
 
         let cosmos_client = match self.cosmos_chain_config.clone() {
             Some(chain_config) => Some(

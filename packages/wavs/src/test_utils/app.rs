@@ -32,7 +32,7 @@ impl TestApp {
             host: None,
             data: None,
             cors_allowed_origins: Vec::new(),
-            chain: None,
+            enabled_ethereum: Vec::new(),
             cosmos_chain: None,
             chain_config: Default::default(),
             wasm_lru_size: None,

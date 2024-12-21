@@ -133,6 +133,7 @@ impl Config {
         Ok(Some(config_merged))
     }
 
+    /// ChainID -> Config
     pub fn ethereum_chain_configs(&self) -> Result<HashMap<String, EthereumChainConfig>> {
         let mut chains = HashMap::new();
         for chain_name in &self.enabled_ethereum {
@@ -170,15 +171,15 @@ impl Config {
                 faucet_endpoint: self.chain_config_override.faucet_endpoint.clone(),
             };
 
-            let chain_id: String = config_override.clone().chain_id.unwrap_or_default();
-            if chain_id.is_empty() {
-                return Err(anyhow!("Chain ID is required"));
-            }
-
             let config_merged: EthereumChainConfig = Figment::new()
                 .merge(figment::providers::Serialized::defaults(config))
                 .merge(figment::providers::Serialized::defaults(config_override))
                 .extract()?;
+
+            let chain_id: String = config_merged.clone().chain_id;
+            if chain_id.is_empty() {
+                return Err(anyhow!("Chain ID is required"));
+            }
 
             chains.insert(chain_id, config_merged);
         }
