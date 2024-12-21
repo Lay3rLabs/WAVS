@@ -22,14 +22,18 @@ use utils::{
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
     layer_contract_client::LayerContractClientSimple,
 };
+use alloy::primitives::Address as EthAddress;
 
 #[derive(Clone)]
 pub struct CoreSubmission {
     cosmos_clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
     cosmos_chain: Option<ChainCosmosSubmission>,
     eth_clients: Arc<Mutex<HashMap<u32, EthSigningClient>>>,
-    eth_chain: Option<ChainEthSubmission>,
+    // chain_id -> chain
+    eth_chains: HashMap<String, ChainEthSubmission>,
     http_client: reqwest::Client,
+    // map of service_manager_addr (EthAddress) -> chain_id (String)
+    service_manager_chain_id: Arc<Mutex<HashMap<String, String>>>,
 }
 
 #[derive(Clone)]
@@ -98,18 +102,27 @@ impl CoreSubmission {
             .map(ChainCosmosSubmission::new)
             .transpose()?;
 
-        let eth_chain = config
-            .try_ethereum_chain_config()
-            .map_err(SubmissionError::Ethereum)?
-            .map(ChainEthSubmission::new)
-            .transpose()?;
+        // let eth_chains = config
+        //     .ethereum_chain_configs()
+        //     .into_iter()
+        //     .flatten()
+        //     .map(ChainEthSubmission::new)
+        //     .collect::<Result<Vec<_>, _>>()?;
+
+        let eth_chains = config
+            .ethereum_chain_configs()
+            .into_iter()
+            .flat_map(|hm| hm.into_iter())
+            .map(|(chain_id, ecc)| Ok((chain_id, ChainEthSubmission::new(ecc)?)))
+            .collect::<Result<HashMap<_, _>, SubmissionError>>()?;
 
         Ok(Self {
             cosmos_clients: Arc::new(Mutex::new(HashMap::new())),
             cosmos_chain,
             eth_clients: Arc::new(Mutex::new(HashMap::new())),
-            eth_chain,
+            eth_chains,
             http_client: reqwest::Client::new(),
+            service_manager_chain_id: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -119,10 +132,13 @@ impl CoreSubmission {
             .ok_or(SubmissionError::MissingCosmosChain)
     }
 
-    fn get_eth_chain(&self) -> Result<&ChainEthSubmission, SubmissionError> {
-        self.eth_chain
-            .as_ref()
-            .ok_or(SubmissionError::MissingEthereumChain)
+    fn get_eth_chain(&self, chain_id: impl AsRef<str>) -> Result<&ChainEthSubmission, SubmissionError> {
+        // self.eth_chain
+        //     .as_ref()
+        //     .ok_or(SubmissionError::MissingEthereumChain)
+
+        let chain = self.eth_chains.get(chain_id.as_ref()).ok_or(SubmissionError::MissingEthereumChain)?;
+        Ok(chain)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
@@ -154,7 +170,7 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn get_eth_client(&self, hd_index: u32) -> Result<EthSigningClient, SubmissionError> {
+    async fn get_eth_client(&self, chain_id: &str, hd_index: u32) -> Result<EthSigningClient, SubmissionError> {
         {
             let lock = self.eth_clients.lock().unwrap();
 
@@ -163,7 +179,7 @@ impl CoreSubmission {
             }
         }
 
-        let mut client_config = self.get_eth_chain()?.client_config.clone();
+        let mut client_config = self.get_eth_chain(chain_id)?.client_config.clone();
 
         client_config.hd_index = Some(hd_index);
 
@@ -243,7 +259,7 @@ impl CoreSubmission {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn maybe_tap_eth_faucet(&self, client: &EthSigningClient) -> Result<(), SubmissionError> {
-        let _faucet_url = match self.get_eth_chain()?.faucet_url.clone() {
+        let _faucet_url = match self.get_eth_chain(&client.config.chain_id)?.faucet_url.clone() {
             Some(url) => url,
             None => {
                 tracing::debug!("No faucet configured, skipping");
@@ -272,7 +288,7 @@ impl CoreSubmission {
             }
         };
 
-        let service_manager_address = match service_manager_address {
+        let service_manager_address: EthAddress = match service_manager_address {
             Address::Eth(addr) => addr.as_bytes().into(),
             _ => {
                 return Err(SubmissionError::ExpectedEthAddress(
@@ -280,6 +296,14 @@ impl CoreSubmission {
                 ))
             }
         };
+
+        let chain_id = eth_client.config.chain_id.to_string();
+        {
+            let mut lock = self.service_manager_chain_id.lock().unwrap();
+            lock.insert(service_manager_address.to_string(), chain_id.clone());
+            drop(lock);
+        }
+
 
         let avs_client =
             LayerContractClientSimple::new(eth_client, service_manager_address, trigger_address);
@@ -309,7 +333,7 @@ impl CoreSubmission {
             };
 
             let aggregator_msg_url = self
-                .get_eth_chain()?
+                .get_eth_chain(chain_id)?
                 .aggregator_url
                 .as_ref()
                 .ok_or(SubmissionError::MissingAggregatorEndpoint)?
@@ -378,8 +402,8 @@ impl Submission for CoreSubmission {
                         while let Some(msg) = rx.recv().await {
                             tracing::debug!("Received message to submit: {:?}", msg);
                             let eth_client = match msg.submit() {
-                                Submit::EthSignedMessage{hd_index, .. } => {
-                                    let client = match _self.get_eth_client(*hd_index).await {
+                                Submit::EthSignedMessage{service_manager_addr, hd_index } => {
+                                    let client = match _self.get_eth_client(&service_manager_addr.to_string(), *hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -393,9 +417,9 @@ impl Submission for CoreSubmission {
 
                                     Some(client)
                                 },
-                                Submit::EthAggregatorTx{..} => {
+                                Submit::EthAggregatorTx{service_manager_addr} => {
                                     let hd_index = 0;
-                                    let client = match _self.get_eth_client(hd_index).await {
+                                    let client = match _self.get_eth_client(&service_manager_addr.to_string(), hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);

@@ -35,8 +35,8 @@ pub struct Config {
     pub wasm_lru_size: usize,
     pub wasm_threads: usize,
 
-    /// The chosen ethereum chain name
-    pub chain: Option<String>,
+    /// The chosen ethereum chain names
+    pub enabled_ethereum: Vec<String>,
 
     /// The chosen cosmos chain name
     pub cosmos_chain: Option<String>,
@@ -59,7 +59,7 @@ impl Default for Config {
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
             cosmos_chain: None,
-            chain: None,
+            enabled_ethereum: Vec::new(),
             chains: ChainConfigs {
                 cosmos: HashMap::new(),
                 eth: HashMap::new(),
@@ -133,56 +133,57 @@ impl Config {
         Ok(Some(config_merged))
     }
 
-    pub fn ethereum_chain_config(&self) -> Result<EthereumChainConfig> {
-        let chain_name = self.chain.as_deref();
-        self.try_ethereum_chain_config()?.ok_or(anyhow!(
-            "No chain config found for ethereum \"{}\"",
-            chain_name.unwrap_or_default()
-        ))
-    }
-    pub fn try_ethereum_chain_config(&self) -> Result<Option<EthereumChainConfig>> {
-        let chain_name = self.chain.as_deref();
+    pub fn ethereum_chain_configs(&self) -> Result<HashMap<String, EthereumChainConfig>> {
+        let mut chains = HashMap::new();
+        for chain_name in &self.enabled_ethereum {
+            let config = self
+                .chains
+                .eth
+                .get(chain_name)
+                .ok_or_else(|| anyhow!("No chain config found for ethereum \"{}\"", chain_name))?;
 
-        let config = match chain_name.and_then(|chain_name| self.chains.eth.get(chain_name)) {
-            None => return Ok(None),
-            Some(config) => config,
-        };
+            // The optional overrides use a prefix to distinguish between layer and ethereum fields
+            // since in the CLI they get flattened and would conflict without a prefix
+            // in order to cleanly merge it with our final, real chain config
+            // we need to strip that prefix so that the fields match
+            #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+            struct ConfigOverride {
+                #[serde(skip_serializing_if = "Option::is_none")]
+                pub chain_id: Option<String>,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                pub http_endpoint: Option<String>,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                pub ws_endpoint: Option<String>,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                pub aggregator_endpoint: Option<String>,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                pub submission_mnemonic: Option<String>,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                pub faucet_endpoint: Option<String>,
+            }
 
-        // The optional overrides use a prefix to distinguish between layer and ethereum fields
-        // since in the CLI they get flattened and would conflict without a prefix
-        // in order to cleanly merge it with our final, real chain config
-        // we need to strip that prefix so that the fields match
-        #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-        struct ConfigOverride {
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub chain_id: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub http_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub ws_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub aggregator_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub submission_mnemonic: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub faucet_endpoint: Option<String>,
+            let config_override = ConfigOverride {
+                chain_id: self.chain_config_override.chain_id.clone(),
+                http_endpoint: self.chain_config_override.http_endpoint.clone(),
+                ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
+                aggregator_endpoint: self.chain_config_override.aggregator_endpoint.clone(),
+                submission_mnemonic: self.chain_config_override.submission_mnemonic.clone(),
+                faucet_endpoint: self.chain_config_override.faucet_endpoint.clone(),
+            };
+
+            // TODO(reece): unwrap
+            let chain_id = config_override.clone().chain_id.unwrap();
+
+            let config_merged: EthereumChainConfig = Figment::new()
+                .merge(figment::providers::Serialized::defaults(config))
+                .merge(figment::providers::Serialized::defaults(config_override))
+                .extract()?;
+
+            chains.insert(chain_id, config_merged);
         }
 
-        let config_override = ConfigOverride {
-            chain_id: self.chain_config_override.chain_id.clone(),
-            http_endpoint: self.chain_config_override.http_endpoint.clone(),
-            ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
-            aggregator_endpoint: self.chain_config_override.aggregator_endpoint.clone(),
-            submission_mnemonic: self.chain_config_override.submission_mnemonic.clone(),
-            faucet_endpoint: self.chain_config_override.faucet_endpoint.clone(),
-        };
+        Ok(chains)
 
-        let config_merged = Figment::new()
-            .merge(figment::providers::Serialized::defaults(config))
-            .merge(figment::providers::Serialized::defaults(config_override))
-            .extract()?;
-
-        Ok(Some(config_merged))
     }
 }
 
@@ -237,6 +238,7 @@ impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
 impl From<EthereumChainConfig> for EthClientConfig {
     fn from(config: EthereumChainConfig) -> Self {
         Self {
+            chain_id: config.chain_id,
             ws_endpoint: Some(config.ws_endpoint),
             http_endpoint: config.http_endpoint,
             mnemonic: config.submission_mnemonic,

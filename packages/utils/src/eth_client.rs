@@ -63,6 +63,7 @@ impl EthSigningClient {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EthClientConfig {
+    pub chain_id: String,
     pub ws_endpoint: Option<String>,
     pub http_endpoint: String,
     pub mnemonic: Option<String>,
