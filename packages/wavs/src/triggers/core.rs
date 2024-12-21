@@ -4,7 +4,9 @@ use crate::{
             Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
         },
         ServiceID, WorkflowID,
-    }, config::Config, AppContext
+    },
+    config::Config,
+    AppContext,
 };
 use alloy::{
     providers::Provider,

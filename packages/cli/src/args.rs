@@ -42,6 +42,9 @@ pub enum Command {
 
         #[clap(flatten)]
         digests: Digests,
+
+        #[clap(long, default_value = "31337")]
+        chain_id: String,
     },
 
     DeployService {
@@ -57,6 +60,9 @@ pub enum Command {
 
         #[clap(flatten)]
         digests: Digests,
+
+        #[clap(long, default_value = "31337")]
+        chain_id: String,
     },
 
     AddTask {
@@ -106,6 +112,9 @@ pub enum Command {
         /// if not set, will be a random string
         #[clap(long)]
         name: Option<String>,
+
+        #[clap(long, default_value = "31337")]
+        chain_id: String,
     },
 }
 

@@ -55,6 +55,7 @@ async fn main() {
             core_contracts,
             register_operator,
             digests,
+            chain_id,
         } => {
             let core_contracts = core_contracts.into();
 
@@ -81,6 +82,7 @@ async fn main() {
                     .create_eth_trigger_echo_service(
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
+                        chain_id,
                         digest,
                     )
                     .await;
@@ -95,6 +97,7 @@ async fn main() {
             register_core_operator,
             register_service_operator,
             digests,
+            chain_id,
         } => {
             let eigen_client = get_eigen_client(&args).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
@@ -128,6 +131,7 @@ async fn main() {
                     .create_eth_trigger_echo_service(
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
+                        chain_id,
                         digest,
                     )
                     .await;
@@ -173,6 +177,7 @@ async fn main() {
             register_service_operator,
             digests,
             name,
+            chain_id,
         } => {
             let eigen_client = get_eigen_client(&args).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
@@ -209,6 +214,7 @@ async fn main() {
                     .create_eth_trigger_echo_service(
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
+                        chain_id,
                         digest,
                     )
                     .await;

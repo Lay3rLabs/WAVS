@@ -338,6 +338,8 @@ mod tests {
 
     use super::*;
 
+    const CHAIN_ID: &str = "31337";
+
     /// Ensure that some items pass end-to-end in simplest possible setup
     #[test]
     fn dispatcher_pipeline_happy_path() {
@@ -368,6 +370,7 @@ mod tests {
         let digest = Digest::new(b"wasm1");
         let component_id = ComponentID::new("component1").unwrap();
         let service_manager_addr = rand_address_eth();
+
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -377,7 +380,10 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx(service_manager_addr.clone())),
+                    submit: Some(Submit::eth_aggregator_tx(
+                        CHAIN_ID.to_string(),
+                        service_manager_addr.clone(),
+                    )),
                 },
             )]
             .into(),
@@ -398,7 +404,7 @@ mod tests {
             trigger_config: action.config,
             wasm_result: payload.into(),
             trigger_id: TriggerId::new(2),
-            submit: Submit::eth_aggregator_tx(service_manager_addr),
+            submit: Submit::eth_aggregator_tx(CHAIN_ID.to_string(), service_manager_addr),
         };
         assert_eq!(processed[0], expected);
     }
@@ -460,7 +466,10 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
+                    submit: Some(Submit::eth_aggregator_tx(
+                        CHAIN_ID.to_string(),
+                        rand_address_eth(),
+                    )),
                 },
             )]
             .into(),
@@ -536,7 +545,10 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
+                    submit: Some(Submit::eth_aggregator_tx(
+                        CHAIN_ID.to_string(),
+                        rand_address_eth(),
+                    )),
                 },
             )]
             .into(),

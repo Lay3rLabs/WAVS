@@ -32,8 +32,6 @@ pub struct CoreSubmission {
     // chain_id -> chain
     eth_chains: HashMap<String, ChainEthSubmission>,
     http_client: reqwest::Client,
-    // map of service_manager_addr (EthAddress) -> chain_id (String)
-    service_manager_chain_id: Arc<Mutex<HashMap<String, String>>>,
 }
 
 #[derive(Clone)]
@@ -102,13 +100,6 @@ impl CoreSubmission {
             .map(ChainCosmosSubmission::new)
             .transpose()?;
 
-        // let eth_chains = config
-        //     .ethereum_chain_configs()
-        //     .into_iter()
-        //     .flatten()
-        //     .map(ChainEthSubmission::new)
-        //     .collect::<Result<Vec<_>, _>>()?;
-
         let eth_chains = config
             .ethereum_chain_configs()
             .into_iter()
@@ -122,7 +113,6 @@ impl CoreSubmission {
             eth_clients: Arc::new(Mutex::new(HashMap::new())),
             eth_chains,
             http_client: reqwest::Client::new(),
-            service_manager_chain_id: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -136,15 +126,12 @@ impl CoreSubmission {
         &self,
         chain_id: impl AsRef<str>,
     ) -> Result<&ChainEthSubmission, SubmissionError> {
-        // self.eth_chain
-        //     .as_ref()
-        //     .ok_or(SubmissionError::MissingEthereumChain)
-
-        let chain = self.eth_chains.get(chain_id.as_ref()).ok_or(
-            SubmissionError::MissingEthereumChain {
-                0: chain_id.as_ref().to_string(),
-            },
-        )?;
+        let chain =
+            self.eth_chains
+                .get(chain_id.as_ref())
+                .ok_or(SubmissionError::MissingEthereumChain(
+                    chain_id.as_ref().to_string(),
+                ))?;
         Ok(chain)
     }
 
@@ -313,12 +300,6 @@ impl CoreSubmission {
         };
 
         let chain_id = eth_client.config.chain_id.to_string();
-        {
-            let mut lock = self.service_manager_chain_id.lock().unwrap();
-            lock.insert(service_manager_address.to_string(), chain_id.clone());
-            drop(lock);
-        }
-
         let avs_client =
             LayerContractClientSimple::new(eth_client, service_manager_address, trigger_address);
 
@@ -416,13 +397,8 @@ impl Submission for CoreSubmission {
                         while let Some(msg) = rx.recv().await {
                             tracing::debug!("Received message to submit: {:?}", msg);
                             let eth_client = match msg.submit() {
-                                Submit::EthSignedMessage{service_manager_addr, hd_index } => {
-                                    let addr = service_manager_addr.to_string();
-                                    let chain_id = {
-                                        let lock = _self.service_manager_chain_id.lock().unwrap();
-                                        let chain_id = lock.get(&addr).unwrap();
-                                        chain_id.clone()
-                                    };
+                                // TODO(reece): just use the hd_index to get the chain_id pairings? (better UX)
+                                Submit::EthSignedMessage{chain_id, hd_index, .. } => {
 
                                     let client = match _self.get_eth_client(chain_id.as_str(), *hd_index).await {
                                         Ok(client) => client,
@@ -438,14 +414,8 @@ impl Submission for CoreSubmission {
 
                                     Some(client)
                                 },
-                                Submit::EthAggregatorTx{service_manager_addr} => {
+                                Submit::EthAggregatorTx{chain_id, ..} => {
                                     let hd_index = 0;
-                                    let addr = service_manager_addr.to_string();
-                                    let chain_id = {
-                                        let lock = _self.service_manager_chain_id.lock().unwrap();
-                                        let chain_id = lock.get(&addr).unwrap();
-                                        chain_id.clone()
-                                    };
                                     let client = match _self.get_eth_client(chain_id.as_str(), hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
@@ -503,7 +473,7 @@ impl Submission for CoreSubmission {
                                         },
                                     }
                                 },
-                                Submit::EthAggregatorTx{service_manager_addr} => {
+                                Submit::EthAggregatorTx{service_manager_addr, ..} => {
                                     match &msg.trigger_config().trigger  {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");

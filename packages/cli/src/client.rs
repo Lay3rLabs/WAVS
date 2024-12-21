@@ -83,12 +83,14 @@ impl HttpClient {
         &self,
         trigger_address: alloy::primitives::Address,
         service_manager_address: alloy::primitives::Address,
+        chain_id: String,
         digest: Digest,
     ) -> ServiceID {
         self.create_service(
             digest,
             Address::Eth(AddrEth::new(trigger_address.into())),
             Submit::EthSignedMessage {
+                chain_id,
                 hd_index: 0,
                 service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
             },

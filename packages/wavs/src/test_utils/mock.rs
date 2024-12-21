@@ -103,6 +103,7 @@ impl MockE2ETestRunner {
             Permissions::default(),
             Vec::new(),
             function,
+            "31337".to_string(),
         )
         .await
     }
@@ -115,6 +116,7 @@ impl MockE2ETestRunner {
         permissions: Permissions,
         envs: Vec<(String, String)>,
         function: impl Function,
+        chain_id: String,
     ) {
         // "upload" the component
         // not going through http for this because we don't have raw bytes, digest is fake
@@ -129,7 +131,7 @@ impl MockE2ETestRunner {
                 permissions,
                 envs,
                 testable: None,
-                submit: Submit::eth_aggregator_tx(rand_address_eth()),
+                submit: Submit::eth_aggregator_tx(chain_id, rand_address_eth()),
             },
             wasm_url: None,
         })

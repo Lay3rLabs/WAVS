@@ -213,6 +213,8 @@ mod e2e {
     ) {
         tracing::info!("Running e2e ethereum tests");
 
+        let chain_id = anvil.chain_id().to_string();
+
         let app = EthTestApp::new(config.clone(), anvil).await;
 
         let echo_service_id = ServiceID::new("echo-service").unwrap();
@@ -225,6 +227,7 @@ mod e2e {
                     app.avs_client.layer.trigger.into(),
                 ))),
                 Submit::EthSignedMessage {
+                    chain_id: chain_id.to_string(),
                     hd_index: 0,
                     service_manager_addr: Address::Eth(AddrEth::new(
                         app.avs_client.layer.service_manager.into(),
@@ -245,6 +248,7 @@ mod e2e {
                     app.avs_client.layer.trigger.into(),
                 ))),
                 Submit::EthSignedMessage {
+                    chain_id: chain_id.to_string(),
                     hd_index: 0,
                     service_manager_addr: Address::Eth(AddrEth::new(
                         app.avs_client.layer.service_manager.into(),
@@ -360,6 +364,7 @@ mod e2e {
                     avs_simple_client.trigger.contract_address.into(),
                 ))),
                 Submit::EthAggregatorTx {
+                    chain_id: chain_id.to_string(),
                     service_manager_addr: Address::Eth(AddrEth::new(
                         avs_simple_client.service_manager_contract_address.into(),
                     )),

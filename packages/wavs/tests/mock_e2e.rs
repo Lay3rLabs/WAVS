@@ -15,6 +15,8 @@ use wavs::{
     AppContext, Digest,
 };
 
+const CHAIN_ID: &str = "31337";
+
 #[test]
 fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
@@ -212,6 +214,7 @@ fn mock_e2e_service_settings() {
                     permissions.clone(),
                     envs.clone(),
                     BigSquare,
+                    CHAIN_ID.to_string(),
                 )
                 .await;
 

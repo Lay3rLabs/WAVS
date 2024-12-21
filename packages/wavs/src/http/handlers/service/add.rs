@@ -156,6 +156,8 @@ mod test {
     use layer_climb::prelude::Address;
     use serde::{Deserialize, Serialize};
 
+    const CHAIN_ID: &str = "31337";
+
     use crate::{
         apis::{
             dispatcher::{Permissions, ServiceStatus, Submit},
@@ -202,7 +204,7 @@ mod test {
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
-                submit: Submit::eth_aggregator_tx(rand_address_eth()),
+                submit: Submit::eth_aggregator_tx(CHAIN_ID.to_string(), rand_address_eth()),
             }
         }
 

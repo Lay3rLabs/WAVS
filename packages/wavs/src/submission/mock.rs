@@ -100,12 +100,14 @@ mod test {
 
     use super::*;
 
+    const CHAIN_ID: &str = "31337";
+
     fn dummy_message(service: &str, payload: &str) -> ChainMessage {
         ChainMessage::Eth {
             trigger_config: TriggerConfig::eth_event(service, service, rand_address_eth()).unwrap(),
             trigger_id: TriggerId::new(rand::thread_rng().gen::<u64>()),
             wasm_result: payload.as_bytes().to_vec(),
-            submit: Submit::eth_aggregator_tx(rand_address_eth()),
+            submit: Submit::eth_aggregator_tx(CHAIN_ID.to_string(), rand_address_eth()),
         }
     }
 
