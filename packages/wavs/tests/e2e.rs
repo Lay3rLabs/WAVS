@@ -36,10 +36,10 @@ mod e2e {
             // TODO: build these based on the enabled chains in the config?
             if #[cfg(feature = "e2e_tests_ethereum")] {
                 let anvil = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
-                let anvil2: Option<AnvilInstance> = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
+                let _anvil2: Option<AnvilInstance> = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
             } else {
                 let anvil: Option<AnvilInstance> = None;
-                let anvil2: Option<AnvilInstance> = None;
+                let _anvil2: Option<AnvilInstance> = None;
             }
         }
         let mut config: Config = {

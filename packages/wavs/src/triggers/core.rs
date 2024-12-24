@@ -28,8 +28,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::task::JoinSet;
-use tokio::{stream, sync::mpsc};
+use tokio::{sync::mpsc, task::JoinSet};
 use tracing::instrument;
 use utils::{
     eth_client::{EthClientBuilder, EthClientConfig},
@@ -209,86 +208,80 @@ impl CoreTriggerManager {
                             match stream {
                                 Some(mut stream) => {
                                     while let Some(result) = stream.next().await {
-                                        match result {
-                                            Ok(BlockTriggers::EthereumLog { log }) => {
-                                                if let Ok(log) = log.log_decode::<NewTrigger>() {
-                                                    let service_id =
-                                                        log.data().serviceId.to_string();
-                                                    let workflow_id =
-                                                        log.data().workflowId.to_string();
-                                                    let trigger_id = log.data().triggerId;
+                                        if let Ok(BlockTriggers::EthereumLog { log }) = result {
+                                            if let Ok(log) = log.log_decode::<NewTrigger>() {
+                                                let service_id = log.data().serviceId.to_string();
+                                                let workflow_id = log.data().workflowId.to_string();
+                                                let trigger_id = log.data().triggerId;
 
-                                                    match (
-                                                        ServiceID::new(&service_id),
-                                                        WorkflowID::new(&workflow_id),
-                                                    ) {
-                                                        (Ok(service_id), Ok(workflow_id)) => {
-                                                            let trigger_id =
-                                                                TriggerId::new(trigger_id);
-                                                            let contract = LayerTrigger::new(
-                                                                log.address(),
-                                                                query_client.provider.clone(),
-                                                            );
+                                                match (
+                                                    ServiceID::new(&service_id),
+                                                    WorkflowID::new(&workflow_id),
+                                                ) {
+                                                    (Ok(service_id), Ok(workflow_id)) => {
+                                                        let trigger_id = TriggerId::new(trigger_id);
+                                                        let contract = LayerTrigger::new(
+                                                            log.address(),
+                                                            query_client.provider.clone(),
+                                                        );
 
-                                                            if let Ok(payload) = contract
-                                                                .getTrigger(*trigger_id)
-                                                                .call()
-                                                                .await
-                                                                .map(|resp| resp._0.data.to_vec())
-                                                            {
-                                                                let contract_address =
-                                                                    Address::Eth(AddrEth::new(
-                                                                        log.address().into(),
-                                                                    ));
+                                                        if let Ok(payload) = contract
+                                                            .getTrigger(*trigger_id)
+                                                            .call()
+                                                            .await
+                                                            .map(|resp| resp._0.data.to_vec())
+                                                        {
+                                                            // let contract_address =
+                                                            //     Address::Eth(AddrEth::new(
+                                                            //         log.address().into(),
+                                                            //     ));
 
-                                                                // Clone the data we need before taking the lock
-                                                                let lookup_id = {
-                                                                    let triggers_by_service_workflow_lock = lookup_maps
-                                                                        .triggers_by_service_workflow
-                                                                        .read()
-                                                                        .unwrap();
+                                                            // Clone the data we need before taking the lock
+                                                            let lookup_id = {
+                                                                let triggers_by_service_workflow_lock = lookup_maps
+                                                                    .triggers_by_service_workflow
+                                                                    .read()
+                                                                    .unwrap();
 
-                                                                    triggers_by_service_workflow_lock
-                                                                        .get(&service_id)
-                                                                        .and_then(|map| map.get(&workflow_id))
-                                                                        .copied()
+                                                                triggers_by_service_workflow_lock
+                                                                    .get(&service_id)
+                                                                    .and_then(|map| map.get(&workflow_id))
+                                                                    .copied()
+                                                            };
+
+                                                            if let Some(lookup_id) = lookup_id {
+                                                                let trigger = {
+                                                                    let all_trigger_data_lock =
+                                                                        lookup_maps
+                                                                            .all_trigger_data
+                                                                            .read()
+                                                                            .unwrap();
+                                                                    all_trigger_data_lock
+                                                                        .get(&lookup_id)
+                                                                        .cloned()
                                                                 };
 
-                                                                if let Some(lookup_id) = lookup_id {
-                                                                    let trigger = {
-                                                                        let all_trigger_data_lock =
-                                                                            lookup_maps
-                                                                                .all_trigger_data
-                                                                                .read()
-                                                                                .unwrap();
-                                                                        all_trigger_data_lock
-                                                                            .get(&lookup_id)
-                                                                            .cloned()
-                                                                    };
-
-                                                                    if let Some(trigger) = trigger {
-                                                                        let _ = action_sender
-                                                                            .send(TriggerAction {
-                                                                                config: trigger,
-                                                                                data: TriggerData::EthEvent {
-                                                                                    service_id,
-                                                                                    workflow_id,
-                                                                                    payload,
-                                                                                    trigger_id,
-                                                                                },
-                                                                            })
-                                                                            .await;
-                                                                    }
+                                                                if let Some(trigger) = trigger {
+                                                                    let _ = action_sender
+                                                                        .send(TriggerAction {
+                                                                            config: trigger,
+                                                                            data: TriggerData::EthEvent {
+                                                                                service_id,
+                                                                                workflow_id,
+                                                                                payload,
+                                                                                trigger_id,
+                                                                            },
+                                                                        })
+                                                                        .await;
                                                                 }
                                                             }
                                                         }
-                                                        _ => {
-                                                            tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
-                                                        }
+                                                    }
+                                                    _ => {
+                                                        tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
                                                     }
                                                 }
                                             }
-                                            _ => {}
                                         }
                                     }
                                 }
@@ -353,13 +346,13 @@ impl CoreTriggerManager {
                                                                             resp._0.data.to_vec()
                                                                         })
                                                                     {
-                                                                        let contract_address =
-                                                                            Address::Eth(
-                                                                                AddrEth::new(
-                                                                                    log.address()
-                                                                                        .into(),
-                                                                                ),
-                                                                            );
+                                                                        // let contract_address =
+                                                                        //     Address::Eth(
+                                                                        //         AddrEth::new(
+                                                                        //             log.address()
+                                                                        //                 .into(),
+                                                                        //         ),
+                                                                        //     );
 
                                                                         // Clone the data we need before taking the lock
                                                                         let lookup_id = {

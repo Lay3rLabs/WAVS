@@ -14,7 +14,7 @@ use alloy::{
 use utils::{
     aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
     eigen_client::EigenClient,
-    eth_client::{self, EthClientBuilder, EthClientConfig},
+    eth_client::{EthClientBuilder, EthClientConfig},
     layer_contract_client::{
         layer_service_manager::ILayerServiceManager::Payload, LayerContractClientFullBuilder,
         LayerContractClientSimple,

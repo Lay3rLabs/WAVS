@@ -7,7 +7,6 @@ use utils::{
         misc::{AVSDirectory, IAVSDirectory::OperatorAVSRegistrationStatus},
         BoxSigningProvider,
     },
-    eth_client::EthSigningClient,
     layer_contract_client::{
         layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
         SignedPayload,
