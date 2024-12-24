@@ -42,8 +42,6 @@ impl TestApp {
                 "test test test test test test test test test test test junk".to_owned(),
             ),
             cors_allowed_origins: Vec::new(),
-            ws_endpoint: None,
-            http_endpoint: None,
             hd_index: None,
             tasks_quorum: Some(1),
         }

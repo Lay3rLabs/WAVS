@@ -7,6 +7,7 @@ use utils::{
         misc::{AVSDirectory, IAVSDirectory::OperatorAVSRegistrationStatus},
         BoxSigningProvider,
     },
+    eth_client::EthSigningClient,
     layer_contract_client::{
         layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
         SignedPayload,
@@ -25,7 +26,16 @@ pub async fn handle_add_payload(
             signed_payload,
             service_manager_address,
             service_id,
-        } => add_payload_trigger(state, signed_payload, service_manager_address, service_id).await,
+        } => {
+            add_payload_trigger(
+                state,
+                "local".to_string(), // TODO:
+                signed_payload,
+                service_manager_address,
+                service_id,
+            )
+            .await
+        }
     };
 
     match resp {
@@ -36,12 +46,13 @@ pub async fn handle_add_payload(
 
 pub async fn add_payload_trigger(
     state: HttpState,
+    chain_name: String,
     signed_payload: SignedPayload,
     service_manager_address: Address,
     // TODO - move ServiceID to utils
     service_id: String,
 ) -> HttpResult<AggregateAvsResponse> {
-    let eth_client = state.config.signing_client().await?;
+    let eth_client = state.config.signing_client(&chain_name).await?;
 
     check_operator(
         service_manager_address,

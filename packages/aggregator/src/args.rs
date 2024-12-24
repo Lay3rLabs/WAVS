@@ -54,16 +54,6 @@ pub struct CliArgs {
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub cors_allowed_origins: Vec<String>,
 
-    /// Websocket ethereum endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ws_endpoint: Option<String>,
-
-    /// Http ethereum endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub http_endpoint: Option<String>,
-
     /// Ethereum mnemonic
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]

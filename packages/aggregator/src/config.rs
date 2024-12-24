@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::{bail, Context, Result};
@@ -8,6 +8,7 @@ use utils::{
     error::EthClientError,
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
 };
+use wavs::config::ChainConfigs;
 
 use crate::args::CliArgs;
 
@@ -35,15 +36,6 @@ pub struct Config {
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
 
-    /// The chain id to use
-    pub chain_id: String,
-
-    /// Websocket eth endpoint
-    pub ws_endpoint: String,
-
-    /// Http eth endpoint
-    pub http_endpoint: String,
-
     /// Number of tasks to trigger transactions
     pub tasks_quorum: u32,
 
@@ -52,6 +44,9 @@ pub struct Config {
 
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
+
+    // TODO: can we just grab this from the wavs.toml?
+    pub chains: ChainConfigs,
 }
 
 /// Default values for the config struct
@@ -59,14 +54,15 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            chain_id: "31337".to_string(),
             port: 8001,
             log_level: vec!["info".to_string()],
-            host: "localhost".to_string(),
+            host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/aggregator"),
             cors_allowed_origins: Vec::new(),
-            ws_endpoint: "ws://127.0.0.1:8545".to_string(),
-            http_endpoint: "http://127.0.0.1:8545".to_string(),
+            chains: ChainConfigs {
+                cosmos: HashMap::new(),
+                eth: HashMap::new(),
+            },
             mnemonic: None,
             hd_index: None,
             tasks_quorum: 3,
@@ -75,12 +71,23 @@ impl Default for Config {
 }
 
 impl Config {
-    pub async fn signing_client(&self) -> Result<EthSigningClient> {
+    pub async fn signing_client(&self, chain_name: &str) -> Result<EthSigningClient> {
         let mnemonic = self.mnemonic.clone();
+        let chain_config = self
+            .chains
+            .eth
+            .get(chain_name)
+            .ok_or(EthClientError::ChainNotFound)?;
+        let ws_endpoint: Option<String> = match chain_config.ws_endpoint.clone() {
+            s if s.is_empty() => None,
+            s => Some(s),
+        };
+        let http_endpoint = chain_config.http_endpoint.clone();
+
         let eth_client = EthClientConfig {
-            chain_id: self.chain_id.clone(),
-            ws_endpoint: Some(self.ws_endpoint.clone()),
-            http_endpoint: self.http_endpoint.clone(),
+            chain_id: chain_config.chain_id.clone(),
+            ws_endpoint,
+            http_endpoint,
             mnemonic,
             hd_index: self.hd_index,
             transport: None,

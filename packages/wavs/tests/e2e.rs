@@ -33,22 +33,23 @@ mod e2e {
     #[test]
     fn e2e_tests() {
         cfg_if::cfg_if! {
+            // TODO: build these based on the enabled chains in the config?
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                let anvil = Some(Anvil::new().spawn());
+                let anvil = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
+                let anvil2: Option<AnvilInstance> = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
             } else {
                 let anvil: Option<AnvilInstance> = None;
+                let anvil2: Option<AnvilInstance> = None;
             }
         }
-        let mut config = {
+        let mut config: Config = {
             tokio::runtime::Runtime::new().unwrap().block_on({
                 async {
                     let mut cli_args = TestApp::default_cli_args();
                     cli_args.dotenv = None;
                     cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
-                    if let Some(anvil) = anvil.as_ref() {
-                        cli_args.chain_config.ws_endpoint = Some(anvil.ws_endpoint().to_string());
-                        cli_args.chain_config.http_endpoint = Some(anvil.endpoint().to_string());
-                    }
+                    // parent directory for the default wavs.toml
+                    cli_args.home = Some(PathBuf::from(".."));
                     TestApp::new_with_args(cli_args)
                         .await
                         .config
@@ -60,11 +61,8 @@ mod e2e {
         let aggregator_config: aggregator::config::Config = {
             let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
             cli_args.dotenv = None;
+            cli_args.home = Some(PathBuf::from("..").join("aggregator"));
             cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
-            if let Some(anvil) = anvil.as_ref() {
-                cli_args.ws_endpoint = Some(anvil.ws_endpoint().to_string());
-                cli_args.http_endpoint = Some(anvil.endpoint().to_string());
-            }
             aggregator::config::ConfigBuilder::new(cli_args)
                 .build()
                 .unwrap()
@@ -80,7 +78,11 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.enabled_ethereum = vec!["local".to_string()];
+                config.enabled_ethereum = vec!["local".to_string(), "e2elocal2".to_string()];
+                if let Err(e) = config.ethereum_chain_configs() {
+                    tracing::debug!("ethereum_chain_configs: {:?}", config);
+                    panic!("Error in ethereum_chain_configs: {}", e);
+                }
             } else {
                 config.enabled_ethereum = vec![];
             }
