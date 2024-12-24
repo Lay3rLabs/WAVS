@@ -18,13 +18,17 @@ use core::fmt;
 use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
 use layer_climb::prelude::*;
+use std::sync::atomic::Ordering;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     pin::Pin,
-    sync::{atomic::{AtomicUsize, AtomicBool}, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc, RwLock,
+    },
     time::Duration,
 };
-use std::sync::atomic::Ordering;
+use tokio::task::JoinSet;
 use tokio::{stream, sync::mpsc};
 use tracing::instrument;
 use utils::{
@@ -128,7 +132,7 @@ impl CoreTriggerManager {
         &self,
         action_sender: mpsc::Sender<TriggerAction>,
     ) -> Result<(), TriggerError> {
-        // stream of streams, one for each chain
+        let mut tasks = JoinSet::new();
         let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<BlockTriggers>> + Send>>> =
             Vec::new();
 
@@ -140,15 +144,14 @@ impl CoreTriggerManager {
             ),
             None => None,
         };
-        // let mut ethereum_clients: HashMap<String, EthClientBuilder> = HashMap::new();
         for (chain_id, chain_config) in &self.eth_chain_configs {
             let chain_id = chain_id.clone();
             let config = chain_config.clone();
             let action_sender = action_sender.clone();
             let lookup_maps = Arc::clone(&self.lookup_maps);
-            let shutdown_signal: Arc<AtomicBool> = Arc::clone(&self.shutdown_signal);
+            let shutdown_signal = Arc::clone(&self.shutdown_signal);
 
-            tokio::spawn(async move {
+            tasks.spawn(async move {
                 while !shutdown_signal.load(Ordering::Relaxed) {
                     tracing::debug!("Building query client for Ethereum chain: {}", chain_id);
                     match EthClientBuilder::new(config.clone()).build_query().await {
@@ -467,7 +470,52 @@ impl CoreTriggerManager {
                                 tracing::error!("Error: {:?}", err);
                             }
                         }
+                        // TODO: move this out to its own handler / into the above changed ETH code
+                        // Ok(BlockTriggers::EthereumLog { log }) => {
+                        //     if let Ok(log) = log.log_decode::<NewTrigger>() {
+                        //         let service_id = log.data().serviceId.to_string();
+                        //         let workflow_id = log.data().workflowId.to_string();
+                        //         let trigger_id = log.data().triggerId;
 
+                        //         // TODO(reece): fix me
+                        //         // get the first client in the hashmap
+                        //         let ethereum_client = ethereum_clients.values().next().unwrap();
+
+                        //         match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
+                        //             (Ok(service_id), Ok(workflow_id)) => {
+                        //                 let trigger_id = TriggerId::new(trigger_id);
+
+                        //                 let contract = LayerTrigger::new(
+                        //                     log.address(),
+                        //                     // ethereum_client.as_ref().unwrap().provider.clone(),
+                        //                     ethereum_client.provider.clone(),
+                        //                 );
+
+                        //                 if let Ok(payload) = contract
+                        //                     .getTrigger(*trigger_id)
+                        //                     .call()
+                        //                     .await
+                        //                     .map(|resp| resp._0.data.to_vec())
+                        //                 {
+                        //                     self.handle_trigger(
+                        //                         &action_sender,
+                        //                         &Address::Eth(AddrEth::new(log.address().into())),
+                        //                         TriggerData::EthEvent {
+                        //                             service_id,
+                        //                             workflow_id,
+                        //                             payload,
+                        //                             trigger_id,
+                        //                         },
+                        //                     )
+                        //                     .await;
+                        //                 }
+                        //             }
+                        //             _ => {
+                        //                 tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
+                        //             }
+                        //         }
+                        //     }
+                        // }
                         Ok(BlockTriggers::Layer {
                             triggers: task_created_events,
                         })
@@ -488,52 +536,6 @@ impl CoreTriggerManager {
                 Ok(BlockTriggers::EthereumLog { log }) => {
                     tracing::debug!("EthereumLog should no longer be called here, it is done above right?: {:?}", log);
                 }
-                // TODO: move this out to its own handler / into the above changed ETH code
-                // Ok(BlockTriggers::EthereumLog { log }) => {
-                //     if let Ok(log) = log.log_decode::<NewTrigger>() {
-                //         let service_id = log.data().serviceId.to_string();
-                //         let workflow_id = log.data().workflowId.to_string();
-                //         let trigger_id = log.data().triggerId;
-
-                //         // TODO(reece): fix me
-                //         // get the first client in the hashmap
-                //         let ethereum_client = ethereum_clients.values().next().unwrap();
-
-                //         match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
-                //             (Ok(service_id), Ok(workflow_id)) => {
-                //                 let trigger_id = TriggerId::new(trigger_id);
-
-                //                 let contract = LayerTrigger::new(
-                //                     log.address(),
-                //                     // ethereum_client.as_ref().unwrap().provider.clone(),
-                //                     ethereum_client.provider.clone(),
-                //                 );
-
-                //                 if let Ok(payload) = contract
-                //                     .getTrigger(*trigger_id)
-                //                     .call()
-                //                     .await
-                //                     .map(|resp| resp._0.data.to_vec())
-                //                 {
-                //                     self.handle_trigger(
-                //                         &action_sender,
-                //                         &Address::Eth(AddrEth::new(log.address().into())),
-                //                         TriggerData::EthEvent {
-                //                             service_id,
-                //                             workflow_id,
-                //                             payload,
-                //                             trigger_id,
-                //                         },
-                //                     )
-                //                     .await;
-                //                 }
-                //             }
-                //             _ => {
-                //                 tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
-                //             }
-                //         }
-                //     }
-                // }
                 Ok(BlockTriggers::Layer { triggers }) => {
                     for (contract_address, task_ids) in triggers {
                         for task_id in task_ids {
@@ -577,11 +579,22 @@ impl CoreTriggerManager {
             }
         }
 
-        tracing::debug!("Trigger Manager watcher finished");
+        // Wait for shutdown signal
+        while !self.shutdown_signal.load(Ordering::Relaxed) {
+            futures::future::poll_fn(|_| std::task::Poll::<()>::Pending).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
 
-        // Keep the watcher running
-        futures::future::pending::<()>().await;
+        // Abort all tasks and wait for them to complete
+        tasks.abort_all();
+        while let Some(res) = tasks.join_next().await {
+            match res {
+                Ok(_) => tracing::debug!("Chain watcher task completed"),
+                Err(e) => tracing::debug!("Chain watcher task aborted: {:?}", e),
+            }
+        }
 
+        tracing::debug!("All chain watchers shut down");
         Ok(())
     }
 
