@@ -5,27 +5,12 @@ pragma solidity ^0.8.22;
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
-import {ERC721BurnableUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721BurnableUpgradeable.sol";
-import {ERC721EnumerableUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
-import {ERC721URIStorageUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721URIStorageUpgradeable.sol";
-import {ERC721VotesUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721VotesUpgradeable.sol";
+import {ERC721BurnableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721BurnableUpgradeable.sol";
+import {ERC721EnumerableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import {ERC721URIStorageUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721URIStorageUpgradeable.sol";
+import {ERC721VotesUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721VotesUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-
-interface ILayerTrigger {
-    struct TriggerResponse {
-        TriggerId triggerId;
-        string serviceId;
-        string workflowId;
-        address creator;
-        bytes data;
-    }
-
-    type TriggerId is uint64;
-}
+import {ILayerTrigger} from "./interfaces/ILayerTrigger.sol";
 
 /// LOL it has to be called this for the current tooling to work... that should be fixed.
 /// @custom:security-contact meow@daodao.zone
@@ -53,7 +38,11 @@ contract LayerTrigger is
     mapping(ILayerTrigger.TriggerId => Trigger) public triggersById;
     mapping(address => ILayerTrigger.TriggerId[]) public triggerIdsByCreator;
 
-    event NewTrigger(string serviceId, string workflowId, ILayerTrigger.TriggerId indexed triggerId);
+    event NewTrigger(
+        string serviceId,
+        string workflowId,
+        ILayerTrigger.TriggerId indexed triggerId
+    );
 
     ILayerTrigger.TriggerId public nextTriggerId;
 
@@ -63,7 +52,10 @@ contract LayerTrigger is
     }
 
     // TODO minter should be the service contract.
-    function initialize(address defaultAdmin, address minter) public initializer {
+    function initialize(
+        address defaultAdmin,
+        address minter
+    ) public initializer {
         __ERC721_init("Collective Super Intelligence", "CSI");
         __ERC721Enumerable_init();
         __ERC721URIStorage_init();
@@ -82,14 +74,24 @@ contract LayerTrigger is
      * @param serviceId The service identifier (string).
      * @param data The request data (bytes).
      */
-    function addTrigger(string memory serviceId, string memory workflowId, bytes memory data) public {
+    function addTrigger(
+        string memory serviceId,
+        string memory workflowId,
+        bytes memory data
+    ) public {
         // Get the next trigger id
-        nextTriggerId = ILayerTrigger.TriggerId.wrap(ILayerTrigger.TriggerId.unwrap(nextTriggerId) + 1);
+        nextTriggerId = ILayerTrigger.TriggerId.wrap(
+            ILayerTrigger.TriggerId.unwrap(nextTriggerId) + 1
+        );
         ILayerTrigger.TriggerId triggerId = nextTriggerId;
 
         // Create the trigger
-        Trigger memory trigger =
-            Trigger({serviceId: serviceId, workflowId: workflowId, creator: msg.sender, data: data});
+        Trigger memory trigger = Trigger({
+            serviceId: serviceId,
+            workflowId: workflowId,
+            creator: msg.sender,
+            data: data
+        });
 
         // update storages
         triggersById[triggerId] = trigger;
@@ -105,16 +107,19 @@ contract LayerTrigger is
      * @notice Get a single trigger by triggerId.
      * @param triggerId The identifier of the trigger.
      */
-    function getTrigger(ILayerTrigger.TriggerId triggerId) public view returns (ILayerTrigger.TriggerResponse memory) {
+    function getTrigger(
+        ILayerTrigger.TriggerId triggerId
+    ) public view returns (ILayerTrigger.TriggerResponse memory) {
         Trigger storage trigger = triggersById[triggerId];
 
-        return ILayerTrigger.TriggerResponse({
-            triggerId: triggerId,
-            workflowId: trigger.workflowId,
-            serviceId: trigger.serviceId,
-            creator: trigger.creator,
-            data: trigger.data
-        });
+        return
+            ILayerTrigger.TriggerResponse({
+                triggerId: triggerId,
+                workflowId: trigger.workflowId,
+                serviceId: trigger.serviceId,
+                creator: trigger.creator,
+                data: trigger.data
+            });
     }
 
     // TODO kill baseURI?
@@ -122,7 +127,14 @@ contract LayerTrigger is
         return "https://example.com/project/";
     }
 
-    function safeMint(address to, string memory uri) public onlyRole(MINTER_ROLE) {
+    function safeMint(
+        address to,
+        string memory uri
+    )
+        public
+        // NOTE I tried removing the onlyRole(MINTER_ROLE) and it still doesn't work.
+        onlyRole(MINTER_ROLE)
+    {
         uint256 tokenId = _nextTokenId++;
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);
@@ -130,22 +142,39 @@ contract LayerTrigger is
 
     // The following functions are overrides required by Solidity.
 
-    function _update(address to, uint256 tokenId, address auth)
+    function _update(
+        address to,
+        uint256 tokenId,
+        address auth
+    )
         internal
-        override(ERC721Upgradeable, ERC721EnumerableUpgradeable, ERC721VotesUpgradeable)
+        override(
+            ERC721Upgradeable,
+            ERC721EnumerableUpgradeable,
+            ERC721VotesUpgradeable
+        )
         returns (address)
     {
         return super._update(to, tokenId, auth);
     }
 
-    function _increaseBalance(address account, uint128 value)
+    function _increaseBalance(
+        address account,
+        uint128 value
+    )
         internal
-        override(ERC721Upgradeable, ERC721EnumerableUpgradeable, ERC721VotesUpgradeable)
+        override(
+            ERC721Upgradeable,
+            ERC721EnumerableUpgradeable,
+            ERC721VotesUpgradeable
+        )
     {
         super._increaseBalance(account, value);
     }
 
-    function tokenURI(uint256 tokenId)
+    function tokenURI(
+        uint256 tokenId
+    )
         public
         view
         override(ERC721Upgradeable, ERC721URIStorageUpgradeable)
@@ -154,10 +183,17 @@ contract LayerTrigger is
         return super.tokenURI(tokenId);
     }
 
-    function supportsInterface(bytes4 interfaceId)
+    function supportsInterface(
+        bytes4 interfaceId
+    )
         public
         view
-        override(ERC721Upgradeable, ERC721EnumerableUpgradeable, ERC721URIStorageUpgradeable, AccessControlUpgradeable)
+        override(
+            ERC721Upgradeable,
+            ERC721EnumerableUpgradeable,
+            ERC721URIStorageUpgradeable,
+            AccessControlUpgradeable
+        )
         returns (bool)
     {
         return super.supportsInterface(interfaceId);

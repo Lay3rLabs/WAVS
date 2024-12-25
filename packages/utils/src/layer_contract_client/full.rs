@@ -161,16 +161,6 @@ impl LayerContractClientFullBuilder {
         let ecdsa_stake_registry_impl =
             ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager).await?;
 
-        tracing::debug!("deploying Hello world registry");
-        let service_manager_impl = LayerServiceManager::deploy(
-            self.eth.provider.clone(),
-            core.avs_directory,
-            proxies.ecdsa_stake_registry,
-            core.rewards_coordinator,
-            core.delegation_manager,
-        )
-        .await?;
-
         let upgrade_call = ECDSAStakeRegistry::initializeCall {
             _serviceManager: proxies.service_manager,
             _thresholdWeight: U256::ZERO,
@@ -190,21 +180,46 @@ impl LayerContractClientFullBuilder {
             .watch()
             .await?;
 
+        let trigger_impl = LayerTrigger::deploy(self.eth.provider.clone()).await?;
+
         tracing::debug!("Upgrading hello world");
         proxies
             .admin
-            .upgrade(proxies.service_manager, *service_manager_impl.address())
+            .upgrade(proxies.trigger, *trigger_impl.address())
             .send()
             .await?
             .watch()
             .await?;
 
-        let underlying_token = strategy.underlyingToken().call().await?._0;
-        assert_ne!(underlying_token, Address::ZERO);
-        tracing::debug!("underlying strategy token addr: {}", underlying_token);
+        tracing::debug!("deploying Hello world registry");
+        let service_manager_impl = LayerServiceManager::deploy(
+            self.eth.provider.clone(),
+            core.avs_directory,
+            proxies.ecdsa_stake_registry,
+            core.rewards_coordinator,
+            core.delegation_manager,
+        )
+        .await?;
 
-        let trigger_impl = LayerTrigger::deploy(self.eth.provider.clone()).await?;
+        // First upgrade and initialize service manager
+        tracing::debug!("Upgrading and initializing service manager");
+        let service_manager_init = LayerServiceManager::initializeCall {
+            _layerTrigger: proxies.trigger,
+        };
 
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.service_manager,
+                *service_manager_impl.address(),
+                service_manager_init.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
+
+        // Then initialize trigger with the upgraded service manager
         tracing::debug!("Upgrading and initializing trigger");
         let initialize_call = LayerTrigger::initializeCall {
             defaultAdmin: proxies.service_manager,
@@ -222,6 +237,10 @@ impl LayerContractClientFullBuilder {
             .await?
             .watch()
             .await?;
+
+        let underlying_token = strategy.underlyingToken().call().await?._0;
+        assert_ne!(underlying_token, Address::ZERO);
+        tracing::debug!("underlying strategy token addr: {}", underlying_token);
 
         // Verify initialization
         let trigger = LayerTrigger::new(proxies.trigger, self.eth.provider.clone());
@@ -247,6 +266,31 @@ impl LayerContractClientFullBuilder {
         );
 
         tracing::debug!("Trigger initialization verified successfully");
+
+        let trigger = LayerTrigger::new(proxies.trigger, self.eth.provider.clone());
+        let minter_role = trigger.MINTER_ROLE().call().await?._0;
+
+        tracing::debug!(
+            "Verifying roles - ServiceManager: {}, MINTER_ROLE: {}",
+            proxies.service_manager,
+            minter_role
+        );
+
+        // Verify service manager knows correct trigger address
+        let service_manager =
+            LayerServiceManager::new(proxies.service_manager, self.eth.provider.clone());
+        let configured_trigger = service_manager.layerTrigger().call().await?._0;
+
+        tracing::debug!(
+            "Service Manager trigger address verification - Expected: {}, Actual: {}",
+            proxies.trigger,
+            configured_trigger
+        );
+
+        assert_eq!(
+            configured_trigger, proxies.trigger,
+            "Service Manager has incorrect trigger address"
+        );
 
         // Upgrade contracts
         Ok(LayerContractClientFull {

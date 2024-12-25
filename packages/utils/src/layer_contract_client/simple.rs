@@ -7,6 +7,7 @@ use crate::{
     alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient,
     layer_contract_client::layer_service_manager::LayerServiceManager::AddedSignedPayloadForTrigger,
 };
+use alloy::contract::Error;
 use alloy::primitives::{FixedBytes, PrimitiveSignature};
 use alloy::{
     dyn_abi::DynSolValue,
@@ -16,7 +17,7 @@ use alloy::{
     sol_types::SolValue,
 };
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize}; // Add this with other imports
 
 #[derive(Clone)]
 pub struct LayerContractClientSimple {
@@ -78,19 +79,47 @@ impl LayerContractClientSimple {
 
         let signed_payload_abi = signed_payload.into_submission_abi();
 
-        let event: AddedSignedPayloadForTrigger = self
+        let result = self
             .service_manager_contract
             .addSignedPayloadForTrigger(signed_payload_abi)
-            .gas(500000)
+            .gas(5000000)
             .send()
-            .await?
-            .get_receipt()
-            .await?
-            .solidity_event()
-            .context("Unable to add signed data for trigger")?;
+            .await;
 
-        if event.triggerId != *trigger_id {
-            anyhow::bail!("Trigger ID mismatch");
+        match result {
+            Ok(tx) => {
+                let receipt = tx.get_receipt().await?;
+                tracing::debug!("Transaction receipt: {:?}", receipt);
+
+                let event: AddedSignedPayloadForTrigger = receipt
+                    .solidity_event()
+                    .context("Unable to add signed data for trigger")?;
+
+                if event.triggerId != *trigger_id {
+                    anyhow::bail!(
+                        "Trigger ID mismatch: expected {:?}, got {:?}",
+                        trigger_id,
+                        event.triggerId
+                    );
+                }
+
+                tracing::debug!(
+                    "Successfully added signed payload for trigger {}",
+                    trigger_id
+                );
+            }
+            Err(e) => {
+                tracing::error!("Failed to send signed payload with error: {:#}", e);
+                match e {
+                    Error::TransportError(ref e) => {
+                        tracing::error!("Transport error: {}", e);
+                    }
+                    _ => {
+                        tracing::error!("Other contract error: {:?}", e);
+                    }
+                }
+                return Err(anyhow::anyhow!("Failed to send signed payload: {:#}", e));
+            }
         }
 
         Ok(())
