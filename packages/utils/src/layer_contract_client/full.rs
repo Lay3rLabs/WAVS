@@ -94,6 +94,7 @@ pub struct LayerAddresses {
 pub struct LayerContractClientFullBuilder {
     pub eth: EthSigningClient,
     pub core_avs_addrs: Option<CoreAVSAddresses>,
+    // pub layer_addresses: Option<LayerAddresses>,
 }
 
 impl LayerContractClientFullBuilder {
@@ -202,8 +203,50 @@ impl LayerContractClientFullBuilder {
         assert_ne!(underlying_token, Address::ZERO);
         tracing::debug!("underlying strategy token addr: {}", underlying_token);
 
-        let trigger = LayerTrigger::deploy(self.eth.provider.clone()).await?;
-        let trigger_address = *trigger.address();
+        let trigger_impl = LayerTrigger::deploy(self.eth.provider.clone()).await?;
+
+        tracing::debug!("Upgrading and initializing trigger");
+        let initialize_call = LayerTrigger::initializeCall {
+            defaultAdmin: proxies.service_manager,
+            minter: proxies.service_manager,
+        };
+
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.trigger,
+                *trigger_impl.address(),
+                initialize_call.abi_encode().into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
+
+        // Verify initialization
+        let trigger = LayerTrigger::new(proxies.trigger, self.eth.provider.clone());
+        let minter_role = trigger.MINTER_ROLE().call().await?._0;
+        let admin_role = trigger.DEFAULT_ADMIN_ROLE().call().await?._0;
+
+        // Verify roles
+        assert!(
+            trigger
+                .hasRole(minter_role, proxies.service_manager)
+                .call()
+                .await?
+                ._0,
+            "Service manager does not have minter role"
+        );
+        assert!(
+            trigger
+                .hasRole(admin_role, proxies.service_manager)
+                .call()
+                .await?
+                ._0,
+            "Service manager does not have admin role"
+        );
+
+        tracing::debug!("Trigger initialization verified successfully");
 
         // Upgrade contracts
         Ok(LayerContractClientFull {
@@ -214,7 +257,7 @@ impl LayerContractClientFullBuilder {
                 service_manager: proxies.service_manager,
                 stake_registry: proxies.ecdsa_stake_registry,
                 token: setup.token,
-                trigger: trigger_address,
+                trigger: proxies.trigger,
             },
         })
     }
@@ -224,6 +267,7 @@ struct Proxies {
     pub admin: ProxyAdminT,
     pub service_manager: Address,
     pub ecdsa_stake_registry: Address,
+    pub trigger: Address,
 }
 
 impl Proxies {
@@ -235,6 +279,7 @@ impl Proxies {
         Ok(Self {
             ecdsa_stake_registry: setup_empty_proxy(eth, &admin).await?,
             service_manager: setup_empty_proxy(eth, &admin).await?,
+            trigger: setup_empty_proxy(eth, &admin).await?,
             admin,
         })
     }

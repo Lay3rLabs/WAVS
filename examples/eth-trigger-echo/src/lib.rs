@@ -6,6 +6,7 @@ struct Component;
 
 impl Guest for Component {
     fn process_eth_trigger(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
+        // TODO serialize string
         Ok(input)
     }
 }
