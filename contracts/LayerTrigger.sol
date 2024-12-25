@@ -122,19 +122,10 @@ contract LayerTrigger is
             });
     }
 
-    // TODO kill baseURI?
-    function _baseURI() internal pure override returns (string memory) {
-        return "https://example.com/project/";
-    }
-
     function safeMint(
         address to,
         string memory uri
-    )
-        public
-        // NOTE I tried removing the onlyRole(MINTER_ROLE) and it still doesn't work.
-        onlyRole(MINTER_ROLE)
-    {
+    ) public onlyRole(MINTER_ROLE) {
         uint256 tokenId = _nextTokenId++;
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);

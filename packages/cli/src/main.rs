@@ -148,6 +148,7 @@ async fn main() {
         } => {
             let eigen_client = get_eigen_client(&args).await;
 
+            // TODO we should rename "name here
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
 
             let signature = run_eth_trigger_echo_task(
