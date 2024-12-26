@@ -141,9 +141,10 @@ impl CoreSubmission {
             KeySigner::new_mnemonic_str(&self.get_cosmos_chain()?.mnemonic, Some(&derivation))
                 .map_err(SubmissionError::Climb)?;
 
-        let client = SigningClient::new(self.get_cosmos_chain()?.chain_config.clone(), signer)
-            .await
-            .map_err(SubmissionError::Climb)?;
+        let client =
+            SigningClient::new(self.get_cosmos_chain()?.chain_config.clone(), signer, None)
+                .await
+                .map_err(SubmissionError::Climb)?;
 
         {
             let mut lock = self.cosmos_clients.lock().unwrap();
