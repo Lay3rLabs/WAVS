@@ -198,8 +198,8 @@ pub struct ChainConfigs {
 pub struct CosmosChainConfig {
     pub chain_id: String,
     pub bech32_prefix: String,
-    pub rpc_endpoint: String,
-    pub grpc_endpoint: String,
+    pub rpc_endpoint: Option<String>,
+    pub grpc_endpoint: Option<String>,
     pub gas_price: f32,
     pub gas_denom: String,
     pub faucet_endpoint: Option<String>,

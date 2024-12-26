@@ -3688,8 +3688,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.1.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.1.1#30b442e909595ce98eda510d908f4bb1637b234d"
+version = "0.3.0"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.0#b71242cc6a4f53b1ae645eb158da85aff1d92bdc"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -3699,8 +3699,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.1.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.1.1#30b442e909595ce98eda510d908f4bb1637b234d"
+version = "0.3.0"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.0#b71242cc6a4f53b1ae645eb158da85aff1d92bdc"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3712,6 +3712,7 @@ dependencies = [
  "k256",
  "layer-climb-config",
  "layer-climb-proto",
+ "log",
  "serde",
  "serde-wasm-bindgen",
  "signature",
@@ -3724,8 +3725,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.1.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.1.1#30b442e909595ce98eda510d908f4bb1637b234d"
+version = "0.3.0"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.0#b71242cc6a4f53b1ae645eb158da85aff1d92bdc"
 dependencies = [
  "anyhow",
  "serde",
@@ -3734,8 +3735,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.1.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.1.1#30b442e909595ce98eda510d908f4bb1637b234d"
+version = "0.3.0"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.0#b71242cc6a4f53b1ae645eb158da85aff1d92bdc"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3751,6 +3752,7 @@ dependencies = [
  "layer-climb-address",
  "layer-climb-config",
  "layer-climb-proto",
+ "log",
  "rand",
  "reqwest",
  "serde",
@@ -3767,8 +3769,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.1.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.1.1#30b442e909595ce98eda510d908f4bb1637b234d"
+version = "0.3.0"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.0#b71242cc6a4f53b1ae645eb158da85aff1d92bdc"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto 0.25.0",
