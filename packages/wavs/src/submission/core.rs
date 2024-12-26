@@ -12,7 +12,8 @@ use crate::{
     config::{Config, CosmosChainConfig, EthereumChainConfig},
     AppContext,
 };
-use lavs_apis::{id::TaskId, verifier_simple::ExecuteMsg as VerifierExecuteMsg};
+use anyhow::anyhow;
+use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
 use layer_climb::prelude::*;
 use reqwest::Url;
 use tokio::sync::mpsc;
@@ -356,6 +357,52 @@ impl CoreSubmission {
 
         Ok(())
     }
+
+    async fn submit_to_cosmos(
+        &self,
+        cosmos_client: SigningClient,
+        verifier_addr: Address,
+        task_queue_addr: Address,
+        msg: ChainMessage,
+    ) -> Result<(), SubmissionError> {
+        let (task_id, wasm_result) = match msg {
+            ChainMessage::Cosmos {
+                task_id,
+                wasm_result,
+                ..
+            } => (task_id, wasm_result),
+            _ => {
+                return Err(SubmissionError::ExpectedEthMessage);
+            }
+        };
+
+        let result: serde_json::Value = serde_json::from_slice(&wasm_result).map_err(|e| {
+            SubmissionError::CosmosParse(anyhow!(
+                "failed to parse wasm result into json value: {:?}",
+                e
+            ))
+        })?;
+
+        let result = serde_json::to_string(&result).map_err(|e| {
+            SubmissionError::CosmosParse(anyhow!(
+                "failed to serialize json value into string: {:?}",
+                e
+            ))
+        })?;
+
+        let contract_msg = VerifierExecuteMsg::ExecutedTask {
+            task_queue_contract: task_queue_addr.to_string(),
+            task_id,
+            result,
+        };
+
+        let _tx_resp = cosmos_client
+            .contract_execute(&verifier_addr, &contract_msg, Vec::new(), None)
+            .await
+            .map_err(SubmissionError::FailedToSubmitCosmos)?;
+
+        Ok(())
+    }
 }
 
 impl Submission for CoreSubmission {
@@ -377,7 +424,6 @@ impl Submission for CoreSubmission {
                     _ = async move {
                     } => {
                         while let Some(msg) = rx.recv().await {
-                            tracing::debug!("Received message to submit: {:?}", msg);
                             let eth_client = match msg.submit() {
                                 Submit::EthSignedMessage{hd_index, .. } => {
                                     let client = match _self.get_eth_client(*hd_index).await {
@@ -469,40 +515,8 @@ impl Submission for CoreSubmission {
                                 Submit::LayerVerifierTx { verifier_addr, ..} => {
                                     match &msg.trigger_config().trigger {
                                         Trigger::LayerQueue { task_queue_addr, .. } => {
-
-                                            let result:serde_json::Value = match serde_json::from_slice(msg.wasm_result()) {
-                                                Ok(result) => result,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to parse wasm result into json value: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
-
-                                            // TODO - TaskId is a TaskQueue concept, not all triggers will have it, should be part of result
-                                            let task_id = TaskId::new(result.get("task_id").unwrap().as_u64().unwrap());
-
-                                            let result = match serde_json::to_string(&result) {
-                                                Ok(result) => result,
-                                                Err(e) => {
-                                                    tracing::error!("Failed to serialize json value into string: {:?}", e);
-                                                    continue;
-                                                }
-                                            };
-
-
-                                            let contract_msg = VerifierExecuteMsg::ExecutedTask {
-                                                task_queue_contract: task_queue_addr.to_string(),
-                                                task_id,
-                                                result,
-                                            };
-
-                                            match layer_client.unwrap().contract_execute(verifier_addr, &contract_msg, Vec::new(), None).await {
-                                                Ok(_) => {
-                                                    tracing::debug!("Submission successful");
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Submission failed: {:?}", e);
-                                                }
+                                            if let Err(e) = _self.submit_to_cosmos(layer_client.unwrap(), verifier_addr.clone(), task_queue_addr.clone(), msg).await {
+                                                tracing::error!("{:?}", e);
                                             }
                                         }
 

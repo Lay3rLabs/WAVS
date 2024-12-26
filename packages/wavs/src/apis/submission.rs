@@ -1,3 +1,4 @@
+use lavs_apis::id::TaskId;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use utils::layer_contract_client::TriggerId;
@@ -22,6 +23,7 @@ pub enum ChainMessage {
     Cosmos {
         trigger_config: TriggerConfig,
         wasm_result: Vec<u8>,
+        task_id: TaskId,
         submit: Submit,
     },
     Eth {
@@ -79,6 +81,8 @@ pub enum SubmissionError {
     MissingAggregatorEndpoint,
     #[error("aggregator url: {0}")]
     AggregatorUrl(url::ParseError),
+    #[error("cosmos parse: {0}")]
+    CosmosParse(anyhow::Error),
     #[error("expected eth address, got: {0}")]
     ExpectedEthAddress(String),
     #[error("expected eth message")]
@@ -87,4 +91,6 @@ pub enum SubmissionError {
     FailedToSignPayload,
     #[error("failed to submit to eth directly: {0}")]
     FailedToSubmitEthDirect(anyhow::Error),
+    #[error("failed to submit to cosmos: {0}")]
+    FailedToSubmitCosmos(anyhow::Error),
 }

@@ -7,7 +7,7 @@ members = [
   "ai-bouncer",
   "eth-event-echo",
   "eth-trigger-echo",
-  "eth-trigger-square",
+  "eth-trigger-square"
 ]
 resolver = "2"
 

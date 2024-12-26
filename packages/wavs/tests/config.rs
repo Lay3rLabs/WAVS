@@ -179,7 +179,7 @@ async fn config_chains() {
     let config = TestApp::new().await.config;
 
     let chain_config = config.cosmos_chain_config().unwrap();
-    assert_eq!(chain_config.chain_id, "layer-local");
+    assert_eq!(chain_config.chain_id, "slay3r-local");
 
     // change the target chain via cli
     let mut cli_args = TestApp::default_cli_args();

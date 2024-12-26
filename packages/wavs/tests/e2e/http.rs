@@ -17,6 +17,7 @@ use wavs::{
     Digest,
 };
 
+#[derive(Clone)]
 pub struct HttpClient {
     inner: reqwest::Client,
     endpoint: String,

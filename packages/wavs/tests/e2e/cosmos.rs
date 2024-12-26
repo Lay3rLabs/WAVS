@@ -6,7 +6,7 @@ use wavs::config::Config;
 
 #[allow(dead_code)]
 pub struct CosmosTestApp {
-    pub layer_client: SigningClient,
+    pub signing_client: SigningClient,
     pub task_queue: LayerTaskQueueContract,
     pub verifier_addr: Address,
 }
@@ -15,14 +15,16 @@ impl CosmosTestApp {
     pub async fn new(config: Config) -> Self {
         // get all env vars
         let seed_phrase =
-            std::env::var("WAVS_E2E_LAYER_MNEMONIC").expect("WAVS_E2E_LAYER_MNEMONIC not set");
-        let task_queue_addr = std::env::var("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS")
-            .expect("WAVS_E2E_LAYER_TASK_QUEUE_ADDRESS not set");
+            std::env::var("WAVS_E2E_COSMOS_MNEMONIC").expect("WAVS_E2E_COSMOS_MNEMONIC not set");
+        let task_queue_addr = std::env::var("WAVS_E2E_COSMOS_TASK_QUEUE_ADDRESS")
+            .expect("WAVS_E2E_COSMOS_TASK_QUEUE_ADDRESS not set");
 
         let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().into();
 
+        println!("Chain config: {:?}", chain_config);
+
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
-        let signing_client = SigningClient::new(chain_config.clone(), key_signer)
+        let signing_client = SigningClient::new(chain_config.clone(), key_signer, None)
             .await
             .unwrap();
 
@@ -47,8 +49,10 @@ impl CosmosTestApp {
             .await
             .unwrap();
 
+        tracing::info!("Cosmos signing client: {}", signing_client.addr);
+
         Self {
-            layer_client: signing_client,
+            signing_client,
             task_queue,
             verifier_addr,
         }
