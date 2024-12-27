@@ -195,11 +195,13 @@ mod e2e {
 
         let trigger_echo_digest = digests.eth_trigger_echo_digest().await;
         let trigger_square_digest = digests.eth_trigger_square_digest().await;
+        let cosmos_query_digest = digests.eth_cosmos_query().await;
 
         let trigger_echo_service_id = service_ids.eth_trigger_echo();
         let trigger_echo_service_id_2 = service_ids.eth_trigger_echo_2();
         let trigger_echo_aggregate_service_id = service_ids.eth_trigger_echo_aggregate();
         let trigger_square_service_id = service_ids.eth_trigger_square();
+        let cosmos_query_service_id = service_ids.eth_cosmos_query();
 
         for (service_id, digest, is_aggregate, is_second_ethereum) in [
             (
@@ -224,6 +226,11 @@ mod e2e {
                 trigger_square_service_id.clone(),
                 trigger_square_digest,
                 false,
+                false,
+            ),
+            (
+                cosmos_query_service_id.clone(),
+                cosmos_query_digest,
                 false,
             ),
         ] {
@@ -478,6 +485,65 @@ mod e2e {
             .await
             .unwrap();
         }
+
+        if let Some(service_id) = cosmos_query_service_id {
+            tracing::info!("Submitting cosmos query task...");
+            let square_trigger_id = avs_client
+                .trigger
+                .add_trigger(
+                    service_id.to_string(),
+                    "default".to_string(),
+                    serde_json::to_vec(&CosmosQueryRequest::BlockHeight).unwrap(),
+                )
+                .await
+                .unwrap();
+
+            tokio::time::timeout(Duration::from_secs(10), {
+                let avs_client = avs_client.clone();
+                async move {
+                    loop {
+                        let signed_data = avs_client
+                            .load_signed_data(square_trigger_id)
+                            .await
+                            .unwrap();
+                        match signed_data {
+                            Some(signed_data) => {
+                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("{}", hex::encode(signed_data.signature));
+
+                                let response =
+                                    serde_json::from_slice::<CosmosQueryResponse>(&signed_data.data)
+                                        .unwrap();
+
+                                tracing::info!("GOT THE RESPONSE!");
+                                match response {
+                                    CosmosQueryResponse::BlockHeight(height) => {
+                                        tracing::info!("height: {}", height);
+                                    },
+                                    CosmosQueryResponse::Balance(height) => {
+                                        tracing::info!("balance: {}", height);
+                                    }
+                                }
+
+                                break;
+                            }
+                            None => {
+                                tracing::info!(
+                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.address(),
+                                    avs_client.service_manager_contract_address,
+                                    square_trigger_id
+                                );
+                            }
+                        }
+                        // still open, waiting...
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
     }
 
     async fn run_tests_crosschain(
@@ -608,6 +674,24 @@ mod e2e {
         pub y: u64,
     }
 
+    #[derive(Serialize, Debug)]
+    #[serde(rename_all = "snake_case")]
+    pub enum CosmosQueryRequest {
+        BlockHeight,
+        Balance {
+            address: Address,
+        },
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "snake_case")]
+    pub enum CosmosQueryResponse {
+        BlockHeight(u64),
+        Balance(String),
+    }
+
+
+
     pub struct ServiceIds {}
 
     impl ServiceIds {
@@ -635,6 +719,11 @@ mod e2e {
             Some(ServiceID::new("eth-trigger-echo-aggregate").unwrap())
         }
 
+        #[cfg(feature = "e2e_tests_ethereum_cosmos_query")]
+        pub fn eth_cosmos_query(&self) -> Option<ServiceID> {
+            Some(ServiceID::new("eth-cosmos-query").unwrap())
+        }
+
         #[cfg(feature = "e2e_tests_cosmos_permissions")]
         pub fn cosmos_permissions(&self) -> Option<ServiceID> {
             Some(ServiceID::new("cosmos-permissions").unwrap())
@@ -657,6 +746,11 @@ mod e2e {
 
         #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo_aggregate"))]
         pub fn eth_trigger_echo_aggregate(&self) -> Option<ServiceID> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_cosmos_query"))]
+        pub fn eth_cosmos_query(&self) -> Option<ServiceID> {
             None
         }
 
@@ -696,6 +790,12 @@ mod e2e {
                 .await
         }
 
+        #[cfg(feature = "e2e_tests_ethereum_cosmos_query")]
+        pub async fn eth_cosmos_query(&self) -> Option<Digest> {
+            self.get_digest("WAVS_E2E_ETH_COSMOS_QUERY_WASM_DIGEST", "eth_cosmos_query")
+                .await
+        }
+
         #[cfg(not(feature = "e2e_tests_cosmos_permissions"))]
         pub async fn permissions_digest(&self) -> Option<Digest> {
             None
@@ -708,6 +808,11 @@ mod e2e {
 
         #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo"))]
         pub async fn eth_trigger_echo_digest(&self) -> Option<Digest> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_cosmos_query"))]
+        pub async fn eth_cosmos_query(&self) -> Option<Digest> {
             None
         }
 

@@ -20,6 +20,7 @@ e2e_tests_ethereum_trigger_square = ["e2e_tests_ethereum"]
 e2e_tests_ethereum_trigger_echo = ["e2e_tests_ethereum"]
 e2e_tests_ethereum_trigger_echo_2 = ["e2e_tests_ethereum"]
 e2e_tests_ethereum_trigger_echo_aggregate = ["e2e_tests_ethereum"]
+e2e_tests_ethereum_cosmos_query = ["e2e_tests_ethereum"]
 e2e_tests_cosmos_permissions = ["e2e_tests_cosmos"]
 
 [dependencies]
