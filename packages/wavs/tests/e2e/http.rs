@@ -92,7 +92,10 @@ impl HttpClient {
             Some(chain_config) => chain_config,
             None => panic!("Chain config not found for chain_id: {}", chain_id),
         };
-        let aggregator_app_url = chain_config.aggregator_endpoint.clone().unwrap_or("http://127.0.0.1:8001".to_string());
+        let aggregator_app_url = chain_config
+            .aggregator_endpoint
+            .clone()
+            .unwrap_or("http://127.0.0.1:8001".to_string());
 
         self.inner
             .post(format!("{}/add-service", aggregator_app_url))

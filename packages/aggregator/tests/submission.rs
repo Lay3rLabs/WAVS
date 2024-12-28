@@ -22,7 +22,6 @@ use utils::{
 };
 
 const ANVIL_DEFAULT_MNEMONIC: &str = "test test test test test test test test test test test junk";
-const CHAIN_NAME: &str = "local";
 
 fn setup_anvil() -> (AnvilInstance, PathBuf) {
     let anvil = Anvil::new().spawn();
@@ -112,7 +111,7 @@ async fn submit_to_chain() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state,
-        CHAIN_NAME.to_string(),
+        anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -207,7 +206,7 @@ async fn submit_to_chain_three() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state.clone(),
-        CHAIN_NAME.to_string(),
+        anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -236,7 +235,7 @@ async fn submit_to_chain_three() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state.clone(),
-        CHAIN_NAME.to_string(),
+        anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -265,7 +264,7 @@ async fn submit_to_chain_three() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state.clone(),
-        CHAIN_NAME.to_string(),
+        anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -368,7 +367,7 @@ async fn invalid_operator_signature() {
         invalid_operator_payload.operator = invalid_signer.address();
         let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
             state.clone(),
-            CHAIN_NAME.to_string(),
+            anvil.chain_id().to_string(),
             invalid_operator_payload,
             avs_client.service_manager_contract_address,
             "default".to_string(),
@@ -393,7 +392,7 @@ async fn invalid_operator_signature() {
         invalid_signature_payload.signature = signature;
         let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
             state,
-            CHAIN_NAME.to_string(),
+            anvil.chain_id().to_string(),
             invalid_signature_payload,
             avs_client.service_manager_contract_address,
             "default".to_string(),

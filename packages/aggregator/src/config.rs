@@ -71,13 +71,17 @@ impl Default for Config {
 }
 
 impl Config {
-    pub async fn signing_client(&self, chain_name: &str) -> Result<EthSigningClient> {
+    pub async fn signing_client(&self, chain_id: &str) -> Result<EthSigningClient> {
         let mnemonic = self.mnemonic.clone();
-        let chain_config = self
+
+        let chain_config = &self
             .chains
             .eth
-            .get(chain_name)
+            .iter()
+            .find(|(_, config)| config.chain_id == chain_id)
+            .map(|(_, config)| config)
             .ok_or(EthClientError::ChainNotFound)?;
+
         let ws_endpoint: Option<String> = match chain_config.ws_endpoint.clone() {
             s if s.is_empty() => None,
             s => Some(s),

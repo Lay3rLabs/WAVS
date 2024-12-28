@@ -24,12 +24,12 @@ pub async fn handle_add_payload(
         AggregateAvsRequest::EthTrigger {
             signed_payload,
             service_manager_address,
-            chain_name,
+            chain_id,
             service_id,
         } => {
             add_payload_trigger(
                 state,
-                chain_name,
+                chain_id,
                 signed_payload,
                 service_manager_address,
                 service_id,
@@ -46,13 +46,13 @@ pub async fn handle_add_payload(
 
 pub async fn add_payload_trigger(
     state: HttpState,
-    chain_name: String,
+    chain_id: String,
     signed_payload: SignedPayload,
     service_manager_address: Address,
     // TODO - move ServiceID to utils
     service_id: String,
 ) -> HttpResult<AggregateAvsResponse> {
-    let eth_client = state.config.signing_client(&chain_name).await?;
+    let eth_client = state.config.signing_client(&chain_id).await?;
 
     check_operator(
         service_manager_address,

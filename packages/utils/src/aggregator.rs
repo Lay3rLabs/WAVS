@@ -12,8 +12,8 @@ pub enum AggregateAvsRequest {
     EthTrigger {
         signed_payload: SignedPayload,
         service_manager_address: Address,
+        chain_id: String,
         // TODO - move ServiceID to utils
-        chain_name: String, // TODO: chain_id?
         service_id: String,
     },
 }

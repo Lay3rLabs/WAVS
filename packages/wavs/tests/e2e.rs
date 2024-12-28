@@ -1,7 +1,7 @@
 // Currently - e2e tests are disabled by default.
 // See TESTS.md for more information on how to run e2e tests.
 
-// #[cfg(feature = "e2e_tests")]
+#[cfg(feature = "e2e_tests")]
 mod e2e {
     mod cosmos;
     mod eth;
@@ -207,8 +207,14 @@ mod e2e {
         aggregator_handle.join().unwrap();
     }
 
-    // TODO: change ordering
-    async fn create_services(http_client: &HttpClient, app: &EthTestApp, echo_service_id: ServiceID, square_service_id: ServiceID, echo_wasm_digest: Digest, square_wasm_digest: Digest) {
+    async fn create_services(
+        http_client: &HttpClient,
+        app: &EthTestApp,
+        echo_service_id: ServiceID,
+        square_service_id: ServiceID,
+        echo_wasm_digest: Digest,
+        square_wasm_digest: Digest,
+    ) {
         let chain_id = app.chain_id();
         http_client
             .create_service(
@@ -249,7 +255,11 @@ mod e2e {
         tracing::info!("Service created: {}, submitting task...", square_service_id);
     }
 
-    async fn submit_tasks(echo_service_id: ServiceID, square_service_id: ServiceID, avs_simple_client: &LayerContractClientSimple) {
+    async fn submit_tasks(
+        echo_service_id: ServiceID,
+        square_service_id: ServiceID,
+        avs_simple_client: &LayerContractClientSimple,
+    ) {
         tracing::info!("Submitting echo task...");
         let echo_trigger_id = avs_simple_client
             .trigger
@@ -342,7 +352,14 @@ mod e2e {
         .unwrap();
     }
 
-    async fn verify_triggers(http_client: &HttpClient, app: &EthTestApp, config: &Config, echo_aggregate_service_id: ServiceID, echo_wasm_digest: Digest, avs_simple_client: &LayerContractClientSimple) {
+    async fn verify_triggers(
+        http_client: &HttpClient,
+        app: &EthTestApp,
+        config: &Config,
+        echo_aggregate_service_id: ServiceID,
+        echo_wasm_digest: Digest,
+        avs_simple_client: &LayerContractClientSimple,
+    ) {
         http_client
             .create_service(
                 echo_aggregate_service_id.clone(),
@@ -449,14 +466,20 @@ mod e2e {
         let app2 = EthTestApp::new(config.clone(), anvil2).await;
         let square_service_id2 = ServiceID::new("square-service2").unwrap();
         let echo_service_id2 = ServiceID::new("echo-service2").unwrap();
-        create_services(&http_client, &app2, echo_service_id2.clone(), square_service_id2.clone(), echo_wasm_digest.clone(), square_wasm_digest.clone()).await;
-
+        create_services(
+            &http_client,
+            &app2,
+            echo_service_id2.clone(),
+            square_service_id2.clone(),
+            echo_wasm_digest.clone(),
+            square_wasm_digest.clone(),
+        )
+        .await;
 
         // let avs_simple_client: LayerContractClientSimple = app.avs_client.clone().into();
         // submit_tasks( echo_service_id, square_service_id, &avs_simple_client).await;
         let avs_simple_client2: LayerContractClientSimple = app2.avs_client.clone().into();
         submit_tasks(echo_service_id2, square_service_id2, &avs_simple_client2).await;
-
 
         // TODO - now with aggregator and multiple payloads within a service....
 
@@ -464,7 +487,15 @@ mod e2e {
         // verify_triggers(&http_client, &app, &config, echo_aggregate_service_id, echo_wasm_digest.clone(), &avs_simple_client).await;
 
         let echo_aggregate_service_id2 = ServiceID::new("echo-aggregate-service-2").unwrap();
-        verify_triggers(&http_client, &app2, &config, echo_aggregate_service_id2, echo_wasm_digest.clone(), &avs_simple_client2).await;
+        verify_triggers(
+            &http_client,
+            &app2,
+            &config,
+            echo_aggregate_service_id2,
+            echo_wasm_digest.clone(),
+            &avs_simple_client2,
+        )
+        .await;
     }
 
     async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {

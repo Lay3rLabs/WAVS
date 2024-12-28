@@ -196,6 +196,26 @@ pub struct ChainConfigs {
     pub eth: HashMap<String, EthereumChainConfig>,
 }
 
+// TODO: keep or remove? (i.e. better UX to allow either one to be used for enabled)
+impl ChainConfigs {
+    pub fn get_chain_id(&self, chain_name: &str) -> Result<String> {
+        let chain_config = self
+            .eth
+            .get(chain_name)
+            .ok_or(anyhow!("Chain not found: {}", chain_name))?;
+        Ok(chain_config.chain_id.clone())
+    }
+    pub fn get_chain_config(&self, chain_id: &str) -> Result<&EthereumChainConfig> {
+        let chain_config = self
+            .eth
+            .iter()
+            .find(|(_, config)| config.chain_id == chain_id)
+            .map(|(_, config)| config)
+            .ok_or(anyhow!("Chain not found: {}", chain_id))?;
+        Ok(chain_config)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CosmosChainConfig {
     pub chain_id: String,
