@@ -84,11 +84,15 @@ impl HttpClient {
         &self,
         service_manager_address: alloy::primitives::Address,
         service_id: ServiceID,
+        chain_id: String,
         config: &Config,
     ) -> Result<()> {
-        let v: Result<HashMap<String, EthereumChainConfig>> = config.ethereum_chain_configs();
-        let first: EthereumChainConfig = v.unwrap().into_values().next().unwrap();
-        let aggregator_app_url = first.aggregator_endpoint.unwrap();
+        let chains: HashMap<String, EthereumChainConfig> = config.ethereum_chain_configs().unwrap();
+        let chain_config = match chains.get(&chain_id) {
+            Some(chain_config) => chain_config,
+            None => panic!("Chain config not found for chain_id: {}", chain_id),
+        };
+        let aggregator_app_url = chain_config.aggregator_endpoint.clone().unwrap_or("http://127.0.0.1:8001".to_string());
 
         self.inner
             .post(format!("{}/add-service", aggregator_app_url))

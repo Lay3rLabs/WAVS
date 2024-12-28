@@ -24,11 +24,12 @@ pub async fn handle_add_payload(
         AggregateAvsRequest::EthTrigger {
             signed_payload,
             service_manager_address,
+            chain_name,
             service_id,
         } => {
             add_payload_trigger(
                 state,
-                "local".to_string(), // TODO:
+                chain_name,
                 signed_payload,
                 service_manager_address,
                 service_id,

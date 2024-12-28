@@ -324,6 +324,7 @@ impl CoreSubmission {
             let request = AggregateAvsRequest::EthTrigger {
                 signed_payload,
                 service_manager_address,
+                chain_name: "e2elocal2".to_string(), // TODO: reece convert from chain_id -> chain_name somehow? (or use chain_id)
                 service_id: service_id.to_string(),
             };
 

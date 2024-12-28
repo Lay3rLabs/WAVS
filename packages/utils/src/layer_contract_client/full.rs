@@ -82,6 +82,21 @@ impl LayerContractClientFull {
     }
 }
 
+impl Clone for LayerContractClientFull {
+    fn clone(&self) -> Self {
+        Self {
+            eth: self.eth.clone(),
+            core: self.core.clone(),
+            layer: self.layer.clone(),
+        }
+    }
+    fn clone_from(&mut self, source: &Self) {
+        self.eth = source.eth.clone();
+        self.core = source.core.clone();
+        self.layer = source.layer.clone();
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LayerAddresses {
     pub proxy_admin: Address,

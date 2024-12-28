@@ -13,6 +13,7 @@ pub enum AggregateAvsRequest {
         signed_payload: SignedPayload,
         service_manager_address: Address,
         // TODO - move ServiceID to utils
+        chain_name: String, // TODO: chain_id?
         service_id: String,
     },
 }

@@ -54,4 +54,8 @@ impl EthTestApp {
             anvil,
         }
     }
+
+    pub fn chain_id(&self) -> String {
+        self.anvil.chain_id().to_string()
+    }
 }
