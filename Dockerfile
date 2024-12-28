@@ -3,6 +3,7 @@ WORKDIR /myapp
 
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
 COPY Cargo.lock Cargo.toml /myapp/
+COPY packages/aggregator /myapp/packages/aggregator
 COPY packages/wavs/Cargo.toml /myapp/packages/wavs/Cargo.toml
 COPY packages/utils/Cargo.toml /myapp/packages/utils/Cargo.toml
 COPY dummy.rs /myapp/packages/wavs/benches/mock_bench.rs
@@ -17,7 +18,7 @@ RUN rm /myapp/packages/utils/src/*.rs
 RUN rm -rf target/release/.fingerprint/wavs*
 
 # This build step should just compile the local code and be faster
-COPY . . 
+COPY . .
 RUN cargo build --manifest-path /myapp/packages/wavs/Cargo.toml --release
 
 ### PRODUCTION
