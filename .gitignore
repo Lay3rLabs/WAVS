@@ -11,3 +11,9 @@ cache
 broadcast
 out
 deployments
+abi_out
+# only allow some components to be checked in for test
+components/*.wasm
+!components/eth_event_echo.wasm
+!components/square.wasm
+!components/btc_avg.wasm

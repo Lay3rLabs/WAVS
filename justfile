@@ -1,4 +1,4 @@
-SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" } 
+SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" }
 TAG := env_var_or_default("TAG", "")
 WASI_OUT_DIR := "./components"
 REPO_ROOT := `git rev-parse --show-toplevel`
@@ -47,9 +47,16 @@ wasi-build:
 
 # compile solidity contracts and copy the ABI to contracts/abi
 solidity-build:
-    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/contracts/abi;
-    forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware --out {{REPO_ROOT}}/contracts/abi;
-    forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/contracts/abi;
+    mkdir -p {{REPO_ROOT}}/abi_out
+    mkdir -p {{REPO_ROOT}}/contracts/abi
+    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/abi_out;
+    forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware --out {{REPO_ROOT}}/abi_out;
+    forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/abi_out;
+    @for contract in \
+        DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
+        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager LayerTrigger EmptyContract; do \
+        cp -r {{REPO_ROOT}}/abi_out/$contract.sol {{REPO_ROOT}}/contracts/abi; \
+    done
 
 # on-chain integration test
 test-wavs-e2e-ethereum:
