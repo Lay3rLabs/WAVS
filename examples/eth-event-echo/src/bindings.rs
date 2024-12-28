@@ -175,16 +175,16 @@ macro_rules! __export_eth_event_world_impl {
 #[doc(inline)]
 pub(crate) use __export_eth_event_world_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[link_section = "component-type:wit-bindgen:0.30.0:eth-event-world:encoded world"]
+#[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:eth-event-world:encoded world"]
 #[doc(hidden)]
 pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 334] = *b"\
 \0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xc8\x01\x01A\x02\x01\
 A\x08\x01B\x04\x01p}\x01p\0\x01r\x03\x07address\0\x0alog-topics\x01\x08log-data\0\
-\x04\0\x07eth-log\x03\0\x02\x03\x01\x1flay3r:avs/eth-event-types@0.3.0\x05\0\x02\
-\x03\0\0\x07eth-log\x03\0\x07eth-log\x03\0\x01\x01p}\x01j\x01\x03\x01s\x01@\x01\x03\
-log\x02\0\x04\x04\0\x11process-eth-event\x01\x05\x04\x01\x1flay3r:avs/eth-event-\
-world@0.3.0\x04\0\x0b\x15\x01\0\x0feth-event-world\x03\0\0\0G\x09producers\x01\x0c\
-processed-by\x02\x0dwit-component\x070.215.0\x10wit-bindgen-rust\x060.30.0";
+\x04\0\x07eth-log\x03\0\x02\x03\0\x1flay3r:avs/eth-event-types@0.3.0\x05\0\x02\x03\
+\0\0\x07eth-log\x03\0\x07eth-log\x03\0\x01\x01p}\x01j\x01\x03\x01s\x01@\x01\x03l\
+og\x02\0\x04\x04\0\x11process-eth-event\x01\x05\x04\0\x1flay3r:avs/eth-event-wor\
+ld@0.3.0\x04\0\x0b\x15\x01\0\x0feth-event-world\x03\0\0\0G\x09producers\x01\x0cp\
+rocessed-by\x02\x0dwit-component\x070.220.0\x10wit-bindgen-rust\x060.35.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {
