@@ -188,7 +188,7 @@ impl CoreTriggerManager {
                                     {
                                         Ok(subscription) => {
                                             tracing::info!(
-                                                "Successfully subscribed to logs with filter"
+                                                "(chain_id:{})Successfully subscribed to logs with filter", chain_id
                                             );
                                             Some(subscription.into_stream().map(|log| {
                                                 Ok::<BlockTriggers, TriggerError>(

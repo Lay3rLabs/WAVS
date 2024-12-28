@@ -1,7 +1,7 @@
 // Currently - e2e tests are disabled by default.
 // See TESTS.md for more information on how to run e2e tests.
 
-#[cfg(feature = "e2e_tests")]
+// #[cfg(feature = "e2e_tests")]
 mod e2e {
     mod cosmos;
     mod eth;
@@ -35,7 +35,7 @@ mod e2e {
         cfg_if::cfg_if! {
             // TODO: build these based on the enabled chains in the config?
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                let anvil = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
+                let anvil: Option<AnvilInstance> = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
                 let anvil2: Option<AnvilInstance> = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
             } else {
                 let anvil: Option<AnvilInstance> = None;
@@ -180,6 +180,7 @@ mod e2e {
                                 run_tests_ethereum(
                                     #[allow(clippy::unnecessary_literal_unwrap)]
                                     anvil.unwrap(),
+                                    #[allow(clippy::unnecessary_literal_unwrap)]
                                     anvil2.unwrap(),
                                     http_client,
                                     config,
@@ -252,7 +253,11 @@ mod e2e {
             )
             .await
             .unwrap();
-        tracing::info!("Service created: {}, submitting task...", square_service_id);
+        tracing::info!(
+            "(chain_id:{}) Service created: {}",
+            app.chain_id(),
+            square_service_id
+        );
     }
 
     async fn submit_tasks(
@@ -260,7 +265,10 @@ mod e2e {
         square_service_id: ServiceID,
         avs_simple_client: &LayerContractClientSimple,
     ) {
-        tracing::info!("Submitting echo task...");
+        tracing::info!(
+            "(chain_id:{}) Submitting echo task...",
+            avs_simple_client.eth.config.chain_id
+        );
         let echo_trigger_id = avs_simple_client
             .trigger
             .add_trigger(
@@ -281,13 +289,14 @@ mod e2e {
                         .unwrap();
                     match signed_data {
                         Some(signed_data) => {
-                            tracing::info!("GOT THE SIGNATURE!");
+                            tracing::info!("(chain_id:{}) GOT THE SIGNATURE!", avs_simple_client.eth.config.chain_id);
                             tracing::info!("{}", hex::encode(signed_data.signature));
                             break;
                         }
                         None => {
                             tracing::info!(
-                                "Waiting for task response by {} on {} for trigger_id {}...",
+                                "(chain_id:{}) Waiting for task response by {} on {} for trigger_id {}...",
+                                avs_simple_client.eth.config.chain_id,
                                 avs_simple_client.eth.address(),
                                 avs_simple_client.service_manager_contract_address,
                                 echo_trigger_id
@@ -302,7 +311,10 @@ mod e2e {
         .await
         .unwrap();
 
-        tracing::info!("Submitting square task...");
+        tracing::info!(
+            "(chain_id:{}) Submitting square task...",
+            avs_simple_client.eth.config.chain_id
+        );
         let square_trigger_id = avs_simple_client
             .trigger
             .add_trigger(
@@ -330,7 +342,10 @@ mod e2e {
                                 serde_json::from_slice::<SquareResponse>(&signed_data.data)
                                     .unwrap();
 
-                            tracing::info!("GOT THE RESPONSE!");
+                            tracing::info!(
+                                "(chain_id:{}) GOT THE RESPONSE!",
+                                avs_simple_client.eth.config.chain_id
+                            );
                             tracing::info!("{:?}", response);
                             break;
                         }
@@ -376,7 +391,11 @@ mod e2e {
             )
             .await
             .unwrap();
-        tracing::info!("Service created: {}", echo_aggregate_service_id);
+        tracing::info!(
+            "(chain_id:{}) Service created: {}",
+            app.chain_id(),
+            echo_aggregate_service_id
+        );
 
         http_client
             .register_service_on_aggregator(
@@ -424,7 +443,10 @@ mod e2e {
 
                     match (signed_data_1, signed_data_2) {
                         (Some(signed_data_1), Some(signed_data_2)) => {
-                            tracing::info!("GOT THE SIGNATURES!");
+                            tracing::info!(
+                                "(chain_id:{}) GOT THE SIGNATURES!",
+                                avs_simple_client.eth.config.chain_id
+                            );
                             tracing::info!("1: {}", hex::encode(signed_data_1.signature));
                             tracing::info!("2: {}", hex::encode(signed_data_2.signature));
                             break;
@@ -458,10 +480,18 @@ mod e2e {
     ) {
         tracing::info!("Running e2e ethereum tests");
 
-        // let app = EthTestApp::new(config.clone(), anvil).await;
-        // let square_service_id = ServiceID::new("square-service").unwrap();
-        // let echo_service_id = ServiceID::new("echo-service").unwrap();
-        // create_services(&http_client, &app, echo_service_id.clone(), square_service_id.clone(), echo_wasm_digest.clone(), square_wasm_digest.clone()).await;
+        let app = EthTestApp::new(config.clone(), anvil).await;
+        let square_service_id = ServiceID::new("square-service").unwrap();
+        let echo_service_id = ServiceID::new("echo-service").unwrap();
+        create_services(
+            &http_client,
+            &app,
+            echo_service_id.clone(),
+            square_service_id.clone(),
+            echo_wasm_digest.clone(),
+            square_wasm_digest.clone(),
+        )
+        .await;
 
         let app2 = EthTestApp::new(config.clone(), anvil2).await;
         let square_service_id2 = ServiceID::new("square-service2").unwrap();
@@ -476,15 +506,24 @@ mod e2e {
         )
         .await;
 
-        // let avs_simple_client: LayerContractClientSimple = app.avs_client.clone().into();
-        // submit_tasks( echo_service_id, square_service_id, &avs_simple_client).await;
+        let avs_simple_client: LayerContractClientSimple = app.avs_client.clone().into();
+        submit_tasks(echo_service_id, square_service_id, &avs_simple_client).await;
+
         let avs_simple_client2: LayerContractClientSimple = app2.avs_client.clone().into();
         submit_tasks(echo_service_id2, square_service_id2, &avs_simple_client2).await;
 
         // TODO - now with aggregator and multiple payloads within a service....
 
-        // let echo_aggregate_service_id = ServiceID::new("echo-aggregate-service").unwrap();
-        // verify_triggers(&http_client, &app, &config, echo_aggregate_service_id, echo_wasm_digest.clone(), &avs_simple_client).await;
+        let echo_aggregate_service_id = ServiceID::new("echo-aggregate-service").unwrap();
+        verify_triggers(
+            &http_client,
+            &app,
+            &config,
+            echo_aggregate_service_id,
+            echo_wasm_digest.clone(),
+            &avs_simple_client,
+        )
+        .await;
 
         let echo_aggregate_service_id2 = ServiceID::new("echo-aggregate-service-2").unwrap();
         verify_triggers(

@@ -74,9 +74,10 @@ impl LayerContractClientFull {
             .transaction_hash;
 
         tracing::debug!(
-            "Operator registered on AVS successfully :{} , tx_hash :{}",
+            "Operator registered on AVS successfully :{} , tx_hash :{}, chain_id:{}",
             self.eth.signer.address(),
-            register_operator_hash
+            register_operator_hash,
+            self.eth.config.chain_id
         );
         Ok(register_operator_hash)
     }

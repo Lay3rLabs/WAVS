@@ -267,7 +267,10 @@ impl EigenClient {
             .watch()
             .await?;
 
-        tracing::debug!("Deployed eigen core");
+        tracing::debug!(
+            "(chain_id:{}) Deployed eigen core",
+            self.eth.config.chain_id
+        );
 
         Ok(proxies.into())
     }
@@ -321,7 +324,6 @@ pub async fn setup_empty_proxy_all(
 
     #[cfg(debug_assertions)]
     {
-        tracing::debug!("sanity checking admin...");
         // Sanity checks - ensure the proxy admin is set correctly
         // see TransparentUpgradeableProxy.sol: function admin()
 

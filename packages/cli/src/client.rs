@@ -32,7 +32,11 @@ pub async fn get_eigen_client(args: &CliArgs) -> EigenClient {
         transport: None,
     };
 
-    tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);
+    tracing::info!(
+        "(chain_id:{}) Creating eth client on: {:?}",
+        args.chain_id,
+        config.ws_endpoint
+    );
 
     let eth_client = EthClientBuilder::new(config).build_signing().await.unwrap();
     EigenClient::new(eth_client)

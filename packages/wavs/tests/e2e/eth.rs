@@ -26,7 +26,11 @@ impl EthTestApp {
             transport: None,
         };
 
-        tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);
+        tracing::info!(
+            "(chain_id:{}) Creating eth client on: {:?}",
+            anvil.chain_id(),
+            config.ws_endpoint
+        );
 
         let eth_client = EthClientBuilder::new(config).build_signing().await.unwrap();
         let eigen_client = EigenClient::new(eth_client);
