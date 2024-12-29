@@ -1,7 +1,7 @@
 // Currently - e2e tests are disabled by default.
 // See TESTS.md for more information on how to run e2e tests.
 
-// #[cfg(feature = "e2e_tests")]
+#[cfg(feature = "e2e_tests")]
 mod e2e {
     mod cosmos;
     mod eth;
