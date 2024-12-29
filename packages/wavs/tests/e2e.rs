@@ -77,7 +77,7 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.enabled_ethereum = vec!["local".to_string(), "e2elocal2".to_string()];
+                config.enabled_ethereum = vec!["local".to_string(), "e2e".to_string()];
                 if let Err(e) = config.ethereum_chain_configs() {
                     tracing::debug!("ethereum_chain_configs: {:?}", config);
                     panic!("Error in ethereum_chain_configs: {}", e);

@@ -15,7 +15,7 @@ log_level = ["info", "wavs=debug"]
 # the allowed cors origins. Default is empty list.
 cors_allowed_origins = [
   "https://lay3rlabs.github.io/*",
-  "http://127.0.0.1:*",
+  "http://localhost:*",
   "http://127.0.0.1:*",
 ]
 
@@ -74,7 +74,7 @@ ws_endpoint = "ws://127.0.0.1:8545"
 http_endpoint = "http://127.0.0.1:8545"
 aggregator_endpoint = "http://127.0.0.1:8001"
 
-[chains.eth.e2elocal2]
+[chains.eth.e2e]
 chain_id = "31338"
 ws_endpoint = "ws://127.0.0.1:8645"
 http_endpoint = "http://127.0.0.1:8645"
