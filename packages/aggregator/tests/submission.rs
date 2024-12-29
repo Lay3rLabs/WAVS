@@ -36,8 +36,8 @@ fn setup_anvil() -> (AnvilInstance, PathBuf) {
     // modify the `chains.eth.local` ws_endpoint to the anvil ws_endpoint
     let toml_content = std::fs::read_to_string(data_path.join("aggregator.toml")).unwrap();
     let toml_content = toml_content
-        .replace("ws://localhost:8545", &anvil.ws_endpoint())
-        .replace("http://localhost:8545", &anvil.endpoint())
+        .replace("ws://127.0.0.1:8545", &anvil.ws_endpoint())
+        .replace("http://127.0.0.1:8545", &anvil.endpoint())
         .replace("31337", &anvil.chain_id().to_string());
     std::fs::write(data_path.join("aggregator.toml"), toml_content).unwrap();
 
@@ -111,7 +111,7 @@ async fn submit_to_chain() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state,
-        anvil.chain_id().to_string(),
+        &anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -141,8 +141,6 @@ async fn submit_to_chain_three() {
     let (anvil, data_path) = setup_anvil();
 
     let aggregator = TestApp::new_with_args(aggregator::args::CliArgs {
-        // ws_endpoint: Some(anvil.ws_endpoint()),
-        // http_endpoint: Some(anvil.endpoint()),
         tasks_quorum: Some(3),
         data: Some(data_path.clone()),
         home: Some(data_path),
@@ -206,7 +204,7 @@ async fn submit_to_chain_three() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state.clone(),
-        anvil.chain_id().to_string(),
+        &anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -235,7 +233,7 @@ async fn submit_to_chain_three() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state.clone(),
-        anvil.chain_id().to_string(),
+        &anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -264,7 +262,7 @@ async fn submit_to_chain_three() {
 
     let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
         state.clone(),
-        anvil.chain_id().to_string(),
+        &anvil.chain_id().to_string(),
         signed_payload,
         avs_client.service_manager_contract_address,
         "default".to_string(),
@@ -297,8 +295,6 @@ async fn invalid_operator_signature() {
     let (anvil, data_path) = setup_anvil();
 
     let aggregator = TestApp::new_with_args(aggregator::args::CliArgs {
-        // ws_endpoint: Some(anvil.ws_endpoint()),
-        // http_endpoint: Some(anvil.endpoint()),
         data: Some(data_path.clone()),
         home: Some(data_path),
         ..TestApp::default_cli_args()
@@ -367,7 +363,7 @@ async fn invalid_operator_signature() {
         invalid_operator_payload.operator = invalid_signer.address();
         let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
             state.clone(),
-            anvil.chain_id().to_string(),
+            &anvil.chain_id().to_string(),
             invalid_operator_payload,
             avs_client.service_manager_contract_address,
             "default".to_string(),
@@ -392,7 +388,7 @@ async fn invalid_operator_signature() {
         invalid_signature_payload.signature = signature;
         let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
             state,
-            anvil.chain_id().to_string(),
+            &anvil.chain_id().to_string(),
             invalid_signature_payload,
             avs_client.service_manager_contract_address,
             "default".to_string(),

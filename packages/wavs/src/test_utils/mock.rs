@@ -96,6 +96,7 @@ impl MockE2ETestRunner {
         service_id: ServiceID,
         digest: Digest,
         function: impl Function,
+        chain_id: impl Into<String>,
     ) {
         self.create_service(
             service_id,
@@ -103,7 +104,7 @@ impl MockE2ETestRunner {
             Permissions::default(),
             Vec::new(),
             function,
-            "31337".to_string(),
+            chain_id.into(),
         )
         .await
     }

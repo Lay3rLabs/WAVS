@@ -22,7 +22,7 @@ pub struct Config {
     /// Default is `["info"]`
     pub log_level: Vec<String>,
     /// The host to bind the server to
-    /// Default is `localhost`
+    /// Default is `127.0.0.1`
     pub host: String,
     /// The directory to store all internal data files
     /// Default is `/var/wavs`
@@ -55,7 +55,7 @@ impl Default for Config {
         Self {
             port: 8000,
             log_level: vec!["info".to_string()],
-            host: "localhost".to_string(),
+            host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
             cosmos_chain: None,
@@ -137,7 +137,7 @@ impl Config {
     pub fn ethereum_chain_configs(&self) -> Result<HashMap<String, EthereumChainConfig>> {
         let mut chains = HashMap::new();
         for chain_name in &self.enabled_ethereum {
-            let config =
+            let config: &EthereumChainConfig =
                 self.chains.eth.get(chain_name).ok_or_else(|| {
                     anyhow!("No chain config found for ethereum \"{}\"", chain_name)
                 })?;
@@ -178,7 +178,10 @@ impl Config {
 
             let chain_id: String = config_merged.clone().chain_id;
             if chain_id.is_empty() {
-                return Err(anyhow!("Chain ID is required"));
+                return Err(anyhow!(
+                    "Chain ID is required in the ethereum config for: {}",
+                    chain_name
+                ));
             }
 
             chains.insert(chain_id, config_merged);
@@ -196,23 +199,25 @@ pub struct ChainConfigs {
     pub eth: HashMap<String, EthereumChainConfig>,
 }
 
-// TODO: keep or remove? (i.e. better UX to allow either one to be used for enabled)
 impl ChainConfigs {
-    pub fn get_chain_id(&self, chain_name: &str) -> Result<String> {
-        let chain_config = self
-            .eth
-            .get(chain_name)
-            .ok_or(anyhow!("Chain not found: {}", chain_name))?;
-        Ok(chain_config.chain_id.clone())
-    }
-    pub fn get_chain_config(&self, chain_id: &str) -> Result<&EthereumChainConfig> {
+    pub fn get_eth_chain_config(&self, chain_id: &str) -> Result<&EthereumChainConfig> {
         let chain_config = self
             .eth
             .iter()
             .find(|(_, config)| config.chain_id == chain_id)
             .map(|(_, config)| config)
-            .ok_or(anyhow!("Chain not found: {}", chain_id))?;
+            .ok_or(anyhow!(
+                "No chain config found for ethereum chain ID: {}",
+                chain_id
+            ))?;
         Ok(chain_config)
+    }
+    pub fn get_eth_chain_id_from_name(&self, chain_name: &str) -> Result<String> {
+        let chain_config = self.eth.get(chain_name).ok_or(anyhow!(
+            "No chain config found for ethereum chain name: {}",
+            chain_name
+        ))?;
+        Ok(chain_config.chain_id.clone())
     }
 }
 

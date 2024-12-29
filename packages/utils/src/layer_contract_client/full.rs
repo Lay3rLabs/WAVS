@@ -74,10 +74,10 @@ impl LayerContractClientFull {
             .transaction_hash;
 
         tracing::debug!(
-            "Operator registered on AVS successfully :{} , tx_hash :{}, chain_id:{}",
+            "(chain_id:{}) Operator registered on AVS successfully :{} , tx_hash :{}",
+            self.eth.config.chain_id,
             self.eth.signer.address(),
             register_operator_hash,
-            self.eth.config.chain_id
         );
         Ok(register_operator_hash)
     }
@@ -90,11 +90,6 @@ impl Clone for LayerContractClientFull {
             core: self.core.clone(),
             layer: self.layer.clone(),
         }
-    }
-    fn clone_from(&mut self, source: &Self) {
-        self.eth = source.eth.clone();
-        self.core = source.core.clone();
-        self.layer = source.layer.clone();
     }
 }
 

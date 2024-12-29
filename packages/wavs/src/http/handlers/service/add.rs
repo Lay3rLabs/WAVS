@@ -204,7 +204,7 @@ mod test {
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
-                submit: Submit::eth_aggregator_tx(CHAIN_ID.to_string(), rand_address_eth()),
+                submit: Submit::eth_aggregator_tx(CHAIN_ID, rand_address_eth()),
             }
         }
 

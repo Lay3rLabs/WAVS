@@ -192,11 +192,10 @@ async fn config_mnemonic() {
     );
 
     // change the endpoints and chain
-    // TODO: re-add some verification
-    // let mut cli_args = TestApp::default_cli_args();
-    // cli_args.ws_endpoint = Some("ws://localhost:1234".to_owned());
-    // cli_args.http_endpoint = Some("http://localhost:4321".to_owned());
-    // let config = TestApp::new_with_args(cli_args).config;
-    // assert_eq!(config.ws_endpoint, "ws://localhost:1234");
-    // assert_eq!(config.http_endpoint, "http://localhost:4321");
+    let mut cli_args = TestApp::default_cli_args();
+    cli_args.home = Some(PathBuf::from(".."));
+    let config = TestApp::new_with_args(cli_args).config;
+    let chain_config = config.chains.eth.get("local").unwrap();
+    assert_eq!(chain_config.ws_endpoint, "ws://127.0.0.1:8545");
+    assert_eq!(chain_config.http_endpoint, "http://127.0.0.1:8545");
 }

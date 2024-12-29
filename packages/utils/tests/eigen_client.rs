@@ -130,7 +130,7 @@ impl EigenTestInit {
         let anvil = Anvil::new().spawn();
 
         let config = EthClientConfig {
-            chain_id: anvil.chain_id().to_string(), // TODO: ?
+            chain_id: anvil.chain_id().to_string(),
             ws_endpoint: Some(anvil.ws_endpoint().to_string()),
             http_endpoint: anvil.endpoint().to_string(),
             mnemonic: Some(

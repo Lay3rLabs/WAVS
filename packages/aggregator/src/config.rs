@@ -27,7 +27,7 @@ pub struct Config {
     /// Default is `["info"]`
     pub log_level: Vec<String>,
     /// The host to bind the server to
-    /// Default is `localhost`
+    /// Default is `127.0.0.1`
     pub host: String,
     /// The directory to store all internal data files
     /// Default is `/var/aggregator`
@@ -45,7 +45,6 @@ pub struct Config {
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
 
-    // TODO: can we just grab this from the wavs.toml?
     pub chains: ChainConfigs,
 }
 
@@ -74,25 +73,18 @@ impl Config {
     pub async fn signing_client(&self, chain_id: &str) -> Result<EthSigningClient> {
         let mnemonic = self.mnemonic.clone();
 
-        let chain_config = &self
-            .chains
-            .eth
-            .iter()
-            .find(|(_, config)| config.chain_id == chain_id)
-            .map(|(_, config)| config)
-            .ok_or(EthClientError::ChainNotFound)?;
+        let chain_config = self.chains.get_eth_chain_config(chain_id)?;
 
         let ws_endpoint: Option<String> = match chain_config.ws_endpoint.clone() {
             s if s.is_empty() => None,
             s => Some(s),
         };
-        let http_endpoint = chain_config.http_endpoint.clone();
 
         let eth_client = EthClientConfig {
             chain_id: chain_config.chain_id.clone(),
             ws_endpoint,
-            http_endpoint,
             mnemonic,
+            http_endpoint: chain_config.http_endpoint.clone(),
             hd_index: self.hd_index,
             transport: None,
         };

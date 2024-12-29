@@ -133,9 +133,9 @@ impl Submit {
             verifier_addr,
         }
     }
-    pub fn eth_aggregator_tx(chain_id: String, service_manager_addr: Address) -> Self {
+    pub fn eth_aggregator_tx(chain_id: impl Into<String>, service_manager_addr: Address) -> Self {
         Submit::EthAggregatorTx {
-            chain_id,
+            chain_id: chain_id.into(),
             service_manager_addr,
         }
     }

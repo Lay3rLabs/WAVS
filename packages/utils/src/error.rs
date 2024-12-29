@@ -11,7 +11,4 @@ pub enum EthClientError {
 
     #[error("Contract not deployed {0}")]
     ContractNotDeployed(Address),
-
-    #[error("Chain not found")]
-    ChainNotFound,
 }

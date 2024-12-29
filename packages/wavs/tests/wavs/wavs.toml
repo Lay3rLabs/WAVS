@@ -2,20 +2,20 @@
 
 log_level = ["info", "wavs=debug", "just_to_confirm_test=debug"]
 
-# chosen eth chain name 
+# chosen eth chain name
 chain = "local"
 
-# chosen cosmos chain name 
+# chosen cosmos chain name
 cosmos_chain = "layer-local"
 
 [chains.cosmos.layer-local]
 chain_id = "layer-local"
 bech32_prefix = "layer"
-rpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "http://localhost:9090"
+rpc_endpoint = "http://127.0.0.1:26657"
+grpc_endpoint = "http://127.0.0.1:9090"
 gas_price = 0.025
 gas_denom = "ulayer"
-faucet_endpoint = "http://localhost:8000"
+faucet_endpoint = "http://127.0.0.1:8000"
 
 # localnode is local testing inside localnode docker-compose network
 [chains.cosmos.layer-localnode]
@@ -47,18 +47,18 @@ gas_denom = "untrn"
 
 [chains.eth.local]
 chain_id = "31337"
-ws_endpoint = "ws://localhost:8545"
-http_endpoint = "http://localhost:8545"
-aggregator_endpoint = "http://localhost:8001"
+ws_endpoint = "ws://127.0.0.1:8545"
+http_endpoint = "http://127.0.0.1:8545"
+aggregator_endpoint = "http://127.0.0.1:8001"
 
 [chains.eth.sepolia]
 chain_id = "11155111"
 ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
 http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
-aggregator_endpoint = "http://localhost:8001"
+aggregator_endpoint = "http://127.0.0.1:8001"
 
 [chains.eth.holesky]
 chain_id = "17000"
 ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
 http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
-aggregator_endpoint = "http://localhost:8001"
+aggregator_endpoint = "http://127.0.0.1:8001"

@@ -15,12 +15,12 @@ log_level = ["info", "wavs=debug"]
 # the allowed cors origins. Default is empty list.
 cors_allowed_origins = [
   "https://lay3rlabs.github.io/*",
-  "http://localhost:*",
+  "http://127.0.0.1:*",
   "http://127.0.0.1:*",
 ]
 
-# the host to serve on. Default is localhost
-# host = "localhost"
+# the host to serve on. Default is 127.0.0.1
+# host = "127.0.0.1"
 
 # the directory to store the data. Default is "/var/wavs"
 # data = "~/wavs/data"
@@ -34,11 +34,11 @@ enabled_ethereum = ["local"]
 [chains.cosmos.layer-local]
 chain_id = "layer-local"
 bech32_prefix = "layer"
-rpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "http://localhost:9090"
+rpc_endpoint = "http://127.0.0.1:26657"
+grpc_endpoint = "http://127.0.0.1:9090"
 gas_price = 0.025
 gas_denom = "ulayer"
-faucet_endpoint = "http://localhost:8000"
+faucet_endpoint = "http://127.0.0.1:8000"
 
 # localnode is local testing inside localnode docker-compose network
 [chains.cosmos.layer-localnode]
@@ -70,24 +70,24 @@ gas_denom = "untrn"
 
 [chains.eth.local]
 chain_id = "31337"
-ws_endpoint = "ws://localhost:8545"
-http_endpoint = "http://localhost:8545"
-aggregator_endpoint = "http://localhost:8001"
+ws_endpoint = "ws://127.0.0.1:8545"
+http_endpoint = "http://127.0.0.1:8545"
+aggregator_endpoint = "http://127.0.0.1:8001"
 
 [chains.eth.e2elocal2]
 chain_id = "31338"
-ws_endpoint = "ws://localhost:8645"
-http_endpoint = "http://localhost:8645"
-aggregator_endpoint = "http://localhost:8001"
+ws_endpoint = "ws://127.0.0.1:8645"
+http_endpoint = "http://127.0.0.1:8645"
+aggregator_endpoint = "http://127.0.0.1:8001"
 
 [chains.eth.sepolia]
 chain_id = "11155111"
 ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
 http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
-aggregator_endpoint = "http://localhost:8001"
+aggregator_endpoint = "http://127.0.0.1:8001"
 
 [chains.eth.holesky]
 chain_id = "17000"
 ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
 http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
-aggregator_endpoint = "http://localhost:8001"
+aggregator_endpoint = "http://127.0.0.1:8001"

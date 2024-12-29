@@ -33,7 +33,7 @@ fn mock_e2e_trigger_flow() {
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(service_id.clone(), digest, BigSquare)
+                .create_service_simple(service_id.clone(), digest, BigSquare, CHAIN_ID)
                 .await;
         }
     });
@@ -113,7 +113,7 @@ fn mock_e2e_service_lifecycle() {
                 (&service_id3, digest3),
             ] {
                 runner
-                    .create_service_simple(service_id.clone(), digest.clone(), BigSquare)
+                    .create_service_simple(service_id.clone(), digest.clone(), BigSquare, CHAIN_ID)
                     .await;
             }
 
@@ -178,7 +178,7 @@ fn mock_e2e_service_test() {
             let digest = Digest::new(b"wasm");
 
             runner
-                .create_service_simple(service_id.clone(), digest.clone(), BigSquare)
+                .create_service_simple(service_id.clone(), digest.clone(), BigSquare, CHAIN_ID)
                 .await;
 
             let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3 }).await;

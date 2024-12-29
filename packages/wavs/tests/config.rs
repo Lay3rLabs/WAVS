@@ -206,8 +206,8 @@ async fn config_chains() {
     let chain_configs = config.ethereum_chain_configs().unwrap();
     assert_eq!(chain_configs.len(), 1);
 
-    // TODO: getting it by name may be more useful? unsure yet.
-    let cfg = chain_configs.get("31337").unwrap();
+    let cfg_chain_id = config.chains.get_eth_chain_id_from_name("local").unwrap();
+    let cfg = chain_configs.get(&cfg_chain_id).unwrap();
     assert_eq!(cfg.chain_id, "31337");
     assert_eq!(cfg.http_endpoint, "http://example.com:1234");
 }

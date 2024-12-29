@@ -47,29 +47,6 @@ pub struct CoreTriggerManager {
     lookup_maps: Arc<LookupMaps>,
     shutdown_signal: Arc<AtomicBool>,
 }
-pub enum BlockTriggers {
-    EthereumLog {
-        log: Log,
-    },
-    Layer {
-        triggers: HashMap<Address, HashSet<TaskId>>,
-    },
-}
-
-impl fmt::Display for BlockTriggers {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BlockTriggers::EthereumLog { log } => write!(f, "EthereumLog: {:?}", log),
-            BlockTriggers::Layer { triggers } => write!(f, "Layer: {:?}", triggers),
-        }
-    }
-}
-
-impl fmt::Debug for BlockTriggers {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-}
 
 struct LookupMaps {
     /// single lookup for all triggers (in theory, can be more than just task queue addr)
@@ -95,6 +72,25 @@ impl LookupMaps {
 }
 
 type LookupId = usize;
+
+#[derive(Debug)]
+pub enum BlockTriggers {
+    EthereumLog {
+        log: Log,
+    },
+    Layer {
+        triggers: HashMap<Address, HashSet<TaskId>>,
+    },
+}
+
+impl fmt::Display for BlockTriggers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlockTriggers::EthereumLog { log } => write!(f, "EthereumLog: {:?}", log),
+            BlockTriggers::Layer { triggers } => write!(f, "Layer: {:?}", triggers),
+        }
+    }
+}
 
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
@@ -882,9 +878,9 @@ mod tests {
                     "test-eth".to_string(),
                     EthereumChainConfig {
                         chain_id: "eth-local".parse().unwrap(),
-                        ws_endpoint: "ws://localhost:26657".to_string(),
-                        http_endpoint: "http://localhost:26657".to_string(),
-                        aggregator_endpoint: Some("http://localhost:8001".to_string()),
+                        ws_endpoint: "ws://127.0.0.1:26657".to_string(),
+                        http_endpoint: "http://127.0.0.1:26657".to_string(),
+                        aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
                         faucet_endpoint: None,
                         submission_mnemonic: None,
                     },
@@ -895,8 +891,8 @@ mod tests {
                     "test-cosmos".to_string(),
                     CosmosChainConfig {
                         chain_id: "layer-local".parse().unwrap(),
-                        rpc_endpoint: "http://localhost:26657".to_string(),
-                        grpc_endpoint: "http://localhost:9090".to_string(),
+                        rpc_endpoint: "http://127.0.0.1:26657".to_string(),
+                        grpc_endpoint: "http://127.0.0.1:9090".to_string(),
                         gas_price: 0.025,
                         gas_denom: "uslay".to_string(),
                         bech32_prefix: "layer".to_string(),

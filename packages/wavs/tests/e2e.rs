@@ -33,7 +33,6 @@ mod e2e {
     #[test]
     fn e2e_tests() {
         cfg_if::cfg_if! {
-            // TODO: build these based on the enabled chains in the config?
             if #[cfg(feature = "e2e_tests_ethereum")] {
                 let anvil: Option<AnvilInstance> = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
                 let anvil2: Option<AnvilInstance> = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
@@ -208,7 +207,72 @@ mod e2e {
         aggregator_handle.join().unwrap();
     }
 
-    async fn create_services(
+    async fn run_tests_ethereum(
+        anvil: AnvilInstance,
+        anvil2: AnvilInstance,
+        http_client: HttpClient,
+        config: Config,
+        echo_wasm_digest: Digest,
+        square_wasm_digest: Digest,
+    ) {
+        tracing::info!("Running e2e ethereum tests");
+
+        let app = EthTestApp::new(config.clone(), anvil).await;
+        let app2 = EthTestApp::new(config.clone(), anvil2).await;
+
+        let square_service_id = ServiceID::new("square-service").unwrap();
+        let echo_service_id = ServiceID::new("echo-service").unwrap();
+
+        let square_service_id2 = ServiceID::new("square-service2").unwrap();
+        let echo_service_id2 = ServiceID::new("echo-service2").unwrap();
+
+        eth_create_services(
+            &http_client,
+            &app,
+            echo_service_id.clone(),
+            square_service_id.clone(),
+            echo_wasm_digest.clone(),
+            square_wasm_digest.clone(),
+        )
+        .await;
+        eth_create_services(
+            &http_client,
+            &app2,
+            echo_service_id2.clone(),
+            square_service_id2.clone(),
+            echo_wasm_digest.clone(),
+            square_wasm_digest.clone(),
+        )
+        .await;
+
+        let avs_simple_client: LayerContractClientSimple = app.avs_client.clone().into();
+        let avs_simple_client2: LayerContractClientSimple = app2.avs_client.clone().into();
+
+        eth_submit_tasks(echo_service_id, square_service_id, &avs_simple_client).await;
+        eth_submit_tasks(echo_service_id2, square_service_id2, &avs_simple_client2).await;
+
+        // TODO - now with aggregator and multiple payloads within a service....
+        eth_verify_triggers(
+            &http_client,
+            &app,
+            &config,
+            ServiceID::new("echo-aggregate-service").unwrap(),
+            echo_wasm_digest.clone(),
+            &avs_simple_client,
+        )
+        .await;
+        eth_verify_triggers(
+            &http_client,
+            &app2,
+            &config,
+            ServiceID::new("echo-aggregate-service-2").unwrap(),
+            echo_wasm_digest.clone(),
+            &avs_simple_client2,
+        )
+        .await;
+    }
+
+    async fn eth_create_services(
         http_client: &HttpClient,
         app: &EthTestApp,
         echo_service_id: ServiceID,
@@ -260,7 +324,7 @@ mod e2e {
         );
     }
 
-    async fn submit_tasks(
+    async fn eth_submit_tasks(
         echo_service_id: ServiceID,
         square_service_id: ServiceID,
         avs_simple_client: &LayerContractClientSimple,
@@ -367,7 +431,7 @@ mod e2e {
         .unwrap();
     }
 
-    async fn verify_triggers(
+    async fn eth_verify_triggers(
         http_client: &HttpClient,
         app: &EthTestApp,
         config: &Config,
@@ -468,73 +532,6 @@ mod e2e {
         })
         .await
         .unwrap();
-    }
-
-    async fn run_tests_ethereum(
-        anvil: AnvilInstance,
-        anvil2: AnvilInstance,
-        http_client: HttpClient,
-        config: Config,
-        echo_wasm_digest: Digest,
-        square_wasm_digest: Digest,
-    ) {
-        tracing::info!("Running e2e ethereum tests");
-
-        let app = EthTestApp::new(config.clone(), anvil).await;
-        let square_service_id = ServiceID::new("square-service").unwrap();
-        let echo_service_id = ServiceID::new("echo-service").unwrap();
-        create_services(
-            &http_client,
-            &app,
-            echo_service_id.clone(),
-            square_service_id.clone(),
-            echo_wasm_digest.clone(),
-            square_wasm_digest.clone(),
-        )
-        .await;
-
-        let app2 = EthTestApp::new(config.clone(), anvil2).await;
-        let square_service_id2 = ServiceID::new("square-service2").unwrap();
-        let echo_service_id2 = ServiceID::new("echo-service2").unwrap();
-        create_services(
-            &http_client,
-            &app2,
-            echo_service_id2.clone(),
-            square_service_id2.clone(),
-            echo_wasm_digest.clone(),
-            square_wasm_digest.clone(),
-        )
-        .await;
-
-        let avs_simple_client: LayerContractClientSimple = app.avs_client.clone().into();
-        submit_tasks(echo_service_id, square_service_id, &avs_simple_client).await;
-
-        let avs_simple_client2: LayerContractClientSimple = app2.avs_client.clone().into();
-        submit_tasks(echo_service_id2, square_service_id2, &avs_simple_client2).await;
-
-        // TODO - now with aggregator and multiple payloads within a service....
-
-        let echo_aggregate_service_id = ServiceID::new("echo-aggregate-service").unwrap();
-        verify_triggers(
-            &http_client,
-            &app,
-            &config,
-            echo_aggregate_service_id,
-            echo_wasm_digest.clone(),
-            &avs_simple_client,
-        )
-        .await;
-
-        let echo_aggregate_service_id2 = ServiceID::new("echo-aggregate-service-2").unwrap();
-        verify_triggers(
-            &http_client,
-            &app2,
-            &config,
-            echo_aggregate_service_id2,
-            echo_wasm_digest.clone(),
-            &avs_simple_client2,
-        )
-        .await;
     }
 
     async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {

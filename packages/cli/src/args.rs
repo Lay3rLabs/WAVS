@@ -5,17 +5,16 @@ use wavs::Digest;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub struct CliArgs {
-    #[clap(long, default_value = "ws://localhost:8545")]
+    #[clap(long, default_value = "ws://127.0.0.1:8545")]
     pub ws_endpoint: String,
 
-    #[clap(long, default_value = "http://localhost:8545")]
+    #[clap(long, default_value = "http://127.0.0.1:8545")]
     pub http_endpoint: String,
 
-    // TODO: how to get this from the configs?
     #[clap(long, default_value = "31337")]
     pub chain_id: String,
 
-    #[clap(long, default_value = "http://localhost:8000")]
+    #[clap(long, default_value = "http://127.0.0.1:8000")]
     pub wavs_endpoint: String,
 
     #[command(subcommand)]

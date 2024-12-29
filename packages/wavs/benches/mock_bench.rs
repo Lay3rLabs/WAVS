@@ -10,6 +10,8 @@ use wavs::{
     AppContext, Digest,
 };
 
+const CHAIN_ID: &str = "31337";
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
@@ -25,7 +27,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(service_id.clone(), digest, BigSquare)
+                .create_service_simple(service_id.clone(), digest, BigSquare, CHAIN_ID)
                 .await;
         }
     });
