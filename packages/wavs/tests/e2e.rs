@@ -298,7 +298,11 @@ mod e2e {
             )
             .await
             .unwrap();
-        tracing::info!("Service created: {}", echo_service_id);
+        tracing::info!(
+            "(chain_id: {}) Service created: {}",
+            app.chain_id(),
+            echo_service_id
+        );
 
         http_client
             .create_service(
@@ -318,7 +322,7 @@ mod e2e {
             .await
             .unwrap();
         tracing::info!(
-            "(chain_id:{}) Service created: {}",
+            "(chain_id: {}) Service created: {}",
             app.chain_id(),
             square_service_id
         );
@@ -330,7 +334,7 @@ mod e2e {
         avs_simple_client: &LayerContractClientSimple,
     ) {
         tracing::info!(
-            "(chain_id:{}) Submitting echo task...",
+            "(chain_id: {}) Submitting echo task...",
             avs_simple_client.eth.config.chain_id
         );
         let echo_trigger_id = avs_simple_client
@@ -353,13 +357,13 @@ mod e2e {
                         .unwrap();
                     match signed_data {
                         Some(signed_data) => {
-                            tracing::info!("(chain_id:{}) GOT THE SIGNATURE!", avs_simple_client.eth.config.chain_id);
+                            tracing::info!("(chain_id: {}) GOT THE SIGNATURE!", avs_simple_client.eth.config.chain_id);
                             tracing::info!("{}", hex::encode(signed_data.signature));
                             break;
                         }
                         None => {
                             tracing::info!(
-                                "(chain_id:{}) Waiting for task response by {} on {} for trigger_id {}...",
+                                "(chain_id: {}) Waiting for task response by {} on {} for trigger_id {}...",
                                 avs_simple_client.eth.config.chain_id,
                                 avs_simple_client.eth.address(),
                                 avs_simple_client.service_manager_contract_address,
@@ -376,7 +380,7 @@ mod e2e {
         .unwrap();
 
         tracing::info!(
-            "(chain_id:{}) Submitting square task...",
+            "(chain_id: {}) Submitting square task...",
             avs_simple_client.eth.config.chain_id
         );
         let square_trigger_id = avs_simple_client
@@ -407,7 +411,7 @@ mod e2e {
                                     .unwrap();
 
                             tracing::info!(
-                                "(chain_id:{}) GOT THE RESPONSE!",
+                                "(chain_id: {}) GOT THE RESPONSE!",
                                 avs_simple_client.eth.config.chain_id
                             );
                             tracing::info!("{:?}", response);
@@ -456,7 +460,7 @@ mod e2e {
             .await
             .unwrap();
         tracing::info!(
-            "(chain_id:{}) Service created: {}",
+            "(chain_id: {}) Service created: {}",
             app.chain_id(),
             echo_aggregate_service_id
         );
@@ -508,7 +512,7 @@ mod e2e {
                     match (signed_data_1, signed_data_2) {
                         (Some(signed_data_1), Some(signed_data_2)) => {
                             tracing::info!(
-                                "(chain_id:{}) GOT THE SIGNATURES!",
+                                "(chain_id: {}) GOT THE SIGNATURES!",
                                 avs_simple_client.eth.config.chain_id
                             );
                             tracing::info!("1: {}", hex::encode(signed_data_1.signature));

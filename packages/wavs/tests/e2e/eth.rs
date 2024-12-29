@@ -27,7 +27,7 @@ impl EthTestApp {
         };
 
         tracing::info!(
-            "(chain_id:{}) Creating eth client on: {:?}",
+            "(chain_id: {}) Creating eth client on: {:?}",
             anvil.chain_id(),
             config.ws_endpoint
         );

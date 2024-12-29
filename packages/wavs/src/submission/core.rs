@@ -276,7 +276,7 @@ impl CoreSubmission {
         hd_index: u32,
         aggregate: bool,
     ) -> Result<(), SubmissionError> {
-        tracing::info!("(chain_id:{}) Submitting to ethereum", chain_id);
+        tracing::info!("(chain_id: {}) Submitting to ethereum", chain_id);
 
         let eth_client = self.get_eth_client(&chain_id, hd_index).await?;
 

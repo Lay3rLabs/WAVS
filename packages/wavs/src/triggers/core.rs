@@ -9,9 +9,11 @@ use crate::{
     AppContext,
 };
 use alloy::{
-    providers::Provider,
+    providers::{Provider, RootProvider},
+    pubsub::SubscriptionStream,
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
+    transports::BoxTransport,
 };
 use anyhow::Result;
 use core::fmt;
@@ -92,6 +94,165 @@ impl fmt::Display for BlockTriggers {
     }
 }
 
+struct EthChainWatcherContext {
+    chain_id: String,
+    config: EthClientConfig,
+    action_sender: mpsc::Sender<TriggerAction>,
+    lookup_maps: Arc<LookupMaps>,
+    shutdown_signal: Arc<AtomicBool>,
+}
+
+impl EthChainWatcherContext {
+    async fn process_log(
+        &self,
+        log: Log,
+        provider: RootProvider<BoxTransport>,
+    ) -> Result<(), TriggerError> {
+        if let Ok(log) = log.log_decode::<NewTrigger>() {
+            let service_id = log.data().serviceId.to_string();
+            let workflow_id = log.data().workflowId.to_string();
+            let trigger_id = TriggerId::new(log.data().triggerId);
+
+            self.handle_trigger_event(service_id, workflow_id, trigger_id, log.address(), provider)
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn handle_trigger_event(
+        &self,
+        service_id: String,
+        workflow_id: String,
+        trigger_id: TriggerId,
+        address: alloy::primitives::Address,
+        provider: RootProvider<BoxTransport>,
+    ) -> Result<(), TriggerError> {
+        match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
+            (Ok(service_id), Ok(workflow_id)) => {
+                let contract = LayerTrigger::new(address, provider);
+
+                if let Ok(payload) = contract
+                    .getTrigger(*trigger_id)
+                    .call()
+                    .await
+                    .map(|resp| resp._0.data.to_vec())
+                {
+                    self.send_trigger_action(service_id, workflow_id, payload, trigger_id)
+                        .await?;
+                }
+            }
+            _ => {
+                tracing::error!(
+                    "error parsing service_id ({service_id}) or workflow_id ({workflow_id})"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    async fn send_trigger_action(
+        &self,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+        payload: Vec<u8>,
+        trigger_id: TriggerId,
+    ) -> Result<(), TriggerError> {
+        if let Some(trigger) = self.get_trigger(service_id.clone(), workflow_id.clone())? {
+            let _ = self
+                .action_sender
+                .send(TriggerAction {
+                    config: trigger,
+                    data: TriggerData::EthEvent {
+                        service_id,
+                        workflow_id,
+                        payload,
+                        trigger_id,
+                    },
+                })
+                .await;
+        }
+        Ok(())
+    }
+
+    fn get_trigger(
+        &self,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+    ) -> Result<Option<TriggerConfig>, TriggerError> {
+        let lookup_id = {
+            let triggers_by_service_workflow_lock = self
+                .lookup_maps
+                .triggers_by_service_workflow
+                .read()
+                .unwrap();
+            triggers_by_service_workflow_lock
+                .get(&service_id)
+                .and_then(|map| map.get(&workflow_id))
+                .copied()
+        };
+
+        if let Some(lookup_id) = lookup_id {
+            let trigger = {
+                let all_trigger_data_lock = self.lookup_maps.all_trigger_data.read().unwrap();
+                all_trigger_data_lock.get(&lookup_id).cloned()
+            };
+            Ok(trigger)
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn handle_websocket_stream(
+        &self,
+        provider: RootProvider<BoxTransport>,
+        subscription: SubscriptionStream<Log>,
+    ) {
+        let stream = subscription
+            .map(|log| Ok::<BlockTriggers, TriggerError>(BlockTriggers::EthereumLog { log }));
+
+        let mut stream = Box::pin(stream);
+        while let Some(result) = stream.next().await {
+            if let Ok(BlockTriggers::EthereumLog { log }) = result {
+                if let Err(e) = self.process_log(log, provider.clone()).await {
+                    tracing::error!("Error processing log: {:?}", e);
+                }
+            }
+        }
+    }
+
+    async fn handle_http_polling(&self, provider: RootProvider<BoxTransport>, filter: Filter) {
+        let mut last_block = provider.get_block_number().await.unwrap_or_default();
+
+        loop {
+            if self.shutdown_signal.load(Ordering::Relaxed) {
+                break;
+            }
+
+            if let Ok(current_block) = provider.get_block_number().await {
+                if current_block > last_block {
+                    if let Ok(logs) = provider
+                        .get_logs(
+                            &filter
+                                .clone()
+                                .from_block(last_block)
+                                .to_block(current_block),
+                        )
+                        .await
+                    {
+                        for log in logs {
+                            if let Err(e) = self.process_log(log, provider.clone()).await {
+                                tracing::error!("Error processing log: {:?}", e);
+                            }
+                        }
+                    }
+                    last_block = current_block;
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }
+}
+
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
@@ -140,32 +301,34 @@ impl CoreTriggerManager {
             None => None,
         };
         for (chain_id, chain_config) in &self.eth_chain_configs {
-            let chain_id = chain_id.clone();
-            let config = chain_config.clone();
-            let action_sender = action_sender.clone();
-            let lookup_maps = Arc::clone(&self.lookup_maps);
-            let shutdown_signal = Arc::clone(&self.shutdown_signal);
+            let context = EthChainWatcherContext {
+                chain_id: chain_id.clone(),
+                config: chain_config.clone(),
+                action_sender: action_sender.clone(),
+                lookup_maps: Arc::clone(&self.lookup_maps),
+                shutdown_signal: Arc::clone(&self.shutdown_signal),
+            };
 
             tasks.spawn(async move {
-                while !shutdown_signal.load(Ordering::Relaxed) {
-                    tracing::debug!("Building query client for Ethereum chain: {}", chain_id);
-                    match EthClientBuilder::new(config.clone()).build_query().await {
+                while !context.shutdown_signal.load(Ordering::Relaxed) {
+                    tracing::debug!("Building query client for Ethereum chain: {}", context.chain_id);
+                    match EthClientBuilder::new(context.config.clone()).build_query().await {
                         Err(e) => {
                             tracing::error!(
                                 "Failed to build query client for ({:?},{:?}): {:?}",
-                                chain_id,
-                                config.ws_endpoint,
+                                context.chain_id,
+                                context.config.ws_endpoint,
                                 e
                             );
-                            if !shutdown_signal.load(Ordering::Relaxed) {
+                            if !context.shutdown_signal.load(Ordering::Relaxed) {
                                 tokio::time::sleep(Duration::from_secs(1)).await;
                                 continue;
                             }
                             break;
                         }
                         Ok(query_client) => {
-                            let endpoint =
-                                config.ws_endpoint.as_ref().unwrap_or(&config.http_endpoint);
+                            let endpoint = context.config.ws_endpoint.as_ref()
+                                .unwrap_or(&context.config.http_endpoint);
 
                             tracing::debug!(
                                 "Trigger Manager for Ethereum chain started on {}",
@@ -175,243 +338,29 @@ impl CoreTriggerManager {
                             let filter = Filter::new().event_signature(NewTrigger::SIGNATURE_HASH);
 
                             // Try websocket first, fall back to HTTP polling if WS fails
-                            let stream = match &config.ws_endpoint {
-                                Some(_ws_endpoint) => {
-                                    match query_client
-                                        .provider
-                                        .subscribe_logs(&filter.clone())
-                                        .await
-                                    {
-                                        Ok(subscription) => {
-                                            tracing::info!(
-                                                "(chain_id:{})Successfully subscribed to logs with filter", chain_id
-                                            );
-                                            Some(subscription.into_stream().map(|log| {
-                                                Ok::<BlockTriggers, TriggerError>(
-                                                    BlockTriggers::EthereumLog { log },
-                                                )
-                                            }))
-                                        }
-                                        Err(e) => {
-                                            tracing::warn!("WebSocket subscription failed, falling back to HTTP polling: {:?}", e);
-                                            None
-                                        }
-                                    }
-                                }
-                                None => None,
-                            };
-
-                            match stream {
-                                Some(mut stream) => {
-                                    while let Some(result) = stream.next().await {
-                                        if let Ok(BlockTriggers::EthereumLog { log }) = result {
-                                            if let Ok(log) = log.log_decode::<NewTrigger>() {
-                                                let service_id = log.data().serviceId.to_string();
-                                                let workflow_id = log.data().workflowId.to_string();
-                                                let trigger_id = log.data().triggerId;
-
-                                                match (
-                                                    ServiceID::new(&service_id),
-                                                    WorkflowID::new(&workflow_id),
-                                                ) {
-                                                    (Ok(service_id), Ok(workflow_id)) => {
-                                                        let trigger_id = TriggerId::new(trigger_id);
-                                                        let contract = LayerTrigger::new(
-                                                            log.address(),
-                                                            query_client.provider.clone(),
-                                                        );
-
-                                                        if let Ok(payload) = contract
-                                                            .getTrigger(*trigger_id)
-                                                            .call()
-                                                            .await
-                                                            .map(|resp| resp._0.data.to_vec())
-                                                        {
-                                                            // let contract_address =
-                                                            //     Address::Eth(AddrEth::new(
-                                                            //         log.address().into(),
-                                                            //     ));
-
-                                                            // Clone the data we need before taking the lock
-                                                            let lookup_id = {
-                                                                let triggers_by_service_workflow_lock = lookup_maps
-                                                                    .triggers_by_service_workflow
-                                                                    .read()
-                                                                    .unwrap();
-
-                                                                triggers_by_service_workflow_lock
-                                                                    .get(&service_id)
-                                                                    .and_then(|map| map.get(&workflow_id))
-                                                                    .copied()
-                                                            };
-
-                                                            if let Some(lookup_id) = lookup_id {
-                                                                let trigger = {
-                                                                    let all_trigger_data_lock =
-                                                                        lookup_maps
-                                                                            .all_trigger_data
-                                                                            .read()
-                                                                            .unwrap();
-                                                                    all_trigger_data_lock
-                                                                        .get(&lookup_id)
-                                                                        .cloned()
-                                                                };
-
-                                                                if let Some(trigger) = trigger {
-                                                                    let _ = action_sender
-                                                                        .send(TriggerAction {
-                                                                            config: trigger,
-                                                                            data: TriggerData::EthEvent {
-                                                                                service_id,
-                                                                                workflow_id,
-                                                                                payload,
-                                                                                trigger_id,
-                                                                            },
-                                                                        })
-                                                                        .await;
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    _ => {
-                                                        tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
-                                                    }
-                                                }
-                                            }
-                                        }
+                            match &context.config.ws_endpoint {
+                                Some(_) => {
+                                    if let Ok(subscription) = query_client.provider.subscribe_logs(&filter).await {
+                                        tracing::info!(
+                                            "(chain_id: {})Successfully subscribed to logs with filter",
+                                            context.chain_id
+                                        );
+                                        context.handle_websocket_stream(query_client.provider.clone(), subscription.into_stream()).await;
+                                    } else {
+                                        tracing::warn!("WebSocket subscription failed, falling back to HTTP polling");
+                                        context.handle_http_polling(query_client.provider.clone(), filter).await;
                                     }
                                 }
                                 None => {
-                                    // Fallback to HTTP polling
                                     tracing::debug!("Using HTTP polling for events");
-                                    let mut last_block = query_client
-                                        .provider
-                                        .get_block_number()
-                                        .await
-                                        .unwrap_or_default();
-
-                                    loop {
-                                        if let Ok(current_block) =
-                                            query_client.provider.get_block_number().await
-                                        {
-                                            if current_block > last_block {
-                                                let filter = filter.clone(); // Clone before using
-                                                if let Ok(logs) = query_client
-                                                    .provider
-                                                    .get_logs(
-                                                        &filter
-                                                            .from_block(last_block)
-                                                            .to_block(current_block),
-                                                    )
-                                                    .await
-                                                {
-                                                    for log in logs {
-                                                        // Process log same as websocket path
-                                                        if let Ok(log) =
-                                                            log.log_decode::<NewTrigger>()
-                                                        {
-                                                            let service_id =
-                                                                log.data().serviceId.to_string();
-                                                            let workflow_id =
-                                                                log.data().workflowId.to_string();
-                                                            let trigger_id = log.data().triggerId;
-
-                                                            match (
-                                                                ServiceID::new(&service_id),
-                                                                WorkflowID::new(&workflow_id),
-                                                            ) {
-                                                                (
-                                                                    Ok(service_id),
-                                                                    Ok(workflow_id),
-                                                                ) => {
-                                                                    let trigger_id =
-                                                                        TriggerId::new(trigger_id);
-                                                                    let contract =
-                                                                        LayerTrigger::new(
-                                                                            log.address(),
-                                                                            query_client
-                                                                                .provider
-                                                                                .clone(),
-                                                                        );
-
-                                                                    if let Ok(payload) = contract
-                                                                        .getTrigger(*trigger_id)
-                                                                        .call()
-                                                                        .await
-                                                                        .map(|resp| {
-                                                                            resp._0.data.to_vec()
-                                                                        })
-                                                                    {
-                                                                        // let contract_address =
-                                                                        //     Address::Eth(
-                                                                        //         AddrEth::new(
-                                                                        //             log.address()
-                                                                        //                 .into(),
-                                                                        //         ),
-                                                                        //     );
-
-                                                                        // Clone the data we need before taking the lock
-                                                                        let lookup_id = {
-                                                                            let triggers_by_service_workflow_lock = lookup_maps
-                                                                                .triggers_by_service_workflow
-                                                                                .read()
-                                                                                .unwrap();
-
-                                                                            triggers_by_service_workflow_lock
-                                                                                .get(&service_id)
-                                                                                .and_then(|map| map.get(&workflow_id))
-                                                                                .copied()
-                                                                        };
-
-                                                                        if let Some(lookup_id) =
-                                                                            lookup_id
-                                                                        {
-                                                                            let trigger = {
-                                                                                let all_trigger_data_lock = lookup_maps
-                                                                                    .all_trigger_data
-                                                                                    .read()
-                                                                                    .unwrap();
-                                                                                all_trigger_data_lock.get(&lookup_id).cloned()
-                                                                            };
-
-                                                                            if let Some(trigger) =
-                                                                                trigger
-                                                                            {
-                                                                                let _ = action_sender
-                                                                                    .send(TriggerAction {
-                                                                                        config: trigger,
-                                                                                        data: TriggerData::EthEvent {
-                                                                                            service_id,
-                                                                                            workflow_id,
-                                                                                            payload,
-                                                                                            trigger_id,
-                                                                                        },
-                                                                                    })
-                                                                                    .await;
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                                _ => {
-                                                                    tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                last_block = current_block;
-                                            }
-                                        }
-                                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                                    }
+                                    context.handle_http_polling(query_client.provider.clone(), filter).await;
                                 }
                             }
                         }
                     }
-
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
-                tracing::debug!("Chain watcher for {} shutting down", chain_id);
+                tracing::debug!("Chain watcher for {} shutting down", context.chain_id);
             });
         }
 
@@ -459,52 +408,6 @@ impl CoreTriggerManager {
                                 tracing::error!("Error: {:?}", err);
                             }
                         }
-                        // TODO: move this out to its own handler / into the above changed ETH code
-                        // Ok(BlockTriggers::EthereumLog { log }) => {
-                        //     if let Ok(log) = log.log_decode::<NewTrigger>() {
-                        //         let service_id = log.data().serviceId.to_string();
-                        //         let workflow_id = log.data().workflowId.to_string();
-                        //         let trigger_id = log.data().triggerId;
-
-                        //         // TODO(reece): fix me
-                        //         // get the first client in the hashmap
-                        //         let ethereum_client = ethereum_clients.values().next().unwrap();
-
-                        //         match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
-                        //             (Ok(service_id), Ok(workflow_id)) => {
-                        //                 let trigger_id = TriggerId::new(trigger_id);
-
-                        //                 let contract = LayerTrigger::new(
-                        //                     log.address(),
-                        //                     // ethereum_client.as_ref().unwrap().provider.clone(),
-                        //                     ethereum_client.provider.clone(),
-                        //                 );
-
-                        //                 if let Ok(payload) = contract
-                        //                     .getTrigger(*trigger_id)
-                        //                     .call()
-                        //                     .await
-                        //                     .map(|resp| resp._0.data.to_vec())
-                        //                 {
-                        //                     self.handle_trigger(
-                        //                         &action_sender,
-                        //                         &Address::Eth(AddrEth::new(log.address().into())),
-                        //                         TriggerData::EthEvent {
-                        //                             service_id,
-                        //                             workflow_id,
-                        //                             payload,
-                        //                             trigger_id,
-                        //                         },
-                        //                     )
-                        //                     .await;
-                        //                 }
-                        //             }
-                        //             _ => {
-                        //                 tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
-                        //             }
-                        //         }
-                        //     }
-                        // }
                         Ok(BlockTriggers::Layer {
                             triggers: task_created_events,
                         })
@@ -523,7 +426,14 @@ impl CoreTriggerManager {
                     tracing::error!("{:?}", err);
                 }
                 Ok(BlockTriggers::EthereumLog { log }) => {
-                    tracing::debug!("EthereumLog should no longer be called here, it is done above right?: {:?}", log);
+                    tracing::debug!(
+                        "EthereumLog should no longer be called here, it is done above: {:?}",
+                        log
+                    );
+                    panic!(
+                        "EthereumLog should no longer be called here, it is done above: {:?}",
+                        log
+                    );
                 }
                 Ok(BlockTriggers::Layer { triggers }) => {
                     for (contract_address, task_ids) in triggers {

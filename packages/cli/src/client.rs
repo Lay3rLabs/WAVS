@@ -33,7 +33,7 @@ pub async fn get_eigen_client(args: &CliArgs) -> EigenClient {
     };
 
     tracing::info!(
-        "(chain_id:{}) Creating eth client on: {:?}",
+        "(chain_id: {}) Creating eth client on: {:?}",
         args.chain_id,
         config.ws_endpoint
     );

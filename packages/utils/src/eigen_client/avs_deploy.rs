@@ -268,7 +268,7 @@ impl EigenClient {
             .await?;
 
         tracing::debug!(
-            "(chain_id:{}) Deployed eigen core",
+            "(chain_id: {}) Deployed eigen core",
             self.eth.config.chain_id
         );
 
