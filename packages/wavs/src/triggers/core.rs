@@ -118,14 +118,10 @@ impl CoreTriggerManager {
             None => None,
         };
 
-        let mut ethereum_clients = HashMap::new();
+        let mut eth_builders = HashMap::new();
         for (chain_name, chain_config) in self.chain_configs.clone() {
-            let client = EthClientBuilder::new(chain_config)
-                .build_query()
-                .await
-                .map_err(TriggerError::Ethereum)?;
-
-            ethereum_clients.insert(chain_name, client);
+            let builder = EthClientBuilder::new(chain_config);
+            eth_builders.insert(chain_name, builder);
         }
 
         if let Some(query_client) = cosmos_client.clone() {
@@ -182,8 +178,17 @@ impl CoreTriggerManager {
             streams.push(event_stream);
         }
 
-        for (chain_name, query_client) in ethereum_clients.clone().into_iter() {
-            tracing::debug!("Trigger Manager for Ethereum chain {} started", chain_name);
+        for (chain_name, builder) in eth_builders.iter() {
+            let chain_name = chain_name.clone();
+            tracing::debug!(
+                "Trigger Manager for Ethereum chain {} started",
+                chain_name.to_string()
+            );
+            let query_client = builder
+                .clone()
+                .build_query()
+                .await
+                .map_err(TriggerError::Ethereum)?;
 
             // Start the event stream
             let filter = Filter::new().event_signature(NewTrigger::SIGNATURE_HASH);
@@ -214,7 +219,16 @@ impl CoreTriggerManager {
                     tracing::error!("{:?}", err);
                 }
                 Ok(BlockTriggers::EthereumLog { chain_name, log }) => {
+                    let chain_name = chain_name.clone();
                     if let Ok(log) = log.log_decode::<NewTrigger>() {
+                        let query_client = eth_builders
+                            .get(&chain_name)
+                            .as_ref()
+                            .unwrap()
+                            .build_query()
+                            .await
+                            .map_err(TriggerError::Ethereum)?;
+
                         let service_id = log.data().serviceId.to_string();
                         let workflow_id = log.data().workflowId.to_string();
                         let trigger_id = log.data().triggerId;
@@ -222,15 +236,8 @@ impl CoreTriggerManager {
                             (Ok(service_id), Ok(workflow_id)) => {
                                 let trigger_id = TriggerId::new(trigger_id);
 
-                                let contract = LayerTrigger::new(
-                                    log.address(),
-                                    ethereum_clients
-                                        .get(&chain_name)
-                                        .as_ref()
-                                        .unwrap()
-                                        .provider
-                                        .clone(),
-                                );
+                                let contract =
+                                    LayerTrigger::new(log.address(), query_client.provider.clone());
 
                                 if let Ok(payload) = contract
                                     .getTrigger(*trigger_id)
