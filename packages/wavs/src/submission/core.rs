@@ -30,6 +30,7 @@ pub struct CoreSubmission {
     cosmos_chain: Option<ChainCosmosSubmission>,
     // chain_id -> chain
     eth_chains: HashMap<String, ChainEthSubmission>,
+    eth_clients: Arc<Mutex<HashMap<(String, u32), EthSigningClient>>>,
     http_client: reqwest::Client,
 }
 
@@ -110,6 +111,7 @@ impl CoreSubmission {
             cosmos_clients: Arc::new(Mutex::new(HashMap::new())),
             cosmos_chain,
             eth_chains,
+            eth_clients: Arc::new(Mutex::new(HashMap::new())),
             http_client: reqwest::Client::new(),
         })
     }
@@ -167,6 +169,13 @@ impl CoreSubmission {
         chain_id: &str,
         hd_index: u32,
     ) -> Result<EthSigningClient, SubmissionError> {
+        {
+            let lock = self.eth_clients.lock().unwrap();
+            if let Some(client) = lock.get(&(chain_id.to_string(), hd_index)) {
+                return Ok(client.clone());
+            }
+        }
+
         let mut client_config = self.get_eth_chain(chain_id)?.client_config.clone();
         client_config.hd_index = Some(hd_index);
 
@@ -174,6 +183,11 @@ impl CoreSubmission {
             .build_signing()
             .await
             .map_err(SubmissionError::Ethereum)?;
+
+        {
+            let mut lock = self.eth_clients.lock().unwrap();
+            lock.insert((chain_id.to_string(), hd_index), client.clone());
+        }
 
         Ok(client)
     }
