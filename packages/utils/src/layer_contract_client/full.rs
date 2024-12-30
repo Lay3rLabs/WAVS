@@ -28,6 +28,7 @@ use chrono::Utc;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct LayerContractClientFull {
     pub eth: EthSigningClient,
     pub core: CoreAVSAddresses,
@@ -80,16 +81,6 @@ impl LayerContractClientFull {
             register_operator_hash,
         );
         Ok(register_operator_hash)
-    }
-}
-
-impl Clone for LayerContractClientFull {
-    fn clone(&self) -> Self {
-        Self {
-            eth: self.eth.clone(),
-            core: self.core.clone(),
-            layer: self.layer.clone(),
-        }
     }
 }
 

@@ -480,7 +480,6 @@ impl CoreTriggerManager {
 
         // Wait for shutdown signal
         while !self.shutdown_signal.load(Ordering::Relaxed) {
-            futures::future::poll_fn(|_| std::task::Poll::<()>::Pending).await;
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
