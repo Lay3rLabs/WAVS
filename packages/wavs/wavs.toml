@@ -28,7 +28,7 @@ cors_allowed_origins = [
 # chosen eth chain names
 eth_chains = ["local"]
 
-# chosen cosmos chain name 
+# chosen cosmos chain name
 # cosmos_chain = "layer-local"
 
 [chains.cosmos.layer-local]
@@ -72,6 +72,12 @@ gas_denom = "untrn"
 chain_id = "31337"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
+aggregator_endpoint = "http://localhost:8001"
+
+[chains.eth.local2]
+chain_id = "31338"
+ws_endpoint = "ws://localhost:8645"
+http_endpoint = "http://localhost:8645"
 aggregator_endpoint = "http://localhost:8001"
 
 [chains.eth.sepolia]

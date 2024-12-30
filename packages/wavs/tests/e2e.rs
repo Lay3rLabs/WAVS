@@ -32,9 +32,12 @@ mod e2e {
     fn e2e_tests() {
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                let anvil = Some(Anvil::new().spawn());
+                // should match the wavs.toml
+                let anvil = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
+                let anvil2 = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
             } else {
                 let anvil: Option<AnvilInstance> = None;
+                let anvil2: Option<AnvilInstance> = None;
             }
         }
         let mut config = {
@@ -43,10 +46,7 @@ mod e2e {
                     let mut cli_args = TestApp::default_cli_args();
                     cli_args.dotenv = None;
                     cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
-                    if let Some(anvil) = anvil.as_ref() {
-                        cli_args.chain_config.ws_endpoint = Some(anvil.ws_endpoint().to_string());
-                        cli_args.chain_config.http_endpoint = Some(anvil.endpoint().to_string());
-                    }
+                    cli_args.home = Some(PathBuf::from(".."));
                     TestApp::new_with_args(cli_args)
                         .await
                         .config
@@ -78,7 +78,7 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.eth_chains = config.eth_chains.clone();
+                config.eth_chains = vec!["local".to_string(), "local2".to_string()];
             } else {
                 config.eth_chains = Vec::new();
             }
@@ -136,8 +136,11 @@ mod e2e {
                             (false, true) => {
                                 run_tests_ethereum(
                                     config.eth_chains[0].clone(),
+                                    config.eth_chains[1].clone(),
                                     #[allow(clippy::unnecessary_literal_unwrap)]
                                     anvil.unwrap(),
+                                    #[allow(clippy::unnecessary_literal_unwrap)]
+                                    anvil2.unwrap(),
                                     http_client,
                                     config,
                                     digests,
@@ -166,7 +169,9 @@ mod e2e {
 
     async fn run_tests_ethereum(
         chain_name: String,
+        chain_name2: String,
         anvil: AnvilInstance,
+        anvil2: AnvilInstance,
         http_client: HttpClient,
         config: Config,
         digests: Digests,
@@ -186,6 +191,46 @@ mod e2e {
         let trigger_echo_service_id = service_ids.eth_trigger_echo();
         let trigger_echo_aggregate_service_id = service_ids.eth_trigger_echo_aggregate();
         let trigger_square_service_id = service_ids.eth_trigger_square();
+        let app2 = EthTestApp::new(config.clone(), anvil2).await;
+
+
+        http_client
+            .create_service(
+                echo_service_id.clone(),
+                echo_wasm_digest.clone(),
+                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
+                    app.avs_client.layer.trigger.into(),
+                ))),
+                Submit::EthSignedMessage {
+                    chain_name: chain_name.clone(),
+                    hd_index: 0,
+                    service_manager_addr: Address::Eth(AddrEth::new(
+                        app.avs_client.layer.service_manager.into(),
+                    )),
+                },
+            )
+            .await
+            .unwrap();
+
+        // 2nd chain copy paste
+        http_client
+            .create_service(
+                echo_service_id2.clone(),
+                echo_wasm_digest.clone(),
+                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
+                    app2.avs_client.layer.trigger.into(),
+                ))),
+                Submit::EthSignedMessage {
+                    chain_name: chain_name2.clone(),
+                    hd_index: 0,
+                    service_manager_addr: Address::Eth(AddrEth::new(
+                        app2.avs_client.layer.service_manager.into(),
+                    )),
+                },
+            )
+            .await
+            .unwrap();
+        tracing::info!("(2) Service created: {}", echo_service_id2);
 
         for (service_id, digest, is_aggregate) in [
             (
