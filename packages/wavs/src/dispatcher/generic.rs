@@ -377,7 +377,10 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx(service_manager_addr.clone())),
+                    submit: Some(Submit::eth_aggregator_tx(
+                        "eth".to_string(),
+                        service_manager_addr.clone(),
+                    )),
                 },
             )]
             .into(),
@@ -398,7 +401,7 @@ mod tests {
             trigger_config: action.config,
             wasm_result: payload.into(),
             trigger_id: TriggerId::new(2),
-            submit: Submit::eth_aggregator_tx(service_manager_addr),
+            submit: Submit::eth_aggregator_tx("eth".to_string(), service_manager_addr),
         };
         assert_eq!(processed[0], expected);
     }
@@ -460,7 +463,10 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
+                    submit: Some(Submit::eth_aggregator_tx(
+                        "eth".to_string(),
+                        rand_address_eth(),
+                    )),
                 },
             )]
             .into(),
@@ -536,7 +542,10 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: Trigger::eth_event(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
+                    submit: Some(Submit::eth_aggregator_tx(
+                        "eth".to_string(),
+                        rand_address_eth(),
+                    )),
                 },
             )]
             .into(),

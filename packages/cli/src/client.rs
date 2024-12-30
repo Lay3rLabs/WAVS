@@ -80,6 +80,7 @@ impl HttpClient {
 
     pub async fn create_eth_trigger_echo_service(
         &self,
+        chain_name: String,
         trigger_address: alloy::primitives::Address,
         service_manager_address: alloy::primitives::Address,
         digest: Digest,
@@ -88,6 +89,7 @@ impl HttpClient {
             digest,
             Address::Eth(AddrEth::new(trigger_address.into())),
             Submit::EthSignedMessage {
+                chain_name,
                 hd_index: 0,
                 service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
             },

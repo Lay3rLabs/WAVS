@@ -36,7 +36,7 @@ pub struct Config {
     pub wasm_threads: usize,
 
     /// The chosen ethereum chain name
-    pub chain: Option<String>,
+    pub eth_chains: Vec<String>,
 
     /// The chosen cosmos chain name
     pub cosmos_chain: Option<String>,
@@ -59,7 +59,7 @@ impl Default for Config {
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
             cosmos_chain: None,
-            chain: None,
+            eth_chains: Vec::new(),
             chains: ChainConfigs {
                 cosmos: HashMap::new(),
                 eth: HashMap::new(),
@@ -133,17 +133,23 @@ impl Config {
         Ok(Some(config_merged))
     }
 
-    pub fn ethereum_chain_config(&self) -> Result<EthereumChainConfig> {
-        let chain_name = self.chain.as_deref();
-        self.try_ethereum_chain_config()?.ok_or(anyhow!(
-            "No chain config found for ethereum \"{}\"",
-            chain_name.unwrap_or_default()
-        ))
-    }
-    pub fn try_ethereum_chain_config(&self) -> Result<Option<EthereumChainConfig>> {
-        let chain_name = self.chain.as_deref();
+    pub fn ethereum_chain_configs(&self) -> Result<HashMap<String, EthereumChainConfig>> {
+        let mut chains = HashMap::with_capacity(self.eth_chains.len());
+        for chain in &self.eth_chains {
+            let config = self.try_ethereum_chain_config(chain)?;
+            if let Some(config) = config {
+                chains.insert(chain.clone(), config);
+            }
+        }
 
-        let config = match chain_name.and_then(|chain_name| self.chains.eth.get(chain_name)) {
+        Ok(chains)
+    }
+
+    pub fn try_ethereum_chain_config(
+        &self,
+        chain_name: &str,
+    ) -> Result<Option<EthereumChainConfig>> {
+        let config = match self.chains.eth.get(chain_name) {
             None => return Ok(None),
             Some(config) => config,
         };

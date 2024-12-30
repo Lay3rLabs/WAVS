@@ -113,9 +113,13 @@ pub enum Submit {
         verifier_addr: Address,
     }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
     /// Sending a message to the aggregator on eth chain
-    EthAggregatorTx { service_manager_addr: Address },
+    EthAggregatorTx {
+        chain_name: String,
+        service_manager_addr: Address,
+    },
     /// Sending a message to the eth chain directly
     EthSignedMessage {
+        chain_name: String,
         service_manager_addr: Address,
         /// The hd index of the mnemonic to sign with
         hd_index: u32,
@@ -129,13 +133,19 @@ impl Submit {
             verifier_addr,
         }
     }
-    pub fn eth_aggregator_tx(service_manager_addr: Address) -> Self {
+    pub fn eth_aggregator_tx(chain_name: String, service_manager_addr: Address) -> Self {
         Submit::EthAggregatorTx {
+            chain_name,
             service_manager_addr,
         }
     }
-    pub fn eth_signed_message(hd_index: u32, service_manager_addr: Address) -> Self {
+    pub fn eth_signed_message(
+        chain_name: String,
+        hd_index: u32,
+        service_manager_addr: Address,
+    ) -> Self {
         Submit::EthSignedMessage {
+            chain_name,
             hd_index,
             service_manager_addr,
         }

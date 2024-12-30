@@ -129,7 +129,7 @@ impl MockE2ETestRunner {
                 permissions,
                 envs,
                 testable: None,
-                submit: Submit::eth_aggregator_tx(rand_address_eth()),
+                submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth()),
             },
             wasm_url: None,
         })

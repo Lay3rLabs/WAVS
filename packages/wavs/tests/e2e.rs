@@ -78,9 +78,9 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.chain = Some(config.chain.clone().unwrap());
+                config.eth_chains = config.eth_chains.clone();
             } else {
-                config.chain = None;
+                config.eth_chains = Vec::new();
             }
         }
 
@@ -129,12 +129,13 @@ mod e2e {
                         let digests = Digests::new(http_client.clone());
                         let service_ids = ServiceIds::new();
 
-                        match (config.cosmos_chain.is_some(), config.chain.is_some()) {
+                        match (config.cosmos_chain.is_some(), !config.eth_chains.is_empty()) {
                             (true, false) => {
                                 run_tests_cosmos(http_client, config, digests, service_ids).await
                             }
                             (false, true) => {
                                 run_tests_ethereum(
+                                    config.eth_chains[0].clone(),
                                     #[allow(clippy::unnecessary_literal_unwrap)]
                                     anvil.unwrap(),
                                     http_client,
@@ -164,6 +165,7 @@ mod e2e {
     }
 
     async fn run_tests_ethereum(
+        chain_name: String,
         anvil: AnvilInstance,
         http_client: HttpClient,
         config: Config,
