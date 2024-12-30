@@ -223,11 +223,7 @@ impl EthChainWatcherContext {
     async fn handle_http_polling(&self, provider: RootProvider<BoxTransport>, filter: Filter) {
         let mut last_block = provider.get_block_number().await.unwrap_or_default();
 
-        loop {
-            if self.shutdown_signal.load(Ordering::Relaxed) {
-                break;
-            }
-
+        while !self.shutdown_signal.load(Ordering::Relaxed) {
             if let Ok(current_block) = provider.get_block_number().await {
                 if current_block > last_block {
                     if let Ok(logs) = provider
@@ -246,6 +242,25 @@ impl EthChainWatcherContext {
                         }
                     }
                     last_block = current_block;
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    async fn handle_poller(
+        &self,
+        provider: RootProvider<BoxTransport>,
+        poll_stream: impl Stream<Item = Vec<Log>> + Unpin,
+    ) {
+        let mut stream = Box::pin(poll_stream);
+
+        while !self.shutdown_signal.load(Ordering::Relaxed) {
+            while let Some(logs) = stream.next().await {
+                for log in logs {
+                    if let Err(e) = self.process_log(log, provider.clone()).await {
+                        tracing::error!("Error processing log: {:?}", e);
+                    }
                 }
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
@@ -347,8 +362,15 @@ impl CoreTriggerManager {
                                         );
                                         context.handle_websocket_stream(query_client.provider.clone(), subscription.into_stream()).await;
                                     } else {
-                                        tracing::warn!("WebSocket subscription failed, falling back to HTTP polling");
-                                        context.handle_http_polling(query_client.provider.clone(), filter).await;
+                                        tracing::warn!("WebSocket subscription failed, falling back to poller");
+                                        match query_client.provider.watch_logs(&filter).await {
+                                            Ok(poller) => {
+                                                context.handle_poller(query_client.provider.clone(), poller.into_stream()).await;
+                                            }
+                                            Err(e) => {
+                                                tracing::error!("Failed to create poller: {:?}", e);
+                                            }
+                                        }
                                     }
                                 }
                                 None => {
