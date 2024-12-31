@@ -5,6 +5,7 @@ mod rpc;
 use anyhow::{anyhow, Result};
 use layer_climb_address::*;
 use layer_climb_config::*;
+use layer_climb_proto::Coin;
 use layer_wasi::Reactor;
 use serde::{Deserialize, Serialize};
 
@@ -47,7 +48,10 @@ fn handle_request(req: CosmosQueryRequest) -> Result<CosmosQueryResponse> {
                 .map(CosmosQueryResponse::BlockHeight),
             CosmosQueryRequest::Balance { address } => get_balance(chain_config, reactor, address)
                 .await
-                .map(CosmosQueryResponse::Balance),
+                .map(|coin| match coin {
+                    Some(coin) => CosmosQueryResponse::Balance(coin.amount),
+                    None => CosmosQueryResponse::Balance("0".to_string()),
+                }),
         }
     })?;
 
@@ -64,13 +68,13 @@ async fn get_balance(
     chain_config: ChainConfig,
     reactor: Reactor,
     address: Address,
-) -> Result<String> {
+) -> Result<Option<Coin>> {
     let req = layer_climb_proto::bank::QueryBalanceRequest {
         address: address.to_string(),
         denom: chain_config.gas_denom.clone(),
     };
 
-    rpc::abci_protobuf_query(
+    rpc::abci_protobuf_query::<_, layer_climb_proto::bank::QueryBalanceResponse>(
         chain_config,
         reactor,
         "/cosmos.bank.v1beta1.Query/Balance",
@@ -78,6 +82,7 @@ async fn get_balance(
         None,
     )
     .await
+    .map(|resp| resp.balance)
 }
 
 bindings::export!(Component with_types_in bindings);

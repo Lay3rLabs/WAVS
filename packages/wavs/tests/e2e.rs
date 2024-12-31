@@ -228,11 +228,7 @@ mod e2e {
                 false,
                 false,
             ),
-            (
-                cosmos_query_service_id.clone(),
-                cosmos_query_digest,
-                false,
-            ),
+            (cosmos_query_service_id.clone(), cosmos_query_digest, false),
         ] {
             let (avs_client, avs_trigger_addr, avs_service_manager_addr, chain_name) =
                 match is_second_ethereum {
@@ -487,8 +483,8 @@ mod e2e {
         }
 
         if let Some(service_id) = cosmos_query_service_id {
-            tracing::info!("Submitting cosmos query task...");
-            let square_trigger_id = avs_client
+            tracing::info!("Submitting cosmos query tasks...");
+            let trigger_id = avs_client
                 .trigger
                 .add_trigger(
                     service_id.to_string(),
@@ -502,27 +498,23 @@ mod e2e {
                 let avs_client = avs_client.clone();
                 async move {
                     loop {
-                        let signed_data = avs_client
-                            .load_signed_data(square_trigger_id)
-                            .await
-                            .unwrap();
+                        let signed_data = avs_client.load_signed_data(trigger_id).await.unwrap();
                         match signed_data {
                             Some(signed_data) => {
                                 tracing::info!("GOT THE SIGNATURE!");
                                 tracing::info!("{}", hex::encode(signed_data.signature));
 
-                                let response =
-                                    serde_json::from_slice::<CosmosQueryResponse>(&signed_data.data)
-                                        .unwrap();
+                                let response = serde_json::from_slice::<CosmosQueryResponse>(
+                                    &signed_data.data,
+                                )
+                                .unwrap();
 
                                 tracing::info!("GOT THE RESPONSE!");
                                 match response {
                                     CosmosQueryResponse::BlockHeight(height) => {
                                         tracing::info!("height: {}", height);
-                                    },
-                                    CosmosQueryResponse::Balance(height) => {
-                                        tracing::info!("balance: {}", height);
                                     }
+                                    _ => panic!("Expected block height"),
                                 }
 
                                 break;
@@ -532,7 +524,68 @@ mod e2e {
                                     "Waiting for task response by {} on {} for trigger_id {}...",
                                     avs_client.eth.address(),
                                     avs_client.service_manager_contract_address,
-                                    square_trigger_id
+                                    trigger_id
+                                );
+                            }
+                        }
+                        // still open, waiting...
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+
+            let trigger_id = avs_client
+                .trigger
+                .add_trigger(
+                    service_id.to_string(),
+                    "default".to_string(),
+                    serde_json::to_vec(&CosmosQueryRequest::Balance {
+                        // this test expects that we're running on Starship
+                        // https://github.com/cosmology-tech/starship/blob/5635e853ac9e364f0ae9c87646536c30b6519748/starship/charts/devnet/configs/keys.json#L27
+                        address: Address::new_cosmos_string(
+                            "osmo1pss7nxeh3f9md2vuxku8q99femnwdjtc8ws4un",
+                            None,
+                        )
+                        .unwrap(),
+                    })
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            tokio::time::timeout(Duration::from_secs(10), {
+                let avs_client = avs_client.clone();
+                async move {
+                    loop {
+                        let signed_data = avs_client.load_signed_data(trigger_id).await.unwrap();
+                        match signed_data {
+                            Some(signed_data) => {
+                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("{}", hex::encode(signed_data.signature));
+
+                                let response = serde_json::from_slice::<CosmosQueryResponse>(
+                                    &signed_data.data,
+                                )
+                                .unwrap();
+
+                                tracing::info!("GOT THE RESPONSE!");
+                                match response {
+                                    CosmosQueryResponse::Balance(balance) => {
+                                        tracing::info!("balance: {}", balance);
+                                    }
+                                    _ => panic!("Expected balance"),
+                                }
+
+                                break;
+                            }
+                            None => {
+                                tracing::info!(
+                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.address(),
+                                    avs_client.service_manager_contract_address,
+                                    trigger_id
                                 );
                             }
                         }
@@ -678,9 +731,7 @@ mod e2e {
     #[serde(rename_all = "snake_case")]
     pub enum CosmosQueryRequest {
         BlockHeight,
-        Balance {
-            address: Address,
-        },
+        Balance { address: Address },
     }
 
     #[derive(Deserialize, Debug)]
@@ -689,8 +740,6 @@ mod e2e {
         BlockHeight(u64),
         Balance(String),
     }
-
-
 
     pub struct ServiceIds {}
 

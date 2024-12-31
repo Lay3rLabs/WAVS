@@ -4,11 +4,18 @@
 starship start --config ./starship.yaml
 ```
 
-## Run via wavs test
-in root `packages/wavs`:
+## (re)build component
+in repo root:
 
 ```bash
-RUST_LOG=info,wavs=debug cargo test --features e2e_tests_ethereum_cosmos_query e2e_tests -- --nocapture
+just wasi-build
+```
+
+## Run via wavs test
+in repo `packages/wavs`:
+
+```bash
+RUST_LOG="info,wavs=debug" cargo test --features e2e_tests_ethereum_cosmos_query e2e_tests -- --nocapture
 ```
 
 ## Stop local chain

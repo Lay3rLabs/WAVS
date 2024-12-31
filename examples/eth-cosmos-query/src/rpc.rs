@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use layer_climb_config::ChainConfig;
-use layer_wasi::{Reactor, Request, WasiPollable};
+use layer_wasi::{Method, Reactor, Request, WasiPollable};
 use tendermint_rpc::Response;
 
 pub async fn block(
@@ -11,7 +11,7 @@ pub async fn block(
     send(
         reactor,
         &chain_config,
-        &tendermint_rpc::endpoint::block::Request {
+        tendermint_rpc::endpoint::block::Request {
             height: height.map(|h| h.try_into()).transpose()?,
         },
     )
@@ -37,7 +37,7 @@ pub async fn abci_query(
     Ok(send(
         reactor,
         &chain_config,
-        &tendermint_rpc::endpoint::abci_query::Request {
+        tendermint_rpc::endpoint::abci_query::Request {
             path: Some(path),
             data,
             height,
@@ -75,12 +75,14 @@ where
 async fn send<T: tendermint_rpc::Request>(
     reactor: Reactor,
     chain_config: &ChainConfig,
-    data: &T,
+    data: T,
 ) -> Result<T::Response> {
-    let mut req = Request::get(&chain_config.rpc_endpoint.clone().unwrap())
+    let mut req = Request::new(Method::Post, &chain_config.rpc_endpoint.clone().unwrap())
         .map_err(|e| anyhow!("{:?}", e))?;
 
-    req.json(data).map_err(|e| anyhow!("{:?}", e))?;
+    req.body = data.into_json().as_bytes().to_vec();
+    req.headers
+        .push(("content-type".to_string(), "application/json".to_string()));
 
     let res = reactor.send(req).await.map_err(|e| anyhow!("{:?}", e))?;
 

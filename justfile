@@ -45,10 +45,6 @@ wasi-build:
     @cp ./examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
     @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
 
-query-build:
-    `cd examples/eth-cosmos-query; cargo component build --release`
-    `cp ./examples/target/wasm32-wasip1/release/eth_cosmos_query.wasm {{WASI_OUT_DIR}}`
-
 # compile solidity contracts and copy the ABI to contracts/abi
 solidity-build:
     mkdir -p {{REPO_ROOT}}/out
