@@ -26,9 +26,10 @@ WAVS is node software for operators that runs an AVS [WASI](https://wasi.dev/) r
 
 Onchain events can trigger a service's WASI components, which are run offchain by operators in the AVS WASI runtime. Results are then verified and brought back onchain, enabling the decentralized execution of offchain services which are verifiable onchain.
 
-1. A service is defined, including an operator set, WASI component, triggers, and a results format.
+1. A service is defined, including a WASI component and triggers.
 2. Service operators listen for onchain events.
 3. An onchain event triggers a task, and operators run the WASI component offchain.
-4. Operators sign the result of the task, and the signatures are sent to the aggregator contract.
-5. Signatures are aggregated, and the result is sent onchain.
+4. Operators sign the result of the task.
+5. (Optional for EVM) The signatures are sent to the aggregator contract which consolidates the results into one transaction.
+6. The result is submitted onchain.
 
