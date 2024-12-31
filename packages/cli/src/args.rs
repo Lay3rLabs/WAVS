@@ -14,6 +14,9 @@ pub struct CliArgs {
     #[clap(long, default_value = "http://localhost:8000")]
     pub wavs_endpoint: String,
 
+    #[clap(long, default_value = "local")]
+    pub eth_chain_name: String,
+
     #[command(subcommand)]
     pub command: Command,
 }

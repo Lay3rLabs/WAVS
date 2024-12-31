@@ -79,6 +79,7 @@ async fn main() {
 
                 let service_id = http_client
                     .create_eth_trigger_echo_service(
+                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,
@@ -126,6 +127,7 @@ async fn main() {
 
                 let service_id = http_client
                     .create_eth_trigger_echo_service(
+                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,
@@ -207,6 +209,7 @@ async fn main() {
 
                 service_id = http_client
                     .create_eth_trigger_echo_service(
+                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,

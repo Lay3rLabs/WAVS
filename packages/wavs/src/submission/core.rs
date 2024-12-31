@@ -28,8 +28,8 @@ use utils::{
 pub struct CoreSubmission {
     cosmos_clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
     cosmos_chain: Option<ChainCosmosSubmission>,
-    eth_clients: Arc<Mutex<HashMap<u32, EthSigningClient>>>,
-    eth_chain: Option<ChainEthSubmission>,
+    eth_clients: Arc<Mutex<HashMap<(String, u32), EthSigningClient>>>,
+    eth_chains: HashMap<String, ChainEthSubmission>,
     http_client: reqwest::Client,
 }
 
@@ -99,17 +99,21 @@ impl CoreSubmission {
             .map(ChainCosmosSubmission::new)
             .transpose()?;
 
-        let eth_chain = config
-            .try_ethereum_chain_config()
-            .map_err(SubmissionError::Ethereum)?
-            .map(ChainEthSubmission::new)
-            .transpose()?;
+        let eth_chain_configs = config
+            .ethereum_chain_configs()
+            .map_err(SubmissionError::Ethereum)?;
+
+        let mut eth_chains = HashMap::new();
+
+        for (name, config) in eth_chain_configs.into_iter() {
+            eth_chains.insert(name.clone(), ChainEthSubmission::new(config)?);
+        }
 
         Ok(Self {
             cosmos_clients: Arc::new(Mutex::new(HashMap::new())),
             cosmos_chain,
             eth_clients: Arc::new(Mutex::new(HashMap::new())),
-            eth_chain,
+            eth_chains,
             http_client: reqwest::Client::new(),
         })
     }
@@ -118,12 +122,6 @@ impl CoreSubmission {
         self.cosmos_chain
             .as_ref()
             .ok_or(SubmissionError::MissingCosmosChain)
-    }
-
-    fn get_eth_chain(&self) -> Result<&ChainEthSubmission, SubmissionError> {
-        self.eth_chain
-            .as_ref()
-            .ok_or(SubmissionError::MissingEthereumChain)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
@@ -156,16 +154,25 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn get_eth_client(&self, hd_index: u32) -> Result<EthSigningClient, SubmissionError> {
+    async fn get_eth_client(
+        &self,
+        chain_name: String,
+        hd_index: u32,
+    ) -> Result<EthSigningClient, SubmissionError> {
         {
             let lock = self.eth_clients.lock().unwrap();
 
-            if let Some(client) = lock.get(&hd_index) {
+            if let Some(client) = lock.get(&(chain_name.clone(), hd_index)) {
                 return Ok(client.clone());
             }
         }
 
-        let mut client_config = self.get_eth_chain()?.client_config.clone();
+        let mut client_config = self
+            .eth_chains
+            .get(&chain_name)
+            .ok_or(SubmissionError::MissingCosmosChain)?
+            .client_config
+            .clone();
 
         client_config.hd_index = Some(hd_index);
 
@@ -176,7 +183,7 @@ impl CoreSubmission {
 
         {
             let mut lock = self.eth_clients.lock().unwrap();
-            lock.insert(hd_index, client.clone());
+            lock.insert((chain_name, hd_index), client.clone());
         }
 
         Ok(client)
@@ -244,8 +251,16 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn maybe_tap_eth_faucet(&self, client: &EthSigningClient) -> Result<(), SubmissionError> {
-        let _faucet_url = match self.get_eth_chain()?.faucet_url.clone() {
+    async fn maybe_tap_eth_faucet(
+        &self,
+        chain_name: String,
+        client: &EthSigningClient,
+    ) -> Result<(), SubmissionError> {
+        let chain_config = self
+            .eth_chains
+            .get(&chain_name)
+            .ok_or(SubmissionError::MissingEthereumChain)?;
+        let _faucet_url = match chain_config.faucet_url.clone() {
             Some(url) => url,
             None => {
                 tracing::debug!("No faucet configured, skipping");
@@ -259,6 +274,7 @@ impl CoreSubmission {
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn submit_to_ethereum(
         &self,
+        chain_name: String,
         eth_client: EthSigningClient,
         trigger_address: Address,
         service_manager_address: Address,
@@ -310,8 +326,12 @@ impl CoreSubmission {
                 service_id: service_id.to_string(),
             };
 
-            let aggregator_msg_url = self
-                .get_eth_chain()?
+            let chain_config = self
+                .eth_chains
+                .get(&chain_name)
+                .ok_or(SubmissionError::MissingEthereumChain)?;
+
+            let aggregator_msg_url = chain_config
                 .aggregator_url
                 .as_ref()
                 .ok_or(SubmissionError::MissingAggregatorEndpoint)?
@@ -425,8 +445,8 @@ impl Submission for CoreSubmission {
                     } => {
                         while let Some(msg) = rx.recv().await {
                             let eth_client = match msg.submit() {
-                                Submit::EthSignedMessage{hd_index, .. } => {
-                                    let client = match _self.get_eth_client(*hd_index).await {
+                                Submit::EthSignedMessage{hd_index, chain_name, .. } => {
+                                    let client = match _self.get_eth_client(chain_name.to_string(), *hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -434,15 +454,15 @@ impl Submission for CoreSubmission {
                                         }
                                     };
 
-                                    if let Err(err) = _self.maybe_tap_eth_faucet(&client).await {
+                                    if let Err(err) = _self.maybe_tap_eth_faucet(chain_name.to_string(), &client).await {
                                         tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.address(), hd_index, err);
                                     }
 
                                     Some(client)
                                 },
-                                Submit::EthAggregatorTx{..} => {
+                                Submit::EthAggregatorTx{chain_name, ..} => {
                                     let hd_index = 0;
-                                    let client = match _self.get_eth_client(hd_index).await {
+                                    let client = match _self.get_eth_client(chain_name.to_string(), hd_index).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -450,7 +470,7 @@ impl Submission for CoreSubmission {
                                         }
                                     };
 
-                                    if let Err(err) = _self.maybe_tap_eth_faucet(&client).await {
+                                    if let Err(err) = _self.maybe_tap_eth_faucet(chain_name.to_string(), &client).await {
                                         tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.address(), hd_index, err);
                                     }
 
@@ -486,27 +506,27 @@ impl Submission for CoreSubmission {
                             };
 
                             match msg.submit() {
-                                Submit::EthSignedMessage{service_manager_addr, ..} => {
+                                Submit::EthSignedMessage{service_manager_addr, chain_name, ..} => {
                                     match &msg.trigger_config().trigger {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
                                         Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            if let Err(e) = _self.submit_to_ethereum(eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, false).await {
+                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, false).await {
                                                 tracing::error!("{:?}", e);
                                             }
                                         },
                                     }
                                 },
-                                Submit::EthAggregatorTx{service_manager_addr} => {
+                                Submit::EthAggregatorTx{service_manager_addr, chain_name} => {
                                     match &msg.trigger_config().trigger  {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
                                         Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            if let Err(e) = _self.submit_to_ethereum(eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, true).await {
+                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, true).await {
                                                 tracing::error!("{:?}", e);
                                             }
                                         },

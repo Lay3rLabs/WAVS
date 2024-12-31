@@ -3,9 +3,9 @@
 log_level = ["info", "wavs=debug", "just_to_confirm_test=debug"]
 
 # chosen eth chain name 
-chain = "local"
+eth_chains = ["local"]
 
-# chosen cosmos chain name 
+# chosen cosmos chain names 
 cosmos_chain = "layer-local"
 
 [chains.cosmos.layer-local]

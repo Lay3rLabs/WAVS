@@ -49,9 +49,10 @@ jobs:
         with:
           toolchain: 1.83.0
           command: test
-          args: --workspace --locked --features e2e_tests_ethereum_baseline
+          args: --workspace --locked --features e2e_tests_ethereum_baseline -- --nocapture
         env:
           RUST_BACKTRACE: 1
+          RUST_LOG: info
 
   lints:
     name: Lints

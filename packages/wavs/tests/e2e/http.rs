@@ -81,13 +81,16 @@ impl HttpClient {
 
     pub async fn register_service_on_aggregator(
         &self,
+        chain_name: &str,
         service_manager_address: alloy::primitives::Address,
         service_id: ServiceID,
         config: &Config,
     ) -> Result<()> {
-        let aggregator_app_url = config
-            .ethereum_chain_config()
+        let configs = config.ethereum_chain_configs().unwrap();
+        let aggregator_app_url = configs
+            .get(chain_name)
             .unwrap()
+            .clone()
             .aggregator_endpoint
             .unwrap();
         self.inner
