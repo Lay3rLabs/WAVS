@@ -182,7 +182,7 @@ impl CoreTriggerManager {
             streams.push(event_stream);
         }
 
-        for (chain_name, query_client) in ethereum_clients.clone().into_iter() {
+        for (chain_name, query_client) in ethereum_clients.iter() {
             tracing::debug!("Trigger Manager for Ethereum chain {} started", chain_name);
 
             // Start the event stream
@@ -194,6 +194,8 @@ impl CoreTriggerManager {
                 .await
                 .map_err(|e| TriggerError::Ethereum(e.into()))?
                 .into_stream();
+
+            let chain_name = chain_name.clone();
 
             let event_stream = Box::pin(stream.map(move |log| {
                 Ok(BlockTriggers::EthereumLog {
@@ -222,14 +224,11 @@ impl CoreTriggerManager {
                             (Ok(service_id), Ok(workflow_id)) => {
                                 let trigger_id = TriggerId::new(trigger_id);
 
+                                let query_client = ethereum_clients.get(&chain_name).unwrap();
+
                                 let contract = LayerTrigger::new(
                                     log.address(),
-                                    ethereum_clients
-                                        .get(&chain_name)
-                                        .as_ref()
-                                        .unwrap()
-                                        .provider
-                                        .clone(),
+                                    query_client.provider.clone(),
                                 );
 
                                 if let Ok(payload) = contract
