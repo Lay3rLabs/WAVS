@@ -297,13 +297,14 @@ mod e2e {
                             avs_client.load_signed_data(echo_trigger_id).await.unwrap();
                         match signed_data {
                             Some(signed_data) => {
-                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("(endpoint: {}) GOT THE SIGNATURE!", avs_client.eth.config.ws_endpoint);
                                 tracing::info!("{}", hex::encode(signed_data.signature));
                                 break;
                             }
                             None => {
                                 tracing::info!(
-                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    "(endpoint: {}) Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.config.ws_endpoint,
                                     avs_client.eth.address(),
                                     avs_client.service_manager_contract_address,
                                     echo_trigger_id
@@ -339,13 +340,14 @@ mod e2e {
                             avs_client.load_signed_data(echo_trigger_id).await.unwrap();
                         match signed_data {
                             Some(signed_data) => {
-                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("(endpoint: {}) GOT THE SIGNATURE!", avs_client.eth.config.ws_endpoint);
                                 tracing::info!("{}", hex::encode(signed_data.signature));
                                 break;
                             }
                             None => {
                                 tracing::info!(
-                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    "(endpoint: {}) Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.config.ws_endpoint,
                                     avs_client.eth.address(),
                                     avs_client.service_manager_contract_address,
                                     echo_trigger_id
@@ -383,7 +385,7 @@ mod e2e {
                             .unwrap();
                         match signed_data {
                             Some(signed_data) => {
-                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("(endpoint: {}) GOT THE SIGNATURE!", avs_client.eth.config.ws_endpoint);
                                 tracing::info!("{}", hex::encode(signed_data.signature));
 
                                 let response =
@@ -396,7 +398,8 @@ mod e2e {
                             }
                             None => {
                                 tracing::info!(
-                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    "(endpoint: {}) Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.config.ws_endpoint,
                                     avs_client.eth.address(),
                                     avs_client.service_manager_contract_address,
                                     square_trigger_id
@@ -449,7 +452,10 @@ mod e2e {
 
                         match (signed_data_1, signed_data_2) {
                             (Some(signed_data_1), Some(signed_data_2)) => {
-                                tracing::info!("GOT THE SIGNATURES!");
+                                tracing::info!(
+                                    "(endpoint: {}) GOT THE AGGREGATED SIGNATURES!",
+                                    avs_client.eth.config.ws_endpoint
+                                );
                                 tracing::info!("1: {}", hex::encode(signed_data_1.signature));
                                 tracing::info!("2: {}", hex::encode(signed_data_2.signature));
                                 break;
