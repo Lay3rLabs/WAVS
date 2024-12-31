@@ -70,7 +70,7 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_cosmos")] {
-                config.cosmos_chain = Some(config.cosmos_chain.clone().unwrap());
+                config.cosmos_chain = Some("layer-local".to_string());
             } else {
                 config.cosmos_chain = None;
             }
@@ -180,75 +180,69 @@ mod e2e {
         tracing::info!("Running e2e ethereum tests");
 
         let app = EthTestApp::new(config.clone(), anvil).await;
+        let app_2 = EthTestApp::new(config.clone(), anvil2).await;
+
         let avs_trigger_addr = Address::Eth(AddrEth::new(app.avs_client.layer.trigger.into()));
+        let avs_trigger_addr_2 = Address::Eth(AddrEth::new(app_2.avs_client.layer.trigger.into()));
+
         let avs_service_manager_addr =
             Address::Eth(AddrEth::new(app.avs_client.layer.service_manager.into()));
+        let avs_service_manager_addr_2 =
+            Address::Eth(AddrEth::new(app_2.avs_client.layer.service_manager.into()));
+
         let avs_client: LayerContractClientSimple = app.avs_client.into();
+        let avs_client_2: LayerContractClientSimple = app_2.avs_client.into();
 
         let trigger_echo_digest = digests.eth_trigger_echo_digest().await;
         let trigger_square_digest = digests.eth_trigger_square_digest().await;
 
         let trigger_echo_service_id = service_ids.eth_trigger_echo();
+        let trigger_echo_service_id_2 = service_ids.eth_trigger_echo_2();
         let trigger_echo_aggregate_service_id = service_ids.eth_trigger_echo_aggregate();
         let trigger_square_service_id = service_ids.eth_trigger_square();
-        let app2 = EthTestApp::new(config.clone(), anvil2).await;
 
-
-        http_client
-            .create_service(
-                echo_service_id.clone(),
-                echo_wasm_digest.clone(),
-                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
-                    app.avs_client.layer.trigger.into(),
-                ))),
-                Submit::EthSignedMessage {
-                    chain_name: chain_name.clone(),
-                    hd_index: 0,
-                    service_manager_addr: Address::Eth(AddrEth::new(
-                        app.avs_client.layer.service_manager.into(),
-                    )),
-                },
-            )
-            .await
-            .unwrap();
-
-        // 2nd chain copy paste
-        http_client
-            .create_service(
-                echo_service_id2.clone(),
-                echo_wasm_digest.clone(),
-                TriggerRequest::eth_event(Address::Eth(AddrEth::new(
-                    app2.avs_client.layer.trigger.into(),
-                ))),
-                Submit::EthSignedMessage {
-                    chain_name: chain_name2.clone(),
-                    hd_index: 0,
-                    service_manager_addr: Address::Eth(AddrEth::new(
-                        app2.avs_client.layer.service_manager.into(),
-                    )),
-                },
-            )
-            .await
-            .unwrap();
-        tracing::info!("(2) Service created: {}", echo_service_id2);
-
-        for (service_id, digest, is_aggregate) in [
+        for (service_id, digest, is_aggregate, is_second_ethereum) in [
             (
                 trigger_echo_service_id.clone(),
                 trigger_echo_digest.clone(),
                 false,
+                false,
+            ),
+            (
+                trigger_echo_service_id_2.clone(),
+                trigger_echo_digest.clone(),
+                false,
+                true,
             ),
             (
                 trigger_echo_aggregate_service_id.clone(),
                 trigger_echo_digest,
                 true,
+                false,
             ),
             (
                 trigger_square_service_id.clone(),
                 trigger_square_digest,
                 false,
+                false,
             ),
         ] {
+            let (avs_client, avs_trigger_addr, avs_service_manager_addr, chain_name) =
+                match is_second_ethereum {
+                    false => (
+                        &avs_client,
+                        &avs_trigger_addr,
+                        &avs_service_manager_addr,
+                        &chain_name,
+                    ),
+                    true => (
+                        &avs_client_2,
+                        &avs_trigger_addr_2,
+                        &avs_service_manager_addr_2,
+                        &chain_name2,
+                    ),
+                };
+
             if service_id.is_some() {
                 let service_id = service_id.unwrap();
                 let digest = digest.unwrap();
@@ -259,6 +253,7 @@ mod e2e {
                         digest,
                         TriggerRequest::eth_event(avs_trigger_addr.clone()),
                         Submit::EthSignedMessage {
+                            chain_name: chain_name.to_string(),
                             hd_index: 0,
                             service_manager_addr: avs_service_manager_addr.clone(),
                         },
@@ -271,6 +266,7 @@ mod e2e {
                 if is_aggregate {
                     http_client
                         .register_service_on_aggregator(
+                            chain_name,
                             avs_client.service_manager_contract_address,
                             service_id.clone(),
                             &config,
@@ -295,6 +291,48 @@ mod e2e {
 
             tokio::time::timeout(Duration::from_secs(10), {
                 let avs_client = avs_client.clone();
+                async move {
+                    loop {
+                        let signed_data =
+                            avs_client.load_signed_data(echo_trigger_id).await.unwrap();
+                        match signed_data {
+                            Some(signed_data) => {
+                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("{}", hex::encode(signed_data.signature));
+                                break;
+                            }
+                            None => {
+                                tracing::info!(
+                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.address(),
+                                    avs_client.service_manager_contract_address,
+                                    echo_trigger_id
+                                );
+                            }
+                        }
+                        // still open, waiting...
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        if let Some(service_id) = trigger_echo_service_id_2 {
+            tracing::info!("Submitting trigger_echo task...");
+            let echo_trigger_id = avs_client_2
+                .trigger
+                .add_trigger(
+                    service_id.to_string(),
+                    "default".to_string(),
+                    b"foo".to_vec(),
+                )
+                .await
+                .unwrap();
+
+            tokio::time::timeout(Duration::from_secs(10), {
+                let avs_client = avs_client_2.clone();
                 async move {
                     loop {
                         let signed_data =
@@ -581,6 +619,11 @@ mod e2e {
             Some(ServiceID::new("eth-trigger-echo").unwrap())
         }
 
+        #[cfg(feature = "e2e_tests_ethereum_trigger_echo")]
+        pub fn eth_trigger_echo_2(&self) -> Option<ServiceID> {
+            Some(ServiceID::new("eth-trigger-echo-2").unwrap())
+        }
+
         #[cfg(feature = "e2e_tests_ethereum_trigger_echo_aggregate")]
         pub fn eth_trigger_echo_aggregate(&self) -> Option<ServiceID> {
             Some(ServiceID::new("eth-trigger-echo-aggregate").unwrap())
@@ -598,6 +641,11 @@ mod e2e {
 
         #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo"))]
         pub fn eth_trigger_echo(&self) -> Option<ServiceID> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo"))]
+        pub fn eth_trigger_echo_2(&self) -> Option<ServiceID> {
             None
         }
 
