@@ -52,6 +52,7 @@ jobs:
           args: --workspace --locked --features e2e_tests_ethereum_baseline
         env:
           RUST_BACKTRACE: 1
+          RUST_LOG: info
 
   lints:
     name: Lints
