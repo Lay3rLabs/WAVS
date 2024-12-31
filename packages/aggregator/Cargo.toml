@@ -23,10 +23,11 @@ thiserror = { workspace = true }
 tower-http = { workspace = true }
 wildmatch = { workspace = true }
 alloy = { workspace = true }
-
 wavs = { workspace = true }
 utils = { workspace = true }
 
 [dev-dependencies]
 temp-env = { workspace = true }
 alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

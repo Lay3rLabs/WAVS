@@ -157,9 +157,11 @@ impl Config {
             #[serde(skip_serializing_if = "Option::is_none")]
             pub chain_id: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
+            pub http_endpoint: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             pub ws_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub http_endpoint: Option<String>,
+            pub aggregator_endpoint: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             pub submission_mnemonic: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -170,6 +172,7 @@ impl Config {
             chain_id: self.chain_config_override.chain_id.clone(),
             http_endpoint: self.chain_config_override.http_endpoint.clone(),
             ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
+            aggregator_endpoint: self.chain_config_override.aggregator_endpoint.clone(),
             submission_mnemonic: self.chain_config_override.submission_mnemonic.clone(),
             faucet_endpoint: self.chain_config_override.faucet_endpoint.clone(),
         };
@@ -195,8 +198,8 @@ pub struct ChainConfigs {
 pub struct CosmosChainConfig {
     pub chain_id: String,
     pub bech32_prefix: String,
-    pub rpc_endpoint: String,
-    pub grpc_endpoint: String,
+    pub rpc_endpoint: Option<String>,
+    pub grpc_endpoint: Option<String>,
     pub gas_price: f32,
     pub gas_denom: String,
     pub faucet_endpoint: Option<String>,
@@ -209,6 +212,7 @@ pub struct EthereumChainConfig {
     pub chain_id: String,
     pub ws_endpoint: String,
     pub http_endpoint: String,
+    pub aggregator_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
     /// mnemonic for the submission client (usually leave this as None and override in env)
     pub submission_mnemonic: Option<String>,
@@ -233,10 +237,11 @@ impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
 impl From<EthereumChainConfig> for EthClientConfig {
     fn from(config: EthereumChainConfig) -> Self {
         Self {
-            ws_endpoint: config.ws_endpoint,
+            ws_endpoint: Some(config.ws_endpoint),
             http_endpoint: config.http_endpoint,
             mnemonic: config.submission_mnemonic,
             hd_index: None,
+            transport: None,
         }
     }
 }

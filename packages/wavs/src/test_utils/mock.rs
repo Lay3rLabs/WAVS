@@ -7,7 +7,6 @@ use crate::{
         engine::EngineError,
         ServiceID,
     },
-    context::AppContext,
     dispatcher::Dispatcher,
     engine::{
         mock::{Function, MockEngine},
@@ -23,14 +22,14 @@ use crate::{
         types::TriggerRequest,
     },
     submission::mock::MockSubmission,
+    test_utils::address::rand_address_eth,
     triggers::mock::MockTriggerManagerChannel,
-    Digest,
+    AppContext, Digest,
 };
 use axum::{
     body::Body,
     http::{Method, Request},
 };
-use layer_climb::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tower::Service;
 
@@ -96,13 +95,11 @@ impl MockE2ETestRunner {
         &self,
         service_id: ServiceID,
         digest: Digest,
-        task_queue_address: &Address,
         function: impl Function,
     ) {
         self.create_service(
             service_id,
             digest,
-            task_queue_address,
             Permissions::default(),
             Vec::new(),
             function,
@@ -110,11 +107,11 @@ impl MockE2ETestRunner {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_service(
         &self,
         service_id: ServiceID,
         digest: Digest,
-        task_queue_address: &Address,
         permissions: Permissions,
         envs: Vec<(String, String)>,
         function: impl Function,
@@ -126,13 +123,13 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: TriggerRequest::eth_queue(task_queue_address.clone()),
+                trigger: TriggerRequest::eth_event(rand_address_eth()),
                 id: service_id,
                 digest: digest.into(),
                 permissions,
                 envs,
                 testable: None,
-                submit: Submit::eth_aggregator_tx(),
+                submit: Submit::eth_aggregator_tx(rand_address_eth()),
             },
             wasm_url: None,
         })

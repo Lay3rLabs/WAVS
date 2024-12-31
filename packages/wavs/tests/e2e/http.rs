@@ -1,5 +1,4 @@
 use anyhow::Result;
-use layer_climb::prelude::Address;
 use serde::{de::DeserializeOwned, Serialize};
 use wavs::{
     apis::{
@@ -18,6 +17,7 @@ use wavs::{
     Digest,
 };
 
+#[derive(Clone)]
 pub struct HttpClient {
     inner: reqwest::Client,
     endpoint: String,
@@ -47,11 +47,11 @@ impl HttpClient {
         &self,
         id: ServiceID,
         digest: Digest,
-        task_queue_addr: Address,
+        trigger: TriggerRequest,
         submit: Submit,
     ) -> Result<()> {
         let service = ServiceRequest {
-            trigger: TriggerRequest::eth_queue(task_queue_addr),
+            trigger,
             id,
             digest: digest.into(),
             permissions: Permissions {
@@ -75,6 +75,32 @@ impl HttpClient {
             .send()
             .await?
             .error_for_status()?;
+
+        Ok(())
+    }
+
+    pub async fn register_service_on_aggregator(
+        &self,
+        service_manager_address: alloy::primitives::Address,
+        service_id: ServiceID,
+        config: &Config,
+    ) -> Result<()> {
+        let aggregator_app_url = config
+            .ethereum_chain_config()
+            .unwrap()
+            .aggregator_endpoint
+            .unwrap();
+        self.inner
+            .post(format!("{}/add-service", aggregator_app_url))
+            .header("Content-Type", "application/json")
+            .json(
+                &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
+                    service_manager_address,
+                    service_id: service_id.to_string(),
+                },
+            )
+            .send()
+            .await?;
 
         Ok(())
     }

@@ -1,0 +1,10 @@
+# the allowed cors origins. Default is empty list.
+cors_allowed_origins = [
+  "https://lay3rlabs.github.io/*",
+  "http://localhost:*",
+  "http://127.0.0.1:*",
+]
+
+ws_endpoint = "ws://localhost:8545"
+http_endpoint = "http://localhost:8545"
+tasks_quorum = 1

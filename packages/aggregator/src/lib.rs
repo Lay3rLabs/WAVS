@@ -1,24 +1,32 @@
 pub mod args;
 pub mod config;
-pub mod context;
 pub mod http;
 pub mod test_utils;
 
-use context::AppContext;
+pub use utils::context::AppContext;
+use wavs::storage::fs::FileStorage;
 
 /// Entry point to start up the server
 /// Called from main
 pub fn run_server(ctx: AppContext, config: config::Config) {
-    ctrlc::set_handler({
+    // Make sure we have file storage first
+    let _file_storage = FileStorage::new(&config.data).unwrap();
+
+    let _ = ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {
             ctx.kill();
         }
-    })
-    .unwrap();
+    });
 
-    // start the http server in its own thread
-    http::server::start(ctx, config).unwrap();
+    let server_handle = std::thread::spawn({
+        let ctx = ctx.clone();
+        move || {
+            http::server::start(ctx.clone(), config).unwrap();
+        }
+    });
+
+    server_handle.join().unwrap();
 }
 
 // the test version of init_tracing does not take a config

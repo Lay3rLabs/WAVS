@@ -3,7 +3,7 @@ use layer_climb::prelude::*;
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::{HelloWorldFullClient, HelloWorldFullClientBuilder},
+    layer_contract_client::{LayerContractClientFull, LayerContractClientFullBuilder},
 };
 use wavs::{
     apis::{
@@ -24,10 +24,11 @@ pub async fn get_eigen_client(args: &CliArgs) -> EigenClient {
     let mnemonic = std::env::var("CLI_ETH_MNEMONIC").expect("CLI_ETH_MNEMONIC env var is required");
 
     let config = EthClientConfig {
-        ws_endpoint: args.ws_endpoint.clone(),
+        ws_endpoint: Some(args.ws_endpoint.clone()),
         http_endpoint: args.http_endpoint.clone(),
         mnemonic: Some(mnemonic),
         hd_index: None,
+        transport: None,
     };
 
     tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);
@@ -39,8 +40,8 @@ pub async fn get_eigen_client(args: &CliArgs) -> EigenClient {
 pub async fn get_avs_client(
     eigen_client: &EigenClient,
     core_contracts: CoreAVSAddresses,
-) -> HelloWorldFullClient {
-    HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
+) -> LayerContractClientFull {
+    LayerContractClientFullBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts)
         .build()
         .await
@@ -60,8 +61,8 @@ impl HttpClient {
         }
     }
 
-    pub async fn upload_hello_world_digest(&self) -> Digest {
-        let wasm_bytes = include_bytes!("../../../components/hello_world.wasm");
+    pub async fn upload_eth_trigger_echo_digest(&self) -> Digest {
+        let wasm_bytes = include_bytes!("../../../components/eth_trigger_echo.wasm");
 
         let response: UploadServiceResponse = self
             .inner
@@ -77,15 +78,19 @@ impl HttpClient {
         response.digest.into()
     }
 
-    pub async fn create_hello_world_service(
+    pub async fn create_eth_trigger_echo_service(
         &self,
-        address: alloy::primitives::Address,
+        trigger_address: alloy::primitives::Address,
+        service_manager_address: alloy::primitives::Address,
         digest: Digest,
     ) -> ServiceID {
         self.create_service(
             digest,
-            Address::Eth(AddrEth::new(address.into())),
-            Submit::EthSignedMessage { hd_index: 0 },
+            Address::Eth(AddrEth::new(trigger_address.into())),
+            Submit::EthSignedMessage {
+                hd_index: 0,
+                service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
+            },
         )
         .await
     }
@@ -93,13 +98,13 @@ impl HttpClient {
     async fn create_service(
         &self,
         digest: Digest,
-        task_queue_addr: Address,
+        trigger_address: Address,
         submit: Submit,
     ) -> ServiceID {
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
-            trigger: TriggerRequest::eth_queue(task_queue_addr),
+            trigger: TriggerRequest::eth_event(trigger_address),
             id: id.clone(),
             digest: digest.into(),
             permissions: Permissions {

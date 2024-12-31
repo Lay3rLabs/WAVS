@@ -1,4 +1,4 @@
-use utils::{eigen_client::CoreAVSAddresses, hello_world::config::HelloWorldAddresses};
+use utils::{eigen_client::CoreAVSAddresses, layer_contract_client::LayerAddresses};
 use wavs::{apis::ServiceID, Digest};
 
 pub fn display_core_contracts(core_contracts: &CoreAVSAddresses) {
@@ -45,37 +45,38 @@ pub fn display_core_contracts(core_contracts: &CoreAVSAddresses) {
     );
 }
 
-pub fn display_hello_world_service_contracts(hello_world_service_contracts: &HelloWorldAddresses) {
-    println!("\n--- HELLO WORLD AVS CONTRACTS ---");
+pub fn display_layer_service_contracts(layer_addresses: &LayerAddresses) {
+    println!("\n--- LAYER AVS CONTRACTS ---");
     println!(
         "CLI_EIGEN_SERVICE_PROXY_ADMIN=\"{}\"",
-        hello_world_service_contracts.proxy_admin
+        layer_addresses.proxy_admin
     );
     println!(
         "CLI_EIGEN_SERVICE_MANAGER=\"{}\"",
-        hello_world_service_contracts.hello_world_service_manager
+        layer_addresses.service_manager
     );
+    println!("CLI_EIGEN_SERVICE_TRIGGER=\"{}\"", layer_addresses.trigger);
     println!(
         "CLI_EIGEN_SERVICE_STAKE_REGISTRY=\"{}\"",
-        hello_world_service_contracts.stake_registry
+        layer_addresses.stake_registry
     );
     println!(
         "CLI_EIGEN_SERVICE_STAKE_TOKEN=\"{}\"",
-        hello_world_service_contracts.token
+        layer_addresses.token
     );
 }
 
-pub fn display_hello_world_service_id(id: &ServiceID) {
-    println!("\n--- HELLO WORLD SERVICE ID ---");
+pub fn display_eth_trigger_echo_service_id(id: &ServiceID) {
+    println!("\n--- ETH_TRIGGER_ECHO SERVICE ID ---");
     println!("{}", id);
 }
 
-pub fn display_hello_world_digest(digest: &Digest) {
-    println!("\n--- HELLO WORLD DIGEST ---");
-    println!("CLI_DIGEST_HELLO_WORLD=\"{}\"", digest);
+pub fn display_eth_trigger_echo_digest(digest: &Digest) {
+    println!("\n--- ETH TRIGGER ECHO DIGEST ---");
+    println!("CLI_DIGEST_ETH_TRIGGER_ECHO=\"{}\"", digest);
 }
 
-pub fn display_task_response_hash(hash: &str) {
-    println!("\n--- TASK RESPONSE HASH ---");
-    println!("{}", hash);
+pub fn display_response_signature(signature: &str) {
+    println!("\n--- RESPONSE SIGNATURE ---");
+    println!("{}", signature);
 }

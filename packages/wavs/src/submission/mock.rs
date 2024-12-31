@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
-use crate::context::AppContext;
+use crate::AppContext;
 
 #[derive(Clone)]
 pub struct MockSubmission {
@@ -72,8 +72,8 @@ impl Submission for MockSubmission {
             while let Some(msg) = rx.recv().await {
                 tracing::debug!(
                     "Received message: {} / {}",
-                    msg.trigger_config.service_id,
-                    msg.trigger_config.workflow_id
+                    msg.trigger_config().service_id,
+                    msg.trigger_config().workflow_id
                 );
                 mock.inbox.lock().unwrap().push(msg);
             }
@@ -90,7 +90,8 @@ impl Submission for MockSubmission {
 mod test {
     use std::{thread::sleep, time::Duration};
 
-    use lavs_apis::id::TaskId;
+    use rand::Rng;
+    use utils::layer_contract_client::TriggerId;
 
     use crate::{
         apis::{dispatcher::Submit, trigger::TriggerConfig},
@@ -99,12 +100,12 @@ mod test {
 
     use super::*;
 
-    fn dummy_message(service: &str, task_id: u64, payload: &str) -> ChainMessage {
-        ChainMessage {
-            trigger_config: TriggerConfig::eth_queue(service, service, rand_address_eth()).unwrap(),
-            task_id: TaskId::new(task_id),
+    fn dummy_message(service: &str, payload: &str) -> ChainMessage {
+        ChainMessage::Eth {
+            trigger_config: TriggerConfig::eth_event(service, service, rand_address_eth()).unwrap(),
+            trigger_id: TriggerId::new(rand::thread_rng().gen::<u64>()),
             wasm_result: payload.as_bytes().to_vec(),
-            submit: Submit::eth_aggregator_tx(),
+            submit: Submit::eth_aggregator_tx(rand_address_eth()),
         }
     }
 
@@ -118,9 +119,9 @@ mod test {
         let (send, rx) = mpsc::channel::<ChainMessage>(2);
         submission.start(ctx.clone(), rx).unwrap();
 
-        let msg1 = dummy_message("serv1", 1, "foo");
-        let msg2 = dummy_message("serv1", 2, "bar");
-        let msg3 = dummy_message("serv1", 3, "baz");
+        let msg1 = dummy_message("serv1", "foo");
+        let msg2 = dummy_message("serv1", "bar");
+        let msg3 = dummy_message("serv1", "baz");
 
         send.blocking_send(msg1.clone()).unwrap();
         // try waiting a bit. is there a way to block somehow?
@@ -143,9 +144,9 @@ mod test {
         let (send, rx) = mpsc::channel::<ChainMessage>(2);
         submission.start(ctx.clone(), rx).unwrap();
 
-        let msg1 = dummy_message("serv1", 1, "foo");
-        let msg2 = dummy_message("serv1", 2, "bar");
-        let msg3 = dummy_message("serv1", 3, "baz");
+        let msg1 = dummy_message("serv1", "foo");
+        let msg2 = dummy_message("serv1", "bar");
+        let msg3 = dummy_message("serv1", "baz");
 
         send.blocking_send(msg1.clone()).unwrap();
         submission.wait_for_messages(1).unwrap();

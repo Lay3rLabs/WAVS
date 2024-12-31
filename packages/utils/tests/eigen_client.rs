@@ -2,8 +2,8 @@ use alloy::node_bindings::{Anvil, AnvilInstance};
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::HelloWorldFullClientBuilder,
     init_tracing_tests,
+    layer_contract_client::{LayerContractClientFullBuilder, LayerContractClientSimple},
 };
 
 #[tokio::test]
@@ -12,7 +12,7 @@ async fn deploy_core_contracts() {
 }
 
 #[tokio::test]
-async fn deploy_hello_world_avs() {
+async fn deploy_layer_avs() {
     let EigenTestInit {
         core_contracts,
         eigen_client,
@@ -24,38 +24,76 @@ async fn deploy_hello_world_avs() {
         .await
         .unwrap();
 
-    let hello_world_client = HelloWorldFullClientBuilder::new(eigen_client.eth.clone())
+    let layer_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts)
         .build()
         .await
         .unwrap();
-    hello_world_client
+
+    layer_client
         .register_operator(&mut rand::rngs::OsRng)
         .await
         .unwrap();
-    let hello_world_client = hello_world_client.into_simple();
+
+    let layer_client: LayerContractClientSimple = layer_client.into();
 
     // Create and respond first task
-    let new_task = hello_world_client
-        .create_new_task("foo".to_owned())
+    let new_trigger_id = layer_client
+        .trigger
+        .add_trigger(
+            "foo-service-id".to_string(),
+            "foo-workflow-id".to_string(),
+            b"foo-data".to_vec(),
+        )
         .await
         .unwrap();
-    assert_eq!(new_task.taskIndex, 0);
-    assert_eq!(new_task.task.name, "foo");
-    hello_world_client
-        .sign_and_submit_task(new_task.task, new_task.taskIndex)
+
+    assert_eq!(*new_trigger_id, 1);
+
+    let trigger = layer_client
+        .trigger
+        .get_trigger(new_trigger_id)
+        .await
+        .unwrap();
+
+    assert_eq!(trigger.data, b"foo-data");
+
+    layer_client
+        .add_signed_payload(
+            layer_client
+                .sign_payload(trigger.trigger_id, trigger.data)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
     // Create and respond second task
-    let new_task = hello_world_client
-        .create_new_task("bar".to_owned())
+    let new_trigger_id = layer_client
+        .trigger
+        .add_trigger(
+            "bar-service-id".to_string(),
+            "bar-workflow-id".to_string(),
+            b"bar-data".to_vec(),
+        )
         .await
         .unwrap();
-    assert_eq!(new_task.taskIndex, 1);
-    assert_eq!(new_task.task.name, "bar");
-    hello_world_client
-        .sign_and_submit_task(new_task.task, new_task.taskIndex)
+
+    assert_eq!(*new_trigger_id, 2);
+    let trigger = layer_client
+        .trigger
+        .get_trigger(new_trigger_id)
+        .await
+        .unwrap();
+
+    assert_eq!(trigger.data, b"bar-data");
+    layer_client
+        .add_signed_payload(
+            layer_client
+                .sign_payload(trigger.trigger_id, trigger.data)
+                .await
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -92,12 +130,13 @@ impl EigenTestInit {
         let anvil = Anvil::new().spawn();
 
         let config = EthClientConfig {
-            ws_endpoint: anvil.ws_endpoint().to_string(),
+            ws_endpoint: Some(anvil.ws_endpoint().to_string()),
             http_endpoint: anvil.endpoint().to_string(),
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),
             hd_index: None,
+            transport: None,
         };
 
         let builder = EthClientBuilder::new(config);
@@ -138,8 +177,8 @@ async fn init() {
         let anvil = Anvil::new().spawn();
 
         let config = EthClientConfig {
-            ws_endpoint: anvil.ws_endpoint().to_string(),
-            http_endpoint: anvil.endpoint().to_string(),
+            ws_endpoint: Some(anvil.ws_endpoint().to_string()),
+            http_endpoint: Some(anvil.endpoint().to_string()),
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),

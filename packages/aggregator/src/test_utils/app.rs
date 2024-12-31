@@ -10,6 +10,12 @@ pub struct TestApp {
     pub config: Arc<Config>,
 }
 
+impl Default for TestApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestApp {
     pub fn default_cli_args() -> CliArgs {
         // get the path relative from this source file, regardless of where we run the test from
@@ -27,6 +33,7 @@ impl TestApp {
                     .join(ConfigBuilder::DIRNAME)
                     .join("non-existant-file"),
             ),
+            data: None,
             port: None,
             log_level: Vec::new(),
             host: None,
@@ -35,17 +42,18 @@ impl TestApp {
                 "test test test test test test test test test test test junk".to_owned(),
             ),
             cors_allowed_origins: Vec::new(),
-            chain: None,
             ws_endpoint: None,
             http_endpoint: None,
+            hd_index: None,
+            tasks_quorum: Some(1),
         }
     }
 
-    pub async fn new() -> Self {
-        Self::new_with_args(Self::default_cli_args()).await
+    pub fn new() -> Self {
+        Self::new_with_args(Self::default_cli_args())
     }
 
-    pub async fn new_with_args(cli_args: CliArgs) -> Self {
+    pub fn new_with_args(cli_args: CliArgs) -> Self {
         let config = Arc::new(ConfigBuilder::new(cli_args).build().unwrap());
 
         crate::init_tracing_tests();

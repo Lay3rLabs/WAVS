@@ -3,8 +3,8 @@ use tokio::sync::mpsc;
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::{TriggerAction, TriggerData};
-use crate::context::AppContext;
 use crate::engine::{Engine, EngineError};
+use crate::AppContext;
 
 pub trait EngineRunner: Send + Sync {
     type Engine: Engine;
@@ -47,14 +47,40 @@ pub trait EngineRunner: Send + Sync {
             TriggerData::Queue { task_id, payload } => {
                 // TODO: add the timestamp to the trigger, don't invent it
                 let timestamp = 1234567890;
-                let wasm_result =
-                    self.engine()
-                        .execute_queue(component, &service.id, payload, timestamp)?;
 
-                Ok(workflow.submit.clone().map(|submit| ChainMessage {
-                    trigger_config: action.config,
+                let wasm_result = self.engine().execute_queue(
+                    component,
+                    &service.id,
                     task_id,
+                    payload,
+                    timestamp,
+                )?;
+
+                Ok(workflow.submit.clone().map(|submit| ChainMessage::Cosmos {
+                    trigger_config: action.config,
                     wasm_result,
+                    task_id,
+                    submit,
+                }))
+            }
+            TriggerData::EthEvent {
+                trigger_id,
+                workflow_id,
+                service_id,
+                payload,
+            } => {
+                let wasm_result = self.engine().execute_eth_event(
+                    component,
+                    &service_id,
+                    &workflow_id,
+                    trigger_id,
+                    payload,
+                )?;
+
+                Ok(workflow.submit.clone().map(|submit| ChainMessage::Eth {
+                    trigger_config: action.config,
+                    wasm_result,
+                    trigger_id,
                     submit,
                 }))
             }

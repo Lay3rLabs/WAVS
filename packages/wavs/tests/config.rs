@@ -179,7 +179,7 @@ async fn config_chains() {
     let config = TestApp::new().await.config;
 
     let chain_config = config.cosmos_chain_config().unwrap();
-    assert_eq!(chain_config.chain_id, "layer-local");
+    assert_eq!(chain_config.chain_id, "slay3r-local");
 
     // change the target chain via cli
     let mut cli_args = TestApp::default_cli_args();
@@ -194,7 +194,10 @@ async fn config_chains() {
     cli_args.chain_config.http_endpoint = Some("THIS-ISN'T-USED".to_string());
     let config = TestApp::new_with_args(cli_args).await.config;
     let chain_config = config.cosmos_chain_config().unwrap();
-    assert_eq!(chain_config.rpc_endpoint, "http://example.com:1234");
+    assert_eq!(
+        chain_config.rpc_endpoint.unwrap(),
+        "http://example.com:1234"
+    );
 
     // change the http endpoint for ethereum
     let mut cli_args = TestApp::default_cli_args();

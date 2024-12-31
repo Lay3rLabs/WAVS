@@ -21,7 +21,7 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     let signing_client = state.config.signing_client().await?;
     let address = signing_client.signer.address();
-    let account = signing_client.http_provider.get_account(address).await?;
+    let account = signing_client.provider.get_account(address).await?;
     let balance = account.balance;
 
     Ok(InfoResponse {

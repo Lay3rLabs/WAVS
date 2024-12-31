@@ -8,7 +8,7 @@ use super::{
     trigger::{Trigger, TriggerAction},
     ComponentID, ServiceID, WorkflowID,
 };
-use crate::{context::AppContext, Digest};
+use crate::{AppContext, Digest};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -113,9 +113,10 @@ pub enum Submit {
         verifier_addr: Address,
     }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
     /// Sending a message to the aggregator on eth chain
-    EthAggregatorTx {},
-    /// Sending a message to the aggregator on eth chain
+    EthAggregatorTx { service_manager_addr: Address },
+    /// Sending a message to the eth chain directly
     EthSignedMessage {
+        service_manager_addr: Address,
         /// The hd index of the mnemonic to sign with
         hd_index: u32,
     },
@@ -128,11 +129,16 @@ impl Submit {
             verifier_addr,
         }
     }
-    pub fn eth_aggregator_tx() -> Self {
-        Submit::EthAggregatorTx {}
+    pub fn eth_aggregator_tx(service_manager_addr: Address) -> Self {
+        Submit::EthAggregatorTx {
+            service_manager_addr,
+        }
     }
-    pub fn eth_signed_message(hd_index: u32) -> Self {
-        Submit::EthSignedMessage { hd_index }
+    pub fn eth_signed_message(hd_index: u32, service_manager_addr: Address) -> Self {
+        Submit::EthSignedMessage {
+            hd_index,
+            service_manager_addr,
+        }
     }
 }
 

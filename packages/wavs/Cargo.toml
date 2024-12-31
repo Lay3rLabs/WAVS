@@ -9,8 +9,17 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [features]
 e2e_tests = []
+# general chain test gating
 e2e_tests_cosmos = ["e2e_tests"]
 e2e_tests_ethereum = ["e2e_tests"]
+# easy-to-use test groups (e.g. for CI) 
+e2e_tests_ethereum_baseline = ["e2e_tests_ethereum_trigger_square", "e2e_tests_ethereum_trigger_echo", "e2e_tests_ethereum_trigger_echo_aggregate"]
+e2e_tests_cosmos_baseline = ["e2e_tests_cosmos_permissions"]
+# specific test gating
+e2e_tests_ethereum_trigger_square = ["e2e_tests_ethereum"]
+e2e_tests_ethereum_trigger_echo = ["e2e_tests_ethereum"]
+e2e_tests_ethereum_trigger_echo_aggregate = ["e2e_tests_ethereum"]
+e2e_tests_cosmos_permissions = ["e2e_tests_cosmos"]
 
 [dependencies]
 utils = { workspace = true }
@@ -60,6 +69,7 @@ temp-env = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true }
 alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
+aggregator = { workspace = true }
 
 [[bench]]
 name = "mock_bench"

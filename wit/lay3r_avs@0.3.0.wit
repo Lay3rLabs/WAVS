@@ -1,0 +1,51 @@
+package lay3r:avs@0.3.0;
+
+use wasi:io/poll@0.2.0;
+use wasi:clocks/monotonic-clock@0.2.0;
+use wasi:io/error@0.2.0;
+use wasi:io/streams@0.2.0;
+use wasi:http/types@0.2.0 as http-types;
+use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
+
+interface task-queue-types {
+  /// serialized json, avs wasi and lay3r contract must agree on the types
+  /// the runner is agnostic to the data format
+  type serialized-json = list<u8>;
+
+  record task-queue-input {
+    timestamp: u64,
+    request: serialized-json,
+  }
+
+  type error = string;
+  type output = result<serialized-json, error>;
+}
+
+world task-queue-world {
+  use task-queue-types.{task-queue-input, output};
+
+  export run-task: func(request: task-queue-input) -> output;
+}
+
+interface eth-event-types {
+  // An alloy log can be recreated with the info here 
+  // block height is extra
+  record eth-log {
+    // the address that emitted an event
+    address: list<u8>,
+    // the raw log topics that can be decoded into an event
+    log-topics: list<list<u8>>,
+    // the raw log data that can be decoded into an event
+    log-data: list<u8>,
+  }
+}
+
+world eth-event-world {
+  use eth-event-types.{eth-log};
+
+  export process-eth-event: func(log: eth-log) -> result<list<u8>, string>;
+}
+
+world eth-trigger-world {
+  export process-eth-trigger: func(input: list<u8>) -> result<list<u8>, string>;
+}

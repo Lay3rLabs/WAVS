@@ -12,7 +12,7 @@ async fn client_stream_blocks() {
     let anvil = Anvil::new().block_time_f64(0.02).try_spawn().unwrap();
 
     let config = EthClientConfig {
-        ws_endpoint: anvil.ws_endpoint().to_string(),
+        ws_endpoint: Some(anvil.ws_endpoint().to_string()),
         http_endpoint: anvil.endpoint().to_string(),
         ..Default::default()
     };
@@ -21,7 +21,7 @@ async fn client_stream_blocks() {
     let client = builder.build_query().await.unwrap();
 
     let mut stream = client
-        .ws_provider
+        .provider
         .subscribe_blocks()
         .await
         .unwrap()
@@ -41,13 +41,14 @@ async fn client_sign_message() {
     let anvil = Anvil::new().try_spawn().unwrap();
 
     let config = EthClientConfig {
-        ws_endpoint: anvil.ws_endpoint().to_string(),
+        ws_endpoint: Some(anvil.ws_endpoint().to_string()),
         http_endpoint: anvil.endpoint().to_string(),
         mnemonic: Some(
             "work man father plunge mystery proud hollow address reunion sauce theory bonus"
                 .to_string(),
         ),
         hd_index: None,
+        transport: None,
     };
 
     let builder = EthClientBuilder::new(config);

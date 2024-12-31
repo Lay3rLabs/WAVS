@@ -20,11 +20,13 @@ mod e2e {
     };
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
+    use utils::layer_contract_client::LayerContractClientSimple;
     use wavs::{
         apis::{dispatcher::Submit, ServiceID},
+        http::types::TriggerRequest,
         test_utils::app::TestApp,
     };
-    use wavs::{config::Config, context::AppContext, dispatcher::CoreDispatcher, Digest};
+    use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};
 
     #[test]
     fn e2e_tests() {
@@ -32,7 +34,7 @@ mod e2e {
             if #[cfg(feature = "e2e_tests_ethereum")] {
                 let anvil = Some(Anvil::new().spawn());
             } else {
-                let mut anvil = None;
+                let anvil: Option<AnvilInstance> = None;
             }
         }
         let mut config = {
@@ -53,6 +55,18 @@ mod e2e {
                 }
             })
         };
+        let aggregator_config: aggregator::config::Config = {
+            let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
+            cli_args.dotenv = None;
+            cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
+            if let Some(anvil) = anvil.as_ref() {
+                cli_args.ws_endpoint = Some(anvil.ws_endpoint().to_string());
+                cli_args.http_endpoint = Some(anvil.endpoint().to_string());
+            }
+            aggregator::config::ConfigBuilder::new(cli_args)
+                .build()
+                .unwrap()
+        };
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_cosmos")] {
@@ -64,7 +78,7 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.chain= Some(config.chain.clone().unwrap());
+                config.chain = Some(config.chain.clone().unwrap());
             } else {
                 config.chain = None;
             }
@@ -80,6 +94,14 @@ mod e2e {
             let config = config.clone();
             move || {
                 wavs::run_server(ctx, config, dispatcher);
+            }
+        });
+
+        let aggregator_handle = std::thread::spawn({
+            let config = aggregator_config.clone();
+            let ctx = ctx.clone();
+            move || {
+                aggregator::run_server(ctx, config);
             }
         });
 
@@ -104,34 +126,12 @@ mod e2e {
                         .await
                         .unwrap();
 
-                        // if wasm_digest isn't set, upload our wasm blob for permissions
-                        let permissions_wasm_digest =
-                            std::env::var("WAVS_E2E_PERMISSIONS_WASM_DIGEST");
-
-                        let permissions_wasm_digest: Digest = match permissions_wasm_digest {
-                            Ok(digest) => digest.parse().unwrap(),
-                            Err(_) => {
-                                let wasm_bytes =
-                                    include_bytes!("../../../components/permissions.wasm");
-                                http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
-                            }
-                        };
-
-                        let hello_world_wasm_digest =
-                            std::env::var("WAVS_E2E_HELLO_WORLD_WASM_DIGEST");
-
-                        let hello_world_wasm_digest: Digest = match hello_world_wasm_digest {
-                            Ok(digest) => digest.parse().unwrap(),
-                            Err(_) => {
-                                let wasm_bytes =
-                                    include_bytes!("../../../components/hello_world.wasm");
-                                http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
-                            }
-                        };
+                        let digests = Digests::new(http_client.clone());
+                        let service_ids = ServiceIds::new();
 
                         match (config.cosmos_chain.is_some(), config.chain.is_some()) {
                             (true, false) => {
-                                run_tests_cosmos(http_client, config, permissions_wasm_digest).await
+                                run_tests_cosmos(http_client, config, digests, service_ids).await
                             }
                             (false, true) => {
                                 run_tests_ethereum(
@@ -139,12 +139,13 @@ mod e2e {
                                     anvil.unwrap(),
                                     http_client,
                                     config,
-                                    hello_world_wasm_digest,
+                                    digests,
+                                    service_ids,
                                 )
-                                .await
+                                .await;
                             }
                             (true, true) => {
-                                run_tests_crosschain(http_client, config, permissions_wasm_digest)
+                                run_tests_crosschain(http_client, config, digests, service_ids)
                                     .await
                             }
                             (false, false) => panic!(
@@ -159,157 +160,338 @@ mod e2e {
 
         test_handle.join().unwrap();
         wavs_handle.join().unwrap();
+        aggregator_handle.join().unwrap();
     }
 
     async fn run_tests_ethereum(
         anvil: AnvilInstance,
         http_client: HttpClient,
-        _config: Config,
-        wasm_digest: Digest,
+        config: Config,
+        digests: Digests,
+        service_ids: ServiceIds,
     ) {
         tracing::info!("Running e2e ethereum tests");
 
-        let app = EthTestApp::new(_config, anvil).await;
+        let app = EthTestApp::new(config.clone(), anvil).await;
+        let avs_trigger_addr = Address::Eth(AddrEth::new(app.avs_client.layer.trigger.into()));
+        let avs_service_manager_addr =
+            Address::Eth(AddrEth::new(app.avs_client.layer.service_manager.into()));
+        let avs_client: LayerContractClientSimple = app.avs_client.into();
 
-        let service_id = ServiceID::new("test-service").unwrap();
+        let trigger_echo_digest = digests.eth_trigger_echo_digest().await;
+        let trigger_square_digest = digests.eth_trigger_square_digest().await;
 
-        http_client
-            .create_service(
-                service_id.clone(),
-                wasm_digest,
-                Address::Eth(AddrEth::new(
-                    app.avs_client
-                        .hello_world
-                        .hello_world_service_manager
-                        .into(),
-                )),
-                Submit::EthSignedMessage { hd_index: 0 },
-            )
-            .await
-            .unwrap();
+        let trigger_echo_service_id = service_ids.eth_trigger_echo();
+        let trigger_echo_aggregate_service_id = service_ids.eth_trigger_echo_aggregate();
+        let trigger_square_service_id = service_ids.eth_trigger_square();
 
-        tracing::info!("Service created: {}, submitting task...", service_id);
+        for (service_id, digest, is_aggregate) in [
+            (
+                trigger_echo_service_id.clone(),
+                trigger_echo_digest.clone(),
+                false,
+            ),
+            (
+                trigger_echo_aggregate_service_id.clone(),
+                trigger_echo_digest,
+                true,
+            ),
+            (
+                trigger_square_service_id.clone(),
+                trigger_square_digest,
+                false,
+            ),
+        ] {
+            if service_id.is_some() {
+                let service_id = service_id.unwrap();
+                let digest = digest.unwrap();
 
-        let avs_simple_client = app.avs_client.into_simple();
-        let task_index = avs_simple_client
-            .create_new_task("foo".to_owned())
-            .await
-            .unwrap()
-            .taskIndex;
-
-        tokio::time::timeout(Duration::from_secs(10), async move {
-            loop {
-                let task_response_hash = avs_simple_client
-                    .task_responded_hash(task_index)
+                http_client
+                    .create_service(
+                        service_id.clone(),
+                        digest,
+                        TriggerRequest::eth_event(avs_trigger_addr.clone()),
+                        Submit::EthSignedMessage {
+                            hd_index: 0,
+                            service_manager_addr: avs_service_manager_addr.clone(),
+                        },
+                    )
                     .await
                     .unwrap();
-                if !task_response_hash.is_empty() {
-                    tracing::info!("GOT THE TASK RESPONSE HASH!");
-                    tracing::info!("{}", hex::encode(task_response_hash));
-                    break;
-                } else {
-                    tracing::info!(
-                        "Waiting for task response by {} on {} for index {}...",
-                        avs_simple_client.eth.address(),
-                        avs_simple_client.contract_address,
-                        task_index
-                    );
+
+                tracing::info!("Service created: {}", service_id);
+
+                if is_aggregate {
+                    http_client
+                        .register_service_on_aggregator(
+                            avs_client.service_manager_contract_address,
+                            service_id.clone(),
+                            &config,
+                        )
+                        .await
+                        .unwrap();
                 }
-                // still open, waiting...
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
-        })
-        .await
-        .unwrap();
+        }
+
+        if let Some(service_id) = trigger_echo_service_id {
+            tracing::info!("Submitting trigger_echo task...");
+            let echo_trigger_id = avs_client
+                .trigger
+                .add_trigger(
+                    service_id.to_string(),
+                    "default".to_string(),
+                    b"foo".to_vec(),
+                )
+                .await
+                .unwrap();
+
+            tokio::time::timeout(Duration::from_secs(10), {
+                let avs_client = avs_client.clone();
+                async move {
+                    loop {
+                        let signed_data =
+                            avs_client.load_signed_data(echo_trigger_id).await.unwrap();
+                        match signed_data {
+                            Some(signed_data) => {
+                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("{}", hex::encode(signed_data.signature));
+                                break;
+                            }
+                            None => {
+                                tracing::info!(
+                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.address(),
+                                    avs_client.service_manager_contract_address,
+                                    echo_trigger_id
+                                );
+                            }
+                        }
+                        // still open, waiting...
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        if let Some(service_id) = trigger_square_service_id {
+            tracing::info!("Submitting square task...");
+            let square_trigger_id = avs_client
+                .trigger
+                .add_trigger(
+                    service_id.to_string(),
+                    "default".to_string(),
+                    serde_json::to_vec(&SquareRequest { x: 3 }).unwrap(),
+                )
+                .await
+                .unwrap();
+
+            tokio::time::timeout(Duration::from_secs(10), {
+                let avs_client = avs_client.clone();
+                async move {
+                    loop {
+                        let signed_data = avs_client
+                            .load_signed_data(square_trigger_id)
+                            .await
+                            .unwrap();
+                        match signed_data {
+                            Some(signed_data) => {
+                                tracing::info!("GOT THE SIGNATURE!");
+                                tracing::info!("{}", hex::encode(signed_data.signature));
+
+                                let response =
+                                    serde_json::from_slice::<SquareResponse>(&signed_data.data)
+                                        .unwrap();
+
+                                tracing::info!("GOT THE RESPONSE!");
+                                tracing::info!("{:?}", response);
+                                break;
+                            }
+                            None => {
+                                tracing::info!(
+                                    "Waiting for task response by {} on {} for trigger_id {}...",
+                                    avs_client.eth.address(),
+                                    avs_client.service_manager_contract_address,
+                                    square_trigger_id
+                                );
+                            }
+                        }
+                        // still open, waiting...
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        if let Some(service_id) = trigger_echo_aggregate_service_id {
+            let echo_aggregate_trigger_id_1 = avs_client
+                .trigger
+                .add_trigger(
+                    service_id.to_string(),
+                    "default".to_string(),
+                    b"foo-aggregate".to_vec(),
+                )
+                .await
+                .unwrap();
+
+            let echo_aggregate_trigger_id_2 = avs_client
+                .trigger
+                .add_trigger(
+                    service_id.to_string(),
+                    "default".to_string(),
+                    b"bar-aggregate".to_vec(),
+                )
+                .await
+                .unwrap();
+
+            tokio::time::timeout(Duration::from_secs(10), {
+                let avs_client = avs_client.clone();
+                async move {
+                    loop {
+                        let signed_data_1 = avs_client
+                            .load_signed_data(echo_aggregate_trigger_id_1)
+                            .await
+                            .unwrap();
+
+                        let signed_data_2 = avs_client
+                            .load_signed_data(echo_aggregate_trigger_id_2)
+                            .await
+                            .unwrap();
+
+                        match (signed_data_1, signed_data_2) {
+                            (Some(signed_data_1), Some(signed_data_2)) => {
+                                tracing::info!("GOT THE SIGNATURES!");
+                                tracing::info!("1: {}", hex::encode(signed_data_1.signature));
+                                tracing::info!("2: {}", hex::encode(signed_data_2.signature));
+                                break;
+                            }
+                            (None, Some(_)) => {
+                                tracing::info!("Got aggregation #1, waiting for #2...");
+                            }
+                            (Some(_), None) => {
+                                tracing::info!("Got aggregation #2, waiting for #1...");
+                            }
+                            (None, None) => {
+                                tracing::info!("Waiting for aggregation responses...");
+                            }
+                        }
+                        // still open, waiting...
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
     }
 
-    async fn run_tests_crosschain(_http_client: HttpClient, _config: Config, _wasm_digest: Digest) {
+    async fn run_tests_crosschain(
+        _http_client: HttpClient,
+        _config: Config,
+        _digests: Digests,
+        _service_ids: ServiceIds,
+    ) {
         tracing::info!("Running e2e crosschain tests");
         // TODO!
     }
 
-    async fn run_tests_cosmos(http_client: HttpClient, config: Config, wasm_digest: Digest) {
+    async fn run_tests_cosmos(
+        http_client: HttpClient,
+        config: Config,
+        digests: Digests,
+        service_ids: ServiceIds,
+    ) {
         tracing::info!("Running e2e cosmos tests");
 
         let app = CosmosTestApp::new(config).await;
 
-        let service_id = ServiceID::new("test-service").unwrap();
+        if let Some(service_id) = service_ids.cosmos_permissions() {
+            let wasm_digest = digests.permissions_digest().await.unwrap();
 
-        http_client
-            .create_service(
-                service_id.clone(),
-                wasm_digest,
-                app.task_queue.addr.clone(),
-                Submit::LayerVerifierTx {
-                    hd_index: 0,
-                    verifier_addr: app.verifier_addr.clone(),
-                },
-            )
-            .await
-            .unwrap();
+            http_client
+                .create_service(
+                    service_id.clone(),
+                    wasm_digest,
+                    TriggerRequest::LayerQueue {
+                        task_queue_addr: app.task_queue.addr.clone(),
+                        poll_interval: 1000,
+                        hd_index: 0,
+                    },
+                    Submit::LayerVerifierTx {
+                        hd_index: 0,
+                        verifier_addr: app.verifier_addr.clone(),
+                    },
+                )
+                .await
+                .unwrap();
 
-        tracing::info!("Service created: {}", service_id);
+            tracing::info!("Service created: {}", service_id);
 
-        let tx_resp = app
-            .task_queue
-            .submit_task(
-                "example request",
-                PermissionsExampleRequest {
-                    url: "https://httpbin.org/get".to_string(),
-                },
-            )
-            .await
-            .unwrap();
+            let tx_resp = app
+                .task_queue
+                .submit_task(
+                    "example request",
+                    PermissionsExampleRequest {
+                        url: "https://httpbin.org/get".to_string(),
+                    },
+                )
+                .await
+                .unwrap();
 
-        let event: TaskCreatedEvent = CosmosTxEvents::from(&tx_resp)
-            .event_first_by_type(TaskCreatedEvent::NAME)
-            .map(cosmwasm_std::Event::from)
-            .unwrap()
-            .try_into()
-            .unwrap();
+            let event: TaskCreatedEvent = CosmosTxEvents::from(&tx_resp)
+                .event_first_by_type(TaskCreatedEvent::NAME)
+                .map(cosmwasm_std::Event::from)
+                .unwrap()
+                .try_into()
+                .unwrap();
 
-        tracing::info!("Task created: {}", event.task_id);
+            tracing::info!("Task created: {}", event.task_id);
 
-        let timeout = tokio::time::timeout(Duration::from_secs(3), async move {
-            loop {
-                let task = app.task_queue.query_task(event.task_id).await.unwrap();
-                match task.status {
-                    task_queue::Status::Open {} => {
-                        // still open, waiting...
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            let timeout = tokio::time::timeout(Duration::from_secs(3), async move {
+                loop {
+                    let task = app.task_queue.query_task(event.task_id).await.unwrap();
+                    match task.status {
+                        task_queue::Status::Open {} => {
+                            // still open, waiting...
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                        task_queue::Status::Completed { .. } => return Ok(task),
+                        task_queue::Status::Expired {} => bail!("Task expired"),
                     }
-                    task_queue::Status::Completed { .. } => return Ok(task),
-                    task_queue::Status::Expired {} => bail!("Task expired"),
                 }
-            }
-        })
-        .await;
+            })
+            .await;
 
-        match timeout {
-            Ok(task) => {
-                let task = task.unwrap();
-                let result = task.result.unwrap();
-                tracing::info!("task completed!");
-                tracing::info!("result: {:#?}", result);
+            match timeout {
+                Ok(task) => {
+                    let task = task.unwrap();
+                    let result = task.result.unwrap();
+                    tracing::info!("task completed!");
+                    tracing::info!("result: {:#?}", result);
+                }
+                Err(_) => panic!("Timeout waiting for task to complete"),
             }
-            Err(_) => panic!("Timeout waiting for task to complete"),
+
+            tracing::info!("regular task submission past, running test service..");
+
+            let result: PermissionsExampleResponse = http_client
+                .test_service(
+                    &service_id,
+                    PermissionsExampleRequest {
+                        url: "https://httpbin.org/get".to_string(),
+                    },
+                )
+                .await
+                .unwrap();
+
+            tracing::info!("success!");
+            assert!(result.filecount > 0);
+            tracing::info!("{:#?}", result);
         }
-
-        tracing::info!("regular task submission past, running test service..");
-
-        let result: PermissionsExampleResponse = http_client
-            .test_service(
-                &service_id,
-                PermissionsExampleRequest {
-                    url: "https://httpbin.org/get".to_string(),
-                },
-            )
-            .await
-            .unwrap();
-
-        tracing::info!("success!");
-        assert!(result.filecount > 0);
-        tracing::info!("{:#?}", result);
     }
 
     #[derive(Deserialize, Serialize, Debug)]
@@ -322,5 +504,137 @@ mod e2e {
         pub filename: PathBuf,
         pub contents: String,
         pub filecount: usize,
+    }
+
+    #[derive(Serialize, Debug)]
+    pub struct SquareRequest {
+        pub x: u64,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[allow(dead_code)]
+    pub struct SquareResponse {
+        pub y: u64,
+    }
+
+    pub struct ServiceIds {}
+
+    impl ServiceIds {
+        pub fn new() -> Self {
+            Self {}
+        }
+
+        #[cfg(feature = "e2e_tests_ethereum_trigger_square")]
+        pub fn eth_trigger_square(&self) -> Option<ServiceID> {
+            Some(ServiceID::new("eth-trigger-square").unwrap())
+        }
+
+        #[cfg(feature = "e2e_tests_ethereum_trigger_echo")]
+        pub fn eth_trigger_echo(&self) -> Option<ServiceID> {
+            Some(ServiceID::new("eth-trigger-echo").unwrap())
+        }
+
+        #[cfg(feature = "e2e_tests_ethereum_trigger_echo_aggregate")]
+        pub fn eth_trigger_echo_aggregate(&self) -> Option<ServiceID> {
+            Some(ServiceID::new("eth-trigger-echo-aggregate").unwrap())
+        }
+
+        #[cfg(feature = "e2e_tests_cosmos_permissions")]
+        pub fn cosmos_permissions(&self) -> Option<ServiceID> {
+            Some(ServiceID::new("cosmos-permissions").unwrap())
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_trigger_square"))]
+        pub fn eth_trigger_square(&self) -> Option<ServiceID> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo"))]
+        pub fn eth_trigger_echo(&self) -> Option<ServiceID> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo_aggregate"))]
+        pub fn eth_trigger_echo_aggregate(&self) -> Option<ServiceID> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_cosmos_permissions"))]
+        pub fn cosmos_permissions(&self) -> Option<ServiceID> {
+            None
+        }
+    }
+
+    pub struct Digests {
+        http_client: HttpClient,
+    }
+
+    impl Digests {
+        pub fn new(http_client: HttpClient) -> Self {
+            Self { http_client }
+        }
+
+        #[cfg(feature = "e2e_tests_cosmos_permissions")]
+        pub async fn permissions_digest(&self) -> Option<Digest> {
+            self.get_digest("WAVS_E2E_PERMISSIONS_WASM_DIGEST", "permissions")
+                .await
+        }
+
+        #[cfg(feature = "e2e_tests_ethereum_trigger_square")]
+        pub async fn eth_trigger_square_digest(&self) -> Option<Digest> {
+            self.get_digest(
+                "WAVS_E2E_ETH_TRIGGER_SQUARE_WASM_DIGEST",
+                "eth_trigger_square",
+            )
+            .await
+        }
+
+        #[cfg(feature = "e2e_tests_ethereum_trigger_echo")]
+        pub async fn eth_trigger_echo_digest(&self) -> Option<Digest> {
+            self.get_digest("WAVS_E2E_ETH_TRIGGER_ECHO_WASM_DIGEST", "eth_trigger_echo")
+                .await
+        }
+
+        #[cfg(not(feature = "e2e_tests_cosmos_permissions"))]
+        pub async fn permissions_digest(&self) -> Option<Digest> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_trigger_square"))]
+        pub async fn eth_trigger_square_digest(&self) -> Option<Digest> {
+            None
+        }
+
+        #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo"))]
+        pub async fn eth_trigger_echo_digest(&self) -> Option<Digest> {
+            None
+        }
+
+        async fn get_digest(&self, env_var_key: &str, wasm_filename: &str) -> Option<Digest> {
+            let digest = std::env::var(env_var_key);
+
+            let digest: Digest = match digest {
+                Ok(digest) => digest.parse().unwrap(),
+                Err(_) => {
+                    let wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .parent()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .join("components")
+                        .join(format!("{}.wasm", wasm_filename));
+
+                    tracing::info!("Uploading wasm: {}", wasm_path.display());
+
+                    let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
+                    self.http_client
+                        .upload_wasm(wasm_bytes.to_vec())
+                        .await
+                        .unwrap()
+                }
+            };
+
+            Some(digest)
+        }
     }
 }

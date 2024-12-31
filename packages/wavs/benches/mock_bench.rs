@@ -3,12 +3,11 @@ use std::time::Duration;
 use criterion::{criterion_group, criterion_main, Criterion};
 use wavs::{
     apis::{ServiceID, WorkflowID},
-    context::AppContext,
     test_utils::{
         address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},
     },
-    Digest,
+    AppContext, Digest,
 };
 
 pub fn criterion_benchmark(c: &mut Criterion) {
@@ -22,12 +21,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     runner.ctx.rt.block_on({
         let runner = runner.clone();
         let service_id = service_id.clone();
-        let task_queue_address = task_queue_address.clone();
 
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(service_id.clone(), digest, &task_queue_address, BigSquare)
+                .create_service_simple(service_id.clone(), digest, BigSquare)
                 .await;
         }
     });

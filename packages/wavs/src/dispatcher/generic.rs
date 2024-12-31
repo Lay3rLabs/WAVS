@@ -13,10 +13,10 @@ use crate::apis::submission::{Submission, SubmissionError};
 use crate::apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager};
 use crate::apis::{IDError, ServiceID};
 
-use crate::context::AppContext;
 use crate::engine::runner::EngineRunner;
 use crate::storage::db::{DBError, RedbStorage, Table, JSON};
 use crate::storage::CAStorageError;
+use crate::AppContext;
 
 /// This should auto-derive clone if T, E, S: Clone
 #[derive(Clone)]
@@ -315,6 +315,7 @@ pub enum DispatcherError {
 #[cfg(test)]
 mod tests {
     use lavs_apis::id::TaskId;
+    use utils::layer_contract_client::TriggerId;
 
     use crate::{
         apis::{
@@ -343,12 +344,16 @@ mod tests {
         init_tracing_tests();
 
         let db_file = tempfile::NamedTempFile::new().unwrap();
-        let task_id = TaskId::new(2);
         let payload = b"foobar";
 
         let action = TriggerAction {
-            config: TriggerConfig::eth_queue("service1", "workflow1", rand_address_eth()).unwrap(),
-            data: TriggerData::queue(task_id, payload),
+            config: TriggerConfig::eth_event("service1", "workflow1", rand_address_eth()).unwrap(),
+            data: TriggerData::EthEvent {
+                service_id: ServiceID::new("service1").unwrap(),
+                workflow_id: WorkflowID::new("workflow1").unwrap(),
+                trigger_id: TriggerId::new(2),
+                payload: payload.to_vec(),
+            },
         };
 
         let dispatcher = Dispatcher::new(
@@ -362,6 +367,7 @@ mod tests {
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
         let component_id = ComponentID::new("component1").unwrap();
+        let service_manager_addr = rand_address_eth();
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -370,8 +376,8 @@ mod tests {
                 action.config.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    trigger: Trigger::eth_event(rand_address_eth()),
+                    submit: Some(Submit::eth_aggregator_tx(service_manager_addr.clone())),
                 },
             )]
             .into(),
@@ -388,11 +394,11 @@ mod tests {
         dispatcher.submission.wait_for_messages(1).unwrap();
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 1);
-        let expected = ChainMessage {
+        let expected = ChainMessage::Eth {
             trigger_config: action.config,
-            task_id,
             wasm_result: payload.into(),
-            submit: Submit::eth_aggregator_tx(),
+            trigger_id: TriggerId::new(2),
+            submit: Submit::eth_aggregator_tx(service_manager_addr),
         };
         assert_eq!(processed[0], expected);
     }
@@ -408,20 +414,24 @@ mod tests {
         let service_id = ServiceID::new("service1").unwrap();
         let workflow_id = WorkflowID::new("workflow1").unwrap();
 
-        let task_queue_address = rand_address_eth();
+        let contract_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_queue(
+                config: TriggerConfig::eth_event(
                     &service_id,
                     &workflow_id,
-                    task_queue_address.clone(),
+                    contract_address.clone(),
                 )
                 .unwrap(),
                 data: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                config: TriggerConfig::eth_queue(&service_id, &workflow_id, task_queue_address)
-                    .unwrap(),
+                config: TriggerConfig::eth_event(
+                    &service_id,
+                    &workflow_id,
+                    contract_address.clone(),
+                )
+                .unwrap(),
                 data: TriggerData::queue(TaskId::new(2), br#"{"x":21}"#),
             },
         ];
@@ -449,8 +459,8 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    trigger: Trigger::eth_event(rand_address_eth()),
+                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
                 },
             )]
             .into(),
@@ -468,11 +478,9 @@ mod tests {
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 2);
 
-        // Check the task_id and payloads
-        assert_eq!(processed[0].task_id, TaskId::new(1));
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(processed[1].task_id, TaskId::new(2));
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        // Check the payloads
+        assert_eq!(&processed[0].wasm_result(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasm_result(), br#"{"y":441}"#);
     }
 
     /// Simulate big-square on a multi-threaded dispatcher
@@ -486,19 +494,19 @@ mod tests {
         // Prepare two actions to be squared
         let service_id = ServiceID::new("service1").unwrap();
         let workflow_id = WorkflowID::new("workflow1").unwrap();
-        let task_queue_address = rand_address_eth();
+        let contract_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_queue(
+                config: TriggerConfig::eth_event(
                     &service_id,
                     &workflow_id,
-                    task_queue_address.clone(),
+                    contract_address.clone(),
                 )
                 .unwrap(),
                 data: TriggerData::queue(TaskId::new(1), br#"{"x":3}"#),
             },
             TriggerAction {
-                config: TriggerConfig::eth_queue(&service_id, &workflow_id, task_queue_address)
+                config: TriggerConfig::eth_event(&service_id, &workflow_id, contract_address)
                     .unwrap(),
                 data: TriggerData::queue(TaskId::new(2), br#"{"x":21}"#),
             },
@@ -527,8 +535,8 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::eth_queue(rand_address_eth()),
-                    submit: Some(Submit::eth_aggregator_tx()),
+                    trigger: Trigger::eth_event(rand_address_eth()),
+                    submit: Some(Submit::eth_aggregator_tx(rand_address_eth())),
                 },
             )]
             .into(),
@@ -546,10 +554,8 @@ mod tests {
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 2);
 
-        // Check the task_id and payloads
-        assert_eq!(processed[0].task_id, TaskId::new(1));
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(processed[1].task_id, TaskId::new(2));
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        // Check the payloads
+        assert_eq!(&processed[0].wasm_result(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasm_result(), br#"{"y":441}"#);
     }
 }

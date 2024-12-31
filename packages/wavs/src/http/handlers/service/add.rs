@@ -53,8 +53,8 @@ impl TriggerRequest {
         }
     }
 
-    pub fn eth_queue(task_queue_addr: Address) -> Self {
-        TriggerRequest::EthQueue { task_queue_addr }
+    pub fn eth_event(contract_address: Address) -> Self {
+        TriggerRequest::EthEvent { contract_address }
     }
 }
 
@@ -128,7 +128,7 @@ impl ServiceRequestParser {
                 hd_index: _,
             } => Trigger::layer_queue(task_queue_addr, poll_interval),
 
-            TriggerRequest::EthQueue { task_queue_addr } => Trigger::eth_queue(task_queue_addr),
+            TriggerRequest::EthEvent { contract_address } => Trigger::eth_event(contract_address),
         };
 
         let workflows = BTreeMap::from([(
@@ -198,11 +198,11 @@ mod test {
             ServiceRequest {
                 id: ServiceID::new("test-name").unwrap(),
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::eth_queue(addr),
+                trigger: TriggerRequest::eth_event(addr),
                 permissions: Permissions::default(),
                 envs: vec![],
                 testable: Some(true),
-                submit: Submit::eth_aggregator_tx(),
+                submit: Submit::eth_aggregator_tx(rand_address_eth()),
             }
         }
 

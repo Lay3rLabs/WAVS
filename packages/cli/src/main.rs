@@ -7,15 +7,16 @@ use args::{CliArgs, Command};
 use clap::Parser;
 use client::{get_avs_client, get_eigen_client, HttpClient};
 use display::{
-    display_core_contracts, display_hello_world_digest, display_hello_world_service_contracts,
-    display_hello_world_service_id, display_task_response_hash,
+    display_core_contracts, display_eth_trigger_echo_digest, display_eth_trigger_echo_service_id,
+    display_layer_service_contracts, display_response_signature,
 };
 use rand::{
     distributions::{Alphanumeric, DistString},
     rngs::OsRng,
 };
-use task::run_hello_world_task;
+use task::run_eth_trigger_echo_task;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use wavs::apis::{ServiceID, WorkflowID};
 
 #[tokio::main]
 async fn main() {
@@ -69,23 +70,24 @@ async fn main() {
 
                 let digest = match digests.digest_hello_world {
                     None => {
-                        let digest = http_client.upload_hello_world_digest().await;
-                        display_hello_world_digest(&digest);
+                        let digest = http_client.upload_eth_trigger_echo_digest().await;
+                        display_eth_trigger_echo_digest(&digest);
                         digest
                     }
                     Some(digest) => digest,
                 };
 
                 let service_id = http_client
-                    .create_hello_world_service(
-                        avs_client.hello_world.hello_world_service_manager,
+                    .create_eth_trigger_echo_service(
+                        avs_client.layer.trigger,
+                        avs_client.layer.service_manager,
                         digest,
                     )
                     .await;
-                display_hello_world_service_id(&service_id);
+                display_eth_trigger_echo_service_id(&service_id);
             }
 
-            display_hello_world_service_contracts(&avs_client.hello_world);
+            display_layer_service_contracts(&avs_client.layer);
         }
 
         Command::DeployAll {
@@ -115,38 +117,54 @@ async fn main() {
 
                 let digest = match digests.digest_hello_world {
                     None => {
-                        let digest = http_client.upload_hello_world_digest().await;
-                        display_hello_world_digest(&digest);
+                        let digest = http_client.upload_eth_trigger_echo_digest().await;
+                        display_eth_trigger_echo_digest(&digest);
                         digest
                     }
                     Some(digest) => digest,
                 };
 
                 let service_id = http_client
-                    .create_hello_world_service(
-                        avs_client.hello_world.hello_world_service_manager,
+                    .create_eth_trigger_echo_service(
+                        avs_client.layer.trigger,
+                        avs_client.layer.service_manager,
                         digest,
                     )
                     .await;
-                display_hello_world_service_id(&service_id);
+                display_eth_trigger_echo_service_id(&service_id);
             }
 
             display_core_contracts(&core_contracts);
-            display_hello_world_service_contracts(&avs_client.hello_world);
+            display_layer_service_contracts(&avs_client.layer);
         }
 
         Command::AddTask {
             wavs,
-            contract_address,
+            trigger_addr,
+            service_manager_addr,
+            service_id,
+            workflow_id,
             name,
         } => {
             let eigen_client = get_eigen_client(&args).await;
 
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
 
-            let hash = run_hello_world_task(eigen_client.eth, wavs, contract_address, name).await;
+            let signature = run_eth_trigger_echo_task(
+                eigen_client.eth,
+                wavs,
+                ServiceID::new(service_id).unwrap(),
+                match workflow_id {
+                    Some(workflow_id) => WorkflowID::new(workflow_id).unwrap(),
+                    None => WorkflowID::new("default").unwrap(),
+                },
+                trigger_addr,
+                service_manager_addr,
+                name,
+            )
+            .await;
 
-            display_task_response_hash(&hash);
+            display_response_signature(&signature);
         }
 
         Command::KitchenSink {
@@ -172,40 +190,47 @@ async fn main() {
                 avs_client.register_operator(&mut OsRng).await.unwrap();
             }
 
+            let mut service_id = ServiceID::new("service-id-1").unwrap();
+            let workflow_id = WorkflowID::new("default").unwrap();
+
             if wavs {
                 let http_client = HttpClient::new(&args);
 
                 let digest = match digests.digest_hello_world {
                     None => {
-                        let digest = http_client.upload_hello_world_digest().await;
-                        display_hello_world_digest(&digest);
+                        let digest = http_client.upload_eth_trigger_echo_digest().await;
+                        display_eth_trigger_echo_digest(&digest);
                         digest
                     }
                     Some(digest) => digest,
                 };
 
-                let service_id = http_client
-                    .create_hello_world_service(
-                        avs_client.hello_world.hello_world_service_manager,
+                service_id = http_client
+                    .create_eth_trigger_echo_service(
+                        avs_client.layer.trigger,
+                        avs_client.layer.service_manager,
                         digest,
                     )
                     .await;
-                display_hello_world_service_id(&service_id);
+                display_eth_trigger_echo_service_id(&service_id);
             }
 
             display_core_contracts(&core_contracts);
-            display_hello_world_service_contracts(&avs_client.hello_world);
+            display_layer_service_contracts(&avs_client.layer);
 
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
-            let hash = run_hello_world_task(
+            let signature = run_eth_trigger_echo_task(
                 eigen_client.eth,
                 wavs,
-                avs_client.hello_world.hello_world_service_manager,
+                service_id,
+                workflow_id,
+                avs_client.layer.trigger,
+                avs_client.layer.service_manager,
                 name,
             )
             .await;
 
-            display_task_response_hash(&hash);
+            display_response_signature(&signature);
         }
     }
 }

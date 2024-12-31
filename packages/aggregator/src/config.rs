@@ -28,12 +28,12 @@ pub struct Config {
     /// The host to bind the server to
     /// Default is `localhost`
     pub host: String,
+    /// The directory to store all internal data files
+    /// Default is `/var/aggregator`
+    pub data: PathBuf,
     /// The allowed cors origins
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
-
-    /// The chosen chain name
-    pub chain: String,
 
     /// Websocket eth endpoint
     pub ws_endpoint: String,
@@ -41,8 +41,14 @@ pub struct Config {
     /// Http eth endpoint
     pub http_endpoint: String,
 
+    /// Number of tasks to trigger transactions
+    pub tasks_quorum: u32,
+
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
+
+    /// The hd index of the mnemonic to sign with
+    pub hd_index: Option<u32>,
 }
 
 /// Default values for the config struct
@@ -53,11 +59,13 @@ impl Default for Config {
             port: 8001,
             log_level: vec!["info".to_string()],
             host: "localhost".to_string(),
+            data: PathBuf::from("/var/aggregator"),
             cors_allowed_origins: Vec::new(),
-            chain: String::new(),
             ws_endpoint: "ws://127.0.0.1:8545".to_string(),
             http_endpoint: "http://127.0.0.1:8545".to_string(),
             mnemonic: None,
+            hd_index: None,
+            tasks_quorum: 3,
         }
     }
 }
@@ -66,10 +74,11 @@ impl Config {
     pub async fn signing_client(&self) -> Result<EthSigningClient> {
         let mnemonic = self.mnemonic.clone();
         let eth_client = EthClientConfig {
-            ws_endpoint: self.ws_endpoint.clone(),
+            ws_endpoint: Some(self.ws_endpoint.clone()),
             http_endpoint: self.http_endpoint.clone(),
             mnemonic,
-            hd_index: None,
+            hd_index: self.hd_index,
+            transport: None,
         };
         let signing_client = EthClientBuilder::new(eth_client).build_signing().await?;
         Ok(signing_client)

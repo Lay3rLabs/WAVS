@@ -3,17 +3,16 @@ use crate::{
         trigger::{
             Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
         },
-        EthHelloWorldTaskRlp, ServiceID, WorkflowID,
+        ServiceID, WorkflowID,
     },
     config::Config,
-    context::AppContext,
+    AppContext,
 };
 use alloy::{
     providers::Provider,
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
 };
-use alloy_rlp::Encodable;
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
@@ -27,7 +26,10 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     eth_client::{EthClientBuilder, EthClientConfig},
-    hello_world::solidity_types::hello_world::HelloWorldServiceManager::NewTaskCreated,
+    layer_contract_client::{
+        layer_trigger::LayerTrigger::{self, NewTrigger},
+        TriggerId,
+    },
 };
 
 #[derive(Clone)]
@@ -105,7 +107,7 @@ impl CoreTriggerManager {
 
         let cosmos_client = match self.cosmos_chain_config.clone() {
             Some(chain_config) => Some(
-                QueryClient::new(chain_config)
+                QueryClient::new(chain_config, None)
                     .await
                     .map_err(TriggerError::Climb)?,
             ),
@@ -114,7 +116,10 @@ impl CoreTriggerManager {
 
         let ethereum_client = match self.chain_config.clone() {
             Some(chain_config) => {
-                tracing::debug!("Ethereum client started on {}", chain_config.ws_endpoint);
+                tracing::debug!(
+                    "Ethereum client started on {}",
+                    chain_config.ws_endpoint.as_ref().unwrap()
+                );
                 Some(
                     EthClientBuilder::new(chain_config)
                         .build_query()
@@ -183,10 +188,10 @@ impl CoreTriggerManager {
             tracing::debug!("Trigger Manager for Ethereum chain started");
 
             // Start the event stream
-            let filter = Filter::new().event_signature(NewTaskCreated::SIGNATURE_HASH);
+            let filter = Filter::new().event_signature(NewTrigger::SIGNATURE_HASH);
 
             let stream = query_client
-                .ws_provider
+                .provider
                 .subscribe_logs(&filter)
                 .await
                 .map_err(|e| TriggerError::Ethereum(e.into()))?
@@ -207,25 +212,42 @@ impl CoreTriggerManager {
                     tracing::error!("{:?}", err);
                 }
                 Ok(BlockTriggers::EthereumLog { log }) => {
-                    if let Ok(event) = log.log_decode::<NewTaskCreated>().map(|log| log.inner.data)
-                    {
-                        let contract_address = Address::Eth(AddrEth::new(log.address().into()));
-                        let task_id = TaskId::new(event.taskIndex.into());
+                    if let Ok(log) = log.log_decode::<NewTrigger>() {
+                        let service_id = log.data().serviceId.to_string();
+                        let workflow_id = log.data().workflowId.to_string();
+                        let trigger_id = log.data().triggerId;
+                        match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
+                            (Ok(service_id), Ok(workflow_id)) => {
+                                let trigger_id = TriggerId::new(trigger_id);
 
-                        // TODO really we should query the contract, but hello world doesn't actually have a payload pipeline
-                        // rather, it's derived from the task name
-                        // let contract = HelloWorldServiceManager::new(log.address(), ethereum_client.as_ref().unwrap().http_provider.clone());
+                                let contract = LayerTrigger::new(
+                                    log.address(),
+                                    ethereum_client.as_ref().unwrap().provider.clone(),
+                                );
 
-                        let mut payload = Vec::new();
-
-                        EthHelloWorldTaskRlp {
-                            name: event.task.name,
-                            created_block: event.task.taskCreatedBlock,
+                                if let Ok(payload) = contract
+                                    .getTrigger(*trigger_id)
+                                    .call()
+                                    .await
+                                    .map(|resp| resp._0.data.to_vec())
+                                {
+                                    self.handle_trigger(
+                                        &action_sender,
+                                        &Address::Eth(AddrEth::new(log.address().into())),
+                                        TriggerData::EthEvent {
+                                            service_id,
+                                            workflow_id,
+                                            payload,
+                                            trigger_id,
+                                        },
+                                    )
+                                    .await;
+                                }
+                            }
+                            _ => {
+                                tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
+                            }
                         }
-                        .encode(&mut payload);
-
-                        self.handle_trigger(&action_sender, &contract_address, task_id, payload)
-                            .await;
                     }
                 }
                 Ok(BlockTriggers::Layer { triggers }) => {
@@ -262,8 +284,7 @@ impl CoreTriggerManager {
                             self.handle_trigger(
                                 &action_sender,
                                 &contract_address,
-                                task_id,
-                                payload,
+                                TriggerData::Queue { task_id, payload },
                             )
                             .await;
                         }
@@ -280,20 +301,45 @@ impl CoreTriggerManager {
     async fn handle_trigger(
         &self,
         action_sender: &mpsc::Sender<TriggerAction>,
+        // for now all triggers are "task queues" of some sort
+        // but this will eventually be more generic
         contract_address: &Address,
-        task_id: TaskId,
-        payload: Vec<u8>,
+        data: TriggerData,
     ) {
-        let lookup_id = {
-            let triggers_by_task_queue_lock =
-                self.lookup_maps.triggers_by_task_queue.read().unwrap();
+        let lookup_id = match &data {
+            TriggerData::Queue { .. } => {
+                let triggers_by_task_queue_lock =
+                    self.lookup_maps.triggers_by_task_queue.read().unwrap();
 
-            match triggers_by_task_queue_lock.get(contract_address) {
-                Some(lookup_id) => *lookup_id,
-                None => {
-                    tracing::debug!("not our task queue: {:?}", contract_address);
+                match triggers_by_task_queue_lock.get(contract_address) {
+                    Some(lookup_id) => *lookup_id,
+                    None => {
+                        tracing::debug!("not our task queue: {:?}", contract_address);
 
-                    return;
+                        return;
+                    }
+                }
+            }
+            TriggerData::EthEvent {
+                service_id,
+                workflow_id,
+                ..
+            } => {
+                let triggers_by_service_workflow_lock = self
+                    .lookup_maps
+                    .triggers_by_service_workflow
+                    .read()
+                    .unwrap();
+
+                match triggers_by_service_workflow_lock
+                    .get(service_id)
+                    .and_then(|map| map.get(workflow_id))
+                {
+                    Some(lookup_id) => *lookup_id,
+                    None => {
+                        tracing::debug!("not our service/workflow: {}/{}", service_id, workflow_id);
+                        return;
+                    }
                 }
             }
         };
@@ -312,7 +358,7 @@ impl CoreTriggerManager {
                 action_sender
                     .send(TriggerAction {
                         config: trigger,
-                        data: TriggerData::Queue { task_id, payload },
+                        data,
                     })
                     .await
                     .unwrap();
@@ -368,12 +414,12 @@ impl TriggerManager for CoreTriggerManager {
                     .unwrap()
                     .insert(task_queue_addr.clone(), lookup_id);
             }
-            Trigger::EthQueue { task_queue_addr } => {
+            Trigger::EthEvent { contract_address } => {
                 self.lookup_maps
                     .triggers_by_task_queue
                     .write()
                     .unwrap()
-                    .insert(task_queue_addr.clone(), lookup_id);
+                    .insert(contract_address.clone(), lookup_id);
             }
         }
 
@@ -502,9 +548,9 @@ fn remove_trigger_data(
                 TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
             )?;
         }
-        Trigger::EthQueue { task_queue_addr } => {
-            triggers_by_task_queue.remove(task_queue_addr).ok_or(
-                TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
+        Trigger::EthEvent { contract_address } => {
+            triggers_by_task_queue.remove(contract_address).ok_or(
+                TriggerError::NoSuchTaskQueueTrigger(contract_address.clone()),
             )?;
         }
     }
@@ -538,6 +584,7 @@ mod tests {
                         chain_id: "eth-local".parse().unwrap(),
                         ws_endpoint: "ws://localhost:26657".to_string(),
                         http_endpoint: "http://localhost:26657".to_string(),
+                        aggregator_endpoint: Some("http://localhost:8001".to_string()),
                         faucet_endpoint: None,
                         submission_mnemonic: None,
                     },
@@ -548,8 +595,8 @@ mod tests {
                     "test-cosmos".to_string(),
                     CosmosChainConfig {
                         chain_id: "layer-local".parse().unwrap(),
-                        rpc_endpoint: "http://localhost:26657".to_string(),
-                        grpc_endpoint: "http://localhost:9090".to_string(),
+                        rpc_endpoint: Some("http://localhost:26657".to_string()),
+                        grpc_endpoint: Some("http://localhost:9090".to_string()),
                         gas_price: 0.025,
                         gas_denom: "uslay".to_string(),
                         bech32_prefix: "layer".to_string(),
@@ -577,16 +624,16 @@ mod tests {
         let task_queue_addr_2_2 = rand_address_eth();
 
         let trigger_1_1 =
-            TriggerConfig::eth_queue(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
+            TriggerConfig::eth_event(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
                 .unwrap();
         let trigger_1_2 =
-            TriggerConfig::eth_queue(&service_id_1, &workflow_id_2, task_queue_addr_1_2.clone())
+            TriggerConfig::eth_event(&service_id_1, &workflow_id_2, task_queue_addr_1_2.clone())
                 .unwrap();
         let trigger_2_1 =
-            TriggerConfig::eth_queue(&service_id_2, &workflow_id_1, task_queue_addr_2_1.clone())
+            TriggerConfig::eth_event(&service_id_2, &workflow_id_1, task_queue_addr_2_1.clone())
                 .unwrap();
         let trigger_2_2 =
-            TriggerConfig::eth_queue(&service_id_2, &workflow_id_2, task_queue_addr_2_2.clone())
+            TriggerConfig::eth_event(&service_id_2, &workflow_id_2, task_queue_addr_2_2.clone())
                 .unwrap();
 
         manager.add_trigger(trigger_1_1).unwrap();
@@ -645,7 +692,7 @@ mod tests {
                     task_queue_addr,
                     poll_interval: _,
                 } => task_queue_addr,
-                Trigger::EthQueue { task_queue_addr } => task_queue_addr,
+                Trigger::EthEvent { contract_address } => contract_address,
             }
         }
     }

@@ -87,16 +87,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "form_urlencoded"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
-dependencies = [
- "percent-encoding",
-]
-
-[[package]]
-name = "hello-world"
+name = "eth-event-echo"
 version = "0.2.0-rc1"
 dependencies = [
  "alloy-rlp",
@@ -104,6 +95,32 @@ dependencies = [
  "layer-wasi 0.1.1 (git+https://github.com/Lay3rLabs/avs-toolkit)",
  "url",
  "wit-bindgen-rt 0.32.0",
+]
+
+[[package]]
+name = "eth-trigger-echo"
+version = "0.2.0-rc1"
+dependencies = [
+ "wit-bindgen-rt 0.32.0",
+]
+
+[[package]]
+name = "eth-trigger-square"
+version = "0.2.0-rc1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "wit-bindgen-rt 0.32.0",
+]
+
+[[package]]
+name = "form_urlencoded"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
+dependencies = [
+ "percent-encoding",
 ]
 
 [[package]]
@@ -293,18 +310,6 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
-
-[[package]]
-name = "message-echo"
-version = "0.2.0-rc1"
-dependencies = [
- "anyhow",
- "layer-wasi 0.1.1 (git+https://github.com/Lay3rLabs/avs-toolkit)",
- "serde",
- "serde_json",
- "url",
- "wit-bindgen-rt 0.32.0",
-]
 
 [[package]]
 name = "percent-encoding"

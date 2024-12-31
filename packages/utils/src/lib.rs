@@ -1,8 +1,12 @@
+pub mod aggregator;
 pub mod alloy_helpers;
+pub mod context;
+pub mod digest;
 pub mod eigen_client;
 pub mod error;
 pub mod eth_client;
-pub mod hello_world;
+pub mod layer_contract_client;
+pub mod storage;
 
 // the test version of init_tracing does not take a config
 // since config itself is tested and modified from different parallel tests

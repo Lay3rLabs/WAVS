@@ -1,4 +1,6 @@
 #![allow(clippy::too_many_arguments)]
+#![allow(missing_docs, non_snake_case)]
+
 use alloy::{
     network::{Ethereum, EthereumWallet},
     providers::{
@@ -10,14 +12,16 @@ use alloy::{
     },
     pubsub::PubSubFrontend,
     sol,
-    transports::http::{Client, Http},
+    transports::{
+        http::{Client, Http},
+        BoxTransport,
+    },
 };
 
 pub mod delegation_manager {
     use super::*;
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         DelegationManager,
         "../../contracts/abi/DelegationManager.sol/DelegationManager.json"
@@ -28,21 +32,18 @@ pub mod proxy {
     use super::*;
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         EmptyContract,
         "../../contracts/abi/EmptyContract.sol/EmptyContract.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         TransparentUpgradeableProxy,
         "../../contracts/abi/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         ProxyAdmin,
         "../../contracts/abi/ProxyAdmin.sol/ProxyAdmin.json"
@@ -53,79 +54,81 @@ pub mod misc {
     use super::*;
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         PauserRegistry,
         "../../contracts/abi/PauserRegistry.sol/PauserRegistry.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         AVSDirectory,
         "../../contracts/abi/AVSDirectory.sol/AVSDirectory.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         StrategyManager,
         "../../contracts/abi/StrategyManager.sol/StrategyManager.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         StrategyFactory,
         "../../contracts/abi/StrategyFactory.sol/StrategyFactory.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         EigenPodManager,
         "../../contracts/abi/EigenPodManager.sol/EigenPodManager.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         RewardsCoordinator,
         "../../contracts/abi/RewardsCoordinator.sol/RewardsCoordinator.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         EigenPod,
         "../../contracts/abi/EigenPod.sol/EigenPod.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         UpgradeableBeacon,
         "../../contracts/abi/UpgradeableBeacon.sol/UpgradeableBeacon.json"
     );
 
     sol!(
-        #[allow(missing_docs)]
         #[sol(rpc)]
         StrategyBase,
         "../../contracts/abi/StrategyBase.sol/StrategyBase.json"
     );
+
+    // It's enum, but alloy didn't generate helpers for it
+    impl IAVSDirectory::OperatorAVSRegistrationStatus {
+        pub fn UNREGISTERED() -> Self {
+            Self::from(0u8)
+        }
+
+        pub fn REGISTERED() -> Self {
+            Self::from(1u8)
+        }
+    }
 }
 
 pub type EmptyContractT =
-    proxy::EmptyContract::EmptyContractInstance<Http<Client>, HttpSigningProvider>;
+    proxy::EmptyContract::EmptyContractInstance<BoxTransport, BoxSigningProvider>;
 
 pub type TransparentProxyContractT =
     proxy::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance<
-        Http<Client>,
-        HttpSigningProvider,
+        BoxTransport,
+        BoxSigningProvider,
     >;
 
-pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<Http<Client>, HttpSigningProvider>;
+pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<BoxTransport, BoxSigningProvider>;
 
 pub type WsSigningProvider = FillProvider<
     JoinFill<
@@ -150,5 +153,18 @@ pub type HttpSigningProvider = FillProvider<
     >,
     RootProvider<Http<Client>>,
     Http<Client>,
+    Ethereum,
+>;
+
+pub type BoxSigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<BoxTransport>,
+    BoxTransport,
     Ethereum,
 >;

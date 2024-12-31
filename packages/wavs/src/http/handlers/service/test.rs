@@ -62,7 +62,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
             Trigger::LayerQueue { .. } => {
                 TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
             }
-            Trigger::EthQueue { .. } => {
+            Trigger::EthEvent { .. } => {
                 TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
             }
         },
@@ -81,7 +81,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
 
     let chain_message = rx.await.unwrap()?.context("could not get chain message")?;
 
-    let output = serde_json::from_slice(&chain_message.wasm_result)?;
+    let output = serde_json::from_slice(chain_message.wasm_result())?;
 
     let resp = TestAppResponse { output };
 
