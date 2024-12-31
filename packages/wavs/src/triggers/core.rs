@@ -107,7 +107,7 @@ impl CoreTriggerManager {
 
         let cosmos_client = match self.cosmos_chain_config.clone() {
             Some(chain_config) => Some(
-                QueryClient::new(chain_config)
+                QueryClient::new(chain_config, None)
                     .await
                     .map_err(TriggerError::Climb)?,
             ),
@@ -595,8 +595,8 @@ mod tests {
                     "test-cosmos".to_string(),
                     CosmosChainConfig {
                         chain_id: "layer-local".parse().unwrap(),
-                        rpc_endpoint: "http://localhost:26657".to_string(),
-                        grpc_endpoint: "http://localhost:9090".to_string(),
+                        rpc_endpoint: Some("http://localhost:26657".to_string()),
+                        grpc_endpoint: Some("http://localhost:9090".to_string()),
                         gas_price: 0.025,
                         gas_denom: "uslay".to_string(),
                         bech32_prefix: "layer".to_string(),

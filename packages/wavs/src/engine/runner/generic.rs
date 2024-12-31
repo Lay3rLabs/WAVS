@@ -59,6 +59,7 @@ pub trait EngineRunner: Send + Sync {
                 Ok(workflow.submit.clone().map(|submit| ChainMessage::Cosmos {
                     trigger_config: action.config,
                     wasm_result,
+                    task_id,
                     submit,
                 }))
             }

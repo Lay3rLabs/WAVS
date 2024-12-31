@@ -9,12 +9,12 @@ chain = "local"
 cosmos_chain = "layer-local"
 
 [chains.cosmos.layer-local]
-chain_id = "layer-local"
+chain_id = "slay3r-local"
 bech32_prefix = "layer"
 rpc_endpoint = "http://localhost:26657"
 grpc_endpoint = "http://localhost:9090"
 gas_price = 0.025
-gas_denom = "ulayer"
+gas_denom = "uslay"
 faucet_endpoint = "http://localhost:8000"
 
 # localnode is local testing inside localnode docker-compose network
