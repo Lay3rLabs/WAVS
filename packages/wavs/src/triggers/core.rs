@@ -220,34 +220,37 @@ impl CoreTriggerManager {
                         let service_id = log.data().serviceId.to_string();
                         let workflow_id = log.data().workflowId.to_string();
                         let trigger_id = log.data().triggerId;
+
                         match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
                             (Ok(service_id), Ok(workflow_id)) => {
                                 let trigger_id = TriggerId::new(trigger_id);
 
                                 let query_client = ethereum_clients.get(&chain_name).unwrap();
 
-                                let contract = LayerTrigger::new(
-                                    log.address(),
-                                    query_client.provider.clone(),
-                                );
+                                let contract =
+                                    LayerTrigger::new(log.address(), query_client.provider.clone());
 
-                                if let Ok(payload) = contract
-                                    .getTrigger(*trigger_id)
-                                    .call()
-                                    .await
-                                    .map(|resp| resp._0.data.to_vec())
-                                {
-                                    self.handle_trigger(
-                                        &action_sender,
-                                        &Address::Eth(AddrEth::new(log.address().into())),
-                                        TriggerData::EthEvent {
-                                            service_id,
-                                            workflow_id,
-                                            payload,
-                                            trigger_id,
-                                        },
-                                    )
-                                    .await;
+                                let resp = contract.getTrigger(*trigger_id).call().await;
+
+                                match resp {
+                                    Ok(resp) => {
+                                        let payload = resp._0.data.to_vec();
+
+                                        self.handle_trigger(
+                                            &action_sender,
+                                            &Address::Eth(AddrEth::new(log.address().into())),
+                                            TriggerData::EthEvent {
+                                                service_id,
+                                                workflow_id,
+                                                payload,
+                                                trigger_id,
+                                            },
+                                        )
+                                        .await;
+                                    }
+                                    Err(err) => {
+                                        tracing::error!("error querying trigger: {:?}", err);
+                                    }
                                 }
                             }
                             _ => {
@@ -339,11 +342,16 @@ impl CoreTriggerManager {
 
                 match triggers_by_service_workflow_lock
                     .get(service_id)
-                    .and_then(|map| map.get(workflow_id))
-                {
-                    Some(lookup_id) => *lookup_id,
-                    None => {
-                        tracing::debug!("not our service/workflow: {}/{}", service_id, workflow_id);
+                    .ok_or(format!("not our service: {}", service_id))
+                    .and_then(|map| {
+                        map.get(workflow_id).ok_or(format!(
+                            "not our workflow: {} (in service {})",
+                            workflow_id, service_id
+                        ))
+                    }) {
+                    Ok(lookup_id) => *lookup_id,
+                    Err(msg) => {
+                        tracing::warn!("{}", msg);
                         return;
                     }
                 }
