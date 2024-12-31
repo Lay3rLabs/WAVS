@@ -77,7 +77,6 @@ pub enum EthClientTransport {
     Http,
 }
 
-#[derive(Clone)]
 pub struct EthClientBuilder {
     pub config: EthClientConfig,
 }
@@ -96,7 +95,7 @@ impl EthClientBuilder {
         }
     }
 
-    pub async fn build_query(&self) -> Result<EthQueryClient> {
+    pub async fn build_query(self) -> Result<EthQueryClient> {
         let provider: RootProvider<BoxTransport> = match self.preferred_transport() {
             // Http preferred or no preference and no websocket
             EthClientTransport::Http => {
@@ -111,8 +110,9 @@ impl EthClientBuilder {
                 ProviderBuilder::new().on_ws(ws).await?.boxed()
             }
         };
+
         Ok(EthQueryClient {
-            config: self.config.clone(),
+            config: self.config,
             provider,
         })
     }
