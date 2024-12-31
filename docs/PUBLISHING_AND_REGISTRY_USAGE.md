@@ -16,7 +16,7 @@ inlined. So instead of copying around a bunch of text files with a `wit/deps` di
 we can distribute a single file.
 
 Not all the tooling supports registry workflows yet. But for authoring Wasm components in Rust,
-[`cargo-component`](https://crates.io/crates/cargo-component) is quite helpful. 
+[`cargo-component`](https://crates.io/crates/cargo-component) is quite helpful.
 For instance, you can scaffold out a new Rust project (similar to `cargo-generate`)
 by just specifying a registry-published WIT package and the target world name (which determines the
 imports / exports of a component). This makes it really easy to iterate on WIT and implementations.

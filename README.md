@@ -1,41 +1,35 @@
-# Wavs
+# WAVS
 
-This is an AVS operator node, that is quickly configurable to easily serve
-logic for many AVSes, each one sandboxed from each other and the node's
-operating system.
+![Banner!](docs/images/wavs.png)
 
-To acheive this sandboxing, we use WASI components, with limited access to system resources.
+[![Project Status: Active -- The project has reached a stable, usable
+state and is being actively
+developed.](https://img.shields.io/badge/repo%20status-Active-green.svg?style=flat-square)](https://www.repostatus.org/#active)
 
-## Running
+WAVS is a next-generation AVS (Actively Validated Service) platform, making it easy to create, manage, and operate high-performance AVSs. By providing a base layer of AVS infrastructure, WAVS allows builders to focus solely on implementing the core logic of their services, which are written in Rust (with support for more languages coming soon), compiled to WASM, and deployed as lightweight service components. Triggered by onchain events, these components are run offchain by operators in the WAVS WASI runtime at near-native speed, and the results are brought verifiably onchain. A service of services, WAVS allows an AVS to dynamically run and manage multiple components that work together to build flexible and intelligent applications.
 
-This repo is organized with multiple packages. The default binary when running from the workspace is `wavs`, 
-but it will only find the config file automatically when running from within the package.
+## Multichain-ready
 
-To run from the root workspace (with `localhost` chain):
+WAVS is designed for the multichain, enabling services to be triggered and results to be posted across different chains. Initially supported on Ethereum and Cosmos, WAVS creates a cross-chain computational layer that is decentralized and verifiable.
 
-```
-cargo run -- --home=./packages/wavs --chain=localhost
-```
+## Guides
 
-Similarly, it will pick up the `.env` from the current working directory.
+- [Quickstart](docs/QUICKSTART.md)
+- [Docs](docs/README.md)
 
-## Persona
+## Overview
 
-This node should be run by an "Operator". This is very much like a "validator" on a PoS chain.
-It receives commitments (stake) on the chain, which provide it with voting power, and it performs
-some off-chain actions, which are submitted on-chain and verified.
+WAVS is node software for operators that runs an AVS [WASI](https://wasi.dev/) runtime which is easily configurable and can serve multiple AVSs. The logic for each AVS is deployed as a WASI service component. These service components are sandboxed from each other and from the node's operating system. This way, operators and AVS services maintain a clean separation, with AVS builders uploading components and operators having to opt-in to each service.
 
-Currently, for demo purposes, we expose the HTTP API to make adding new WASI components easy.
-However, in any realistic scenario, each node is managed by an operator, which must explicitly
-opt-in to running the AVS software, and then register their intention on-chain, in order
-to collect commitments.
 
-The AVS team, which will code all the WASI components, and deploy (and write?) the AVS contracts
-on-chain should be completely independent of the operators for a clean separation of concerns,
-and thus have no access to their system.
+![WAVS overview](./docs/images/flow.png)
 
-## Architecture
+Onchain events can trigger a service's WASI components, which are run offchain by operators in the AVS WASI runtime. Results are then verified and brought back onchain, enabling the decentralized execution of offchain services which are verifiable onchain.
 
-Start by looking at this overview diagram of the various components of the system
+1. A service is defined, including a WASI component and triggers.
+2. Service operators listen for onchain events.
+3. An onchain event triggers a task, and operators run the WASI component offchain.
+4. Operators sign the result of the task.
+5. (Optional for EVM) The signatures are sent to the aggregator contract which consolidates the results into one transaction.
+6. The result is submitted onchain.
 
-![Architecture Overview](./docs/images/ArchOverview.svg)

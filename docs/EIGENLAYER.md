@@ -2,9 +2,9 @@
 
 ## Requirements
 
-Before using Eigenlayer ensure you have the following tools installed:
+Before using Eigenlayer, ensure you have the following tools installed:
 
-1. **Foundry**  
+1. **Foundry**
    Foundry is needed for contract development, compilation, and testing. It includes:
 
    - **Forge**: for building and managing smart contracts.
@@ -17,14 +17,14 @@ Before using Eigenlayer ensure you have the following tools installed:
    foundryup
    ```
 
-2. **Git Submodules**  
+2. **Git Submodules**
    This project includes a Git submodule for the Eigenlayer contracts and Forge Standard Library. Initialize and update submodules with:
 
    ```bash
    git submodule update --init --recursive
    ```
 
-## Generating ABI 
+## Generating ABI
 
 Eigenlayer ABI is needed for everything to work correctly. While it's already checked in to the repo, it can be regenerated via:
 
