@@ -101,8 +101,7 @@ impl CoreSubmission {
             .transpose()?;
 
         let mut eth_chains = HashMap::new();
-
-        for (name, config) in config.chains.eth.clone().into_iter() {
+        for (name, config) in config.active_ethereum_chain_configs() {
             eth_chains.insert(name.clone(), ChainEthSubmission::new(config)?);
         }
 

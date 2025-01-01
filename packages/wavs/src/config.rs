@@ -2,7 +2,9 @@ use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
-use utils::config::{ChainConfigs, CosmosChainConfig, OptionalWavsChainConfig};
+use utils::config::{
+    ChainConfigs, CosmosChainConfig, EthereumChainConfig, OptionalWavsChainConfig,
+};
 
 use crate::args::CliArgs;
 
@@ -71,6 +73,20 @@ impl Default for Config {
 }
 
 impl Config {
+    pub fn active_ethereum_chain_configs(&self) -> HashMap<String, EthereumChainConfig> {
+        self.chains
+            .eth
+            .iter()
+            .filter_map(|(chain_name, chain)| {
+                if self.eth_chains.contains(chain_name) {
+                    Some((chain_name.clone(), chain.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     pub fn cosmos_chain_config(&self) -> Result<&CosmosChainConfig> {
         match self.cosmos_chain.as_deref() {
             Some(chain_name) => self.chains.cosmos.get(chain_name).ok_or(anyhow::anyhow!(

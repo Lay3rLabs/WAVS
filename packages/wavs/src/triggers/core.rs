@@ -75,7 +75,7 @@ impl CoreTriggerManager {
             .map(|chain_config| chain_config.clone().into());
 
         let mut chain_configs = HashMap::new();
-        for (chain_name, chain_config) in config.chains.eth.clone().into_iter() {
+        for (chain_name, chain_config) in config.active_ethereum_chain_configs() {
             chain_configs.insert(chain_name, chain_config.into());
         }
 
