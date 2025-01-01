@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{arg, Parser, Subcommand, ValueEnum};
+use clap::{arg, Parser, ValueEnum};
 use utils::{
     config::OptionalWavsChainConfig, eigen_client::CoreAVSAddresses,
     layer_contract_client::LayerAddresses,
@@ -9,45 +9,19 @@ use wavs::Digest;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-pub struct CliArgs {
-    #[clap(long, default_value = "../../wavs.toml")]
-    pub wavs_config: PathBuf,
-
-    #[clap(long, default_value = "http://localhost:8000")]
-    pub wavs_endpoint: String,
-
-    /// The chain to hit
-    #[clap(long, default_value = "local")]
-    pub chain: String,
-
-    /// The chain kind. If not supplied, will try to determine from the config file
-    #[clap(long, default_value = None)]
-    pub chain_kind: Option<ChainKind>,
-
-    #[clap(flatten)]
-    pub chain_config_override: OptionalWavsChainConfig,
-
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-#[derive(ValueEnum, Debug, Clone, Copy)]
-pub enum ChainKind {
-    Cosmos,
-    Eth,
-}
-
-#[derive(Clone, Subcommand)]
 pub enum Command {
     DeployCore {
         #[clap(long, default_value_t = true)]
         register_operator: bool,
+
+        #[clap(flatten)]
+        wavs: WavsArgs,
     },
 
     DeployAll {
         /// If set, will add the service to wavs too
         #[clap(long, default_value_t = false)]
-        wavs: bool,
+        add_service: bool,
 
         #[clap(long, default_value_t = true)]
         register_core_operator: bool,
@@ -57,12 +31,15 @@ pub enum Command {
 
         #[clap(flatten)]
         digests: Digests,
+
+        #[clap(flatten)]
+        wavs: WavsArgs,
     },
 
     DeployService {
         /// If set, will add the service to wavs too
         #[clap(long, default_value_t = false)]
-        wavs: bool,
+        add_service: bool,
 
         #[clap(long, default_value_t = true)]
         register_operator: bool,
@@ -72,13 +49,16 @@ pub enum Command {
 
         #[clap(flatten)]
         digests: Digests,
+
+        #[clap(flatten)]
+        wavs: WavsArgs,
     },
 
     AddTask {
         /// If set, will watch the chain for final result
         /// otherwise, will manually submit the result to the contract
         #[clap(long, default_value_t = false)]
-        wavs: bool,
+        watch_wavs: bool,
 
         /// The contract address for the trigger
         #[clap(long, env = "CLI_EIGEN_SERVICE_TRIGGER")]
@@ -98,6 +78,9 @@ pub enum Command {
         /// if not set, will be a random string
         #[clap(long)]
         name: Option<String>,
+
+        #[clap(flatten)]
+        wavs: WavsArgs,
     },
 
     /// Kitchen sink subcommand
@@ -106,7 +89,7 @@ pub enum Command {
         /// and wait for the final result to land
         /// otherwise, will manually submit the result to the contract
         #[clap(long, default_value_t = false)]
-        wavs: bool,
+        add_service: bool,
 
         #[clap(long, default_value_t = true)]
         register_core_operator: bool,
@@ -121,7 +104,37 @@ pub enum Command {
         /// if not set, will be a random string
         #[clap(long)]
         name: Option<String>,
+
+        #[clap(flatten)]
+        wavs: WavsArgs,
     },
+}
+
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+pub struct WavsArgs {
+    #[clap(long, default_value = "../../wavs.toml")]
+    pub config_filepath: PathBuf,
+
+    #[clap(long, default_value = "http://localhost:8000")]
+    pub endpoint: String,
+
+    /// The chain to hit
+    #[clap(long, default_value = "local")]
+    pub chain: String,
+
+    /// The chain kind. If not supplied, will try to determine from the config file
+    #[clap(long, default_value = None)]
+    pub chain_kind: Option<ChainKind>,
+
+    #[clap(flatten)]
+    pub chain_config_override: OptionalWavsChainConfig,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy)]
+pub enum ChainKind {
+    Cosmos,
+    Eth,
 }
 
 #[derive(Parser, Debug, Clone)]

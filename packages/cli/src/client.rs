@@ -1,4 +1,4 @@
-use crate::context::{CliChainConfig, CliContext};
+use crate::context::{WavsChainConfig, WavsContext};
 use layer_climb::prelude::*;
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
@@ -20,11 +20,11 @@ use wavs::{
     Digest,
 };
 
-pub async fn get_eigen_client(ctx: CliContext) -> EigenClient {
+pub async fn get_eigen_client(ctx: WavsContext) -> EigenClient {
     let mnemonic = std::env::var("CLI_ETH_MNEMONIC").expect("CLI_ETH_MNEMONIC env var is required");
 
     let mut config: EthClientConfig = match &ctx.chain_config {
-        CliChainConfig::Eth(config) => config.clone().into(),
+        WavsChainConfig::Eth(config) => config.clone().into(),
         _ => panic!("Expected an Ethereum chain config"),
     };
 
@@ -49,11 +49,11 @@ pub async fn get_avs_client(
 
 pub struct HttpClient {
     inner: reqwest::Client,
-    ctx: CliContext,
+    ctx: WavsContext,
 }
 
 impl HttpClient {
-    pub fn new(ctx: CliContext) -> Self {
+    pub fn new(ctx: WavsContext) -> Self {
         Self {
             inner: reqwest::Client::new(),
             ctx,
@@ -65,7 +65,7 @@ impl HttpClient {
 
         let response: UploadServiceResponse = self
             .inner
-            .post(format!("{}/upload", self.ctx.args.wavs_endpoint))
+            .post(format!("{}/upload", self.ctx.args.endpoint))
             .body(wasm_bytes.to_vec())
             .send()
             .await
@@ -123,7 +123,7 @@ impl HttpClient {
         .unwrap();
 
         self.inner
-            .post(format!("{}/app", self.ctx.args.wavs_endpoint))
+            .post(format!("{}/app", self.ctx.args.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
             .send()

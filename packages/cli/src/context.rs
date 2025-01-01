@@ -1,41 +1,38 @@
 use anyhow::{Context, Result};
-use clap::Parser;
 use serde::Deserialize;
 use std::sync::Arc;
 use utils::config::{
     ChainConfigs, CosmosChainConfig, EthereumChainConfig, OptionalWavsChainConfig,
 };
 
-use crate::args::{ChainKind, CliArgs};
+use crate::args::{ChainKind, WavsArgs};
 
 #[derive(Clone)]
-pub struct CliContext {
-    inner: Arc<CliContextInner>,
+pub struct WavsContext {
+    inner: Arc<WavsContextInner>,
 }
 
-impl std::ops::Deref for CliContext {
-    type Target = CliContextInner;
+impl std::ops::Deref for WavsContext {
+    type Target = WavsContextInner;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-pub struct CliContextInner {
-    pub args: CliArgs,
-    pub chain_config: CliChainConfig,
+pub struct WavsContextInner {
+    pub args: WavsArgs,
+    pub chain_config: WavsChainConfig,
 }
 
 #[allow(dead_code)]
-pub enum CliChainConfig {
+pub enum WavsChainConfig {
     Cosmos(CosmosChainConfig),
     Eth(EthereumChainConfig),
 }
 
-impl CliContext {
-    pub fn new() -> Result<Self> {
-        let args = CliArgs::parse();
-
+impl WavsContext {
+    pub fn new(args: WavsArgs) -> Result<Self> {
         #[derive(Debug, Deserialize)]
         struct PartialWavsConfig {
             pub chains: ChainConfigs,
@@ -44,7 +41,7 @@ impl CliContext {
         }
 
         let config =
-            std::fs::read_to_string(&args.wavs_config).expect("Could not read config file");
+            std::fs::read_to_string(&args.config_filepath).expect("Could not read config file");
         let config: PartialWavsConfig =
             toml::from_str(&config).expect("Could not parse config file");
 
@@ -59,25 +56,25 @@ impl CliContext {
                     .cosmos
                     .get(&args.chain)
                     .cloned()
-                    .map(CliChainConfig::Cosmos),
+                    .map(WavsChainConfig::Cosmos),
                 ChainKind::Eth => chains
                     .eth
                     .get(&args.chain)
                     .cloned()
-                    .map(CliChainConfig::Eth),
+                    .map(WavsChainConfig::Eth),
             })
             .unwrap_or_else(|| match chains.cosmos.get(&args.chain).cloned() {
-                Some(chain) => Some(CliChainConfig::Cosmos(chain)),
+                Some(chain) => Some(WavsChainConfig::Cosmos(chain)),
                 None => chains
                     .eth
                     .get(&args.chain)
                     .cloned()
-                    .map(CliChainConfig::Eth),
+                    .map(WavsChainConfig::Eth),
             })
             .context(format!("No chain config found for: {}", args.chain))?;
 
         Ok(Self {
-            inner: Arc::new(CliContextInner { args, chain_config }),
+            inner: Arc::new(WavsContextInner { args, chain_config }),
         })
     }
 }
