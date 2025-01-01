@@ -68,7 +68,3 @@ update-submodules:
 lint:
     cargo fmt --all -- --check
     cargo clippy --all-targets -- -D warnings
-
-# cli proof of concept 
-cli-deploy:
-    cd packages/cli && cargo run deploy-service --chain="CHAIN_ID" —trigger="ADDRESS" —submit="ADDRESS" —component-file="component.wasm"
