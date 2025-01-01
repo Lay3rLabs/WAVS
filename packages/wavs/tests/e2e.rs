@@ -228,7 +228,12 @@ mod e2e {
                 false,
                 false,
             ),
-            (cosmos_query_service_id.clone(), cosmos_query_digest, false),
+            (
+                cosmos_query_service_id.clone(),
+                cosmos_query_digest,
+                false,
+                false,
+            ),
         ] {
             let (avs_client, avs_trigger_addr, avs_service_manager_addr, chain_name) =
                 match is_second_ethereum {

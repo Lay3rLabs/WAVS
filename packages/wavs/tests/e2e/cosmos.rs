@@ -21,8 +21,6 @@ impl CosmosTestApp {
 
         let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().into();
 
-        println!("Chain config: {:?}", chain_config);
-
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
         let signing_client = SigningClient::new(chain_config.clone(), key_signer, None)
             .await
