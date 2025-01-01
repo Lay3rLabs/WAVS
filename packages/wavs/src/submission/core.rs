@@ -9,7 +9,7 @@ use crate::{
         submission::{ChainMessage, Submission, SubmissionError},
         trigger::Trigger,
     },
-    config::{Config, CosmosChainConfig, EthereumChainConfig},
+    config::Config,
     AppContext,
 };
 use anyhow::anyhow;
@@ -20,6 +20,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
+    config::{CosmosChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
     layer_contract_client::LayerContractClientSimple,
 };
@@ -96,16 +97,12 @@ impl CoreSubmission {
         let cosmos_chain = config
             .try_cosmos_chain_config()
             .map_err(SubmissionError::Climb)?
-            .map(ChainCosmosSubmission::new)
+            .map(|x| ChainCosmosSubmission::new(x.clone()))
             .transpose()?;
-
-        let eth_chain_configs = config
-            .ethereum_chain_configs()
-            .map_err(SubmissionError::Ethereum)?;
 
         let mut eth_chains = HashMap::new();
 
-        for (name, config) in eth_chain_configs.into_iter() {
+        for (name, config) in config.chains.eth.clone().into_iter() {
             eth_chains.insert(name.clone(), ChainEthSubmission::new(config)?);
         }
 

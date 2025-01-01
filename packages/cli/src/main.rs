@@ -1,11 +1,12 @@
 mod args;
 mod client;
+mod context;
 mod display;
 mod task;
 
-use args::{CliArgs, Command};
-use clap::Parser;
+use args::Command;
 use client::{get_avs_client, get_eigen_client, HttpClient};
+use context::CliContext;
 use display::{
     display_core_contracts, display_eth_trigger_echo_digest, display_eth_trigger_echo_service_id,
     display_layer_service_contracts, display_response_signature,
@@ -22,7 +23,7 @@ use wavs::apis::{ServiceID, WorkflowID};
 async fn main() {
     let _ = dotenvy::dotenv();
 
-    let args = CliArgs::parse();
+    let ctx = CliContext::new().unwrap();
 
     // setup tracing
     tracing_subscriber::registry()
@@ -35,9 +36,9 @@ async fn main() {
         .try_init()
         .unwrap();
 
-    match args.command.clone() {
+    match ctx.args.command.clone() {
         Command::DeployCore { register_operator } => {
-            let eigen_client = get_eigen_client(&args).await;
+            let eigen_client = get_eigen_client(ctx).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_operator {
@@ -58,7 +59,7 @@ async fn main() {
         } => {
             let core_contracts = core_contracts.into();
 
-            let eigen_client = get_eigen_client(&args).await;
+            let eigen_client = get_eigen_client(ctx.clone()).await;
             let avs_client = get_avs_client(&eigen_client, core_contracts).await;
 
             if register_operator {
@@ -66,7 +67,7 @@ async fn main() {
             }
 
             if wavs {
-                let http_client = HttpClient::new(&args);
+                let http_client = HttpClient::new(ctx);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -79,7 +80,6 @@ async fn main() {
 
                 let service_id = http_client
                     .create_eth_trigger_echo_service(
-                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,
@@ -97,7 +97,7 @@ async fn main() {
             register_service_operator,
             digests,
         } => {
-            let eigen_client = get_eigen_client(&args).await;
+            let eigen_client = get_eigen_client(ctx.clone()).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_core_operator {
@@ -114,7 +114,7 @@ async fn main() {
             }
 
             if wavs {
-                let http_client = HttpClient::new(&args);
+                let http_client = HttpClient::new(ctx);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -127,7 +127,6 @@ async fn main() {
 
                 let service_id = http_client
                     .create_eth_trigger_echo_service(
-                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,
@@ -148,7 +147,7 @@ async fn main() {
             workflow_id,
             name,
         } => {
-            let eigen_client = get_eigen_client(&args).await;
+            let eigen_client = get_eigen_client(ctx).await;
 
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
 
@@ -176,7 +175,7 @@ async fn main() {
             digests,
             name,
         } => {
-            let eigen_client = get_eigen_client(&args).await;
+            let eigen_client = get_eigen_client(ctx.clone()).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_core_operator {
@@ -196,7 +195,7 @@ async fn main() {
             let workflow_id = WorkflowID::new("default").unwrap();
 
             if wavs {
-                let http_client = HttpClient::new(&args);
+                let http_client = HttpClient::new(ctx);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -209,7 +208,6 @@ async fn main() {
 
                 service_id = http_client
                     .create_eth_trigger_echo_service(
-                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,

@@ -1,24 +1,40 @@
-use clap::{arg, Parser, Subcommand};
-use utils::{eigen_client::CoreAVSAddresses, layer_contract_client::LayerAddresses};
+use std::path::PathBuf;
+
+use clap::{arg, Parser, Subcommand, ValueEnum};
+use utils::{
+    config::OptionalWavsChainConfig, eigen_client::CoreAVSAddresses,
+    layer_contract_client::LayerAddresses,
+};
 use wavs::Digest;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub struct CliArgs {
-    #[clap(long, default_value = "ws://localhost:8545")]
-    pub ws_endpoint: String,
-
-    #[clap(long, default_value = "http://localhost:8545")]
-    pub http_endpoint: String,
+    #[clap(long, default_value = "../../wavs.toml")]
+    pub wavs_config: PathBuf,
 
     #[clap(long, default_value = "http://localhost:8000")]
     pub wavs_endpoint: String,
 
+    /// The chain to hit
     #[clap(long, default_value = "local")]
-    pub eth_chain_name: String,
+    pub chain: String,
+
+    /// The chain kind. If not supplied, will try to determine from the config file
+    #[clap(long, default_value = None)]
+    pub chain_kind: Option<ChainKind>,
+
+    #[clap(flatten)]
+    pub chain_config_override: OptionalWavsChainConfig,
 
     #[command(subcommand)]
     pub command: Command,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy)]
+pub enum ChainKind {
+    Cosmos,
+    Eth,
 }
 
 #[derive(Clone, Subcommand)]
