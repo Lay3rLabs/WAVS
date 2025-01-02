@@ -7,7 +7,8 @@ members = [
   "ai-bouncer",
   "eth-event-echo",
   "eth-trigger-echo",
-  "eth-trigger-square"
+  "eth-trigger-square",
+  "eth-cosmos-query",
 ]
 resolver = "2"
 
@@ -28,6 +29,12 @@ alloy-primitives = "0.8.15"
 alloy-sol-macro = "0.8.15"
 alloy-sol-types = "0.8.15"
 layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.1" }
+layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+tendermint-rpc = "0.40.1"
+tendermint = { version = "0.40.1", default-features = false}
+wstd = "0.4.0"
 
 [profile.release]
 codegen-units = 1
