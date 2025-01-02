@@ -1,12 +1,12 @@
 use clap::Parser;
-use serde::{de, Deserialize, Deserializer, Serialize};
-use std::{fmt, path::PathBuf};
-use utils::config::OptionalWavsChainConfig;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use utils::{config::CliEnvExt, serde::deserialize_vec_string};
 
-/// This struct is used for both CliArgs and Environment variables
-/// Every Cli Arg can be overridden by an environment variable
-/// following the pattern of WAVS_{UPPERCASE_ARG_NAME}
-/// where "WAVS" is configured in the CliArgs::ENV_VAR_PREFIX constant
+/// This struct is used for both args and environment variables
+/// the basic idea is that every env var can be overriden by a cli arg
+/// and these override the config file
+/// env vars follow the pattern of WAVS_{UPPERCASE_ARG_NAME}
 #[derive(Debug, Parser, Serialize, Deserialize, Default)]
 #[command(version, about, long_about = None)]
 #[serde(default)]
@@ -77,50 +77,25 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_chain: Option<String>,
 
-    #[clap(flatten)]
-    #[serde(flatten)]
-    pub chain_config: OptionalWavsChainConfig,
+    /// mnemonic for the submission client (usually leave this as None and override in env)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submission_mnemonic: Option<String>,
+
+    /// mnemonic for the submission client (usually leave this as None and override in env)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cosmos_submission_mnemonic: Option<String>,
 }
 
-impl CliArgs {
-    pub const ENV_VAR_PREFIX: &'static str = "WAVS";
+impl CliEnvExt for CliArgs {
+    const ENV_VAR_PREFIX: &'static str = "WAVS";
 
-    pub fn env_var(name: &str) -> Option<String> {
-        std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
-    }
-}
-
-fn deserialize_vec_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct StringOrVec;
-
-    impl<'de> de::Visitor<'de> for StringOrVec {
-        type Value = Vec<String>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a comma-separated string or a sequence of strings")
-        }
-
-        fn visit_str<E>(self, value: &str) -> Result<Vec<String>, E>
-        where
-            E: de::Error,
-        {
-            Ok(value.split(',').map(|s| s.trim().to_string()).collect())
-        }
-
-        fn visit_seq<A>(self, mut seq: A) -> Result<Vec<String>, A::Error>
-        where
-            A: de::SeqAccess<'de>,
-        {
-            let mut vec = Vec::new();
-            while let Some(elem) = seq.next_element()? {
-                vec.push(elem);
-            }
-            Ok(vec)
-        }
+    fn home_dir(&self) -> Option<PathBuf> {
+        self.home.clone()
     }
 
-    deserializer.deserialize_any(StringOrVec)
+    fn dotenv_path(&self) -> Option<PathBuf> {
+        self.dotenv.clone()
+    }
 }

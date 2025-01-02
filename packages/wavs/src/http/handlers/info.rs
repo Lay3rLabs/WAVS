@@ -23,8 +23,9 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
 
     let cosmos_chain_config = state.config.cosmos_chain_config()?.clone();
 
-    let mnemonic = cosmos_chain_config
-        .submission_mnemonic
+    let mnemonic = state
+        .config
+        .cosmos_submission_mnemonic
         .clone()
         .context("submission_mnemonic not set")?;
 

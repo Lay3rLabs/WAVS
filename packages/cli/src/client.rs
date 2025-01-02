@@ -1,8 +1,7 @@
-use crate::context::WavsContext;
 use layer_climb::prelude::*;
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
-    eth_client::{EthClientBuilder, EthClientConfig},
+    eth_client::{EthChainConfig, EthClientBuilder},
     layer_contract_client::{LayerContractClientFull, LayerContractClientFullBuilder},
 };
 use wavs::{
@@ -20,16 +19,21 @@ use wavs::{
     Digest,
 };
 
-pub async fn get_eigen_client(ctx: WavsContext) -> EigenClient {
-    let mnemonic = std::env::var("CLI_ETH_MNEMONIC").expect("CLI_ETH_MNEMONIC env var is required");
+use crate::config::Config;
 
-    let mut config: EthClientConfig = ctx.chain_config.clone().try_into().unwrap();
+pub async fn get_eigen_client(config: &Config) -> EigenClient {
+    let chain_config = config
+        .chains
+        .get_chain(&config.chain)
+        .unwrap()
+        .unwrap_or_else(|| panic!("chain not found for {}", config.chain));
+    let chain_config = EthChainConfig::try_from(chain_config).unwrap();
+    let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone());
 
-    config.mnemonic = Some(mnemonic);
-
-    tracing::info!("Creating eth client on: {:?}", config.ws_endpoint);
-
-    let eth_client = EthClientBuilder::new(config).build_signing().await.unwrap();
+    let eth_client = EthClientBuilder::new(client_config)
+        .build_signing()
+        .await
+        .unwrap();
     EigenClient::new(eth_client)
 }
 
@@ -46,14 +50,16 @@ pub async fn get_avs_client(
 
 pub struct HttpClient {
     inner: reqwest::Client,
-    ctx: WavsContext,
+    endpoint: String,
+    chain_name: String,
 }
 
 impl HttpClient {
-    pub fn new(ctx: WavsContext) -> Self {
+    pub fn new(config: &Config) -> Self {
         Self {
             inner: reqwest::Client::new(),
-            ctx,
+            endpoint: config.wavs_endpoint.clone(),
+            chain_name: config.chain.clone(),
         }
     }
 
@@ -62,7 +68,7 @@ impl HttpClient {
 
         let response: UploadServiceResponse = self
             .inner
-            .post(format!("{}/upload", self.ctx.args.endpoint))
+            .post(format!("{}/upload", self.endpoint))
             .body(wasm_bytes.to_vec())
             .send()
             .await
@@ -84,7 +90,7 @@ impl HttpClient {
             digest,
             Address::Eth(AddrEth::new(trigger_address.into())),
             Submit::EthSignedMessage {
-                chain_name: self.ctx.args.chain.clone(),
+                chain_name: self.chain_name.clone(),
                 hd_index: 0,
                 service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
             },
@@ -120,7 +126,7 @@ impl HttpClient {
         .unwrap();
 
         self.inner
-            .post(format!("{}/app", self.ctx.args.endpoint))
+            .post(format!("{}/app", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
             .send()

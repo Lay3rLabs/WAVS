@@ -1,19 +1,12 @@
+use alloy::node_bindings::AnvilInstance;
 use std::{path::PathBuf, sync::Arc};
+use utils::config::{ConfigBuilder, ConfigExt, EthereumChainConfig};
 
-use crate::{
-    args::CliArgs,
-    config::{Config, ConfigBuilder},
-};
+use crate::{args::CliArgs, config::Config};
 
 #[derive(Clone)]
 pub struct TestApp {
     pub config: Arc<Config>,
-}
-
-impl Default for TestApp {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl TestApp {
@@ -23,14 +16,14 @@ impl TestApp {
             home: Some(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("tests")
-                    .join(ConfigBuilder::DIRNAME),
+                    .join(Config::DIRNAME),
             ),
             // this purposefully points at a non-existing file
             // so that we don't load a real .env in tests
             dotenv: Some(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("tests")
-                    .join(ConfigBuilder::DIRNAME)
+                    .join(Config::DIRNAME)
                     .join("non-existant-file"),
             ),
             data: None,
@@ -42,22 +35,36 @@ impl TestApp {
                 "test test test test test test test test test test test junk".to_owned(),
             ),
             cors_allowed_origins: Vec::new(),
-            ws_endpoint: None,
-            http_endpoint: None,
+            chain: None,
             hd_index: None,
             tasks_quorum: Some(1),
         }
     }
 
-    pub fn new() -> Self {
-        Self::new_with_args(Self::default_cli_args())
+    pub fn new(anvil: Option<&AnvilInstance>) -> Self {
+        Self::new_with_args(Self::default_cli_args(), anvil)
     }
 
-    pub fn new_with_args(cli_args: CliArgs) -> Self {
-        let config = Arc::new(ConfigBuilder::new(cli_args).build().unwrap());
+    pub fn new_with_args(cli_args: CliArgs, anvil: Option<&AnvilInstance>) -> Self {
+        let mut config: Config = ConfigBuilder::new(cli_args).build().unwrap();
+
+        if let Some(anvil) = anvil {
+            let chain = config
+                .chains
+                .get_chain(&config.chain)
+                .unwrap()
+                .unwrap()
+                .clone();
+            let mut chain: EthereumChainConfig = chain.try_into().unwrap();
+            chain.ws_endpoint = anvil.ws_endpoint().to_string();
+            chain.http_endpoint = anvil.endpoint().to_string();
+            config.chains.eth.insert(config.chain.clone(), chain);
+        }
 
         crate::init_tracing_tests();
 
-        Self { config }
+        Self {
+            config: Arc::new(config),
+        }
     }
 }

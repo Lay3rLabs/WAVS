@@ -20,7 +20,7 @@ mod e2e {
     };
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
-    use utils::layer_contract_client::LayerContractClientSimple;
+    use utils::{config::ConfigBuilder, layer_contract_client::LayerContractClientSimple};
     use wavs::{
         apis::{dispatcher::Submit, ServiceID},
         http::types::TriggerRequest,
@@ -60,13 +60,8 @@ mod e2e {
             let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
             cli_args.dotenv = None;
             cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
-            if let Some(anvil) = anvil.as_ref() {
-                cli_args.ws_endpoint = Some(anvil.ws_endpoint().to_string());
-                cli_args.http_endpoint = Some(anvil.endpoint().to_string());
-            }
-            aggregator::config::ConfigBuilder::new(cli_args)
-                .build()
-                .unwrap()
+            cli_args.chain = Some("local".to_string());
+            ConfigBuilder::new(cli_args).build().unwrap()
         };
 
         cfg_if::cfg_if! {

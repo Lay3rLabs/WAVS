@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
 use clap::{arg, Parser};
+use serde::{Deserialize, Serialize};
 use utils::{
-    config::OptionalWavsChainConfig, eigen_client::CoreAVSAddresses,
-    layer_contract_client::LayerAddresses,
+    config::CliEnvExt, eigen_client::CoreAVSAddresses, layer_contract_client::LayerAddresses,
+    serde::deserialize_vec_string,
 };
 use wavs::Digest;
 
@@ -15,7 +16,7 @@ pub enum Command {
         register_operator: bool,
 
         #[clap(flatten)]
-        wavs: WavsArgs,
+        args: CliArgs,
     },
 
     DeployAll {
@@ -33,7 +34,7 @@ pub enum Command {
         digests: Digests,
 
         #[clap(flatten)]
-        wavs: WavsArgs,
+        args: CliArgs,
     },
 
     DeployService {
@@ -51,7 +52,7 @@ pub enum Command {
         digests: Digests,
 
         #[clap(flatten)]
-        wavs: WavsArgs,
+        args: CliArgs,
     },
 
     AddTask {
@@ -80,7 +81,7 @@ pub enum Command {
         name: Option<String>,
 
         #[clap(flatten)]
-        wavs: WavsArgs,
+        args: CliArgs,
     },
 
     /// Kitchen sink subcommand
@@ -106,25 +107,70 @@ pub enum Command {
         name: Option<String>,
 
         #[clap(flatten)]
-        wavs: WavsArgs,
+        args: CliArgs,
     },
 }
 
-#[derive(Parser)]
+/// This struct is used for both args and environment variables
+/// the basic idea is that every env var can be overriden by a cli arg
+/// and these override the config file
+/// env vars follow the pattern of WAVS_CLI_{UPPERCASE_ARG_NAME}
+#[derive(Debug, Parser, Serialize, Deserialize, Default)]
 #[command(version, about, long_about = None)]
-pub struct WavsArgs {
-    #[clap(long, default_value = "../../wavs.toml")]
-    pub config_filepath: PathBuf,
+#[serde(default)]
+pub struct CliArgs {
+    /// The home directory of the application, where the wavs.toml configuration file is stored
+    /// if not provided, a series of default directories will be tried
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub home: Option<PathBuf>,
 
-    #[clap(long, default_value = "http://localhost:8000")]
-    pub endpoint: String,
+    /// The path to an optional dotenv file to try and load
+    /// if not set, will be the current working directory's .env
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dotenv: Option<PathBuf>,
 
-    /// The chain to hit
-    #[clap(long, default_value = "local")]
-    pub chain: String,
+    /// Log level in the format of comma-separated tracing directives.
+    /// See example config file for more info
+    #[arg(long, value_delimiter = ',')]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(deserialize_with = "deserialize_vec_string")]
+    pub log_level: Vec<String>,
 
-    #[clap(flatten)]
-    pub chain_config_override: OptionalWavsChainConfig,
+    /// The directory to store all internal data files
+    /// See example config file for more info
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<PathBuf>,
+
+    /// The chain to use for the application
+    /// will load from the config file
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain: Option<String>,
+
+    /// mnemonic (usually leave this as None and override in env)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cosmos_mnemonic: Option<String>,
+
+    /// mnemonic (usually leave this as None and override in env)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eth_mnemonic: Option<String>,
+}
+
+impl CliEnvExt for CliArgs {
+    const ENV_VAR_PREFIX: &'static str = "WAVS_CLI";
+
+    fn home_dir(&self) -> Option<PathBuf> {
+        self.home.clone()
+    }
+
+    fn dotenv_path(&self) -> Option<PathBuf> {
+        self.dotenv.clone()
+    }
 }
 
 #[derive(Parser, Debug, Clone)]

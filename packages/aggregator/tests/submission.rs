@@ -26,12 +26,14 @@ async fn submit_to_chain() {
     let anvil = Anvil::new().spawn();
     let data_path = tempfile::tempdir().unwrap().path().to_path_buf();
     let _ = utils::storage::fs::FileStorage::new(data_path.clone());
-    let aggregator = TestApp::new_with_args(aggregator::args::CliArgs {
-        ws_endpoint: Some(anvil.ws_endpoint()),
-        http_endpoint: Some(anvil.endpoint()),
-        data: Some(data_path),
-        ..TestApp::default_cli_args()
-    });
+    let aggregator = TestApp::new_with_args(
+        aggregator::args::CliArgs {
+            chain: Some("local".to_string()),
+            data: Some(data_path),
+            ..TestApp::default_cli_args()
+        },
+        Some(&anvil),
+    );
     let eth_client = EthClientBuilder::new(EthClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: anvil.endpoint(),
@@ -117,13 +119,15 @@ async fn submit_to_chain_three() {
     let anvil = Anvil::new().spawn();
     let data_path = tempfile::tempdir().unwrap().path().to_path_buf();
     let _ = utils::storage::fs::FileStorage::new(data_path.clone());
-    let aggregator = TestApp::new_with_args(aggregator::args::CliArgs {
-        ws_endpoint: Some(anvil.ws_endpoint()),
-        http_endpoint: Some(anvil.endpoint()),
-        tasks_quorum: Some(3),
-        data: Some(data_path),
-        ..TestApp::default_cli_args()
-    });
+    let aggregator = TestApp::new_with_args(
+        aggregator::args::CliArgs {
+            tasks_quorum: Some(3),
+            data: Some(data_path),
+            ..TestApp::default_cli_args()
+        },
+        Some(&anvil),
+    );
+
     let eth_client = EthClientBuilder::new(EthClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: anvil.endpoint(),
@@ -269,12 +273,14 @@ async fn invalid_operator_signature() {
     let anvil = Anvil::new().spawn();
     let data_path = tempfile::tempdir().unwrap().path().to_path_buf();
     let _ = utils::storage::fs::FileStorage::new(data_path.clone());
-    let aggregator = TestApp::new_with_args(aggregator::args::CliArgs {
-        ws_endpoint: Some(anvil.ws_endpoint()),
-        http_endpoint: Some(anvil.endpoint()),
-        data: Some(data_path),
-        ..TestApp::default_cli_args()
-    });
+    let aggregator = TestApp::new_with_args(
+        aggregator::args::CliArgs {
+            chain: Some("local".to_string()),
+            data: Some(data_path),
+            ..TestApp::default_cli_args()
+        },
+        Some(&anvil),
+    );
     let eth_client = EthClientBuilder::new(EthClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint()),
         http_endpoint: anvil.endpoint(),

@@ -1,9 +1,8 @@
 use std::{path::PathBuf, sync::Arc};
 
-use crate::{
-    args::CliArgs,
-    config::{Config, ConfigBuilder},
-};
+use utils::config::{ConfigBuilder, ConfigExt};
+
+use crate::{args::CliArgs, config::Config};
 
 #[derive(Clone)]
 pub struct TestApp {
@@ -17,14 +16,14 @@ impl TestApp {
             home: Some(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("tests")
-                    .join(ConfigBuilder::DIRNAME),
+                    .join(Config::DIRNAME),
             ),
             // this purposefully points at a non-existing file
             // so that we don't load a real .env in tests
             dotenv: Some(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("tests")
-                    .join(ConfigBuilder::DIRNAME)
+                    .join(Config::DIRNAME)
                     .join("non-existant-file"),
             ),
             port: None,
@@ -34,9 +33,10 @@ impl TestApp {
             cors_allowed_origins: Vec::new(),
             chain: None,
             cosmos_chain: None,
-            chain_config: Default::default(),
             wasm_lru_size: None,
             wasm_threads: None,
+            submission_mnemonic: None,
+            cosmos_submission_mnemonic: None,
         }
     }
 

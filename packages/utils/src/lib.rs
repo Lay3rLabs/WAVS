@@ -7,6 +7,7 @@ pub mod eigen_client;
 pub mod error;
 pub mod eth_client;
 pub mod layer_contract_client;
+pub mod serde;
 pub mod storage;
 
 // the test version of init_tracing does not take a config

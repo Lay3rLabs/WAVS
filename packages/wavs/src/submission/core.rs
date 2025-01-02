@@ -21,7 +21,7 @@ use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
     config::{CosmosChainConfig, EthereumChainConfig},
-    eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
+    eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig, EthSigningClient},
     layer_contract_client::LayerContractClientSimple,
 };
 
@@ -43,12 +43,7 @@ struct ChainCosmosSubmission {
 
 impl ChainCosmosSubmission {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
-    fn new(config: CosmosChainConfig) -> Result<Self, SubmissionError> {
-        let mnemonic = config
-            .submission_mnemonic
-            .clone()
-            .ok_or(SubmissionError::MissingMnemonic)?;
-
+    fn new(config: CosmosChainConfig, mnemonic: String) -> Result<Self, SubmissionError> {
         let faucet_url = config
             .faucet_endpoint
             .as_ref()
@@ -72,14 +67,15 @@ struct ChainEthSubmission {
 
 impl ChainEthSubmission {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
-    fn new(config: EthereumChainConfig) -> Result<Self, SubmissionError> {
+    fn new(config: EthereumChainConfig, mnemonic: String) -> Result<Self, SubmissionError> {
         let aggregator_url = config
             .aggregator_endpoint
             .as_ref()
             .map(|endpoint| endpoint.parse())
             .transpose()
             .map_err(SubmissionError::AggregatorUrl)?;
-        let client_config = config.into();
+
+        let client_config = EthChainConfig::from(config).to_client_config(None, Some(mnemonic));
 
         Ok(Self {
             client_config,
@@ -97,12 +93,30 @@ impl CoreSubmission {
         let cosmos_chain = config
             .try_cosmos_chain_config()
             .map_err(SubmissionError::Climb)?
-            .map(|x| ChainCosmosSubmission::new(x.clone()))
+            .map(|x| {
+                let mnemonic = config
+                    .cosmos_submission_mnemonic
+                    .clone()
+                    .ok_or(SubmissionError::MissingMnemonic)?;
+
+                ChainCosmosSubmission::new(x.clone(), mnemonic)
+            })
             .transpose()?;
 
         let mut eth_chains = HashMap::new();
-        for (name, config) in config.active_ethereum_chain_configs() {
-            eth_chains.insert(name.clone(), ChainEthSubmission::new(config)?);
+        let active_ethereum_chain_configs = config.active_ethereum_chain_configs();
+        if !active_ethereum_chain_configs.is_empty() {
+            let mnemonic = config
+                .submission_mnemonic
+                .clone()
+                .ok_or(SubmissionError::MissingMnemonic)?;
+
+            for (name, chain_config) in config.active_ethereum_chain_configs() {
+                eth_chains.insert(
+                    name.clone(),
+                    ChainEthSubmission::new(chain_config, mnemonic.clone())?,
+                );
+            }
         }
 
         Ok(Self {

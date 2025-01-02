@@ -38,7 +38,7 @@ async fn client_stream_blocks() {
 #[tokio::test]
 async fn client_sign_message() {
     init_tracing_tests();
-    let anvil = Anvil::new().try_spawn().unwrap();
+    let anvil = Anvil::new().spawn();
 
     let config = EthClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),

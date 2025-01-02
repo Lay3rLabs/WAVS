@@ -1,11 +1,12 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use aggregator::{args::CliArgs, config::ConfigBuilder, run_server, AppContext};
+use aggregator::{args::CliArgs, config::Config, run_server, AppContext};
+use utils::config::{ConfigBuilder, ConfigExt};
 
 fn main() {
     let args = CliArgs::parse();
-    let config = ConfigBuilder::new(args).build().unwrap();
+    let config: Config = ConfigBuilder::new(args).build().unwrap();
 
     // setup tracing
     tracing_subscriber::registry()
