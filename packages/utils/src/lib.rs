@@ -1,5 +1,6 @@
 pub mod aggregator;
 pub mod alloy_helpers;
+pub mod config;
 pub mod context;
 pub mod digest;
 pub mod eigen_client;

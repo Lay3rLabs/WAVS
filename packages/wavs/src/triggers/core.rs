@@ -72,13 +72,10 @@ impl CoreTriggerManager {
         let cosmos_chain_config = config
             .try_cosmos_chain_config()
             .map_err(TriggerError::Climb)?
-            .map(|chain_config| chain_config.into());
+            .map(|chain_config| chain_config.clone().into());
 
         let mut chain_configs = HashMap::new();
-        for (chain_name, chain_config) in config
-            .ethereum_chain_configs()
-            .map_err(TriggerError::Ethereum)?
-        {
+        for (chain_name, chain_config) in config.active_ethereum_chain_configs() {
             chain_configs.insert(chain_name, chain_config.into());
         }
 
@@ -579,11 +576,12 @@ mod tests {
             trigger::{Trigger, TriggerConfig, TriggerManager},
             ServiceID, WorkflowID,
         },
-        config::{ChainConfigs, Config, CosmosChainConfig, EthereumChainConfig},
+        config::Config,
         test_utils::address::rand_address_eth,
     };
 
     use layer_climb::prelude::*;
+    use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
 
     use super::CoreTriggerManager;
 

@@ -24,6 +24,10 @@ hex = { workspace = true }
 redb = { workspace = true }
 serde_json = { workspace = true }
 walkdir = { workspace = true }
+layer-climb = { workspace = true }
+clap = { workspace = true }
+figment = { workspace = true }
+toml = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -86,7 +86,7 @@ impl HttpClient {
         service_id: ServiceID,
         config: &Config,
     ) -> Result<()> {
-        let configs = config.ethereum_chain_configs().unwrap();
+        let configs = config.active_ethereum_chain_configs();
         let aggregator_app_url = configs
             .get(chain_name)
             .unwrap()

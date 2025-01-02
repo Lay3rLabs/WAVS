@@ -1,11 +1,13 @@
 mod args;
 mod client;
+mod context;
 mod display;
 mod task;
 
-use args::{CliArgs, Command};
+use args::Command;
 use clap::Parser;
 use client::{get_avs_client, get_eigen_client, HttpClient};
+use context::WavsContext;
 use display::{
     display_core_contracts, display_eth_trigger_echo_digest, display_eth_trigger_echo_service_id,
     display_layer_service_contracts, display_response_signature,
@@ -22,8 +24,6 @@ use wavs::apis::{ServiceID, WorkflowID};
 async fn main() {
     let _ = dotenvy::dotenv();
 
-    let args = CliArgs::parse();
-
     // setup tracing
     tracing_subscriber::registry()
         .with(
@@ -35,9 +35,13 @@ async fn main() {
         .try_init()
         .unwrap();
 
-    match args.command.clone() {
-        Command::DeployCore { register_operator } => {
-            let eigen_client = get_eigen_client(&args).await;
+    match Command::parse() {
+        Command::DeployCore {
+            register_operator,
+            wavs,
+        } => {
+            let ctx = WavsContext::new(wavs).unwrap();
+            let eigen_client = get_eigen_client(ctx).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_operator {
@@ -51,22 +55,24 @@ async fn main() {
         }
 
         Command::DeployService {
+            add_service,
             wavs,
             core_contracts,
             register_operator,
             digests,
         } => {
+            let ctx = WavsContext::new(wavs).unwrap();
             let core_contracts = core_contracts.into();
 
-            let eigen_client = get_eigen_client(&args).await;
+            let eigen_client = get_eigen_client(ctx.clone()).await;
             let avs_client = get_avs_client(&eigen_client, core_contracts).await;
 
             if register_operator {
                 avs_client.register_operator(&mut OsRng).await.unwrap();
             }
 
-            if wavs {
-                let http_client = HttpClient::new(&args);
+            if add_service {
+                let http_client = HttpClient::new(ctx);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -79,7 +85,6 @@ async fn main() {
 
                 let service_id = http_client
                     .create_eth_trigger_echo_service(
-                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,
@@ -92,12 +97,14 @@ async fn main() {
         }
 
         Command::DeployAll {
+            add_service,
             wavs,
             register_core_operator,
             register_service_operator,
             digests,
         } => {
-            let eigen_client = get_eigen_client(&args).await;
+            let ctx = WavsContext::new(wavs).unwrap();
+            let eigen_client = get_eigen_client(ctx.clone()).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_core_operator {
@@ -113,8 +120,8 @@ async fn main() {
                 avs_client.register_operator(&mut OsRng).await.unwrap();
             }
 
-            if wavs {
-                let http_client = HttpClient::new(&args);
+            if add_service {
+                let http_client = HttpClient::new(ctx);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -127,7 +134,6 @@ async fn main() {
 
                 let service_id = http_client
                     .create_eth_trigger_echo_service(
-                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,
@@ -141,6 +147,7 @@ async fn main() {
         }
 
         Command::AddTask {
+            watch_wavs,
             wavs,
             trigger_addr,
             service_manager_addr,
@@ -148,13 +155,14 @@ async fn main() {
             workflow_id,
             name,
         } => {
-            let eigen_client = get_eigen_client(&args).await;
+            let ctx = WavsContext::new(wavs).unwrap();
+            let eigen_client = get_eigen_client(ctx).await;
 
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
 
             let signature = run_eth_trigger_echo_task(
                 eigen_client.eth,
-                wavs,
+                watch_wavs,
                 ServiceID::new(service_id).unwrap(),
                 match workflow_id {
                     Some(workflow_id) => WorkflowID::new(workflow_id).unwrap(),
@@ -170,13 +178,15 @@ async fn main() {
         }
 
         Command::KitchenSink {
+            add_service,
             wavs,
             register_core_operator,
             register_service_operator,
             digests,
             name,
         } => {
-            let eigen_client = get_eigen_client(&args).await;
+            let ctx = WavsContext::new(wavs).unwrap();
+            let eigen_client = get_eigen_client(ctx.clone()).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_core_operator {
@@ -195,8 +205,8 @@ async fn main() {
             let mut service_id = ServiceID::new("service-id-1").unwrap();
             let workflow_id = WorkflowID::new("default").unwrap();
 
-            if wavs {
-                let http_client = HttpClient::new(&args);
+            if add_service {
+                let http_client = HttpClient::new(ctx);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -209,7 +219,6 @@ async fn main() {
 
                 service_id = http_client
                     .create_eth_trigger_echo_service(
-                        args.eth_chain_name.clone(),
                         avs_client.layer.trigger,
                         avs_client.layer.service_manager,
                         digest,
@@ -224,7 +233,7 @@ async fn main() {
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
             let signature = run_eth_trigger_echo_task(
                 eigen_client.eth,
-                wavs,
+                add_service,
                 service_id,
                 workflow_id,
                 avs_client.layer.trigger,

@@ -1,11 +1,12 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
-use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
-use utils::eth_client::EthClientConfig;
+use utils::config::{
+    ChainConfigs, CosmosChainConfig, EthereumChainConfig, OptionalWavsChainConfig,
+};
 
-use crate::args::{CliArgs, OptionalWavsChainConfig};
+use crate::args::CliArgs;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -72,182 +73,34 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn cosmos_chain_config(&self) -> Result<CosmosChainConfig> {
-        let chain_name = self.cosmos_chain.as_deref();
-        self.try_cosmos_chain_config()?.ok_or(anyhow!(
-            "No chain config found for cosmos chain \"{}\"",
-            chain_name.unwrap_or_default()
-        ))
-    }
-    pub fn try_cosmos_chain_config(&self) -> Result<Option<CosmosChainConfig>> {
-        let chain_name = self.cosmos_chain.as_deref();
-
-        let config = match chain_name.and_then(|chain_name| self.chains.cosmos.get(chain_name)) {
-            None => return Ok(None),
-            Some(config) => config,
-        };
-
-        // The optional overrides use a prefix to distinguish between layer and ethereum fields
-        // since in the CLI they get flattened and would conflict without a prefix
-        // in order to cleanly merge it with our final, real chain config
-        // we need to strip that prefix so that the fields match
-        #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-        struct ConfigOverride {
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub chain_id: Option<ChainId>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub bech32_prefix: Option<ChainId>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub rpc_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub grpc_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub gas_price: Option<f32>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub gas_denom: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub faucet_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub submission_mnemonic: Option<String>,
-        }
-
-        let config_override = ConfigOverride {
-            chain_id: self.chain_config_override.cosmos_chain_id.clone(),
-            bech32_prefix: self.chain_config_override.cosmos_bech32_prefix.clone(),
-            grpc_endpoint: self.chain_config_override.cosmos_grpc_endpoint.clone(),
-            gas_price: self.chain_config_override.cosmos_gas_price,
-            gas_denom: self.chain_config_override.cosmos_gas_denom.clone(),
-            faucet_endpoint: self.chain_config_override.cosmos_faucet_endpoint.clone(),
-            submission_mnemonic: self
-                .chain_config_override
-                .cosmos_submission_mnemonic
-                .clone(),
-            rpc_endpoint: self.chain_config_override.cosmos_rpc_endpoint.clone(),
-        };
-
-        let config_merged = Figment::new()
-            .merge(figment::providers::Serialized::defaults(config))
-            .merge(figment::providers::Serialized::defaults(config_override))
-            .extract()?;
-
-        Ok(Some(config_merged))
+    pub fn active_ethereum_chain_configs(&self) -> HashMap<String, EthereumChainConfig> {
+        self.chains
+            .eth
+            .iter()
+            .filter_map(|(chain_name, chain)| {
+                if self.eth_chains.contains(chain_name) {
+                    Some((chain_name.clone(), chain.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
-    pub fn ethereum_chain_configs(&self) -> Result<HashMap<String, EthereumChainConfig>> {
-        let mut chains = HashMap::with_capacity(self.eth_chains.len());
-        for chain in &self.eth_chains {
-            let config = self.try_ethereum_chain_config(chain)?;
-            if let Some(config) = config {
-                chains.insert(chain.clone(), config);
-            }
-        }
-
-        Ok(chains)
-    }
-
-    pub fn try_ethereum_chain_config(
-        &self,
-        chain_name: &str,
-    ) -> Result<Option<EthereumChainConfig>> {
-        let config = match self.chains.eth.get(chain_name) {
-            None => return Ok(None),
-            Some(config) => config,
-        };
-
-        // The optional overrides use a prefix to distinguish between layer and ethereum fields
-        // since in the CLI they get flattened and would conflict without a prefix
-        // in order to cleanly merge it with our final, real chain config
-        // we need to strip that prefix so that the fields match
-        #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-        struct ConfigOverride {
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub chain_id: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub http_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub ws_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub aggregator_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub submission_mnemonic: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub faucet_endpoint: Option<String>,
-        }
-
-        let config_override = ConfigOverride {
-            chain_id: self.chain_config_override.chain_id.clone(),
-            http_endpoint: self.chain_config_override.http_endpoint.clone(),
-            ws_endpoint: self.chain_config_override.ws_endpoint.clone(),
-            aggregator_endpoint: self.chain_config_override.aggregator_endpoint.clone(),
-            submission_mnemonic: self.chain_config_override.submission_mnemonic.clone(),
-            faucet_endpoint: self.chain_config_override.faucet_endpoint.clone(),
-        };
-
-        let config_merged = Figment::new()
-            .merge(figment::providers::Serialized::defaults(config))
-            .merge(figment::providers::Serialized::defaults(config_override))
-            .extract()?;
-
-        Ok(Some(config_merged))
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ChainConfigs {
-    /// Cosmos-style chains (including Layer-SDK)
-    pub cosmos: HashMap<String, CosmosChainConfig>,
-    /// Ethereum-style chains
-    pub eth: HashMap<String, EthereumChainConfig>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CosmosChainConfig {
-    pub chain_id: String,
-    pub bech32_prefix: String,
-    pub rpc_endpoint: Option<String>,
-    pub grpc_endpoint: Option<String>,
-    pub gas_price: f32,
-    pub gas_denom: String,
-    pub faucet_endpoint: Option<String>,
-    /// mnemonic for the submission client (usually leave this as None and override in env)
-    pub submission_mnemonic: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct EthereumChainConfig {
-    pub chain_id: String,
-    pub ws_endpoint: String,
-    pub http_endpoint: String,
-    pub aggregator_endpoint: Option<String>,
-    pub faucet_endpoint: Option<String>,
-    /// mnemonic for the submission client (usually leave this as None and override in env)
-    pub submission_mnemonic: Option<String>,
-}
-
-impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
-    fn from(config: CosmosChainConfig) -> Self {
-        Self {
-            chain_id: ChainId::new(config.chain_id),
-            rpc_endpoint: config.rpc_endpoint,
-            grpc_endpoint: config.grpc_endpoint,
-            grpc_web_endpoint: None,
-            gas_price: config.gas_price,
-            gas_denom: config.gas_denom,
-            address_kind: AddrKind::Cosmos {
-                prefix: config.bech32_prefix,
-            },
+    pub fn cosmos_chain_config(&self) -> Result<&CosmosChainConfig> {
+        match self.cosmos_chain.as_deref() {
+            Some(chain_name) => self.chains.cosmos.get(chain_name).ok_or(anyhow::anyhow!(
+                "No cosmos chain config found for chain: {}",
+                chain_name
+            )),
+            None => bail!("No cosmos chain specified in config"),
         }
     }
-}
 
-impl From<EthereumChainConfig> for EthClientConfig {
-    fn from(config: EthereumChainConfig) -> Self {
-        Self {
-            ws_endpoint: Some(config.ws_endpoint),
-            http_endpoint: config.http_endpoint,
-            mnemonic: config.submission_mnemonic,
-            hd_index: None,
-            transport: None,
+    pub fn try_cosmos_chain_config(&self) -> Result<Option<&CosmosChainConfig>> {
+        match self.cosmos_chain.as_deref() {
+            Some(chain_name) => Ok(self.chains.cosmos.get(chain_name)),
+            None => Ok(None),
         }
     }
 }
@@ -302,13 +155,17 @@ impl ConfigBuilder {
 
         // then, our final config, which can have more complex types with easier TOML-like syntax
         // and also fills in defaults for required values at the end
-        let config: Config = Figment::new()
+        let mut config: Config = Figment::new()
             .merge(figment::providers::Toml::file(Self::filepath(
                 &cli_env_args,
             )?))
             .merge(figment::providers::Serialized::defaults(cli_env_args))
             .join(figment::providers::Serialized::defaults(Config::default()))
             .extract()?;
+
+        config.chains = config
+            .chains
+            .merge_overrides(&config.chain_config_override)?;
 
         Ok(Config {
             data: shellexpand::tilde(&config.data.to_string_lossy())

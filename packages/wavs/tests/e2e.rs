@@ -55,6 +55,7 @@ mod e2e {
                 }
             })
         };
+
         let aggregator_config: aggregator::config::Config = {
             let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
             cli_args.dotenv = None;

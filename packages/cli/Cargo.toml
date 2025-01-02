@@ -25,5 +25,6 @@ hex = { workspace = true }
 reqwest = { workspace = true }
 wavs = { workspace = true }
 layer-climb = { workspace = true }
+toml = { workspace = true }
 
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
