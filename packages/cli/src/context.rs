@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::sync::Arc;
-use utils::config::{
-    ChainConfigs, CosmosChainConfig, EthereumChainConfig, OptionalWavsChainConfig,
-};
+use utils::config::{AnyChainConfig, ChainConfigs, OptionalWavsChainConfig};
 
-use crate::args::{ChainKind, WavsArgs};
+use crate::args::WavsArgs;
 
 #[derive(Clone)]
 pub struct WavsContext {
@@ -22,13 +20,7 @@ impl std::ops::Deref for WavsContext {
 
 pub struct WavsContextInner {
     pub args: WavsArgs,
-    pub chain_config: WavsChainConfig,
-}
-
-#[allow(dead_code)]
-pub enum WavsChainConfig {
-    Cosmos(CosmosChainConfig),
-    Eth(EthereumChainConfig),
+    pub chain_config: AnyChainConfig,
 }
 
 impl WavsContext {
@@ -41,37 +33,17 @@ impl WavsContext {
         }
 
         let config =
-            std::fs::read_to_string(&args.config_filepath).expect("Could not read config file");
+            std::fs::read_to_string(&args.config_filepath).context("Could not read config file")?;
         let config: PartialWavsConfig =
-            toml::from_str(&config).expect("Could not parse config file");
+            toml::from_str(&config).context("Could not parse config file")?;
 
         let chains = config
             .chains
             .merge_overrides(&config.chain_config_override)?;
 
-        let chain_config = args
-            .chain_kind
-            .map(|kind| match kind {
-                ChainKind::Cosmos => chains
-                    .cosmos
-                    .get(&args.chain)
-                    .cloned()
-                    .map(WavsChainConfig::Cosmos),
-                ChainKind::Eth => chains
-                    .eth
-                    .get(&args.chain)
-                    .cloned()
-                    .map(WavsChainConfig::Eth),
-            })
-            .unwrap_or_else(|| match chains.cosmos.get(&args.chain).cloned() {
-                Some(chain) => Some(WavsChainConfig::Cosmos(chain)),
-                None => chains
-                    .eth
-                    .get(&args.chain)
-                    .cloned()
-                    .map(WavsChainConfig::Eth),
-            })
-            .context(format!("No chain config found for: {}", args.chain))?;
+        let chain_config = chains
+            .get_chain(&args.chain)?
+            .context(format!("No chain config found for {}", args.chain))?;
 
         Ok(Self {
             inner: Arc::new(WavsContextInner { args, chain_config }),

@@ -1,4 +1,4 @@
-use crate::context::{WavsChainConfig, WavsContext};
+use crate::context::WavsContext;
 use layer_climb::prelude::*;
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
@@ -23,10 +23,7 @@ use wavs::{
 pub async fn get_eigen_client(ctx: WavsContext) -> EigenClient {
     let mnemonic = std::env::var("CLI_ETH_MNEMONIC").expect("CLI_ETH_MNEMONIC env var is required");
 
-    let mut config: EthClientConfig = match &ctx.chain_config {
-        WavsChainConfig::Eth(config) => config.clone().into(),
-        _ => panic!("Expected an Ethereum chain config"),
-    };
+    let mut config: EthClientConfig = ctx.chain_config.clone().try_into().unwrap();
 
     config.mnemonic = Some(mnemonic);
 

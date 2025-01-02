@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{arg, Parser, ValueEnum};
+use clap::{arg, Parser};
 use utils::{
     config::OptionalWavsChainConfig, eigen_client::CoreAVSAddresses,
     layer_contract_client::LayerAddresses,
@@ -123,18 +123,8 @@ pub struct WavsArgs {
     #[clap(long, default_value = "local")]
     pub chain: String,
 
-    /// The chain kind. If not supplied, will try to determine from the config file
-    #[clap(long, default_value = None)]
-    pub chain_kind: Option<ChainKind>,
-
     #[clap(flatten)]
     pub chain_config_override: OptionalWavsChainConfig,
-}
-
-#[derive(ValueEnum, Debug, Clone, Copy)]
-pub enum ChainKind {
-    Cosmos,
-    Eth,
 }
 
 #[derive(Parser, Debug, Clone)]

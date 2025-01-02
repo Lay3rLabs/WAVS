@@ -5,7 +5,7 @@ use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::eth_client::EthClientConfig;
+use crate::{error::ChainConfigError, eth_client::EthClientConfig};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ChainConfigs {
@@ -15,7 +15,63 @@ pub struct ChainConfigs {
     pub eth: HashMap<String, EthereumChainConfig>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum AnyChainConfig {
+    Cosmos(CosmosChainConfig),
+    Eth(EthereumChainConfig),
+}
+
+impl TryFrom<AnyChainConfig> for CosmosChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
+        match config {
+            AnyChainConfig::Cosmos(config) => Ok(config),
+            AnyChainConfig::Eth(_) => Err(ChainConfigError::ExpectedCosmosChain),
+        }
+    }
+}
+
+impl TryFrom<AnyChainConfig> for ChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
+        CosmosChainConfig::try_from(config).map(Into::into)
+    }
+}
+
+impl TryFrom<AnyChainConfig> for EthereumChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
+        match config {
+            AnyChainConfig::Eth(config) => Ok(config),
+            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEthChain),
+        }
+    }
+}
+
+impl TryFrom<AnyChainConfig> for EthClientConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
+        EthereumChainConfig::try_from(config).map(Into::into)
+    }
+}
+
 impl ChainConfigs {
+    pub fn get_chain(&self, chain_name: &str) -> Result<Option<AnyChainConfig>> {
+        match (self.eth.get(chain_name), self.cosmos.get(chain_name)) {
+            (Some(_), Some(_)) => {
+                Err(ChainConfigError::DuplicateChainName(chain_name.to_string()).into())
+            }
+            (Some(eth), None) => Ok(Some(AnyChainConfig::Eth(eth.clone()))),
+            (None, Some(cosmos)) => Ok(Some(AnyChainConfig::Cosmos(cosmos.clone()))),
+            (None, None) => Ok(None),
+        }
+    }
+
     pub fn merge_overrides(self, chain_config_override: &OptionalWavsChainConfig) -> Result<Self> {
         // The optional overrides use a prefix to distinguish between layer and ethereum fields
         // since in the CLI they get flattened and would conflict without a prefix
@@ -223,4 +279,111 @@ pub struct OptionalWavsChainConfig {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_submission_mnemonic: Option<String>,
+}
+
+#[cfg(test)]
+mod test {
+    use super::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
+
+    #[test]
+    fn chain_name_lookup() {
+        let chain_configs = mock_chain_configs();
+        let chain: CosmosChainConfig = chain_configs
+            .get_chain("cosmos")
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(chain.chain_id, "cosmos");
+
+        let chain: EthereumChainConfig = chain_configs
+            .get_chain("eth")
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(chain.chain_id, "eth");
+    }
+
+    #[test]
+    fn chain_name_lookup_fails_duplicate() {
+        let mut chain_configs = mock_chain_configs();
+
+        chain_configs.cosmos.insert(
+            "eth".to_string(),
+            CosmosChainConfig {
+                chain_id: "eth".to_string(),
+                bech32_prefix: "eth".to_string(),
+                rpc_endpoint: Some("http://localhost:1317".to_string()),
+                grpc_endpoint: Some("http://localhost:9090".to_string()),
+                gas_price: 0.01,
+                gas_denom: "uatom".to_string(),
+                faucet_endpoint: Some("http://localhost:8000".to_string()),
+                submission_mnemonic: Some("mnemonic".to_string()),
+            },
+        );
+
+        assert!(chain_configs.get_chain("eth").is_err());
+    }
+
+    fn mock_chain_configs() -> ChainConfigs {
+        ChainConfigs {
+            cosmos: vec![
+                (
+                    "cosmos".to_string(),
+                    CosmosChainConfig {
+                        chain_id: "cosmos".to_string(),
+                        bech32_prefix: "cosmos".to_string(),
+                        rpc_endpoint: Some("http://localhost:1317".to_string()),
+                        grpc_endpoint: Some("http://localhost:9090".to_string()),
+                        gas_price: 0.01,
+                        gas_denom: "uatom".to_string(),
+                        faucet_endpoint: Some("http://localhost:8000".to_string()),
+                        submission_mnemonic: Some("mnemonic".to_string()),
+                    },
+                ),
+                (
+                    "layer".to_string(),
+                    CosmosChainConfig {
+                        chain_id: "layer".to_string(),
+                        bech32_prefix: "layer".to_string(),
+                        rpc_endpoint: Some("http://localhost:1317".to_string()),
+                        grpc_endpoint: Some("http://localhost:9090".to_string()),
+                        gas_price: 0.01,
+                        gas_denom: "uatom".to_string(),
+                        faucet_endpoint: Some("http://localhost:8000".to_string()),
+                        submission_mnemonic: Some("mnemonic".to_string()),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            eth: vec![
+                (
+                    "eth".to_string(),
+                    EthereumChainConfig {
+                        chain_id: "eth".to_string(),
+                        ws_endpoint: "ws://localhost:8546".to_string(),
+                        http_endpoint: "http://localhost:8545".to_string(),
+                        aggregator_endpoint: Some("http://localhost:8000".to_string()),
+                        faucet_endpoint: Some("http://localhost:8000".to_string()),
+                        submission_mnemonic: Some("mnemonic".to_string()),
+                    },
+                ),
+                (
+                    "polygon".to_string(),
+                    EthereumChainConfig {
+                        chain_id: "polygon".to_string(),
+                        ws_endpoint: "ws://localhost:8546".to_string(),
+                        http_endpoint: "http://localhost:8545".to_string(),
+                        aggregator_endpoint: Some("http://localhost:8000".to_string()),
+                        faucet_endpoint: Some("http://localhost:8000".to_string()),
+                        submission_mnemonic: Some("mnemonic".to_string()),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
 }
