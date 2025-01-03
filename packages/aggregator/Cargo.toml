@@ -29,5 +29,4 @@ tempfile = { workspace = true }
 
 [dev-dependencies]
 temp-env = { workspace = true }
-alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
 serde_json = { workspace = true }
