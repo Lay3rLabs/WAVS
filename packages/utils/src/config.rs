@@ -392,22 +392,26 @@ mod test {
         pub log_level: Vec<String>,
     }
 
+    fn workspace_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    }
+
+    fn utils_path() -> PathBuf {
+        workspace_path().join("packages").join("utils")
+    }
+
     impl TestCliEnv {
         pub fn new() -> Self {
             Self {
-                home: Some(
-                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                        .join("tests")
-                        .join(TestConfig::DIRNAME),
-                ),
+                home: Some(workspace_path().join("packages").join(TestConfig::DIRNAME)),
                 // this purposefully points at a non-existing file
                 // so that we don't load a real .env in tests
-                dotenv: Some(
-                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                        .join("tests")
-                        .join(TestConfig::DIRNAME)
-                        .join("non-existant-file"),
-                ),
+                dotenv: Some(utils_path().join("does-not-exist")),
                 log_level: Vec::new(),
             }
         }
@@ -508,7 +512,6 @@ mod test {
                     .add_directive("bar=debug".parse().unwrap())
             });
 
-        // it's set in the file too for other tests, but here we need to be explicit
         let config = temp_env::with_vars(
             [(
                 format!("{}_{}", TestCliEnv::ENV_VAR_PREFIX, "LOG_LEVEL"),
@@ -565,12 +568,7 @@ mod test {
     async fn config_dotenv() {
         let mut cli_args = TestCliEnv::new();
 
-        cli_args.dotenv = Some(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("tests")
-                .join(TestConfig::DIRNAME)
-                .join("testdotenv"),
-        );
+        cli_args.dotenv = Some(utils_path().join("tests").join(".env.test"));
 
         let _ = ConfigBuilder::<TestConfig, _>::new(cli_args)
             .build()

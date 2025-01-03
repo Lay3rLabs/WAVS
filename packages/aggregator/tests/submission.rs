@@ -12,14 +12,11 @@ use alloy::{
 use utils::{
     aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
     eigen_client::EigenClient,
-    eth_client::{EthClientBuilder, EthClientConfig},
     layer_contract_client::{
         layer_service_manager::ILayerServiceManager::Payload, LayerContractClientFullBuilder,
         LayerContractClientSimple,
     },
 };
-
-const ANVIL_DEFAULT_MNEMONIC: &str = "test test test test test test test test test test test junk";
 
 #[tokio::test]
 async fn submit_to_chain() {
@@ -30,20 +27,11 @@ async fn submit_to_chain() {
         aggregator::args::CliArgs {
             chain: Some("local".to_string()),
             data: Some(data_path),
-            ..TestApp::default_cli_args()
+            ..TestApp::zeroed_cli_args()
         },
         Some(&anvil),
     );
-    let eth_client = EthClientBuilder::new(EthClientConfig {
-        ws_endpoint: Some(anvil.ws_endpoint()),
-        http_endpoint: anvil.endpoint(),
-        mnemonic: Some(ANVIL_DEFAULT_MNEMONIC.to_owned()),
-        hd_index: None,
-        transport: None,
-    })
-    .build_signing()
-    .await
-    .unwrap();
+    let eth_client = aggregator.eth_signing_client().await;
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
@@ -122,23 +110,15 @@ async fn submit_to_chain_three() {
     let aggregator = TestApp::new_with_args(
         aggregator::args::CliArgs {
             tasks_quorum: Some(3),
+            chain: Some("local".to_string()),
             data: Some(data_path),
-            ..TestApp::default_cli_args()
+            ..TestApp::zeroed_cli_args()
         },
         Some(&anvil),
     );
-
-    let eth_client = EthClientBuilder::new(EthClientConfig {
-        ws_endpoint: Some(anvil.ws_endpoint()),
-        http_endpoint: anvil.endpoint(),
-        mnemonic: Some(ANVIL_DEFAULT_MNEMONIC.to_owned()),
-        hd_index: None,
-        transport: None,
-    })
-    .build_signing()
-    .await
-    .unwrap();
+    let eth_client = aggregator.eth_signing_client().await;
     let eigen_client = EigenClient::new(eth_client);
+
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
     let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
@@ -277,20 +257,11 @@ async fn invalid_operator_signature() {
         aggregator::args::CliArgs {
             chain: Some("local".to_string()),
             data: Some(data_path),
-            ..TestApp::default_cli_args()
+            ..TestApp::zeroed_cli_args()
         },
         Some(&anvil),
     );
-    let eth_client = EthClientBuilder::new(EthClientConfig {
-        ws_endpoint: Some(anvil.ws_endpoint()),
-        http_endpoint: anvil.endpoint(),
-        mnemonic: Some(ANVIL_DEFAULT_MNEMONIC.to_owned()),
-        hd_index: None,
-        transport: None,
-    })
-    .build_signing()
-    .await
-    .unwrap();
+    let eth_client = aggregator.eth_signing_client().await;
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 

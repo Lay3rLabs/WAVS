@@ -1,10 +1,11 @@
 use aggregator::test_utils::app::TestApp;
-use alloy::primitives::Address;
+use alloy::{node_bindings::Anvil, primitives::Address};
 
 // tests that we load chain config section correctly
 #[tokio::test]
 async fn config_mnemonic() {
-    let config = TestApp::new(None).config;
+    let anvil = Anvil::new().spawn();
+    let config = TestApp::new_with_args(TestApp::zeroed_cli_args(), Some(&anvil)).config;
 
     let signer = config.signer().unwrap();
     assert_eq!(
@@ -15,7 +16,7 @@ async fn config_mnemonic() {
     );
 
     // change the mnemonic via cli
-    let mut cli_args = TestApp::default_cli_args();
+    let mut cli_args = TestApp::zeroed_cli_args();
     let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_owned();
     cli_args.mnemonic = Some(mnemonic);
     let config = TestApp::new_with_args(cli_args, None).config;
