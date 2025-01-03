@@ -12,11 +12,7 @@ use super::{
 };
 
 // this is called from main
-pub fn start(
-    ctx: AppContext,
-    config: Config,
-) -> anyhow::Result<()> {
-
+pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
     let mut shutdown_signal = ctx.get_kill_receiver();
     ctx.rt.block_on(async move {
         let (host, port) = (config.host.clone(), config.port);
