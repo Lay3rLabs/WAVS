@@ -15,9 +15,10 @@ use super::{
 pub fn start(
     ctx: AppContext,
     config: Config,
-) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
+) -> anyhow::Result<()> {
+
     let mut shutdown_signal = ctx.get_kill_receiver();
-    let handle = ctx.rt.spawn(async move {
+    ctx.rt.block_on(async move {
         let (host, port) = (config.host.clone(), config.port);
 
         let router = make_router(config).await?;
@@ -34,9 +35,7 @@ pub fn start(
             .await?;
 
         anyhow::Ok(())
-    });
-
-    Ok(handle)
+    })
 }
 
 // this is called from main and tests

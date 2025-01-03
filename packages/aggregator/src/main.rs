@@ -22,4 +22,5 @@ fn main() {
     let ctx = AppContext::new();
 
     run_server(ctx, config);
+
 }
