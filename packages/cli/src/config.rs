@@ -26,10 +26,10 @@ pub struct Config {
     /// All the available chains
     pub chains: ChainConfigs,
 
-    /// The mnemonic to use for submitting transactions on cosmos chains
+    /// The mnemonic to use for submitting transactions on cosmos chains (usually set via env var)
     pub cosmos_mnemonic: Option<String>,
 
-    /// The mnemonic to use for submitting transactions on ethereum chains
+    /// The mnemonic to use for submitting transactions on ethereum chains (usually set via env var)
     pub eth_mnemonic: Option<String>,
 }
 
