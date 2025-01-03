@@ -86,6 +86,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_submission_mnemonic: Option<String>,
+
+    /// The maximum amount of fuel (compute metering) to allow for 1 components execution
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_wasm_fuel: Option<u64>,
 }
 
 impl CliEnvExt for CliArgs {
