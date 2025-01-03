@@ -597,9 +597,9 @@ mod tests {
                     "test-eth".to_string(),
                     EthereumChainConfig {
                         chain_id: "eth-local".parse().unwrap(),
-                        ws_endpoint: "ws://localhost:26657".to_string(),
-                        http_endpoint: "http://localhost:26657".to_string(),
-                        aggregator_endpoint: Some("http://localhost:8001".to_string()),
+                        ws_endpoint: "ws://127.0.0.1:26657".to_string(),
+                        http_endpoint: "http://127.0.0.1:26657".to_string(),
+                        aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
                         faucet_endpoint: None,
                     },
                 )]
@@ -609,8 +609,8 @@ mod tests {
                     "test-cosmos".to_string(),
                     CosmosChainConfig {
                         chain_id: "layer-local".parse().unwrap(),
-                        rpc_endpoint: Some("http://localhost:26657".to_string()),
-                        grpc_endpoint: Some("http://localhost:9090".to_string()),
+                        rpc_endpoint: Some("http://127.0.0.1:26657".to_string()),
+                        grpc_endpoint: Some("http://127.0.0.1:9090".to_string()),
                         gas_price: 0.025,
                         gas_denom: "uslay".to_string(),
                         bech32_prefix: "layer".to_string(),
