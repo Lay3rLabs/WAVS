@@ -3,10 +3,12 @@ use std::path::PathBuf;
 use clap::{arg, Parser};
 use serde::{Deserialize, Serialize};
 use utils::{
-    config::CliEnvExt, eigen_client::CoreAVSAddresses, layer_contract_client::LayerAddresses,
+    config::{CliEnvExt, ConfigBuilder},
+    layer_contract_client::LayerAddresses,
     serde::deserialize_vec_string,
 };
-use wavs::Digest;
+
+use crate::config::Config;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -19,37 +21,14 @@ pub enum Command {
         args: CliArgs,
     },
 
-    DeployAll {
-        /// If set, will add the service to wavs too
-        #[clap(long, default_value_t = false)]
-        add_service: bool,
-
-        #[clap(long, default_value_t = true)]
-        register_core_operator: bool,
-
-        #[clap(long, default_value_t = true)]
-        register_service_operator: bool,
-
-        #[clap(flatten)]
-        digests: Digests,
-
-        #[clap(flatten)]
-        args: CliArgs,
-    },
-
     DeployService {
-        /// If set, will add the service to wavs too
-        #[clap(long, default_value_t = false)]
-        add_service: bool,
-
+        /// If set, will register as an operator for the service too
         #[clap(long, default_value_t = true)]
         register_operator: bool,
 
-        #[clap(flatten)]
-        core_contracts: EnvCoreAVSAddresses,
-
-        #[clap(flatten)]
-        digests: Digests,
+        /// Path to the WASI component
+        #[clap(long)]
+        component: PathBuf,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -61,61 +40,42 @@ pub enum Command {
         #[clap(long, default_value_t = false)]
         watch_wavs: bool,
 
-        /// The contract address for the trigger
-        #[clap(long, env = "CLI_EIGEN_SERVICE_TRIGGER")]
-        trigger_addr: alloy::primitives::Address,
-
-        /// The contract address for the service manager
-        #[clap(long, env = "CLI_EIGEN_SERVICE_MANAGER")]
-        service_manager_addr: alloy::primitives::Address,
-
         #[clap(long)]
         service_id: String,
 
         #[clap(long)]
         workflow_id: Option<String>,
 
-        /// The name of the task
-        /// if not set, will be a random string
+        /// The payload data, hex-encoded
         #[clap(long)]
-        name: Option<String>,
-
-        #[clap(flatten)]
-        args: CliArgs,
-    },
-
-    /// Kitchen sink subcommand
-    KitchenSink {
-        /// If set, will add the service to wavs
-        /// and wait for the final result to land
-        /// otherwise, will manually submit the result to the contract
-        #[clap(long, default_value_t = false)]
-        add_service: bool,
-
-        #[clap(long, default_value_t = true)]
-        register_core_operator: bool,
-
-        #[clap(long, default_value_t = true)]
-        register_service_operator: bool,
-
-        #[clap(flatten)]
-        digests: Digests,
-
-        /// The name of the task
-        /// if not set, will be a random string
-        #[clap(long)]
-        name: Option<String>,
+        input: String,
 
         #[clap(flatten)]
         args: CliArgs,
     },
 }
 
+impl Command {
+    pub fn args(&self) -> CliArgs {
+        let args = match self {
+            Self::DeployCore { args, .. } => args,
+            Self::DeployService { args, .. } => args,
+            Self::AddTask { args, .. } => args,
+        };
+
+        args.clone()
+    }
+
+    pub fn config(&self) -> Config {
+        ConfigBuilder::new(self.args()).build().unwrap()
+    }
+}
+
 /// This struct is used for both args and environment variables
 /// the basic idea is that every env var can be overriden by a cli arg
 /// and these override the config file
 /// env vars follow the pattern of WAVS_CLI_{UPPERCASE_ARG_NAME}
-#[derive(Debug, Parser, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Parser, Serialize, Deserialize, Default)]
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct CliArgs {
@@ -174,67 +134,6 @@ impl CliEnvExt for CliArgs {
 }
 
 #[derive(Parser, Debug, Clone)]
-pub struct EnvCoreAVSAddresses {
-    #[arg(long, env = "CLI_EIGEN_CORE_PROXY_ADMIN")]
-    pub core_proxy_admin: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_DELEGATION_MANAGER")]
-    pub core_delegation_manager: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_STRATEGY_MANAGER")]
-    pub core_strategy_manager: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_POD_MANAGER")]
-    pub core_eigen_pod_manager: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_POD_BEACON")]
-    pub core_eigen_pod_beacon: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_PAUSER_REGISTRY")]
-    pub core_pauser_registry: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_STRATEGY_FACTORY")]
-    pub core_strategy_factory: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_STRATEGY_BEACON")]
-    pub core_strategy_beacon: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_AVS_DIRECTORY")]
-    pub core_avs_directory: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_CORE_REWARDS_COORDINATOR")]
-    pub core_rewards_coordinator: Option<alloy::primitives::Address>,
-}
-
-impl From<EnvCoreAVSAddresses> for CoreAVSAddresses {
-    fn from(opt: EnvCoreAVSAddresses) -> Self {
-        Self {
-            proxy_admin: opt
-                .core_proxy_admin
-                .expect("set --core-proxy-admin or CLI_EIGEN_CORE_PROXY_ADMIN"),
-            delegation_manager: opt
-                .core_delegation_manager
-                .expect("set --core-delegation-manager or CLI_EIGEN_CORE_DELEGATION_MANAGER"),
-            strategy_manager: opt
-                .core_strategy_manager
-                .expect("set --core-strategy-manager or CLI_EIGEN_CORE_STRATEGY_MANAGER"),
-            eigen_pod_manager: opt
-                .core_eigen_pod_manager
-                .expect("set --core-eigen-pod-manager or CLI_EIGEN_CORE_POD_MANAGER"),
-            eigen_pod_beacon: opt
-                .core_eigen_pod_beacon
-                .expect("set --core-eigen-pod-beacon or CLI_EIGEN_CORE_POD_BEACON"),
-            pauser_registry: opt
-                .core_pauser_registry
-                .expect("set --core-pauser-registry or CLI_EIGEN_CORE_PAUSER_REGISTRY"),
-            strategy_factory: opt
-                .core_strategy_factory
-                .expect("set --core-strategy-factory or CLI_EIGEN_CORE_STRATEGY_FACTORY"),
-            strategy_beacon: opt
-                .core_strategy_beacon
-                .expect("set --core-strategy-beacon or CLI_EIGEN_CORE_STRATEGY_BEACON"),
-            avs_directory: opt
-                .core_avs_directory
-                .expect("set --core-avs-directory or CLI_EIGEN_CORE_AVS_DIRECTORY"),
-            rewards_coordinator: opt
-                .core_rewards_coordinator
-                .expect("set --core-rewards-coordinator or CLI_EIGEN_CORE_REWARDS_COORDINATOR"),
-        }
-    }
-}
-
-#[derive(Parser, Debug, Clone)]
 pub struct EnvServiceAddresses {
     #[arg(long, env = "CLI_EIGEN_SERVICE_PROXY_ADMIN")]
     pub service_proxy_admin: Option<alloy::primitives::Address>,
@@ -268,10 +167,4 @@ impl From<EnvServiceAddresses> for LayerAddresses {
                 .expect("set --service-token or CLI_EIGEN_SERVICE_TOKEN"),
         }
     }
-}
-
-#[derive(Parser, Debug, Clone)]
-pub struct Digests {
-    #[arg(long, env = "CLI_DIGEST_HELLO_WORLD")]
-    pub digest_hello_world: Option<Digest>,
 }

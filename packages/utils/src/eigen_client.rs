@@ -47,6 +47,20 @@ pub struct CoreAVSAddresses {
 }
 
 impl CoreAVSAddresses {
+    pub fn as_vec(&self) -> Vec<Address> {
+        vec![
+            self.proxy_admin,
+            self.delegation_manager,
+            self.strategy_manager,
+            self.eigen_pod_manager,
+            self.eigen_pod_beacon,
+            self.pauser_registry,
+            self.strategy_factory,
+            self.strategy_beacon,
+            self.avs_directory,
+            self.rewards_coordinator,
+        ]
+    }
     pub async fn calculate_operator_avs_registration_digest_hash(
         &self,
         operator: Address,

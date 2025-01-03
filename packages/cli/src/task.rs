@@ -1,24 +1,24 @@
 use std::time::Duration;
 
-use utils::{eth_client::EthSigningClient, layer_contract_client::LayerContractClientSimple};
+use utils::{
+    eth_client::EthSigningClient,
+    layer_contract_client::{LayerAddresses, LayerContractClientSimple, SignedData},
+};
 use wavs::apis::{ServiceID, WorkflowID};
 
-pub async fn run_eth_trigger_echo_task(
+pub async fn add_task(
     eth_signing_client: EthSigningClient,
     wavs: bool,
     service_id: ServiceID,
     workflow_id: WorkflowID,
-    trigger_address: alloy::primitives::Address,
-    service_manager_address: alloy::primitives::Address,
-    name: String,
-) -> String {
+    service_addresses: &LayerAddresses,
+    data: Vec<u8>,
+) -> SignedData {
     let client = LayerContractClientSimple::new(
         eth_signing_client,
-        service_manager_address,
-        trigger_address,
+        service_addresses.service_manager,
+        service_addresses.trigger,
     );
-
-    let data = name.as_bytes().to_vec();
 
     let trigger_id = client
         .trigger
@@ -49,7 +49,7 @@ pub async fn run_eth_trigger_echo_task(
 
             match resp {
                 Some(resp) => {
-                    return hex::encode(resp.signature);
+                    return resp;
                 }
                 None => {
                     tracing::info!("Waiting for task response on {}", trigger_id);

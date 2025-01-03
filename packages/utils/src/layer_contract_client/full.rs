@@ -91,6 +91,18 @@ pub struct LayerAddresses {
     pub token: Address,
 }
 
+impl LayerAddresses {
+    pub fn as_vec(&self) -> Vec<Address> {
+        vec![
+            self.proxy_admin,
+            self.service_manager,
+            self.trigger,
+            self.stake_registry,
+            self.token,
+        ]
+    }
+}
+
 pub struct LayerContractClientFullBuilder {
     pub eth: EthSigningClient,
     pub core_avs_addrs: Option<CoreAVSAddresses>,
