@@ -35,11 +35,6 @@ pub enum Command {
     },
 
     AddTask {
-        /// If set, will watch the chain for final result
-        /// otherwise, will manually submit the result to the contract
-        #[clap(long, default_value_t = false)]
-        watch_wavs: bool,
-
         #[clap(long)]
         service_id: String,
 

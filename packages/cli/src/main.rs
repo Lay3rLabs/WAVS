@@ -112,7 +112,6 @@ async fn main() {
         }
 
         Command::AddTask {
-            watch_wavs,
             service_id,
             workflow_id,
             input,
@@ -143,7 +142,6 @@ async fn main() {
 
             let signed_data = add_task(
                 eigen_client.eth,
-                watch_wavs,
                 service_id,
                 match workflow_id {
                     Some(workflow_id) => WorkflowID::new(workflow_id).unwrap(),

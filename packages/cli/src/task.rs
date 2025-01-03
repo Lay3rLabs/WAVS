@@ -8,7 +8,6 @@ use wavs::apis::{ServiceID, WorkflowID};
 
 pub async fn add_task(
     eth_signing_client: EthSigningClient,
-    wavs: bool,
     service_id: ServiceID,
     workflow_id: WorkflowID,
     service_addresses: &LayerAddresses,
@@ -22,24 +21,11 @@ pub async fn add_task(
 
     let trigger_id = client
         .trigger
-        .add_trigger(
-            service_id.to_string(),
-            workflow_id.to_string(),
-            data.clone(),
-        )
+        .add_trigger(service_id.to_string(), workflow_id.to_string(), data)
         .await
         .unwrap();
 
     println!("Task submitted with id: {}", trigger_id);
-
-    if !wavs {
-        tracing::info!("Submitting the task result directly");
-
-        client
-            .add_signed_payload(client.sign_payload(trigger_id, data).await.unwrap())
-            .await
-            .unwrap();
-    }
 
     tracing::info!("Waiting for the chain to see the result");
 
