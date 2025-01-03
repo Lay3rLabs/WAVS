@@ -94,6 +94,6 @@ cli-deploy-core:
 cli-deploy-service COMPONENT:
     cd packages/cli && cargo run deploy-service --component "../../{{COMPONENT}}"
 
-# e.g. just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D
+# e.g. `just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D` or `{\"x\":2}`
 cli-add-task SERVICE_ID INPUT:
-    cd packages/cli && cargo run add-task --service-id {{SERVICE_ID}} --input "{{INPUT}}"
+    cd packages/cli && cargo run add-task --service-id {{SERVICE_ID}} --input '{{INPUT}}'

@@ -78,5 +78,6 @@ pub fn display_signed_data(signed_data: &SignedData) {
     println!("\n--- RESPONSE SIGNATURE ---");
     println!("{}", hex::encode(&signed_data.signature));
     println!("\n--- RESPONSE DATA ---");
-    println!("{}", hex::encode(&signed_data.data));
+    println!("hex encoded: {}", hex::encode(&signed_data.data));
+    println!("UTF8: {}", String::from_utf8_lossy(&signed_data.data));
 }

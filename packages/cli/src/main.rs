@@ -117,7 +117,15 @@ async fn main() {
             input,
             ..
         } => {
-            let input = hex::decode(input).expect("payload is not valid");
+            let input = if let Ok(bytes) = hex::decode(input.clone()) {
+                bytes
+            } else {
+                let hex = input.as_bytes().iter().fold(String::new(), |mut acc, b| {
+                    acc.push_str(&format!("{:02x}", b));
+                    acc
+                });
+                hex::decode(hex).expect("Failed to decode input")
+            };
 
             if !deployment.eigen_core.contains_key(&config.chain) {
                 tracing::error!(
