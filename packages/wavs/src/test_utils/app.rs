@@ -32,6 +32,7 @@ impl TestApp {
             wasm_threads: None,
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
+            max_wasm_fuel: None,
         }
     }
 
