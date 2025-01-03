@@ -18,7 +18,7 @@ pub struct Config {
     /// Default is `["info"]`
     pub log_level: Vec<String>,
     /// The host to bind the server to
-    /// Default is `localhost`
+    /// Default is `127.0.0.1`
     pub host: String,
     /// The directory to store all internal data files
     /// Default is `/var/wavs`
@@ -71,7 +71,7 @@ impl Default for Config {
         Self {
             port: 8000,
             log_level: vec!["info".to_string()],
-            host: "localhost".to_string(),
+            host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
             cosmos_chain: None,

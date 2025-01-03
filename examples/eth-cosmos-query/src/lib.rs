@@ -31,7 +31,7 @@ fn process_eth_trigger(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
 fn handle_request(req: CosmosQueryRequest) -> Result<CosmosQueryResponse> {
     let chain_config = ChainConfig {
         chain_id: "local-osmosis".parse().unwrap(),
-        rpc_endpoint: Some("http://localhost:26657".to_string()),
+        rpc_endpoint: Some("http://127.0.0.1:26657".to_string()),
         grpc_endpoint: None,
         grpc_web_endpoint: None,
         gas_price: 0.025,
