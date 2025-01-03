@@ -1,16 +1,6 @@
 pragma solidity ^0.8.0;
 
-interface ILayerTrigger {
-    struct TriggerResponse {
-        TriggerId triggerId;
-        string serviceId;
-        string workflowId;
-        address creator;
-        bytes data;
-    }
-
-    type TriggerId is uint64;
-}
+import {ILayerTrigger} from "./interfaces/ILayerTrigger.sol";
 
 contract LayerTrigger {
     // Data structures
