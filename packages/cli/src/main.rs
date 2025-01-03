@@ -75,6 +75,8 @@ async fn main() {
         Command::DeployService {
             register_operator,
             component,
+            service_manager,
+            ecdsa_stake_registry,
             ..
         } => {
             let core_contracts = match deployment.eigen_core.get(&config.chain) {
@@ -87,7 +89,13 @@ async fn main() {
                     return;
                 }
             };
-            let avs_client = get_avs_client(&eigen_client, core_contracts).await;
+            let avs_client = get_avs_client(
+                &eigen_client,
+                core_contracts,
+                service_manager,
+                ecdsa_stake_registry,
+            )
+            .await;
 
             if register_operator {
                 avs_client.register_operator(&mut OsRng).await.unwrap();
