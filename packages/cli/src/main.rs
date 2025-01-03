@@ -1,28 +1,30 @@
 mod args;
 mod client;
 mod config;
+mod deploy;
 mod display;
 mod task;
 
 use args::Command;
 use clap::Parser;
 use client::{get_avs_client, get_eigen_client, HttpClient};
+use deploy::Deployment;
 use display::{
-    display_core_contracts, display_eth_trigger_echo_digest, display_eth_trigger_echo_service_id,
-    display_layer_service_contracts, display_response_signature,
+    display_core_contracts, display_layer_service_contracts, display_service_id,
+    display_signed_data,
 };
-use rand::{
-    distributions::{Alphanumeric, DistString},
-    rngs::OsRng,
-};
-use task::run_eth_trigger_echo_task;
+use rand::rngs::OsRng;
+use task::add_task;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::config::ConfigBuilder;
+use utils::config::ConfigExt;
 use wavs::apis::{ServiceID, WorkflowID};
 
 #[tokio::main]
 async fn main() {
     let _ = dotenvy::dotenv();
+
+    let command = Command::parse();
+    let config = command.config();
 
     // setup tracing
     tracing_subscriber::registry()
@@ -31,17 +33,28 @@ async fn main() {
                 .without_time()
                 .with_target(false),
         )
-        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(config.tracing_env_filter().unwrap())
         .try_init()
         .unwrap();
 
-    match Command::parse() {
+    let eigen_client = get_eigen_client(&config).await;
+    let http_client = HttpClient::new(&config);
+    let mut deployment = Deployment::load(&config).unwrap();
+    deployment
+        .sanitize(&command, &config, &eigen_client)
+        .await
+        .unwrap();
+
+    match command {
         Command::DeployCore {
-            register_operator,
-            args,
+            register_operator, ..
         } => {
-            let config = ConfigBuilder::new(args).build().unwrap();
-            let eigen_client = get_eigen_client(&config).await;
+            if let Some(core_contracts) = deployment.eigen_core.get(&config.chain) {
+                tracing::warn!("Core contracts already deployed for chain {}", config.chain);
+                display_core_contracts(core_contracts);
+                return;
+            }
+
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_operator {
@@ -52,197 +65,102 @@ async fn main() {
             }
 
             display_core_contracts(&core_contracts);
+
+            deployment
+                .eigen_core
+                .insert(config.chain.clone(), core_contracts);
+            deployment.save(&config).unwrap();
         }
 
         Command::DeployService {
-            add_service,
-            args,
-            core_contracts,
             register_operator,
-            digests,
+            component,
+            ..
         } => {
-            let config = ConfigBuilder::new(args).build().unwrap();
-            let core_contracts = core_contracts.into();
-
-            let eigen_client = get_eigen_client(&config).await;
+            let core_contracts = match deployment.eigen_core.get(&config.chain) {
+                Some(core_contracts) => core_contracts.clone(),
+                None => {
+                    tracing::error!(
+                        "Core contracts not deployed for chain {}, deploy those first!",
+                        config.chain
+                    );
+                    return;
+                }
+            };
             let avs_client = get_avs_client(&eigen_client, core_contracts).await;
 
             if register_operator {
                 avs_client.register_operator(&mut OsRng).await.unwrap();
             }
 
-            if add_service {
-                let http_client = HttpClient::new(&config);
+            let digest = http_client.upload_component(&component).await;
 
-                let digest = match digests.digest_hello_world {
-                    None => {
-                        let digest = http_client.upload_eth_trigger_echo_digest().await;
-                        display_eth_trigger_echo_digest(&digest);
-                        digest
-                    }
-                    Some(digest) => digest,
-                };
+            let service_id = http_client
+                .create_service(
+                    avs_client.layer.trigger,
+                    avs_client.layer.service_manager,
+                    digest,
+                )
+                .await;
 
-                let service_id = http_client
-                    .create_eth_trigger_echo_service(
-                        avs_client.layer.trigger,
-                        avs_client.layer.service_manager,
-                        digest,
-                    )
-                    .await;
-                display_eth_trigger_echo_service_id(&service_id);
-            }
+            display_service_id(&service_id);
 
             display_layer_service_contracts(&avs_client.layer);
-        }
 
-        Command::DeployAll {
-            add_service,
-            args,
-            register_core_operator,
-            register_service_operator,
-            digests,
-        } => {
-            let config = ConfigBuilder::new(args).build().unwrap();
-            let eigen_client = get_eigen_client(&config).await;
-            let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
-
-            if register_core_operator {
-                eigen_client
-                    .register_operator(&core_contracts)
-                    .await
-                    .unwrap();
-            }
-
-            let avs_client = get_avs_client(&eigen_client, core_contracts.clone()).await;
-
-            if register_service_operator {
-                avs_client.register_operator(&mut OsRng).await.unwrap();
-            }
-
-            if add_service {
-                let http_client = HttpClient::new(&config);
-
-                let digest = match digests.digest_hello_world {
-                    None => {
-                        let digest = http_client.upload_eth_trigger_echo_digest().await;
-                        display_eth_trigger_echo_digest(&digest);
-                        digest
-                    }
-                    Some(digest) => digest,
-                };
-
-                let service_id = http_client
-                    .create_eth_trigger_echo_service(
-                        avs_client.layer.trigger,
-                        avs_client.layer.service_manager,
-                        digest,
-                    )
-                    .await;
-                display_eth_trigger_echo_service_id(&service_id);
-            }
-
-            display_core_contracts(&core_contracts);
-            display_layer_service_contracts(&avs_client.layer);
+            deployment.eth_services.insert(service_id, avs_client.layer);
+            deployment.save(&config).unwrap();
         }
 
         Command::AddTask {
-            watch_wavs,
-            args,
-            trigger_addr,
-            service_manager_addr,
             service_id,
             workflow_id,
-            name,
+            input,
+            ..
         } => {
-            let config = ConfigBuilder::new(args).build().unwrap();
-            let eigen_client = get_eigen_client(&config).await;
+            let input = if let Ok(bytes) = hex::decode(input.clone()) {
+                bytes
+            } else {
+                let hex = input.as_bytes().iter().fold(String::new(), |mut acc, b| {
+                    acc.push_str(&format!("{:02x}", b));
+                    acc
+                });
+                hex::decode(hex).expect("Failed to decode input")
+            };
 
-            let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
+            if !deployment.eigen_core.contains_key(&config.chain) {
+                tracing::error!(
+                    "Core contracts not deployed for chain {}, deploy those first!",
+                    config.chain
+                );
+                return;
+            };
 
-            let signature = run_eth_trigger_echo_task(
+            let service_id = ServiceID::new(service_id).unwrap();
+
+            let service_contracts = match deployment.eth_services.get(&service_id) {
+                Some(service_contracts) => service_contracts.clone(),
+                None => {
+                    tracing::error!(
+                        "Service contracts not deployed for service {}, deploy those first!",
+                        service_id
+                    );
+                    return;
+                }
+            };
+
+            let signed_data = add_task(
                 eigen_client.eth,
-                watch_wavs,
-                ServiceID::new(service_id).unwrap(),
+                service_id,
                 match workflow_id {
                     Some(workflow_id) => WorkflowID::new(workflow_id).unwrap(),
                     None => WorkflowID::new("default").unwrap(),
                 },
-                trigger_addr,
-                service_manager_addr,
-                name,
+                &service_contracts,
+                input,
             )
             .await;
 
-            display_response_signature(&signature);
-        }
-
-        Command::KitchenSink {
-            add_service,
-            args,
-            register_core_operator,
-            register_service_operator,
-            digests,
-            name,
-        } => {
-            let config = ConfigBuilder::new(args).build().unwrap();
-            let eigen_client = get_eigen_client(&config).await;
-            let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
-
-            if register_core_operator {
-                eigen_client
-                    .register_operator(&core_contracts)
-                    .await
-                    .unwrap();
-            }
-
-            let avs_client = get_avs_client(&eigen_client, core_contracts.clone()).await;
-
-            if register_service_operator {
-                avs_client.register_operator(&mut OsRng).await.unwrap();
-            }
-
-            let mut service_id = ServiceID::new("service-id-1").unwrap();
-            let workflow_id = WorkflowID::new("default").unwrap();
-
-            if add_service {
-                let http_client = HttpClient::new(&config);
-
-                let digest = match digests.digest_hello_world {
-                    None => {
-                        let digest = http_client.upload_eth_trigger_echo_digest().await;
-                        display_eth_trigger_echo_digest(&digest);
-                        digest
-                    }
-                    Some(digest) => digest,
-                };
-
-                service_id = http_client
-                    .create_eth_trigger_echo_service(
-                        avs_client.layer.trigger,
-                        avs_client.layer.service_manager,
-                        digest,
-                    )
-                    .await;
-                display_eth_trigger_echo_service_id(&service_id);
-            }
-
-            display_core_contracts(&core_contracts);
-            display_layer_service_contracts(&avs_client.layer);
-
-            let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
-            let signature = run_eth_trigger_echo_task(
-                eigen_client.eth,
-                add_service,
-                service_id,
-                workflow_id,
-                avs_client.layer.trigger,
-                avs_client.layer.service_manager,
-                name,
-            )
-            .await;
-
-            display_response_signature(&signature);
+            display_signed_data(&signed_data);
         }
     }
 }

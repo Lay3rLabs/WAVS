@@ -91,6 +91,18 @@ pub struct LayerAddresses {
     pub token: Address,
 }
 
+impl LayerAddresses {
+    pub fn as_vec(&self) -> Vec<Address> {
+        vec![
+            self.proxy_admin,
+            self.service_manager,
+            self.trigger,
+            self.stake_registry,
+            self.token,
+        ]
+    }
+}
+
 pub struct LayerContractClientFullBuilder {
     pub eth: EthSigningClient,
     pub core_avs_addrs: Option<CoreAVSAddresses>,
@@ -160,7 +172,7 @@ impl LayerContractClientFullBuilder {
         let ecdsa_stake_registry_impl =
             ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager).await?;
 
-        tracing::debug!("deploying Hello world registry");
+        tracing::debug!("deploying Layer service manager registry");
         let service_manager_impl = LayerServiceManager::deploy(
             self.eth.provider.clone(),
             core.avs_directory,
@@ -189,7 +201,7 @@ impl LayerContractClientFullBuilder {
             .watch()
             .await?;
 
-        tracing::debug!("Upgrading hello world");
+        tracing::debug!("Upgrading Layer service manager");
         proxies
             .admin
             .upgrade(proxies.service_manager, *service_manager_impl.address())

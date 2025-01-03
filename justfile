@@ -68,3 +68,32 @@ update-submodules:
 lint:
     cargo fmt --all -- --check
     cargo clippy --all-targets -- -D warnings
+
+# waiting on: https://github.com/casey/just/issues/626
+start-all:
+  #!/bin/bash -eux
+  just start-anvil &
+  just start-aggregator &
+  just start-wavs &
+  trap 'kill $(jobs -pr)' EXIT
+  wait
+
+start-wavs:
+    cd packages/wavs && cargo run
+
+start-aggregator:
+    cd packages/aggregator && cargo run
+
+start-anvil:
+    anvil
+
+cli-deploy-core:
+    cd packages/cli && cargo run deploy-core
+
+# e.g. just cli-deploy-service ./components/eth_trigger_square.wasm
+cli-deploy-service COMPONENT:
+    cd packages/cli && cargo run deploy-service --component "../../{{COMPONENT}}"
+
+# e.g. `just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D` or `{\"x\":2}`
+cli-add-task SERVICE_ID INPUT:
+    cd packages/cli && cargo run add-task --service-id {{SERVICE_ID}} --input '{{INPUT}}'

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use layer_climb::prelude::*;
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
@@ -63,8 +65,8 @@ impl HttpClient {
         }
     }
 
-    pub async fn upload_eth_trigger_echo_digest(&self) -> Digest {
-        let wasm_bytes = include_bytes!("../../../components/eth_trigger_echo.wasm");
+    pub async fn upload_component(&self, path: impl AsRef<Path>) -> Digest {
+        let wasm_bytes = std::fs::read(path).unwrap();
 
         let response: UploadServiceResponse = self
             .inner
@@ -80,30 +82,19 @@ impl HttpClient {
         response.digest.into()
     }
 
-    pub async fn create_eth_trigger_echo_service(
+    pub async fn create_service(
         &self,
         trigger_address: alloy::primitives::Address,
         service_manager_address: alloy::primitives::Address,
         digest: Digest,
     ) -> ServiceID {
-        self.create_service(
-            digest,
-            Address::Eth(AddrEth::new(trigger_address.into())),
-            Submit::EthSignedMessage {
-                chain_name: self.chain_name.clone(),
-                hd_index: 0,
-                service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
-            },
-        )
-        .await
-    }
+        let trigger_address = Address::Eth(AddrEth::new(trigger_address.into()));
+        let submit = Submit::EthSignedMessage {
+            chain_name: self.chain_name.clone(),
+            hd_index: 0,
+            service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
+        };
 
-    async fn create_service(
-        &self,
-        digest: Digest,
-        trigger_address: Address,
-        submit: Submit,
-    ) -> ServiceID {
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {

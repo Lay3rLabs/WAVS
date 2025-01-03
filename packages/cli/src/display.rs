@@ -1,5 +1,8 @@
-use utils::{eigen_client::CoreAVSAddresses, layer_contract_client::LayerAddresses};
-use wavs::{apis::ServiceID, Digest};
+use utils::{
+    eigen_client::CoreAVSAddresses,
+    layer_contract_client::{LayerAddresses, SignedData},
+};
+use wavs::apis::ServiceID;
 
 pub fn display_core_contracts(core_contracts: &CoreAVSAddresses) {
     println!("\n--- CORE AVS CONTRACTS ---");
@@ -66,17 +69,15 @@ pub fn display_layer_service_contracts(layer_addresses: &LayerAddresses) {
     );
 }
 
-pub fn display_eth_trigger_echo_service_id(id: &ServiceID) {
-    println!("\n--- ETH_TRIGGER_ECHO SERVICE ID ---");
+pub fn display_service_id(id: &ServiceID) {
+    println!("\n--- SERVICE ID ---");
     println!("{}", id);
 }
 
-pub fn display_eth_trigger_echo_digest(digest: &Digest) {
-    println!("\n--- ETH TRIGGER ECHO DIGEST ---");
-    println!("CLI_DIGEST_ETH_TRIGGER_ECHO=\"{}\"", digest);
-}
-
-pub fn display_response_signature(signature: &str) {
+pub fn display_signed_data(signed_data: &SignedData) {
     println!("\n--- RESPONSE SIGNATURE ---");
-    println!("{}", signature);
+    println!("{}", hex::encode(&signed_data.signature));
+    println!("\n--- RESPONSE DATA ---");
+    println!("hex encoded: {}", hex::encode(&signed_data.data));
+    println!("UTF8: {}", String::from_utf8_lossy(&signed_data.data));
 }
