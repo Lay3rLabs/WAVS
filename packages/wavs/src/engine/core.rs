@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::instrument;
 use utils::layer_contract_client::TriggerId;
-use wasmtime::Store;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
 };
+use wasmtime::{Store, Trap};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
@@ -26,14 +26,21 @@ pub struct WasmEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
     app_data_dir: PathBuf,
+    fuel_limit: u64,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
     /// Create a new Wasm Engine manager.
-    pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>, lru_size: usize) -> Self {
+    pub fn new(
+        wasm_storage: S,
+        app_data_dir: impl AsRef<Path>,
+        lru_size: usize,
+        fuel_limit: u64,
+    ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
         config.async_support(true);
+        config.consume_fuel(true);
         let wasm_engine = WTEngine::new(&config).unwrap();
 
         let lru_size = NonZeroUsize::new(lru_size).unwrap();
@@ -49,6 +56,7 @@ impl<S: CAStorage> WasmEngine<S> {
             wasm_engine,
             memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
+            fuel_limit,
         }
     }
 }
@@ -89,6 +97,10 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     ) -> Result<Vec<u8>, EngineError> {
         let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
 
+        store
+            .set_fuel(self.fuel_limit)
+            .map_err(EngineError::Other)?;
+
         self.block_on_run(async move {
             let instance = bindings::task_queue::TaskQueueWorld::instantiate_async(
                 &mut store, &component, &linker,
@@ -97,13 +109,17 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             .context("Wasm instantiate failed")?;
             let input = bindings::task_queue::TaskQueueInput { timestamp, request };
 
-            let response = instance
+            instance
                 .call_run_task(&mut store, &input)
                 .await
-                .context("Failed to run task")?
-                .map_err(EngineError::ComponentError)?;
-
-            Ok::<Vec<u8>, EngineError>(response)
+                .context("Failed to run task")
+                .map_err(|e| match e.downcast_ref::<Trap>() {
+                    Some(t) if *t == Trap::OutOfFuel => {
+                        EngineError::OutOfFuel(service_id.clone(), task_id.u64())
+                    }
+                    _ => EngineError::ComponentError(e.to_string()),
+                })?
+                .map_err(EngineError::ComponentError)
         })
     }
 
@@ -119,6 +135,10 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     ) -> Result<Vec<u8>, EngineError> {
         let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
 
+        store
+            .set_fuel(self.fuel_limit)
+            .map_err(EngineError::Other)?;
+
         self.block_on_run(async move {
             // For right now, we use the hello-world pipeline (contract and component)
             // eventually this will be a more generic system
@@ -129,13 +149,17 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             .await
             .context("Wasm instantiate failed")?;
 
-            let response = instance
+            instance
                 .call_process_eth_trigger(&mut store, &payload)
                 .await
-                .context("Failed to run task")?
-                .map_err(EngineError::ComponentError)?;
-
-            Ok::<Vec<u8>, EngineError>(response)
+                .context("Failed to run task")
+                .map_err(|e| match e.downcast_ref::<Trap>() {
+                    Some(t) if *t == Trap::OutOfFuel => {
+                        EngineError::OutOfFuel(service_id.clone(), trigger_id.u64())
+                    }
+                    _ => EngineError::ComponentError(e.to_string()),
+                })?
+                .map_err(EngineError::ComponentError)
         })
     }
 }
@@ -252,12 +276,13 @@ mod tests {
 
     const SQUARE: &[u8] = include_bytes!("../../../../components/square.wasm");
     const BTC_AVG: &[u8] = include_bytes!("../../../../components/btc_avg.wasm");
+    const DEFAULT_FUEL_LIMIT: u64 = 100_000;
 
     #[test]
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, DEFAULT_FUEL_LIMIT);
 
         // store two blobs
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -275,7 +300,7 @@ mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, DEFAULT_FUEL_LIMIT);
 
         // store valid wasm
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -291,7 +316,7 @@ mod tests {
     fn execute_square() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, DEFAULT_FUEL_LIMIT);
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -308,5 +333,31 @@ mod tests {
             )
             .unwrap();
         assert_eq!(&result, br#"{"y":144}"#);
+    }
+
+    #[test]
+    fn execute_without_enough_fuel() {
+        let storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+
+        let low_fuel_limit = 1;
+        let engine = WasmEngine::new(storage, &app_data, 3, low_fuel_limit);
+
+        // store square digest
+        let digest = engine.store_wasm(SQUARE).unwrap();
+        let component = crate::apis::dispatcher::Component::new(&digest);
+
+        // execute it and get the error
+        let err = engine
+            .execute_queue(
+                &component,
+                &ServiceID::new("foobar").unwrap(),
+                TaskId::new(12345),
+                br#"{"x":12}"#.into(),
+                12345,
+            )
+            .unwrap_err();
+
+        assert!(matches!(err, EngineError::OutOfFuel(_, _)));
     }
 }

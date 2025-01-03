@@ -74,6 +74,11 @@ impl TriggerId {
     pub fn new(val: u64) -> Self {
         Self(val)
     }
+
+    /// The underlying `u64` representation.
+    pub fn u64(self) -> u64 {
+        self.0
+    }
 }
 
 impl Deref for TriggerId {

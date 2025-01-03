@@ -102,4 +102,7 @@ pub enum EngineError {
 
     #[error{"{0}"}]
     Other(#[from] anyhow::Error),
+
+    #[error("Max fuel consumed by WasmEngine for service: {0}. Id: {1}")]
+    OutOfFuel(ServiceID, u64),
 }
