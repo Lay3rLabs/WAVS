@@ -1,11 +1,222 @@
-use anyhow::Result;
-use clap::Parser;
-use figment::Figment;
+use anyhow::{bail, Context, Result};
+use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{collections::HashMap, marker::PhantomData, path::PathBuf};
 
-use crate::{error::ChainConfigError, eth_client::EthClientConfig};
+use crate::{error::ChainConfigError, eth_client::EthChainConfig};
+
+/// The builder we use to build Config
+#[derive(Debug)]
+pub struct ConfigBuilder<CONFIG, ARG> {
+    pub cli_env_args: ARG,
+    _config: PhantomData<CONFIG>,
+}
+
+pub trait CliEnvExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
+    // e.g. "WAVS"
+    const ENV_VAR_PREFIX: &'static str;
+
+    // an optional argument to specify the home directory
+    // if not supplied, config will try a series of fallbacks
+    fn home_dir(&self) -> Option<PathBuf>;
+
+    // an optional argument to specify the home directory
+    // if not supplied, config will try a series of fallbacks
+    fn dotenv_path(&self) -> Option<PathBuf>;
+
+    fn merge_cli_env_args(&self) -> Result<Self> {
+        let env_prefix = format!("{}_", Self::ENV_VAR_PREFIX);
+
+        let _self = Figment::new()
+            .merge(figment::providers::Env::prefixed(&env_prefix))
+            .merge(figment::providers::Serialized::defaults(self))
+            .extract()?;
+
+        Ok(_self)
+    }
+
+    fn env_var(name: &str) -> Option<String> {
+        std::env::var(format!("{}_{name}", Self::ENV_VAR_PREFIX)).ok()
+    }
+}
+
+pub trait ConfigExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
+    // e.g. "wavs"
+    const DIRNAME: &'static str;
+    // e.g. "wavs.toml"
+    const FILENAME: &'static str;
+
+    // the data directory, which is the root of the data storage
+    fn with_data_dir(&mut self, f: fn(&mut PathBuf));
+
+    fn log_levels(&self) -> impl Iterator<Item = &str>;
+
+    fn tracing_env_filter(&self) -> Result<tracing_subscriber::EnvFilter> {
+        let mut filter = tracing_subscriber::EnvFilter::from_default_env();
+        for directive in self.log_levels() {
+            match directive.parse() {
+                Ok(directive) => filter = filter.add_directive(directive),
+                Err(err) => bail!("{}: {}", err, directive),
+            }
+        }
+
+        Ok(filter)
+    }
+}
+
+impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
+    pub fn new(cli_env_args: ARG) -> Self {
+        Self {
+            cli_env_args,
+            _config: PhantomData,
+        }
+    }
+
+    pub fn build(self) -> Result<CONFIG> {
+        // try to load dotenv first, since it may affect env vars for filepaths
+        let dotenv_path = self
+            .cli_env_args
+            .dotenv_path()
+            .unwrap_or(std::env::current_dir()?.join(".env"));
+
+        if dotenv_path.exists() {
+            if let Err(e) = dotenvy::from_path(dotenv_path) {
+                bail!("Error loading dotenv file: {}", e);
+            }
+        }
+
+        // first merge the cli and env vars
+        let cli_env_args = self.cli_env_args.merge_cli_env_args()?;
+
+        // then get the filepath for our file-based config
+        let filepath =
+            ConfigFilePath::new(CONFIG::FILENAME, CONFIG::DIRNAME, cli_env_args.home_dir())
+                .into_path()
+                .context(format!(
+                    "Error getting config file path (filename: {}, dirname: {}, homedir: {:?})",
+                    CONFIG::FILENAME,
+                    CONFIG::DIRNAME,
+                    cli_env_args.home_dir()
+                ))?;
+
+        // lastly, our final config, which can have more complex types with easier TOML-like syntax
+        // but is overriden by the cli/env args if they exist
+        // and also fills in defaults for required values at the end
+        let mut config: CONFIG = Figment::new()
+            .merge(figment::providers::Toml::file(filepath))
+            .merge(figment::providers::Serialized::defaults(cli_env_args))
+            .join(figment::providers::Serialized::defaults(CONFIG::default()))
+            .extract()?;
+
+        config.with_data_dir(|data_dir| {
+            *data_dir = shellexpand::tilde(&data_dir.to_string_lossy())
+                .to_string()
+                .into();
+        });
+
+        Ok(config)
+    }
+}
+
+// a helper to try a series of fallback paths, looking for a config file
+#[derive(Clone, Debug)]
+pub struct ConfigFilePath {
+    // the filename to look for in each directory, e.g. "wavs.toml"
+    pub filename: String,
+    // the directory name to look for in user's home directory, config, etc., e.g. "wavs"
+    pub dirname: String,
+    // the optional directory set via direct args or env
+    pub arg_env_dir: Option<PathBuf>,
+}
+
+impl ConfigFilePath {
+    pub fn new(
+        filename: impl ToString,
+        dirname: impl ToString,
+        arg_env_dir: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            filename: filename.to_string(),
+            dirname: dirname.to_string(),
+            arg_env_dir,
+        }
+    }
+
+    pub fn into_path(self) -> Option<PathBuf> {
+        self.into_possible().into_iter().find(|path| path.exists())
+    }
+
+    // tries a series of fallbacks
+    pub fn into_possible(self) -> Vec<PathBuf> {
+        let Self {
+            filename,
+            dirname,
+            arg_env_dir,
+        } = self;
+
+        // the paths returned will be tried in order of pushing
+        let mut dirs = Vec::new();
+
+        // explicit, e.g. passing --home /foo to a binary, or env var HOME="/foo"
+        // i.e. the path in this case will be /foo/{filename}
+        if let Some(dir) = arg_env_dir {
+            dirs.push(dir);
+        }
+
+        // next, check the current working directory, wherever the command is run from
+        // i.e. ./{filename}
+        if let Ok(dir) = std::env::current_dir() {
+            dirs.push(dir);
+        }
+
+        // here we want to check the user's home directory directly, not in the `.config` subdirectory
+        // in this case, to not pollute the home directory, it looks for ~/.{dirname}/{filename} (e.g. ~/.wavs/wavs.toml)
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(format!(".{}", &dirname))) {
+            dirs.push(dir);
+        }
+
+        // checks the `wavs/wavs.toml` file in the system config directory
+        // this will vary, but the final path with then be something like:
+        // Linux: ~/.config/wavs/wavs.toml
+        // macOS: ~/Library/Application Support/wavs/wavs.toml
+        // Windows: C:\Users\MyUserName\AppData\Roaming\wavs\wavs.toml
+        if let Some(dir) = dirs::config_dir().map(|dir| dir.join(&dirname)) {
+            dirs.push(dir);
+        }
+
+        // On linux, this may already be added via config_dir above
+        // but on macOS and windows, and maybe unix-like environments (msys, wsl, etc)
+        // it's helpful to add it explicitly
+        // the final path here typically becomes something like ~/.config/wavs/wavs.toml
+        if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
+            .ok()
+            .map(PathBuf::from)
+            .map(|dir| dir.join(&dirname))
+        {
+            dirs.push(dir);
+        }
+
+        // Similarly, `config_dir` above may have already added this
+        // but on systems like Windows, it's helpful to add it explicitly
+        // since the system may place the config dir in AppData/Roaming
+        // but we want to check the user's home dir first
+        // this will definitively become something like ~/.config/wavs/wavs.toml
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(&dirname)) {
+            dirs.push(dir);
+        }
+
+        // Lastly, try /etc/wavs/wavs.toml
+        dirs.push(PathBuf::from("/etc").join(&dirname));
+
+        // now we have a list of directories to check, we need to add the filename to each
+        let mut all_files: Vec<PathBuf> = dirs.into_iter().map(|dir| dir.join(&filename)).collect();
+
+        all_files.dedup();
+
+        all_files
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ChainConfigs {
@@ -52,7 +263,7 @@ impl TryFrom<AnyChainConfig> for EthereumChainConfig {
     }
 }
 
-impl TryFrom<AnyChainConfig> for EthClientConfig {
+impl TryFrom<AnyChainConfig> for EthChainConfig {
     type Error = ChainConfigError;
 
     fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
@@ -71,101 +282,9 @@ impl ChainConfigs {
             (None, None) => Ok(None),
         }
     }
-
-    pub fn merge_overrides(self, chain_config_override: &OptionalWavsChainConfig) -> Result<Self> {
-        // The optional overrides use a prefix to distinguish between layer and ethereum fields
-        // since in the CLI they get flattened and would conflict without a prefix
-        // in order to cleanly merge it with our final, real chain config
-        // we need to strip that prefix so that the fields match
-        #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-        struct EthConfigOverride {
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub chain_id: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub http_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub ws_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub aggregator_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub submission_mnemonic: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub faucet_endpoint: Option<String>,
-        }
-
-        let eth_config_override = EthConfigOverride {
-            chain_id: chain_config_override.chain_id.clone(),
-            http_endpoint: chain_config_override.http_endpoint.clone(),
-            ws_endpoint: chain_config_override.ws_endpoint.clone(),
-            aggregator_endpoint: chain_config_override.aggregator_endpoint.clone(),
-            submission_mnemonic: chain_config_override.submission_mnemonic.clone(),
-            faucet_endpoint: chain_config_override.faucet_endpoint.clone(),
-        };
-
-        // The optional overrides use a prefix to distinguish between layer and ethereum fields
-        // since in the CLI they get flattened and would conflict without a prefix
-        // in order to cleanly merge it with our final, real chain config
-        // we need to strip that prefix so that the fields match
-        #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-        struct CosmosConfigOverride {
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub chain_id: Option<ChainId>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub bech32_prefix: Option<ChainId>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub rpc_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub grpc_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub gas_price: Option<f32>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub gas_denom: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub faucet_endpoint: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub submission_mnemonic: Option<String>,
-        }
-
-        let cosmos_config_override = CosmosConfigOverride {
-            chain_id: chain_config_override.cosmos_chain_id.clone(),
-            bech32_prefix: chain_config_override.cosmos_bech32_prefix.clone(),
-            grpc_endpoint: chain_config_override.cosmos_grpc_endpoint.clone(),
-            gas_price: chain_config_override.cosmos_gas_price,
-            gas_denom: chain_config_override.cosmos_gas_denom.clone(),
-            faucet_endpoint: chain_config_override.cosmos_faucet_endpoint.clone(),
-            submission_mnemonic: chain_config_override.cosmos_submission_mnemonic.clone(),
-            rpc_endpoint: chain_config_override.cosmos_rpc_endpoint.clone(),
-        };
-
-        let mut eth = HashMap::with_capacity(self.eth.len());
-        for (name, config) in self.eth.into_iter() {
-            let config_merged = Figment::new()
-                .merge(figment::providers::Serialized::defaults(config))
-                .merge(figment::providers::Serialized::defaults(
-                    &eth_config_override,
-                ))
-                .extract()?;
-
-            eth.insert(name, config_merged);
-        }
-
-        let mut cosmos = HashMap::with_capacity(self.cosmos.len());
-
-        for (name, config) in self.cosmos.into_iter() {
-            let config_merged = Figment::new()
-                .merge(figment::providers::Serialized::defaults(config))
-                .merge(figment::providers::Serialized::defaults(
-                    &cosmos_config_override,
-                ))
-                .extract()?;
-
-            cosmos.insert(name, config_merged);
-        }
-
-        Ok(Self { cosmos, eth })
-    }
 }
 
+/// Cosmos chain config with extra info like faucet
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CosmosChainConfig {
     pub chain_id: String,
@@ -175,10 +294,9 @@ pub struct CosmosChainConfig {
     pub gas_price: f32,
     pub gas_denom: String,
     pub faucet_endpoint: Option<String>,
-    /// mnemonic for the submission client (usually leave this as None and override in env)
-    pub submission_mnemonic: Option<String>,
 }
 
+/// Ethereum chain config with extra info like faucet
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EthereumChainConfig {
     pub chain_id: String,
@@ -186,8 +304,6 @@ pub struct EthereumChainConfig {
     pub http_endpoint: String,
     pub aggregator_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
-    /// mnemonic for the submission client (usually leave this as None and override in env)
-    pub submission_mnemonic: Option<String>,
 }
 
 impl From<CosmosChainConfig> for ChainConfig {
@@ -206,84 +322,269 @@ impl From<CosmosChainConfig> for ChainConfig {
     }
 }
 
-impl From<EthereumChainConfig> for EthClientConfig {
+impl From<EthereumChainConfig> for EthChainConfig {
     fn from(config: EthereumChainConfig) -> Self {
         Self {
             ws_endpoint: Some(config.ws_endpoint),
             http_endpoint: config.http_endpoint,
-            mnemonic: config.submission_mnemonic,
-            hd_index: None,
             transport: None,
         }
     }
 }
 
-// flattened and used in both direct config and cli/env args
-// because it is flattened, we need to use prefixes to avoid conflicts
-#[derive(Parser, Clone, Debug, Serialize, Deserialize, Default)]
-pub struct OptionalWavsChainConfig {
-    /// To override the chosen eth chain's chain_id
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain_id: Option<String>,
-    /// To override the chosen eth chain's ws_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ws_endpoint: Option<String>,
-    /// To override the chosen eth chain's rpc_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub http_endpoint: Option<String>,
-    /// To override the chosen aggregator endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregator_endpoint: Option<String>,
-    /// To override the chosen eth chain's submission mnemonic
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub submission_mnemonic: Option<String>,
-    /// To override the chosen eth chain's submission mnemonic
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub faucet_endpoint: Option<String>,
-
-    /// To override the chosen cosmos chain's chain_id
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_chain_id: Option<ChainId>,
-    /// To override the chosen cosmos chain's bech32_prefix
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_bech32_prefix: Option<ChainId>,
-    /// To override the chosen cosmos chain's rpc_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_rpc_endpoint: Option<String>,
-    /// To override the chosen cosmos chain's grpc_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_grpc_endpoint: Option<String>,
-    /// To override the chosen cosmos chain's gas_price
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_gas_price: Option<f32>,
-    /// To override the chosen cosmos chain's gas_denom
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_gas_denom: Option<String>,
-    /// To override the chosen cosmos chain's faucet_endpoint
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_faucet_endpoint: Option<String>,
-    /// To override the chosen cosmos chain's submission mnemonic
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_submission_mnemonic: Option<String>,
-}
-
 #[cfg(test)]
 mod test {
-    use super::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
+    use std::{path::PathBuf, sync::LazyLock};
+
+    use serde::{Deserialize, Serialize};
+
+    use crate::{config::ConfigFilePath, serde::deserialize_vec_string};
+
+    use super::{
+        ChainConfigs, CliEnvExt, ConfigBuilder, ConfigExt, CosmosChainConfig, EthereumChainConfig,
+    };
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct TestConfig {
+        pub data: PathBuf,
+        pub port: u16,
+        pub log_level: Vec<String>,
+    }
+
+    impl Default for TestConfig {
+        fn default() -> Self {
+            Self {
+                data: PathBuf::from("/var/wavs"),
+                port: 8000,
+                log_level: vec!["info".to_string()],
+            }
+        }
+    }
+
+    impl TestConfig {
+        pub fn new() -> Self {
+            ConfigBuilder::new(TestCliEnv::new()).build().unwrap()
+        }
+    }
+
+    impl ConfigExt for TestConfig {
+        const DIRNAME: &'static str = "wavs";
+        const FILENAME: &'static str = "wavs.toml";
+
+        fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
+            f(&mut self.data);
+        }
+
+        fn log_levels(&self) -> impl Iterator<Item = &str> {
+            self.log_level.iter().map(|s| s.as_str())
+        }
+    }
+
+    #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+    #[serde(default)]
+    struct TestCliEnv {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub home: Option<PathBuf>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub dotenv: Option<PathBuf>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(deserialize_with = "deserialize_vec_string")]
+        pub log_level: Vec<String>,
+    }
+
+    fn workspace_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    }
+
+    fn utils_path() -> PathBuf {
+        workspace_path().join("packages").join("utils")
+    }
+
+    impl TestCliEnv {
+        pub fn new() -> Self {
+            Self {
+                home: Some(workspace_path().join("packages").join(TestConfig::DIRNAME)),
+                // this purposefully points at a non-existing file
+                // so that we don't load a real .env in tests
+                dotenv: Some(utils_path().join("does-not-exist")),
+                log_level: Vec::new(),
+            }
+        }
+    }
+
+    impl CliEnvExt for TestCliEnv {
+        const ENV_VAR_PREFIX: &'static str = "WAVS";
+
+        fn home_dir(&self) -> Option<PathBuf> {
+            self.home.clone()
+        }
+
+        fn dotenv_path(&self) -> Option<PathBuf> {
+            self.dotenv.clone()
+        }
+    }
+
+    // this test is confiming the user overrides for filepath work as expected
+    // but it does not test the complete list of fallbacks past those first few common cases
+    // because the complete list will change depending on the platform, global env vars, etc.
+    #[tokio::test]
+    async fn config_filepath() {
+        fn filepaths(home: Option<PathBuf>) -> Vec<PathBuf> {
+            let home = TestCliEnv {
+                home,
+                dotenv: None,
+                log_level: Vec::new(),
+            }
+            .merge_cli_env_args()
+            .unwrap()
+            .home;
+
+            ConfigFilePath::new(TestConfig::FILENAME, TestConfig::DIRNAME, home).into_possible()
+        }
+
+        // make sure all the test directories are not there by default
+        let default_dirs = filepaths(None);
+        for i in 1..=10 {
+            assert!(!default_dirs
+                .contains(&PathBuf::from(format!("/tmp{}", i)).join(TestConfig::FILENAME)));
+        }
+
+        // if provide a specific home directory, then it is the first one to try
+        assert_eq!(
+            filepaths(Some("/tmp1".into())).first().unwrap(),
+            &PathBuf::from("/tmp1").join(TestConfig::FILENAME)
+        );
+
+        // even if we also provide it in an env var, it still takes precedence
+        temp_env::with_vars(
+            [(
+                format!("{}_{}", TestCliEnv::ENV_VAR_PREFIX, "HOME"),
+                Some("/tmp2"),
+            )],
+            || {
+                assert_eq!(
+                    filepaths(Some("/tmp3".into())).first().unwrap(),
+                    &PathBuf::from("/tmp3").join(TestConfig::FILENAME)
+                );
+            },
+        );
+
+        // but if we provide an env var, and not a specific home directory, then env var becomes the first
+        temp_env::with_vars(
+            [(
+                format!("{}_{}", TestCliEnv::ENV_VAR_PREFIX, "HOME"),
+                Some("/tmp2"),
+            )],
+            || {
+                assert_eq!(
+                    filepaths(None).first().unwrap(),
+                    &PathBuf::from("/tmp2").join(TestConfig::FILENAME),
+                );
+            },
+        );
+    }
+
+    // tests that default values are set correctly
+    #[tokio::test]
+    async fn config_default() {
+        // port is *not* set in the test toml file
+        assert_eq!(TestConfig::default().port, TestConfig::new().port);
+    }
+
+    // tests that we can configure array-strings, and it overrides as expected
+    #[tokio::test]
+    async fn config_array_string() {
+        static TRACING_ENV_FILTER_ENV: LazyLock<tracing_subscriber::EnvFilter> =
+            LazyLock::new(|| {
+                tracing_subscriber::EnvFilter::from_default_env()
+                    .add_directive("debug".parse().unwrap())
+                    .add_directive("foo=trace".parse().unwrap())
+            });
+        static TRACING_ENV_FILTER_CLI: LazyLock<tracing_subscriber::EnvFilter> =
+            LazyLock::new(|| {
+                tracing_subscriber::EnvFilter::from_default_env()
+                    .add_directive("trace".parse().unwrap())
+                    .add_directive("bar=debug".parse().unwrap())
+            });
+
+        let config = temp_env::with_vars(
+            [(
+                format!("{}_{}", TestCliEnv::ENV_VAR_PREFIX, "LOG_LEVEL"),
+                Some("info, wavs=debug, just_to_confirm_test=debug"),
+            )],
+            TestConfig::new,
+        );
+
+        assert_eq!(
+            config.log_level,
+            ["info", "wavs=debug", "just_to_confirm_test=debug"]
+        );
+
+        // replace the var and check that it is now what we expect
+        // env replacement needs to be in an async function
+        {
+            temp_env::async_with_vars(
+                [(
+                    format!("{}_{}", TestCliEnv::ENV_VAR_PREFIX, "LOG_LEVEL"),
+                    Some("debug, foo=trace"),
+                )],
+                check(),
+            )
+            .await;
+
+            async fn check() {
+                // first - if we don't set a CLI var, it should use the env var
+                let config = TestConfig::new();
+                assert_eq!(
+                    config.tracing_env_filter().unwrap().to_string(),
+                    TRACING_ENV_FILTER_ENV.to_string()
+                );
+
+                // but then, even when the env var is available, if we set a CLI var, it should override
+                let mut cli_args = TestCliEnv::new();
+                cli_args.log_level = TRACING_ENV_FILTER_CLI
+                    .to_string()
+                    .split(",")
+                    .map(|s| s.to_string())
+                    .collect();
+
+                let config: TestConfig = ConfigBuilder::new(cli_args).build().unwrap();
+
+                assert_eq!(
+                    config.tracing_env_filter().unwrap().to_string(),
+                    TRACING_ENV_FILTER_CLI.to_string()
+                );
+            }
+        }
+    }
+
+    // tests that we load a dotenv file correctly, if specified in cli args
+    #[tokio::test]
+    async fn config_dotenv() {
+        let mut cli_args = TestCliEnv::new();
+
+        cli_args.dotenv = Some(utils_path().join("tests").join(".env.test"));
+
+        let _ = ConfigBuilder::<TestConfig, _>::new(cli_args)
+            .build()
+            .unwrap();
+
+        // if we try to check against meaningful env vars, we may conflict with other tests and/or user settings
+        // so just check for a dummy value since this test only cares about the dotenv file itself
+        // coverage of environment var overrides is in other tests with temp_env scopes
+        assert_eq!(
+            std::env::var(format!("{}_RANDOM_TEST_VALUE", TestCliEnv::ENV_VAR_PREFIX)).unwrap(),
+            "hello world"
+        );
+
+        // unset the value, just to play nice, though this could be a race condition (see docs on remove_var)
+        std::env::remove_var(format!("{}_RANDOM_TEST_VALUE", TestCliEnv::ENV_VAR_PREFIX))
+    }
 
     #[test]
     fn chain_name_lookup() {
@@ -319,7 +620,6 @@ mod test {
                 gas_price: 0.01,
                 gas_denom: "uatom".to_string(),
                 faucet_endpoint: Some("http://localhost:8000".to_string()),
-                submission_mnemonic: Some("mnemonic".to_string()),
             },
         );
 
@@ -339,7 +639,6 @@ mod test {
                         gas_price: 0.01,
                         gas_denom: "uatom".to_string(),
                         faucet_endpoint: Some("http://localhost:8000".to_string()),
-                        submission_mnemonic: Some("mnemonic".to_string()),
                     },
                 ),
                 (
@@ -352,7 +651,6 @@ mod test {
                         gas_price: 0.01,
                         gas_denom: "uatom".to_string(),
                         faucet_endpoint: Some("http://localhost:8000".to_string()),
-                        submission_mnemonic: Some("mnemonic".to_string()),
                     },
                 ),
             ]
@@ -367,7 +665,6 @@ mod test {
                         http_endpoint: "http://localhost:8545".to_string(),
                         aggregator_endpoint: Some("http://localhost:8000".to_string()),
                         faucet_endpoint: Some("http://localhost:8000".to_string()),
-                        submission_mnemonic: Some("mnemonic".to_string()),
                     },
                 ),
                 (
@@ -378,7 +675,6 @@ mod test {
                         http_endpoint: "http://localhost:8545".to_string(),
                         aggregator_endpoint: Some("http://localhost:8000".to_string()),
                         faucet_endpoint: Some("http://localhost:8000".to_string()),
-                        submission_mnemonic: Some("mnemonic".to_string()),
                     },
                 ),
             ]

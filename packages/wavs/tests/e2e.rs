@@ -20,13 +20,30 @@ mod e2e {
     };
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
-    use utils::layer_contract_client::LayerContractClientSimple;
+    use utils::{config::ConfigBuilder, layer_contract_client::LayerContractClientSimple};
     use wavs::{
         apis::{dispatcher::Submit, ServiceID},
         http::types::TriggerRequest,
         test_utils::app::TestApp,
     };
     use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};
+
+    fn workspace_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    }
+
+    fn wavs_path() -> PathBuf {
+        workspace_path().join("packages").join("wavs")
+    }
+
+    fn aggregator_path() -> PathBuf {
+        workspace_path().join("packages").join("aggregator")
+    }
 
     #[test]
     fn e2e_tests() {
@@ -43,10 +60,9 @@ mod e2e {
         let mut config = {
             tokio::runtime::Runtime::new().unwrap().block_on({
                 async {
-                    let mut cli_args = TestApp::default_cli_args();
+                    let mut cli_args = TestApp::zeroed_cli_args();
+                    cli_args.home = Some(wavs_path());
                     cli_args.dotenv = None;
-                    cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
-                    cli_args.home = Some(PathBuf::from(".."));
                     TestApp::new_with_args(cli_args)
                         .await
                         .config
@@ -57,16 +73,11 @@ mod e2e {
         };
 
         let aggregator_config: aggregator::config::Config = {
-            let mut cli_args = aggregator::test_utils::app::TestApp::default_cli_args();
+            let mut cli_args = aggregator::test_utils::app::TestApp::zeroed_cli_args();
+            cli_args.home = Some(aggregator_path());
             cli_args.dotenv = None;
-            cli_args.data = Some(tempfile::tempdir().unwrap().path().to_path_buf());
-            if let Some(anvil) = anvil.as_ref() {
-                cli_args.ws_endpoint = Some(anvil.ws_endpoint().to_string());
-                cli_args.http_endpoint = Some(anvil.endpoint().to_string());
-            }
-            aggregator::config::ConfigBuilder::new(cli_args)
-                .build()
-                .unwrap()
+            cli_args.chain = Some("local".to_string());
+            ConfigBuilder::new(cli_args).build().unwrap()
         };
 
         cfg_if::cfg_if! {

@@ -5,6 +5,11 @@ cors_allowed_origins = [
   "http://127.0.0.1:*",
 ]
 
+chain = "local"
+
+[chains.eth.local]
+chain_id = "31337"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
+
 tasks_quorum = 1

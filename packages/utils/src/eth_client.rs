@@ -61,6 +61,31 @@ impl EthSigningClient {
     }
 }
 
+// Just the raw config needed for talking to ethereum, not wavs-specific
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct EthChainConfig {
+    pub ws_endpoint: Option<String>,
+    pub http_endpoint: String,
+    /// Preferred transport
+    pub transport: Option<EthClientTransport>,
+}
+
+impl EthChainConfig {
+    pub fn to_client_config(
+        &self,
+        hd_index: Option<u32>,
+        mnemonic: Option<String>,
+    ) -> EthClientConfig {
+        EthClientConfig {
+            ws_endpoint: self.ws_endpoint.clone(),
+            http_endpoint: self.http_endpoint.clone(),
+            transport: self.transport,
+            hd_index,
+            mnemonic,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EthClientConfig {
     pub ws_endpoint: Option<String>,

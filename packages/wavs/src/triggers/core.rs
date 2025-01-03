@@ -25,7 +25,7 @@ use std::{
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    eth_client::{EthClientBuilder, EthClientConfig},
+    eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig},
     layer_contract_client::{
         layer_trigger::LayerTrigger::{self, NewTrigger},
         TriggerId,
@@ -76,7 +76,10 @@ impl CoreTriggerManager {
 
         let mut chain_configs = HashMap::new();
         for (chain_name, chain_config) in config.active_ethereum_chain_configs() {
-            chain_configs.insert(chain_name, chain_config.into());
+            chain_configs.insert(
+                chain_name,
+                EthChainConfig::from(chain_config).to_client_config(None, None),
+            );
         }
 
         Ok(Self {
@@ -598,7 +601,6 @@ mod tests {
                         http_endpoint: "http://localhost:26657".to_string(),
                         aggregator_endpoint: Some("http://localhost:8001".to_string()),
                         faucet_endpoint: None,
-                        submission_mnemonic: None,
                     },
                 )]
                 .into_iter()
@@ -613,7 +615,6 @@ mod tests {
                         gas_denom: "uslay".to_string(),
                         bech32_prefix: "layer".to_string(),
                         faucet_endpoint: None,
-                        submission_mnemonic: None,
                     },
                 )]
                 .into_iter()

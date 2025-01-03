@@ -1,13 +1,12 @@
 mod args;
 mod client;
-mod context;
+mod config;
 mod display;
 mod task;
 
 use args::Command;
 use clap::Parser;
 use client::{get_avs_client, get_eigen_client, HttpClient};
-use context::WavsContext;
 use display::{
     display_core_contracts, display_eth_trigger_echo_digest, display_eth_trigger_echo_service_id,
     display_layer_service_contracts, display_response_signature,
@@ -18,6 +17,7 @@ use rand::{
 };
 use task::run_eth_trigger_echo_task;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utils::config::ConfigBuilder;
 use wavs::apis::{ServiceID, WorkflowID};
 
 #[tokio::main]
@@ -38,10 +38,10 @@ async fn main() {
     match Command::parse() {
         Command::DeployCore {
             register_operator,
-            wavs,
+            args,
         } => {
-            let ctx = WavsContext::new(wavs).unwrap();
-            let eigen_client = get_eigen_client(ctx).await;
+            let config = ConfigBuilder::new(args).build().unwrap();
+            let eigen_client = get_eigen_client(&config).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_operator {
@@ -56,15 +56,15 @@ async fn main() {
 
         Command::DeployService {
             add_service,
-            wavs,
+            args,
             core_contracts,
             register_operator,
             digests,
         } => {
-            let ctx = WavsContext::new(wavs).unwrap();
+            let config = ConfigBuilder::new(args).build().unwrap();
             let core_contracts = core_contracts.into();
 
-            let eigen_client = get_eigen_client(ctx.clone()).await;
+            let eigen_client = get_eigen_client(&config).await;
             let avs_client = get_avs_client(&eigen_client, core_contracts).await;
 
             if register_operator {
@@ -72,7 +72,7 @@ async fn main() {
             }
 
             if add_service {
-                let http_client = HttpClient::new(ctx);
+                let http_client = HttpClient::new(&config);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -98,13 +98,13 @@ async fn main() {
 
         Command::DeployAll {
             add_service,
-            wavs,
+            args,
             register_core_operator,
             register_service_operator,
             digests,
         } => {
-            let ctx = WavsContext::new(wavs).unwrap();
-            let eigen_client = get_eigen_client(ctx.clone()).await;
+            let config = ConfigBuilder::new(args).build().unwrap();
+            let eigen_client = get_eigen_client(&config).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_core_operator {
@@ -121,7 +121,7 @@ async fn main() {
             }
 
             if add_service {
-                let http_client = HttpClient::new(ctx);
+                let http_client = HttpClient::new(&config);
 
                 let digest = match digests.digest_hello_world {
                     None => {
@@ -148,15 +148,15 @@ async fn main() {
 
         Command::AddTask {
             watch_wavs,
-            wavs,
+            args,
             trigger_addr,
             service_manager_addr,
             service_id,
             workflow_id,
             name,
         } => {
-            let ctx = WavsContext::new(wavs).unwrap();
-            let eigen_client = get_eigen_client(ctx).await;
+            let config = ConfigBuilder::new(args).build().unwrap();
+            let eigen_client = get_eigen_client(&config).await;
 
             let name = name.unwrap_or_else(|| Alphanumeric.sample_string(&mut OsRng, 16));
 
@@ -179,14 +179,14 @@ async fn main() {
 
         Command::KitchenSink {
             add_service,
-            wavs,
+            args,
             register_core_operator,
             register_service_operator,
             digests,
             name,
         } => {
-            let ctx = WavsContext::new(wavs).unwrap();
-            let eigen_client = get_eigen_client(ctx.clone()).await;
+            let config = ConfigBuilder::new(args).build().unwrap();
+            let eigen_client = get_eigen_client(&config).await;
             let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
             if register_core_operator {
@@ -206,7 +206,7 @@ async fn main() {
             let workflow_id = WorkflowID::new("default").unwrap();
 
             if add_service {
-                let http_client = HttpClient::new(ctx);
+                let http_client = HttpClient::new(&config);
 
                 let digest = match digests.digest_hello_world {
                     None => {

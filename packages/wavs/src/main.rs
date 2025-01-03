@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wavs::{args::CliArgs, config::ConfigBuilder, dispatcher::CoreDispatcher, AppContext};
+use utils::config::{ConfigBuilder, ConfigExt};
+use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher, AppContext};
 
 fn main() {
     let args = CliArgs::parse();
-    let config = ConfigBuilder::new(args).build().unwrap();
+    let config: Config = ConfigBuilder::new(args).build().unwrap();
 
     // setup tracing
     tracing_subscriber::registry()
