@@ -66,7 +66,8 @@ impl HttpClient {
     }
 
     pub async fn upload_component(&self, path: impl AsRef<Path>) -> Digest {
-        let wasm_bytes = std::fs::read(path).unwrap();
+        let root = Path::new("../../").join(path.as_ref());
+        let wasm_bytes = std::fs::read(root).unwrap();
 
         let response: UploadServiceResponse = self
             .inner
