@@ -110,9 +110,6 @@ pub struct LayerContractClientFullBuilder {
     /// if set, this service manager will be used instead of the default
     /// LayerServiceManager contract
     service_manager: Option<Address>,
-    /// if set, this ecdsa stake registry will be used instead of the default
-    /// ECDSAStakeRegistry contract
-    ecdsa_stake_registry: Option<Address>,
 }
 
 impl LayerContractClientFullBuilder {
@@ -121,7 +118,6 @@ impl LayerContractClientFullBuilder {
             eth,
             core_avs_addrs: None,
             service_manager: None,
-            ecdsa_stake_registry: None,
         }
     }
 
@@ -131,19 +127,8 @@ impl LayerContractClientFullBuilder {
     }
 
     // if you pre-upload your contracts you must override them here
-    pub fn override_contracts(
-        mut self,
-        service_manager: Option<Address>,
-        ecdsa_stake_registry: Option<Address>,
-    ) -> Self {
-        if service_manager.is_some() != ecdsa_stake_registry.is_some() {
-            panic!(
-                "service_manager and ecdsa_stake_registry must both be set if one is overridden"
-            );
-        }
+    pub fn override_service_manager(mut self, service_manager: Option<Address>) -> Self {
         self.service_manager = service_manager;
-        self.ecdsa_stake_registry = ecdsa_stake_registry;
-        println!("service_manager: {:?}", self.service_manager);
         self
     }
 }
@@ -194,21 +179,42 @@ impl LayerContractClientFullBuilder {
             self.eth.provider.clone(),
         );
 
-        let ecdsa_stake_registry = match self.ecdsa_stake_registry {
-            Some(addr) => addr,
-            None => {
-                tracing::debug!("deploying ECDSA stake registry");
-                let ecdsa_stake_registry_impl =
+        // Get or deploy stake registry
+        let ecdsa_stake_registry_address =
+            if let Some(service_manager_address) = self.service_manager {
+                LayerServiceManager::new(service_manager_address, self.eth.provider.clone())
+                    .stakeRegistry()
+                    .call()
+                    .await?
+                    ._0
+            } else {
+                let impl_contract =
                     ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager)
                         .await?;
-                *ecdsa_stake_registry_impl.address()
-            }
-        };
+                proxies
+                    .admin
+                    .upgradeAndCall(
+                        proxies.ecdsa_stake_registry,
+                        *impl_contract.address(),
+                        ECDSAStakeRegistry::initializeCall {
+                            _serviceManager: proxies.service_manager,
+                            _thresholdWeight: U256::ZERO,
+                            _quorum: setup.quorum,
+                        }
+                        .abi_encode()
+                        .into(),
+                    )
+                    .send()
+                    .await?
+                    .watch()
+                    .await?;
+                proxies.ecdsa_stake_registry
+            };
 
-        let service_manager_addr = match self.service_manager {
+        // Get or deploy service manager
+        let service_manager_address = match self.service_manager {
             Some(addr) => addr,
             None => {
-                tracing::debug!("deploying Layer service manager registry");
                 let service_manager_impl = LayerServiceManager::deploy(
                     self.eth.provider.clone(),
                     core.avs_directory,
@@ -217,37 +223,18 @@ impl LayerContractClientFullBuilder {
                     core.delegation_manager,
                 )
                 .await?;
-                *service_manager_impl.address()
+
+                proxies
+                    .admin
+                    .upgrade(proxies.service_manager, *service_manager_impl.address())
+                    .send()
+                    .await?
+                    .watch()
+                    .await?;
+
+                proxies.service_manager
             }
         };
-
-        let upgrade_call = ECDSAStakeRegistry::initializeCall {
-            _serviceManager: proxies.service_manager,
-            _thresholdWeight: U256::ZERO,
-            _quorum: setup.quorum,
-        };
-
-        tracing::debug!("Upgrading stake registry");
-        proxies
-            .admin
-            .upgradeAndCall(
-                proxies.ecdsa_stake_registry,
-                ecdsa_stake_registry,
-                upgrade_call.abi_encode().into(),
-            )
-            .send()
-            .await?
-            .watch()
-            .await?;
-
-        tracing::debug!("Upgrading Layer service manager");
-        proxies
-            .admin
-            .upgrade(proxies.service_manager, service_manager_addr)
-            .send()
-            .await?
-            .watch()
-            .await?;
 
         let underlying_token = strategy.underlyingToken().call().await?._0;
         assert_ne!(underlying_token, Address::ZERO);
@@ -256,16 +243,13 @@ impl LayerContractClientFullBuilder {
         let trigger = LayerTrigger::deploy(self.eth.provider.clone()).await?;
         let trigger_address = *trigger.address();
 
-        // Upgrade contracts
         Ok(LayerContractClientFull {
             eth: self.eth,
             core,
             layer: LayerAddresses {
                 proxy_admin: *proxies.admin.address(),
-                service_manager: self.service_manager.unwrap_or(proxies.service_manager),
-                stake_registry: self
-                    .ecdsa_stake_registry
-                    .unwrap_or(proxies.ecdsa_stake_registry),
+                service_manager: service_manager_address,
+                stake_registry: ecdsa_stake_registry_address,
                 token: setup.token,
                 trigger: trigger_address,
             },

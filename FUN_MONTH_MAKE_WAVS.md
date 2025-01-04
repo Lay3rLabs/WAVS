@@ -28,8 +28,8 @@ SERVICE_MANAGER_ADDRESS=`jq -r .transactions[1].contractAddress < broadcast/Reec
 
 # override the services manager if we uploaded a different one in the past (i.e. forge script)
 # useful to create other components not called 'LayerServiceManager.sol' (since DeployService hardcodes this)
-(cd packages/cli && cargo run deploy-service --component "./components/eth_trigger_square.wasm" --service-manager ${SERVICE_MANAGER_ADDRESS} --ecdsa-stake-registry ${ECDSA_STAKE_REGISTRY_ADDRESS})
+(cd packages/cli && cargo run deploy-service --component "./components/eth_trigger_square.wasm" --service-manager ${SERVICE_MANAGER_ADDRESS})
 
 ## Add a task
-just cli-add-task 01942f87bab87cd388f1e469802ead9c {\"x\":2}
+just cli-add-task 01943311e4607442b6700a1c99c5a52f {\"x\":2}
 ```

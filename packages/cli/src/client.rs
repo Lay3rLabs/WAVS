@@ -43,11 +43,10 @@ pub async fn get_avs_client(
     eigen_client: &EigenClient,
     core_contracts: CoreAVSAddresses,
     service_manager_override: Option<alloy::primitives::Address>,
-    ecdsa_stake_registry_override: Option<alloy::primitives::Address>,
 ) -> LayerContractClientFull {
     LayerContractClientFullBuilder::new(eigen_client.eth.clone())
         .avs_addresses(core_contracts)
-        .override_contracts(service_manager_override, ecdsa_stake_registry_override)
+        .override_service_manager(service_manager_override)
         .build()
         .await
         .unwrap()

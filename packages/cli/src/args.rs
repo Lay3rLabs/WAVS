@@ -37,10 +37,6 @@ pub enum Command {
         /// Override the service manager address
         #[clap(long)]
         service_manager: Option<Address>,
-
-        /// Override the ecdsa stake registry address
-        #[clap(long)]
-        ecdsa_stake_registry: Option<Address>,
     },
 
     AddTask {
