@@ -2,14 +2,14 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
-import {ReeceLayerServiceManager} from "../ReeceServiceManager.sol";
+import {LayerServiceManager} from "../LayerServiceManager.sol";
 import {ECDSAStakeRegistry} from "@eigenlayer/middleware/src/unaudited/ECDSAStakeRegistry.sol";
 import {IDelegationManager} from "@eigenlayer/middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
 import {Quorum, StrategyParams} from "@eigenlayer/middleware/src/interfaces/IECDSAStakeRegistryEventsAndErrors.sol";
 import {IStrategy} from "@eigenlayer/middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 
-// forge script ./contracts/script/ReeceServiceManager.s.sol
-contract ReeceServiceManagerScript is Script {
+// forge script ./contracts/script/LayerServiceManager.s.sol
+contract LayerServiceManagerScript is Script {
 
     address public delegation_manager = vm.envAddress("CLI_EIGEN_CORE_DELEGATION_MANAGER");
     address public rewards_coordinator = vm.envAddress("CLI_EIGEN_CORE_REWARDS_COORDINATOR");
@@ -28,7 +28,7 @@ contract ReeceServiceManagerScript is Script {
         console.log("rewards_coordinator:", rewards_coordinator);
         console.log("avs_directory:", avs_directory);
 
-        ReeceLayerServiceManager sm = new ReeceLayerServiceManager(
+        LayerServiceManager sm = new LayerServiceManager(
             avs_directory,
             address(ecdsa_registry),
             rewards_coordinator,
@@ -43,9 +43,6 @@ contract ReeceServiceManagerScript is Script {
             multiplier: 10_000
         });
         ecdsa_registry.initialize(address(sm), 0, quorum);
-
-        sm.incrementCounter();
-        console.log("counter:", sm.counter());
 
         vm.stopBroadcast();
 

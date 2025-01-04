@@ -126,7 +126,7 @@ impl LayerContractClientFullBuilder {
         self
     }
 
-    // if you pre-upload your contracts you must override them here
+    // if your service manager is already deployed, you can override it here to use it.
     pub fn override_service_manager(mut self, service_manager: Option<Address>) -> Self {
         self.service_manager = service_manager;
         self
