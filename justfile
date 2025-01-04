@@ -67,6 +67,7 @@ update-submodules:
 
 lint:
     cargo fmt --all -- --check
+    cargo fix --allow-dirty --allow-staged
     cargo clippy --all-targets -- -D warnings
 
 # waiting on: https://github.com/casey/just/issues/626

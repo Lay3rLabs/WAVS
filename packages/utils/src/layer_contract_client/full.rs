@@ -166,6 +166,10 @@ impl LayerContractClientFullBuilder {
         service_manager: Option<Address>,
         ecdsa_stake_registry: Option<Address>,
     ) -> Self {
+        if service_manager.is_some() || ecdsa_stake_registry.is_some() {
+            panic!("service_manager and ecdsa_stake_registry must be set if one is overridden");
+        }
+
         self.service_manager_override = service_manager;
         self.ecdsa_stake_registry_override = ecdsa_stake_registry;
         self
@@ -184,10 +188,10 @@ impl LayerContractClientFullBuilder {
             self.eth.provider.clone(),
         );
 
-        tracing::debug!("deploying ECDSA stake registry");
         let ecdsa_stake_registry = match self.ecdsa_stake_registry_override {
             Some(addr) => addr,
             None => {
+                tracing::debug!("deploying ECDSA stake registry");
                 let ecdsa_stake_registry_impl =
                     ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager)
                         .await?;
@@ -195,10 +199,10 @@ impl LayerContractClientFullBuilder {
             }
         };
 
-        tracing::debug!("deploying Layer service manager registry");
         let service_manager_addr = match self.service_manager_override {
             Some(addr) => addr,
             None => {
+                tracing::debug!("deploying Layer service manager registry");
                 let service_manager_impl = LayerServiceManager::deploy(
                     self.eth.provider.clone(),
                     core.avs_directory,
@@ -211,7 +215,6 @@ impl LayerContractClientFullBuilder {
             }
         };
 
-        // TODO: only if ecdsa_stake_registry is not set?
         let upgrade_call = ECDSAStakeRegistry::initializeCall {
             _serviceManager: service_manager_addr,
             _thresholdWeight: U256::ZERO,

@@ -15,11 +15,13 @@ export CLI_EIGEN_CORE_REWARDS_COORDINATOR=`echo $CONTRACTS | jq -r .rewards_coor
 export CLI_EIGEN_CORE_AVS_DIRECTORY=`echo $CONTRACTS | jq -r .avs_directory`
 
 # deploy smart contract(s)
-forge script ./contracts/script/ServiceManager.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+# - ECDSAStakeRegistry for message signing verification
+# - ServiceManager for task submission
+forge script ./contracts/script/ReeceServiceManager.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
 
 # this has to be uploaded first since the service manager depends on it
-ECDSA_STAKE_REGISTRY_ADDRESS=`cat broadcast/ServiceManager.s.sol/31337/run-latest.json | jq -r .transactions[0].contractAddress`
-SERVICE_MANAGER_ADDRESS=`cat broadcast/ServiceManager.s.sol/31337/run-latest.json | jq -r .transactions[1].contractAddress`
+ECDSA_STAKE_REGISTRY_ADDRESS=`jq -r .transactions[0].contractAddress < broadcast/ReeceServiceManager.s.sol/31337/run-latest.json`
+SERVICE_MANAGER_ADDRESS=`jq -r .transactions[1].contractAddress < broadcast/ReeceServiceManager.s.sol/31337/run-latest.json`
 
 # deploy your component (all permissions by default)
 # just cli-deploy-service ./components/eth_trigger_square.wasm
@@ -29,5 +31,5 @@ SERVICE_MANAGER_ADDRESS=`cat broadcast/ServiceManager.s.sol/31337/run-latest.jso
 (cd packages/cli && cargo run deploy-service --component "./components/eth_trigger_square.wasm" --service-manager ${SERVICE_MANAGER_ADDRESS} --ecdsa-stake-registry ${ECDSA_STAKE_REGISTRY_ADDRESS})
 
 ## Add a task
-just cli-add-task 01942e7349df79e387dc208adbc7647d {\"x\":2}
+just cli-add-task 01942f87bab87cd388f1e469802ead9c {\"x\":2}
 ```

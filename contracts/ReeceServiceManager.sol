@@ -59,7 +59,6 @@ contract ReeceLayerServiceManager is ECDSAServiceManagerBase {
     function addSignedPayloadForTrigger(
         ILayerServiceManager.SignedPayload calldata signedPayload
     ) public {
-        // TODO: My manual ECDSA contract setup is not working as expected. Need to fix this, for now commenting out the signature check
         bytes32 message = keccak256(abi.encode(signedPayload.payload));
         bytes32 ethSignedMessageHash = ECDSAUpgradeable.toEthSignedMessageHash(message);
         bytes4 magicValue = IERC1271Upgradeable.isValidSignature.selector;
@@ -99,7 +98,6 @@ contract ReeceLayerServiceManager is ECDSAServiceManagerBase {
         }
     }
 
-    // TODO: add onlyOperators modifier
     function incrementCounter() public {
         counter += 1;
         emit CounterIncremented(counter);
