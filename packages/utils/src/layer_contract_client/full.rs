@@ -129,6 +129,23 @@ impl LayerContractClientFullBuilder {
         self.core_avs_addrs = Some(addresses);
         self
     }
+
+    // if you pre-upload your contracts you must override them here
+    pub fn override_contracts(
+        mut self,
+        service_manager: Option<Address>,
+        ecdsa_stake_registry: Option<Address>,
+    ) -> Self {
+        if service_manager.is_some() != ecdsa_stake_registry.is_some() {
+            panic!(
+                "service_manager and ecdsa_stake_registry must both be set if one is overridden"
+            );
+        }
+        self.service_manager = service_manager;
+        self.ecdsa_stake_registry = ecdsa_stake_registry;
+        println!("service_manager: {:?}", self.service_manager);
+        self
+    }
 }
 
 struct SetupAddrs {
@@ -162,21 +179,6 @@ impl LayerContractClientFullBuilder {
                 }],
             },
         })
-    }
-
-    // if you pre-upload your contracts you must override them here
-    pub fn override_contracts(
-        mut self,
-        service_manager: Option<Address>,
-        ecdsa_stake_registry: Option<Address>,
-    ) -> Self {
-        if service_manager.is_some() || ecdsa_stake_registry.is_some() {
-            panic!("service_manager and ecdsa_stake_registry must be set if one is overridden");
-        }
-
-        self.service_manager = service_manager;
-        self.ecdsa_stake_registry = ecdsa_stake_registry;
-        self
     }
 
     pub async fn build(mut self) -> Result<LayerContractClientFull> {
@@ -260,8 +262,10 @@ impl LayerContractClientFullBuilder {
             core,
             layer: LayerAddresses {
                 proxy_admin: *proxies.admin.address(),
-                service_manager: service_manager_addr,
-                stake_registry: ecdsa_stake_registry,
+                service_manager: self.service_manager.unwrap_or(proxies.service_manager),
+                stake_registry: self
+                    .ecdsa_stake_registry
+                    .unwrap_or(proxies.ecdsa_stake_registry),
                 token: setup.token,
                 trigger: trigger_address,
             },
