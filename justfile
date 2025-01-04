@@ -5,7 +5,7 @@ REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
 
 help:
-  @just --list
+  just --list
 
 # builds wavs:latest
 docker-build:
@@ -25,19 +25,18 @@ docker-run:
 
 # stop the running wavs container
 docker-stop:
-    @if [ "{{DOCKER_WAVS_ID}}" != "" ]; then \
+    if [ "{{DOCKER_WAVS_ID}}" != "" ]; then \
         {{SUDO}} docker kill {{DOCKER_WAVS_ID}}; \
         echo "Stopped container {{DOCKER_WAVS_ID}}"; \
     else \
         echo "No container running"; \
     fi
 
-# compile all WASI components, places the output in components dir
-wasi-build:
-    @rm -rf examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
-    @mkdir -p {{WASI_OUT_DIR}}
-
-    @for C in examples/*/Cargo.toml; do \
+# compile WASI components, places the output in components dir
+wasi-build COMPONENT="*":
+    rm -rf ./components/
+    mkdir -p ./components/
+    @for C in examples/{{COMPONENT}}/Cargo.toml; do \
         echo "Building WASI component in $(dirname $C)"; \
         `cd $(dirname $C); cargo component build --release; cargo fmt;`; \
     done
