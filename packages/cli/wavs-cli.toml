@@ -9,7 +9,7 @@
 log_level = ["info", "wavs=debug"]
 
 # the directory to store the data. Default is "/var/wavs"
-# data = "~/wavs-cli/data"
+# data = "~/wavs/cli"
 
 # chosen chain name
 chain = "local"
