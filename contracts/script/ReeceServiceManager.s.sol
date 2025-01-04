@@ -8,7 +8,7 @@ import {IDelegationManager} from "@eigenlayer/middleware/lib/eigenlayer-contract
 import {Quorum, StrategyParams} from "@eigenlayer/middleware/src/interfaces/IECDSAStakeRegistryEventsAndErrors.sol";
 import {IStrategy} from "@eigenlayer/middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 
-// forge script ./contracts/script/ServiceManager.s.sol
+// forge script ./contracts/script/ReeceServiceManager.s.sol
 contract ReeceServiceManagerScript is Script {
 
     address public delegation_manager = vm.envAddress("CLI_EIGEN_CORE_DELEGATION_MANAGER");

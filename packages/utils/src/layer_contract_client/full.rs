@@ -107,8 +107,12 @@ pub struct LayerContractClientFullBuilder {
     pub eth: EthSigningClient,
     pub core_avs_addrs: Option<CoreAVSAddresses>,
 
-    service_manager_override: Option<Address>,
-    ecdsa_stake_registry_override: Option<Address>,
+    /// if set, this service manager will be used instead of the default
+    /// LayerServiceManager contract
+    service_manager: Option<Address>,
+    /// if set, this ecdsa stake registry will be used instead of the default
+    /// ECDSAStakeRegistry contract
+    ecdsa_stake_registry: Option<Address>,
 }
 
 impl LayerContractClientFullBuilder {
@@ -116,8 +120,8 @@ impl LayerContractClientFullBuilder {
         Self {
             eth,
             core_avs_addrs: None,
-            service_manager_override: None,
-            ecdsa_stake_registry_override: None,
+            service_manager: None,
+            ecdsa_stake_registry: None,
         }
     }
 
@@ -170,8 +174,8 @@ impl LayerContractClientFullBuilder {
             panic!("service_manager and ecdsa_stake_registry must be set if one is overridden");
         }
 
-        self.service_manager_override = service_manager;
-        self.ecdsa_stake_registry_override = ecdsa_stake_registry;
+        self.service_manager = service_manager;
+        self.ecdsa_stake_registry = ecdsa_stake_registry;
         self
     }
 
@@ -188,7 +192,7 @@ impl LayerContractClientFullBuilder {
             self.eth.provider.clone(),
         );
 
-        let ecdsa_stake_registry = match self.ecdsa_stake_registry_override {
+        let ecdsa_stake_registry = match self.ecdsa_stake_registry {
             Some(addr) => addr,
             None => {
                 tracing::debug!("deploying ECDSA stake registry");
@@ -199,7 +203,7 @@ impl LayerContractClientFullBuilder {
             }
         };
 
-        let service_manager_addr = match self.service_manager_override {
+        let service_manager_addr = match self.service_manager {
             Some(addr) => addr,
             None => {
                 tracing::debug!("deploying Layer service manager registry");
@@ -216,7 +220,7 @@ impl LayerContractClientFullBuilder {
         };
 
         let upgrade_call = ECDSAStakeRegistry::initializeCall {
-            _serviceManager: service_manager_addr,
+            _serviceManager: proxies.service_manager,
             _thresholdWeight: U256::ZERO,
             _quorum: setup.quorum,
         };
