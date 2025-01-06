@@ -6,18 +6,7 @@ import {IERC1271Upgradeable} from "@openzeppelin-upgrades/contracts/interfaces/I
 import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptography/ECDSAUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import {ILayerTrigger} from "./LayerTrigger.sol";
-
-interface ILayerServiceManager {
-    struct Payload {
-        ILayerTrigger.TriggerId triggerId;
-        bytes data;
-    }
-
-    struct SignedPayload {
-        Payload payload;
-        bytes signature;
-    }
-}
+import {ILayerServiceManager} from "./interfaces/ILayerServiceManager.sol";
 
 contract LayerServiceManager is ECDSAServiceManagerBase {
     // Modifiers
@@ -84,7 +73,7 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
             signature: signedPayload.signature
         });
 
-        // updating the storage with data responses 
+        // updating the storage with data responses
         signedDataByTriggerId[signedPayload.payload.triggerId] = signedData;
 
         // emitting event

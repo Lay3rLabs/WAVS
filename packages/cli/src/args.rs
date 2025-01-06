@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use alloy::primitives::Address;
 use clap::{arg, Parser};
 use serde::{Deserialize, Serialize};
 use utils::{
@@ -32,6 +33,10 @@ pub enum Command {
 
         #[clap(flatten)]
         args: CliArgs,
+
+        /// Override the service manager address
+        #[clap(long)]
+        service_manager: Option<Address>,
     },
 
     AddTask {
