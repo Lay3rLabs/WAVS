@@ -105,7 +105,3 @@ cli-add-task SERVICE_ID INPUT:
 # e.g. `just cli-exec ./components/eth_trigger_square.wasm {\"x\":2}`
 cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'
-
-# e.g. `just cli-exec ./components/eth_trigger_square.wasm ~/input.json`
-cli-exec-file COMPONENT FILE:
-    @cd packages/cli && cargo run --quiet exec --component {{COMPONENT}} --input-file '{{FILE}}'

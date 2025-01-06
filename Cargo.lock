@@ -6933,6 +6933,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "shellexpand 3.1.0",
  "tempfile",
  "tokio",
  "toml",

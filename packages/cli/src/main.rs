@@ -203,16 +203,23 @@ async fn main() {
         }
 
         Command::Exec {
-            component,
-            input,
-            input_file,
-            ..
+            component, input, ..
         } => {
-            let input_bytes = match (input, input_file) {
-                (Some(input), None) => decode_input(&input),
-                (None, Some(input_file)) => std::fs::read(input_file).unwrap(),
-                _ => {
-                    unreachable!("Either input or input_file must be provided");
+            let input_bytes = match input.starts_with('@') {
+                true => {
+                    let filepath = shellexpand::tilde(&input[1..]).to_string();
+
+                    std::fs::read(filepath).unwrap()
+                }
+
+                false => {
+                    if Path::new(&shellexpand::tilde(&input).to_string()).exists() {
+                        tracing::warn!(
+                            "Are you sure you didn't mean to use @ to specify file input?"
+                        );
+                    }
+
+                    decode_input(&input)
                 }
             };
 

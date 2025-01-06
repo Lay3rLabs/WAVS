@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use alloy::primitives::Address;
-use clap::{arg, ArgGroup, Parser};
+use clap::{arg, Parser};
 use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
@@ -54,13 +54,6 @@ pub enum Command {
         args: CliArgs,
     },
 
-    #[command(
-        group(ArgGroup::new("exec_input")
-            .required(true)
-            .multiple(false)
-            .args(["input", "input_file"])
-        )
-    )]
     Exec {
         /// Path to the WASI component
         /// The component must implement the eth-trigger-world WIT
@@ -71,12 +64,9 @@ pub enum Command {
         args: CliArgs,
 
         /// The payload data, hex-encoded.
-        #[clap(long, group = "exec_input")]
-        input: Option<String>,
-
-        /// Path to a file to use for payload data.
-        #[clap(long, group = "exec_input")]
-        input_file: Option<PathBuf>,
+        /// If preceded by a `@`, will be treated as a file path
+        #[clap(long)]
+        input: String,
     },
 }
 

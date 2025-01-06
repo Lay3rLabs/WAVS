@@ -57,31 +57,31 @@ impl DisplayBuilder {
             pub gas_used: Option<u64>,
         }
 
-                #[derive(Debug, Serialize)]
-                #[serde(rename_all = "snake_case")]
-                pub struct SignedDataJson {
-                    pub signature: String,
-                    pub data_bytes: String,
-                    pub data_utf8: String,
-                }
+        #[derive(Debug, Serialize)]
+        #[serde(rename_all = "snake_case")]
+        pub struct SignedDataJson {
+            pub signature: String,
+            pub data_bytes: String,
+            pub data_utf8: String,
+        }
 
-                let signed_data = self.signed_data.map(|signed_data| SignedDataJson {
-                    signature: hex::encode(&signed_data.signature),
-                    data_bytes: hex::encode(&signed_data.data),
-                    data_utf8: String::from_utf8_lossy(&signed_data.data).into(),
-                });
+        let signed_data = self.signed_data.map(|signed_data| SignedDataJson {
+            signature: hex::encode(&signed_data.signature),
+            data_bytes: hex::encode(&signed_data.data),
+            data_utf8: String::from_utf8_lossy(&signed_data.data).into(),
+        });
 
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&DisplayJson {
-                        core_contracts: self.core_contracts,
-                        layer_addresses: self.layer_addresses,
-                        service: self.service,
-                        workflow_id: self.workflow_id,
-                        signed_data,
-                        gas_used: self.gas_used,
-                    })
-                    .unwrap()
-                );
-            }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&DisplayJson {
+                core_contracts: self.core_contracts,
+                layer_addresses: self.layer_addresses,
+                service: self.service,
+                workflow_id: self.workflow_id,
+                signed_data,
+                gas_used: self.gas_used,
+            })
+            .unwrap()
+        );
+    }
 }
