@@ -5,7 +5,7 @@
 - anvil / foundry
 - solidity
 - just `cargo install just`
-- git clone wavs
+- `git clone git@github.com:Lay3rLabs/WAVS.git --branch reece/january-building-your-wavs`
 
 ## Create new component
 
