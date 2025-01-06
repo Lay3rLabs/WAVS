@@ -7,7 +7,7 @@ use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
     layer_contract_client::LayerAddresses,
 };
-use wavs::apis::ServiceID;
+use wavs::apis::{ServiceID, WorkflowID};
 
 use crate::{args::Command, config::Config};
 
@@ -16,7 +16,7 @@ use crate::{args::Command, config::Config};
 pub struct Deployment {
     // keyed by chain NAME (not chain id)
     pub eigen_core: HashMap<String, CoreAVSAddresses>,
-    pub eth_services: HashMap<ServiceID, LayerAddresses>,
+    pub eth_services: HashMap<ServiceID, HashMap<WorkflowID, LayerAddresses>>,
 }
 
 impl Deployment {
@@ -69,21 +69,30 @@ impl Deployment {
             Command::AddTask { service_id, .. } => Some(ServiceID::new(service_id)?),
         } {
             let mut to_remove = HashSet::new();
-            for (id, addresses) in self.eth_services.iter() {
-                if *id != service_id {
+            for (deployed_service_id, workflows) in self.eth_services.iter() {
+                if *deployed_service_id != service_id {
                     continue;
                 }
 
-                for address in addresses.as_vec() {
-                    if client.eth.provider.get_code_at(address).await?.0.is_empty() {
-                        to_remove.insert(service_id.clone());
+                for (deployed_workflow_id, addresses) in workflows.iter() {
+                    for address in addresses.as_vec() {
+                        if client.eth.provider.get_code_at(address).await?.0.is_empty() {
+                            to_remove.insert((
+                                deployed_service_id.clone(),
+                                deployed_workflow_id.clone(),
+                            ));
+                        }
                     }
                 }
             }
 
-            for id in to_remove.into_iter() {
-                tracing::warn!("Service addresses for {id} are invalid, filtering out");
-                self.eth_services.remove(&id);
+            for (service_id, workflow_id) in to_remove.into_iter() {
+                tracing::warn!("Service addresses for service {service_id}, workflow {workflow_id} are invalid, filtering out");
+                let service = self.eth_services.get_mut(&service_id).unwrap();
+                service.remove(&workflow_id);
+                if service.is_empty() {
+                    self.eth_services.remove(&service_id);
+                }
             }
         }
 

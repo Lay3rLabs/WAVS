@@ -9,7 +9,7 @@ use utils::{
 use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions, Submit},
-        ServiceID,
+        ServiceID, WorkflowID,
     },
     http::{
         handlers::service::{
@@ -96,7 +96,7 @@ impl HttpClient {
         trigger_address: alloy::primitives::Address,
         service_manager_address: alloy::primitives::Address,
         digest: Digest,
-    ) -> ServiceID {
+    ) -> (ServiceID, WorkflowID) {
         let trigger_address = Address::Eth(AddrEth::new(trigger_address.into()));
         let submit = Submit::EthSignedMessage {
             chain_name: self.chain_name.clone(),
@@ -135,6 +135,7 @@ impl HttpClient {
             .error_for_status()
             .unwrap();
 
-        id
+        // for now, this is always the WorkflowID - see http service add
+        (id, WorkflowID::new("default").unwrap())
     }
 }
