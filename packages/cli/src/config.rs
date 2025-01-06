@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 use utils::config::{ChainConfigs, ConfigExt};
@@ -31,6 +32,22 @@ pub struct Config {
 
     /// The mnemonic to use for submitting transactions on ethereum chains (usually set via env var)
     pub eth_mnemonic: Option<String>,
+
+    /// The display format (default is `json`)
+    pub display: DisplayFormat,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ValueEnum, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayFormat {
+    Json,
+    Plaintext,
+}
+
+impl Default for DisplayFormat {
+    fn default() -> Self {
+        Self::Json
+    }
 }
 
 impl ConfigExt for Config {
@@ -54,6 +71,7 @@ impl Default for Config {
             wavs_endpoint: "http://127.0.0.1:8000".to_string(),
             log_level: vec!["info".to_string()],
             data: PathBuf::from("/var/wavs-cli"),
+            display: Default::default(),
             chain: "local".to_string(),
             chains: ChainConfigs {
                 cosmos: HashMap::new(),
