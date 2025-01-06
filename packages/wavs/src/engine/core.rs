@@ -221,9 +221,14 @@ impl<S: CAStorage> WasmEngine<S> {
                 .context("preopen failed")?;
         }
 
+        let env_vars: Vec<(String, String)> = std::env::vars()
+            .filter(|(key, _)| key.starts_with("WAVS_ENGINE_ENV_"))
+            .chain(wasi.env.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+            .collect();
+
         // add any env vars that were provided
-        if !wasi.env.is_empty() {
-            builder.envs(&wasi.env);
+        if !env_vars.is_empty() {
+            builder.envs(&env_vars);
         }
         let ctx = builder.build();
 

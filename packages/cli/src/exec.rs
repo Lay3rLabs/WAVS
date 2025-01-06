@@ -31,6 +31,14 @@ pub async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> ExecCo
         .preopened_dir(&app_data_dir, ".", DirPerms::all(), FilePerms::all())
         .expect("preopen failed");
 
+    let env_vars: Vec<_> = std::env::vars()
+        .filter(|(key, _)| key.starts_with("WAVS_ENGINE_ENV_"))
+        .collect();
+
+    if !env_vars.is_empty() {
+        builder.envs(&env_vars);
+    }
+
     let ctx = builder.build();
 
     let host = Host {
