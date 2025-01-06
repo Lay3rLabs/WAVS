@@ -5,7 +5,7 @@ REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
 
 help:
-  @just --list
+  just --list
 
 # builds wavs:latest
 docker-build:
@@ -25,19 +25,18 @@ docker-run:
 
 # stop the running wavs container
 docker-stop:
-    @if [ "{{DOCKER_WAVS_ID}}" != "" ]; then \
+    if [ "{{DOCKER_WAVS_ID}}" != "" ]; then \
         {{SUDO}} docker kill {{DOCKER_WAVS_ID}}; \
         echo "Stopped container {{DOCKER_WAVS_ID}}"; \
     else \
         echo "No container running"; \
     fi
 
-# compile all WASI components, places the output in components dir
-wasi-build:
-    @rm -rf examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
-    @mkdir -p {{WASI_OUT_DIR}}
-
-    @for C in examples/*/Cargo.toml; do \
+# compile WASI components, places the output in components dir
+wasi-build COMPONENT="*":
+    rm -rf ./components/
+    mkdir -p ./components/
+    @for C in examples/{{COMPONENT}}/Cargo.toml; do \
         echo "Building WASI component in $(dirname $C)"; \
         `cd $(dirname $C); cargo component build --release; cargo fmt;`; \
     done
@@ -67,6 +66,7 @@ update-submodules:
 
 lint:
     cargo fmt --all -- --check
+    cargo fix --allow-dirty --allow-staged
     cargo clippy --all-targets -- -D warnings
 
 # waiting on: https://github.com/casey/just/issues/626
@@ -92,7 +92,7 @@ cli-deploy-core:
 
 # e.g. just cli-deploy-service ./components/eth_trigger_square.wasm
 cli-deploy-service COMPONENT:
-    cd packages/cli && cargo run deploy-service --component "../../{{COMPONENT}}"
+    cd packages/cli && cargo run deploy-service --component "{{COMPONENT}}"
 
 # e.g. `just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D` or `{\"x\":2}`
 cli-add-task SERVICE_ID INPUT:
