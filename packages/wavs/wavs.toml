@@ -31,7 +31,7 @@ eth_chains = ["local"]
 # chosen cosmos chain name
 # cosmos_chain = "layer-local"
 
-max_wasm_fuel = 1_000_000
+max_wasm_fuel = 25_000_000
 
 [chains.cosmos.layer-local]
 chain_id = "slay3r-local"
