@@ -82,7 +82,7 @@ impl LayerContractClientSimple {
         let result = self
             .service_manager_contract
             .addSignedPayloadForTrigger(signed_payload_abi)
-            .gas(500000)
+            .gas(5000000)
             .send()
             .await;
 
