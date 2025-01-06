@@ -68,8 +68,14 @@ impl HttpClient {
     }
 
     pub async fn upload_component(&self, path: impl AsRef<Path>) -> Digest {
-        let root = Path::new("../../").join(path.as_ref());
-        let wasm_bytes = std::fs::read(root).unwrap();
+        let path = if path.as_ref().is_absolute() {
+            path.as_ref().to_path_buf()
+        } else {
+            // if relative path, parent (root of the repo) is relative 2 back from this file
+            Path::new("../../").join(path.as_ref())
+        };
+
+        let wasm_bytes = std::fs::read(path).unwrap();
 
         let response: UploadServiceResponse = self
             .inner
