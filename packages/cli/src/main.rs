@@ -44,7 +44,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let mut display = DisplayBuilder::new(config.display);
+    let mut display = DisplayBuilder::new();
 
     match command {
         Command::DeployCore {

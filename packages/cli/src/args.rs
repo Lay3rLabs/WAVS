@@ -9,7 +9,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 
-use crate::config::{Config, DisplayFormat};
+use crate::config::Config;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -119,10 +119,6 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eth_mnemonic: Option<String>,
-
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<DisplayFormat>,
 }
 
 impl CliEnvExt for CliArgs {
