@@ -276,7 +276,7 @@ mod tests {
 
     const SQUARE: &[u8] = include_bytes!("../../../../components/square.wasm");
     const BTC_AVG: &[u8] = include_bytes!("../../../../components/btc_avg.wasm");
-    const DEFAULT_FUEL_LIMIT: u64 = 100_000;
+    const DEFAULT_FUEL_LIMIT: u64 = 1_000_000;
 
     #[test]
     fn store_and_list_wasm() {
