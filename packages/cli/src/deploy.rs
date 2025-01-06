@@ -67,6 +67,7 @@ impl Deployment {
             Command::DeployCore { .. } => None,
             Command::DeployService { .. } => None,
             Command::AddTask { service_id, .. } => Some(ServiceID::new(service_id)?),
+            Command::Exec { .. } => None,
         } {
             let mut to_remove = HashSet::new();
             for (deployed_service_id, workflows) in self.eth_services.iter() {

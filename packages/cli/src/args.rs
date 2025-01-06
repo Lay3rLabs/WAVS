@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use alloy::primitives::Address;
-use clap::{arg, Parser};
+use clap::{arg, ArgGroup, Parser};
 use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
@@ -53,6 +53,30 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
     },
+
+    #[command(
+        group(ArgGroup::new("exec_input")
+            .required(true)
+            .multiple(false)
+            .args(["input", "input_file"])
+        )
+    )]
+    Exec {
+        /// Path to the WASI component
+        #[clap(long)]
+        component: PathBuf,
+
+        #[clap(flatten)]
+        args: CliArgs,
+
+        /// The payload data, hex-encoded.
+        #[clap(long, group = "exec_input")]
+        input: Option<String>,
+
+        /// Path to a file to use for payload data.
+        #[clap(long, group = "exec_input")]
+        input_file: Option<PathBuf>,
+    },
 }
 
 impl Command {
@@ -61,6 +85,7 @@ impl Command {
             Self::DeployCore { args, .. } => args,
             Self::DeployService { args, .. } => args,
             Self::AddTask { args, .. } => args,
+            Self::Exec { args, .. } => args,
         };
 
         args.clone()
