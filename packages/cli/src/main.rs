@@ -14,7 +14,7 @@ use clap::Parser;
 use client::{get_avs_client, HttpClient};
 use context::ChainContext;
 use display::{DisplayBuilder, ServiceAndWorkflow};
-use exec::exec_component;
+use exec::{exec_component, ExecComponentResponse};
 use rand::rngs::OsRng;
 use task::add_task;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -218,10 +218,17 @@ async fn main() {
 
             let wasm_bytes = read_component(component);
 
+            let ExecComponentResponse {
+                output_bytes,
+                gas_used,
+            } = exec_component(wasm_bytes, input_bytes).await;
+
             display.signed_data = Some(SignedData {
-                data: exec_component(wasm_bytes, input_bytes).await,
+                data: output_bytes,
                 signature: vec![],
             });
+
+            display.gas_used = Some(gas_used);
         }
     }
 

@@ -63,6 +63,7 @@ pub enum Command {
     )]
     Exec {
         /// Path to the WASI component
+        /// The component must implement the eth-trigger-world WIT
         #[clap(long)]
         component: PathBuf,
 

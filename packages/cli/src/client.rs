@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use layer_climb::prelude::*;
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
