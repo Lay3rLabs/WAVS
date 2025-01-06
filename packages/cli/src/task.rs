@@ -25,7 +25,7 @@ pub async fn add_task(
         .await
         .unwrap();
 
-    println!("Task submitted with id: {}", trigger_id);
+    tracing::info!("Task submitted with id: {}", trigger_id);
 
     tracing::info!("Waiting for the chain to see the result");
 
