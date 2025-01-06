@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use layer_climb::prelude::*;
 use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
@@ -67,16 +65,7 @@ impl HttpClient {
         }
     }
 
-    pub async fn upload_component(&self, path: impl AsRef<Path>) -> Digest {
-        let path = if path.as_ref().is_absolute() {
-            path.as_ref().to_path_buf()
-        } else {
-            // if relative path, parent (root of the repo) is relative 2 back from this file
-            Path::new("../../").join(path.as_ref())
-        };
-
-        let wasm_bytes = std::fs::read(path).unwrap();
-
+    pub async fn upload_component(&self, wasm_bytes: Vec<u8>) -> Digest {
         let response: UploadServiceResponse = self
             .inner
             .post(format!("{}/upload", self.endpoint))

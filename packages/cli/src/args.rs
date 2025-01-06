@@ -53,6 +53,21 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
     },
+
+    Exec {
+        /// Path to the WASI component
+        /// The component must implement the eth-trigger-world WIT
+        #[clap(long)]
+        component: PathBuf,
+
+        #[clap(flatten)]
+        args: CliArgs,
+
+        /// The payload data, hex-encoded.
+        /// If preceded by a `@`, will be treated as a file path
+        #[clap(long)]
+        input: String,
+    },
 }
 
 impl Command {
@@ -61,6 +76,7 @@ impl Command {
             Self::DeployCore { args, .. } => args,
             Self::DeployService { args, .. } => args,
             Self::AddTask { args, .. } => args,
+            Self::Exec { args, .. } => args,
         };
 
         args.clone()

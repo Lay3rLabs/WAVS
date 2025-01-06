@@ -12,6 +12,7 @@ pub struct DisplayBuilder {
     pub service: Option<ServiceAndWorkflow>,
     pub workflow_id: Option<ServiceID>,
     pub signed_data: Option<SignedData>,
+    pub gas_used: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,6 +30,7 @@ impl DisplayBuilder {
             service: None,
             workflow_id: None,
             signed_data: None,
+            gas_used: None,
         }
     }
 
@@ -50,6 +52,9 @@ impl DisplayBuilder {
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub signed_data: Option<SignedDataJson>,
+
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub gas_used: Option<u64>,
         }
 
         #[derive(Debug, Serialize)]
@@ -74,6 +79,7 @@ impl DisplayBuilder {
                 service: self.service,
                 workflow_id: self.workflow_id,
                 signed_data,
+                gas_used: self.gas_used,
             })
             .unwrap()
         );

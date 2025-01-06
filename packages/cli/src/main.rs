@@ -1,21 +1,24 @@
 mod args;
 mod client;
 mod config;
+mod context;
 mod deploy;
 mod display;
+mod exec;
 mod task;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use args::Command;
 use clap::Parser;
-use client::{get_avs_client, get_eigen_client, HttpClient};
-use deploy::Deployment;
+use client::{get_avs_client, HttpClient};
+use context::ChainContext;
 use display::{DisplayBuilder, ServiceAndWorkflow};
+use exec::{exec_component, ExecComponentResponse};
 use rand::rngs::OsRng;
 use task::add_task;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::config::ConfigExt;
+use utils::{config::ConfigExt, layer_contract_client::SignedData};
 use wavs::apis::{ServiceID, WorkflowID};
 
 #[tokio::main]
@@ -36,20 +39,19 @@ async fn main() {
         .try_init()
         .unwrap();
 
-    let eigen_client = get_eigen_client(&config).await;
-    let http_client = HttpClient::new(&config);
-    let mut deployment = Deployment::load(&config).unwrap();
-    deployment
-        .sanitize(&command, &config, &eigen_client)
-        .await
-        .unwrap();
-
     let mut display = DisplayBuilder::new();
+
+    let ctx = ChainContext::try_new(&command, &config).await;
 
     match command {
         Command::DeployCore {
             register_operator, ..
         } => {
+            let ChainContext {
+                eigen_client,
+                mut deployment,
+            } = ctx.unwrap();
+
             let core_contracts = match deployment.eigen_core.get(&config.chain) {
                 Some(core_contracts) => {
                     tracing::warn!("Core contracts already deployed for chain {}", config.chain);
@@ -83,6 +85,11 @@ async fn main() {
             service_manager,
             ..
         } => {
+            let ChainContext {
+                eigen_client,
+                mut deployment,
+            } = ctx.unwrap();
+
             let core_contracts = match deployment.eigen_core.get(&config.chain) {
                 Some(core_contracts) => core_contracts.clone(),
                 None => {
@@ -101,7 +108,10 @@ async fn main() {
                 avs_client.register_operator(&mut OsRng).await.unwrap();
             }
 
-            let digest = http_client.upload_component(&component).await;
+            let http_client = HttpClient::new(&config);
+
+            let wasm_bytes = read_component(component);
+            let digest = http_client.upload_component(wasm_bytes).await;
 
             let (service_id, workflow_id) = http_client
                 .create_service(
@@ -133,15 +143,12 @@ async fn main() {
             input,
             ..
         } => {
-            let input = if let Ok(bytes) = hex::decode(input.clone()) {
-                bytes
-            } else {
-                let hex = input.as_bytes().iter().fold(String::new(), |mut acc, b| {
-                    acc.push_str(&format!("{:02x}", b));
-                    acc
-                });
-                hex::decode(hex).expect("Failed to decode input")
-            };
+            let ChainContext {
+                eigen_client,
+                deployment,
+            } = ctx.unwrap();
+
+            let input = decode_input(&input);
 
             if !deployment.eigen_core.contains_key(&config.chain) {
                 tracing::error!(
@@ -194,7 +201,66 @@ async fn main() {
             });
             display.signed_data = Some(signed_data);
         }
+
+        Command::Exec {
+            component, input, ..
+        } => {
+            let input_bytes = match input.starts_with('@') {
+                true => {
+                    let filepath = shellexpand::tilde(&input[1..]).to_string();
+
+                    std::fs::read(filepath).unwrap()
+                }
+
+                false => {
+                    if Path::new(&shellexpand::tilde(&input).to_string()).exists() {
+                        tracing::warn!(
+                            "Are you sure you didn't mean to use @ to specify file input?"
+                        );
+                    }
+
+                    decode_input(&input)
+                }
+            };
+
+            let wasm_bytes = read_component(component);
+
+            let ExecComponentResponse {
+                output_bytes,
+                gas_used,
+            } = exec_component(wasm_bytes, input_bytes).await;
+
+            display.signed_data = Some(SignedData {
+                data: output_bytes,
+                signature: vec![],
+            });
+
+            display.gas_used = Some(gas_used);
+        }
     }
 
     display.show();
+}
+
+fn decode_input(input: &str) -> Vec<u8> {
+    if let Ok(bytes) = hex::decode(input) {
+        bytes
+    } else {
+        let hex = input.as_bytes().iter().fold(String::new(), |mut acc, b| {
+            acc.push_str(&format!("{:02x}", b));
+            acc
+        });
+        hex::decode(hex).expect("Failed to decode input")
+    }
+}
+
+fn read_component(path: impl AsRef<Path>) -> Vec<u8> {
+    let path = if path.as_ref().is_absolute() {
+        path.as_ref().to_path_buf()
+    } else {
+        // if relative path, parent (root of the repo) is relative 2 back from this file
+        Path::new("../../").join(path.as_ref())
+    };
+
+    std::fs::read(path).unwrap()
 }

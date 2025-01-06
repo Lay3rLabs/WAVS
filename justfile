@@ -101,3 +101,7 @@ cli-deploy-service COMPONENT SERVICE_MANAGER_ADDR="":
 # e.g. `just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D` or `{\"x\":2}`
 cli-add-task SERVICE_ID INPUT:
     @cd packages/cli && cargo run --quiet add-task --service-id {{SERVICE_ID}} --input '{{INPUT}}'
+
+# e.g. `just cli-exec ./components/eth_trigger_square.wasm {\"x\":2}`
+cli-exec COMPONENT INPUT:
+    @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'

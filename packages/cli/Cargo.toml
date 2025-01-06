@@ -26,5 +26,10 @@ reqwest = { workspace = true }
 wavs = { workspace = true }
 layer-climb = { workspace = true }
 toml = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-wasi-http = { workspace = true }
+wasmtime-wasi = { workspace = true }
+tempfile = { workspace = true }
+shellexpand = { workspace = true }
 
 uuid = { version = "1.11.0", features = ["v7", "serde"] }

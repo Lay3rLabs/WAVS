@@ -6933,12 +6933,17 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "shellexpand 3.1.0",
+ "tempfile",
  "tokio",
  "toml",
  "tracing",
  "tracing-subscriber",
  "utils",
  "uuid",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
  "wavs",
 ]
 
