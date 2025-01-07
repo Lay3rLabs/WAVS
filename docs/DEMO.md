@@ -1,5 +1,7 @@
 # Deploy a new component & launch onto a local network
 
+Evan's more detailed instructions based on this demo: <https://aware-class-ea3.notion.site/Reece-s-WAVS-Tutorial-1749b73c338d805b9f1ad18456a07256?pvs=4>
+
 ## requirements
 - rust installed
 - anvil / foundry
@@ -15,7 +17,7 @@ There is probably a better way to do this, for now it's fairly straight forward.
 cp -r examples/eth-trigger-echo examples/eth-trigger-reece-weather
 sed -i -e 's/eth-trigger-echo/eth-trigger-reece-weather/g' examples/eth-trigger-reece-weather/Cargo.toml
 
-# update examples/Cargo.toml workspace:  `eth-trigger-reece-weather`
+# update examples/Cargo.toml workspace and add: `eth-trigger-reece-weather`
 
 # open in code editor
 code examples/eth-trigger-reece-weather
@@ -23,7 +25,6 @@ code examples/eth-trigger-reece-weather
 
 ## Update Cargo.toml
 ```toml
-# update examples/eth-trigger-reece-weather/Cargo.toml `name = "eth-trigger-reece-weather"` and `package = "component:eth-trigger-reece-weather"`
 
 [dependencies]
 wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
@@ -311,8 +312,6 @@ just solidity-build
 ```bash
 # if you previously used wavs, clear old data with `rm -rf ~/wavs/`
 
-# modify the max_wasm_fuel in wavs.toml to 100million
-
 # start anvil, wavs, and the wavs aggregator
 just start-all
 
@@ -332,8 +331,8 @@ export CLI_EIGEN_CORE_AVS_DIRECTORY=`echo $CONTRACTS | jq -r '.avs_directory'`
 forge script ./contracts/script/ReeceWeatherServiceManager.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
 
 # this has to be uploaded first since the service manager depends on it (not required for input)
-# ECDSA_STAKE_REGISTRY_ADDRESS=`jq -r .transactions[0].contractAddress < broadcast/LayerServiceManager.s.sol/31337/run-latest.json`
-SERVICE_MANAGER_ADDRESS=`jq -r '.transactions[1].contractAddress' < broadcast/LayerServiceManager.s.sol/31337/run-latest.json`
+# ECDSA_STAKE_REGISTRY_ADDRESS=`jq -r .transactions[0].contractAddress < broadcast/ReeceWeatherServiceManager.s.sol/31337/run-latest.json`
+SERVICE_MANAGER_ADDRESS=`jq -r '.transactions[1].contractAddress' < broadcast/ReeceWeatherServiceManager.s.sol/31337/run-latest.json`
 
 # deploy
 just cli-deploy-service ./components/eth_trigger_reece_weather.wasm ${SERVICE_MANAGER_ADDRESS}
