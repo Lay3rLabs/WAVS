@@ -13,7 +13,9 @@ struct Component;
 
 impl Guest for Component {
     fn run_cron() -> Output {
-        let api_key = std::env::var("API_KEY").or(Err("missing env var `API_KEY`".to_string()))?;
+        let api_key = std::env::var("WAVS_ENV_COINGECKO_API_KEY").or(Err(
+            "missing env var `WAVS_ENV_COINGECKO_API_KEY`".to_string(),
+        ))?;
         let price = coin_gecko::get_btc_usd_price(&api_key)
             .map_err(|err| err.to_string())?
             .ok_or("invalid response from coin gecko API")?;

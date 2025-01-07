@@ -86,8 +86,8 @@ impl Provider for GroqProvider {
     const NAME: &'static str = "groq";
 
     fn new() -> Result<Self, String> {
-        let api_key = std::env::var("GROQ_API_KEY")
-            .map_err(|e| format!("missing env var `GROQ_API_KEY`: {e}"))?;
+        let api_key = std::env::var("WAVS_ENV_GROQ_API_KEY")
+            .map_err(|e| format!("missing env var `WAVS_ENV_GROQ_API_KEY`: {e}"))?;
 
         Ok(Self { api_key })
     }
