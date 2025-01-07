@@ -27,7 +27,7 @@ package = "component:eth-trigger-square"
 
 [package.metadata.component.target]
 path = "../../wit"
-world = "eth-trigger-world"
+world = "raw-world"
 
 [package.metadata.component.target.dependencies]
 "wasi:io" = "=0.2.0"

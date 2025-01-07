@@ -1,7 +1,7 @@
-pub type EthLog = lay3r::avs::eth_event_types::EthLog;
+pub type EthLog = lay3r::avs::wavs_types::EthLog;
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn _export_process_eth_event_cabi<T: Guest>(
+pub unsafe fn _export_run_cabi<T: Guest>(
     arg0: *mut u8,
     arg1: usize,
     arg2: *mut u8,
@@ -27,7 +27,7 @@ pub unsafe fn _export_process_eth_event_cabi<T: Guest>(
     }
     _rt::cabi_dealloc(base4, len4 * 8, 4);
     let len5 = arg5;
-    let result6 = T::process_eth_event(lay3r::avs::eth_event_types::EthLog {
+    let result6 = T::run(lay3r::avs::wavs_types::EthLog {
         address: _rt::Vec::from_raw_parts(arg0.cast(), len0, len0),
         log_topics: result4,
         log_data: _rt::Vec::from_raw_parts(arg4.cast(), len5, len5),
@@ -57,7 +57,7 @@ pub unsafe fn _export_process_eth_event_cabi<T: Guest>(
 }
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn __post_return_process_eth_event<T: Guest>(arg0: *mut u8) {
+pub unsafe fn __post_return_run<T: Guest>(arg0: *mut u8) {
     let l0 = i32::from(*arg0.add(0).cast::<u8>());
     match l0 {
         0 => {
@@ -75,18 +75,17 @@ pub unsafe fn __post_return_process_eth_event<T: Guest>(arg0: *mut u8) {
     }
 }
 pub trait Guest {
-    fn process_eth_event(log: EthLog) -> Result<_rt::Vec<u8>, _rt::String>;
+    fn run(log: EthLog) -> Result<_rt::Vec<u8>, _rt::String>;
 }
 #[doc(hidden)]
 macro_rules! __export_world_eth_event_world_cabi {
     ($ty:ident with_types_in $($path_to_types:tt)*) => {
-        const _ : () = { #[export_name = "process-eth-event"] unsafe extern "C" fn
-        export_process_eth_event(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3 :
-        usize, arg4 : * mut u8, arg5 : usize,) -> * mut u8 { $($path_to_types)*::
-        _export_process_eth_event_cabi::<$ty > (arg0, arg1, arg2, arg3, arg4, arg5) }
-        #[export_name = "cabi_post_process-eth-event"] unsafe extern "C" fn
-        _post_return_process_eth_event(arg0 : * mut u8,) { $($path_to_types)*::
-        __post_return_process_eth_event::<$ty > (arg0) } };
+        const _ : () = { #[export_name = "run"] unsafe extern "C" fn export_run(arg0 : *
+        mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 :
+        usize,) -> * mut u8 { $($path_to_types)*:: _export_run_cabi::<$ty > (arg0, arg1,
+        arg2, arg3, arg4, arg5) } #[export_name = "cabi_post_run"] unsafe extern "C" fn
+        _post_return_run(arg0 : * mut u8,) { $($path_to_types)*:: __post_return_run::<$ty
+        > (arg0) } };
     };
 }
 #[doc(hidden)]
@@ -99,14 +98,13 @@ pub mod lay3r {
     #[allow(dead_code)]
     pub mod avs {
         #[allow(dead_code, clippy::all)]
-        pub mod eth_event_types {
+        pub mod wavs_types {
             #[used]
             #[doc(hidden)]
             static __FORCE_SECTION_REF: fn() =
                 super::super::super::__link_custom_section_describing_imports;
             use super::super::super::_rt;
             /// An alloy log can be recreated with the info here
-            /// block height is extra
             #[derive(Clone)]
             pub struct EthLog {
                 /// the address that emitted an event
@@ -175,16 +173,16 @@ macro_rules! __export_eth_event_world_impl {
 #[doc(inline)]
 pub(crate) use __export_eth_event_world_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[link_section = "component-type:wit-bindgen:0.30.0:eth-event-world:encoded world"]
+#[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:eth-event-world:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 334] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xc8\x01\x01A\x02\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 315] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb5\x01\x01A\x02\x01\
 A\x08\x01B\x04\x01p}\x01p\0\x01r\x03\x07address\0\x0alog-topics\x01\x08log-data\0\
-\x04\0\x07eth-log\x03\0\x02\x03\x01\x1flay3r:avs/eth-event-types@0.3.0\x05\0\x02\
-\x03\0\0\x07eth-log\x03\0\x07eth-log\x03\0\x01\x01p}\x01j\x01\x03\x01s\x01@\x01\x03\
-log\x02\0\x04\x04\0\x11process-eth-event\x01\x05\x04\x01\x1flay3r:avs/eth-event-\
-world@0.3.0\x04\0\x0b\x15\x01\0\x0feth-event-world\x03\0\0\0G\x09producers\x01\x0c\
-processed-by\x02\x0dwit-component\x070.215.0\x10wit-bindgen-rust\x060.30.0";
+\x04\0\x07eth-log\x03\0\x02\x03\0\x1alay3r:avs/wavs-types@0.3.0\x05\0\x02\x03\0\0\
+\x07eth-log\x03\0\x07eth-log\x03\0\x01\x01p}\x01j\x01\x03\x01s\x01@\x01\x03log\x02\
+\0\x04\x04\0\x03run\x01\x05\x04\0\x1flay3r:avs/eth-event-world@0.3.0\x04\0\x0b\x15\
+\x01\0\x0feth-event-world\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit\
+-component\x070.220.0\x10wit-bindgen-rust\x060.35.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

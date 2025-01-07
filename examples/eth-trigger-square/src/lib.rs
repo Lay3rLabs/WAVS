@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 struct Component;
 
 impl Guest for Component {
-    fn process_eth_trigger(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
+    fn run(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
         let TaskRequestData { x } = serde_json::from_slice(&input)
             .map_err(|e| anyhow!("Could not deserialize input request from JSON: {}", e))
             .unwrap();

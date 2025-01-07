@@ -1,7 +1,7 @@
 use wasmtime::component::bindgen;
 
 bindgen!({
-  world: "eth-trigger-world",
+  world: "raw-world",
   path: "../../wit",
   async: true,
 });

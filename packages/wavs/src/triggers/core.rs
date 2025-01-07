@@ -2,9 +2,11 @@ use crate::{
     apis::{
         trigger::{
             Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
+            TriggerSource,
         },
         ServiceID, WorkflowID,
     },
+    bindings::eth_event::EthLog,
     config::Config,
     AppContext,
 };
@@ -239,11 +241,16 @@ impl CoreTriggerManager {
                                         self.handle_trigger(
                                             &action_sender,
                                             &Address::Eth(AddrEth::new(log.address().into())),
-                                            TriggerData::EthEvent {
+                                            TriggerSource::EthEvent {
                                                 service_id,
                                                 workflow_id,
                                                 payload,
                                                 trigger_id,
+                                                log: EthLog {
+                                                    address: log.address().to_vec(),
+                                                    log_topics: log.inner.topics().to_vec(),
+                                                    log_data: log.data(),
+                                                },
                                             },
                                         )
                                         .await;
@@ -293,7 +300,7 @@ impl CoreTriggerManager {
                             self.handle_trigger(
                                 &action_sender,
                                 &contract_address,
-                                TriggerData::Queue { task_id, payload },
+                                TriggerSource::CosmosEvent { task_id, payload },
                             )
                             .await;
                         }
@@ -313,10 +320,10 @@ impl CoreTriggerManager {
         // for now all triggers are "task queues" of some sort
         // but this will eventually be more generic
         contract_address: &Address,
-        data: TriggerData,
+        source: TriggerSource,
     ) {
-        let lookup_id = match &data {
-            TriggerData::Queue { .. } => {
+        let lookup_id = match &source {
+            TriggerSource::CosmosEvent { .. } => {
                 let triggers_by_task_queue_lock =
                     self.lookup_maps.triggers_by_task_queue.read().unwrap();
 
@@ -329,7 +336,7 @@ impl CoreTriggerManager {
                     }
                 }
             }
-            TriggerData::EthEvent {
+            TriggerSource::EthEvent {
                 service_id,
                 workflow_id,
                 ..
@@ -365,6 +372,25 @@ impl CoreTriggerManager {
                 .get(&lookup_id)
                 .ok_or(TriggerError::NoSuchTriggerData(lookup_id))
                 .cloned()
+        };
+
+        let data = match source {
+            TriggerSource::CosmosEvent { task_id, payload } => {
+                TriggerData::new_raw_id(task_id, &payload)
+            }
+            TriggerSource::EthEvent {
+                service_id,
+                workflow_id,
+                payload,
+                trigger_id,
+            } => TriggerData::EthEvent {
+                log: EthLog {
+                    service_id,
+                    workflow_id,
+                    payload,
+                    trigger_id,
+                },
+            },
         };
 
         match trigger {

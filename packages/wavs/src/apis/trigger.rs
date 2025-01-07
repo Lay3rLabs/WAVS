@@ -5,7 +5,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use utils::layer_contract_client::TriggerId;
 
-use crate::AppContext;
+use crate::{bindings::eth_event::EthLog, AppContext};
 
 use super::{IDError, ServiceID, WorkflowID};
 
@@ -97,7 +97,7 @@ impl TriggerConfig {
 }
 
 /// A bundle of the trigger and the associated data needed to take action on it
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TriggerAction {
     /// Identify which trigger this came from
     pub config: TriggerConfig,
@@ -106,30 +106,37 @@ pub struct TriggerAction {
     pub data: TriggerData,
 }
 
-/// This is the actual data we got from the trigger, used to feed into the component
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+/// This is the actual data we derive from the trigger and sent onto the engine
+#[derive(Debug)]
 pub enum TriggerData {
-    Queue {
-        /// The id from the task queue
-        task_id: TaskId,
-        /// The input data associated with that task
-        payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
-    },
-    EthEvent {
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
-        trigger_id: TriggerId,
-        payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
-    },
+    RawWithId { id: String, data: Vec<u8> },
+    EthEvent { log: EthLog },
 }
 
 impl TriggerData {
-    pub fn queue(task_id: TaskId, payload: &[u8]) -> Self {
-        TriggerData::Queue {
-            task_id,
-            payload: payload.to_vec(),
+    pub fn new_raw_id(id: impl ToString, data: &[u8]) -> Self {
+        TriggerData::RawWithId {
+            id: id.to_string(),
+            data: data.to_vec(),
         }
     }
+}
+
+/// Just an internal implementation detail, not exposed to the outside world
+/// used to get from the raw trigger data to the actual trigger data  
+#[derive(Debug)]
+pub enum TriggerSource {
+    EthEvent {
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+        payload: Vec<u8>,
+        trigger_id: TriggerId,
+        log: EthLog,
+    },
+    CosmosEvent {
+        payload: Vec<u8>,
+        task_id: TaskId,
+    },
 }
 
 #[derive(Error, Debug)]

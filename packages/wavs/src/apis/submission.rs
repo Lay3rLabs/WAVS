@@ -1,11 +1,13 @@
-use lavs_apis::id::TaskId;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use utils::layer_contract_client::TriggerId;
 
 use crate::AppContext;
 
-use super::{dispatcher::Submit, trigger::TriggerConfig};
+use super::{
+    dispatcher::{Submit, SubmitFormat},
+    trigger::TriggerAction,
+};
 
 pub trait Submission: Send + Sync {
     /// Start running the submission manager
@@ -17,44 +19,26 @@ pub trait Submission: Send + Sync {
     ) -> Result<(), SubmissionError>;
 }
 
-/// The data returned from a trigger action
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ChainMessage {
-    Cosmos {
-        trigger_config: TriggerConfig,
-        wasm_result: Vec<u8>,
-        task_id: TaskId,
-        submit: Submit,
-    },
-    Eth {
-        trigger_config: TriggerConfig,
-        wasm_result: Vec<u8>,
-        trigger_id: TriggerId,
-        submit: Submit,
-    },
+/// The data passed to the submission manager
+/// constructed from, basically, trigger + engine result
+#[derive(Debug)]
+pub struct ChainMessage {
+    pub trigger: TriggerAction,
+    pub wasm_result: Vec<u8>,
+    pub submit: Submit,
+    pub submit_format: SubmitFormat,
 }
 
-impl ChainMessage {
-    pub fn wasm_result(&self) -> &[u8] {
-        match self {
-            ChainMessage::Cosmos { wasm_result, .. } => wasm_result,
-            ChainMessage::Eth { wasm_result, .. } => wasm_result,
-        }
-    }
-
-    pub fn submit(&self) -> &Submit {
-        match self {
-            ChainMessage::Cosmos { submit, .. } => submit,
-            ChainMessage::Eth { submit, .. } => submit,
-        }
-    }
-
-    pub fn trigger_config(&self) -> &TriggerConfig {
-        match self {
-            ChainMessage::Cosmos { trigger_config, .. } => trigger_config,
-            ChainMessage::Eth { trigger_config, .. } => trigger_config,
-        }
-    }
+/// For usecases where we need to sign additional data besides the raw output
+/// it gets set in this wrapper, and then _that_ becomes the submission data
+/// SubmitFormat::Raw is not used in this case, it's just sent directly
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SubmitWrapper {
+    // set if SubmitFormat is InputOutputId
+    pub input: Option<Vec<u8>>,
+    // set if SubmitFormat is InputOutputId or OutputId
+    pub id: Option<String>,
+    pub data: Vec<u8>,
 }
 
 #[derive(Error, Debug)]
@@ -93,4 +77,8 @@ pub enum SubmissionError {
     FailedToSubmitEthDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
     FailedToSubmitCosmos(anyhow::Error),
+    #[error("mismatched trigger / submit format")]
+    MismatchTriggerFormat,
+    #[error("serde: {0}")]
+    Serde(serde_json::Error),
 }

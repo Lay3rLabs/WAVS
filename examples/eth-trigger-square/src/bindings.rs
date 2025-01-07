@@ -1,10 +1,10 @@
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn _export_process_eth_trigger_cabi<T: Guest>(arg0: *mut u8, arg1: usize) -> *mut u8 {
+pub unsafe fn _export_run_cabi<T: Guest>(arg0: *mut u8, arg1: usize) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
     let len0 = arg1;
-    let result1 = T::process_eth_trigger(_rt::Vec::from_raw_parts(arg0.cast(), len0, len0));
+    let result1 = T::run(_rt::Vec::from_raw_parts(arg0.cast(), len0, len0));
     let ptr2 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
     match result1 {
         Ok(e) => {
@@ -30,7 +30,7 @@ pub unsafe fn _export_process_eth_trigger_cabi<T: Guest>(arg0: *mut u8, arg1: us
 }
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn __post_return_process_eth_trigger<T: Guest>(arg0: *mut u8) {
+pub unsafe fn __post_return_run<T: Guest>(arg0: *mut u8) {
     let l0 = i32::from(*arg0.add(0).cast::<u8>());
     match l0 {
         0 => {
@@ -48,21 +48,20 @@ pub unsafe fn __post_return_process_eth_trigger<T: Guest>(arg0: *mut u8) {
     }
 }
 pub trait Guest {
-    fn process_eth_trigger(input: _rt::Vec<u8>) -> Result<_rt::Vec<u8>, _rt::String>;
+    fn run(input: _rt::Vec<u8>) -> Result<_rt::Vec<u8>, _rt::String>;
 }
 #[doc(hidden)]
-macro_rules! __export_world_eth_trigger_world_cabi {
+macro_rules! __export_world_raw_world_cabi {
     ($ty:ident with_types_in $($path_to_types:tt)*) => {
-        const _ : () = { #[export_name = "process-eth-trigger"] unsafe extern "C" fn
-        export_process_eth_trigger(arg0 : * mut u8, arg1 : usize,) -> * mut u8 {
-        $($path_to_types)*:: _export_process_eth_trigger_cabi::<$ty > (arg0, arg1) }
-        #[export_name = "cabi_post_process-eth-trigger"] unsafe extern "C" fn
-        _post_return_process_eth_trigger(arg0 : * mut u8,) { $($path_to_types)*::
-        __post_return_process_eth_trigger::<$ty > (arg0) } };
+        const _ : () = { #[export_name = "run"] unsafe extern "C" fn export_run(arg0 : *
+        mut u8, arg1 : usize,) -> * mut u8 { $($path_to_types)*:: _export_run_cabi::<$ty
+        > (arg0, arg1) } #[export_name = "cabi_post_run"] unsafe extern "C" fn
+        _post_return_run(arg0 : * mut u8,) { $($path_to_types)*:: __post_return_run::<$ty
+        > (arg0) } };
     };
 }
 #[doc(hidden)]
-pub(crate) use __export_world_eth_trigger_world_cabi;
+pub(crate) use __export_world_raw_world_cabi;
 #[repr(align(4))]
 struct _RetArea([::core::mem::MaybeUninit<u8>; 12]);
 static mut _RET_AREA: _RetArea = _RetArea([::core::mem::MaybeUninit::uninit(); 12]);
@@ -101,26 +100,25 @@ mod _rt {
 /// ```
 #[allow(unused_macros)]
 #[doc(hidden)]
-macro_rules! __export_eth_trigger_world_impl {
+macro_rules! __export_raw_world_impl {
     ($ty:ident) => {
         self::export!($ty with_types_in self);
     };
     ($ty:ident with_types_in $($path_to_types_root:tt)*) => {
-        $($path_to_types_root)*:: __export_world_eth_trigger_world_cabi!($ty
-        with_types_in $($path_to_types_root)*);
+        $($path_to_types_root)*:: __export_world_raw_world_cabi!($ty with_types_in
+        $($path_to_types_root)*);
     };
 }
 #[doc(inline)]
-pub(crate) use __export_eth_trigger_world_impl as export;
+pub(crate) use __export_raw_world_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[link_section = "component-type:wit-bindgen:0.30.0:eth-trigger-world:encoded world"]
+#[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:raw-world:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 224] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07Y\x01A\x02\x01A\x04\x01\
-p}\x01j\x01\0\x01s\x01@\x01\x05input\0\0\x01\x04\0\x13process-eth-trigger\x01\x02\
-\x04\x01!lay3r:avs/eth-trigger-world@0.3.0\x04\0\x0b\x17\x01\0\x11eth-trigger-wo\
-rld\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.215.0\x10\
-wit-bindgen-rust\x060.30.0";
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 192] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07A\x01A\x02\x01A\x04\x01\
+p}\x01j\x01\0\x01s\x01@\x01\x05input\0\0\x01\x04\0\x03run\x01\x02\x04\0\x19lay3r\
+:avs/raw-world@0.3.0\x04\0\x0b\x0f\x01\0\x09raw-world\x03\0\0\0G\x09producers\x01\
+\x0cprocessed-by\x02\x0dwit-component\x070.220.0\x10wit-bindgen-rust\x060.35.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

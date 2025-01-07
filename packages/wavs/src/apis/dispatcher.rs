@@ -97,7 +97,7 @@ pub struct Workflow {
 
     /// How to submit the result of the component.
     /// May be unset for eg cron jobs that just update internal state and don't submit anything
-    pub submit: Option<Submit>,
+    pub submit: Option<(Submit, SubmitFormat)>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -150,6 +150,14 @@ impl Submit {
             service_manager_addr,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmitFormat {
+    InputOutputId,
+    OutputId,
+    Raw,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]

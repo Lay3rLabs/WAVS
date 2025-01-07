@@ -13,19 +13,15 @@ struct Component;
 
 use bindings::Guest;
 impl Guest for Component {
-    fn process_eth_trigger(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
-        process_eth_trigger(input)
+    fn run(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
+        let req: CosmosQueryRequest = serde_json::from_slice(&input)
+            .map_err(|e| anyhow!("Could not deserialize input request from JSON: {}", e))
+            .unwrap();
+
+        let resp = handle_request(req).map_err(|e| e.to_string())?;
+
+        serde_json::to_vec(&resp).map_err(|e| e.to_string())
     }
-}
-
-fn process_eth_trigger(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
-    let req: CosmosQueryRequest = serde_json::from_slice(&input)
-        .map_err(|e| anyhow!("Could not deserialize input request from JSON: {}", e))
-        .unwrap();
-
-    let resp = handle_request(req).map_err(|e| e.to_string())?;
-
-    serde_json::to_vec(&resp).map_err(|e| e.to_string())
 }
 
 fn handle_request(req: CosmosQueryRequest) -> Result<CosmosQueryResponse> {

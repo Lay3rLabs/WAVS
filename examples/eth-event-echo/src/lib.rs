@@ -14,7 +14,7 @@ pub struct EthOutput {
 }
 
 impl Guest for Component {
-    fn process_eth_event(log: EthLog) -> Result<Vec<u8>, String> {
+    fn run(log: EthLog) -> Result<Vec<u8>, String> {
         let mut output = Vec::new();
         EthOutput {
             address: log.address,

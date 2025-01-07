@@ -1,10 +1,8 @@
-use lavs_apis::id::TaskId;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
 
 use crate::apis::dispatcher::Component;
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::{ServiceID, WorkflowID};
+use crate::apis::trigger::{TriggerAction, TriggerData};
 use crate::Digest;
 
 /// Simply returns the request as the result.
@@ -30,27 +28,17 @@ impl Engine for IdentityEngine {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
         _component: &Component,
-        _service_id: &ServiceID,
-        _task_id: TaskId,
-        request: Vec<u8>,
-        _timestamp: u64,
+        trigger: &TriggerAction,
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(request)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        _component: &Component,
-        _service_id: &ServiceID,
-        _workflow_id: &WorkflowID,
-        _trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        Ok(payload)
+        match &trigger.data {
+            TriggerData::RawWithId { data, .. } => Ok(data.clone()),
+            _ => Err(EngineError::Other(anyhow::anyhow!(
+                "Unsupported mock identity trigger data"
+            ))),
+        }
     }
 }
 

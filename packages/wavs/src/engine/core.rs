@@ -1,11 +1,9 @@
 use anyhow::Context;
-use lavs_apis::id::TaskId;
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -15,7 +13,7 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::AllowedHostPermission;
-use crate::apis::{ServiceID, WorkflowID};
+use crate::apis::trigger::{TriggerAction, TriggerData};
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{apis, bindings, Digest};
 
@@ -87,76 +85,43 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
-        wasi: &apis::dispatcher::Component,
-        service_id: &ServiceID,
-        task_id: TaskId,
-        request: Vec<u8>,
-        timestamp: u64,
+        component: &apis::dispatcher::Component,
+        trigger: &TriggerAction,
     ) -> Result<Vec<u8>, EngineError> {
-        let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
+        let (mut store, component, linker) = self.get_instance_deps(component, trigger)?;
 
         store
             .set_fuel(self.fuel_limit)
             .map_err(EngineError::Other)?;
 
         self.block_on_run(async move {
-            let instance = bindings::task_queue::TaskQueueWorld::instantiate_async(
-                &mut store, &component, &linker,
-            )
-            .await
-            .context("Wasm instantiate failed")?;
-            let input = bindings::task_queue::TaskQueueInput { timestamp, request };
+            let res = match &trigger.data {
+                TriggerData::RawWithId { data, .. } => {
+                    bindings::raw::RawWorld::instantiate_async(&mut store, &component, &linker)
+                        .await
+                        .context("Wasm instantiate failed")?
+                        .call_run(store, &data)
+                        .await
+                }
+                TriggerData::EthEvent { log } => {
+                    bindings::eth_event::EthEventWorld::instantiate_async(
+                        &mut store, &component, &linker,
+                    )
+                    .await
+                    .context("Wasm instantiate failed")?
+                    .call_run(store, &log)
+                    .await
+                }
+            };
 
-            instance
-                .call_run_task(&mut store, &input)
-                .await
-                .context("Failed to run task")
+            res.context("Failed to run task")
                 .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => {
-                        EngineError::OutOfFuel(service_id.clone(), task_id.u64())
-                    }
-                    _ => EngineError::ComponentError(e.to_string()),
-                })?
-                .map_err(EngineError::ComponentError)
-        })
-    }
-
-    /// This will execute a contract that implements the layer_avs:eth-event wit interface
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        wasi: &apis::dispatcher::Component,
-        service_id: &ServiceID,
-        workflow_id: &WorkflowID,
-        trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
-
-        store
-            .set_fuel(self.fuel_limit)
-            .map_err(EngineError::Other)?;
-
-        self.block_on_run(async move {
-            // For right now, we use the hello-world pipeline (contract and component)
-            // eventually this will be a more generic system
-
-            let instance = bindings::eth_trigger::EthTriggerWorld::instantiate_async(
-                &mut store, &component, &linker,
-            )
-            .await
-            .context("Wasm instantiate failed")?;
-
-            instance
-                .call_process_eth_trigger(&mut store, &payload)
-                .await
-                .context("Failed to run task")
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => {
-                        EngineError::OutOfFuel(service_id.clone(), trigger_id.u64())
-                    }
+                    Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(
+                        trigger.config.service_id.clone(),
+                        trigger.config.workflow_id.clone(),
+                    ),
                     _ => EngineError::ComponentError(e.to_string()),
                 })?
                 .map_err(EngineError::ComponentError)
@@ -183,7 +148,7 @@ impl<S: CAStorage> WasmEngine<S> {
     fn get_instance_deps<L: WasiView + WasiHttpView>(
         &self,
         wasi: &apis::dispatcher::Component,
-        service_id: &ServiceID,
+        trigger: &TriggerAction,
     ) -> Result<(Store<Host>, Component, Linker<L>), EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
@@ -212,7 +177,10 @@ impl<S: CAStorage> WasmEngine<S> {
 
         // conditionally allow fs access
         if wasi.permissions.file_system {
-            let app_cache_path = self.app_data_dir.join(service_id.as_ref());
+            let app_cache_path = self
+                .app_data_dir
+                .join(trigger.config.service_id.as_ref())
+                .join(trigger.config.workflow_id.as_ref());
             if !app_cache_path.is_dir() {
                 std::fs::create_dir(&app_cache_path)?;
             }

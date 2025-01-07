@@ -1,11 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::{ServiceID, WorkflowID};
+use crate::apis::trigger::TriggerData;
 use crate::Digest;
-use lavs_apis::id::TaskId;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
 
 use super::{Engine, EngineError};
 
@@ -50,38 +48,31 @@ impl Engine for MockEngine {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
         component: &crate::apis::dispatcher::Component,
-        _service_id: &ServiceID,
-        _task_id: TaskId,
-        request: Vec<u8>,
-        timestamp: u64,
+        trigger: &crate::apis::trigger::TriggerAction,
     ) -> Result<Vec<u8>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
             .get(&component.wasm)
             .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
-        let result = fx.execute(request, timestamp)?;
-        Ok(result)
-    }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        _component: &crate::apis::dispatcher::Component,
-        _service_id: &ServiceID,
-        _workflow_id: &WorkflowID,
-        _trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        Ok(payload)
+        let request = match &trigger.data {
+            TriggerData::RawWithId { data, .. } => Ok(data.clone()),
+            _ => Err(EngineError::Other(anyhow::anyhow!(
+                "Unsupported mock trigger data"
+            ))),
+        }?;
+
+        let result = fx.execute(request)?;
+        Ok(result)
     }
 }
 
 pub trait Function: Send + Sync + 'static {
-    fn execute(&self, request: Vec<u8>, timestamp: u64) -> Result<Vec<u8>, EngineError>;
+    fn execute(&self, request: Vec<u8>) -> Result<Vec<u8>, EngineError>;
 }
 
 #[cfg(test)]

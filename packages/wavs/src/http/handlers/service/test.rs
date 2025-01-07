@@ -2,7 +2,6 @@ use std::ops::Bound;
 
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
-use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -60,10 +59,10 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
         },
         data: match workflow.trigger {
             Trigger::LayerQueue { .. } => {
-                TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
+                TriggerData::new_raw_id(0, serde_json::to_vec(&input)?.as_slice())
             }
             Trigger::EthEvent { .. } => {
-                TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
+                TriggerData::new_raw_id(0, serde_json::to_vec(&input)?.as_slice())
             }
         },
     };
@@ -81,7 +80,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
 
     let chain_message = rx.await.unwrap()?.context("could not get chain message")?;
 
-    let output = serde_json::from_slice(chain_message.wasm_result())?;
+    let output = serde_json::from_slice(&chain_message.wasm_result)?;
 
     let resp = TestAppResponse { output };
 
