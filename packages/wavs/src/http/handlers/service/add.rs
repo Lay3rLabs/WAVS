@@ -184,8 +184,6 @@ mod test {
         pub digest: ShaDigest,
         pub trigger: TriggerRequest,
         pub permissions: Permissions,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        pub envs: Vec<(String, String)>,
         pub testable: Option<bool>,
     }
 

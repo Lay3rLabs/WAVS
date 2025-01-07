@@ -123,8 +123,6 @@ mod test {
         pub digest: ShaDigest,
         pub trigger: TriggerResponse,
         pub permissions: Permissions,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        pub envs: Vec<(String, String)>,
         pub testable: Option<bool>,
     }
 
@@ -138,7 +136,6 @@ mod test {
                     digest: Digest::new(&[0; 32]).into(),
                     trigger: TriggerResponse::eth_event(rand_address_eth()),
                     permissions: Permissions::default(),
-                    envs: vec![],
                     testable: Some(true),
                 },
                 OldApp {
@@ -147,7 +144,6 @@ mod test {
                     digest: Digest::new(&[0; 32]).into(),
                     trigger: TriggerResponse::eth_event(rand_address_eth()),
                     permissions: Permissions::default(),
-                    envs: vec![],
                     testable: Some(true),
                 },
                 OldApp {
@@ -156,7 +152,6 @@ mod test {
                     digest: Digest::new(&[0; 32]).into(),
                     trigger: TriggerResponse::eth_event(rand_address_eth()),
                     permissions: Permissions::default(),
-                    envs: vec![],
                     testable: Some(true),
                 },
             ],

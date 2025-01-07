@@ -43,6 +43,8 @@ Let's do the first build to generate the `src/bindings.rs` file. Afterwards, you
 familiar `cargo` commands such as `cargo test` and `cargo clippy`. It may be helpful to inspect
 `src/bindings.rs` during development to see the type information for producing the Wasm component.
 
+**IMPORTANT**: System environment variables must be prefixed with `WAVS_ENV_` (e.g., `WAVS_ENV_COINGECKO_API_KEY`). Environment variables that do not contain this prefix will not be accessible by the component.
+
 ```bash
 cargo component build
 ```
@@ -97,7 +99,6 @@ read -d '' BODY << "EOF"
     }
   },
   "permissions": {},
-  "envs": [],
   "testable": true
 }
 EOF
