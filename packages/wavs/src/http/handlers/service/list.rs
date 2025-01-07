@@ -38,8 +38,6 @@ pub struct ServiceResponse {
     // for 0.3, it might be nice to make this just Trigger, but the address type breaks backwards compat
     pub trigger: TriggerResponse,
     pub permissions: Permissions,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub envs: Vec<(String, String)>,
     pub testable: Option<bool>,
 }
 
@@ -64,7 +62,6 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
         for component in service.components.values() {
             services.push(ServiceResponse {
                 digest: component.wasm.clone().into(),
-                envs: component.env.clone(),
                 permissions: component.permissions.clone(),
                 status: service.status,
                 id: service.id.clone(),

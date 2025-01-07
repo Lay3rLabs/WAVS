@@ -38,8 +38,6 @@ pub struct ServiceRequest {
     pub digest: ShaDigest,
     pub trigger: TriggerRequest,
     pub permissions: Permissions,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub envs: Vec<(String, String)>,
     pub testable: Option<bool>,
     pub submit: Submit,
 }
@@ -116,7 +114,6 @@ impl ServiceRequestParser {
         let component = Component {
             wasm: req.digest.into(),
             permissions: req.permissions,
-            env: req.envs,
         };
 
         let components = BTreeMap::from([(component_id.clone(), component)]);
@@ -200,7 +197,6 @@ mod test {
                 digest: Digest::new(&[0; 32]).into(),
                 trigger: TriggerRequest::eth_event(addr),
                 permissions: Permissions::default(),
-                envs: vec![],
                 testable: Some(true),
                 submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth()),
             }
