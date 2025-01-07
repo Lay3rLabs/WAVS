@@ -221,10 +221,14 @@ impl<S: CAStorage> WasmEngine<S> {
                 .context("preopen failed")?;
         }
 
-        // add any env vars that were provided
-        if !wasi.env.is_empty() {
-            builder.envs(&wasi.env);
+        let env: Vec<_> = std::env::vars()
+            .filter(|(key, _)| key.starts_with("WAVS_ENV"))
+            .collect();
+
+        if !env.is_empty() {
+            builder.envs(&env);
         }
+
         let ctx = builder.build();
 
         // create host (what is this actually? some state needed for the linker?)
