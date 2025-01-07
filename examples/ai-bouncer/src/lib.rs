@@ -13,8 +13,9 @@ struct Component;
 
 impl Guest for Component {
     fn run_task(request: TaskQueueInput) -> Output {
-        let provider = std::env::var("WAVS_ENV_AI_BOUNCER_PROVIDER")
-            .or(Err("missing env var `WAVS_ENV_AI_BOUNCER_PROVIDER`".to_string()))?;
+        let provider = std::env::var("WAVS_ENV_AI_BOUNCER_PROVIDER").or(Err(
+            "missing env var `WAVS_ENV_AI_BOUNCER_PROVIDER`".to_string(),
+        ))?;
 
         let res = match serde_json::from_slice(&request.request) {
             Ok(input) => block_on(|reactor| get_output(reactor, provider, input)),
