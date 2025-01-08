@@ -84,6 +84,7 @@ async fn main() {
             component,
             service_manager,
             service_config,
+            world,
             ..
         } => {
             let ChainContext {
@@ -120,6 +121,7 @@ async fn main() {
                     avs_client.layer.service_manager,
                     digest,
                     service_config.unwrap_or_default(),
+                    world,
                 )
                 .await;
 
@@ -187,14 +189,7 @@ async fn main() {
                 }
             };
 
-            let signed_data = add_task(
-                eigen_client.eth,
-                service_id.clone(),
-                workflow_id.clone(),
-                &service_contracts,
-                input,
-            )
-            .await;
+            let signed_data = add_task(eigen_client.eth, &service_contracts, input).await;
 
             display.layer_addresses = Some(service_contracts);
             display.service = Some(ServiceAndWorkflow {

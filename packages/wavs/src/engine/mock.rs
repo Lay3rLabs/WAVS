@@ -1,12 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::dispatcher::ServiceConfig;
+use crate::apis::{trigger::TriggerAction, dispatcher::ServiceConfig};
 use crate::Digest;
-use lavs_apis::id::TaskId;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
-use utils::{ServiceID, WorkflowID};
 
 use super::{Engine, EngineError};
 
@@ -51,44 +48,30 @@ impl Engine for MockEngine {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
         component: &crate::apis::dispatcher::Component,
-        _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _task_id: TaskId,
-        request: Vec<u8>,
-        timestamp: u64,
+        trigger: TriggerAction,
+        _service_config: &ServiceConfig
     ) -> Result<Vec<u8>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
             .get(&component.wasm)
             .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
-        let result = fx.execute(request, timestamp)?;
+        let result = fx.execute(trigger.data.into_vec().unwrap())?;
         Ok(result)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        _component: &crate::apis::dispatcher::Component,
-        _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _workflow_id: &WorkflowID,
-        _trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        Ok(payload)
     }
 }
 
 pub trait Function: Send + Sync + 'static {
-    fn execute(&self, request: Vec<u8>, timestamp: u64) -> Result<Vec<u8>, EngineError>;
+    fn execute(&self, request: Vec<u8>) -> Result<Vec<u8>, EngineError>;
 }
 
 #[cfg(test)]
 mod test {
+    use crate::apis::dispatcher::ComponentWorld;
+
     use super::*;
 
     #[test]
@@ -110,7 +93,7 @@ mod test {
     pub struct FixedResult(Vec<u8>);
 
     impl Function for FixedResult {
-        fn execute(&self, _request: Vec<u8>, _timestamp: u64) -> Result<Vec<u8>, EngineError> {
+        fn execute(&self, _request: Vec<u8>) -> Result<Vec<u8>, EngineError> {
             Ok(self.0.clone())
         }
     }
@@ -131,43 +114,58 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let c1 = crate::apis::dispatcher::Component::new(&d1);
+        let c1 = crate::apis::dispatcher::Component::new(d1, ComponentWorld::Raw);
         let res = engine
-            .execute_queue(
+            .execute(
                 &c1,
-                &ServiceConfig::default(),
-                &ServiceID::new("321").unwrap(),
-                TaskId::new(123),
-                b"123".into(),
-                1234,
+                TriggerAction {
+                    config: crate::apis::trigger::TriggerConfig::contract_event(
+                        "321",
+                        "default",
+                        crate::test_utils::address::rand_address_eth(),
+                    )
+                    .unwrap(),
+                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                },
+                &ServiceConfig::default()
             )
             .unwrap();
         assert_eq!(res, r1);
 
         // d2 call gets r2
-        let c2 = crate::apis::dispatcher::Component::new(&d2);
+        let c2 = crate::apis::dispatcher::Component::new(d2, ComponentWorld::Raw);
         let res = engine
-            .execute_queue(
+            .execute(
                 &c2,
-                &ServiceConfig::default(),
-                &ServiceID::new("321").unwrap(),
-                TaskId::new(123),
-                b"123".into(),
-                1234,
+                TriggerAction {
+                    config: crate::apis::trigger::TriggerConfig::contract_event(
+                        "321",
+                        "default",
+                        crate::test_utils::address::rand_address_eth(),
+                    )
+                    .unwrap(),
+                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                },
+                &ServiceConfig::default()
             )
             .unwrap();
         assert_eq!(res, r2);
 
         // d3 call returns missing error
-        let c3 = crate::apis::dispatcher::Component::new(&d3);
+        let c3 = crate::apis::dispatcher::Component::new(d3, ComponentWorld::Raw);
         let err = engine
-            .execute_queue(
+            .execute(
                 &c3,
-                &ServiceConfig::default(),
-                &ServiceID::new("321").unwrap(),
-                TaskId::new(123),
-                b"123".into(),
-                1234,
+                TriggerAction {
+                    config: crate::apis::trigger::TriggerConfig::contract_event(
+                        "321",
+                        "default",
+                        crate::test_utils::address::rand_address_eth(),
+                    )
+                    .unwrap(),
+                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                },
+                &ServiceConfig::default()
             )
             .unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));

@@ -1,21 +1,16 @@
 use std::collections::BTreeMap;
 
 use axum::{extract::State, response::IntoResponse, Json};
-use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     apis::{
         dispatcher::{
-            Component, Permissions, Service, ServiceConfig, ServiceStatus, Submit, Workflow,
+            Component, ComponentWorld, ServiceConfig, Permissions, Service, ServiceStatus, Submit, Workflow,
         },
         trigger::Trigger,
     },
-    http::{
-        error::HttpResult,
-        state::HttpState,
-        types::{ShaDigest, TriggerRequest},
-    },
+    http::{error::HttpResult, state::HttpState, types::ShaDigest},
 };
 use utils::ServiceID;
 
@@ -30,7 +25,7 @@ pub struct AddServiceRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct ServiceRequest {
     // on the wire, for v0.2, it's "name"
     // however, internally we repurpose this as the ID
@@ -38,37 +33,18 @@ pub struct ServiceRequest {
     #[serde(rename = "name")]
     pub id: ServiceID,
     pub digest: ShaDigest,
-    pub trigger: TriggerRequest,
+    pub trigger: Trigger,
+    pub world: ComponentWorld,
     pub permissions: Permissions,
     pub config: ServiceConfig,
     pub testable: Option<bool>,
     pub submit: Submit,
 }
 
-impl TriggerRequest {
-    pub fn layer_queue(task_queue_addr: Address, poll_interval: u32, hd_index: u32) -> Self {
-        TriggerRequest::LayerQueue {
-            task_queue_addr,
-            poll_interval,
-            hd_index,
-        }
-    }
-
-    pub fn eth_event(contract_address: Address) -> Self {
-        TriggerRequest::EthEvent { contract_address }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AddServiceResponse {
-    // on the wire, for v0.2, it's "name"
-    // however, internally we repurpose this as the ID
-    // so we'll just treat it as an ID for here, and keep "name" field for backwards compat
-    #[serde(rename = "name")]
     pub id: ServiceID,
-    // TODO for 0.3, not sure why this is needed, it's always "Active"
-    pub status: ServiceStatus,
 }
 
 #[axum::debug_handler]
@@ -93,10 +69,7 @@ async fn add_service_inner(
 
     state.dispatcher.add_service(service)?;
 
-    Ok(AddServiceResponse {
-        id: service_id,
-        status: ServiceStatus::Active,
-    })
+    Ok(AddServiceResponse { id: service_id })
 }
 
 #[allow(dead_code)]
@@ -118,26 +91,17 @@ impl ServiceRequestParser {
         let component = Component {
             wasm: req.digest.into(),
             permissions: req.permissions,
+            world: req.world,
         };
 
         let components = BTreeMap::from([(component_id.clone(), component)]);
 
-        let trigger = match req.trigger {
-            TriggerRequest::LayerQueue {
-                task_queue_addr,
-                poll_interval,
-                hd_index: _,
-            } => Trigger::layer_queue(task_queue_addr, poll_interval),
-
-            TriggerRequest::EthEvent { contract_address } => Trigger::eth_event(contract_address),
-        };
-
         let workflows = BTreeMap::from([(
             workflow_id,
             Workflow {
-                trigger,
+                trigger: req.trigger,
                 component: component_id,
-                submit: Some(req.submit),
+                submit: req.submit,
             },
         )]);
 
@@ -156,11 +120,13 @@ impl ServiceRequestParser {
 #[cfg(test)]
 mod test {
     use layer_climb::prelude::Address;
-    use serde::{Deserialize, Serialize};
 
     use crate::{
-        apis::dispatcher::{Permissions, ServiceConfig, ServiceStatus, Submit},
-        http::{handlers::service::add::TriggerRequest, types::ShaDigest},
+        apis::{
+            dispatcher::{ComponentWorld,ServiceConfig, Permissions, Submit},
+            trigger::Trigger,
+            ServiceID,
+        },
         test_utils::address::rand_address_eth,
         Digest,
     };
@@ -168,39 +134,18 @@ mod test {
 
     use super::{ServiceRequest, ServiceRequestParser};
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OldRegisterAppRequest {
-        #[serde(flatten)]
-        pub app: OldApp,
-
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub wasm_url: Option<String>,
-    }
-
-    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OldApp {
-        pub name: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub status: Option<ServiceStatus>,
-        pub digest: ShaDigest,
-        pub trigger: TriggerRequest,
-        pub permissions: Permissions,
-        pub testable: Option<bool>,
-    }
-
     #[tokio::test]
     async fn add_service_validation() {
         fn make_service_req(addr: Address) -> ServiceRequest {
             ServiceRequest {
                 id: ServiceID::new("test-name").unwrap(),
+                world: ComponentWorld::Raw,
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: TriggerRequest::eth_event(addr),
+                trigger: Trigger::contract_event(addr),
                 permissions: Permissions::default(),
                 testable: Some(true),
-                submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth(), None),
-                config: ServiceConfig::default(),
+                submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
+                config: ServiceConfig::default()
             }
         }
 

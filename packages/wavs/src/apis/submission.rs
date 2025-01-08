@@ -1,7 +1,5 @@
-use lavs_apis::id::TaskId;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use utils::layer_contract_client::TriggerId;
 
 use crate::AppContext;
 
@@ -19,42 +17,10 @@ pub trait Submission: Send + Sync {
 
 /// The data returned from a trigger action
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ChainMessage {
-    Cosmos {
-        trigger_config: TriggerConfig,
-        wasm_result: Vec<u8>,
-        task_id: TaskId,
-        submit: Submit,
-    },
-    Eth {
-        trigger_config: TriggerConfig,
-        wasm_result: Vec<u8>,
-        trigger_id: TriggerId,
-        submit: Submit,
-    },
-}
-
-impl ChainMessage {
-    pub fn wasm_result(&self) -> &[u8] {
-        match self {
-            ChainMessage::Cosmos { wasm_result, .. } => wasm_result,
-            ChainMessage::Eth { wasm_result, .. } => wasm_result,
-        }
-    }
-
-    pub fn submit(&self) -> &Submit {
-        match self {
-            ChainMessage::Cosmos { submit, .. } => submit,
-            ChainMessage::Eth { submit, .. } => submit,
-        }
-    }
-
-    pub fn trigger_config(&self) -> &TriggerConfig {
-        match self {
-            ChainMessage::Cosmos { trigger_config, .. } => trigger_config,
-            ChainMessage::Eth { trigger_config, .. } => trigger_config,
-        }
-    }
+pub struct ChainMessage {
+    pub trigger_config: TriggerConfig,
+    pub wasm_result: Vec<u8>,
+    pub submit: Submit,
 }
 
 #[derive(Error, Debug)]

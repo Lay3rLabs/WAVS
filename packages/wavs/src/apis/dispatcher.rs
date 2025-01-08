@@ -23,7 +23,7 @@ pub trait DispatchManager: Send + Sync {
 
     fn start(&self, ctx: AppContext) -> Result<(), Self::Error>;
 
-    fn run_trigger(&self, action: TriggerAction) -> Result<Option<ChainMessage>, Self::Error>;
+    fn run_trigger(&self, action: TriggerAction) -> Result<ChainMessage, Self::Error>;
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
@@ -95,69 +95,34 @@ pub struct Workflow {
     pub trigger: Trigger,
     /// A reference to which component to run with this data - for now, always "default"
     pub component: ComponentID,
-
     /// How to submit the result of the component.
-    /// May be unset for eg cron jobs that just update internal state and don't submit anything
-    pub submit: Option<Submit>,
+    pub submit: Submit,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Submit {
-    /// Writing a transaction directly to the layer verifier contract
-    LayerVerifierTx {
-        /// The hd index of the mnemonic to sign with
-        hd_index: u32,
-        // The address of the verifier contract to submit to
-        // Note: To keep the same axum API, the http server can query this from the task queue contract (which is provided)
-        // I want to break these hard dependencies internally, so Dispatcher doesn't assume those connections between contracts
-        verifier_addr: Address,
-    }, // Example alternative is making a message and BLS signing it, then submitting to an aggregator
-    /// Sending a message to the aggregator on eth chain
-    EthAggregatorTx {
+    // useful for when the component just does something with its own state
+    None,
+    CosmosContract {
         chain_name: String,
-        service_manager_addr: Address,
-        max_gas: Option<u64>,
+        contract_addr: Address,
     },
-    /// Sending a message to the eth chain directly
-    EthSignedMessage {
+    EigenContract {
         chain_name: String,
-        service_manager_addr: Address,
-        /// The hd index of the mnemonic to sign with
-        hd_index: u32,
+        service_manager: Address,
+        aggregate: bool,
         max_gas: Option<u64>,
     },
 }
 
 impl Submit {
-    pub fn layer_verifier_tx(hd_index: u32, verifier_addr: Address) -> Self {
-        Submit::LayerVerifierTx {
-            hd_index,
-            verifier_addr,
-        }
-    }
-    pub fn eth_aggregator_tx(
-        chain_name: String,
-        service_manager_addr: Address,
-        max_gas: Option<u64>,
-    ) -> Self {
-        Submit::EthAggregatorTx {
+    pub fn eigen_contract(chain_name: String, service_manager: Address, aggregate: bool, max_gas: Option<u64>) -> Self {
+        Submit::EigenContract {
             chain_name,
-            service_manager_addr,
-            max_gas,
-        }
-    }
-    pub fn eth_signed_message(
-        chain_name: String,
-        hd_index: u32,
-        service_manager_addr: Address,
-        max_gas: Option<u64>,
-    ) -> Self {
-        Submit::EthSignedMessage {
-            chain_name,
-            hd_index,
-            service_manager_addr,
-            max_gas,
+            service_manager,
+            aggregate,
+            max_gas
         }
     }
 }
@@ -174,12 +139,13 @@ pub enum ServiceStatus {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct Component {
     pub wasm: Digest,
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
+    pub world: ComponentWorld,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -215,10 +181,20 @@ impl Default for ServiceConfig {
     }
 }
 
+// These correspond to the WIT component worlds
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+pub enum ComponentWorld {
+    ChainEvent,
+    EthLog,
+    Raw,
+}
+
 impl Component {
-    pub fn new(digest: &Digest) -> Self {
+    pub fn new(digest: Digest, world: ComponentWorld) -> Self {
         Self {
-            wasm: digest.clone(),
+            wasm: digest,
+            world,
             permissions: Default::default(),
         }
     }

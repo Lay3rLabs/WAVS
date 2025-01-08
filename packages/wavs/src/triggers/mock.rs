@@ -1,4 +1,3 @@
-use std::sync::atomic::AtomicU64;
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
@@ -7,7 +6,6 @@ use crate::apis::trigger::{
 };
 use utils::{IDError, ServiceID, WorkflowID};
 
-use lavs_apis::id::TaskId;
 use layer_climb::prelude::Address;
 use serde::Serialize;
 use tokio::sync::mpsc;
@@ -142,7 +140,6 @@ impl TriggerManager for MockTriggerManagerVec {
 // This mock is currently only used in mock_e2e.rs
 // it doesn't have the same coverage in unit tests here as MockTriggerManager
 pub struct MockTriggerManagerChannel {
-    trigger_count: AtomicU64,
     sender: mpsc::Sender<TriggerAction>,
     receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
     trigger_datas: Mutex<Vec<TriggerConfig>>,
@@ -155,7 +152,6 @@ impl MockTriggerManagerChannel {
         let (sender, receiver) = mpsc::channel(channel_bound);
 
         Self {
-            trigger_count: AtomicU64::new(1),
             receiver: Mutex::new(Some(receiver)),
             sender,
             trigger_datas: Mutex::new(Vec::new()),
@@ -170,16 +166,15 @@ impl MockTriggerManagerChannel {
         contract_address: &Address,
         data: &(impl Serialize + std::fmt::Debug),
     ) {
-        let task_id = TaskId::new(
-            self.trigger_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        );
-
         self.sender
             .send(TriggerAction {
-                config: TriggerConfig::eth_event(service_id, workflow_id, contract_address.clone())
-                    .unwrap(),
-                data: TriggerData::queue(task_id, serde_json::to_string(data).unwrap().as_bytes()),
+                config: TriggerConfig::contract_event(
+                    service_id,
+                    workflow_id,
+                    contract_address.clone(),
+                )
+                .unwrap(),
+                data: TriggerData::new_raw(serde_json::to_string(data).unwrap().as_bytes()),
             })
             .await
             .unwrap();
@@ -235,9 +230,6 @@ impl TriggerManager for MockTriggerManagerChannel {
 
 #[cfg(test)]
 mod tests {
-
-    use lavs_apis::id::TaskId;
-
     use crate::{apis::trigger::TriggerData, test_utils::address::rand_address_eth};
 
     use super::*;
@@ -248,20 +240,18 @@ mod tests {
 
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_event("service1", "workflow1", contract_address.clone())
-                    .unwrap(),
-                data: TriggerData::Queue {
-                    task_id: TaskId::new(2),
-                    payload: "foobar".into(),
-                },
+                config: TriggerConfig::contract_event(
+                    "service1",
+                    "workflow1",
+                    contract_address.clone(),
+                )
+                .unwrap(),
+                data: TriggerData::new_raw(b"foobar"),
             },
             TriggerAction {
-                config: TriggerConfig::eth_event("service2", "workflow2", contract_address)
+                config: TriggerConfig::contract_event("service2", "workflow2", contract_address)
                     .unwrap(),
-                data: TriggerData::Queue {
-                    task_id: TaskId::new(4),
-                    payload: "zoomba".into(),
-                },
+                data: TriggerData::new_raw(b"zoomba"),
             },
         ];
         let triggers = MockTriggerManagerVec::new().with_actions(actions.clone());
@@ -278,7 +268,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerConfig::eth_event("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = TriggerConfig::contract_event("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -289,7 +279,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerConfig::eth_event("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = TriggerConfig::contract_event("abcd", "abcd", rand_address_eth()).unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }

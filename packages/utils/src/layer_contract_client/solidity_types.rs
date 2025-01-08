@@ -46,6 +46,7 @@ pub mod layer_service_manager {
 pub mod layer_trigger {
     use super::*;
     pub use ILayerTrigger::TriggerResponse;
+    pub use LayerTrigger::{NewTriggerId, WavsTrigger};
 
     sol!(
         #[allow(missing_docs)]

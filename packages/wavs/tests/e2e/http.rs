@@ -3,15 +3,16 @@ use serde::{de::DeserializeOwned, Serialize};
 use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::apis::dispatcher::ServiceConfig;
 use wavs::{
-    apis::dispatcher::{AllowedHostPermission, Permissions, Submit},
+    apis::{
+        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, Submit},
+        trigger::{Trigger, TriggerData},
+        ServiceID,
+    },
     config::Config,
-    http::{
-        handlers::service::{
-            add::{AddServiceRequest, ServiceRequest},
-            test::{TestAppRequest, TestAppResponse},
-            upload::UploadServiceResponse,
-        },
-        types::TriggerRequest,
+    http::handlers::service::{
+        add::{AddServiceRequest, ServiceRequest},
+        test::{TestAppRequest, TestAppResponse},
+        upload::UploadServiceResponse,
     },
     Digest,
 };
@@ -46,12 +47,14 @@ impl HttpClient {
         &self,
         id: ServiceID,
         digest: Digest,
-        trigger: TriggerRequest,
+        trigger: Trigger,
         submit: Submit,
+        world: ComponentWorld,
     ) -> Result<()> {
         let service = ServiceRequest {
             trigger,
             id,
+            world,
             digest: digest.into(),
             permissions: Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,
@@ -98,7 +101,6 @@ impl HttpClient {
             .json(
                 &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
                     service_manager_address,
-                    service_id,
                 },
             )
             .send()
@@ -110,11 +112,11 @@ impl HttpClient {
     pub async fn test_service<D: DeserializeOwned>(
         &self,
         name: impl ToString,
-        input: impl Serialize,
+        input: TriggerData,
     ) -> Result<D> {
         let body = serde_json::to_string(&TestAppRequest {
             name: name.to_string(),
-            input: Some(serde_json::to_value(input)?),
+            input,
         })?;
 
         let response: TestAppResponse = self

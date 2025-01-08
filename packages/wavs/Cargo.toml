@@ -48,7 +48,6 @@ wildmatch = { workspace = true }
 layer-climb = { workspace = true }
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
-lavs-apis = { workspace = true }
 futures = { workspace = true }
 cosmwasm-std = { workspace = true }
 reqwest = { workspace = true }

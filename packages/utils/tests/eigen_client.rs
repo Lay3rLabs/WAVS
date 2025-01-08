@@ -41,11 +41,7 @@ async fn deploy_layer_avs() {
     // Create and respond first task
     let new_trigger_id = layer_client
         .trigger
-        .add_trigger(
-            ServiceID::new("foo-service-id").unwrap(),
-            WorkflowID::new("foo-workflow-id").unwrap(),
-            b"foo-data".to_vec(),
-        )
+        .add_trigger(b"foo-data".to_vec())
         .await
         .unwrap();
 
@@ -60,24 +56,14 @@ async fn deploy_layer_avs() {
     assert_eq!(trigger.data, b"foo-data");
 
     layer_client
-        .add_signed_payload(
-            layer_client
-                .sign_payload(trigger.trigger_id, trigger.data)
-                .await
-                .unwrap(),
-            None,
-        )
+        .add_signed_payload(layer_client.sign_payload(trigger.data).await.unwrap(), None)
         .await
         .unwrap();
 
     // Create and respond second task
     let new_trigger_id = layer_client
         .trigger
-        .add_trigger(
-            ServiceID::new("bar-service-id").unwrap(),
-            WorkflowID::new("bar-workflow-id").unwrap(),
-            b"bar-data".to_vec(),
-        )
+        .add_trigger(b"bar-data".to_vec())
         .await
         .unwrap();
 
@@ -90,13 +76,7 @@ async fn deploy_layer_avs() {
 
     assert_eq!(trigger.data, b"bar-data");
     layer_client
-        .add_signed_payload(
-            layer_client
-                .sign_payload(trigger.trigger_id, trigger.data)
-                .await
-                .unwrap(),
-            None,
-        )
+        .add_signed_payload(layer_client.sign_payload(trigger.data).await.unwrap(), None)
         .await
         .unwrap();
 

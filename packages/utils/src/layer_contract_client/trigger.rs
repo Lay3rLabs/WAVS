@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use super::layer_trigger::LayerTrigger;
-use super::layer_trigger::LayerTrigger::NewTrigger;
+use super::layer_trigger::NewTriggerId;
 use super::LayerTriggerT;
 use crate::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient, ServiceID};
 use alloy::primitives::Address;
@@ -27,15 +27,10 @@ impl LayerContractClientTrigger {
     }
 
     // TODO - bring all newtypes into utils
-    pub async fn add_trigger(
-        &self,
-        service_id: impl ToString,
-        workflow_id: impl ToString,
-        data: Vec<u8>,
-    ) -> Result<TriggerId> {
-        let event: NewTrigger = self
+    pub async fn add_trigger(&self, data: Vec<u8>) -> Result<TriggerId> {
+        let event: NewTriggerId = self
             .contract
-            .addTrigger(service_id.to_string(), workflow_id.to_string(), data.into())
+            .addTrigger(data.into())
             .send()
             .await?
             .get_receipt()
@@ -43,7 +38,7 @@ impl LayerContractClientTrigger {
             .solidity_event()
             .context("Not found new task creation event")?;
 
-        Ok(TriggerId::new(event.triggerId))
+        Ok(TriggerId::new(event._0))
     }
 
     pub async fn get_trigger(&self, trigger_id: TriggerId) -> Result<TriggerResponse> {
@@ -57,8 +52,6 @@ impl LayerContractClientTrigger {
 
         Ok(TriggerResponse {
             trigger_id: TriggerId::new(resp.triggerId),
-            service_id: ServiceID::new(resp.serviceId)?,
-            workflow_id: resp.workflowId,
             creator: resp.creator,
             data: resp.data.to_vec(),
         })
@@ -103,8 +96,6 @@ impl std::fmt::Debug for TriggerId {
 
 pub struct TriggerResponse {
     pub trigger_id: TriggerId,
-    pub service_id: ServiceID,
-    pub workflow_id: String,
     pub creator: Address,
     pub data: Vec<u8>,
 }

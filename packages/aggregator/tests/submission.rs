@@ -7,16 +7,11 @@ use alloy::{
         local::{coins_bip39::English, MnemonicBuilder},
         SignerSync,
     },
-    sol_types::SolValue,
 };
 use utils::{
     aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
     eigen_client::EigenClient,
-    layer_contract_client::{
-        layer_service_manager::ILayerServiceManager::Payload, LayerContractClientFullBuilder,
-        LayerContractClientSimple,
-    },
-    ServiceID,
+    layer_contract_client::{LayerContractClientFullBuilder, LayerContractClientSimple},
 };
 
 #[tokio::test]
@@ -58,7 +53,6 @@ async fn submit_to_chain() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
-            service_id: ServiceID::new("default").unwrap(),
         },
     )
     .await
@@ -68,20 +62,16 @@ async fn submit_to_chain() {
 
     let trigger_id = avs_client
         .trigger
-        .add_trigger("default", "default", task_message.clone())
+        .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client
-        .sign_payload(trigger_id, task_message)
-        .await
-        .unwrap();
+    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
 
-    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+    let response = aggregator::http::handlers::service::add_payload::add_payload(
         state,
         signed_payload,
         avs_client.service_manager_contract_address,
-        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -144,7 +134,6 @@ async fn submit_to_chain_three() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
-            service_id: ServiceID::new("default").unwrap(),
         },
     )
     .await
@@ -153,22 +142,18 @@ async fn submit_to_chain_three() {
     // first task - should just aggregate
     let task_message = b"foo".to_vec();
 
-    let trigger_id = avs_client
+    let _ = avs_client
         .trigger
-        .add_trigger("default", "default", task_message.clone())
+        .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client
-        .sign_payload(trigger_id, task_message)
-        .await
-        .unwrap();
+    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
 
-    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+    let response = aggregator::http::handlers::service::add_payload::add_payload(
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
-        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -181,22 +166,18 @@ async fn submit_to_chain_three() {
     // Second - still aggregating
     let task_message = b"hello".to_vec();
 
-    let trigger_id = avs_client
+    let _ = avs_client
         .trigger
-        .add_trigger("default", "default", task_message.clone())
+        .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client
-        .sign_payload(trigger_id, task_message)
-        .await
-        .unwrap();
+    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
 
-    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+    let response = aggregator::http::handlers::service::add_payload::add_payload(
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
-        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -211,20 +192,16 @@ async fn submit_to_chain_three() {
 
     let trigger_id = avs_client
         .trigger
-        .add_trigger("default", "default", task_message.clone())
+        .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client
-        .sign_payload(trigger_id, task_message)
-        .await
-        .unwrap();
+    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
 
-    let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+    let response = aggregator::http::handlers::service::add_payload::add_payload(
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
-        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -291,7 +268,6 @@ async fn invalid_operator_signature() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
-            service_id: ServiceID::new("default").unwrap(),
         },
     )
     .await
@@ -299,26 +275,22 @@ async fn invalid_operator_signature() {
 
     let task_message = b"world".to_vec();
 
-    let trigger_id = avs_client
+    let _ = avs_client
         .trigger
-        .add_trigger("default", "default", task_message.clone())
+        .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client
-        .sign_payload(trigger_id, task_message)
-        .await
-        .unwrap();
+    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
 
     // Invalid operator
     {
         let mut invalid_operator_payload = signed_payload.clone();
         invalid_operator_payload.operator = invalid_signer.address();
-        let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+        let response = aggregator::http::handlers::service::add_payload::add_payload(
             state.clone(),
             invalid_operator_payload,
             avs_client.service_manager_contract_address,
-            ServiceID::new("default").unwrap(),
         )
         .await
         .unwrap_err();
@@ -328,21 +300,16 @@ async fn invalid_operator_signature() {
     // Invalid signature
     {
         let mut invalid_signature_payload = signed_payload.clone();
-        let payload = Payload {
-            triggerId: *trigger_id,
-            data: signed_payload.data.into(),
-        };
 
-        let payload_hash = eip191_hash_message(keccak256(payload.abi_encode()));
+        let payload_hash = eip191_hash_message(keccak256(signed_payload.data));
 
-        let signature = invalid_signer.sign_hash_sync(&payload_hash).unwrap();
+        let signature = invalid_signer.sign_hash_sync(&payload_hash).unwrap().into();
 
         invalid_signature_payload.signature = signature;
-        let response = aggregator::http::handlers::service::add_payload::add_payload_trigger(
+        let response = aggregator::http::handlers::service::add_payload::add_payload(
             state,
             invalid_signature_payload,
             avs_client.service_manager_contract_address,
-            ServiceID::new("default").unwrap(),
         )
         .await
         .unwrap_err();

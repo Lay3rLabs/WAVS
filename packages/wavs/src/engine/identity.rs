@@ -1,9 +1,8 @@
-use lavs_apis::id::TaskId;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
 
 use crate::apis::dispatcher::{Component, ServiceConfig};
 use crate::apis::engine::{Engine, EngineError};
+use crate::apis::trigger::TriggerAction;
 use crate::Digest;
 use utils::{ServiceID, WorkflowID};
 
@@ -30,34 +29,26 @@ impl Engine for IdentityEngine {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
         _component: &Component,
-        _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _task_id: TaskId,
-        request: Vec<u8>,
-        _timestamp: u64,
+        trigger: TriggerAction,
+        _service_config: &ServiceConfig
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(request)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        _component: &Component,
-        _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _workflow_id: &WorkflowID,
-        _trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        Ok(payload)
+        Ok(trigger.data.into_vec().unwrap())
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::{
+        apis::{
+            dispatcher::ComponentWorld,
+            trigger::{TriggerConfig, TriggerData},
+        },
+        test_utils::address::rand_address_eth,
+    };
+
     use super::*;
 
     #[test]
@@ -74,15 +65,16 @@ mod test {
 
         // execute returns self
         let request = b"this is only a test".to_vec();
-        let component = Component::new(&d1);
+        let component = Component::new(d1, ComponentWorld::Raw);
         let result = engine
-            .execute_queue(
+            .execute(
                 &component,
-                &ServiceConfig::default(),
-                &ServiceID::new("foobar").unwrap(),
-                TaskId::new(123),
-                request.clone(),
-                1234567890,
+                TriggerAction {
+                    config: TriggerConfig::contract_event("foobar", "baz", rand_address_eth())
+                        .unwrap(),
+                    data: TriggerData::new_raw(request.clone()),
+                },
+                &ServiceConfig::default()
             )
             .unwrap();
         assert_eq!(request, result);

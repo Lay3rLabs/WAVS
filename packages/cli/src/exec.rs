@@ -50,12 +50,12 @@ pub async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> ExecCo
     let mut store = wasmtime::Store::new(&engine, host);
     store.set_fuel(u64::MAX).unwrap();
 
-    let instance = EthTriggerWorld::instantiate_async(&mut store, &component, &linker)
+    let instance = WavsRawWorld::instantiate_async(&mut store, &component, &linker)
         .await
         .expect("Wasm instantiate failed");
 
     let response = instance
-        .call_process_eth_trigger(&mut store, &input_bytes)
+        .call_run(&mut store, &input_bytes)
         .await
         .unwrap()
         .unwrap();
@@ -95,7 +95,7 @@ impl WasiHttpView for Host {
 }
 
 wasmtime::component::bindgen!({
-  world: "eth-trigger-world",
+  world: "wavs-raw-world",
   path: "../../wit",
   async: true,
 });

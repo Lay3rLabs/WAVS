@@ -7,22 +7,27 @@ use crate::{
     apis::{
         dispatcher::Submit,
         submission::{ChainMessage, Submission, SubmissionError},
-        trigger::Trigger,
     },
     config::Config,
     AppContext,
 };
+use alloy::signers::SignerSync;
+use alloy::{
+    primitives::{eip191_hash_message, keccak256},
+    providers::Provider,
+    sol_types::SolValue,
+};
 use anyhow::anyhow;
-use lavs_apis::verifier_simple::ExecuteMsg as VerifierExecuteMsg;
 use layer_climb::prelude::*;
 use reqwest::Url;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
     config::{CosmosChainConfig, EthereumChainConfig},
     eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig, EthSigningClient},
-    layer_contract_client::LayerContractClientSimple,
+    layer_contract_client::{layer_service_manager::LayerServiceManager, SignedPayload},
 };
 
 #[derive(Clone)]
@@ -135,7 +140,13 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn get_cosmos_client(&self, hd_index: u32) -> Result<SigningClient, SubmissionError> {
+    async fn get_cosmos_client(
+        &self,
+        chain_name: String,
+    ) -> Result<SigningClient, SubmissionError> {
+        // TODO - where should hd_index come from?
+        let hd_index = 0;
+
         {
             let lock = self.cosmos_clients.lock().unwrap();
 
@@ -167,8 +178,10 @@ impl CoreSubmission {
     async fn get_eth_client(
         &self,
         chain_name: String,
-        hd_index: u32,
     ) -> Result<EthSigningClient, SubmissionError> {
+        // TODO - where should hd_index come from?
+        let hd_index = 0;
+
         {
             let lock = self.eth_clients.lock().unwrap();
 
@@ -287,21 +300,11 @@ impl CoreSubmission {
         &self,
         chain_name: String,
         eth_client: EthSigningClient,
-        trigger_address: Address,
         service_manager_address: Address,
-        msg: ChainMessage,
-        max_gas: Option<u64>,
+        data: Vec<u8>,
         aggregate: bool,
+        max_gas: Option<u64>,
     ) -> Result<(), SubmissionError> {
-        let trigger_address = match trigger_address {
-            Address::Eth(addr) => addr.as_bytes().into(),
-            _ => {
-                return Err(SubmissionError::ExpectedEthAddress(
-                    trigger_address.to_string(),
-                ))
-            }
-        };
-
         let service_manager_address = match service_manager_address {
             Address::Eth(addr) => addr.as_bytes().into(),
             _ => {
@@ -311,31 +314,31 @@ impl CoreSubmission {
             }
         };
 
-        let avs_client =
-            LayerContractClientSimple::new(eth_client, service_manager_address, trigger_address);
+        let service_manager_contract =
+            LayerServiceManager::new(service_manager_address, eth_client.provider.clone());
 
-        let (trigger_id, wasm_result, service_id) = match msg {
-            ChainMessage::Eth {
-                trigger_id,
-                wasm_result,
-                trigger_config,
-                ..
-            } => (trigger_id, wasm_result, trigger_config.service_id),
-            _ => {
-                return Err(SubmissionError::ExpectedEthMessage);
-            }
-        };
-
-        let signed_payload = avs_client
-            .sign_payload(trigger_id, wasm_result)
-            .await
-            .map_err(|_| SubmissionError::FailedToSignPayload)?;
+        let data_hash = eip191_hash_message(keccak256(data.abi_encode()));
+        let signature: Vec<u8> = eth_client
+            .signer
+            .sign_hash_sync(&data_hash)
+            .map_err(|_| SubmissionError::FailedToSignPayload)?
+            .into();
 
         if aggregate {
-            let request = AggregateAvsRequest::EthTrigger {
-                signed_payload,
+            let request = AggregateAvsRequest::EigenContract {
+                signed_payload: SignedPayload {
+                    operator: eth_client.address(),
+                    data,
+                    data_hash,
+                    signature,
+                    signed_block_height: eth_client
+                        .provider
+                        .get_block_number()
+                        .await
+                        .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
+                        - 1,
+                },
                 service_manager_address,
-                service_id: service_id.clone(),
             };
 
             let chain_config = self
@@ -374,17 +377,12 @@ impl CoreSubmission {
                 }
             }
         } else {
-            match avs_client.add_signed_payload(signed_payload, max_gas).await {
-                Ok(_) => {
-                    tracing::debug!(
-                        "Submission to Eth for trigger id {} successful!",
-                        trigger_id
-                    );
-                }
-                Err(e) => {
-                    return Err(SubmissionError::FailedToSubmitEthDirect(e));
-                }
-            }
+            let _ = service_manager_contract
+                .addRawData(data.into(), signature.into())
+                .gas(max_gas.unwrap_or(500_000).min(30_000_000))
+                .send()
+                .await
+                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(anyhow!("{}", e)))?;
         }
 
         Ok(())
@@ -392,45 +390,21 @@ impl CoreSubmission {
 
     async fn submit_to_cosmos(
         &self,
+        _chain_name: String,
         cosmos_client: SigningClient,
-        verifier_addr: Address,
-        task_queue_addr: Address,
-        msg: ChainMessage,
+        contract_addr: Address,
+        data: Vec<u8>,
     ) -> Result<(), SubmissionError> {
-        let (task_id, wasm_result) = match msg {
-            ChainMessage::Cosmos {
-                task_id,
-                wasm_result,
-                ..
-            } => (task_id, wasm_result),
-            _ => {
-                return Err(SubmissionError::ExpectedEthMessage);
-            }
-        };
+        // Contracts must have some interface with this shape
+        #[derive(Deserialize, Serialize, Debug)]
+        enum ExecuteMsg {
+            AddData { data: Vec<u8> },
+        }
 
-        let result: serde_json::Value = serde_json::from_slice(&wasm_result).map_err(|e| {
-            SubmissionError::CosmosParse(anyhow!(
-                "failed to parse wasm result into json value: {:?}",
-                e
-            ))
-        })?;
-
-        let result = serde_json::to_string(&result).map_err(|e| {
-            SubmissionError::CosmosParse(anyhow!(
-                "failed to serialize json value into string: {:?}",
-                e
-            ))
-        })?;
-
-        let contract_msg = VerifierExecuteMsg::ExecutedTask {
-            task_queue_contract: task_queue_addr.to_string(),
-            task_id,
-            #[allow(clippy::useless_conversion)]
-            result: result.into(),
-        };
+        let contract_msg = ExecuteMsg::AddData { data };
 
         let _tx_resp = cosmos_client
-            .contract_execute(&verifier_addr, &contract_msg, Vec::new(), None)
+            .contract_execute(&contract_addr, &contract_msg, Vec::new(), None)
             .await
             .map_err(SubmissionError::FailedToSubmitCosmos)?;
 
@@ -457,52 +431,29 @@ impl Submission for CoreSubmission {
                     _ = async move {
                     } => {
                         while let Some(msg) = rx.recv().await {
-                            let eth_client = match msg.submit() {
-                                Submit::EthSignedMessage{hd_index, chain_name, .. } => {
-                                    let client = match _self.get_eth_client(chain_name.to_string(), *hd_index).await {
-                                        Ok(client) => client,
-                                        Err(e) => {
-                                            tracing::error!("Failed to get client: {:?}", e);
-                                            continue;
+                            match msg.submit {
+                                Submit::EigenContract {chain_name, aggregate, service_manager } => {
+                                    if aggregate {
+                                    } else {
+                                        let client = match _self.get_eth_client(chain_name.to_string()).await {
+                                            Ok(client) => client,
+                                            Err(e) => {
+                                                tracing::error!("Failed to get client: {:?}", e);
+                                                continue;
+                                            }
+                                        };
+
+                                        if let Err(err) = _self.maybe_tap_eth_faucet(chain_name.to_string(), &client).await {
+                                            tracing::error!("Failed to tap faucet for client {}: {:?}",client.address(), err);
                                         }
-                                    };
 
-                                    if let Err(err) = _self.maybe_tap_eth_faucet(chain_name.to_string(), &client).await {
-                                        tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.address(), hd_index, err);
-                                    }
-
-                                    Some(client)
-                                },
-                                Submit::EthAggregatorTx{chain_name, ..} => {
-                                    let hd_index = 0;
-                                    let client = match _self.get_eth_client(chain_name.to_string(), hd_index).await {
-                                        Ok(client) => client,
-                                        Err(e) => {
-                                            tracing::error!("Failed to get client: {:?}", e);
-                                            continue;
+                                        if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), client, service_manager, msg.wasm_result, aggregate).await {
+                                            tracing::error!("{:?}", e);
                                         }
-                                    };
-
-                                    if let Err(err) = _self.maybe_tap_eth_faucet(chain_name.to_string(), &client).await {
-                                        tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.address(), hd_index, err);
                                     }
-
-                                    Some(client)
                                 },
-                                Submit::LayerVerifierTx { .. } => {
-                                    None
-                                }
-                            };
-
-                            let layer_client = match msg.submit() {
-                                Submit::EthSignedMessage{..} => {
-                                    None
-                                },
-                                Submit::EthAggregatorTx{..} => {
-                                    None
-                                },
-                                Submit::LayerVerifierTx { hd_index, .. } => {
-                                    let client = match _self.get_cosmos_client(*hd_index).await {
+                                Submit::CosmosContract { chain_name, contract_addr } => {
+                                    let client = match _self.get_cosmos_client(chain_name.to_string()).await {
                                         Ok(client) => client,
                                         Err(e) => {
                                             tracing::error!("Failed to get client: {:?}", e);
@@ -511,58 +462,16 @@ impl Submission for CoreSubmission {
                                     };
 
                                     if let Err(err) = _self.maybe_tap_cosmos_faucet(&client).await {
-                                        tracing::error!("Failed to tap faucet for client {} at hd_index {}: {:?}",client.addr, hd_index, err);
+                                        tracing::error!("Failed to tap faucet for client {}: {:?}",client.addr, err);
                                     }
 
-                                    Some(client)
+                                    if let Err(e) = _self.submit_to_cosmos(chain_name.to_string(), client, contract_addr, msg.wasm_result).await {
+                                        tracing::error!("{:?}", e);
+                                    }
+                                },
+                                Submit::None => {
                                 }
                             };
-
-                            match msg.submit() {
-                                Submit::EthSignedMessage{service_manager_addr, chain_name, max_gas, ..} => {
-                                    let max_gas = *max_gas;
-
-                                    match &msg.trigger_config().trigger {
-                                        Trigger::LayerQueue { .. } => {
-                                            tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
-                                            continue;
-                                        },
-                                        Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, max_gas, false).await {
-                                                tracing::error!("{:?}", e);
-                                            }
-                                        },
-                                    }
-                                },
-                                Submit::EthAggregatorTx{service_manager_addr, chain_name, max_gas} => {
-                                    let max_gas = *max_gas;
-                                    match &msg.trigger_config().trigger  {
-                                        Trigger::LayerQueue { .. } => {
-                                            tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
-                                            continue;
-                                        },
-                                        Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, max_gas, true).await {
-                                                tracing::error!("{:?}", e);
-                                            }
-                                        },
-                                    }
-                                },
-                                Submit::LayerVerifierTx { verifier_addr, ..} => {
-                                    match &msg.trigger_config().trigger {
-                                        Trigger::LayerQueue { task_queue_addr, .. } => {
-                                            if let Err(e) = _self.submit_to_cosmos(layer_client.unwrap(), verifier_addr.clone(), task_queue_addr.clone(), msg).await {
-                                                tracing::error!("{:?}", e);
-                                            }
-                                        }
-
-                                        Trigger::EthEvent { .. } => {
-                                            tracing::error!("Cross chain from Ethereum trigger to Layer submission is not supported yet");
-                                            continue;
-                                        }
-                                    }
-                                }
-                            }
                         }
                         tracing::debug!("Submission channel closed");
                     }

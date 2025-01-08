@@ -9,23 +9,22 @@ use crate::{layer_contract_client::SignedPayload, ServiceID};
 #[serde(rename_all = "snake_case")]
 pub enum AggregateAvsRequest {
     // left as an enum to allow for future expansion
-    EthTrigger {
+    EigenContract {
         signed_payload: SignedPayload,
         service_manager_address: Address,
-        service_id: ServiceID,
     },
 }
 
 impl AggregateAvsRequest {
     pub fn signed_payload(&self) -> &SignedPayload {
         match self {
-            AggregateAvsRequest::EthTrigger { signed_payload, .. } => signed_payload,
+            AggregateAvsRequest::EigenContract { signed_payload, .. } => signed_payload,
         }
     }
 
     pub fn service_manager_address(&self) -> Address {
         match self {
-            AggregateAvsRequest::EthTrigger {
+            AggregateAvsRequest::EigenContract {
                 service_manager_address,
                 ..
             } => *service_manager_address,
@@ -45,7 +44,5 @@ pub enum AddAggregatorServiceRequest {
     EthTrigger {
         /// Address of the avs
         service_manager_address: Address,
-        /// ID of the service
-        service_id: ServiceID,
     },
 }

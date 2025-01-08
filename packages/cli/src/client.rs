@@ -6,13 +6,14 @@ use utils::{
 };
 use utils::{ServiceID, WorkflowID};
 use wavs::{
-    apis::dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
-    http::{
-        handlers::service::{
-            add::{AddServiceRequest, ServiceRequest},
-            upload::UploadServiceResponse,
-        },
-        types::TriggerRequest,
+    apis::{
+        dispatcher::{AllowedHostPermission, ComponentWorld, ServiceConfig, Permissions, Submit},
+        trigger::Trigger,
+        ServiceID, WorkflowID,
+    },
+    http::handlers::service::{
+        add::{AddServiceRequest, ServiceRequest},
+        upload::UploadServiceResponse,
     },
     Digest,
 };
@@ -84,19 +85,21 @@ impl HttpClient {
         service_manager_address: alloy::primitives::Address,
         digest: Digest,
         config: ServiceConfig,
+        world: ComponentWorld,
     ) -> (ServiceID, WorkflowID) {
-        let trigger_address = Address::Eth(AddrEth::new(trigger_address.into()));
-        let submit = Submit::EthSignedMessage {
+        let trigger_address = trigger_address.into(); 
+        let submit = Submit::EigenContract {
             chain_name: self.chain_name.clone(),
-            hd_index: 0,
-            service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
             max_gas: config.max_gas,
+            service_manager: service_manager_address.into() 
+            aggregate: false,
         };
 
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
-            trigger: TriggerRequest::eth_event(trigger_address),
+            trigger: Trigger::contract_event(trigger_address),
+            world,
             id: id.clone(),
             digest: digest.into(),
             permissions: Permissions {

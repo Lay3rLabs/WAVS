@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use lavs_apis::{id::TaskId, tasks as task_queue};
 use layer_climb::{prelude::*, proto::abci::TxResponse, signing::SigningClient};
 use serde::Serialize;
 use wavs::config::Config;
@@ -19,6 +18,9 @@ impl CosmosTestApp {
         let task_queue_addr = std::env::var("WAVS_E2E_COSMOS_TASK_QUEUE_ADDRESS")
             .expect("WAVS_E2E_COSMOS_TASK_QUEUE_ADDRESS not set");
 
+        let verifier_addr = std::env::var("WAVS_E2E_COSMOS_VERIFIER_ADDRESS")
+            .expect("WAVS_E2E_COSMOS_VERIFIER_ADDRESS not set");
+
         let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().clone().into();
 
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
@@ -31,17 +33,7 @@ impl CosmosTestApp {
             task_queue_addr
         );
         let task_queue_addr = chain_config.parse_address(&task_queue_addr).unwrap();
-
-        let resp: lavs_apis::tasks::ConfigResponse = signing_client
-            .querier
-            .contract_smart(
-                &task_queue_addr,
-                &lavs_apis::tasks::QueryMsg::Custom(lavs_apis::tasks::CustomQueryMsg::Config {}),
-            )
-            .await
-            .unwrap();
-
-        let verifier_addr = chain_config.parse_address(&resp.verifier).unwrap();
+        let verifier_addr = chain_config.parse_address(&verifier_addr).unwrap();
 
         let task_queue = LayerTaskQueueContract::new(signing_client.clone(), task_queue_addr)
             .await

@@ -24,14 +24,9 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
 
     // Structs
 
-    /* small optimization, no need to double-save the TriggerId */
-    struct SignedData {
-        bytes data;
-        bytes signature;
-    }
 
     // Storage
-    mapping(ILayerTrigger.TriggerId => SignedData) public signedDataByTriggerId;
+    mapping(ILayerTrigger.TriggerId => ILayerServiceManager.SignedPayload) public signedPayloadByTriggerId;
 
     // Events
     event AddedSignedPayloadForTrigger(ILayerTrigger.TriggerId indexed triggerId);
@@ -51,10 +46,11 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         )
     {}
 
-    function addSignedPayloadForTrigger(
-        ILayerServiceManager.SignedPayload calldata signedPayload
-    ) public {
-        bytes32 message = keccak256(abi.encode(signedPayload.payload));
+    function addRawData(
+        bytes calldata data, 
+        bytes calldata signature
+    ) view public {
+        bytes32 message = keccak256(abi.encode(data));
         bytes32 ethSignedMessageHash = ECDSAUpgradeable.toEthSignedMessageHash(message);
         bytes4 magicValue = IERC1271Upgradeable.isValidSignature.selector;
 
@@ -62,29 +58,32 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
             !(magicValue ==
                 ECDSAStakeRegistry(stakeRegistry).isValidSignature(
                     ethSignedMessageHash,
-                    signedPayload.signature
+                    signature
                 ))
         ) {
             revert InvalidSignature();
         }
-
-        SignedData memory signedData = SignedData({
-            data: signedPayload.payload.data,
-            signature: signedPayload.signature
-        });
-
-        // updating the storage with data responses
-        signedDataByTriggerId[signedPayload.payload.triggerId] = signedData;
-
-        // emitting event
-        emit AddedSignedPayloadForTrigger(signedPayload.payload.triggerId);
     }
 
-    function addSignedPayloadForTriggerMulti(
-        ILayerServiceManager.SignedPayload[] calldata signedPayloads
+    // TODO - contracts should basically do this, but derive the extra stuff from signedPayload.data
+    function addSignedPayloadForTrigger(
+        ILayerServiceManager.SignedPayload calldata signedPayload,
+        ILayerTrigger.TriggerId triggerId
     ) public {
+        addRawData(signedPayload.data, signedPayload.signature);
+
+        // updating the storage with data responses
+        signedPayloadByTriggerId[triggerId] = signedPayload;
+
+        // emitting event
+        emit AddedSignedPayloadForTrigger(triggerId);
+    }
+
+    function addSignedPayloadMulti(
+        ILayerServiceManager.SignedPayload[] calldata signedPayloads
+    ) view public {
         for (uint32 i = 0; i < signedPayloads.length; i++) {
-            LayerServiceManager(address(this)).addSignedPayloadForTrigger(signedPayloads[i]);
+            LayerServiceManager(address(this)).addRawData(signedPayloads[i].data, signedPayloads[i].signature);
         }
     }
 }

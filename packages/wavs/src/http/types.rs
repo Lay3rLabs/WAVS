@@ -1,50 +1,8 @@
 use std::{fmt, ops::Deref, str::FromStr};
 
-use layer_climb::prelude::*;
 use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{apis::trigger::Trigger, Digest};
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum TriggerRequest {
-    // TODO: add this variant later, not for now
-    // #[serde(rename_all = "camelCase")]
-    // Cron { schedule: String },
-    #[serde(rename_all = "camelCase")]
-    LayerQueue {
-        // FIXME: add some chain name. right now all triggers are on one chain
-        task_queue_addr: Address,
-        /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
-        poll_interval: u32,
-        /// For now, this is the hd_index associated with this trigger
-        /// Later, this will likely be part of a separate "submission manager" API
-        /// and internally it's already separated that way
-        hd_index: u32,
-    },
-    #[serde(rename_all = "camelCase")]
-    EthEvent { contract_address: Address },
-}
-
-pub type TriggerResponse = TriggerRequest;
-
-impl Trigger {
-    pub fn into_response(self, hd_index: u32) -> TriggerResponse {
-        match self {
-            Trigger::LayerQueue {
-                task_queue_addr,
-                poll_interval,
-            } => TriggerResponse::LayerQueue {
-                task_queue_addr,
-                poll_interval,
-                hd_index,
-            },
-            Trigger::EthEvent { contract_address } => {
-                TriggerResponse::EthEvent { contract_address }
-            }
-        }
-    }
-}
+use crate::Digest;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::{
     apis::{
-        dispatcher::{Component, Service, ServiceStatus, Workflow},
+        dispatcher::{Component, ComponentWorld, Service, ServiceStatus, Submit, Workflow},
         trigger::Trigger,
     },
     storage::db::{RedbStorage, Table, JSON},
@@ -71,11 +71,11 @@ fn db_service_store() {
     let components: BTreeMap<ComponentID, Component> = [
         (
             ComponentID::new("component-id-1").unwrap(),
-            Component::new(&Digest::new(b"digest-1")),
+            Component::new(Digest::new(b"digest-1"), ComponentWorld::Raw),
         ),
         (
             ComponentID::new("component-id-2").unwrap(),
-            Component::new(&Digest::new(b"digest-2")),
+            Component::new(Digest::new(b"digest-2"), ComponentWorld::Raw),
         ),
     ]
     .into();
@@ -84,17 +84,17 @@ fn db_service_store() {
         (
             WorkflowID::new("workflow-id-1").unwrap(),
             Workflow {
-                trigger: Trigger::eth_event(rand_address_eth()),
+                trigger: Trigger::contract_event(rand_address_eth()),
                 component: ComponentID::new("component-id-1").unwrap(),
-                submit: None,
+                submit: Submit::None,
             },
         ),
         (
             WorkflowID::new("workflow-id-2").unwrap(),
             Workflow {
-                trigger: Trigger::eth_event(rand_address_eth()),
+                trigger: Trigger::contract_event(rand_address_eth()),
                 component: ComponentID::new("component-id-2").unwrap(),
-                submit: None,
+                submit: Submit::None,
             },
         ),
     ]

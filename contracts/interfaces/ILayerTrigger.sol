@@ -4,8 +4,6 @@ pragma solidity ^0.8.22;
 interface ILayerTrigger {
     struct TriggerResponse {
         TriggerId triggerId;
-        string serviceId;
-        string workflowId;
         address creator;
         bytes data;
     }

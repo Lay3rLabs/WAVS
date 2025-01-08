@@ -6888,7 +6888,6 @@ dependencies = [
  "futures",
  "hex",
  "http-body-util",
- "lavs-apis",
  "layer-climb",
  "lru",
  "rand",

@@ -12,7 +12,6 @@ use alloy::{
 };
 use anyhow::Result;
 use futures::{Stream, StreamExt};
-use lavs_apis::{events::task_queue_events::TaskCreatedEvent, id::TaskId, tasks as task_queue};
 use layer_climb::prelude::*;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -23,10 +22,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig},
-    layer_contract_client::{
-        layer_trigger::LayerTrigger::{self, NewTrigger},
-        TriggerId,
-    },
+    layer_contract_client::layer_trigger::LayerTrigger::WavsTrigger,
 };
 use utils::{ServiceID, WorkflowID};
 
@@ -40,9 +36,9 @@ pub struct CoreTriggerManager {
 
 struct LookupMaps {
     /// single lookup for all triggers (in theory, can be more than just task queue addr)
-    pub all_trigger_data: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
-    /// lookup id by task queue address
-    pub triggers_by_task_queue: Arc<RwLock<HashMap<Address, LookupId>>>,
+    pub trigger_configs: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
+    /// lookup id by contract event address
+    pub triggers_by_contract_event: Arc<RwLock<HashMap<Address, LookupId>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -53,15 +49,30 @@ struct LookupMaps {
 impl LookupMaps {
     pub fn new() -> Self {
         Self {
-            all_trigger_data: Arc::new(RwLock::new(BTreeMap::new())),
+            trigger_configs: Arc::new(RwLock::new(BTreeMap::new())),
             lookup_id: Arc::new(AtomicUsize::new(0)),
-            triggers_by_task_queue: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 }
 
 type LookupId = usize;
+
+// *potential* triggers that we can react to
+// this is just a local encapsulation, not a full trigger
+// and is used to ultimately filter+map to a TriggerAction
+enum StreamTriggers {
+    Cosmos {
+        chain_id: String,
+        contract_events: HashMap<Address, HashSet<Vec<u8>>>,
+    },
+    Ethereum {
+        chain_id: String,
+        log: Log,
+        data: Vec<u8>,
+    },
+}
 
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
@@ -94,18 +105,8 @@ impl CoreTriggerManager {
         action_sender: mpsc::Sender<TriggerAction>,
     ) -> Result<(), TriggerError> {
         // stream of streams, one for each chain
-        let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<BlockTriggers>> + Send>>> =
+        let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<StreamTriggers>> + Send>>> =
             Vec::new();
-
-        enum BlockTriggers {
-            EthereumLog {
-                chain_name: String,
-                log: Log,
-            },
-            Layer {
-                triggers: HashMap<Address, HashSet<TaskId>>,
-            },
-        }
 
         let cosmos_client = match self.cosmos_chain_config.clone() {
             Some(chain_config) => Some(
@@ -139,29 +140,41 @@ impl CoreTriggerManager {
                     .await
                     .map_err(TriggerError::Climb)?
                     .map(move |block_events| {
-                        let mut task_created_events: HashMap<Address, HashSet<TaskId>> =
+                        let mut contract_events: HashMap<Address, HashSet<Vec<u8>>> =
                             HashMap::new();
 
                         match block_events {
                             Ok(block_events) => {
                                 let events = CosmosTxEvents::from(block_events.events);
 
-                                for event in events.events_iter().map(cosmwasm_std::Event::from) {
-                                    if let Ok(task_event) = TaskCreatedEvent::try_from(&event) {
-                                        let contract_address =
-                                            event.attributes.iter().find_map(|attr| {
-                                                if attr.key == "_contract_address" {
-                                                    chain_config.parse_address(&attr.value).ok()
-                                                } else {
-                                                    None
-                                                }
-                                            });
+                                for event in events.filter_events_by_type("wavs-trigger").map(cosmwasm_std::Event::from) {
+                                    let contract_address =
+                                        event.attributes.iter().find_map(|attr| {
+                                            if attr.key == "_contract_address" {
+                                                chain_config.parse_address(&attr.value).ok()
+                                            } else {
+                                                None
+                                            }
+                                        });
 
-                                        if let Some(contract_address) = contract_address {
-                                            task_created_events
+                                    let data =
+                                        event.attributes.iter().find_map(|attr| {
+                                            if attr.key == "data" {
+                                                hex::decode(&attr.value).ok()
+                                            } else {
+                                                None
+                                            }
+                                        });
+
+                                    match (contract_address, data) {
+                                        (Some(contract_address), Some(data)) => {
+                                            contract_events
                                                 .entry(contract_address)
                                                 .or_default()
-                                                .insert(task_event.task_id);
+                                                .insert(data);
+                                        }
+                                        _ => {
+                                            tracing::error!("Error: {:?}", "missing contract address or data on wavs-trigger event");
                                         }
                                     }
                                 }
@@ -171,8 +184,9 @@ impl CoreTriggerManager {
                             }
                         }
 
-                        Ok(BlockTriggers::Layer {
-                            triggers: task_created_events,
+                        Ok(StreamTriggers::Cosmos {
+                            chain_id: chain_config.chain_id.to_string(),
+                            contract_events
                         })
                     }),
             );
@@ -184,7 +198,7 @@ impl CoreTriggerManager {
             tracing::debug!("Trigger Manager for Ethereum chain {} started", chain_name);
 
             // Start the event stream
-            let filter = Filter::new().event_signature(NewTrigger::SIGNATURE_HASH);
+            let filter = Filter::new().event_signature(WavsTrigger::SIGNATURE_HASH);
 
             let stream = query_client
                 .provider
@@ -193,13 +207,18 @@ impl CoreTriggerManager {
                 .map_err(|e| TriggerError::Ethereum(e.into()))?
                 .into_stream();
 
-            let chain_name = chain_name.clone();
+            let chain_id = chain_name.clone();
 
             let event_stream = Box::pin(stream.map(move |log| {
-                Ok(BlockTriggers::EthereumLog {
-                    chain_name: chain_name.to_string(),
-                    log,
-                })
+                if let Ok(event) = log.log_decode::<WavsTrigger>() {
+                    Ok(StreamTriggers::Ethereum {
+                        chain_id: chain_id.clone(),
+                        log,
+                        data: event.inner.data._0.to_vec(),
+                    })
+                } else {
+                    Err(anyhow::anyhow!("error decoding log"))
+                }
             }));
 
             streams.push(event_stream);
@@ -209,176 +228,84 @@ impl CoreTriggerManager {
         let mut streams = futures::stream::select_all(streams);
 
         while let Some(res) = streams.next().await {
-            match res {
+            let res = match res {
                 Err(err) => {
                     tracing::error!("{:?}", err);
+                    continue;
                 }
-                Ok(BlockTriggers::EthereumLog { chain_name, log }) => {
-                    if let Ok(log) = log.log_decode::<NewTrigger>() {
-                        let service_id = log.data().serviceId.to_string();
-                        let workflow_id = log.data().workflowId.to_string();
-                        let trigger_id = log.data().triggerId;
+                Ok(res) => res,
+            };
 
-                        match (ServiceID::new(&service_id), WorkflowID::new(&workflow_id)) {
-                            (Ok(service_id), Ok(workflow_id)) => {
-                                let trigger_id = TriggerId::new(trigger_id);
+            let mut trigger_actions = Vec::new();
 
-                                let query_client = ethereum_clients.get(&chain_name).unwrap();
-
-                                let contract =
-                                    LayerTrigger::new(log.address(), query_client.provider.clone());
-
-                                let resp = contract.getTrigger(*trigger_id).call().await;
-
-                                match resp {
-                                    Ok(resp) => {
-                                        let payload = resp._0.data.to_vec();
-
-                                        self.handle_trigger(
-                                            &action_sender,
-                                            &Address::Eth(AddrEth::new(log.address().into())),
-                                            TriggerData::EthEvent {
-                                                service_id,
-                                                workflow_id,
-                                                payload,
-                                                trigger_id,
-                                            },
-                                        )
-                                        .await;
-                                    }
-                                    Err(err) => {
-                                        tracing::error!("error querying trigger: {:?}", err);
-                                    }
-                                }
-                            }
-                            _ => {
-                                tracing::error!("error parsing service_id ({service_id}) or workflow_id ({workflow_id})");
+            match res {
+                StreamTriggers::Ethereum {
+                    log,
+                    chain_id,
+                    data,
+                } => {
+                    let contract_address = Address::Eth(AddrEth::new(log.address().into()));
+                    if let Some(trigger_config) = self
+                        .lookup_maps
+                        .triggers_by_contract_event
+                        .read()
+                        .unwrap()
+                        .get(&contract_address)
+                        .and_then(|id| {
+                            self.lookup_maps
+                                .trigger_configs
+                                .read()
+                                .unwrap()
+                                .get(id)
+                                .cloned()
+                        })
+                    {
+                        trigger_actions.push(TriggerAction {
+                            data: TriggerData::EthContractEvent {
+                                contract_address,
+                                chain_id,
+                                log: log.inner.data,
+                                event_data: Some(data),
+                            },
+                            config: trigger_config,
+                        });
+                    }
+                }
+                StreamTriggers::Cosmos {
+                    contract_events,
+                    chain_id,
+                } => {
+                    let triggers_by_contract_event_lock =
+                        self.lookup_maps.triggers_by_contract_event.read().unwrap();
+                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+                    for (contract_address, datas) in contract_events {
+                        if let Some(trigger_config) = triggers_by_contract_event_lock
+                            .get(&contract_address)
+                            .and_then(|id| trigger_configs_lock.get(id).cloned())
+                        {
+                            for data in datas.into_iter() {
+                                trigger_actions.push(TriggerAction {
+                                    data: TriggerData::CosmosContractEvent {
+                                        contract_address: contract_address.clone(),
+                                        chain_id: chain_id.clone(),
+                                        event_data: Some(data),
+                                    },
+                                    config: trigger_config.clone(),
+                                });
                             }
                         }
                     }
                 }
-                Ok(BlockTriggers::Layer { triggers }) => {
-                    for (contract_address, task_ids) in triggers {
-                        for task_id in task_ids {
-                            let resp: Result<task_queue::TaskResponse> = cosmos_client
-                                .as_ref()
-                                .unwrap() // safe - only way we got this is by having a client in the first place
-                                .contract_smart(
-                                    &contract_address,
-                                    &task_queue::QueryMsg::Custom(
-                                        task_queue::CustomQueryMsg::Task { id: task_id },
-                                    ),
-                                )
-                                .await;
+            }
 
-                            let payload = match resp {
-                                Ok(resp) => {
-                                    if !matches!(resp.status, task_queue::Status::Open {}) {
-                                        tracing::debug!("task is not open: {:?}", resp);
-                                        continue;
-                                    }
-                                    resp.payload
-                                }
-                                Err(err) => {
-                                    tracing::error!("error querying task queue: {:?}", err);
-                                    continue;
-                                }
-                            };
-
-                            let payload = serde_json::to_vec(&payload)
-                                .map_err(|e| TriggerError::ParseAvsPayload(e.into()))?;
-
-                            self.handle_trigger(
-                                &action_sender,
-                                &contract_address,
-                                TriggerData::Queue { task_id, payload },
-                            )
-                            .await;
-                        }
-                    }
-                }
+            for action in trigger_actions {
+                action_sender.send(action).await.unwrap();
             }
         }
 
         tracing::debug!("Trigger Manager watcher finished");
 
         Ok(())
-    }
-
-    async fn handle_trigger(
-        &self,
-        action_sender: &mpsc::Sender<TriggerAction>,
-        // for now all triggers are "task queues" of some sort
-        // but this will eventually be more generic
-        contract_address: &Address,
-        data: TriggerData,
-    ) {
-        let lookup_id = match &data {
-            TriggerData::Queue { .. } => {
-                let triggers_by_task_queue_lock =
-                    self.lookup_maps.triggers_by_task_queue.read().unwrap();
-
-                match triggers_by_task_queue_lock.get(contract_address) {
-                    Some(lookup_id) => *lookup_id,
-                    None => {
-                        tracing::debug!("not our task queue: {:?}", contract_address);
-
-                        return;
-                    }
-                }
-            }
-            TriggerData::EthEvent {
-                service_id,
-                workflow_id,
-                ..
-            } => {
-                let triggers_by_service_workflow_lock = self
-                    .lookup_maps
-                    .triggers_by_service_workflow
-                    .read()
-                    .unwrap();
-
-                match triggers_by_service_workflow_lock
-                    .get(service_id)
-                    .ok_or(format!("not our service: {}", service_id))
-                    .and_then(|map| {
-                        map.get(workflow_id).ok_or(format!(
-                            "not our workflow: {} (in service {})",
-                            workflow_id, service_id
-                        ))
-                    }) {
-                    Ok(lookup_id) => *lookup_id,
-                    Err(msg) => {
-                        tracing::warn!("{}", msg);
-                        return;
-                    }
-                }
-            }
-        };
-
-        let trigger = {
-            let all_trigger_data_lock = self.lookup_maps.all_trigger_data.read().unwrap();
-
-            all_trigger_data_lock
-                .get(&lookup_id)
-                .ok_or(TriggerError::NoSuchTriggerData(lookup_id))
-                .cloned()
-        };
-
-        match trigger {
-            Ok(trigger) => {
-                action_sender
-                    .send(TriggerAction {
-                        config: trigger,
-                        data,
-                    })
-                    .await
-                    .unwrap();
-            }
-            Err(err) => {
-                tracing::error!("error finding task: {:?}", err);
-            }
-        }
     }
 }
 
@@ -408,31 +335,22 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn add_trigger(&self, data: TriggerConfig) -> Result<(), TriggerError> {
+    fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
         // get the next lookup id
         let lookup_id = self
             .lookup_maps
             .lookup_id
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        match &data.trigger {
-            Trigger::LayerQueue {
-                task_queue_addr,
-                poll_interval: _,
-            } => {
+        match &config.trigger {
+            Trigger::ContractEvent { address } => {
                 self.lookup_maps
-                    .triggers_by_task_queue
+                    .triggers_by_contract_event
                     .write()
                     .unwrap()
-                    .insert(task_queue_addr.clone(), lookup_id);
+                    .insert(address.clone(), lookup_id);
             }
-            Trigger::EthEvent { contract_address } => {
-                self.lookup_maps
-                    .triggers_by_task_queue
-                    .write()
-                    .unwrap()
-                    .insert(contract_address.clone(), lookup_id);
-            }
+            Trigger::Test => {}
         }
 
         // adding it to our lookups is the same, regardless of type
@@ -440,15 +358,15 @@ impl TriggerManager for CoreTriggerManager {
             .triggers_by_service_workflow
             .write()
             .unwrap()
-            .entry(data.service_id.clone())
+            .entry(config.service_id.clone())
             .or_default()
-            .insert(data.workflow_id.clone(), lookup_id);
+            .insert(config.workflow_id.clone(), lookup_id);
 
         self.lookup_maps
-            .all_trigger_data
+            .trigger_configs
             .write()
             .unwrap()
-            .insert(lookup_id, data);
+            .insert(lookup_id, config);
         Ok(())
     }
 
@@ -474,8 +392,8 @@ impl TriggerManager for CoreTriggerManager {
             .ok_or(TriggerError::NoSuchWorkflow(service_id, workflow_id))?;
 
         remove_trigger_data(
-            &mut self.lookup_maps.all_trigger_data.write().unwrap(),
-            &mut self.lookup_maps.triggers_by_task_queue.write().unwrap(),
+            &mut self.lookup_maps.trigger_configs.write().unwrap(),
+            &mut self.lookup_maps.triggers_by_contract_event.write().unwrap(),
             lookup_id,
         )?;
 
@@ -483,10 +401,10 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
-        let mut all_trigger_data_lock = self.lookup_maps.all_trigger_data.write().unwrap();
-        let mut triggers_by_task_queue_lock =
-            self.lookup_maps.triggers_by_task_queue.write().unwrap();
+    fn remove_service(&self, service_id: crate::apis::ServiceID) -> Result<(), TriggerError> {
+        let mut trigger_configs = self.lookup_maps.trigger_configs.write().unwrap();
+        let mut triggers_by_contract_event =
+            self.lookup_maps.triggers_by_contract_event.write().unwrap();
         let mut triggers_by_service_workflow_lock = self
             .lookup_maps
             .triggers_by_service_workflow
@@ -499,8 +417,8 @@ impl TriggerManager for CoreTriggerManager {
 
         for lookup_id in workflow_map.values() {
             remove_trigger_data(
-                &mut all_trigger_data_lock,
-                &mut triggers_by_task_queue_lock,
+                &mut trigger_configs,
+                &mut triggers_by_contract_event,
                 *lookup_id,
             )?;
         }
@@ -520,17 +438,17 @@ impl TriggerManager for CoreTriggerManager {
             .triggers_by_service_workflow
             .read()
             .unwrap();
-        let all_trigger_data_lock = self.lookup_maps.all_trigger_data.read().unwrap();
+        let trigger_configs = self.lookup_maps.trigger_configs.read().unwrap();
 
         let workflow_map = triggers_by_service_workflow_lock
             .get(&service_id)
             .ok_or(TriggerError::NoSuchService(service_id))?;
 
         for lookup_id in workflow_map.values() {
-            let trigger_data = all_trigger_data_lock
+            let trigger_config = trigger_configs
                 .get(lookup_id)
                 .ok_or(TriggerError::NoSuchTriggerData(*lookup_id))?;
-            triggers.push(trigger_data.clone());
+            triggers.push(trigger_config.clone());
         }
 
         Ok(triggers)
@@ -538,30 +456,23 @@ impl TriggerManager for CoreTriggerManager {
 }
 
 fn remove_trigger_data(
-    all_trigger_data: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_task_queue: &mut HashMap<Address, LookupId>,
+    trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
+    triggers_by_contract_address: &mut HashMap<Address, LookupId>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
-    let trigger_data = all_trigger_data
+    let trigger_data = trigger_configs
         .remove(&lookup_id)
         .ok_or(TriggerError::NoSuchTriggerData(lookup_id))?;
 
-    // 2. remove from task_queue_lookup_map
+    // 2. remove from contracts
     match &trigger_data.trigger {
-        Trigger::LayerQueue {
-            task_queue_addr,
-            poll_interval: _,
-        } => {
-            triggers_by_task_queue.remove(task_queue_addr).ok_or(
-                TriggerError::NoSuchTaskQueueTrigger(task_queue_addr.clone()),
-            )?;
+        Trigger::ContractEvent { address } => {
+            triggers_by_contract_address
+                .remove(address)
+                .ok_or(TriggerError::NoSuchContract(address.clone()))?;
         }
-        Trigger::EthEvent { contract_address } => {
-            triggers_by_task_queue.remove(contract_address).ok_or(
-                TriggerError::NoSuchTaskQueueTrigger(contract_address.clone()),
-            )?;
-        }
+        Trigger::Test => {}
     }
 
     Ok(())
@@ -629,18 +540,30 @@ mod tests {
         let task_queue_addr_2_1 = rand_address_eth();
         let task_queue_addr_2_2 = rand_address_eth();
 
-        let trigger_1_1 =
-            TriggerConfig::eth_event(&service_id_1, &workflow_id_1, task_queue_addr_1_1.clone())
-                .unwrap();
-        let trigger_1_2 =
-            TriggerConfig::eth_event(&service_id_1, &workflow_id_2, task_queue_addr_1_2.clone())
-                .unwrap();
-        let trigger_2_1 =
-            TriggerConfig::eth_event(&service_id_2, &workflow_id_1, task_queue_addr_2_1.clone())
-                .unwrap();
-        let trigger_2_2 =
-            TriggerConfig::eth_event(&service_id_2, &workflow_id_2, task_queue_addr_2_2.clone())
-                .unwrap();
+        let trigger_1_1 = TriggerConfig::contract_event(
+            &service_id_1,
+            &workflow_id_1,
+            task_queue_addr_1_1.clone(),
+        )
+        .unwrap();
+        let trigger_1_2 = TriggerConfig::contract_event(
+            &service_id_1,
+            &workflow_id_2,
+            task_queue_addr_1_2.clone(),
+        )
+        .unwrap();
+        let trigger_2_1 = TriggerConfig::contract_event(
+            &service_id_2,
+            &workflow_id_1,
+            task_queue_addr_2_1.clone(),
+        )
+        .unwrap();
+        let trigger_2_2 = TriggerConfig::contract_event(
+            &service_id_2,
+            &workflow_id_2,
+            task_queue_addr_2_2.clone(),
+        )
+        .unwrap();
 
         manager.add_trigger(trigger_1_1).unwrap();
         manager.add_trigger(trigger_1_2).unwrap();
@@ -694,11 +617,8 @@ mod tests {
 
         fn get_trigger_addr(trigger: &Trigger) -> &Address {
             match trigger {
-                Trigger::LayerQueue {
-                    task_queue_addr,
-                    poll_interval: _,
-                } => task_queue_addr,
-                Trigger::EthEvent { contract_address } => contract_address,
+                Trigger::ContractEvent { address } => address,
+                _ => panic!("unexpected trigger type"),
             }
         }
     }

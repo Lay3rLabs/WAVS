@@ -5,8 +5,6 @@ import {ILayerTrigger} from "./interfaces/ILayerTrigger.sol";
 contract LayerTrigger {
     // Data structures
     struct Trigger {
-        string serviceId;
-        string workflowId;
         address creator;
         bytes data;
     }
@@ -18,7 +16,8 @@ contract LayerTrigger {
     mapping(address => ILayerTrigger.TriggerId[]) public triggerIdsByCreator;
 
     // Events
-    event NewTrigger(string serviceId, string workflowId, ILayerTrigger.TriggerId indexed triggerId);
+    event NewTriggerId(ILayerTrigger.TriggerId);
+    event WavsTrigger(bytes);
 
     // Global vars
     ILayerTrigger.TriggerId public nextTriggerId;
@@ -27,18 +26,15 @@ contract LayerTrigger {
 
     /**
      * @notice Add a new trigger.
-     * @param serviceId The service identifier (string).
      * @param data The request data (bytes).
      */
-    function addTrigger(string memory serviceId, string memory workflowId, bytes memory data) public {
+    function addTrigger(bytes memory data) public {
         // Get the next trigger id
         nextTriggerId = ILayerTrigger.TriggerId.wrap(ILayerTrigger.TriggerId.unwrap(nextTriggerId) + 1);
         ILayerTrigger.TriggerId triggerId = nextTriggerId;
 
         // Create the trigger
         Trigger memory trigger = Trigger({
-            serviceId: serviceId,
-            workflowId: workflowId,
             creator: msg.sender,
             data: data
         });
@@ -48,8 +44,9 @@ contract LayerTrigger {
 
         triggerIdsByCreator[msg.sender].push(triggerId);
 
-        // emit event
-        emit NewTrigger(serviceId, workflowId, triggerId);
+        // emit the data directly in an event
+        emit NewTriggerId(triggerId);
+        emit WavsTrigger(data);
     }
 
     /**
@@ -61,8 +58,6 @@ contract LayerTrigger {
 
         return ILayerTrigger.TriggerResponse({
             triggerId: triggerId,
-            workflowId: trigger.workflowId,
-            serviceId: trigger.serviceId,
             creator: trigger.creator,
             data: trigger.data
         });

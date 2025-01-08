@@ -4,12 +4,9 @@ use utils::{
     eth_client::EthSigningClient,
     layer_contract_client::{LayerAddresses, LayerContractClientSimple, SignedData},
 };
-use utils::{ServiceID, WorkflowID};
 
 pub async fn add_task(
     eth_signing_client: EthSigningClient,
-    service_id: ServiceID,
-    workflow_id: WorkflowID,
     service_addresses: &LayerAddresses,
     data: Vec<u8>,
 ) -> SignedData {
@@ -19,11 +16,7 @@ pub async fn add_task(
         service_addresses.trigger,
     );
 
-    let trigger_id = client
-        .trigger
-        .add_trigger(service_id.to_string(), workflow_id.to_string(), data)
-        .await
-        .unwrap();
+    let trigger_id = client.trigger.add_trigger(data).await.unwrap();
 
     tracing::info!("Task submitted with id: {}", trigger_id);
 

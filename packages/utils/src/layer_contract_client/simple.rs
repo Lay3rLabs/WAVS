@@ -1,20 +1,16 @@
-use super::layer_service_manager::{ILayerServiceManager::Payload, LayerServiceManager};
+use super::layer_service_manager::LayerServiceManager;
 use super::{
     solidity_types, LayerContractClientFull, LayerContractClientTrigger, LayerServiceManagerT,
     TriggerId,
 };
-use crate::{
-    alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient,
-    layer_contract_client::layer_service_manager::LayerServiceManager::AddedSignedPayloadForTrigger,
-};
+use crate::eth_client::EthSigningClient;
 use alloy::contract::Error;
-use alloy::primitives::{FixedBytes, PrimitiveSignature};
+use alloy::primitives::FixedBytes;
 use alloy::{
     dyn_abi::DynSolValue,
     primitives::{eip191_hash_message, keccak256, Address, U256},
     providers::Provider,
     signers::SignerSync,
-    sol_types::SolValue,
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -55,7 +51,7 @@ impl LayerContractClientSimple {
     pub async fn load_signed_data(&self, trigger_id: TriggerId) -> Result<Option<SignedData>> {
         let resp = self
             .service_manager_contract
-            .signedDataByTriggerId(*trigger_id)
+            .signedPayloadByTriggerId(*trigger_id)
             .call()
             .await
             .context("Failed to get signed data")?;
@@ -81,7 +77,6 @@ impl LayerContractClientSimple {
         let trigger_id = signed_payload.trigger_id;
         tracing::debug!("Signing and responding to trigger {}", trigger_id);
 
-        let signed_payload_abi = signed_payload.into_submission_abi();
 
         // EIP-1559 has a default 30m gas limit per block without override. Else:
         // 'a intrinsic gas too high -- tx.gas_limit > env.block.gas_limit' is thrown
@@ -94,7 +89,7 @@ impl LayerContractClientSimple {
 
         let result = self
             .service_manager_contract
-            .addSignedPayloadForTrigger(signed_payload_abi)
+            .addRawData(signed_payload.data.into(), signed_payload.signature.into())
             .gas(gas)
             .send()
             .await;
@@ -103,23 +98,6 @@ impl LayerContractClientSimple {
             Ok(tx) => {
                 let receipt = tx.get_receipt().await?;
                 tracing::debug!("Transaction receipt: {:?}", receipt);
-
-                let event: AddedSignedPayloadForTrigger = receipt
-                    .solidity_event()
-                    .context("Unable to add signed data for trigger")?;
-
-                if event.triggerId != *trigger_id {
-                    anyhow::bail!(
-                        "Trigger ID mismatch: expected {:?}, got {:?}",
-                        trigger_id,
-                        event.triggerId
-                    );
-                }
-
-                tracing::debug!(
-                    "Successfully added signed payload for trigger {}",
-                    trigger_id
-                );
             }
             Err(e) => {
                 tracing::error!("Failed to send signed payload with error: {:#}", e);
@@ -138,25 +116,14 @@ impl LayerContractClientSimple {
         Ok(())
     }
 
-    pub async fn sign_payload(
-        &self,
-        trigger_id: TriggerId,
-        data: Vec<u8>,
-    ) -> Result<SignedPayload> {
-        let payload = Payload {
-            triggerId: *trigger_id,
-            data: data.into(),
-        };
-
-        let payload_hash = eip191_hash_message(keccak256(payload.abi_encode()));
-
-        let signature = self.eth.signer.sign_hash_sync(&payload_hash)?;
+    pub async fn sign_payload(&self, data: Vec<u8>) -> Result<SignedPayload> {
+        let data_hash = eip191_hash_message(keccak256(&data));
+        let signature = self.eth.signer.sign_hash_sync(&data_hash)?.into();
 
         Ok(SignedPayload {
             operator: self.eth.address(),
-            trigger_id,
-            data: payload.data.to_vec(),
-            payload_hash,
+            data,
+            data_hash,
             signature,
             signed_block_height: self.eth.provider.get_block_number().await? - 1,
         })
@@ -168,10 +135,9 @@ impl LayerContractClientSimple {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SignedPayload {
     pub operator: Address,
-    pub trigger_id: TriggerId,
     pub data: Vec<u8>,
-    pub payload_hash: FixedBytes<32>,
-    pub signature: PrimitiveSignature,
+    pub data_hash: FixedBytes<32>,
+    pub signature: Vec<u8>,
     pub signed_block_height: u64,
 }
 
@@ -180,7 +146,7 @@ impl SignedPayload {
         self,
     ) -> solidity_types::layer_service_manager::ILayerServiceManager::SignedPayload {
         let operators: Vec<DynSolValue> = vec![self.operator.into()];
-        let signature: Vec<DynSolValue> = vec![DynSolValue::Bytes(self.signature.into())];
+        let signature: Vec<DynSolValue> = vec![DynSolValue::Bytes(self.signature)];
         let signed_block_height = U256::from(self.signed_block_height);
 
         let signature = DynSolValue::Tuple(vec![
@@ -191,10 +157,7 @@ impl SignedPayload {
         .abi_encode_params();
 
         solidity_types::layer_service_manager::ILayerServiceManager::SignedPayload {
-            payload: Payload {
-                triggerId: *self.trigger_id,
-                data: self.data.into(),
-            },
+            data: self.data.into(),
             signature: signature.into(),
         }
     }

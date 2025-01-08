@@ -9,6 +9,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wavs::apis::dispatcher::ServiceConfig;
+use wavs::apis::dispatcher::ComponentWorld;
 
 use crate::config::Config;
 
@@ -31,6 +32,10 @@ pub enum Command {
         /// Path to the WASI component
         #[clap(long)]
         component: PathBuf,
+
+        /// The kind of world the component adheres to
+        #[clap(long)]
+        world: ComponentWorld,
 
         #[clap(flatten)]
         args: CliArgs,
