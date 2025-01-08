@@ -25,6 +25,7 @@ docker-stop:
 
 # compile WASI components, places the output in components dir
 wasi-build COMPONENT="*":
+    rm -f ./examples/target/wasm32-wasip1/release/*.wasm 
     rm -rf ./components/
     mkdir -p ./components/
     @for C in examples/{{COMPONENT}}/Cargo.toml; do \

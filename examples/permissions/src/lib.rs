@@ -8,31 +8,29 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use bindings::{
-    wasi::{
-        http::{
-            outgoing_handler,
-            types::{Headers, InputStream, OutgoingRequest, Scheme},
-        },
-        io::streams::StreamError,
-    },
-    Guest, Output, TaskQueueInput,
-};
+use bindings::{Contract, Guest};
 use serde::{Deserialize, Serialize};
 use url::Url;
+use wasi::{
+    http::{
+        outgoing_handler,
+        types::{Headers, InputStream, OutgoingRequest, Scheme},
+    },
+    io::streams::StreamError,
+};
 
 struct Component;
 
 impl Guest for Component {
-    fn run_task(input: TaskQueueInput) -> Output {
-        match inner_run_task(input) {
+    fn run(_contract: Contract, input: Vec<u8>) -> Result<Vec<u8>, String> {
+        match inner_run_task(serde_json::from_slice(&input).map_err(|x| x.to_string())?) {
             Ok(response) => serde_json::to_vec(&response).map_err(|x| x.to_string()),
             Err(e) => Err(e.to_string()),
         }
     }
 }
 
-fn inner_run_task(input: TaskQueueInput) -> Result<Response> {
+fn inner_run_task(input: PermissionsInput) -> Result<Response> {
     const DIRECTORY_NAME: &'static str = "./responses";
 
     let responses_path = Path::new(DIRECTORY_NAME);
@@ -40,12 +38,10 @@ fn inner_run_task(input: TaskQueueInput) -> Result<Response> {
         fs::create_dir_all(DIRECTORY_NAME)?;
     }
 
-    let req: Request = serde_json::from_slice(&input.request).context("Failed to parse request")?;
-
     let response_path = responses_path.join(format!("{}.txt", input.timestamp));
     let mut response_file = fs::File::create(&response_path)?;
 
-    let contents = get_url(Url::parse(&req.url)?)?;
+    let contents = get_url(Url::parse(&input.url)?)?;
 
     response_file.write_all(contents.as_bytes())?;
 
@@ -118,8 +114,9 @@ fn read_stream_to_string(stream: &InputStream) -> Result<String> {
 }
 
 #[derive(Deserialize, Serialize)]
-struct Request {
+struct PermissionsInput {
     pub url: String,
+    pub timestamp: u64,
 }
 
 #[derive(Deserialize, Serialize)]

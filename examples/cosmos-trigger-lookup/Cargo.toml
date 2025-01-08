@@ -1,5 +1,5 @@
 [package]
-name = "square"
+name = "cosmos-trigger-lookup"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
@@ -7,10 +7,13 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-anyhow = { workspace = true }
-wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
+wavs-helpers = { workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true}
+layer-climb-address = { workspace = true}
+layer-climb-config = { workspace = true}
+wit-bindgen-rt = { workspace = true}
+wstd = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
@@ -23,7 +26,7 @@ strip = true
 lto = true
 
 [package.metadata.component]
-package = "component:square"
+package = "component:cosmos-trigger-lookup"
 
 [package.metadata.component.target]
 path = "../../wit"

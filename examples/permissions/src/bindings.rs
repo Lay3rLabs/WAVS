@@ -1,41 +1,73 @@
-pub type TaskQueueInput = lay3r::avs::types::TaskQueueInput;
-pub type Output = lay3r::avs::types::Output;
+pub type Contract = lay3r::avs::wavs_types::Contract;
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn _export_run_task_cabi<T: Guest>(arg0: i64, arg1: *mut u8, arg2: usize) -> *mut u8 {
+pub unsafe fn _export_run_cabi<T: Guest>(
+    arg0: i32,
+    arg1: *mut u8,
+    arg2: usize,
+    arg3: i32,
+    arg4: *mut u8,
+    arg5: usize,
+    arg6: *mut u8,
+    arg7: usize,
+) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
-    let len0 = arg2;
-    let result1 = T::run_task(lay3r::avs::types::TaskQueueInput {
-        timestamp: arg0 as u64,
-        request: _rt::Vec::from_raw_parts(arg1.cast(), len0, len0),
-    });
-    let ptr2 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
-    match result1 {
-        Ok(e) => {
-            *ptr2.add(0).cast::<u8>() = (0i32) as u8;
-            let vec3 = (e).into_boxed_slice();
-            let ptr3 = vec3.as_ptr().cast::<u8>();
-            let len3 = vec3.len();
-            ::core::mem::forget(vec3);
-            *ptr2.add(8).cast::<usize>() = len3;
-            *ptr2.add(4).cast::<*mut u8>() = ptr3.cast_mut();
+    use lay3r::avs::wavs_types::Address as V2;
+    let v2 = match arg0 {
+        0 => {
+            let e2 = {
+                let len0 = arg2;
+                _rt::Vec::from_raw_parts(arg1.cast(), len0, len0)
+            };
+            V2::Eth(e2)
         }
-        Err(e) => {
-            *ptr2.add(0).cast::<u8>() = (1i32) as u8;
-            let vec4 = (e.into_bytes()).into_boxed_slice();
-            let ptr4 = vec4.as_ptr().cast::<u8>();
-            let len4 = vec4.len();
-            ::core::mem::forget(vec4);
-            *ptr2.add(8).cast::<usize>() = len4;
-            *ptr2.add(4).cast::<*mut u8>() = ptr4.cast_mut();
+        n => {
+            debug_assert_eq!(n, 1, "invalid enum discriminant");
+            let e2 = {
+                let len1 = arg2;
+                let bytes1 = _rt::Vec::from_raw_parts(arg1.cast(), len1, len1);
+                (_rt::string_lift(bytes1), arg3 as u32)
+            };
+            V2::Cosmos(e2)
         }
     };
-    ptr2
+    let len3 = arg5;
+    let bytes3 = _rt::Vec::from_raw_parts(arg4.cast(), len3, len3);
+    let len4 = arg7;
+    let result5 = T::run(
+        lay3r::avs::wavs_types::Contract {
+            address: v2,
+            chain_id: _rt::string_lift(bytes3),
+        },
+        _rt::Vec::from_raw_parts(arg6.cast(), len4, len4),
+    );
+    let ptr6 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
+    match result5 {
+        Ok(e) => {
+            *ptr6.add(0).cast::<u8>() = (0i32) as u8;
+            let vec7 = (e).into_boxed_slice();
+            let ptr7 = vec7.as_ptr().cast::<u8>();
+            let len7 = vec7.len();
+            ::core::mem::forget(vec7);
+            *ptr6.add(8).cast::<usize>() = len7;
+            *ptr6.add(4).cast::<*mut u8>() = ptr7.cast_mut();
+        }
+        Err(e) => {
+            *ptr6.add(0).cast::<u8>() = (1i32) as u8;
+            let vec8 = (e.into_bytes()).into_boxed_slice();
+            let ptr8 = vec8.as_ptr().cast::<u8>();
+            let len8 = vec8.len();
+            ::core::mem::forget(vec8);
+            *ptr6.add(8).cast::<usize>() = len8;
+            *ptr6.add(4).cast::<*mut u8>() = ptr8.cast_mut();
+        }
+    };
+    ptr6
 }
 #[doc(hidden)]
 #[allow(non_snake_case)]
-pub unsafe fn __post_return_run_task<T: Guest>(arg0: *mut u8) {
+pub unsafe fn __post_return_run<T: Guest>(arg0: *mut u8) {
     let l0 = i32::from(*arg0.add(0).cast::<u8>());
     match l0 {
         0 => {
@@ -53,21 +85,23 @@ pub unsafe fn __post_return_run_task<T: Guest>(arg0: *mut u8) {
     }
 }
 pub trait Guest {
-    fn run_task(request: TaskQueueInput) -> Output;
+    /// event-data is emitted from the chain via a specific event type
+    /// which WAVS knows how to extract
+    fn run(contract: Contract, event_data: _rt::Vec<u8>) -> Result<_rt::Vec<u8>, _rt::String>;
 }
 #[doc(hidden)]
-macro_rules! __export_world_task_queue_cabi {
+macro_rules! __export_world_wavs_chain_event_world_cabi {
     ($ty:ident with_types_in $($path_to_types:tt)*) => {
-        const _ : () = { #[export_name = "run-task"] unsafe extern "C" fn
-        export_run_task(arg0 : i64, arg1 : * mut u8, arg2 : usize,) -> * mut u8 {
-        $($path_to_types)*:: _export_run_task_cabi::<$ty > (arg0, arg1, arg2) }
-        #[export_name = "cabi_post_run-task"] unsafe extern "C" fn
-        _post_return_run_task(arg0 : * mut u8,) { $($path_to_types)*::
-        __post_return_run_task::<$ty > (arg0) } };
+        const _ : () = { #[export_name = "run"] unsafe extern "C" fn export_run(arg0 :
+        i32, arg1 : * mut u8, arg2 : usize, arg3 : i32, arg4 : * mut u8, arg5 : usize,
+        arg6 : * mut u8, arg7 : usize,) -> * mut u8 { $($path_to_types)*::
+        _export_run_cabi::<$ty > (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) }
+        #[export_name = "cabi_post_run"] unsafe extern "C" fn _post_return_run(arg0 : *
+        mut u8,) { $($path_to_types)*:: __post_return_run::<$ty > (arg0) } };
     };
 }
 #[doc(hidden)]
-pub(crate) use __export_world_task_queue_cabi;
+pub(crate) use __export_world_wavs_chain_event_world_cabi;
 #[repr(align(4))]
 struct _RetArea([::core::mem::MaybeUninit<u8>; 12]);
 static mut _RET_AREA: _RetArea = _RetArea([::core::mem::MaybeUninit::uninit(); 12]);
@@ -76,188 +110,56 @@ pub mod lay3r {
     #[allow(dead_code)]
     pub mod avs {
         #[allow(dead_code, clippy::all)]
-        pub mod types {
+        pub mod wavs_types {
             #[used]
             #[doc(hidden)]
             static __FORCE_SECTION_REF: fn() =
                 super::super::super::__link_custom_section_describing_imports;
             use super::super::super::_rt;
-            /// serialized json, avs wasi and lay3r contract must agree on the types
-            /// the runner is agnostic to the data format
-            pub type SerializedJson = _rt::Vec<u8>;
             #[derive(Clone)]
-            pub struct TaskQueueInput {
-                pub timestamp: u64,
-                pub request: SerializedJson,
+            pub enum Address {
+                Eth(_rt::Vec<u8>),
+                /// the bech32-encoded address, and length of the prefix
+                Cosmos((_rt::String, u32)),
             }
-            impl ::core::fmt::Debug for TaskQueueInput {
+            impl ::core::fmt::Debug for Address {
                 fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                    f.debug_struct("TaskQueueInput")
-                        .field("timestamp", &self.timestamp)
-                        .field("request", &self.request)
+                    match self {
+                        Address::Eth(e) => f.debug_tuple("Address::Eth").field(e).finish(),
+                        Address::Cosmos(e) => f.debug_tuple("Address::Cosmos").field(e).finish(),
+                    }
+                }
+            }
+            #[derive(Clone)]
+            pub struct Contract {
+                pub address: Address,
+                pub chain_id: _rt::String,
+            }
+            impl ::core::fmt::Debug for Contract {
+                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    f.debug_struct("Contract")
+                        .field("address", &self.address)
+                        .field("chain-id", &self.chain_id)
                         .finish()
                 }
             }
-            pub type Error = _rt::String;
-            pub type Output = Result<SerializedJson, Error>;
-        }
-    }
-}
-#[allow(dead_code)]
-pub mod wasi {
-    #[allow(dead_code)]
-    pub mod clocks {
-        #[allow(dead_code, clippy::all)]
-        pub mod monotonic_clock {
-            #[used]
-            #[doc(hidden)]
-            static __FORCE_SECTION_REF: fn() =
-                super::super::super::__link_custom_section_describing_imports;
-            use super::super::super::_rt;
-            pub type Pollable = super::super::super::wasi::io::poll::Pollable;
-            pub type Instant = u64;
-            pub type Duration = u64;
-            #[allow(unused_unsafe, clippy::all)]
-            pub fn now() -> Instant {
-                unsafe {
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "wasi:clocks/monotonic-clock@0.2.0")]
-                    extern "C" {
-                        #[link_name = "now"]
-                        fn wit_import() -> i64;
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    fn wit_import() -> i64 {
-                        unreachable!()
-                    }
-                    let ret = wit_import();
-                    ret as u64
-                }
-            }
-            #[allow(unused_unsafe, clippy::all)]
-            pub fn resolution() -> Duration {
-                unsafe {
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "wasi:clocks/monotonic-clock@0.2.0")]
-                    extern "C" {
-                        #[link_name = "resolution"]
-                        fn wit_import() -> i64;
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    fn wit_import() -> i64 {
-                        unreachable!()
-                    }
-                    let ret = wit_import();
-                    ret as u64
-                }
-            }
-            #[allow(unused_unsafe, clippy::all)]
-            pub fn subscribe_instant(when: Instant) -> Pollable {
-                unsafe {
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "wasi:clocks/monotonic-clock@0.2.0")]
-                    extern "C" {
-                        #[link_name = "subscribe-instant"]
-                        fn wit_import(_: i64) -> i32;
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    fn wit_import(_: i64) -> i32 {
-                        unreachable!()
-                    }
-                    let ret = wit_import(_rt::as_i64(when));
-                    super::super::super::wasi::io::poll::Pollable::from_handle(ret as u32)
-                }
-            }
-            #[allow(unused_unsafe, clippy::all)]
-            pub fn subscribe_duration(when: Duration) -> Pollable {
-                unsafe {
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "wasi:clocks/monotonic-clock@0.2.0")]
-                    extern "C" {
-                        #[link_name = "subscribe-duration"]
-                        fn wit_import(_: i64) -> i32;
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    fn wit_import(_: i64) -> i32 {
-                        unreachable!()
-                    }
-                    let ret = wit_import(_rt::as_i64(when));
-                    super::super::super::wasi::io::poll::Pollable::from_handle(ret as u32)
-                }
-            }
-        }
-    }
-    #[allow(dead_code)]
-    pub mod http {
-        #[allow(dead_code, clippy::all)]
-        pub mod types {
-            #[used]
-            #[doc(hidden)]
-            static __FORCE_SECTION_REF: fn() =
-                super::super::super::__link_custom_section_describing_imports;
-            use super::super::super::_rt;
-            pub type Duration = super::super::super::wasi::clocks::monotonic_clock::Duration;
-            pub type InputStream = super::super::super::wasi::io::streams::InputStream;
-            pub type OutputStream = super::super::super::wasi::io::streams::OutputStream;
-            pub type IoError = super::super::super::wasi::io::error::Error;
-            pub type Pollable = super::super::super::wasi::io::poll::Pollable;
+            /// An alloy log can be recreated with the info here
             #[derive(Clone)]
-            pub enum Method {
-                Get,
-                Head,
-                Post,
-                Put,
-                Delete,
-                Connect,
-                Options,
-                Trace,
-                Patch,
-                Other(_rt::String),
+            pub struct EthLog {
+                /// the raw log topics that can be decoded into an event
+                pub topics: _rt::Vec<_rt::Vec<u8>>,
+                /// the raw log data that can be decoded into an event
+                pub data: _rt::Vec<u8>,
             }
-            impl ::core::fmt::Debug for Method {
+            impl ::core::fmt::Debug for EthLog {
                 fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                    match self {
-                        Method::Get => f.debug_tuple("Method::Get").finish(),
-                        Method::Head => f.debug_tuple("Method::Head").finish(),
-                        Method::Post => f.debug_tuple("Method::Post").finish(),
-                        Method::Put => f.debug_tuple("Method::Put").finish(),
-                        Method::Delete => f.debug_tuple("Method::Delete").finish(),
-                        Method::Connect => f.debug_tuple("Method::Connect").finish(),
-                        Method::Options => f.debug_tuple("Method::Options").finish(),
-                        Method::Trace => f.debug_tuple("Method::Trace").finish(),
-                        Method::Patch => f.debug_tuple("Method::Patch").finish(),
-                        Method::Other(e) => f.debug_tuple("Method::Other").field(e).finish(),
-                    }
-                }
-            }
-            #[derive(Clone)]
-            pub enum Scheme {
-                Http,
-                Https,
-                Other(_rt::String),
-            }
-            impl ::core::fmt::Debug for Scheme {
-                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                    match self {
-                        Scheme::Http => f.debug_tuple("Scheme::Http").finish(),
-                        Scheme::Https => f.debug_tuple("Scheme::Https").finish(),
-                        Scheme::Other(e) => f.debug_tuple("Scheme::Other").field(e).finish(),
-                    }
-                }
-            }
-            #[derive(Clone)]
-            pub struct DnsErrorPayload {
-                pub rcode: Option<_rt::String>,
-                pub info_code: Option<u16>,
-            }
-            impl ::core::fmt::Debug for DnsErrorPayload {
-                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                    f.debug_struct("DnsErrorPayload")
-                        .field("rcode", &self.rcode)
-                        .field("info-code", &self.info_code)
+                    f.debug_struct("EthLog")
+                        .field("topics", &self.topics)
+                        .field("data", &self.data)
                         .finish()
                 }
             }
+<<<<<<< HEAD
             #[derive(Clone)]
             pub struct TlsAlertReceivedPayload {
                 pub alert_id: Option<u8>,
@@ -6852,135 +6754,23 @@ pub mod wasi {
                     }
                 }
             }
+=======
+>>>>>>> aafda9e (refactor components)
         }
     }
 }
 mod _rt {
-    use core::fmt;
-    use core::marker;
-    use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
-    /// A type which represents a component model resource, either imported or
-    /// exported into this component.
-    ///
-    /// This is a low-level wrapper which handles the lifetime of the resource
-    /// (namely this has a destructor). The `T` provided defines the component model
-    /// intrinsics that this wrapper uses.
-    ///
-    /// One of the chief purposes of this type is to provide `Deref` implementations
-    /// to access the underlying data when it is owned.
-    ///
-    /// This type is primarily used in generated code for exported and imported
-    /// resources.
-    #[repr(transparent)]
-    pub struct Resource<T: WasmResource> {
-        handle: AtomicU32,
-        _marker: marker::PhantomData<T>,
-    }
-    /// A trait which all wasm resources implement, namely providing the ability to
-    /// drop a resource.
-    ///
-    /// This generally is implemented by generated code, not user-facing code.
-    #[allow(clippy::missing_safety_doc)]
-    pub unsafe trait WasmResource {
-        /// Invokes the `[resource-drop]...` intrinsic.
-        unsafe fn drop(handle: u32);
-    }
-    impl<T: WasmResource> Resource<T> {
-        #[doc(hidden)]
-        pub unsafe fn from_handle(handle: u32) -> Self {
-            debug_assert!(handle != u32::MAX);
-            Self {
-                handle: AtomicU32::new(handle),
-                _marker: marker::PhantomData,
-            }
-        }
-        /// Takes ownership of the handle owned by `resource`.
-        ///
-        /// Note that this ideally would be `into_handle` taking `Resource<T>` by
-        /// ownership. The code generator does not enable that in all situations,
-        /// unfortunately, so this is provided instead.
-        ///
-        /// Also note that `take_handle` is in theory only ever called on values
-        /// owned by a generated function. For example a generated function might
-        /// take `Resource<T>` as an argument but then call `take_handle` on a
-        /// reference to that argument. In that sense the dynamic nature of
-        /// `take_handle` should only be exposed internally to generated code, not
-        /// to user code.
-        #[doc(hidden)]
-        pub fn take_handle(resource: &Resource<T>) -> u32 {
-            resource.handle.swap(u32::MAX, Relaxed)
-        }
-        #[doc(hidden)]
-        pub fn handle(resource: &Resource<T>) -> u32 {
-            resource.handle.load(Relaxed)
-        }
-    }
-    impl<T: WasmResource> fmt::Debug for Resource<T> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.debug_struct("Resource")
-                .field("handle", &self.handle)
-                .finish()
-        }
-    }
-    impl<T: WasmResource> Drop for Resource<T> {
-        fn drop(&mut self) {
-            unsafe {
-                match self.handle.load(Relaxed) {
-                    u32::MAX => {}
-                    other => T::drop(other),
-                }
-            }
-        }
-    }
-    pub unsafe fn bool_lift(val: u8) -> bool {
-        if cfg!(debug_assertions) {
-            match val {
-                0 => false,
-                1 => true,
-                _ => panic!("invalid bool discriminant"),
-            }
-        } else {
-            val != 0
-        }
-    }
-    pub use alloc_crate::alloc;
-    pub use alloc_crate::vec::Vec;
-    pub fn as_i64<T: AsI64>(t: T) -> i64 {
-        t.as_i64()
-    }
-    pub trait AsI64 {
-        fn as_i64(self) -> i64;
-    }
-    impl<'a, T: Copy + AsI64> AsI64 for &'a T {
-        fn as_i64(self) -> i64 {
-            (*self).as_i64()
-        }
-    }
-    impl AsI64 for i64 {
-        #[inline]
-        fn as_i64(self) -> i64 {
-            self as i64
-        }
-    }
-    impl AsI64 for u64 {
-        #[inline]
-        fn as_i64(self) -> i64 {
-            self as i64
-        }
-    }
     pub use alloc_crate::string::String;
+    pub use alloc_crate::vec::Vec;
+    #[cfg(target_arch = "wasm32")]
+    pub fn run_ctors_once() {
+        wit_bindgen_rt::run_ctors_once();
+    }
     pub unsafe fn string_lift(bytes: Vec<u8>) -> String {
         if cfg!(debug_assertions) {
             String::from_utf8(bytes).unwrap()
         } else {
             String::from_utf8_unchecked(bytes)
-        }
-    }
-    pub unsafe fn invalid_enum_discriminant<T>() -> T {
-        if cfg!(debug_assertions) {
-            panic!("invalid enum discriminant")
-        } else {
-            core::hint::unreachable_unchecked()
         }
     }
     pub unsafe fn cabi_dealloc(ptr: *mut u8, size: usize, align: usize) {
@@ -6990,70 +6780,8 @@ mod _rt {
         let layout = alloc::Layout::from_size_align_unchecked(size, align);
         alloc::dealloc(ptr, layout);
     }
-    pub fn as_i32<T: AsI32>(t: T) -> i32 {
-        t.as_i32()
-    }
-    pub trait AsI32 {
-        fn as_i32(self) -> i32;
-    }
-    impl<'a, T: Copy + AsI32> AsI32 for &'a T {
-        fn as_i32(self) -> i32 {
-            (*self).as_i32()
-        }
-    }
-    impl AsI32 for i32 {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    impl AsI32 for u32 {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    impl AsI32 for i16 {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    impl AsI32 for u16 {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    impl AsI32 for i8 {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    impl AsI32 for u8 {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    impl AsI32 for char {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    impl AsI32 for usize {
-        #[inline]
-        fn as_i32(self) -> i32 {
-            self as i32
-        }
-    }
-    #[cfg(target_arch = "wasm32")]
-    pub fn run_ctors_once() {
-        wit_bindgen_rt::run_ctors_once();
-    }
     extern crate alloc as alloc_crate;
+    pub use alloc_crate::alloc;
 }
 /// Generates `#[no_mangle]` functions to export the specified type as the
 /// root implementation of all generated traits.
@@ -7073,18 +6801,19 @@ mod _rt {
 /// ```
 #[allow(unused_macros)]
 #[doc(hidden)]
-macro_rules! __export_task_queue_impl {
+macro_rules! __export_wavs_chain_event_world_impl {
     ($ty:ident) => {
         self::export!($ty with_types_in self);
     };
     ($ty:ident with_types_in $($path_to_types_root:tt)*) => {
-        $($path_to_types_root)*:: __export_world_task_queue_cabi!($ty with_types_in
-        $($path_to_types_root)*);
+        $($path_to_types_root)*:: __export_world_wavs_chain_event_world_cabi!($ty
+        with_types_in $($path_to_types_root)*);
     };
 }
 #[doc(inline)]
-pub(crate) use __export_task_queue_impl as export;
+pub(crate) use __export_wavs_chain_event_world_impl as export;
 #[cfg(target_arch = "wasm32")]
+<<<<<<< HEAD
 #[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:task-queue:encoded world"]
 #[doc(hidden)]
 pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 6655] = *b"\
@@ -7221,6 +6950,20 @@ B\x08\x01p}\x04\0\x0fserialized-json\x03\0\0\x01r\x02\x09timestampw\x07request\x
 \x04\0\x1alay3r:avs/task-queue@0.3.0\x04\0\x0b\x10\x01\0\x0atask-queue\x03\0\0\0\
 G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.220.0\x10wit-bindge\
 n-rust\x060.35.0";
+=======
+#[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:wavs-chain-event-world:encoded world"]
+#[doc(hidden)]
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 405] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x88\x02\x01A\x02\x01\
+A\x08\x01B\x09\x01p}\x01o\x02sy\x01q\x02\x03eth\x01\0\0\x06cosmos\x01\x01\0\x04\0\
+\x07address\x03\0\x02\x01r\x02\x07address\x03\x08chain-ids\x04\0\x08contract\x03\
+\0\x04\x01p\0\x01r\x02\x06topics\x06\x04data\0\x04\0\x07eth-log\x03\0\x07\x03\0\x1a\
+lay3r:avs/wavs-types@0.3.0\x05\0\x02\x03\0\0\x08contract\x03\0\x08contract\x03\0\
+\x01\x01p}\x01j\x01\x03\x01s\x01@\x02\x08contract\x02\x0aevent-data\x03\0\x04\x04\
+\0\x03run\x01\x05\x04\0&lay3r:avs/wavs-chain-event-world@0.3.0\x04\0\x0b\x1c\x01\
+\0\x16wavs-chain-event-world\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0d\
+wit-component\x070.220.0\x10wit-bindgen-rust\x060.35.0";
+>>>>>>> aafda9e (refactor components)
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

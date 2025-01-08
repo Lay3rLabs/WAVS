@@ -1,5 +1,5 @@
 [package]
-name = "square"
+name = "echo-data"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
@@ -7,10 +7,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-anyhow = { workspace = true }
-wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
+wit-bindgen-rt = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
@@ -23,7 +20,7 @@ strip = true
 lto = true
 
 [package.metadata.component]
-package = "component:square"
+package = "component:echo-data"
 
 [package.metadata.component.target]
 path = "../../wit"
