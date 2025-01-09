@@ -1,9 +1,7 @@
 mod full;
-mod simple;
+mod service_manager;
 mod solidity_types;
-mod trigger;
 
 pub use full::*;
-pub use simple::*;
+pub use service_manager::*;
 pub use solidity_types::*;
-pub use trigger::*;

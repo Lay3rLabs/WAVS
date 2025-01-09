@@ -10,8 +10,9 @@ use alloy::{
 };
 use utils::{
     aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
+    avs_client::{AvsClientBuilder, ServiceManagerClient},
     eigen_client::EigenClient,
-    layer_contract_client::{LayerContractClientFullBuilder, LayerContractClientSimple},
+    example_client::{SimpleSubmitClient, SimpleTriggerClient},
 };
 
 #[tokio::test]
@@ -31,11 +32,14 @@ async fn submit_to_chain() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
-        .avs_addresses(core_contracts.clone())
-        .build()
+    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+        .core_addresses(core_contracts.clone())
+        .build(SimpleSubmitClient::deploy)
         .await
         .unwrap();
+
+    let submit_client =
+        SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
 
     // Register operator
     eigen_client
@@ -45,7 +49,7 @@ async fn submit_to_chain() {
 
     avs_client.register_operator(&mut OsRng).await.unwrap();
 
-    let avs_client: LayerContractClientSimple = avs_client.into();
+    let avs_client: ServiceManagerClient = avs_client.into();
 
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
 
@@ -58,15 +62,25 @@ async fn submit_to_chain() {
     .await
     .unwrap();
 
+    let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+        .await
+        .unwrap();
     let task_message = b"world".to_vec();
 
-    let trigger_id = avs_client
-        .trigger
+    let trigger_id = trigger_client
         .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
+    let signed_payload = avs_client
+        .sign_payload(
+            trigger_client
+                .get_trigger_payload(trigger_id)
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
     let response = aggregator::http::handlers::service::add_payload::add_payload(
         state,
@@ -86,11 +100,7 @@ async fn submit_to_chain() {
     }
 
     // Ensure it's landed!
-    avs_client
-        .load_signed_data(trigger_id)
-        .await
-        .unwrap()
-        .unwrap();
+    assert!(submit_client.trigger_validated(trigger_id).await);
 }
 
 #[tokio::test]
@@ -112,11 +122,14 @@ async fn submit_to_chain_three() {
 
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
-        .avs_addresses(core_contracts.clone())
-        .build()
+    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+        .core_addresses(core_contracts.clone())
+        .build(SimpleSubmitClient::deploy)
         .await
         .unwrap();
+
+    let submit_client =
+        SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
 
     // Register operator
     eigen_client
@@ -126,7 +139,7 @@ async fn submit_to_chain_three() {
 
     avs_client.register_operator(&mut OsRng).await.unwrap();
 
-    let avs_client: LayerContractClientSimple = avs_client.into();
+    let avs_client: ServiceManagerClient = avs_client.into();
 
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
 
@@ -142,13 +155,24 @@ async fn submit_to_chain_three() {
     // first task - should just aggregate
     let task_message = b"foo".to_vec();
 
-    let _ = avs_client
-        .trigger
+    let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+        .await
+        .unwrap();
+
+    let trigger_id = trigger_client
         .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
+    let signed_payload = avs_client
+        .sign_payload(
+            trigger_client
+                .get_trigger_payload(trigger_id)
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
     let response = aggregator::http::handlers::service::add_payload::add_payload(
         state.clone(),
@@ -166,13 +190,20 @@ async fn submit_to_chain_three() {
     // Second - still aggregating
     let task_message = b"hello".to_vec();
 
-    let _ = avs_client
-        .trigger
+    let trigger_id = trigger_client
         .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
+    let signed_payload = avs_client
+        .sign_payload(
+            trigger_client
+                .get_trigger_payload(trigger_id)
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
     let response = aggregator::http::handlers::service::add_payload::add_payload(
         state.clone(),
@@ -190,13 +221,20 @@ async fn submit_to_chain_three() {
     // Third should get to the quorum
     let task_message = b"world".to_vec();
 
-    let trigger_id = avs_client
-        .trigger
+    let trigger_id = trigger_client
         .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
+    let signed_payload = avs_client
+        .sign_payload(
+            trigger_client
+                .get_trigger_payload(trigger_id)
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
     let response = aggregator::http::handlers::service::add_payload::add_payload(
         state.clone(),
@@ -219,11 +257,7 @@ async fn submit_to_chain_three() {
     }
 
     // Ensure it's landed!
-    avs_client
-        .load_signed_data(trigger_id)
-        .await
-        .unwrap()
-        .unwrap();
+    assert!(submit_client.trigger_validated(trigger_id).await);
 }
 
 #[tokio::test]
@@ -243,11 +277,14 @@ async fn invalid_operator_signature() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let avs_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
-        .avs_addresses(core_contracts.clone())
-        .build()
+    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+        .core_addresses(core_contracts.clone())
+        .build(SimpleSubmitClient::deploy)
         .await
         .unwrap();
+
+    let _submit_client =
+        SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
 
     // Register operator
     eigen_client
@@ -261,7 +298,7 @@ async fn invalid_operator_signature() {
         .build_random_with(&mut OsRng)
         .unwrap();
 
-    let avs_client: LayerContractClientSimple = avs_client.into();
+    let avs_client: ServiceManagerClient = avs_client.into();
 
     let state = HttpState::new((*aggregator.config).clone()).unwrap();
     aggregator::http::handlers::service::add_service::add_service(
@@ -273,15 +310,26 @@ async fn invalid_operator_signature() {
     .await
     .unwrap();
 
+    let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+        .await
+        .unwrap();
+
     let task_message = b"world".to_vec();
 
-    let _ = avs_client
-        .trigger
+    let trigger_id = trigger_client
         .add_trigger(task_message.clone())
         .await
         .unwrap();
 
-    let signed_payload = avs_client.sign_payload(task_message).await.unwrap();
+    let signed_payload = avs_client
+        .sign_payload(
+            trigger_client
+                .get_trigger_payload(trigger_id)
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
     // Invalid operator
     {

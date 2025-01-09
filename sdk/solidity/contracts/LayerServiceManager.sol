@@ -7,13 +7,23 @@ import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptogra
 import "@openzeppelin/contracts/utils/Strings.sol";
 import {ILayerServiceManager} from "./interfaces/ILayerServiceManager.sol";
 
-contract LayerServiceManager is ECDSAServiceManagerBase {
+abstract contract LayerServiceManager is ECDSAServiceManagerBase {
     // Modifiers
     modifier onlyOperator() {
         require(
             ECDSAStakeRegistry(stakeRegistry).operatorRegistered(msg.sender),
             "Operator must be the caller"
         );
+        _;
+    }
+
+    modifier onlyValidPayload(ILayerServiceManager.SignedPayload calldata signedPayload) {
+        require(validatePayload(signedPayload), InvalidSignature());
+        _;
+    }
+
+    modifier onlyValidPayloads(ILayerServiceManager.SignedPayload[] calldata signedPayloads) {
+        require(validatePayloadMulti(signedPayloads), InvalidSignature());
         _;
     }
 
@@ -36,29 +46,43 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         )
     {}
 
-    function addSignedPayload(
-        ILayerServiceManager.SignedPayload calldata signedPayload
-    ) view public {
-        bytes32 message = keccak256(abi.encode(signedPayload.data));
-        bytes32 ethSignedMessageHash = ECDSAUpgradeable.toEthSignedMessageHash(message);
-        bytes4 magicValue = IERC1271Upgradeable.isValidSignature.selector;
+    // Subcontracts should override this function
+    function _handleAddPayload(ILayerServiceManager.SignedPayload calldata signedPayload) internal virtual;
 
-        if (
-            !(magicValue ==
-                ECDSAStakeRegistry(stakeRegistry).isValidSignature(
-                    ethSignedMessageHash,
-                    signedPayload.signature
-                ))
-        ) {
-            revert InvalidSignature();
+    function addPayload(ILayerServiceManager.SignedPayload calldata signedPayload) public onlyValidPayload(signedPayload) {
+        _handleAddPayload(signedPayload);
+    }
+
+    function addPayloadMulti(ILayerServiceManager.SignedPayload[] calldata signedPayloads) public onlyValidPayloads(signedPayloads) {
+        for (uint32 i = 0; i < signedPayloads.length; i++) {
+            _handleAddPayload(signedPayloads[i]);
         }
     }
 
-    function addSignedPayloadMulti(
+    function validatePayload(
+        ILayerServiceManager.SignedPayload calldata signedPayload
+    ) view public returns (bool) {
+        bytes32 message = keccak256(signedPayload.data);
+        bytes32 ethSignedMessageHash = ECDSAUpgradeable.toEthSignedMessageHash(message);
+        bytes4 magicValue = IERC1271Upgradeable.isValidSignature.selector;
+
+        return (magicValue ==
+                ECDSAStakeRegistry(stakeRegistry).isValidSignature(
+                    ethSignedMessageHash,
+                    signedPayload.signature
+                )
+        );
+    }
+
+    function validatePayloadMulti(
         ILayerServiceManager.SignedPayload[] calldata signedPayloads
-    ) view public {
+    ) view public returns (bool) {
         for (uint32 i = 0; i < signedPayloads.length; i++) {
-            LayerServiceManager(address(this)).addSignedPayload(signedPayloads[i]);
+            if(!LayerServiceManager(address(this)).validatePayload(signedPayloads[i])) {
+                return false;
+            }
         }
+
+        return true;
     }
 }

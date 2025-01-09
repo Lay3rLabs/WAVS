@@ -1,3 +1,4 @@
+@layer-contracts/=sdk/solidity/contracts/
 @eigenlayer/contracts/=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/
 @eigenlayer/middleware/=lib/eigenlayer-middleware/
 @eigenlayer/test/=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/test/

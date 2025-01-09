@@ -1,12 +1,13 @@
 pub mod aggregator;
 pub mod alloy_helpers;
+pub mod avs_client;
 pub mod config;
 pub mod context;
 pub mod digest;
 pub mod eigen_client;
 pub mod error;
 pub mod eth_client;
-pub mod layer_contract_client;
+pub mod example_client;
 pub mod serde;
 pub mod storage;
 pub mod types;

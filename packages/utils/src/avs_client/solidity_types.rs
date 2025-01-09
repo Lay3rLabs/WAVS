@@ -1,7 +1,6 @@
 use crate::eigen_client::solidity_types::BoxSigningProvider;
 use alloy::{sol, transports::BoxTransport};
 use layer_service_manager::LayerServiceManager::LayerServiceManagerInstance;
-use layer_trigger::LayerTrigger::LayerTriggerInstance;
 
 pub mod stake_registry {
     use super::*;
@@ -45,17 +44,14 @@ pub mod layer_service_manager {
 
 pub mod layer_trigger {
     use super::*;
-    pub use ILayerTrigger::TriggerResponse;
-    pub use LayerTrigger::{NewTriggerId, WavsTrigger};
+    pub use ILayerTrigger::LayerTriggerEvent;
 
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        LayerTrigger,
-        "../../examples/contracts/solidity/abi/LayerTrigger.sol/LayerTrigger.json"
+        ILayerTrigger,
+        "../../sdk/solidity/contracts/abi/ILayerTrigger.sol/ILayerTrigger.json"
     );
 }
 
 pub type LayerServiceManagerT = LayerServiceManagerInstance<BoxTransport, BoxSigningProvider>;
-
-pub type LayerTriggerT = LayerTriggerInstance<BoxTransport, BoxSigningProvider>;

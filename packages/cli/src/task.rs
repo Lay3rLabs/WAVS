@@ -1,22 +1,28 @@
 use std::time::Duration;
 
 use utils::{
+    avs_client::SignedData,
     eth_client::EthSigningClient,
-    layer_contract_client::{LayerAddresses, LayerContractClientSimple, SignedData},
+    example_client::{SimpleSubmitClient, SimpleTriggerClient},
 };
+
+use crate::deploy::EthService;
 
 pub async fn add_task(
     eth_signing_client: EthSigningClient,
-    service_addresses: &LayerAddresses,
+    eth_service: &EthService,
     data: Vec<u8>,
 ) -> SignedData {
-    let client = LayerContractClientSimple::new(
+    // TODO - handle different kinds of triggers/submits
+    let trigger_client =
+        SimpleTriggerClient::new(eth_signing_client.clone(), eth_service.trigger_address);
+
+    let submit_client = SimpleSubmitClient::new(
         eth_signing_client,
-        service_addresses.service_manager,
-        service_addresses.trigger,
+        eth_service.avs_addresses.service_manager,
     );
 
-    let trigger_id = client.trigger.add_trigger(data).await.unwrap();
+    let trigger_id = trigger_client.add_trigger(data).await.unwrap();
 
     tracing::info!("Task submitted with id: {}", trigger_id);
 
@@ -24,13 +30,14 @@ pub async fn add_task(
 
     tokio::time::timeout(Duration::from_secs(10), async move {
         loop {
-            let resp = client.load_signed_data(trigger_id).await.unwrap();
-
-            match resp {
-                Some(resp) => {
-                    return resp;
+            match submit_client.trigger_validated(trigger_id).await {
+                true => {
+                    return submit_client
+                        .signed_data_for_trigger(trigger_id)
+                        .await
+                        .unwrap();
                 }
-                None => {
+                false => {
                     tracing::info!("Waiting for task response on {}", trigger_id);
                 }
             }

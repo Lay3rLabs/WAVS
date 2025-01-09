@@ -1,29 +1,47 @@
 use std::ops::Deref;
 
-use super::layer_trigger::LayerTrigger;
-use super::layer_trigger::NewTriggerId;
-use super::LayerTriggerT;
-use crate::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient, ServiceID};
-use alloy::primitives::Address;
+use crate::{
+    alloy_helpers::SolidityEventFinder, eigen_client::solidity_types::BoxSigningProvider,
+    eth_client::EthSigningClient,
+};
+use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use super::{
+    example_trigger::TriggerInfo,
+    solidity_types::{
+        example_trigger::SimpleTrigger::{self, NewTriggerId},
+        SimpleTriggerT,
+    },
+};
+
 #[derive(Clone)]
-pub struct LayerContractClientTrigger {
+pub struct SimpleTriggerClient {
     pub eth: EthSigningClient,
     pub contract_address: Address,
-    pub contract: LayerTriggerT,
+    pub contract: SimpleTriggerT,
 }
 
-impl LayerContractClientTrigger {
+impl SimpleTriggerClient {
     pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
-        let contract = LayerTrigger::new(contract_address, eth.provider.clone());
+        let contract = SimpleTrigger::new(contract_address, eth.provider.clone());
 
         Self {
             eth,
             contract_address,
             contract,
         }
+    }
+
+    pub async fn new_deploy(eth: EthSigningClient) -> Result<Self> {
+        let contract_address = Self::deploy(eth.provider.clone()).await?;
+        Ok(Self::new(eth, contract_address))
+    }
+
+    pub async fn deploy(provider: BoxSigningProvider) -> Result<Address> {
+        let contract = SimpleTrigger::deploy(provider).await?;
+        Ok(*contract.address())
     }
 
     // TODO - bring all newtypes into utils
@@ -41,19 +59,27 @@ impl LayerContractClientTrigger {
         Ok(TriggerId::new(event._0))
     }
 
-    pub async fn get_trigger(&self, trigger_id: TriggerId) -> Result<TriggerResponse> {
-        let resp = self
+    pub async fn get_trigger_info(&self, trigger_id: TriggerId) -> Result<TriggerInfo> {
+        Ok(self
             .contract
             .getTrigger(*trigger_id)
             .call()
             .await
             .context("Failed to get trigger")?
-            ._0;
+            ._0)
+    }
+
+    pub async fn get_trigger_payload(&self, trigger_id: TriggerId) -> Result<Vec<u8>> {
+        Ok(self.get_trigger_info(trigger_id).await?.abi_encode())
+    }
+
+    pub async fn get_trigger_friendly(&self, trigger_id: TriggerId) -> Result<TriggerResponse> {
+        let info = self.get_trigger_info(trigger_id).await?;
 
         Ok(TriggerResponse {
-            trigger_id: TriggerId::new(resp.triggerId),
-            creator: resp.creator,
-            data: resp.data.to_vec(),
+            trigger_id: TriggerId::new(info.triggerId),
+            creator: info.creator,
+            data: info.data.to_vec(),
         })
     }
 }
@@ -94,6 +120,7 @@ impl std::fmt::Debug for TriggerId {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TriggerResponse {
     pub trigger_id: TriggerId,
     pub creator: Address,

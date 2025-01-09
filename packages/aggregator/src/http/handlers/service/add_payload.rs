@@ -3,15 +3,14 @@ use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
+    avs_client::{
+        layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
+        SignedPayload,
+    },
     eigen_client::solidity_types::{
         misc::{AVSDirectory, IAVSDirectory::OperatorAVSRegistrationStatus},
         BoxSigningProvider,
     },
-    layer_contract_client::{
-        layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
-        SignedPayload,
-    },
-    ServiceID,
 };
 
 use crate::http::{error::HttpResult, state::HttpState};
@@ -74,7 +73,7 @@ pub async fn add_payload(
             .collect::<Vec<_>>();
 
         let pending_tx = LayerServiceManager::new(service_manager_address, &eth_client.provider)
-            .addSignedPayloadMulti(payloads)
+            .addPayloadMulti(payloads)
             .send()
             .await?;
         let tx_hash = pending_tx.tx_hash();

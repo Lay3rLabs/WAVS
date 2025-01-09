@@ -25,9 +25,9 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
+    avs_client::{layer_service_manager::LayerServiceManager, SignedPayload},
     config::{CosmosChainConfig, EthereumChainConfig},
     eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig, EthSigningClient},
-    layer_contract_client::{layer_service_manager::LayerServiceManager, SignedPayload},
 };
 
 #[derive(Clone)]
@@ -378,7 +378,7 @@ impl CoreSubmission {
             }
         } else {
             let _ = service_manager_contract
-                .addSignedPayload(
+                .addPayload(
                     SignedPayload {
                         operator: eth_client.address(),
                         data,

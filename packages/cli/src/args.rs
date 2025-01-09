@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use alloy::primitives::Address;
-use clap::{arg, Parser};
+use clap::{arg, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 use utils::{
+    avs_client::AvsAddresses,
     config::{CliEnvExt, ConfigBuilder},
-    layer_contract_client::LayerAddresses,
     serde::deserialize_vec_string,
 };
 use wavs::apis::dispatcher::ServiceConfig;
@@ -36,6 +36,14 @@ pub enum Command {
         /// The kind of world the component adheres to
         #[clap(long)]
         world: ComponentWorld,
+
+        /// The kind of trigger to deploy
+        #[clap(long, default_value_t = CliTriggerKind::SimpleContract)]
+        trigger: CliTriggerKind,
+
+        /// The kind of submit to deploy
+        #[clap(long, default_value_t = CliSubmitKind::SimpleContract)]
+        submit: CliSubmitKind,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -77,6 +85,54 @@ pub enum Command {
         #[clap(long)]
         input: String,
     },
+}
+
+#[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
+pub enum CliTriggerKind {
+    SimpleContract,
+}
+
+impl std::fmt::Display for CliTriggerKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SimpleContract => write!(f, "simple-contract"),
+        }
+    }
+}
+
+impl std::str::FromStr for CliTriggerKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "simple-contract" => Ok(Self::SimpleContract),
+            _ => Err(format!("unknown trigger kind: {}", s)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
+pub enum CliSubmitKind {
+    SimpleContract,
+}
+
+impl std::fmt::Display for CliSubmitKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SimpleContract => write!(f, "simple-contract"),
+        }
+    }
+}
+
+impl std::str::FromStr for CliSubmitKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "simple-contract" => Ok(Self::SimpleContract),
+            _ => Err(format!("unknown submit kind: {}", s)),
+        }
+    }
 }
 
 impl Command {
@@ -172,7 +228,7 @@ pub struct EnvServiceAddresses {
     pub service_trigger: Option<alloy::primitives::Address>,
 }
 
-impl From<EnvServiceAddresses> for LayerAddresses {
+impl From<EnvServiceAddresses> for AvsAddresses {
     fn from(opt: EnvServiceAddresses) -> Self {
         Self {
             proxy_admin: opt
@@ -181,9 +237,6 @@ impl From<EnvServiceAddresses> for LayerAddresses {
             service_manager: opt
                 .service_manager
                 .expect("set --service-manager or CLI_EIGEN_SERVICE_MANAGER"),
-            trigger: opt
-                .service_trigger
-                .expect("set --service-trigger or CLI_EIGEN_SERVICE_TRIGGER"),
             stake_registry: opt
                 .service_stake_registry
                 .expect("set --service-stake-registry or CLI_EIGEN_SERVICE_STAKE_REGISTRY"),

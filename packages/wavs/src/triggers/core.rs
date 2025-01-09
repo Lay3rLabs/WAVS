@@ -13,7 +13,7 @@ use alloy::{
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
-use layer_cosmwasm::event::LayerTriggerEvent;
+use layer_cosmwasm::event::LayerTriggerEvent as CosmosLayerTriggerEvent;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     pin::Pin,
@@ -22,8 +22,8 @@ use std::{
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
+    avs_client::layer_trigger::LayerTriggerEvent as EthLayerTriggerEvent,
     eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig},
-    layer_contract_client::layer_trigger::LayerTrigger::WavsTrigger,
 };
 use utils::{ServiceID, WorkflowID};
 
@@ -160,7 +160,8 @@ impl CoreTriggerManager {
                                             })?;
 
                                         let event = cosmwasm_std::Event::from(event);
-                                        let event = LayerTriggerEvent::try_from(event).ok()?;
+                                        let event =
+                                            CosmosLayerTriggerEvent::try_from(event).ok()?;
 
                                         Some((contract_address, event))
                                     })
@@ -190,7 +191,7 @@ impl CoreTriggerManager {
             tracing::debug!("Trigger Manager for Ethereum chain {} started", chain_name);
 
             // Start the event stream
-            let filter = Filter::new().event_signature(WavsTrigger::SIGNATURE_HASH);
+            let filter = Filter::new().event_signature(EthLayerTriggerEvent::SIGNATURE_HASH);
 
             let stream = query_client
                 .provider
@@ -202,7 +203,7 @@ impl CoreTriggerManager {
             let chain_id = chain_name.clone();
 
             let event_stream = Box::pin(stream.map(move |log| {
-                if let Ok(event) = log.log_decode::<WavsTrigger>() {
+                if let Ok(event) = log.log_decode::<EthLayerTriggerEvent>() {
                     Ok(StreamTriggers::Ethereum {
                         chain_id: chain_id.clone(),
                         log,

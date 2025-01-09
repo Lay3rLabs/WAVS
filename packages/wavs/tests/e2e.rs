@@ -15,8 +15,7 @@ mod e2e {
     use http::HttpClient;
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
-    use utils::ServiceID;
-    use utils::{config::ConfigBuilder, layer_contract_client::LayerContractClientSimple};
+    use utils::{avs_client::ServiceManagerClient, config::ConfigBuilder};
     use wavs::{
         apis::{
             dispatcher::{ComponentWorld, Submit},
@@ -201,8 +200,8 @@ mod e2e {
         let avs_service_manager_addr_2 =
             Address::Eth(AddrEth::new(app_2.avs_client.layer.service_manager.into()));
 
-        let avs_client: LayerContractClientSimple = app.avs_client.into();
-        let avs_client_2: LayerContractClientSimple = app_2.avs_client.into();
+        let avs_client: ServiceManagerClient = app.avs_client.into();
+        let avs_client_2: ServiceManagerClient = app_2.avs_client.into();
 
         let trigger_echo_digest = digests.eth_trigger_echo_digest().await;
         let trigger_square_digest = digests.eth_trigger_square_digest().await;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use alloy::primitives::Address;
 use utils::{
-    layer_contract_client::SignedPayload,
+    avs_client::SignedPayload,
     storage::db::{DBError, RedbStorage, Table, JSON},
     ServiceID,
 };

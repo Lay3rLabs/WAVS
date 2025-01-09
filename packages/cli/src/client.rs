@@ -1,8 +1,8 @@
 use layer_climb::prelude::*;
 use utils::{
+    avs_client::{AvsClient, AvsClientBuilder, ServiceManagerDeps},
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthChainConfig, EthClientBuilder},
-    layer_contract_client::{LayerContractClientFull, LayerContractClientFullBuilder},
 };
 use utils::{ServiceID, WorkflowID};
 use wavs::{
@@ -36,15 +36,20 @@ pub async fn get_eigen_client(config: &Config) -> EigenClient {
     EigenClient::new(eth_client)
 }
 
-pub async fn get_avs_client(
+pub async fn get_avs_client<F, Fut>(
     eigen_client: &EigenClient,
     core_contracts: CoreAVSAddresses,
     service_manager_override: Option<alloy::primitives::Address>,
-) -> LayerContractClientFull {
-    LayerContractClientFullBuilder::new(eigen_client.eth.clone())
-        .avs_addresses(core_contracts)
+    deploy_service_manager: F,
+) -> AvsClient
+where
+    F: FnOnce(ServiceManagerDeps) -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<alloy::primitives::Address>>,
+{
+    AvsClientBuilder::new(eigen_client.eth.clone())
+        .core_addresses(core_contracts)
         .override_service_manager(service_manager_override)
-        .build()
+        .build(deploy_service_manager)
         .await
         .unwrap()
 }

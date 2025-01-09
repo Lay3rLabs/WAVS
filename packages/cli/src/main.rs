@@ -13,13 +13,18 @@ use args::Command;
 use clap::Parser;
 use client::{get_avs_client, HttpClient};
 use context::ChainContext;
+use deploy::EthService;
 use display::{DisplayBuilder, ServiceAndWorkflow};
 use exec::{exec_component, ExecComponentResponse};
 use rand::rngs::OsRng;
 use task::add_task;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::{config::ConfigExt, layer_contract_client::SignedData};
-use utils::{ServiceID, WorkflowID};
+use utils::{
+    avs_client::SignedData,
+    config::ConfigExt,
+    example_client::{SimpleSubmitClient, SimpleTriggerClient},
+};
+use wavs::apis::{ServiceID, WorkflowID};
 
 #[tokio::main]
 async fn main() {
@@ -85,6 +90,8 @@ async fn main() {
             service_manager,
             service_config,
             world,
+            trigger,
+            submit,
             ..
         } => {
             let ChainContext {
@@ -103,8 +110,15 @@ async fn main() {
                 }
             };
 
-            let avs_client =
-                get_avs_client(&eigen_client, core_contracts.clone(), service_manager).await;
+            let avs_client = get_avs_client(
+                &eigen_client,
+                core_contracts.clone(),
+                service_manager,
+                match submit {
+                    args::CliSubmitKind::SimpleContract => SimpleSubmitClient::deploy,
+                },
+            )
+            .await;
 
             if register_operator {
                 avs_client.register_operator(&mut OsRng).await.unwrap();
@@ -115,9 +129,17 @@ async fn main() {
             let wasm_bytes = read_component(component);
             let digest = http_client.upload_component(wasm_bytes).await;
 
+            let trigger_address = match trigger {
+                args::CliTriggerKind::SimpleContract => {
+                    SimpleTriggerClient::deploy(avs_client.eth.provider.clone())
+                        .await
+                        .unwrap()
+                }
+            };
+
             let (service_id, workflow_id) = http_client
                 .create_service(
-                    avs_client.layer.trigger,
+                    trigger_address,
                     avs_client.layer.service_manager,
                     digest,
                     service_config.unwrap_or_default(),
@@ -125,8 +147,15 @@ async fn main() {
                 )
                 .await;
 
+            let eth_service = EthService {
+                avs_addresses: avs_client.layer.clone(),
+                trigger_address,
+                trigger_kind: trigger,
+                submit_kind: submit,
+            };
+
             let mut workflows = HashMap::new();
-            workflows.insert(workflow_id.clone(), avs_client.layer.clone());
+            workflows.insert(workflow_id.clone(), eth_service.clone());
 
             deployment
                 .eth_services
@@ -138,7 +167,7 @@ async fn main() {
                 workflow_id,
             });
             display.core_contracts = Some(core_contracts);
-            display.layer_addresses = Some(avs_client.layer);
+            display.eth_service = Some(eth_service);
         }
 
         Command::AddTask {
@@ -168,7 +197,7 @@ async fn main() {
                 None => WorkflowID::new("default").unwrap(),
             };
 
-            let service_contracts = match deployment.eth_services.get(&service_id) {
+            let eth_service = match deployment.eth_services.get(&service_id) {
                 Some(workflow_contracts) => match workflow_contracts.get(&workflow_id) {
                     Some(service_contracts) => service_contracts.clone(),
                     None => {
@@ -189,9 +218,9 @@ async fn main() {
                 }
             };
 
-            let signed_data = add_task(eigen_client.eth, &service_contracts, input).await;
+            let signed_data = add_task(eigen_client.eth, &eth_service, input).await;
 
-            display.layer_addresses = Some(service_contracts);
+            display.eth_service = Some(eth_service);
             display.service = Some(ServiceAndWorkflow {
                 service_id,
                 workflow_id,

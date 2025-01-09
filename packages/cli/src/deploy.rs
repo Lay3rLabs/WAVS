@@ -1,22 +1,33 @@
 use std::collections::{HashMap, HashSet};
 
-use alloy::providers::Provider;
+use alloy::{primitives::Address, providers::Provider};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use utils::{
+    avs_client::AvsAddresses,
     eigen_client::{CoreAVSAddresses, EigenClient},
-    layer_contract_client::LayerAddresses,
 };
 use utils::{ServiceID, WorkflowID};
 
-use crate::{args::Command, config::Config};
+use crate::{
+    args::{CliSubmitKind, CliTriggerKind, Command},
+    config::Config,
+};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Deployment {
     // keyed by chain NAME (not chain id)
     pub eigen_core: HashMap<String, CoreAVSAddresses>,
-    pub eth_services: HashMap<ServiceID, HashMap<WorkflowID, LayerAddresses>>,
+    pub eth_services: HashMap<ServiceID, HashMap<WorkflowID, EthService>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EthService {
+    pub avs_addresses: AvsAddresses,
+    pub trigger_address: Address,
+    pub trigger_kind: CliTriggerKind,
+    pub submit_kind: CliSubmitKind,
 }
 
 impl Deployment {
@@ -76,8 +87,16 @@ impl Deployment {
                 }
 
                 for (deployed_workflow_id, addresses) in workflows.iter() {
-                    for address in addresses.as_vec() {
-                        if client.eth.provider.get_code_at(address).await?.0.is_empty() {
+                    for address in addresses.avs_addresses.as_vec() {
+                        if client.eth.provider.get_code_at(address).await?.0.is_empty()
+                            || client
+                                .eth
+                                .provider
+                                .get_code_at(addresses.trigger_address)
+                                .await?
+                                .0
+                                .is_empty()
+                        {
                             to_remove.insert((
                                 deployed_service_id.clone(),
                                 deployed_workflow_id.clone(),

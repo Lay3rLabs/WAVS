@@ -3,7 +3,7 @@
 use alloy::primitives::{Address, TxHash};
 use serde::{Deserialize, Serialize};
 
-use crate::{layer_contract_client::SignedPayload, ServiceID};
+use crate::avs_client::SignedPayload;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]

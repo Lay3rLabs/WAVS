@@ -1,10 +1,13 @@
-use alloy::node_bindings::{Anvil, AnvilInstance};
+use alloy::{
+    node_bindings::{Anvil, AnvilInstance},
+    sol_types::SolValue,
+};
 use utils::{
+    avs_client::{AvsClientBuilder, ServiceManagerClient},
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
+    example_client::{SimpleSubmitClient, SimpleTriggerClient},
     init_tracing_tests,
-    layer_contract_client::{LayerContractClientFullBuilder, LayerContractClientSimple},
-    ServiceID, WorkflowID,
 };
 
 #[tokio::test]
@@ -25,58 +28,71 @@ async fn deploy_layer_avs() {
         .await
         .unwrap();
 
-    let layer_client = LayerContractClientFullBuilder::new(eigen_client.eth.clone())
-        .avs_addresses(core_contracts)
-        .build()
+    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+        .core_addresses(core_contracts)
+        .build(SimpleSubmitClient::deploy)
         .await
         .unwrap();
 
-    layer_client
+    avs_client
         .register_operator(&mut rand::rngs::OsRng)
         .await
         .unwrap();
 
-    let layer_client: LayerContractClientSimple = layer_client.into();
+    let avs_client: ServiceManagerClient = avs_client.into();
+    let trigger_addr = SimpleTriggerClient::deploy(avs_client.eth.provider.clone())
+        .await
+        .unwrap();
+    let trigger_client = SimpleTriggerClient::new(avs_client.eth.clone(), trigger_addr);
 
     // Create and respond first task
-    let new_trigger_id = layer_client
-        .trigger
+    let new_trigger_id = trigger_client
         .add_trigger(b"foo-data".to_vec())
         .await
         .unwrap();
 
     assert_eq!(*new_trigger_id, 1);
 
-    let trigger = layer_client
-        .trigger
-        .get_trigger(new_trigger_id)
+    let trigger = trigger_client
+        .get_trigger_friendly(new_trigger_id)
         .await
         .unwrap();
 
     assert_eq!(trigger.data, b"foo-data");
 
-    layer_client
-        .add_signed_payload(layer_client.sign_payload(trigger.data).await.unwrap(), None)
+    let trigger_bytes = trigger_client
+        .get_trigger_info(new_trigger_id)
+        .await
+        .unwrap()
+        .abi_encode();
+
+    avs_client
+        .add_signed_payload(avs_client.sign_payload(trigger_bytes).await.unwrap(), None)
         .await
         .unwrap();
 
     // Create and respond second task
-    let new_trigger_id = layer_client
-        .trigger
+    let new_trigger_id = trigger_client
         .add_trigger(b"bar-data".to_vec())
         .await
         .unwrap();
 
     assert_eq!(*new_trigger_id, 2);
-    let trigger = layer_client
-        .trigger
-        .get_trigger(new_trigger_id)
+    let trigger = trigger_client
+        .get_trigger_friendly(new_trigger_id)
         .await
         .unwrap();
 
     assert_eq!(trigger.data, b"bar-data");
-    layer_client
-        .add_signed_payload(layer_client.sign_payload(trigger.data).await.unwrap(), None)
+
+    let trigger_bytes = trigger_client
+        .get_trigger_info(new_trigger_id)
+        .await
+        .unwrap()
+        .abi_encode();
+
+    avs_client
+        .add_signed_payload(avs_client.sign_payload(trigger_bytes).await.unwrap(), None)
         .await
         .unwrap();
 

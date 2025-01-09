@@ -1,8 +1,5 @@
 use super::layer_service_manager::LayerServiceManager;
-use super::{
-    solidity_types, LayerContractClientFull, LayerContractClientTrigger, LayerServiceManagerT,
-    TriggerId,
-};
+use super::{solidity_types, AvsClient, LayerServiceManagerT};
 use crate::eth_client::EthSigningClient;
 use alloy::contract::Error;
 use alloy::primitives::FixedBytes;
@@ -16,58 +13,28 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
-pub struct LayerContractClientSimple {
+pub struct ServiceManagerClient {
     pub eth: EthSigningClient,
-    pub trigger: LayerContractClientTrigger,
     pub service_manager_contract_address: Address,
     pub service_manager_contract: LayerServiceManagerT,
 }
 
-impl From<LayerContractClientFull> for LayerContractClientSimple {
-    fn from(full: LayerContractClientFull) -> Self {
-        Self::new(full.eth, full.layer.service_manager, full.layer.trigger)
+impl From<AvsClient> for ServiceManagerClient {
+    fn from(full: AvsClient) -> Self {
+        Self::new(full.eth, full.layer.service_manager)
     }
 }
 
-impl LayerContractClientSimple {
-    pub fn new(
-        eth: EthSigningClient,
-        service_manager_contract_address: Address,
-        trigger_contract_address: Address,
-    ) -> Self {
+impl ServiceManagerClient {
+    pub fn new(eth: EthSigningClient, service_manager_contract_address: Address) -> Self {
         let service_manager_contract =
             LayerServiceManager::new(service_manager_contract_address, eth.provider.clone());
-        let trigger = LayerContractClientTrigger::new(eth.clone(), trigger_contract_address);
 
         Self {
             eth,
-            trigger,
             service_manager_contract_address,
             service_manager_contract,
         }
-    }
-
-    // only succeeds if signed data landed on-chain
-    pub async fn load_signed_data(&self, _trigger_id: TriggerId) -> Result<Option<SignedData>> {
-        // TODO - bring this back
-        Ok(None)
-        // let resp = self
-        //     .service_manager_contract
-        //     .signedPayloadByTriggerId(*trigger_id)
-        //     .call()
-        //     .await
-        //     .context("Failed to get signed data")?;
-
-        // let data = SignedData {
-        //     data: resp.data.to_vec(),
-        //     signature: resp.signature.to_vec(),
-        // };
-
-        // if data.signature.is_empty() {
-        //     Ok(None)
-        // } else {
-        //     Ok(Some(data))
-        // }
     }
 
     // helper to add a single signed payload to the contract
@@ -91,7 +58,7 @@ impl LayerContractClientSimple {
 
         let result = self
             .service_manager_contract
-            .addSignedPayload(signed_payload.into_submission_abi())
+            .addPayload(signed_payload.into_submission_abi())
             .gas(gas)
             .send()
             .await;

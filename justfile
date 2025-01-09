@@ -38,13 +38,14 @@ wasi-build COMPONENT="*":
     @cp ./examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
     @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
 
-# compile solidity contracts and copy the ABI to contracts/abi
+# compile solidity contracts and copy the ABI to sdk/solidity/contracts/abi
+# example ABI's will be copied to examples/contracts/solidity/abi
 solidity-build:
     rm -rf {{REPO_ROOT}}/out
-    mkdir -p {{REPO_ROOT}}/out
     rm -rf {{REPO_ROOT}}/sdk/solidity/contracts/abi
-    mkdir -p {{REPO_ROOT}}/sdk/solidity/contracts/abi
     rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi
+    mkdir -p {{REPO_ROOT}}/out
+    mkdir -p {{REPO_ROOT}}/sdk/solidity/contracts/abi
     mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/sdk/solidity/contracts;
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
@@ -52,10 +53,11 @@ solidity-build:
     forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/out;
     @for contract in \
         DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
-        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager EmptyContract; do \
+        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager ILayerTrigger EmptyContract; do \
         cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/sdk/solidity/contracts/abi; \
     done
-    cp -r {{REPO_ROOT}}/out/LayerTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
 
 # on-chain integration test
 test-wavs-e2e-ethereum:

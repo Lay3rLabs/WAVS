@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
-use utils::{
-    eigen_client::CoreAVSAddresses,
-    layer_contract_client::{LayerAddresses, SignedData},
-};
-use utils::{ServiceID, WorkflowID};
+use utils::{avs_client::SignedData, eigen_client::CoreAVSAddresses};
+use wavs::apis::{ServiceID, WorkflowID};
+
+use crate::deploy::EthService;
 
 #[derive(Debug)]
 pub struct DisplayBuilder {
     pub core_contracts: Option<CoreAVSAddresses>,
-    pub layer_addresses: Option<LayerAddresses>,
+    pub eth_service: Option<EthService>,
     pub service: Option<ServiceAndWorkflow>,
     pub workflow_id: Option<ServiceID>,
     pub signed_data: Option<SignedData>,
@@ -26,7 +25,7 @@ impl DisplayBuilder {
     pub fn new() -> Self {
         Self {
             core_contracts: None,
-            layer_addresses: None,
+            eth_service: None,
             service: None,
             workflow_id: None,
             signed_data: None,
@@ -42,7 +41,7 @@ impl DisplayBuilder {
             pub core_contracts: Option<CoreAVSAddresses>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub layer_addresses: Option<LayerAddresses>,
+            pub eth_service: Option<EthService>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub service: Option<ServiceAndWorkflow>,
@@ -75,7 +74,7 @@ impl DisplayBuilder {
             "{}",
             serde_json::to_string_pretty(&DisplayJson {
                 core_contracts: self.core_contracts,
-                layer_addresses: self.layer_addresses,
+                eth_service: self.eth_service,
                 service: self.service,
                 workflow_id: self.workflow_id,
                 signed_data,
