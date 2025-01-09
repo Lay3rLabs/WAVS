@@ -4,6 +4,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wavs::bindings::raw::WavsRawWorld;
 
 // This is pretty much all just copy/pasted from wavs... see over there for explanation :)
 pub struct ExecComponentResponse {
@@ -93,9 +94,3 @@ impl WasiHttpView for Host {
         &mut self.http
     }
 }
-
-wasmtime::component::bindgen!({
-  world: "wavs-raw-world",
-  path: "../../wit",
-  async: true,
-});

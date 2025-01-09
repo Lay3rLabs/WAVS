@@ -1,0 +1,36 @@
+[package]
+name = "echo-log"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+layer-wasi = { workspace = true }
+alloy-rlp = { workspace = true }
+anyhow = { workspace = true }
+wit-bindgen-rt = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+debug = false
+strip = true
+lto = true
+
+[package.metadata.component]
+package = "component:echo-log"
+
+[package.metadata.component.target]
+path = "../../../wit"
+world = "wavs-eth-log-world"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = "=0.2.0"
+"wasi:clocks" = "=0.2.0"
+"wasi:http" = "=0.2.0"
+"wasi:random" = "=0.2.0"

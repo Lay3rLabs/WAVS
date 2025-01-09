@@ -10,7 +10,7 @@ pub mod stake_registry {
         #[allow(missing_docs)]
         #[sol(rpc)]
         ECDSAStakeRegistry,
-        "../../contracts/abi/ECDSAStakeRegistry.sol/ECDSAStakeRegistry.json"
+        "../../sdk/solidity/contracts/abi/ECDSAStakeRegistry.sol/ECDSAStakeRegistry.json"
     );
 }
 
@@ -21,14 +21,14 @@ pub mod token {
         #[allow(missing_docs)]
         #[sol(rpc)]
         LayerToken,
-        "../../contracts/abi/LayerToken.sol/LayerToken.json"
+        "../../sdk/solidity/contracts/abi/LayerToken.sol/LayerToken.json"
     );
 
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
         IStrategy,
-        "../../contracts/abi/IStrategy.sol/IStrategy.json"
+        "../../sdk/solidity/contracts/abi/IStrategy.sol/IStrategy.json"
     );
 }
 
@@ -39,7 +39,7 @@ pub mod layer_service_manager {
         #[allow(missing_docs)]
         #[sol(rpc)]
         LayerServiceManager,
-        "../../contracts/abi/LayerServiceManager.sol/LayerServiceManager.json"
+        "../../sdk/solidity/contracts/abi/LayerServiceManager.sol/LayerServiceManager.json"
     );
 }
 
@@ -52,7 +52,7 @@ pub mod layer_trigger {
         #[allow(missing_docs)]
         #[sol(rpc)]
         LayerTrigger,
-        "../../contracts/abi/LayerTrigger.sol/LayerTrigger.json"
+        "../../examples/contracts/solidity/abi/LayerTrigger.sol/LayerTrigger.json"
     );
 }
 

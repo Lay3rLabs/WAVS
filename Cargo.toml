@@ -1,5 +1,9 @@
 [workspace]
-members = ["packages/*"]
+members = [
+  "packages/*",
+  "sdk/wasi",
+  "sdk/cosmwasm",
+]
 resolver = "2"
 
 [workspace.package]
@@ -14,6 +18,8 @@ rust-version = "1.80.0"
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 aggregator = { path = "packages/aggregator" }
+layer-wasi = { path = "sdk/wasi" }
+layer-cosmwasm = { path = "sdk/cosmwasm" }
 clap = { version = "4.5.20", features = ["derive", "env"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }
@@ -35,11 +41,13 @@ tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
 layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
 ctrlc = "3.4.5"
 tempfile = "3.13.0"
 lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.1" }
 futures = "0.3.31"
-cosmwasm-std = "2.1.4"
 reqwest = { version = "0.12.9", features = ["json"] }
 rand = "0.8.5"
 cfg-if = "1.0.0"
@@ -58,7 +66,19 @@ url = "2.5.3"
 bip39 = "2.0.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
-alloy = { version = "0.6.4", features = ["full", "signer-mnemonic", "node-bindings"] }
-alloy-rlp = {version = "0.3.10", features = ["derive"]}
 chrono = "0.4.38"
 shellexpand = "3.1.0"
+wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
+alloy = { version = "0.6.4", features = ["full", "signer-mnemonic", "node-bindings"] }
+alloy-rlp = {version = "0.3.10", features = ["derive"]}
+alloy-primitives = "0.8.15"
+alloy-sol-macro = "0.8.15"
+alloy-sol-types = "0.8.15"
+tendermint-rpc = "0.40.1"
+tendermint = { version = "0.40.1", default-features = false}
+wstd = "0.4.0"
+wasi = "0.13.3"
+cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
+cosmwasm-schema = "2.2.0"
+cw-storage-plus = "2.0.0"
+cw2 = "2.0.0"

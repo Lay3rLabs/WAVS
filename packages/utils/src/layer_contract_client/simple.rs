@@ -12,7 +12,7 @@ use alloy::{
     providers::Provider,
     signers::SignerSync,
 };
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
@@ -48,24 +48,26 @@ impl LayerContractClientSimple {
     }
 
     // only succeeds if signed data landed on-chain
-    pub async fn load_signed_data(&self, trigger_id: TriggerId) -> Result<Option<SignedData>> {
-        let resp = self
-            .service_manager_contract
-            .signedPayloadByTriggerId(*trigger_id)
-            .call()
-            .await
-            .context("Failed to get signed data")?;
+    pub async fn load_signed_data(&self, _trigger_id: TriggerId) -> Result<Option<SignedData>> {
+        // TODO - bring this back
+        Ok(None)
+        // let resp = self
+        //     .service_manager_contract
+        //     .signedPayloadByTriggerId(*trigger_id)
+        //     .call()
+        //     .await
+        //     .context("Failed to get signed data")?;
 
-        let data = SignedData {
-            data: resp.data.to_vec(),
-            signature: resp.signature.to_vec(),
-        };
+        // let data = SignedData {
+        //     data: resp.data.to_vec(),
+        //     signature: resp.signature.to_vec(),
+        // };
 
-        if data.signature.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(data))
-        }
+        // if data.signature.is_empty() {
+        //     Ok(None)
+        // } else {
+        //     Ok(Some(data))
+        // }
     }
 
     // helper to add a single signed payload to the contract
@@ -89,7 +91,7 @@ impl LayerContractClientSimple {
 
         let result = self
             .service_manager_contract
-            .addRawData(signed_payload.data.into(), signed_payload.signature.into())
+            .addSignedPayload(signed_payload.into_submission_abi())
             .gas(gas)
             .send()
             .await;

@@ -2,6 +2,6 @@ use wasmtime::component::bindgen;
 
 bindgen!({
   world: "wavs-eth-log-world",
-  path: "../../wit",
+  path: "../../sdk/wit",
   async: true,
 });

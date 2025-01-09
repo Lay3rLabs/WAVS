@@ -378,7 +378,21 @@ impl CoreSubmission {
             }
         } else {
             let _ = service_manager_contract
-                .addRawData(data.into(), signature.into())
+                .addSignedPayload(
+                    SignedPayload {
+                        operator: eth_client.address(),
+                        data,
+                        data_hash,
+                        signature,
+                        signed_block_height: eth_client
+                            .provider
+                            .get_block_number()
+                            .await
+                            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
+                            - 1,
+                    }
+                    .into_submission_abi(),
+                )
                 .gas(max_gas.unwrap_or(500_000).min(30_000_000))
                 .send()
                 .await

@@ -1,5 +1,6 @@
 SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" }
-WASI_OUT_DIR := "./components"
+TAG := env_var_or_default("TAG", "")
+WASI_OUT_DIR := "./examples/build/components"
 REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
 
@@ -25,29 +26,36 @@ docker-stop:
 
 # compile WASI components, places the output in components dir
 wasi-build COMPONENT="*":
+    cd packages/sdk/wasi && cargo component build --release
     rm -f ./examples/target/wasm32-wasip1/release/*.wasm 
-    rm -rf ./components/
-    mkdir -p ./components/
-    @for C in examples/{{COMPONENT}}/Cargo.toml; do \
+    rm -rf {{WASI_OUT_DIR}} 
+    @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
         echo "Building WASI component in $(dirname $C)"; \
         `cd $(dirname $C); cargo component build --release; cargo fmt;`; \
     done
 
+    mkdir -p {{WASI_OUT_DIR}} 
     @cp ./examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
     @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
 
 # compile solidity contracts and copy the ABI to contracts/abi
 solidity-build:
+    rm -rf {{REPO_ROOT}}/out
     mkdir -p {{REPO_ROOT}}/out
-    mkdir -p {{REPO_ROOT}}/contracts/abi
-    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out;
+    rm -rf {{REPO_ROOT}}/sdk/solidity/contracts/abi
+    mkdir -p {{REPO_ROOT}}/sdk/solidity/contracts/abi
+    rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi
+    mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
+    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/sdk/solidity/contracts;
+    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
     forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware --out {{REPO_ROOT}}/out;
     forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/out;
     @for contract in \
         DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
-        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager LayerTrigger EmptyContract; do \
-        cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/contracts/abi; \
+        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager EmptyContract; do \
+        cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/sdk/solidity/contracts/abi; \
     done
+    cp -r {{REPO_ROOT}}/out/LayerTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
 
 # on-chain integration test
 test-wavs-e2e-ethereum:

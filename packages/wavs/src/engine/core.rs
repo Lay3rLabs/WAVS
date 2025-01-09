@@ -364,8 +364,9 @@ mod tests {
 
     use super::*;
 
-    const SQUARE: &[u8] = include_bytes!("../../../../components/square.wasm");
-    const PERMISSIONS: &[u8] = include_bytes!("../../../../components/permissions.wasm");
+    const SQUARE: &[u8] = include_bytes!("../../../../examples/build/components/square.wasm");
+    const PERMISSIONS: &[u8] =
+        include_bytes!("../../../../examples/build/components/permissions.wasm");
     const DEFAULT_FUEL_LIMIT: u64 = 1_000_000;
 
     #[test]

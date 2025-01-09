@@ -1,17 +1,18 @@
 [workspace]
 members = [
-  "_helpers",
-  "cosmos-query",
-  "cosmos-trigger-lookup",
-  "echo-data",
-  "echo-log",
-  "echo-raw",
-  "square",
-  "permissions",
+  "components/cosmos-query",
+  "components/cosmos-trigger-lookup",
+  "components/echo-data",
+  "components/echo-log",
+  "components/echo-raw",
+  "components/square",
+  "components/permissions",
   # TODO - port from old/
   # "composition/http-allow-list/http-allowed-coingecko",
   # "ai-bouncer",
   # "btc-avg",
+
+  "contracts/cosmwasm/simple",
 ]
 resolver = "2"
 
@@ -23,7 +24,8 @@ rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [workspace.dependencies]
-wavs-helpers = { path = "_helpers" }
+layer-wasi = { path = "../sdk/wasi" }
+layer-cosmwasm = { path = "../sdk/cosmwasm" }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 anyhow = "1.0.90"
@@ -40,6 +42,11 @@ tendermint = { version = "0.40.1", default-features = false}
 wstd = "0.4.0"
 url = "2.5.3"
 wasi = "0.13.3"
+cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
+cosmwasm-schema = "2.2.0"
+cw-storage-plus = "2.0.0"
+cw2 = "2.0.0"
+hex = "0.4.3"
 
 [profile.release]
 codegen-units = 1

@@ -1726,7 +1726,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d0afc4daf81936e6ef5a2cf76f00c913ba5bc385d58ae1e09644e25d16b0381"
 dependencies = [
  "prost",
- "tendermint-proto",
+ "tendermint-proto 0.39.1",
 ]
 
 [[package]]
@@ -1736,7 +1736,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8ce7f4797cdf5cd18be6555ff3f0a8d37023c2d60f3b2708895d601b85c1c46"
 dependencies = [
  "prost",
- "tendermint-proto",
+ "tendermint-proto 0.39.1",
  "tonic",
 ]
 
@@ -2660,6 +2660,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "eyre"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cd915d99f24784cdc19fd37ef22b97e3ff0ae756c7e492e9fbfe897d61e2aec"
+dependencies = [
+ "indenter",
+ "once_cell",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2741,6 +2751,7 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c606d892c9de11507fa0dcffc116434f94e105d0bbdc4e405b61519464c49d7b"
 dependencies = [
+ "eyre",
  "paste",
 ]
 
@@ -2944,7 +2955,7 @@ dependencies = [
  "cfg-if",
  "js-sys",
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "wasm-bindgen",
 ]
 
@@ -3293,7 +3304,7 @@ dependencies = [
  "informalsystems-pbjson",
  "prost",
  "subtle-encoding",
- "tendermint-proto",
+ "tendermint-proto 0.39.1",
  "tonic",
 ]
 
@@ -3475,6 +3486,12 @@ dependencies = [
  "quote",
  "syn 2.0.94",
 ]
+
+[[package]]
+name = "indenter"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
@@ -3719,7 +3736,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "signature",
  "subtle-encoding",
- "tendermint",
+ "tendermint 0.39.1",
  "thiserror 1.0.69",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -3759,8 +3776,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "tendermint",
- "tendermint-rpc",
+ "tendermint 0.39.1",
+ "tendermint-rpc 0.39.1",
  "thiserror 1.0.69",
  "tokio",
  "toml",
@@ -3777,8 +3794,37 @@ dependencies = [
  "anyhow",
  "cosmos-sdk-proto 0.25.0",
  "ibc-proto",
- "tendermint-proto",
+ "tendermint-proto 0.39.1",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "layer-cosmwasm"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "cosmwasm-std",
+ "hex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "layer-wasi"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "layer-climb-address",
+ "layer-climb-config",
+ "layer-climb-proto",
+ "serde",
+ "serde_json",
+ "tendermint 0.40.1",
+ "tendermint-rpc 0.40.1",
+ "url",
+ "wasi 0.13.3+wasi-0.2.2",
+ "wit-bindgen-rt 0.32.0",
+ "wstd",
 ]
 
 [[package]]
@@ -3919,7 +3965,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2886843bf800fba2e3377cff24abf6379b4c4d5c6681eaf9ea5b0d15090450bd"
 dependencies = [
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
 ]
 
@@ -5614,7 +5660,35 @@ dependencies = [
  "signature",
  "subtle",
  "subtle-encoding",
- "tendermint-proto",
+ "tendermint-proto 0.39.1",
+ "time",
+ "zeroize",
+]
+
+[[package]]
+name = "tendermint"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9703e34d940c2a293804752555107f8dbe2b84ec4c6dd5203831235868105d2"
+dependencies = [
+ "bytes",
+ "digest 0.10.7",
+ "ed25519",
+ "ed25519-consensus",
+ "flex-error",
+ "futures",
+ "num-traits",
+ "once_cell",
+ "prost",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "serde_repr",
+ "sha2 0.10.8",
+ "signature",
+ "subtle",
+ "subtle-encoding",
+ "tendermint-proto 0.40.1",
  "time",
  "zeroize",
 ]
@@ -5628,7 +5702,21 @@ dependencies = [
  "flex-error",
  "serde",
  "serde_json",
- "tendermint",
+ "tendermint 0.39.1",
+ "toml",
+ "url",
+]
+
+[[package]]
+name = "tendermint-config"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89cc3ea9a39b7ee34eefcff771cc067ecaa0c988c1c5ac08defd878471a06f76"
+dependencies = [
+ "flex-error",
+ "serde",
+ "serde_json",
+ "tendermint 0.40.1",
  "toml",
  "url",
 ]
@@ -5638,6 +5726,21 @@ name = "tendermint-proto"
 version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf3abf34ecf33125621519e9952688e7a59a98232d51538037ba21fbe526a802"
+dependencies = [
+ "bytes",
+ "flex-error",
+ "prost",
+ "serde",
+ "serde_bytes",
+ "subtle-encoding",
+ "time",
+]
+
+[[package]]
+name = "tendermint-proto"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ae9e1705aa0fa5ecb2c6aa7fb78c2313c4a31158ea5f02048bf318f849352eb"
 dependencies = [
  "bytes",
  "flex-error",
@@ -5667,9 +5770,38 @@ dependencies = [
  "serde_json",
  "subtle",
  "subtle-encoding",
- "tendermint",
- "tendermint-config",
- "tendermint-proto",
+ "tendermint 0.39.1",
+ "tendermint-config 0.39.1",
+ "tendermint-proto 0.39.1",
+ "thiserror 1.0.69",
+ "time",
+ "url",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "tendermint-rpc"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835a52aa504c63ec05519e31348d3f4ba2fe79493c588e2cad5323d5e81b161a"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "flex-error",
+ "getrandom",
+ "peg",
+ "pin-project",
+ "rand",
+ "semver 1.0.24",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "subtle",
+ "subtle-encoding",
+ "tendermint 0.40.1",
+ "tendermint-config 0.40.1",
+ "tendermint-proto 0.40.1",
  "thiserror 1.0.69",
  "time",
  "url",
@@ -6376,6 +6508,15 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
+
+[[package]]
+name = "wasi"
+version = "0.13.3+wasi-0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26816d2e1a4a36a2940b96c5296ce403917633dff8f3440e9b236ed6f6bacad2"
+dependencies = [
+ "wit-bindgen-rt 0.33.0",
+]
 
 [[package]]
 name = "wasm-bindgen"
@@ -7274,6 +7415,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-bindgen-rt"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ca6f307148acf7199e492fd3781cc7b79f8f3eda003c0ac3aa8079449601ccb"
+dependencies = [
+ "bitflags 2.6.0",
+]
+
+[[package]]
+name = "wit-bindgen-rt"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3268f3d866458b787f390cf61f4bbb563b922d091359f9608842999eaee3943c"
+dependencies = [
+ "bitflags 2.6.0",
+]
+
+[[package]]
 name = "wit-parser"
 version = "0.215.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7332,6 +7491,17 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wstd"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "159bdbe25114f4549900a9ba7170f3604c10b76c76bb58bbb61767b27773f844"
+dependencies = [
+ "slab",
+ "url",
+ "wasi 0.13.3+wasi-0.2.2",
 ]
 
 [[package]]
