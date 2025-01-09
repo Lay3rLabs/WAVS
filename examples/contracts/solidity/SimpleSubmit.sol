@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 import {LayerServiceManager} from "@layer-contracts/LayerServiceManager.sol";
 import {ILayerServiceManager} from "@layer-contracts/interfaces/ILayerServiceManager.sol";
 import {ISimpleTrigger} from "./interfaces/ISimpleTrigger.sol";
+import {ISimpleSubmit} from "./interfaces/ISimpleSubmit.sol";
 
 contract SimpleSubmit is LayerServiceManager {
     constructor(
@@ -20,18 +21,27 @@ contract SimpleSubmit is LayerServiceManager {
     {}
 
     mapping(ISimpleTrigger.TriggerId => bool) validTriggers;
-    mapping(ISimpleTrigger.TriggerId => ILayerServiceManager.SignedPayload) payloadsByTriggerId;
+    mapping(ISimpleTrigger.TriggerId => bytes) datas;
+    mapping(ISimpleTrigger.TriggerId => bytes) signatures;
 
+    // payload data is expected to be DataWithId
     function _handleAddPayload(ILayerServiceManager.SignedPayload calldata signedPayload) internal virtual override { 
-        ISimpleTrigger.TriggerInfo memory triggerInfo = abi.decode(signedPayload.data, (ISimpleTrigger.TriggerInfo));
-        validTriggers[triggerInfo.triggerId] = true;
+        ISimpleSubmit.DataWithId memory dataWithId = abi.decode(signedPayload.data, (ISimpleSubmit.DataWithId));
+
+        signatures[dataWithId.triggerId] = signedPayload.signature;
+        datas[dataWithId.triggerId] = dataWithId.data;
+        validTriggers[dataWithId.triggerId] = true;
     }
 
     function isValidTriggerId(ISimpleTrigger.TriggerId triggerId) external view returns (bool) {
         return validTriggers[triggerId];
     }
 
-    function getSignedPayloadForTriggerId(ISimpleTrigger.TriggerId triggerId) external view returns (ILayerServiceManager.SignedPayload memory signedPayload) {
-        signedPayload = payloadsByTriggerId[triggerId];
+    function getSignature(ISimpleTrigger.TriggerId triggerId) external view returns (bytes memory signature) {
+        signature = signatures[triggerId];
+    }
+
+    function getData(ISimpleTrigger.TriggerId triggerId) external view returns (bytes memory data) {
+        data = datas[triggerId];
     }
 }

@@ -1,7 +1,4 @@
-use alloy::{
-    node_bindings::{Anvil, AnvilInstance},
-    sol_types::SolValue,
-};
+use alloy::node_bindings::{Anvil, AnvilInstance};
 use utils::{
     avs_client::{AvsClientBuilder, ServiceManagerClient},
     eigen_client::{CoreAVSAddresses, EigenClient},
@@ -53,21 +50,15 @@ async fn deploy_layer_avs() {
 
     assert_eq!(*new_trigger_id, 1);
 
-    let trigger = trigger_client
-        .get_trigger_friendly(new_trigger_id)
+    let trigger_data = trigger_client
+        .get_trigger_data(new_trigger_id)
         .await
         .unwrap();
 
-    assert_eq!(trigger.data, b"foo-data");
-
-    let trigger_bytes = trigger_client
-        .get_trigger_info(new_trigger_id)
-        .await
-        .unwrap()
-        .abi_encode();
+    assert_eq!(trigger_data, b"foo-data");
 
     avs_client
-        .add_signed_payload(avs_client.sign_payload(trigger_bytes).await.unwrap(), None)
+        .add_signed_payload(avs_client.sign_payload(trigger_data).await.unwrap(), None)
         .await
         .unwrap();
 
@@ -78,21 +69,15 @@ async fn deploy_layer_avs() {
         .unwrap();
 
     assert_eq!(*new_trigger_id, 2);
-    let trigger = trigger_client
-        .get_trigger_friendly(new_trigger_id)
+    let trigger_data = trigger_client
+        .get_trigger_data(new_trigger_id)
         .await
         .unwrap();
 
-    assert_eq!(trigger.data, b"bar-data");
-
-    let trigger_bytes = trigger_client
-        .get_trigger_info(new_trigger_id)
-        .await
-        .unwrap()
-        .abi_encode();
+    assert_eq!(trigger_data, b"bar-data");
 
     avs_client
-        .add_signed_payload(avs_client.sign_payload(trigger_bytes).await.unwrap(), None)
+        .add_signed_payload(avs_client.sign_payload(trigger_data).await.unwrap(), None)
         .await
         .unwrap();
 

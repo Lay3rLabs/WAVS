@@ -13,14 +13,17 @@ use utils::{IDError, ServiceID, WorkflowID};
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     // A contract that emits an event
-    ContractEvent { address: Address },
+    ContractEvent { address: Address, chain_id: String },
     // not a real trigger, just for testing
     Test,
 }
 
 impl Trigger {
-    pub fn contract_event(address: Address) -> Self {
-        Trigger::ContractEvent { address }
+    pub fn contract_event(address: Address, chain_id: impl ToString) -> Self {
+        Trigger::ContractEvent {
+            address,
+            chain_id: chain_id.to_string(),
+        }
     }
 }
 
@@ -58,11 +61,12 @@ impl TriggerConfig {
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         contract_address: Address,
+        chain_name: impl ToString,
     ) -> Result<Self, IDError> {
         Ok(Self {
             service_id: service_id.try_into()?,
             workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::contract_event(contract_address),
+            trigger: Trigger::contract_event(contract_address, chain_name),
         })
     }
 }
@@ -129,10 +133,12 @@ pub enum TriggerError {
     NoSuchWorkflow(ServiceID, WorkflowID),
     #[error("Cannot find trigger data: {0}")]
     NoSuchTriggerData(usize),
-    #[error("Cannot find trigger contract: {0}")]
-    NoSuchContract(Address),
+    #[error("Cannot find trigger contract: {0} / {1}")]
+    NoSuchContract(String, Address),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
+    #[error("Contract address already registered: {0} / {1}")]
+    ContractAddressAlreadyRegistered(String, Address),
 }

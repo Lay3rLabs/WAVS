@@ -95,8 +95,13 @@ mod test {
 
     fn dummy_message(service: &str, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_config: TriggerConfig::contract_event(service, service, rand_address_eth())
-                .unwrap(),
+            trigger_config: TriggerConfig::contract_event(
+                service,
+                service,
+                rand_address_eth(),
+                "eth",
+            )
+            .unwrap(),
             wasm_result: payload.as_bytes().to_vec(),
             submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
         }

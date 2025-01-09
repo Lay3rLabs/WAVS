@@ -6,7 +6,6 @@ use crate::eigen_client::solidity_types::BoxSigningProvider;
 
 pub mod example_trigger {
     use alloy::sol;
-    pub use ISimpleTrigger::TriggerInfo;
     pub use SimpleTrigger::NewTriggerId;
 
     sol!(
@@ -19,6 +18,7 @@ pub mod example_trigger {
 
 pub mod example_submit {
     use alloy::sol;
+    pub use interface::ISimpleSubmit::DataWithId;
 
     sol!(
         #[allow(missing_docs)]
@@ -26,6 +26,17 @@ pub mod example_submit {
         SimpleSubmit,
         "../../examples/contracts/solidity/abi/SimpleSubmit.sol/SimpleSubmit.json"
     );
+
+    mod interface {
+        use alloy::sol;
+
+        sol!(
+            #[allow(missing_docs)]
+            #[sol(rpc)]
+            ISimpleSubmit,
+            "../../examples/contracts/solidity/abi/ISimpleSubmit.sol/ISimpleSubmit.json"
+        );
+    }
 }
 
 pub type SimpleTriggerT = SimpleTriggerInstance<BoxTransport, BoxSigningProvider>;

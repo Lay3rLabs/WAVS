@@ -73,12 +73,10 @@ async fn submit_to_chain() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(
-            trigger_client
-                .get_trigger_payload(trigger_id)
-                .await
-                .unwrap(),
-        )
+        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+            *trigger_id,
+            task_message,
+        ))
         .await
         .unwrap();
 
@@ -165,12 +163,10 @@ async fn submit_to_chain_three() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(
-            trigger_client
-                .get_trigger_payload(trigger_id)
-                .await
-                .unwrap(),
-        )
+        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+            *trigger_id,
+            task_message,
+        ))
         .await
         .unwrap();
 
@@ -196,12 +192,10 @@ async fn submit_to_chain_three() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(
-            trigger_client
-                .get_trigger_payload(trigger_id)
-                .await
-                .unwrap(),
-        )
+        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+            *trigger_id,
+            task_message,
+        ))
         .await
         .unwrap();
 
@@ -227,12 +221,10 @@ async fn submit_to_chain_three() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(
-            trigger_client
-                .get_trigger_payload(trigger_id)
-                .await
-                .unwrap(),
-        )
+        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+            *trigger_id,
+            task_message,
+        ))
         .await
         .unwrap();
 
@@ -322,12 +314,10 @@ async fn invalid_operator_signature() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(
-            trigger_client
-                .get_trigger_payload(trigger_id)
-                .await
-                .unwrap(),
-        )
+        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+            *trigger_id,
+            task_message,
+        ))
         .await
         .unwrap();
 

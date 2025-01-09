@@ -1,15 +1,16 @@
 use alloy::node_bindings::AnvilInstance;
 use utils::{
-    avs_client::{AvsClient, AvsClientBuilder},
-    eigen_client::EigenClient,
+    avs_client::AvsClientBuilder,
+    eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
+    example_client::{SimpleSubmitClient, SimpleTriggerClient},
 };
 use wavs::config::Config;
 
 #[allow(dead_code)]
 pub struct EthTestApp {
     pub eigen_client: EigenClient,
-    pub avs_client: AvsClient,
+    pub core_contracts: CoreAVSAddresses,
     anvil: AnvilInstance,
 }
 
@@ -36,9 +37,17 @@ impl EthTestApp {
             .await
             .unwrap();
 
-        let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
-            .core_addresses(core_contracts)
-            .build()
+        Self {
+            eigen_client,
+            anvil,
+            core_contracts,
+        }
+    }
+
+    pub async fn deploy_service_contracts(&self) -> (SimpleTriggerClient, SimpleSubmitClient) {
+        let avs_client = AvsClientBuilder::new(self.eigen_client.eth.clone())
+            .core_addresses(self.core_contracts.clone())
+            .build(SimpleSubmitClient::deploy)
             .await
             .unwrap();
 
@@ -47,10 +56,13 @@ impl EthTestApp {
             .await
             .unwrap();
 
-        Self {
-            eigen_client,
-            avs_client,
-            anvil,
-        }
+        let submit_client =
+            SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+
+        let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+            .await
+            .unwrap();
+
+        (trigger_client, submit_client)
     }
 }

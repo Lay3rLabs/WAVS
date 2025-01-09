@@ -165,6 +165,7 @@ impl MockTriggerManagerChannel {
         workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
         contract_address: &Address,
         data: &(impl Serialize + std::fmt::Debug),
+        chain_id: impl ToString + std::fmt::Debug,
     ) {
         self.sender
             .send(TriggerAction {
@@ -172,6 +173,7 @@ impl MockTriggerManagerChannel {
                     service_id,
                     workflow_id,
                     contract_address.clone(),
+                    chain_id,
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(serde_json::to_string(data).unwrap().as_bytes()),
@@ -244,13 +246,19 @@ mod tests {
                     "service1",
                     "workflow1",
                     contract_address.clone(),
+                    "eth",
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(b"foobar"),
             },
             TriggerAction {
-                config: TriggerConfig::contract_event("service2", "workflow2", contract_address)
-                    .unwrap(),
+                config: TriggerConfig::contract_event(
+                    "service2",
+                    "workflow2",
+                    contract_address,
+                    "eth",
+                )
+                .unwrap(),
                 data: TriggerData::new_raw(b"zoomba"),
             },
         ];
@@ -268,7 +276,8 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerConfig::contract_event("abcd", "abcd", rand_address_eth()).unwrap();
+        let data =
+            TriggerConfig::contract_event("abcd", "abcd", rand_address_eth(), "eth").unwrap();
         triggers.add_trigger(data).unwrap();
     }
 
@@ -279,7 +288,8 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerConfig::contract_event("abcd", "abcd", rand_address_eth()).unwrap();
+        let data =
+            TriggerConfig::contract_event("abcd", "abcd", rand_address_eth(), "eth").unwrap();
         triggers.add_trigger(data).unwrap_err();
     }
 }

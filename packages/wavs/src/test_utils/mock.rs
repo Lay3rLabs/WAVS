@@ -122,7 +122,7 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: Trigger::contract_event(rand_address_eth()),
+                trigger: Trigger::contract_event(rand_address_eth(), "eth"),
                 id: service_id,
                 digest: digest.into(),
                 world: ComponentWorld::Raw,

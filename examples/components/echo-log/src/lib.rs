@@ -17,7 +17,7 @@ pub struct EthOutput {
 impl Guest for Component {
     fn run(contract: Contract, log: EthLog) -> Result<Vec<u8>, String> {
         let address =
-            parse_address_eth!(bindings::lay3r::avs::wavs_types::Address, contract.address);
+            parse_address_eth!(bindings::lay3r::avs::layer_types::Address, contract.address);
 
         let mut output = Vec::new();
         EthOutput {

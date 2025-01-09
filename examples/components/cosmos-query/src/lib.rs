@@ -2,6 +2,7 @@
 mod bindings;
 
 use anyhow::{anyhow, Result};
+use example_helpers::trigger::{decode_trigger_input, encode_trigger_output};
 use layer_climb_address::Address;
 use layer_climb_config::*;
 use layer_wasi::cosmos::CosmosQuerier;
@@ -13,13 +14,17 @@ use bindings::{Contract, Guest};
 
 impl Guest for Component {
     fn run(_contract: Contract, input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
+        let (trigger_id, input) = decode_trigger_input(input)?;
+
         let req: CosmosQueryRequest = serde_json::from_slice(&input)
             .map_err(|e| anyhow!("Could not deserialize input request from JSON: {}", e))
             .unwrap();
 
         let resp = handle_request(req).map_err(|e| e.to_string())?;
 
-        serde_json::to_vec(&resp).map_err(|e| e.to_string())
+        serde_json::to_vec(&resp)
+            .map_err(|e| e.to_string())
+            .map(|output| encode_trigger_output(trigger_id, output))
     }
 }
 

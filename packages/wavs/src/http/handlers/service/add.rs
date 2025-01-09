@@ -141,7 +141,7 @@ mod test {
                 id: ServiceID::new("test-name").unwrap(),
                 world: ComponentWorld::Raw,
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: Trigger::contract_event(addr),
+                trigger: Trigger::contract_event(addr, "eth"),
                 permissions: Permissions::default(),
                 testable: Some(true),
                 submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),

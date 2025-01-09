@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    example_trigger::TriggerInfo,
+    example_trigger::ISimpleTrigger::TriggerInfo,
     solidity_types::{
         example_trigger::SimpleTrigger::{self, NewTriggerId},
         SimpleTriggerT,
@@ -44,7 +44,20 @@ impl SimpleTriggerClient {
         Ok(*contract.address())
     }
 
-    // TODO - bring all newtypes into utils
+    // just a static helper to simulate the data that would be emitted from the contract
+    pub fn trigger_info_bytes(
+        creator: Address,
+        trigger_id: u64,
+        data: impl AsRef<[u8]>,
+    ) -> Vec<u8> {
+        TriggerInfo {
+            triggerId: trigger_id,
+            creator,
+            data: data.as_ref().to_vec().into(),
+        }
+        .abi_encode()
+    }
+
     pub async fn add_trigger(&self, data: Vec<u8>) -> Result<TriggerId> {
         let event: NewTriggerId = self
             .contract
@@ -59,29 +72,32 @@ impl SimpleTriggerClient {
         Ok(TriggerId::new(event._0))
     }
 
-    pub async fn get_trigger_info(&self, trigger_id: TriggerId) -> Result<TriggerInfo> {
+    // Returns the inner trigger data (i.e. the data that was sent via add_trigger)
+    pub async fn get_trigger_data(&self, trigger_id: TriggerId) -> Result<Vec<u8>> {
         Ok(self
             .contract
             .getTrigger(*trigger_id)
             .call()
             .await
             .context("Failed to get trigger")?
-            ._0)
+            ._0
+            .data
+            .to_vec())
     }
 
-    pub async fn get_trigger_payload(&self, trigger_id: TriggerId) -> Result<Vec<u8>> {
-        Ok(self.get_trigger_info(trigger_id).await?.abi_encode())
-    }
-
-    pub async fn get_trigger_friendly(&self, trigger_id: TriggerId) -> Result<TriggerResponse> {
-        let info = self.get_trigger_info(trigger_id).await?;
-
-        Ok(TriggerResponse {
-            trigger_id: TriggerId::new(info.triggerId),
-            creator: info.creator,
-            data: info.data.to_vec(),
-        })
-    }
+    // // Returns the same payload emitted from the event
+    // // mostly just used in test flows
+    // pub async fn get_trigger_info_payload(&self, trigger_id: TriggerId) -> Result<Vec<u8>> {
+    //     Ok(self
+    //         .contract
+    //         .getTrigger(*trigger_id)
+    //         .call()
+    //         .await
+    //         .context("Failed to get trigger")?
+    //         ._0
+    //         .abi_encode()
+    //     )
+    // }
 }
 
 // Rust-friendly API around types
@@ -123,6 +139,5 @@ impl std::fmt::Debug for TriggerId {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TriggerResponse {
     pub trigger_id: TriggerId,
-    pub creator: Address,
     pub data: Vec<u8>,
 }

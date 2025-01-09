@@ -38,8 +38,8 @@ pub struct CoreTriggerManager {
 struct LookupMaps {
     /// single lookup for all triggers (in theory, can be more than just task queue addr)
     pub trigger_configs: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
-    /// lookup id by contract event address
-    pub triggers_by_contract_event: Arc<RwLock<HashMap<Address, LookupId>>>,
+    /// lookup id by (chain id, contract event address)
+    pub triggers_by_contract_event: Arc<RwLock<HashMap<(String, Address), LookupId>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -243,7 +243,7 @@ impl CoreTriggerManager {
                         .triggers_by_contract_event
                         .read()
                         .unwrap()
-                        .get(&contract_address)
+                        .get(&(chain_id.clone(), contract_address.clone()))
                         .and_then(|id| {
                             self.lookup_maps
                                 .trigger_configs
@@ -273,7 +273,7 @@ impl CoreTriggerManager {
                     let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
                     for (contract_address, datas) in contract_events {
                         if let Some(trigger_config) = triggers_by_contract_event_lock
-                            .get(&contract_address)
+                            .get(&(chain_id.clone(), contract_address.clone()))
                             .and_then(|id| trigger_configs_lock.get(id).cloned())
                         {
                             for data in datas.into_iter() {
@@ -336,12 +336,17 @@ impl TriggerManager for CoreTriggerManager {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         match &config.trigger {
-            Trigger::ContractEvent { address } => {
-                self.lookup_maps
-                    .triggers_by_contract_event
-                    .write()
-                    .unwrap()
-                    .insert(address.clone(), lookup_id);
+            Trigger::ContractEvent { address, chain_id } => {
+                let mut lock = self.lookup_maps.triggers_by_contract_event.write().unwrap();
+                let key = (chain_id.clone(), address.clone());
+                if lock.contains_key(&key) {
+                    return Err(TriggerError::ContractAddressAlreadyRegistered(
+                        chain_id.clone(),
+                        address.clone(),
+                    ));
+                }
+
+                lock.insert(key, lookup_id);
             }
             Trigger::Test => {}
         }
@@ -450,7 +455,7 @@ impl TriggerManager for CoreTriggerManager {
 
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_contract_address: &mut HashMap<Address, LookupId>,
+    triggers_by_contract_address: &mut HashMap<(String, Address), LookupId>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -459,11 +464,11 @@ fn remove_trigger_data(
         .ok_or(TriggerError::NoSuchTriggerData(lookup_id))?;
 
     // 2. remove from contracts
-    match &trigger_data.trigger {
-        Trigger::ContractEvent { address } => {
+    match trigger_data.trigger {
+        Trigger::ContractEvent { address, chain_id } => {
             triggers_by_contract_address
-                .remove(address)
-                .ok_or(TriggerError::NoSuchContract(address.clone()))?;
+                .remove(&(chain_id.clone(), address.clone()))
+                .ok_or(TriggerError::NoSuchContract(chain_id, address))?;
         }
         Trigger::Test => {}
     }
@@ -537,24 +542,28 @@ mod tests {
             &service_id_1,
             &workflow_id_1,
             task_queue_addr_1_1.clone(),
+            "eth",
         )
         .unwrap();
         let trigger_1_2 = TriggerConfig::contract_event(
             &service_id_1,
             &workflow_id_2,
             task_queue_addr_1_2.clone(),
+            "eth",
         )
         .unwrap();
         let trigger_2_1 = TriggerConfig::contract_event(
             &service_id_2,
             &workflow_id_1,
             task_queue_addr_2_1.clone(),
+            "eth",
         )
         .unwrap();
         let trigger_2_2 = TriggerConfig::contract_event(
             &service_id_2,
             &workflow_id_2,
             task_queue_addr_2_2.clone(),
+            "eth",
         )
         .unwrap();
 
@@ -610,7 +619,7 @@ mod tests {
 
         fn get_trigger_addr(trigger: &Trigger) -> &Address {
             match trigger {
-                Trigger::ContractEvent { address } => address,
+                Trigger::ContractEvent { address, .. } => address,
                 _ => panic!("unexpected trigger type"),
             }
         }

@@ -15,7 +15,6 @@ use alloy::signers::SignerSync;
 use alloy::{
     primitives::{eip191_hash_message, keccak256},
     providers::Provider,
-    sol_types::SolValue,
 };
 use anyhow::anyhow;
 use layer_climb::prelude::*;
@@ -317,7 +316,7 @@ impl CoreSubmission {
         let service_manager_contract =
             LayerServiceManager::new(service_manager_address, eth_client.provider.clone());
 
-        let data_hash = eip191_hash_message(keccak256(data.abi_encode()));
+        let data_hash = eip191_hash_message(keccak256(&data));
         let signature: Vec<u8> = eth_client
             .signer
             .sign_hash_sync(&data_hash)

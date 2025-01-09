@@ -26,9 +26,11 @@ docker-stop:
 
 # compile WASI components, places the output in components dir
 wasi-build COMPONENT="*":
-    cd packages/sdk/wasi && cargo component build --release
-    rm -f ./examples/target/wasm32-wasip1/release/*.wasm 
-    rm -rf {{WASI_OUT_DIR}} 
+    @if [ "{{COMPONENT}}" = "*" ]; then \
+        cd sdk/wasi && cargo component build --release; \
+        rm -f ./examples/target/wasm32-wasip1/release/*.wasm; \
+        rm -rf {{WASI_OUT_DIR}}; \
+    fi
     @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
         echo "Building WASI component in $(dirname $C)"; \
         `cd $(dirname $C); cargo component build --release; cargo fmt;`; \
@@ -57,7 +59,9 @@ solidity-build:
         cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/sdk/solidity/contracts/abi; \
     done
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/ISimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
 
 # on-chain integration test
 test-wavs-e2e-ethereum:

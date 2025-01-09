@@ -144,6 +144,7 @@ async fn main() {
                     digest,
                     service_config.unwrap_or_default(),
                     world,
+                    config.chain.clone(),
                 )
                 .await;
 

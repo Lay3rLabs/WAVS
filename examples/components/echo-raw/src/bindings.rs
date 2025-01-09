@@ -51,7 +51,7 @@ pub trait Guest {
     fn run(input: _rt::Vec<u8>) -> Result<_rt::Vec<u8>, _rt::String>;
 }
 #[doc(hidden)]
-macro_rules! __export_world_wavs_raw_world_cabi {
+macro_rules! __export_world_layer_raw_world_cabi {
     ($ty:ident with_types_in $($path_to_types:tt)*) => {
         const _ : () = { #[export_name = "run"] unsafe extern "C" fn export_run(arg0 : *
         mut u8, arg1 : usize,) -> * mut u8 { $($path_to_types)*:: _export_run_cabi::<$ty
@@ -61,7 +61,7 @@ macro_rules! __export_world_wavs_raw_world_cabi {
     };
 }
 #[doc(hidden)]
-pub(crate) use __export_world_wavs_raw_world_cabi;
+pub(crate) use __export_world_layer_raw_world_cabi;
 #[repr(align(4))]
 struct _RetArea([::core::mem::MaybeUninit<u8>; 12]);
 static mut _RET_AREA: _RetArea = _RetArea([::core::mem::MaybeUninit::uninit(); 12]);
@@ -100,26 +100,26 @@ mod _rt {
 /// ```
 #[allow(unused_macros)]
 #[doc(hidden)]
-macro_rules! __export_wavs_raw_world_impl {
+macro_rules! __export_layer_raw_world_impl {
     ($ty:ident) => {
         self::export!($ty with_types_in self);
     };
     ($ty:ident with_types_in $($path_to_types_root:tt)*) => {
-        $($path_to_types_root)*:: __export_world_wavs_raw_world_cabi!($ty with_types_in
+        $($path_to_types_root)*:: __export_world_layer_raw_world_cabi!($ty with_types_in
         $($path_to_types_root)*);
     };
 }
 #[doc(inline)]
-pub(crate) use __export_wavs_raw_world_impl as export;
+pub(crate) use __export_layer_raw_world_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:wavs-raw-world:encoded world"]
+#[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:layer-raw-world:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 202] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07F\x01A\x02\x01A\x04\x01\
-p}\x01j\x01\0\x01s\x01@\x01\x05input\0\0\x01\x04\0\x03run\x01\x02\x04\0\x1elay3r\
-:avs/wavs-raw-world@0.3.0\x04\0\x0b\x14\x01\0\x0ewavs-raw-world\x03\0\0\0G\x09pr\
-oducers\x01\x0cprocessed-by\x02\x0dwit-component\x070.220.0\x10wit-bindgen-rust\x06\
-0.35.0";
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 204] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07G\x01A\x02\x01A\x04\x01\
+p}\x01j\x01\0\x01s\x01@\x01\x05input\0\0\x01\x04\0\x03run\x01\x02\x04\0\x1flay3r\
+:avs/layer-raw-world@0.3.0\x04\0\x0b\x15\x01\0\x0flayer-raw-world\x03\0\0\0G\x09\
+producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.220.0\x10wit-bindgen-rus\
+t\x060.35.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

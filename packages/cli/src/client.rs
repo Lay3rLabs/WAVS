@@ -91,6 +91,7 @@ impl HttpClient {
         digest: Digest,
         config: ServiceConfig,
         world: ComponentWorld,
+        chain_id: impl ToString,
     ) -> (ServiceID, WorkflowID) {
         let trigger_address = trigger_address.into(); 
         let submit = Submit::EigenContract {
@@ -103,7 +104,7 @@ impl HttpClient {
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
-            trigger: Trigger::contract_event(trigger_address),
+            trigger: Trigger::contract_event(trigger_address, chain_id),
             world,
             id: id.clone(),
             digest: digest.into(),

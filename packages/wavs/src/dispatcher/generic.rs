@@ -345,8 +345,13 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            config: TriggerConfig::contract_event("service1", "workflow1", rand_address_eth())
-                .unwrap(),
+            config: TriggerConfig::contract_event(
+                "service1",
+                "workflow1",
+                rand_address_eth(),
+                "eth",
+            )
+            .unwrap(),
             data: TriggerData::new_raw(payload),
         };
 
@@ -375,7 +380,7 @@ mod tests {
                 action.config.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::contract_event(rand_address_eth()),
+                    trigger: Trigger::contract_event(rand_address_eth(), "eth".to_string()),
                     submit: Submit::eigen_contract(
                         "eth".to_string(),
                         service_manager_addr.clone(),
@@ -424,6 +429,7 @@ mod tests {
                     &service_id,
                     &workflow_id,
                     contract_address.clone(),
+                    "eth",
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":3}"#),
@@ -433,6 +439,7 @@ mod tests {
                     &service_id,
                     &workflow_id,
                     contract_address.clone(),
+                    "eth",
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":21}"#),
@@ -467,7 +474,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::contract_event(rand_address_eth()),
+                    trigger: Trigger::contract_event(rand_address_eth(), "eth".to_string()),
                     submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
                 },
             )]
@@ -509,13 +516,19 @@ mod tests {
                     &service_id,
                     &workflow_id,
                     contract_address.clone(),
+                    "eth",
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":3}"#),
             },
             TriggerAction {
-                config: TriggerConfig::contract_event(&service_id, &workflow_id, contract_address)
-                    .unwrap(),
+                config: TriggerConfig::contract_event(
+                    &service_id,
+                    &workflow_id,
+                    contract_address,
+                    "eth",
+                )
+                .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":21}"#),
             },
         ];
@@ -548,7 +561,7 @@ mod tests {
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
-                    trigger: Trigger::contract_event(rand_address_eth()),
+                    trigger: Trigger::contract_event(rand_address_eth(), "eth".to_string()),
                     submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
                 },
             )]

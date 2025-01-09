@@ -70,8 +70,13 @@ mod test {
             .execute(
                 &component,
                 TriggerAction {
-                    config: TriggerConfig::contract_event("foobar", "baz", rand_address_eth())
-                        .unwrap(),
+                    config: TriggerConfig::contract_event(
+                        "foobar",
+                        "baz",
+                        rand_address_eth(),
+                        "eth",
+                    )
+                    .unwrap(),
                     data: TriggerData::new_raw(request.clone()),
                 },
                 &ServiceConfig::default()

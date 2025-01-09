@@ -28,8 +28,8 @@ crate-type = ["rlib", "cdylib"]
 package = "component:eth-cosmos-query"
 
 [package.metadata.component.target]
-path = "../../../wit"
-world = "wavs-helper-world"
+path = "../wit"
+world = "layer-sdk-world"
 
 [package.metadata.component.target.dependencies]
 "wasi:io" = "=0.2.0"

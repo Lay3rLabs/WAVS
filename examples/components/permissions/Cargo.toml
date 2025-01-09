@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 wasi = { workspace = true }
 wit-bindgen-rt = { workspace = true }
 url = { workspace = true }
+example-helpers = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
@@ -28,8 +29,8 @@ lto = true
 package = "component:permissions"
 
 [package.metadata.component.target]
-path = "../../../wit"
-world = "wavs-chain-event-world"
+path = "../../../sdk/wit"
+world = "layer-chain-event-world"
 
 [package.metadata.component.target.dependencies]
 "wasi:io" = "=0.2.0"

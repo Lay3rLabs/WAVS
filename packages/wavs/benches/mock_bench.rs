@@ -52,6 +52,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                                 &workflow_id,
                                 &task_queue_address,
                                 &SquareIn { x: i as u64 },
+                                "eth",
                             )
                             .await;
                     }

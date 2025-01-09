@@ -7,6 +7,7 @@ members = [
   "components/echo-raw",
   "components/square",
   "components/permissions",
+  "components/_helpers",
   # TODO - port from old/
   # "composition/http-allow-list/http-allowed-coingecko",
   # "ai-bouncer",
@@ -26,13 +27,14 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 [workspace.dependencies]
 layer-wasi = { path = "../sdk/wasi" }
 layer-cosmwasm = { path = "../sdk/cosmwasm" }
+example-helpers = { path = "./components/_helpers" }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 anyhow = "1.0.90"
 wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
 alloy-rlp = {version = "0.3.10", features = ["derive"]}
 alloy-primitives = "0.8.15"
-alloy-sol-macro = "0.8.15"
+alloy-sol-macro = {version = "0.8.15", features = ["json"]}
 alloy-sol-types = "0.8.15"
 layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
 layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }

@@ -60,6 +60,7 @@ fn mock_e2e_trigger_flow() {
                     &workflow_id,
                     &task_queue_address,
                     &SquareIn { x: 3 },
+                    "eth",
                 )
                 .await;
             runner
@@ -70,6 +71,7 @@ fn mock_e2e_trigger_flow() {
                     &workflow_id,
                     &task_queue_address,
                     &SquareIn { x: 21 },
+                    "eth",
                 )
                 .await;
         }

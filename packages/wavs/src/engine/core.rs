@@ -110,6 +110,8 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 TriggerData::Raw(_) => None,
             };
 
+            tracing::debug!("Running task on world {:?}", world);
+
             let res = match world {
                 ComponentWorld::ChainEvent => {
                     let contract = match (contract, chain_id) {
@@ -119,12 +121,12 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                                     bech32_addr,
                                     prefix_len,
                                 } => {
-                                    bindings::chain_event::lay3r::avs::wavs_types::Address::Cosmos(
+                                    bindings::chain_event::lay3r::avs::layer_types::Address::Cosmos(
                                         (bech32_addr, prefix_len.try_into().unwrap()),
                                     )
                                 }
                                 Address::Eth(addr) => {
-                                    bindings::chain_event::lay3r::avs::wavs_types::Address::Eth(
+                                    bindings::chain_event::lay3r::avs::layer_types::Address::Eth(
                                         addr.as_bytes().to_vec(),
                                     )
                                 }
@@ -147,7 +149,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                         }
                     };
 
-                    bindings::chain_event::WavsChainEventWorld::instantiate_async(
+                    bindings::chain_event::LayerChainEventWorld::instantiate_async(
                         &mut store, &component, &linker,
                     )
                     .await
@@ -158,7 +160,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 ComponentWorld::EthLog => {
                     let eth_log = match trigger.data {
                         TriggerData::EthContractEvent { log, .. } => {
-                            bindings::eth_log::lay3r::avs::wavs_types::EthLog {
+                            bindings::eth_log::lay3r::avs::layer_types::EthLog {
                                 topics: log.topics().iter().map(|t| t.to_vec()).collect(),
                                 data: log.data.to_vec(),
                             }
@@ -173,12 +175,12 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                                 Address::Cosmos {
                                     bech32_addr,
                                     prefix_len,
-                                } => bindings::eth_log::lay3r::avs::wavs_types::Address::Cosmos((
+                                } => bindings::eth_log::lay3r::avs::layer_types::Address::Cosmos((
                                     bech32_addr,
                                     prefix_len.try_into().unwrap(),
                                 )),
                                 Address::Eth(addr) => {
-                                    bindings::eth_log::lay3r::avs::wavs_types::Address::Eth(
+                                    bindings::eth_log::lay3r::avs::layer_types::Address::Eth(
                                         addr.as_bytes().to_vec(),
                                     )
                                 }
@@ -192,7 +194,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                         }
                     };
 
-                    bindings::eth_log::WavsEthLogWorld::instantiate_async(
+                    bindings::eth_log::LayerEthLogWorld::instantiate_async(
                         &mut store, &component, &linker,
                     )
                     .await
@@ -210,7 +212,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                         }
                     };
 
-                    bindings::raw::WavsRawWorld::instantiate_async(&mut store, &component, &linker)
+                    bindings::raw::LayerRawWorld::instantiate_async(&mut store, &component, &linker)
                         .await
                         .context("Wasm instantiate failed")?
                         .call_run(store, &data)
@@ -359,8 +361,12 @@ mod tests {
         dispatcher::ServiceConfig,
         ServiceID, WorkflowID,
     };
+    use utils::example_client::{SimpleSubmitClient, SimpleTriggerClient};
 
-    use crate::{storage::memory::MemoryStorage, test_utils::address::rand_address_layer};
+    use crate::{
+        storage::memory::MemoryStorage,
+        test_utils::address::{rand_address_eth_alloy, rand_address_layer},
+    };
 
     use super::*;
 
@@ -426,13 +432,20 @@ mod tests {
                     data: TriggerData::CosmosContractEvent {
                         contract_address: rand_address_layer(),
                         chain_id: "cosmos".to_string(),
-                        event_data: Some(br#"{"x":12}"#.to_vec()),
+                        event_data: Some(SimpleTriggerClient::trigger_info_bytes(
+                            rand_address_eth_alloy(),
+                            0,
+                            br#"{"x":12}"#,
+                        )),
                     },
                 },
                 &ServiceConfig::default()
             )
             .unwrap();
-        assert_eq!(&result, br#"{"y":144}"#);
+
+        let (_, data) = SimpleSubmitClient::decode_data_with_id_bytes(&result).unwrap();
+
+        assert_eq!(&data, br#"{"y":144}"#);
     }
 
     #[test]
@@ -524,7 +537,11 @@ mod tests {
                     data: TriggerData::CosmosContractEvent {
                         contract_address: rand_address_layer(),
                         chain_id: "cosmos".to_string(),
-                        event_data: Some(br#"{"x":12}"#.to_vec()),
+                        event_data: Some(SimpleTriggerClient::trigger_info_bytes(
+                            rand_address_eth_alloy(),
+                            0,
+                            br#"{"x":12}"#,
+                        )),
                     },
                 },
                 &service_config

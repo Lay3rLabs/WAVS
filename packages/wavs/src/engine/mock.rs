@@ -123,6 +123,7 @@ mod test {
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
+                        "eth",
                     )
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),
@@ -142,6 +143,7 @@ mod test {
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
+                        "eth",
                     )
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),
@@ -161,6 +163,7 @@ mod test {
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
+                        "eth",
                     )
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),

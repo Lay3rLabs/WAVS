@@ -32,10 +32,11 @@ pub async fn add_task(
         loop {
             match submit_client.trigger_validated(trigger_id).await {
                 true => {
-                    return submit_client
-                        .signed_data_for_trigger(trigger_id)
-                        .await
-                        .unwrap();
+                    let data = submit_client.trigger_data(trigger_id).await.unwrap();
+
+                    let signature = submit_client.trigger_signature(trigger_id).await.unwrap();
+
+                    return SignedData { data, signature };
                 }
                 false => {
                     tracing::info!("Waiting for task response on {}", trigger_id);

@@ -1,6 +1,7 @@
 #[allow(warnings)]
 mod bindings;
 use bindings::{Contract, Guest};
+use example_helpers::trigger::{decode_trigger_input, encode_trigger_output};
 use layer_climb_config::{AddrKind, ChainConfig};
 use layer_wasi::{cosmos::CosmosQuerier, parse_address};
 use serde::{Deserialize, Serialize};
@@ -8,8 +9,10 @@ use serde::{Deserialize, Serialize};
 struct Component;
 
 impl Guest for Component {
-    fn run(contract: Contract, event_data: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
-        let address = parse_address!(bindings::lay3r::avs::wavs_types::Address, contract.address);
+    fn run(contract: Contract, input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
+        let (input_trigger_id, event_data) = decode_trigger_input(input)?;
+
+        let address = parse_address!(bindings::lay3r::avs::layer_types::Address, contract.address);
 
         let chain_config = match contract.chain_id.as_str() {
             "local-osmosis" => ChainConfig {
@@ -41,6 +44,7 @@ impl Guest for Component {
             trigger_id,
         })
         .map_err(|e| e.to_string())
+        .map(|output| encode_trigger_output(input_trigger_id, output))
     }
 }
 

@@ -1,10 +1,8 @@
 use anyhow::Result;
-use serde::{de::DeserializeOwned, Serialize};
-use utils::{ComponentID, ServiceID, WorkflowID};
-use wavs::apis::dispatcher::ServiceConfig;
+use serde::de::DeserializeOwned;
 use wavs::{
     apis::{
-        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, Submit},
+        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, Submit, ServiceConfig},
         trigger::{Trigger, TriggerData},
         ServiceID,
     },
@@ -85,7 +83,6 @@ impl HttpClient {
         &self,
         chain_name: &str,
         service_manager_address: alloy::primitives::Address,
-        service_id: ServiceID,
         config: &Config,
     ) -> Result<()> {
         let configs = config.active_ethereum_chain_configs();

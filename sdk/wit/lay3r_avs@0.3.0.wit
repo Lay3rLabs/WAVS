@@ -7,7 +7,7 @@ use wasi:io/streams@0.2.0;
 use wasi:http/types@0.2.0 as http-types;
 use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
 
-interface wavs-types {
+interface layer-types {
   variant address {
     eth(list<u8>),
     // the bech32-encoded address, and length of the prefix
@@ -28,24 +28,24 @@ interface wavs-types {
   }
 }
 
-world wavs-chain-event-world {
-  use wavs-types.{contract};
+world layer-chain-event-world {
+  use layer-types.{contract};
 
   // event-data is emitted from the chain via a specific event type
   // which WAVS knows how to extract
   export run: func(contract: contract, event-data: list<u8>) -> result<list<u8>, string>;
 }
 
-world wavs-eth-log-world {
-  use wavs-types.{contract, eth-log};
+world layer-eth-log-world {
+  use layer-types.{contract, eth-log};
 
   export run: func(contract: contract, log: eth-log) -> result<list<u8>, string>;
 }
 
-world wavs-raw-world {
+world layer-raw-world {
   export run: func(input: list<u8>) -> result<list<u8>, string>;
 }
 
-world wavs-helper-world {
-  use wavs-types.{address, contract, eth-log};
+world layer-sdk-world {
+  use layer-types.{address, contract, eth-log};
 }
