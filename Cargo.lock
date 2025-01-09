@@ -7030,6 +7030,7 @@ dependencies = [
  "hex",
  "http-body-util",
  "layer-climb",
+ "layer-cosmwasm",
  "lru",
  "rand",
  "rayon",

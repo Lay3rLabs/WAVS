@@ -13,6 +13,7 @@ use alloy::{
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
+use layer_cosmwasm::event::LayerTriggerEvent;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     pin::Pin,
@@ -147,36 +148,27 @@ impl CoreTriggerManager {
                             Ok(block_events) => {
                                 let events = CosmosTxEvents::from(block_events.events);
 
-                                for event in events.filter_events_by_type("wavs-trigger").map(cosmwasm_std::Event::from) {
-                                    let contract_address =
-                                        event.attributes.iter().find_map(|attr| {
-                                            if attr.key == "_contract_address" {
-                                                chain_config.parse_address(&attr.value).ok()
-                                            } else {
-                                                None
-                                            }
-                                        });
+                                for (contract_address, event) in
+                                    events.events_iter().filter_map(|event| {
+                                        let contract_address =
+                                            event.attributes().find_map(|attr| {
+                                                if attr.key() == "_contract_address" {
+                                                    chain_config.parse_address(attr.value()).ok()
+                                                } else {
+                                                    None
+                                                }
+                                            })?;
 
-                                    let data =
-                                        event.attributes.iter().find_map(|attr| {
-                                            if attr.key == "data" {
-                                                hex::decode(&attr.value).ok()
-                                            } else {
-                                                None
-                                            }
-                                        });
+                                        let event = cosmwasm_std::Event::from(event);
+                                        let event = LayerTriggerEvent::try_from(event).ok()?;
 
-                                    match (contract_address, data) {
-                                        (Some(contract_address), Some(data)) => {
-                                            contract_events
-                                                .entry(contract_address)
-                                                .or_default()
-                                                .insert(data);
-                                        }
-                                        _ => {
-                                            tracing::error!("Error: {:?}", "missing contract address or data on wavs-trigger event");
-                                        }
-                                    }
+                                        Some((contract_address, event))
+                                    })
+                                {
+                                    contract_events
+                                        .entry(contract_address)
+                                        .or_default()
+                                        .insert(event.data);
                                 }
                             }
                             Err(err) => {
@@ -186,7 +178,7 @@ impl CoreTriggerManager {
 
                         Ok(StreamTriggers::Cosmos {
                             chain_id: chain_config.chain_id.to_string(),
-                            contract_events
+                            contract_events,
                         })
                     }),
             );

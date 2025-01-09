@@ -19,8 +19,8 @@ use alloy::{
 };
 use anyhow::anyhow;
 use layer_climb::prelude::*;
+use layer_cosmwasm::msg::LayerExecuteMsg;
 use reqwest::Url;
-use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
@@ -409,13 +409,9 @@ impl CoreSubmission {
         contract_addr: Address,
         data: Vec<u8>,
     ) -> Result<(), SubmissionError> {
-        // Contracts must have some interface with this shape
-        #[derive(Deserialize, Serialize, Debug)]
-        enum ExecuteMsg {
-            AddData { data: Vec<u8> },
-        }
-
-        let contract_msg = ExecuteMsg::AddData { data };
+        // TODO - commitments etc.
+        let signature = Vec::new();
+        let contract_msg = LayerExecuteMsg::new(data, signature);
 
         let _tx_resp = cosmos_client
             .contract_execute(&contract_addr, &contract_msg, Vec::new(), None)

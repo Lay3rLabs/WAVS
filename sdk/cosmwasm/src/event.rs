@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Error};
 use cosmwasm_std::Event;
 
-// ContractEvent Triggers must emit this event to trigger wavs
+// Trigger Contracts must emit this event
 #[derive(Debug)]
 pub struct LayerTriggerEvent {
     // this is any data that the contract wants to send to the component

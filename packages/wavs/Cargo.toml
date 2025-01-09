@@ -24,6 +24,7 @@ e2e_tests_ethereum_cosmos_query = ["e2e_tests_ethereum"]
 e2e_tests_cosmos_permissions = ["e2e_tests_cosmos"]
 
 [dependencies]
+layer-cosmwasm = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
