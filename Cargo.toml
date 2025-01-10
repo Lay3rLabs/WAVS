@@ -82,3 +82,4 @@ cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
 cosmwasm-schema = "2.2.0"
 cw-storage-plus = "2.0.0"
 cw2 = "2.0.0"
+localic-std = {git = "https://github.com/strangelove-ventures/interchaintest", branch = "main" } 

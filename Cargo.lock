@@ -3810,6 +3810,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "layer-tests"
+version = "0.2.0-rc1"
+dependencies = [
+ "aggregator",
+ "alloy",
+ "alloy-rlp",
+ "anyhow",
+ "axum",
+ "bip39",
+ "cfg-if",
+ "clap 4.5.23",
+ "cosmwasm-std",
+ "ctrlc",
+ "dirs 5.0.1",
+ "dotenvy",
+ "figment",
+ "futures",
+ "hex",
+ "http-body-util",
+ "layer-climb",
+ "layer-cosmwasm",
+ "lru",
+ "rand",
+ "rayon",
+ "redb",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "shellexpand 3.1.0",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "toml",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "utils",
+ "walkdir",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
+ "wavs",
+ "wildmatch",
+]
+
+[[package]]
 name = "layer-wasi"
 version = "0.2.0"
 dependencies = [
