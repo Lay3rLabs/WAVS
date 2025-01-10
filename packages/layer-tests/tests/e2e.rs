@@ -61,8 +61,6 @@ mod e2e {
             .with_env_filter(EnvFilter::from_default_env())
             .init();
 
-        tracing::debug!("Tracing initialized for tests");
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
                 tracing::info!("Running Ethereum e2e tests");
@@ -72,6 +70,24 @@ mod e2e {
             } else {
                 let anvil: Option<AnvilInstance> = None;
                 let anvil2: Option<AnvilInstance> = None;
+            }
+        }
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "e2e_tests_cosmos")] {
+                tracing::info!("Running Cosmos e2e tests");
+                // should match the wavs.toml
+                let anvil = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
+                let anvil2 = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
+            } else {
+                let anvil: Option<AnvilInstance> = None;
+                let anvil2: Option<AnvilInstance> = None;
+            }
+        }
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "e2e_tests_crosschain")] {
+                tracing::info!("Running Crosschain e2e tests");
             }
         }
 
@@ -95,7 +111,6 @@ mod e2e {
         .build()
         .unwrap();
 
-        tracing::info!("config: {:?}", config);
         let aggregator_config: aggregator::config::Config = {
             let mut cli_args = aggregator::test_utils::app::TestApp::zeroed_cli_args();
             cli_args.home = Some(aggregator_path());

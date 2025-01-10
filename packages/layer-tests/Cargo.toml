@@ -7,17 +7,20 @@ authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 
 [features]
-default = ["e2e_tests_ethereum"]
+default = ["e2e_tests_cosmos"]
+e2e_tests_cosmos = []
+e2e_tests_ethereum = []
+e2e_tests_crosschain = ["e2e_tests_cosmos", "e2e_tests_ethereum"]
 # easy-to-use test groups (e.g. for CI) 
-e2e_tests_ethereum = ["e2e_tests_ethereum_trigger_square", "e2e_tests_ethereum_trigger_echo_1", "e2e_tests_ethereum_trigger_echo_2", "e2e_tests_ethereum_trigger_echo_aggregate"]
-e2e_tests_cosmos = ["e2e_tests_cosmos_permissions"]
+e2e_tests_ethereum_baseline = ["e2e_tests_ethereum_trigger_square", "e2e_tests_ethereum_trigger_echo_1", "e2e_tests_ethereum_trigger_echo_2", "e2e_tests_ethereum_trigger_echo_aggregate"]
+e2e_tests_cosmos_baseline = ["e2e_tests_cosmos_permissions"]
 # specific test gating
-e2e_tests_ethereum_trigger_square = []
-e2e_tests_ethereum_trigger_echo_1 = []
-e2e_tests_ethereum_trigger_echo_2 = []
-e2e_tests_ethereum_trigger_echo_aggregate = []
-e2e_tests_ethereum_cosmos_query = []
-e2e_tests_cosmos_permissions = []
+e2e_tests_ethereum_trigger_square = ["e2e_tests_ethereum"]
+e2e_tests_ethereum_trigger_echo_1 = ["e2e_tests_ethereum"]
+e2e_tests_ethereum_trigger_echo_2 = ["e2e_tests_ethereum"]
+e2e_tests_ethereum_trigger_echo_aggregate = ["e2e_tests_ethereum"]
+e2e_tests_ethereum_cosmos_query = ["e2e_tests_ethereum"]
+e2e_tests_cosmos_permissions = ["e2e_tests_cosmos"]
 
 [dependencies]
 wavs = { workspace = true }
