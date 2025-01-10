@@ -3,6 +3,14 @@
 version = 1
 
 [[package]]
+name = "wasi:cli"
+
+[[package.version]]
+requirement = "=0.2.0"
+version = "0.2.0"
+digest = "sha256:e7e85458e11caf76554b724ebf4f113259decf0f3b1ee2e2930de096f72114a7"
+
+[[package]]
 name = "wasi:clocks"
 
 [[package.version]]

@@ -1,8 +1,10 @@
 SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" }
 TAG := env_var_or_default("TAG", "")
 WASI_OUT_DIR := "./examples/build/components"
+COSMWASM_OUT_DIR := "./examples/build/contracts"
 REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
+ARCH := `uname -m`
 
 help:
   just --list
@@ -40,12 +42,14 @@ wasi-build COMPONENT="*":
     @cp ./examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
     @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
 
-# compile solidity contracts and copy the ABI to sdk/solidity/contracts/abi
+# compile solidity contracts (including examples) and copy the ABI to sdk/solidity/contracts/abi
 # example ABI's will be copied to examples/contracts/solidity/abi
-solidity-build:
-    rm -rf {{REPO_ROOT}}/out
-    rm -rf {{REPO_ROOT}}/sdk/solidity/contracts/abi
-    rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi
+solidity-build CLEAN="":
+    @if [ "{{CLEAN}}" = "clean" ]; then \
+        rm -rf {{REPO_ROOT}}/out; \
+        rm -rf {{REPO_ROOT}}/sdk/solidity/contracts/abi; \
+        rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi; \
+    fi
     mkdir -p {{REPO_ROOT}}/out
     mkdir -p {{REPO_ROOT}}/sdk/solidity/contracts/abi
     mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
@@ -62,6 +66,22 @@ solidity-build:
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+
+# compile cosmwasm example contracts
+cosmwasm-build:
+    @if [ "{{ARCH}}" = "arm64" ]; then \
+      docker run --rm \
+        -v "{{REPO_ROOT}}:/code" \
+        --mount type=volume,source="layer_wavs_cache",target=/target \
+        --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+        cosmwasm/workspace-optimizer-arm64:0.16.0; \
+    else \
+      docker run --rm \
+        -v "{{REPO_ROOT}}:/code" \
+        --mount type=volume,source="layer_wavs_cache",target=/target \
+        --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+        cosmwasm/workspace-optimizer:0.16.0; \
+    fi
 
 # on-chain integration test
 test-wavs-e2e-ethereum:
