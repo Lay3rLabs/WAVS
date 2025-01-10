@@ -1,9 +1,16 @@
+use std::{
+    process::{Child, Command, Stdio},
+    time::Duration,
+};
+
 use anyhow::{Context, Result};
 use layer_climb::{prelude::*, proto::abci::TxResponse, signing::SigningClient};
 use serde::Serialize;
-use wavs::config::Config;
+use wavs::{config::Config, AppContext};
 
-use super::{http::HttpClient, Digests, ServiceIds};
+use super::{http::HttpClient, wavs_path, workspace_path, Digests, ServiceIds};
+
+const IC_API_URL: &str = "http://127.0.0.1:8080";
 
 #[allow(dead_code)]
 pub struct CosmosTestApp {
@@ -25,6 +32,73 @@ impl CosmosTestApp {
         tracing::info!("Cosmos signing client: {}", signing_client.addr);
 
         Self { signing_client }
+    }
+}
+
+pub fn start_chain(ctx: AppContext) {
+    let ic_test_handle = IcTestHandle::spawn();
+
+    let builder = localic_std::transactions::ChainRequestBuilder::new(
+        IC_API_URL.to_string(),
+        "localjuno-1".to_string(),
+        true,
+    )
+    .unwrap();
+    ctx.rt.block_on(async {
+        tokio::time::timeout(Duration::from_secs(150), async {
+            let client = reqwest::Client::new();
+            loop {
+                if client.get(IC_API_URL).send().await.is_ok() {
+                    return anyhow::Ok(());
+                } else {
+                    tracing::info!("Waiting for server to start...");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        })
+        .await
+        .unwrap();
+    });
+
+    let chain = localic_std::node::Chain::new(&builder);
+    let chain_config = chain.get_chain_config();
+    tracing::info!("{:?}", chain_config);
+}
+
+/// A wrapper around a Child process that kills it when dropped.
+pub struct IcTestHandle {
+    child: Child,
+}
+
+impl IcTestHandle {
+    /// Spawns a new process, returning a guard that will kill it when dropped.
+    pub fn spawn() -> Self {
+        let bin_path = std::env::var("WAVS_IC_BIN_PATH").expect("WAVS_IC_BIN_PATH not set");
+        let bin_path = shellexpand::tilde(&bin_path).to_string();
+        let data_path = workspace_path()
+            .join("packages")
+            .join("layer-tests")
+            .join("interchain");
+        let child = Command::new(bin_path)
+            .args(["start", "juno", "--api-port", "8080"])
+            .env("ICTEST_HOME", data_path)
+            // If you want to see the process output in your terminal, remove this or
+            // use Stdio::inherit() for stdout/stderr. Here we just discard it.
+            // .stdout(Stdio::null())
+            // .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+
+        Self { child }
+    }
+}
+
+impl Drop for IcTestHandle {
+    fn drop(&mut self) {
+        // Attempt to kill the child process. Ignore errors if it's already dead.
+        let _ = self.child.kill();
+        // We can wait on it to ensure it has actually terminated.
+        let _ = self.child.wait();
     }
 }
 

@@ -21,6 +21,7 @@ mod e2e {
     use eth::EthTestApp;
     use http::HttpClient;
     use layer_climb::prelude::*;
+    use localic_std::transactions::ChainRequestBuilder;
     use serde::{Deserialize, Serialize};
     use tracing_subscriber::EnvFilter;
     use utils::{avs_client::ServiceManagerClient, config::ConfigBuilder};
@@ -57,6 +58,8 @@ mod e2e {
             println!("Failed to load .env file");
         }
 
+        let ctx = AppContext::new();
+
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .init();
@@ -76,12 +79,8 @@ mod e2e {
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_cosmos")] {
                 tracing::info!("Running Cosmos e2e tests");
-                // should match the wavs.toml
-                let anvil = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
-                let anvil2 = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
+                cosmos::start_chain(ctx.clone());
             } else {
-                let anvil: Option<AnvilInstance> = None;
-                let anvil2: Option<AnvilInstance> = None;
             }
         }
 
@@ -134,8 +133,6 @@ mod e2e {
                 config.eth_chains = Vec::new();
             }
         }
-
-        let ctx = AppContext::new();
 
         let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 

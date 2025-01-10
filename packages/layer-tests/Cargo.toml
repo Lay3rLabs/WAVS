@@ -7,7 +7,8 @@ authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 
 [features]
-default = ["e2e_tests_cosmos"]
+default = ["e2e_tests_ethereum"]
+# default = ["e2e_tests_ethereum_baseline", "e2e_tests_cosmos_baseline", "e2e_tests_crosschain"]
 e2e_tests_cosmos = []
 e2e_tests_ethereum = []
 e2e_tests_crosschain = ["e2e_tests_cosmos", "e2e_tests_ethereum"]
@@ -66,3 +67,4 @@ bip39 = { workspace = true }
 alloy = { workspace = true }
 shellexpand = { workspace = true }
 alloy-rlp = { workspace = true }
+localic-std = {workspace = true}
