@@ -7,10 +7,12 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+layer-wasi = {workspace = true}
 alloy-rlp = {workspace = true}
 alloy-primitives = {workspace = true}
 alloy-sol-macro = {workspace = true}
 alloy-sol-types = {workspace = true}
+layer-climb-address = {workspace = true}
 serde = { workspace = true }
 anyhow = { workspace = true }
 

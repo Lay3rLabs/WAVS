@@ -1167,6 +1167,8 @@ dependencies = [
  "alloy-sol-macro",
  "alloy-sol-types",
  "anyhow",
+ "layer-climb-address",
+ "layer-wasi",
  "serde",
 ]
 

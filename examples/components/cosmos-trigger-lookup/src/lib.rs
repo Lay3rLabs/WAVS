@@ -1,7 +1,7 @@
 #[allow(warnings)]
 mod bindings;
 use bindings::{Contract, Guest};
-use example_helpers::trigger::{decode_trigger_input, encode_trigger_output};
+use example_helpers::trigger::{decode_trigger_input, encode_trigger_output, ChainQuerierExt};
 use layer_climb_config::{AddrKind, ChainConfig};
 use layer_wasi::{cosmos::CosmosQuerier, parse_address};
 use serde::{Deserialize, Serialize};
