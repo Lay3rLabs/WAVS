@@ -69,19 +69,22 @@ solidity-build CLEAN="":
 
 # compile cosmwasm example contracts
 cosmwasm-build:
+    rm -rf {{COSMWASM_OUT_DIR}}
+    mkdir -p {{COSMWASM_OUT_DIR}}
     @if [ "{{ARCH}}" = "arm64" ]; then \
       docker run --rm \
         -v "{{REPO_ROOT}}:/code" \
         --mount type=volume,source="layer_wavs_cache",target=/target \
         --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-        cosmwasm/workspace-optimizer-arm64:0.16.0; \
+        cosmwasm/optimizer-arm64:0.16.1 ./examples; \
     else \
       docker run --rm \
         -v "{{REPO_ROOT}}:/code" \
         --mount type=volume,source="layer_wavs_cache",target=/target \
         --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-        cosmwasm/workspace-optimizer:0.16.0; \
+        cosmwasm/optimizer:0.16.1 ./examples; \
     fi
+    cp ./artifacts/*.wasm {{COSMWASM_OUT_DIR}}
 
 # on-chain integration test
 test-wavs-e2e-ethereum:
