@@ -1,11 +1,13 @@
 use std::{
     process::{Child, Command, Stdio},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
 use layer_climb::{prelude::*, proto::abci::TxResponse, signing::SigningClient};
 use serde::Serialize;
+use tempfile::tempfile;
+use utils::config::CosmosChainConfig;
 use wavs::{config::Config, AppContext};
 
 use super::{http::HttpClient, wavs_path, workspace_path, Digests, ServiceIds};
@@ -13,6 +15,126 @@ use super::{http::HttpClient, wavs_path, workspace_path, Digests, ServiceIds};
 const IC_API_URL: &str = "http://127.0.0.1:8080";
 
 #[allow(dead_code)]
+pub fn start_chain(ctx: AppContext) -> CosmosChainConfig {
+    let ic_test_handle = IcTestHandle::spawn();
+
+    let chain_info = ctx.rt.block_on(async {
+        tokio::time::timeout(Duration::from_secs(30), async {
+            let client = reqwest::Client::new();
+            let sleep_duration = Duration::from_millis(100);
+            let mut log_clock = Instant::now();
+            loop {
+                let chain_info = match client.get(format!("{IC_API_URL}/info")).send().await {
+                    Ok(resp) => match resp.json::<serde_json::Value>().await {
+                        Ok(json) => json
+                            .as_object()
+                            .and_then(|json| json.get("logs"))
+                            .and_then(|logs| logs.get("chains"))
+                            .and_then(|logs| logs.as_array())
+                            .and_then(|logs| {
+                                logs.iter().find(|log| log["chain_id"] == "localjuno-1")
+                            })
+                            .cloned(),
+                        Err(_) => None,
+                    },
+                    Err(_) => None,
+                };
+
+                match chain_info {
+                    Some(chain_info) => {
+                        return chain_info;
+                    }
+                    None => {
+                        tokio::time::sleep(sleep_duration).await;
+                        if Instant::now() - log_clock > Duration::from_secs(3) {
+                            tracing::info!("Waiting for server to start...");
+                            log_clock = Instant::now();
+                        }
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap()
+    });
+
+    CosmosChainConfig {
+        chain_id: chain_info
+            .get("chain_id")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string(),
+        rpc_endpoint: chain_info
+            .get("rpc_address")
+            .map(|rpc| rpc.as_str().unwrap().to_string()),
+        //grpc_endpoint: chain_info.get("grpc_address").map(|grpc| grpc.as_str().unwrap().to_string()),
+        grpc_endpoint: None,
+        gas_price: 0.025,
+        gas_denom: "ujuno".to_string(),
+        bech32_prefix: "juno".to_string(),
+        faucet_endpoint: None,
+    }
+}
+
+/// A wrapper around a Child process that kills it when dropped.
+pub struct IcTestHandle {
+    child: Child,
+    data_dir: tempfile::TempDir,
+}
+
+impl IcTestHandle {
+    /// Spawns a new process, returning a guard that will kill it when dropped.
+    pub fn spawn() -> Self {
+        let bin_path = match std::env::var("WAVS_LOCAL_IC_BIN_PATH") {
+            Ok(bin_path) => shellexpand::tilde(&bin_path).to_string(),
+            Err(_) => "local-ic".to_string(),
+        };
+        let repo_data_path = workspace_path()
+            .join("packages")
+            .join("layer-tests")
+            .join("interchain");
+
+        let temp_data = tempfile::tempdir().unwrap();
+
+        // recursively copy all files and directories from repo_data_path to data_path
+        let _ = fs_extra::dir::copy(
+            repo_data_path,
+            temp_data.path(),
+            &fs_extra::dir::CopyOptions {
+                overwrite: true,
+                content_only: true,
+                ..Default::default()
+            },
+        );
+
+        let child = Command::new(bin_path)
+            .args(["start", "juno", "--api-port", "8080"])
+            .env("ICTEST_HOME", temp_data.path())
+            // can be more quiet by uncommenting these
+            // .stdout(Stdio::null())
+            // .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+
+        tracing::info!("starting LocalIc (pid {})", child.id());
+        Self {
+            child,
+            data_dir: temp_data,
+        }
+    }
+}
+
+impl Drop for IcTestHandle {
+    fn drop(&mut self) {
+        tracing::info!("dropping IcTestHandle, killing process {}", self.child.id());
+        // Attempt to kill the child process. Ignore errors if it's already dead.
+        let _ = self.child.kill();
+        // We can wait on it to ensure it has actually terminated.
+        let _ = self.child.wait();
+    }
+}
+
 pub struct CosmosTestApp {
     pub signing_client: SigningClient,
 }
@@ -20,8 +142,7 @@ pub struct CosmosTestApp {
 impl CosmosTestApp {
     pub async fn new(config: Config) -> Self {
         // get all env vars
-        let seed_phrase =
-            std::env::var("WAVS_E2E_COSMOS_MNEMONIC").expect("WAVS_E2E_COSMOS_MNEMONIC not set");
+        let seed_phrase = "decorate bright ozone fork gallery riot bus exhaust worth way bone indoor calm squirrel merry zero scheme cotton until shop any excess stage laundry";
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
 
         let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().clone().into();
@@ -35,79 +156,13 @@ impl CosmosTestApp {
     }
 }
 
-pub fn start_chain(ctx: AppContext) {
-    let ic_test_handle = IcTestHandle::spawn();
-
-    let builder = localic_std::transactions::ChainRequestBuilder::new(
-        IC_API_URL.to_string(),
-        "localjuno-1".to_string(),
-        true,
-    )
-    .unwrap();
-    ctx.rt.block_on(async {
-        tokio::time::timeout(Duration::from_secs(150), async {
-            let client = reqwest::Client::new();
-            loop {
-                if client.get(IC_API_URL).send().await.is_ok() {
-                    return anyhow::Ok(());
-                } else {
-                    tracing::info!("Waiting for server to start...");
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-            }
-        })
-        .await
-        .unwrap();
-    });
-
-    let chain = localic_std::node::Chain::new(&builder);
-    let chain_config = chain.get_chain_config();
-    tracing::info!("{:?}", chain_config);
-}
-
-/// A wrapper around a Child process that kills it when dropped.
-pub struct IcTestHandle {
-    child: Child,
-}
-
-impl IcTestHandle {
-    /// Spawns a new process, returning a guard that will kill it when dropped.
-    pub fn spawn() -> Self {
-        let bin_path = std::env::var("WAVS_IC_BIN_PATH").expect("WAVS_IC_BIN_PATH not set");
-        let bin_path = shellexpand::tilde(&bin_path).to_string();
-        let data_path = workspace_path()
-            .join("packages")
-            .join("layer-tests")
-            .join("interchain");
-        let child = Command::new(bin_path)
-            .args(["start", "juno", "--api-port", "8080"])
-            .env("ICTEST_HOME", data_path)
-            // If you want to see the process output in your terminal, remove this or
-            // use Stdio::inherit() for stdout/stderr. Here we just discard it.
-            // .stdout(Stdio::null())
-            // .stderr(Stdio::null())
-            .spawn()
-            .unwrap();
-
-        Self { child }
-    }
-}
-
-impl Drop for IcTestHandle {
-    fn drop(&mut self) {
-        // Attempt to kill the child process. Ignore errors if it's already dead.
-        let _ = self.child.kill();
-        // We can wait on it to ensure it has actually terminated.
-        let _ = self.child.wait();
-    }
-}
-
 pub async fn run_tests_cosmos(
     http_client: HttpClient,
     config: Config,
     digests: Digests,
     service_ids: ServiceIds,
 ) {
+    let app = CosmosTestApp::new(config).await;
     /*
     tracing::info!("Running e2e cosmos tests");
 

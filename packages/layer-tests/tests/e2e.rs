@@ -21,10 +21,12 @@ mod e2e {
     use eth::EthTestApp;
     use http::HttpClient;
     use layer_climb::prelude::*;
-    use localic_std::transactions::ChainRequestBuilder;
     use serde::{Deserialize, Serialize};
     use tracing_subscriber::EnvFilter;
-    use utils::{avs_client::ServiceManagerClient, config::ConfigBuilder};
+    use utils::{
+        avs_client::ServiceManagerClient,
+        config::{ConfigBuilder, CosmosChainConfig},
+    };
     use wavs::{
         apis::{
             dispatcher::{ComponentWorld, Submit},
@@ -79,8 +81,9 @@ mod e2e {
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_cosmos")] {
                 tracing::info!("Running Cosmos e2e tests");
-                cosmos::start_chain(ctx.clone());
+                let cosmos_chain_config = Some(cosmos::start_chain(ctx.clone()));
             } else {
+                let cosmos_chain_config: Option<ChainConfig> = None;
             }
         }
 
@@ -120,7 +123,9 @@ mod e2e {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_cosmos")] {
-                config.cosmos_chain = Some("layer-local".to_string());
+                let chain_name = "layer-test-cosmos".to_string();
+                config.cosmos_chain = Some(chain_name.clone());
+                config.chains.cosmos.insert(chain_name, cosmos_chain_config.unwrap());
             } else {
                 config.cosmos_chain = None;
             }
