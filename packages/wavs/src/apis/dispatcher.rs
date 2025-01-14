@@ -1,14 +1,13 @@
 use std::{collections::BTreeMap, ops::Bound};
 
-use layer_climb::prelude::Address;
-use serde::{Deserialize, Serialize};
-
 use super::{
     submission::ChainMessage,
     trigger::{Trigger, TriggerAction},
     ComponentID, ServiceID, WorkflowID,
 };
 use crate::{AppContext, Digest};
+use layer_climb::prelude::Address;
+use serde::{Deserialize, Serialize};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -170,6 +169,30 @@ pub struct Component {
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
+    pub config: ServiceConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceConfig {
+    /// The maximum amount of compute metering to allow for a single component execution
+    pub fuel_limit: u64,
+    /// External env variables to be read from the system host for private use
+    /// must be prefixed with `WAVS_ENV_`
+    pub allowed_envs: Vec<String>,
+    /// key-value pairs that are accessible via the components environment
+    /// these values are public for anyone to read and handled as the true configuration.
+    pub kv: Vec<(String, String)>,
+}
+
+impl Default for ServiceConfig {
+    fn default() -> Self {
+        Self {
+            fuel_limit: 100_000_000,
+            allowed_envs: vec![],
+            kv: vec![],
+        }
+    }
 }
 
 impl Component {
@@ -177,6 +200,14 @@ impl Component {
         Self {
             wasm: digest.clone(),
             permissions: Default::default(),
+            config: Default::default(),
+        }
+    }
+
+    pub fn with_config(&self, config: ServiceConfig) -> Self {
+        Self {
+            config,
+            ..self.clone()
         }
     }
 }

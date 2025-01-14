@@ -8,6 +8,7 @@ use utils::{
     layer_contract_client::LayerAddresses,
     serde::deserialize_vec_string,
 };
+use wavs::apis::dispatcher::ServiceConfig;
 
 use crate::config::Config;
 
@@ -37,6 +38,9 @@ pub enum Command {
         /// Override the service manager address
         #[clap(long)]
         service_manager: Option<Address>,
+
+        #[clap(long, value_parser = parse_json_string)]
+        component_config: Option<ServiceConfig>,
     },
 
     AddTask {
@@ -68,6 +72,11 @@ pub enum Command {
         #[clap(long)]
         input: String,
     },
+}
+
+// Parser function for direct JSON string input
+fn parse_json_string(json: &str) -> Result<Config, String> {
+    serde_json::from_str(json).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
 impl Command {

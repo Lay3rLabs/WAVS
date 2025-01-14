@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::http::{map_response, TestHttpApp};
 use crate::{
     apis::{
-        dispatcher::{DispatchManager, Permissions, Submit},
+        dispatcher::{DispatchManager, Permissions, ServiceConfig, Submit},
         engine::EngineError,
         ServiceID,
     },
@@ -97,8 +97,14 @@ impl MockE2ETestRunner {
         digest: Digest,
         function: impl Function,
     ) {
-        self.create_service(service_id, digest, Permissions::default(), function)
-            .await
+        self.create_service(
+            service_id,
+            digest,
+            Permissions::default(),
+            ServiceConfig::default(),
+            function,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -107,6 +113,7 @@ impl MockE2ETestRunner {
         service_id: ServiceID,
         digest: Digest,
         permissions: Permissions,
+        config: ServiceConfig,
         function: impl Function,
     ) {
         // "upload" the component
@@ -120,6 +127,7 @@ impl MockE2ETestRunner {
                 id: service_id,
                 digest: digest.into(),
                 permissions,
+                config,
                 testable: None,
                 submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth()),
             },
