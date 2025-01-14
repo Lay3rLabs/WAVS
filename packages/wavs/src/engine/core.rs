@@ -224,11 +224,6 @@ impl<S: CAStorage> WasmEngine<S> {
             .filter(|(key, _)| {
                 key.starts_with("WAVS_ENV") && service_config.host_envs.contains(&key.to_string())
             })
-            .collect();
-
-        // extend env with the custom config kv pairs
-        let env: Vec<_> = env
-            .into_iter()
             .chain(
                 service_config
                     .kv
@@ -354,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_config_env() {
+    fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(storage, &app_data, 3);
@@ -362,7 +357,6 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        // store square digest
         let digest = engine.store_wasm(ETH_TRIGGER_ECHO).unwrap();
         let component = crate::apis::dispatcher::Component::new(&digest);
         let service_config = ServiceConfig {
@@ -371,7 +365,7 @@ mod tests {
             kv: vec![("foo".to_string(), "bar".to_string())],
         };
 
-        // verifies the public configuration works
+        // verify service config kv is accessible
         let result = engine
             .execute_eth_event(
                 &component,
@@ -384,7 +378,7 @@ mod tests {
             .unwrap();
         assert_eq!(&result, br#"bar"#);
 
-        // verifies the enabled env var works
+        // verify whitelisted host env var is accessible
         let result = engine
             .execute_eth_event(
                 &component,
@@ -397,7 +391,7 @@ mod tests {
             .unwrap();
         assert_eq!(&result, br#"testing"#);
 
-        // verifies the non-enabled env var is not accessible
+        // verify the non-enabled env var is not accessible
         let result = engine
             .execute_eth_event(
                 &component,

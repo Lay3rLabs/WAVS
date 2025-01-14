@@ -39,7 +39,7 @@ pub enum Command {
         #[clap(long)]
         service_manager: Option<Address>,
 
-        #[clap(long, value_parser = parse_json_string)]
+        #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
         service_config: Option<ServiceConfig>,
     },
 
@@ -72,14 +72,6 @@ pub enum Command {
         #[clap(long)]
         input: String,
     },
-}
-
-// Parser function for direct JSON string input
-fn parse_json_string(json: &str) -> Result<ServiceConfig, String> {
-    if json.is_empty() || json == "{}" {
-        return Ok(ServiceConfig::default());
-    }
-    serde_json::from_str(json).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
 impl Command {

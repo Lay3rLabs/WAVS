@@ -176,13 +176,15 @@ pub struct Component {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceConfig {
-    /// The maximum amount of compute metering to allow for a single component execution
+    /// The maximum amount of compute metering to allow for a single execution
     pub fuel_limit: u64,
-    /// External env variables to be read from the system host for private use
-    /// must be prefixed with `WAVS_ENV_`
+    /// External env variable keys to be read from the system host on execute (i.e. API keys).
+    /// Must be prefixed with `WAVS_ENV_`.
     pub host_envs: Vec<String>,
-    /// key-value pairs that are accessible via the components environment
-    /// these values are public for anyone to read and handled as the true configuration.
+    /// Configuration key-value pairs that are accessible in the components environment.
+    /// These config values are public and viewable by anyone.
+    /// Components read the values with `std::env::var`, case sensitive & no prefix required.
+    /// Values here are viewable by anyone. Use host_envs to set private values.
     pub kv: Vec<(String, String)>,
 }
 
