@@ -4,7 +4,7 @@
 
 use wavs::{
     apis::{
-        dispatcher::{AllowedHostPermission, Permissions},
+        dispatcher::{AllowedHostPermission, Permissions, ServiceConfig},
         ServiceID, WorkflowID,
     },
     engine::runner::EngineRunner,
@@ -203,11 +203,14 @@ fn mock_e2e_service_settings() {
                 ..Default::default()
             };
 
+            let config = ServiceConfig::default();
+
             runner
                 .create_service(
                     service_id.clone(),
                     digest.clone(),
                     permissions.clone(),
+                    config.clone(),
                     BigSquare,
                 )
                 .await;

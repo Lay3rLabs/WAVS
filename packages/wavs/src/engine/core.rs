@@ -14,7 +14,7 @@ use wasmtime::{Store, Trap};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use crate::apis::dispatcher::AllowedHostPermission;
+use crate::apis::dispatcher::{AllowedHostPermission, ServiceConfig};
 use crate::apis::{ServiceID, WorkflowID};
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{apis, bindings, Digest};
@@ -26,17 +26,11 @@ pub struct WasmEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
     app_data_dir: PathBuf,
-    fuel_limit: u64,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
     /// Create a new Wasm Engine manager.
-    pub fn new(
-        wasm_storage: S,
-        app_data_dir: impl AsRef<Path>,
-        lru_size: usize,
-        fuel_limit: u64,
-    ) -> Self {
+    pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>, lru_size: usize) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
         config.async_support(true);
@@ -56,7 +50,6 @@ impl<S: CAStorage> WasmEngine<S> {
             wasm_engine,
             memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
-            fuel_limit,
         }
     }
 }
@@ -90,15 +83,17 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     fn execute_queue(
         &self,
         wasi: &apis::dispatcher::Component,
+        service_config: &ServiceConfig,
         service_id: &ServiceID,
         task_id: TaskId,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
+        let (mut store, component, linker) =
+            self.get_instance_deps(wasi, service_id, service_config)?;
 
         store
-            .set_fuel(self.fuel_limit)
+            .set_fuel(service_config.fuel_limit)
             .map_err(EngineError::Other)?;
 
         self.block_on_run(async move {
@@ -128,15 +123,17 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     fn execute_eth_event(
         &self,
         wasi: &apis::dispatcher::Component,
+        service_config: &ServiceConfig,
         service_id: &ServiceID,
         workflow_id: &WorkflowID,
         trigger_id: TriggerId,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError> {
-        let (mut store, component, linker) = self.get_instance_deps(wasi, service_id)?;
+        let (mut store, component, linker) =
+            self.get_instance_deps(wasi, service_id, service_config)?;
 
         store
-            .set_fuel(self.fuel_limit)
+            .set_fuel(service_config.fuel_limit)
             .map_err(EngineError::Other)?;
 
         self.block_on_run(async move {
@@ -184,6 +181,7 @@ impl<S: CAStorage> WasmEngine<S> {
         &self,
         wasi: &apis::dispatcher::Component,
         service_id: &ServiceID,
+        service_config: &ServiceConfig,
     ) -> Result<(Store<Host>, Component, Linker<L>), EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
@@ -221,8 +219,17 @@ impl<S: CAStorage> WasmEngine<S> {
                 .context("preopen failed")?;
         }
 
+        // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
         let env: Vec<_> = std::env::vars()
-            .filter(|(key, _)| key.starts_with("WAVS_ENV"))
+            .filter(|(key, _)| {
+                key.starts_with("WAVS_ENV") && service_config.host_envs.contains(&key.to_string())
+            })
+            .chain(
+                service_config
+                    .kv
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            )
             .collect();
 
         if !env.is_empty() {
@@ -274,19 +281,21 @@ impl WasiHttpView for Host {
 
 #[cfg(test)]
 mod tests {
+    use apis::dispatcher::ServiceConfig;
+
     use crate::storage::memory::MemoryStorage;
 
     use super::*;
 
     const SQUARE: &[u8] = include_bytes!("../../../../components/square.wasm");
     const BTC_AVG: &[u8] = include_bytes!("../../../../components/btc_avg.wasm");
-    const DEFAULT_FUEL_LIMIT: u64 = 1_000_000;
+    const ETH_TRIGGER_ECHO: &[u8] = include_bytes!("../../../../components/eth_trigger_echo.wasm");
 
     #[test]
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, DEFAULT_FUEL_LIMIT);
+        let engine = WasmEngine::new(storage, &app_data, 3);
 
         // store two blobs
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -304,7 +313,7 @@ mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, DEFAULT_FUEL_LIMIT);
+        let engine = WasmEngine::new(storage, &app_data, 3);
 
         // store valid wasm
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -320,16 +329,16 @@ mod tests {
     fn execute_square() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, DEFAULT_FUEL_LIMIT);
+        let engine = WasmEngine::new(storage, &app_data, 3);
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
         let component = crate::apis::dispatcher::Component::new(&digest);
-
         // execute it and get square
         let result = engine
             .execute_queue(
                 &component,
+                &ServiceConfig::default(),
                 &ServiceID::new("foobar").unwrap(),
                 TaskId::new(12345),
                 br#"{"x":12}"#.into(),
@@ -340,21 +349,83 @@ mod tests {
     }
 
     #[test]
+    fn validate_execute_config_environment() {
+        let storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(storage, &app_data, 3);
+
+        std::env::set_var("WAVS_ENV_TEST", "testing");
+        std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
+
+        let digest = engine.store_wasm(ETH_TRIGGER_ECHO).unwrap();
+        let component = crate::apis::dispatcher::Component::new(&digest);
+        let service_config = ServiceConfig {
+            fuel_limit: 100_000_000,
+            host_envs: vec!["WAVS_ENV_TEST".to_string()],
+            kv: vec![("foo".to_string(), "bar".to_string())],
+        };
+
+        // verify service config kv is accessible
+        let result = engine
+            .execute_eth_event(
+                &component,
+                &service_config,
+                &ServiceID::new("foobar").unwrap(),
+                &WorkflowID::new("default").unwrap(),
+                TriggerId::new(12345),
+                br#"envvar:foo"#.into(),
+            )
+            .unwrap();
+        assert_eq!(&result, br#"bar"#);
+
+        // verify whitelisted host env var is accessible
+        let result = engine
+            .execute_eth_event(
+                &component,
+                &service_config,
+                &ServiceID::new("foobar").unwrap(),
+                &WorkflowID::new("default").unwrap(),
+                TriggerId::new(12345),
+                br#"envvar:WAVS_ENV_TEST"#.into(),
+            )
+            .unwrap();
+        assert_eq!(&result, br#"testing"#);
+
+        // verify the non-enabled env var is not accessible
+        let result = engine
+            .execute_eth_event(
+                &component,
+                &service_config,
+                &ServiceID::new("foobar").unwrap(),
+                &WorkflowID::new("default").unwrap(),
+                TriggerId::new(12345),
+                br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#.into(),
+            )
+            .unwrap_err();
+        assert!(matches!(result, EngineError::ComponentError(_)));
+    }
+
+    #[test]
     fn execute_without_enough_fuel() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
 
         let low_fuel_limit = 1;
-        let engine = WasmEngine::new(storage, &app_data, 3, low_fuel_limit);
+        let engine = WasmEngine::new(storage, &app_data, 3);
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
         let component = crate::apis::dispatcher::Component::new(&digest);
+        let service_config = ServiceConfig {
+            fuel_limit: low_fuel_limit,
+            ..Default::default()
+        };
 
         // execute it and get the error
         let err = engine
             .execute_queue(
                 &component,
+                &service_config,
                 &ServiceID::new("foobar").unwrap(),
                 TaskId::new(12345),
                 br#"{"x":12}"#.into(),

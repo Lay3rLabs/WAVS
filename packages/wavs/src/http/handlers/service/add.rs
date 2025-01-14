@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     apis::{
-        dispatcher::{Component, Permissions, Service, ServiceStatus, Submit, Workflow},
+        dispatcher::{
+            Component, Permissions, Service, ServiceConfig, ServiceStatus, Submit, Workflow,
+        },
         trigger::Trigger,
         ComponentID, ServiceID, WorkflowID,
     },
@@ -38,6 +40,7 @@ pub struct ServiceRequest {
     pub digest: ShaDigest,
     pub trigger: TriggerRequest,
     pub permissions: Permissions,
+    pub config: ServiceConfig,
     pub testable: Option<bool>,
     pub submit: Submit,
 }
@@ -142,6 +145,7 @@ impl ServiceRequestParser {
             name: service_id.to_string(),
             components,
             workflows,
+            config: Some(req.config),
             status: ServiceStatus::Active,
             testable: req.testable.unwrap_or(false),
         })
@@ -155,7 +159,7 @@ mod test {
 
     use crate::{
         apis::{
-            dispatcher::{Permissions, ServiceStatus, Submit},
+            dispatcher::{Permissions, ServiceConfig, ServiceStatus, Submit},
             ServiceID,
         },
         http::{handlers::service::add::TriggerRequest, types::ShaDigest},
@@ -197,6 +201,7 @@ mod test {
                 permissions: Permissions::default(),
                 testable: Some(true),
                 submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth()),
+                config: ServiceConfig::default(),
             }
         }
 

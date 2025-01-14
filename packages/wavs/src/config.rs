@@ -45,10 +45,6 @@ pub struct Config {
 
     /// The mnemonic to use for submitting transactions on Cosmos chains
     pub cosmos_submission_mnemonic: Option<String>,
-
-    /// The maximum amount of compute metering to allow for a single component execution
-    /// Default is `1_000_000`
-    pub max_wasm_fuel: u64,
 }
 
 impl ConfigExt for Config {
@@ -84,7 +80,6 @@ impl Default for Config {
             wasm_threads: 4,
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
-            max_wasm_fuel: 1_000_000,
         }
     }
 }

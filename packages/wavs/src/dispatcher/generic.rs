@@ -372,6 +372,7 @@ mod tests {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
             components: [(component_id.clone(), Component::new(&digest))].into(),
+            config: None,
             workflows: [(
                 action.config.workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
@@ -458,6 +459,7 @@ mod tests {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
             components: [(component_id.clone(), Component::new(&digest))].into(),
+            config: None,
             workflows: [(
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {
@@ -537,6 +539,7 @@ mod tests {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
             components: [(component_id.clone(), Component::new(&digest))].into(),
+            config: None,
             workflows: [(
                 workflow_id.clone(),
                 crate::apis::dispatcher::Workflow {

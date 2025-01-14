@@ -6,7 +6,7 @@ use utils::{
 };
 use wavs::{
     apis::{
-        dispatcher::{AllowedHostPermission, Permissions, Submit},
+        dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
         ServiceID, WorkflowID,
     },
     http::{
@@ -85,6 +85,7 @@ impl HttpClient {
         trigger_address: alloy::primitives::Address,
         service_manager_address: alloy::primitives::Address,
         digest: Digest,
+        config: ServiceConfig,
     ) -> (ServiceID, WorkflowID) {
         let trigger_address = Address::Eth(AddrEth::new(trigger_address.into()));
         let submit = Submit::EthSignedMessage {
@@ -105,6 +106,7 @@ impl HttpClient {
             },
             testable: Some(true),
             submit,
+            config,
         };
 
         let body = serde_json::to_string(&AddServiceRequest {
