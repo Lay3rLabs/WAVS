@@ -335,7 +335,7 @@ impl CoreSubmission {
             let request = AggregateAvsRequest::EthTrigger {
                 signed_payload,
                 service_manager_address,
-                service_id: service_id.to_string(),
+                service_id: service_id.clone(),
             };
 
             let chain_config = self

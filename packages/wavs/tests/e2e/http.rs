@@ -100,7 +100,7 @@ impl HttpClient {
             .json(
                 &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
                     service_manager_address,
-                    service_id: service_id.to_string(),
+                    service_id,
                 },
             )
             .send()

@@ -9,6 +9,8 @@ pub mod eth_client;
 pub mod layer_contract_client;
 pub mod serde;
 pub mod storage;
+pub mod types;
+pub use types::{ComponentID, IDError, ServiceID, WorkflowID};
 
 // the test version of init_tracing does not take a config
 // since config itself is tested and modified from different parallel tests

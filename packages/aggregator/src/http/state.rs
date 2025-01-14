@@ -8,6 +8,7 @@ use anyhow::bail;
 use utils::{
     layer_contract_client::SignedPayload,
     storage::db::{DBError, RedbStorage, Table, JSON},
+    ServiceID,
 };
 
 use crate::config::Config;
@@ -67,18 +68,21 @@ impl HttpState {
     pub fn register_service(
         &self,
         service_manager: Address,
-        service_id: String,
+        service_id: ServiceID,
     ) -> anyhow::Result<()> {
         let service_manager = service_manager.to_string();
 
         match self.storage.get(PAYLOADS_BY_SERVICE_ID, &service_manager)? {
             None => {
                 let mut lookup = HashMap::new();
-                lookup.insert(service_id, Vec::new());
-                self.storage
-                    .set(PAYLOADS_BY_SERVICE_ID, &service_manager, &lookup)?;
+                lookup.insert(service_id.to_string(), Vec::new());
+                self.storage.set(
+                    PAYLOADS_BY_SERVICE_ID,
+                    &service_manager.to_string(),
+                    &lookup,
+                )?;
             }
-            Some(table) => match table.value().entry(service_id.clone()) {
+            Some(table) => match table.value().entry(service_id.to_string()) {
                 Entry::Vacant(entry) => {
                     entry.insert(Vec::new());
                 }

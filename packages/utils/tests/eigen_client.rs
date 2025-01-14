@@ -4,6 +4,7 @@ use utils::{
     eth_client::{EthClientBuilder, EthClientConfig},
     init_tracing_tests,
     layer_contract_client::{LayerContractClientFullBuilder, LayerContractClientSimple},
+    ServiceID, WorkflowID,
 };
 
 #[tokio::test]
@@ -41,8 +42,8 @@ async fn deploy_layer_avs() {
     let new_trigger_id = layer_client
         .trigger
         .add_trigger(
-            "foo-service-id".to_string(),
-            "foo-workflow-id".to_string(),
+            ServiceID::new("foo-service-id").unwrap().to_string(),
+            WorkflowID::new("foo-workflow-id").unwrap().to_string(),
             b"foo-data".to_vec(),
         )
         .await
@@ -73,8 +74,8 @@ async fn deploy_layer_avs() {
     let new_trigger_id = layer_client
         .trigger
         .add_trigger(
-            "bar-service-id".to_string(),
-            "bar-workflow-id".to_string(),
+            ServiceID::new("bar-service-id").unwrap().to_string(),
+            WorkflowID::new("bar-workflow-id").unwrap().to_string(),
             b"bar-data".to_vec(),
         )
         .await

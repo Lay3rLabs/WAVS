@@ -11,6 +11,7 @@ use utils::{
         layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
         SignedPayload,
     },
+    ServiceID,
 };
 
 use crate::http::{error::HttpResult, state::HttpState};
@@ -38,8 +39,7 @@ pub async fn add_payload_trigger(
     state: HttpState,
     signed_payload: SignedPayload,
     service_manager_address: Address,
-    // TODO - move ServiceID to utils
-    service_id: String,
+    service_id: ServiceID,
 ) -> HttpResult<AggregateAvsResponse> {
     let eth_client = state.config.signing_client().await?;
 
@@ -53,7 +53,7 @@ pub async fn add_payload_trigger(
     let mut payloads_map = state.load_all_payloads(service_manager_address)?;
 
     let queue = payloads_map
-        .entry(service_id)
+        .entry(service_id.to_string())
         .or_insert_with(Default::default);
 
     queue.push(signed_payload);
