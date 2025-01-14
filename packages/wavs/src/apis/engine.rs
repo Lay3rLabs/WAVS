@@ -5,7 +5,10 @@ use utils::layer_contract_client::TriggerId;
 
 use crate::{storage::CAStorageError, Digest};
 
-use super::{dispatcher::Component, ComponentID, ServiceID, WorkflowID};
+use super::{
+    dispatcher::{Component, ServiceConfig},
+    ComponentID, ServiceID, WorkflowID,
+};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
@@ -17,6 +20,7 @@ pub trait Engine: Send + Sync {
     fn execute_queue(
         &self,
         component: &Component,
+        service_config: &ServiceConfig,
         service_id: &ServiceID,
         task_id: TaskId,
         request: Vec<u8>,
@@ -27,6 +31,7 @@ pub trait Engine: Send + Sync {
     fn execute_eth_event(
         &self,
         component: &Component,
+        service_config: &ServiceConfig,
         service_id: &ServiceID,
         workflow_id: &WorkflowID,
         trigger_id: TriggerId,
@@ -46,25 +51,39 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
     fn execute_queue(
         &self,
         component: &Component,
+        service_config: &ServiceConfig,
         service_id: &ServiceID,
         task_id: TaskId,
         request: Vec<u8>,
         timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref()
-            .execute_queue(component, service_id, task_id, request, timestamp)
+        self.as_ref().execute_queue(
+            component,
+            service_config,
+            service_id,
+            task_id,
+            request,
+            timestamp,
+        )
     }
 
     fn execute_eth_event(
         &self,
         component: &Component,
+        service_config: &ServiceConfig,
         service_id: &ServiceID,
         workflow_id: &WorkflowID,
         trigger_id: TriggerId,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref()
-            .execute_eth_event(component, service_id, workflow_id, trigger_id, payload)
+        self.as_ref().execute_eth_event(
+            component,
+            service_config,
+            service_id,
+            workflow_id,
+            trigger_id,
+            payload,
+        )
     }
 }
 

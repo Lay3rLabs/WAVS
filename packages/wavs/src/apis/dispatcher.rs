@@ -82,6 +82,8 @@ pub struct Service {
 
     pub status: ServiceStatus,
 
+    pub config: Option<ServiceConfig>,
+
     pub testable: bool,
 }
 
@@ -169,7 +171,6 @@ pub struct Component {
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
-    pub config: ServiceConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -200,14 +201,6 @@ impl Component {
         Self {
             wasm: digest.clone(),
             permissions: Default::default(),
-            config: Default::default(),
-        }
-    }
-
-    pub fn with_config(&self, config: ServiceConfig) -> Self {
-        Self {
-            config,
-            ..self.clone()
         }
     }
 }

@@ -117,7 +117,6 @@ impl ServiceRequestParser {
         let component = Component {
             wasm: req.digest.into(),
             permissions: req.permissions,
-            config: req.config,
         };
 
         let components = BTreeMap::from([(component_id.clone(), component)]);
@@ -146,6 +145,7 @@ impl ServiceRequestParser {
             name: service_id.to_string(),
             components,
             workflows,
+            config: Some(req.config),
             status: ServiceStatus::Active,
             testable: req.testable.unwrap_or(false),
         })

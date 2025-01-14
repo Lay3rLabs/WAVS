@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{de::DeserializeOwned, Serialize};
-use wavs::apis::dispatcher::ComponentConfig;
+use wavs::apis::dispatcher::ServiceConfig;
 use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions, Submit},
@@ -60,7 +60,7 @@ impl HttpClient {
                 file_system: true,
             },
             testable: Some(true),
-            config: ComponentConfig::default(),
+            config: ServiceConfig::default(),
             submit,
         };
 

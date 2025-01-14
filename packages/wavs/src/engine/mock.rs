@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
+use crate::apis::dispatcher::ServiceConfig;
 use crate::apis::{ServiceID, WorkflowID};
 use crate::Digest;
 use lavs_apis::id::TaskId;
@@ -53,6 +54,7 @@ impl Engine for MockEngine {
     fn execute_queue(
         &self,
         component: &crate::apis::dispatcher::Component,
+        _service_config: &ServiceConfig,
         _service_id: &ServiceID,
         _task_id: TaskId,
         request: Vec<u8>,
@@ -71,6 +73,7 @@ impl Engine for MockEngine {
     fn execute_eth_event(
         &self,
         _component: &crate::apis::dispatcher::Component,
+        _service_config: &ServiceConfig,
         _service_id: &ServiceID,
         _workflow_id: &WorkflowID,
         _trigger_id: TriggerId,
@@ -132,6 +135,7 @@ mod test {
         let res = engine
             .execute_queue(
                 &c1,
+                &ServiceConfig::default(),
                 &ServiceID::new("321").unwrap(),
                 TaskId::new(123),
                 b"123".into(),
@@ -145,6 +149,7 @@ mod test {
         let res = engine
             .execute_queue(
                 &c2,
+                &ServiceConfig::default(),
                 &ServiceID::new("321").unwrap(),
                 TaskId::new(123),
                 b"123".into(),
@@ -158,6 +163,7 @@ mod test {
         let err = engine
             .execute_queue(
                 &c3,
+                &ServiceConfig::default(),
                 &ServiceID::new("321").unwrap(),
                 TaskId::new(123),
                 b"123".into(),

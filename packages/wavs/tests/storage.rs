@@ -107,6 +107,7 @@ fn db_service_store() {
         workflows,
         status: ServiceStatus::Active,
         testable: true,
+        config: None,
     };
 
     storage.set(SERVICE_TABLE, &service_id, &service).unwrap();

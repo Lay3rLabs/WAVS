@@ -2,7 +2,7 @@ use lavs_apis::id::TaskId;
 use tracing::instrument;
 use utils::layer_contract_client::TriggerId;
 
-use crate::apis::dispatcher::Component;
+use crate::apis::dispatcher::{Component, ServiceConfig};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::{ServiceID, WorkflowID};
 use crate::Digest;
@@ -33,6 +33,7 @@ impl Engine for IdentityEngine {
     fn execute_queue(
         &self,
         _component: &Component,
+        _service_config: &ServiceConfig,
         _service_id: &ServiceID,
         _task_id: TaskId,
         request: Vec<u8>,
@@ -45,6 +46,7 @@ impl Engine for IdentityEngine {
     fn execute_eth_event(
         &self,
         _component: &Component,
+        _service_config: &ServiceConfig,
         _service_id: &ServiceID,
         _workflow_id: &WorkflowID,
         _trigger_id: TriggerId,
@@ -76,6 +78,7 @@ mod test {
         let result = engine
             .execute_queue(
                 &component,
+                &ServiceConfig::default(),
                 &ServiceID::new("foobar").unwrap(),
                 TaskId::new(123),
                 request.clone(),
