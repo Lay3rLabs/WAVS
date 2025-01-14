@@ -40,7 +40,7 @@ pub enum Command {
         service_manager: Option<Address>,
 
         #[clap(long, value_parser = parse_json_string)]
-        component_config: Option<ServiceConfig>,
+        service_config: Option<ServiceConfig>,
     },
 
     AddTask {
@@ -75,7 +75,10 @@ pub enum Command {
 }
 
 // Parser function for direct JSON string input
-fn parse_json_string(json: &str) -> Result<Config, String> {
+fn parse_json_string(json: &str) -> Result<ServiceConfig, String> {
+    if json.is_empty() || json == "{}" {
+        return Ok(ServiceConfig::default());
+    }
     serde_json::from_str(json).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 

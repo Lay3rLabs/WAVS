@@ -83,7 +83,7 @@ async fn main() {
             register_operator,
             component,
             service_manager,
-            component_config,
+            service_config,
             ..
         } => {
             let ChainContext {
@@ -119,7 +119,7 @@ async fn main() {
                     avs_client.layer.trigger,
                     avs_client.layer.service_manager,
                     digest,
-                    component_config.unwrap_or_default(),
+                    service_config.unwrap_or_default(),
                 )
                 .await;
 

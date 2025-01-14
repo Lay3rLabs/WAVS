@@ -222,8 +222,7 @@ impl<S: CAStorage> WasmEngine<S> {
         // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
         let env: Vec<_> = std::env::vars()
             .filter(|(key, _)| {
-                key.starts_with("WAVS_ENV")
-                    && service_config.allowed_envs.contains(&key.to_string())
+                key.starts_with("WAVS_ENV") && service_config.host_envs.contains(&key.to_string())
             })
             .collect();
 
@@ -368,7 +367,7 @@ mod tests {
         let component = crate::apis::dispatcher::Component::new(&digest);
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
-            allowed_envs: vec!["WAVS_ENV_TEST".to_string()],
+            host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
         };
 

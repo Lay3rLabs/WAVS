@@ -180,7 +180,7 @@ pub struct ServiceConfig {
     pub fuel_limit: u64,
     /// External env variables to be read from the system host for private use
     /// must be prefixed with `WAVS_ENV_`
-    pub allowed_envs: Vec<String>,
+    pub host_envs: Vec<String>,
     /// key-value pairs that are accessible via the components environment
     /// these values are public for anyone to read and handled as the true configuration.
     pub kv: Vec<(String, String)>,
@@ -190,7 +190,7 @@ impl Default for ServiceConfig {
     fn default() -> Self {
         Self {
             fuel_limit: 100_000_000,
-            allowed_envs: vec![],
+            host_envs: vec![],
             kv: vec![],
         }
     }
