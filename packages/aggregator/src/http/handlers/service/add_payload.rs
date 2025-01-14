@@ -53,7 +53,7 @@ pub async fn add_payload_trigger(
     let mut payloads_map = state.load_all_payloads(service_manager_address)?;
 
     let queue = payloads_map
-        .entry(service_id.to_string())
+        .entry(service_id)
         .or_insert_with(Default::default);
 
     queue.push(signed_payload);

@@ -42,8 +42,8 @@ async fn deploy_layer_avs() {
     let new_trigger_id = layer_client
         .trigger
         .add_trigger(
-            ServiceID::new("foo-service-id").unwrap().to_string(),
-            WorkflowID::new("foo-workflow-id").unwrap().to_string(),
+            ServiceID::new("foo-service-id").unwrap(),
+            WorkflowID::new("foo-workflow-id").unwrap(),
             b"foo-data".to_vec(),
         )
         .await
@@ -74,8 +74,8 @@ async fn deploy_layer_avs() {
     let new_trigger_id = layer_client
         .trigger
         .add_trigger(
-            ServiceID::new("bar-service-id").unwrap().to_string(),
-            WorkflowID::new("bar-workflow-id").unwrap().to_string(),
+            ServiceID::new("bar-service-id").unwrap(),
+            WorkflowID::new("bar-workflow-id").unwrap(),
             b"bar-data".to_vec(),
         )
         .await
