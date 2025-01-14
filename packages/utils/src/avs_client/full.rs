@@ -1,5 +1,4 @@
 use super::solidity_types::{
-    layer_service_manager::LayerServiceManager,
     stake_registry::ECDSAStakeRegistry::{self, Quorum, StrategyParams},
     token::{IStrategy, LayerToken},
 };
@@ -100,32 +99,21 @@ impl AvsAddresses {
     }
 }
 
-pub struct AvsClientBuilder {
+pub struct AvsClientDeployer {
     pub eth: EthSigningClient,
     pub core_avs_addrs: Option<CoreAVSAddresses>,
-
-    /// if set, this service manager will be used instead of the default
-    /// LayerServiceManager contract
-    service_manager: Option<Address>,
 }
 
-impl AvsClientBuilder {
+impl AvsClientDeployer {
     pub fn new(eth: EthSigningClient) -> Self {
         Self {
             eth,
             core_avs_addrs: None,
-            service_manager: None,
         }
     }
 
     pub fn core_addresses(mut self, addresses: CoreAVSAddresses) -> Self {
         self.core_avs_addrs = Some(addresses);
-        self
-    }
-
-    // if your service manager is already deployed, you can override it here to use it.
-    pub fn override_service_manager(mut self, service_manager: Option<Address>) -> Self {
-        self.service_manager = service_manager;
         self
     }
 }
@@ -143,7 +131,7 @@ pub struct ServiceManagerDeps {
     pub delegation_manager: Address,
 }
 
-impl AvsClientBuilder {
+impl AvsClientDeployer {
     async fn set_up(&self, strategy_factory: Address) -> Result<SetupAddrs> {
         let token = LayerToken::deploy(self.eth.provider.clone()).await?;
         let strategy_factory = StrategyFactory::new(strategy_factory, self.eth.provider.clone());
@@ -171,7 +159,7 @@ impl AvsClientBuilder {
         })
     }
 
-    pub async fn build<F, Fut>(mut self, deploy_service_manager: F) -> Result<AvsClient>
+    pub async fn deploy<F, Fut>(mut self, deploy_service_manager: F) -> Result<AvsClient>
     where
         F: FnOnce(ServiceManagerDeps) -> Fut,
         Fut: std::future::Future<Output = Result<Address>>,
@@ -189,61 +177,44 @@ impl AvsClientBuilder {
         );
 
         // Get or deploy stake registry
-        let ecdsa_stake_registry_address =
-            if let Some(service_manager_address) = self.service_manager {
-                LayerServiceManager::new(service_manager_address, self.eth.provider.clone())
-                    .stakeRegistry()
-                    .call()
-                    .await?
-                    ._0
-            } else {
-                let impl_contract =
-                    ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager)
-                        .await?;
-                proxies
-                    .admin
-                    .upgradeAndCall(
-                        proxies.ecdsa_stake_registry,
-                        *impl_contract.address(),
-                        ECDSAStakeRegistry::initializeCall {
-                            _serviceManager: proxies.service_manager,
-                            _thresholdWeight: U256::ZERO,
-                            _quorum: setup.quorum,
-                        }
-                        .abi_encode()
-                        .into(),
-                    )
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
-                proxies.ecdsa_stake_registry
-            };
+        let impl_contract =
+            ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager).await?;
 
-        // Get or deploy service manager
-        let service_manager_address = match self.service_manager {
-            Some(addr) => addr,
-            None => {
-                let service_manager_addr = deploy_service_manager(ServiceManagerDeps {
-                    provider: self.eth.provider.clone(),
-                    avs_directory: core.avs_directory,
-                    stake_registry: proxies.ecdsa_stake_registry,
-                    rewards_coordinator: core.rewards_coordinator,
-                    delegation_manager: core.delegation_manager,
-                })
-                .await?;
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.ecdsa_stake_registry,
+                *impl_contract.address(),
+                ECDSAStakeRegistry::initializeCall {
+                    _serviceManager: proxies.service_manager,
+                    _thresholdWeight: U256::ZERO,
+                    _quorum: setup.quorum,
+                }
+                .abi_encode()
+                .into(),
+            )
+            .send()
+            .await?
+            .watch()
+            .await?;
 
-                proxies
-                    .admin
-                    .upgrade(proxies.service_manager, service_manager_addr)
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
+        // Deploy service manager
+        let service_manager_addr = deploy_service_manager(ServiceManagerDeps {
+            provider: self.eth.provider.clone(),
+            avs_directory: core.avs_directory,
+            stake_registry: proxies.ecdsa_stake_registry,
+            rewards_coordinator: core.rewards_coordinator,
+            delegation_manager: core.delegation_manager,
+        })
+        .await?;
 
-                proxies.service_manager
-            }
-        };
+        proxies
+            .admin
+            .upgrade(proxies.service_manager, service_manager_addr)
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         let underlying_token = strategy.underlyingToken().call().await?._0;
         assert_ne!(underlying_token, Address::ZERO);
@@ -254,8 +225,8 @@ impl AvsClientBuilder {
             core,
             layer: AvsAddresses {
                 proxy_admin: *proxies.admin.address(),
-                service_manager: service_manager_address,
-                stake_registry: ecdsa_stake_registry_address,
+                service_manager: proxies.service_manager,
+                stake_registry: proxies.ecdsa_stake_registry,
                 token: setup.token,
             },
         })

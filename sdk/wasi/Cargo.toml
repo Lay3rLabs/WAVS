@@ -20,6 +20,10 @@ tendermint-rpc = { workspace = true }
 tendermint = { workspace = true }
 url = { workspace = true }
 wasi = { workspace = true }
+cosmwasm-std = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-sol-types = {workspace = true }
+alloy-rpc-types = {workspace = true }
 
 [lib]
 crate-type = ["rlib", "cdylib"]

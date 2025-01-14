@@ -1,7 +1,7 @@
 use wasmtime::component::bindgen;
 
 bindgen!({
-  world: "layer-eth-log-world",
+  world: "layer-eth-contract-event-world",
   path: "../../sdk/wit",
   async: true,
 });

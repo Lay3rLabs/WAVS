@@ -1,26 +1,36 @@
 use std::{
-    collections::{HashMap, HashSet}, sync::Arc, time::Duration
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
 };
 
 use alloy::node_bindings::{Anvil, AnvilInstance};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use utils::{
-    avs_client::AvsClientBuilder, config::EthereumChainConfig, eigen_client::{CoreAVSAddresses, EigenClient}, eth_client::{EthClientBuilder, EthClientConfig}, example_eth_client::{SimpleSubmitClient, SimpleTriggerClient}
+    avs_client::AvsClientBuilder,
+    config::EthereumChainConfig,
+    eigen_client::{CoreAVSAddresses, EigenClient},
+    eth_client::{EthClientBuilder, EthClientConfig},
+    example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
 };
 use wavs::{
     apis::{
         dispatcher::{ComponentWorld, Submit},
         trigger::Trigger,
     },
-    config::Config, AppContext,
+    config::Config,
+    AppContext,
 };
 
 use crate::e2e::payload::{CosmosQueryRequest, CosmosQueryResponse, SquareRequest, SquareResponse};
 
 use super::{http::HttpClient, Digests, ServiceIds};
 
-pub fn start_chain(ctx: AppContext, index: u8) -> (String, EthereumChainConfig, Option<AnvilInstance>) {
+pub fn start_chain(
+    ctx: AppContext,
+    index: u8,
+) -> (String, EthereumChainConfig, Option<AnvilInstance>) {
     let port = 8545 + index as u16;
     let chain_id = 31337 + index as u64;
 
@@ -30,15 +40,14 @@ pub fn start_chain(ctx: AppContext, index: u8) -> (String, EthereumChainConfig, 
         format!("local-eth-test-{}", index),
         EthereumChainConfig {
             chain_id: 31337.to_string(),
-            http_endpoint: anvil.endpoint(), 
+            http_endpoint: anvil.endpoint(),
             ws_endpoint: anvil.ws_endpoint(),
             aggregator_endpoint: None,
             faucet_endpoint: None,
         },
-        Some(anvil)
+        Some(anvil),
     )
 }
-        
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -51,7 +60,11 @@ pub struct EthTestApp {
 }
 
 impl EthTestApp {
-    pub async fn new(chain_name: String, chain_config: EthereumChainConfig, anvil: Option<AnvilInstance>) -> Self {
+    pub async fn new(
+        chain_name: String,
+        chain_config: EthereumChainConfig,
+        anvil: Option<AnvilInstance>,
+    ) -> Self {
         let config = EthClientConfig {
             ws_endpoint: Some(chain_config.ws_endpoint.clone()),
             http_endpoint: chain_config.http_endpoint.clone(),
@@ -82,10 +95,12 @@ impl EthTestApp {
         }
     }
 
-    pub async fn deploy_service_contracts(&self) -> (SimpleTriggerClient, SimpleSubmitClient) {
+    pub async fn deploy_service_contracts(
+        &self,
+    ) -> (SimpleEthTriggerClient, SimpleEthSubmitClient) {
         let avs_client = AvsClientBuilder::new(self.eigen_client.eth.clone())
             .core_addresses(self.core_contracts.clone())
-            .build(SimpleSubmitClient::deploy)
+            .build(SimpleEthSubmitClient::deploy)
             .await
             .unwrap();
 
@@ -95,9 +110,9 @@ impl EthTestApp {
             .unwrap();
 
         let submit_client =
-            SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+            SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
 
-        let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+        let trigger_client = SimpleEthTriggerClient::new_deploy(avs_client.eth.clone())
             .await
             .unwrap();
 
@@ -157,22 +172,24 @@ pub async fn run_tests(
             let service_id = service_id.unwrap();
             let digest = digest.unwrap();
 
-            let (trigger_client, submit_client) = app.deploy_service_contracts().await; 
+            let (trigger_client, submit_client) = app.deploy_service_contracts().await;
 
-            if !contract_addrs.insert((app.chain_name.clone(), trigger_client.contract_address.clone())) {
+            if !contract_addrs.insert((
+                app.chain_name.clone(),
+                trigger_client.contract_address.clone(),
+            )) {
                 panic!(
                     "({}) ({}) Duplicate trigger contract address: {}",
-                    app.chain_name,
-                    service_id,
-                    trigger_client.contract_address
+                    app.chain_name, service_id, trigger_client.contract_address
                 );
             }
-            if !contract_addrs.insert((app.chain_name.clone(), submit_client.contract_address.clone())) {
+            if !contract_addrs.insert((
+                app.chain_name.clone(),
+                submit_client.contract_address.clone(),
+            )) {
                 panic!(
                     "({}) ({}) Duplicate submit contract address: {}",
-                    app.chain_name,
-                    service_id,
-                    submit_client.contract_address
+                    app.chain_name, service_id, submit_client.contract_address
                 );
             }
 
@@ -185,7 +202,10 @@ pub async fn run_tests(
                 .create_service(
                     service_id.clone(),
                     digest,
-                    Trigger::contract_event(trigger_contract_address.clone(), app.chain_name.clone()),
+                    Trigger::contract_event(
+                        trigger_contract_address.clone(),
+                        app.chain_name.clone(),
+                    ),
                     Submit::eigen_contract(
                         app.chain_name.to_string(),
                         submit_contract_address.clone(),

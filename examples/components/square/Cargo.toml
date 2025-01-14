@@ -12,6 +12,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 example-helpers = { workspace = true }
 wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
+wstd = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
@@ -28,7 +29,7 @@ package = "component:square"
 
 [package.metadata.component.target]
 path = "../../../sdk/wit"
-world = "layer-chain-event-world"
+world = "layer-any-contract-event-world"
 
 [package.metadata.component.target.dependencies]
 "wasi:io" = "=0.2.0"

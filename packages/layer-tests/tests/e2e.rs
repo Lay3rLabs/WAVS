@@ -100,9 +100,15 @@ mod e2e {
 
         config.eth_chains = eth_chains.iter().map(|(name, _, _)| name.clone()).collect();
         config.cosmos_chain = cosmos_chains.first().map(|(name, _, _)| name.clone());
-        config.chains = ChainConfigs{
-            cosmos: cosmos_chains.iter().map(|(name, chain, _)| (name.clone(), chain.clone())).collect(), 
-            eth: eth_chains.iter().map(|(name, chain, _)| (name.clone(), chain.clone())).collect(), 
+        config.chains = ChainConfigs {
+            cosmos: cosmos_chains
+                .iter()
+                .map(|(name, chain, _)| (name.clone(), chain.clone()))
+                .collect(),
+            eth: eth_chains
+                .iter()
+                .map(|(name, chain, _)| (name.clone(), chain.clone()))
+                .collect(),
         };
 
         let aggregator_config: aggregator::config::Config = {
@@ -167,15 +173,28 @@ mod e2e {
                         }
 
                         if !eth_apps.is_empty() {
-                            eth::run_tests(eth_apps.clone(), http_client.clone(), digests.clone(), service_ids.clone())
-                                .await
+                            eth::run_tests(
+                                eth_apps.clone(),
+                                http_client.clone(),
+                                digests.clone(),
+                                service_ids.clone(),
+                            )
+                            .await
                         }
                         if !cosmos_apps.is_empty() {
-                            cosmos::run_tests(cosmos_apps.clone(), http_client.clone(), digests.clone(), service_ids.clone())
-                                .await
+                            cosmos::run_tests(
+                                cosmos_apps.clone(),
+                                http_client.clone(),
+                                digests.clone(),
+                                service_ids.clone(),
+                            )
+                            .await
                         }
 
-                        if !eth_apps.is_empty() && !cosmos_apps.is_empty() && cfg!(feature = "e2e_tests_crosschain") {
+                        if !eth_apps.is_empty()
+                            && !cosmos_apps.is_empty()
+                            && cfg!(feature = "e2e_tests_crosschain")
+                        {
                             cross_chain::run_tests_crosschain(
                                 eth_apps.clone(),
                                 cosmos_apps.clone(),
@@ -211,7 +230,7 @@ mod e2e {
         pub fn new() -> Self {
             Self {
                 eth_square: if cfg!(feature = "e2e_tests_ethereum_trigger_square") {
-                        Some(ServiceID::new("eth-trigger-square").unwrap())
+                    Some(ServiceID::new("eth-trigger-square").unwrap())
                 } else {
                     None
                 },
@@ -221,27 +240,27 @@ mod e2e {
                     None
                 },
                 eth_echo_2: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_2") {
-                        Some(ServiceID::new("eth-trigger-echo-2").unwrap())
+                    Some(ServiceID::new("eth-trigger-echo-2").unwrap())
                 } else {
                     None
                 },
-                eth_echo_aggregate: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_aggregate") { 
-                        Some(ServiceID::new("eth-trigger-echo-aggregate").unwrap())
+                eth_echo_aggregate: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_aggregate") {
+                    Some(ServiceID::new("eth-trigger-echo-aggregate").unwrap())
                 } else {
                     None
                 },
                 eth_cosmos_query: if cfg!(feature = "e2e_tests_ethereum_cosmos_query") {
-                        Some(ServiceID::new("eth-cosmos-query").unwrap())
+                    Some(ServiceID::new("eth-cosmos-query").unwrap())
                 } else {
                     None
                 },
                 eth_permissions: if cfg!(feature = "e2e_tests_ethereum_permissions") {
-                        Some(ServiceID::new("eth-permissions").unwrap())
+                    Some(ServiceID::new("eth-permissions").unwrap())
                 } else {
                     None
                 },
                 cosmos_permissions: if cfg!(feature = "e2e_tests_cosmos_permissions") {
-                        Some(ServiceID::new("cosmos-permissions").unwrap())
+                    Some(ServiceID::new("cosmos-permissions").unwrap())
                 } else {
                     None
                 },
@@ -262,7 +281,11 @@ mod e2e {
 
     impl Digests {
         pub async fn new(http_client: &HttpClient) -> Self {
-            async fn get_digest(http_client: &HttpClient, env_var_key: &str, wasm_filename: &str) -> Option<Digest> {
+            async fn get_digest(
+                http_client: &HttpClient,
+                env_var_key: &str,
+                wasm_filename: &str,
+            ) -> Option<Digest> {
                 let digest = std::env::var(env_var_key);
 
                 let digest: Digest = match digest {
@@ -282,44 +305,88 @@ mod e2e {
 
                         let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
 
-                        http_client
-                            .upload_wasm(wasm_bytes.to_vec())
-                            .await
-                            .unwrap()
+                        http_client.upload_wasm(wasm_bytes.to_vec()).await.unwrap()
                     }
                 };
 
                 Some(digest)
             }
-            Self { 
+            Self {
                 permissions: if cfg!(feature = "e2e_tests_cosmos_permissions") {
-                    Some(get_digest(http_client, "WAVS_E2E_PERMISSIONS_WASM_DIGEST", "permissions").await.unwrap())
+                    Some(
+                        get_digest(
+                            http_client,
+                            "WAVS_E2E_PERMISSIONS_WASM_DIGEST",
+                            "permissions",
+                        )
+                        .await
+                        .unwrap(),
+                    )
                 } else {
                     None
                 },
                 square: if cfg!(feature = "e2e_tests_ethereum_trigger_square") {
-                    Some(get_digest(http_client, "WAVS_E2E_SQUARE_WASM_DIGEST", "square").await.unwrap())
+                    Some(
+                        get_digest(http_client, "WAVS_E2E_SQUARE_WASM_DIGEST", "square")
+                            .await
+                            .unwrap(),
+                    )
                 } else {
                     None
                 },
-                echo_eth_event: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_1") || cfg!(feature = "e2e_tests_ethereum_trigger_echo_2") || cfg!(feature = "e2e_tests_ethereum_trigger_echo_aggregate") {
-                    Some(get_digest(http_client, "WAVS_E2E_ECHO_ETH_EVENT_WASM_DIGEST", "echo_eth_event").await.unwrap())
+                echo_eth_event: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_1")
+                    || cfg!(feature = "e2e_tests_ethereum_trigger_echo_2")
+                    || cfg!(feature = "e2e_tests_ethereum_trigger_echo_aggregate")
+                {
+                    Some(
+                        get_digest(
+                            http_client,
+                            "WAVS_E2E_ECHO_ETH_EVENT_WASM_DIGEST",
+                            "echo_eth_event",
+                        )
+                        .await
+                        .unwrap(),
+                    )
                 } else {
                     None
                 },
                 echo_cosmos_event: if cfg!(feature = "e2e_tests_cosmos_trigger_echo") {
-                    Some(get_digest(http_client, "WAVS_E2E_ECHO_COSMOS_EVENT_WASM_DIGEST", "echo_cosmos_event").await.unwrap())
+                    Some(
+                        get_digest(
+                            http_client,
+                            "WAVS_E2E_ECHO_COSMOS_EVENT_WASM_DIGEST",
+                            "echo_cosmos_event",
+                        )
+                        .await
+                        .unwrap(),
+                    )
                 } else {
                     None
                 },
                 echo_raw: None,
                 cosmos_query: if cfg!(feature = "e2e_tests_ethereum_cosmos_query") {
-                    Some(get_digest(http_client, "WAVS_E2E_COSMOS_QUERY_WASM_DIGEST", "cosmos_query").await.unwrap())
+                    Some(
+                        get_digest(
+                            http_client,
+                            "WAVS_E2E_COSMOS_QUERY_WASM_DIGEST",
+                            "cosmos_query",
+                        )
+                        .await
+                        .unwrap(),
+                    )
                 } else {
                     None
                 },
                 cosmos_trigger_lookup: if cfg!(feature = "e2e_tests_ethereum_cosmos_query") {
-                    Some(get_digest(http_client, "WAVS_E2E_COSMOS_TRIGGER_LOOKUP_WASM_DIGEST", "cosmos_trigger_lookup").await.unwrap())
+                    Some(
+                        get_digest(
+                            http_client,
+                            "WAVS_E2E_COSMOS_TRIGGER_LOOKUP_WASM_DIGEST",
+                            "cosmos_trigger_lookup",
+                        )
+                        .await
+                        .unwrap(),
+                    )
                 } else {
                     None
                 },

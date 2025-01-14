@@ -10,12 +10,11 @@ use alloy::{
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
-use layer_cosmwasm::event::LayerTriggerEvent as CosmosLayerTriggerEvent;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     pin::Pin,
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
@@ -38,8 +37,11 @@ pub struct CoreTriggerManager {
 struct LookupMaps {
     /// single lookup for all triggers (in theory, can be more than just task queue addr)
     pub trigger_configs: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
-    /// lookup id by (chain id, contract event address)
-    pub triggers_by_contract_event: Arc<RwLock<HashMap<(String, Address), LookupId>>>,
+    /// lookup id by (chain id, contract event address, event type)
+    pub triggers_by_cosmos_contract_event:
+        Arc<RwLock<HashMap<(String, Address, String), LookupId>>>,
+    /// lookup id by (chain id, contract event address, event hash)
+    pub triggers_by_eth_contract_event: Arc<RwLock<HashMap<(String, Address, Vec<u8>), LookupId>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -52,7 +54,8 @@ impl LookupMaps {
         Self {
             trigger_configs: Arc::new(RwLock::new(BTreeMap::new())),
             lookup_id: Arc::new(AtomicUsize::new(0)),
-            triggers_by_contract_event: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_eth_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
@@ -66,12 +69,14 @@ type LookupId = usize;
 enum StreamTriggers {
     Cosmos {
         chain_id: String,
-        contract_events: HashMap<Address, HashSet<Vec<u8>>>,
+        // these are not filtered yet, just all the contract-based events
+        contract_events: Vec<(Address, cosmwasm_std::Event)>,
+        block_height: u64,
     },
     Ethereum {
         chain_id: String,
         log: Log,
-        data: Vec<u8>,
+        block_height: u64,
     },
 }
 
@@ -140,47 +145,33 @@ impl CoreTriggerManager {
                     .stream_block_events(None)
                     .await
                     .map_err(TriggerError::Climb)?
-                    .map(move |block_events| {
-                        let mut contract_events: HashMap<Address, HashSet<Vec<u8>>> =
-                            HashMap::new();
+                    .map(move |block_events| match block_events {
+                        Ok(block_events) => {
+                            let mut contract_events = Vec::new();
+                            let events = CosmosTxEvents::from(block_events.events);
 
-                        match block_events {
-                            Ok(block_events) => {
-                                let events = CosmosTxEvents::from(block_events.events);
+                            for event in events.events_iter() {
+                                let contract_address = event.attributes().find_map(|attr| {
+                                    if attr.key() == "_contract_address" {
+                                        chain_config.parse_address(attr.value()).ok()
+                                    } else {
+                                        None
+                                    }
+                                });
 
-                                for (contract_address, event) in
-                                    events.events_iter().filter_map(|event| {
-                                        let contract_address =
-                                            event.attributes().find_map(|attr| {
-                                                if attr.key() == "_contract_address" {
-                                                    chain_config.parse_address(attr.value()).ok()
-                                                } else {
-                                                    None
-                                                }
-                                            })?;
-
-                                        let event = cosmwasm_std::Event::from(event);
-                                        let event =
-                                            CosmosLayerTriggerEvent::try_from(event).ok()?;
-
-                                        Some((contract_address, event))
-                                    })
-                                {
-                                    contract_events
-                                        .entry(contract_address)
-                                        .or_default()
-                                        .insert(event.data);
+                                if let Some(contract_address) = contract_address {
+                                    let event = cosmwasm_std::Event::from(event);
+                                    contract_events.push((contract_address, event));
                                 }
                             }
-                            Err(err) => {
-                                tracing::error!("Error: {:?}", err);
-                            }
-                        }
 
-                        Ok(StreamTriggers::Cosmos {
-                            chain_id: chain_config.chain_id.to_string(),
-                            contract_events,
-                        })
+                            Ok(StreamTriggers::Cosmos {
+                                chain_id: chain_config.chain_id.to_string(),
+                                contract_events,
+                                block_height: block_events.height,
+                            })
+                        }
+                        Err(err) => Err(err),
                     }),
             );
 
@@ -191,6 +182,7 @@ impl CoreTriggerManager {
             tracing::debug!("Trigger Manager for Ethereum chain {} started", chain_name);
 
             // Start the event stream
+            // TODO - just grab every event
             let filter = Filter::new().event_signature(EthLayerTriggerEvent::SIGNATURE_HASH);
 
             let stream = query_client
@@ -207,7 +199,9 @@ impl CoreTriggerManager {
                     Ok(StreamTriggers::Ethereum {
                         chain_id: chain_id.clone(),
                         log,
-                        data: event.inner.data._0.to_vec(),
+                        block_height: event
+                            .block_number
+                            .context("couldn't get eth block height")?,
                     })
                 } else {
                     Err(anyhow::anyhow!("error decoding log"))
@@ -235,15 +229,19 @@ impl CoreTriggerManager {
                 StreamTriggers::Ethereum {
                     log,
                     chain_id,
-                    data,
+                    block_height,
                 } => {
-                    let contract_address = Address::Eth(AddrEth::new(log.address().into()));
+                    // TODO - derive this from log
+                    let event_hash = EthLayerTriggerEvent::SIGNATURE_HASH.to_vec();
+
+                    let contract_address = layer_climb::prelude::Address::from(log.address());
+
                     if let Some(trigger_config) = self
                         .lookup_maps
-                        .triggers_by_contract_event
+                        .triggers_by_eth_contract_event
                         .read()
                         .unwrap()
-                        .get(&(chain_id.clone(), contract_address.clone()))
+                        .get(&(chain_id.clone(), contract_address.clone(), event_hash))
                         .and_then(|id| {
                             self.lookup_maps
                                 .trigger_configs
@@ -258,7 +256,7 @@ impl CoreTriggerManager {
                                 contract_address,
                                 chain_id,
                                 log: log.inner.data,
-                                event_data: Some(data),
+                                block_height,
                             },
                             config: trigger_config,
                         });
@@ -267,25 +265,28 @@ impl CoreTriggerManager {
                 StreamTriggers::Cosmos {
                     contract_events,
                     chain_id,
+                    block_height,
                 } => {
-                    let triggers_by_contract_event_lock =
-                        self.lookup_maps.triggers_by_contract_event.read().unwrap();
+                    let triggers_by_contract_event_lock = self
+                        .lookup_maps
+                        .triggers_by_cosmos_contract_event
+                        .read()
+                        .unwrap();
                     let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-                    for (contract_address, datas) in contract_events {
+                    for (contract_address, event) in contract_events {
                         if let Some(trigger_config) = triggers_by_contract_event_lock
-                            .get(&(chain_id.clone(), contract_address.clone()))
+                            .get(&(chain_id.clone(), contract_address.clone(), event.ty.clone()))
                             .and_then(|id| trigger_configs_lock.get(id).cloned())
                         {
-                            for data in datas.into_iter() {
-                                trigger_actions.push(TriggerAction {
-                                    data: TriggerData::CosmosContractEvent {
-                                        contract_address: contract_address.clone(),
-                                        chain_id: chain_id.clone(),
-                                        event_data: Some(data),
-                                    },
-                                    config: trigger_config.clone(),
-                                });
-                            }
+                            trigger_actions.push(TriggerAction {
+                                data: TriggerData::CosmosContractEvent {
+                                    contract_address: contract_address.clone(),
+                                    chain_id: chain_id.clone(),
+                                    event,
+                                    block_height,
+                                },
+                                config: trigger_config.clone(),
+                            });
                         }
                     }
                 }
@@ -335,14 +336,42 @@ impl TriggerManager for CoreTriggerManager {
             .lookup_id
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        match &config.trigger {
-            Trigger::ContractEvent { address, chain_id } => {
-                let mut lock = self.lookup_maps.triggers_by_contract_event.write().unwrap();
-                let key = (chain_id.clone(), address.clone());
+        match config.trigger.clone() {
+            Trigger::EthContractEvent {
+                address,
+                chain_id,
+                event_hash,
+            } => {
+                let mut lock = self
+                    .lookup_maps
+                    .triggers_by_eth_contract_event
+                    .write()
+                    .unwrap();
+                let key = (chain_id.clone(), address.clone(), event_hash.clone());
                 if lock.contains_key(&key) {
-                    return Err(TriggerError::ContractAddressAlreadyRegistered(
-                        chain_id.clone(),
-                        address.clone(),
+                    return Err(TriggerError::EthContractEventAlreadyRegistered(
+                        chain_id,
+                        address,
+                        hex::encode(event_hash),
+                    ));
+                }
+
+                lock.insert(key, lookup_id);
+            }
+            Trigger::CosmosContractEvent {
+                address,
+                chain_id,
+                event_type,
+            } => {
+                let mut lock = self
+                    .lookup_maps
+                    .triggers_by_cosmos_contract_event
+                    .write()
+                    .unwrap();
+                let key = (chain_id.clone(), address.clone(), event_type.clone());
+                if lock.contains_key(&key) {
+                    return Err(TriggerError::CosmosContractEventAlreadyRegistered(
+                        chain_id, address, event_type,
                     ));
                 }
 
@@ -391,7 +420,16 @@ impl TriggerManager for CoreTriggerManager {
 
         remove_trigger_data(
             &mut self.lookup_maps.trigger_configs.write().unwrap(),
-            &mut self.lookup_maps.triggers_by_contract_event.write().unwrap(),
+            &mut self
+                .lookup_maps
+                .triggers_by_eth_contract_event
+                .write()
+                .unwrap(),
+            &mut self
+                .lookup_maps
+                .triggers_by_cosmos_contract_event
+                .write()
+                .unwrap(),
             lookup_id,
         )?;
 
@@ -401,8 +439,16 @@ impl TriggerManager for CoreTriggerManager {
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_service(&self, service_id: crate::apis::ServiceID) -> Result<(), TriggerError> {
         let mut trigger_configs = self.lookup_maps.trigger_configs.write().unwrap();
-        let mut triggers_by_contract_event =
-            self.lookup_maps.triggers_by_contract_event.write().unwrap();
+        let mut triggers_by_eth_contract_event = self
+            .lookup_maps
+            .triggers_by_eth_contract_event
+            .write()
+            .unwrap();
+        let mut triggers_by_cosmos_contract_event = self
+            .lookup_maps
+            .triggers_by_cosmos_contract_event
+            .write()
+            .unwrap();
         let mut triggers_by_service_workflow_lock = self
             .lookup_maps
             .triggers_by_service_workflow
@@ -416,7 +462,8 @@ impl TriggerManager for CoreTriggerManager {
         for lookup_id in workflow_map.values() {
             remove_trigger_data(
                 &mut trigger_configs,
-                &mut triggers_by_contract_event,
+                &mut triggers_by_eth_contract_event,
+                &mut triggers_by_cosmos_contract_event,
                 *lookup_id,
             )?;
         }
@@ -455,7 +502,8 @@ impl TriggerManager for CoreTriggerManager {
 
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_contract_address: &mut HashMap<(String, Address), LookupId>,
+    triggers_by_eth_contract_address: &mut HashMap<(String, Address, Vec<u8>), LookupId>,
+    triggers_by_cosmos_contract_address: &mut HashMap<(String, Address, String), LookupId>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -465,10 +513,29 @@ fn remove_trigger_data(
 
     // 2. remove from contracts
     match trigger_data.trigger {
-        Trigger::ContractEvent { address, chain_id } => {
-            triggers_by_contract_address
-                .remove(&(chain_id.clone(), address.clone()))
-                .ok_or(TriggerError::NoSuchContract(chain_id, address))?;
+        Trigger::EthContractEvent {
+            address,
+            chain_id,
+            event_hash,
+        } => {
+            triggers_by_eth_contract_address
+                .remove(&(chain_id.clone(), address.clone(), event_hash.clone()))
+                .ok_or(TriggerError::NoSuchEthContractEvent(
+                    chain_id,
+                    address,
+                    hex::encode(event_hash),
+                ))?;
+        }
+        Trigger::CosmosContractEvent {
+            address,
+            chain_id,
+            event_type,
+        } => {
+            triggers_by_cosmos_contract_address
+                .remove(&(chain_id.clone(), address.clone(), event_type.clone()))
+                .ok_or(TriggerError::NoSuchCosmosContractEvent(
+                    chain_id, address, event_type,
+                ))?;
         }
         Trigger::Test => {}
     }

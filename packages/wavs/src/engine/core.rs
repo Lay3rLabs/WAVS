@@ -87,7 +87,8 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
         let world = wasi.world;
-        let (mut store, component, linker) = self.get_instance_deps(wasi, &trigger, service_config)?;
+        let (mut store, component, linker) =
+            self.get_instance_deps(wasi, &trigger, service_config)?;
 
         store
             .set_fuel(service_config.fuel_limit)
@@ -113,9 +114,9 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             tracing::debug!("Running task on world {:?}", world);
 
             let res = match world {
-                ComponentWorld::ChainEvent => {
+                ComponentWorld::EthContractEvent => {
                     let contract = match (contract, chain_id) {
-                        (Some(contract), Some(chain_id)) => bindings::chain_event::Contract {
+                        (Some(contract), Some(chain_id)) => bindings::eth_contract_event::Contract {
                             address: match contract {
                                 Address::Cosmos {
                                     bech32_addr,
@@ -357,8 +358,8 @@ impl WasiHttpView for Host {
 #[cfg(test)]
 mod tests {
     use apis::{
-        trigger::{Trigger, TriggerConfig},
         dispatcher::ServiceConfig,
+        trigger::{Trigger, TriggerConfig},
         ServiceID, WorkflowID,
     };
     use utils::example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient};
@@ -439,7 +440,7 @@ mod tests {
                         )),
                     },
                 },
-                &ServiceConfig::default()
+                &ServiceConfig::default(),
             )
             .unwrap();
 
@@ -457,8 +458,8 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        let digest = engine.store_wasm(ETH_TRIGGER_ECHO).unwrap();
-        let component = crate::apis::dispatcher::Component::new(&digest, ComponentWorld::ChainEvent);
+        let digest = engine.store_wasm(PERMISSIONS).unwrap();
+        let component = crate::apis::dispatcher::Component::new(digest, ComponentWorld::ChainEvent);
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
@@ -470,39 +471,75 @@ mod tests {
 
         // verify service config kv is accessible
         let result = engine
-            .execute_eth_event(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: &workflow_id,
+                        trigger: Trigger::Test,
+                    },
+                    data: TriggerData::CosmosContractEvent {
+                        contract_address: rand_address_layer(),
+                        chain_id: "cosmos".to_string(),
+                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
+                            rand_address_eth_alloy(),
+                            0,
+                            br#"envvar:foo"#,
+                        )),
+                    },
+                },
                 &service_config,
-                &ServiceID::new("foobar").unwrap(),
-                &workflow_id,
-                TriggerId::new(12345),
-                br#"envvar:foo"#.into(),
             )
             .unwrap();
         assert_eq!(&result, br#"bar"#);
 
         // verify whitelisted host env var is accessible
         let result = engine
-            .execute_eth_event(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: &workflow_id,
+                        trigger: Trigger::Test,
+                    },
+                    data: TriggerData::CosmosContractEvent {
+                        contract_address: rand_address_layer(),
+                        chain_id: "cosmos".to_string(),
+                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
+                            rand_address_eth_alloy(),
+                            0,
+                            br#"envvar:WAVS_ENV_TEST"#,
+                        )),
+                    },
+                },
                 &service_config,
-                &ServiceID::new("foobar").unwrap(),
-                &workflow_id,
-                TriggerId::new(12345),
-                br#"envvar:WAVS_ENV_TEST"#.into(),
             )
             .unwrap();
         assert_eq!(&result, br#"testing"#);
 
         // verify the non-enabled env var is not accessible
         let result = engine
-            .execute_eth_event(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: &workflow_id,
+                        trigger: Trigger::Test,
+                    },
+                    data: TriggerData::CosmosContractEvent {
+                        contract_address: rand_address_layer(),
+                        chain_id: "cosmos".to_string(),
+                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
+                            rand_address_eth_alloy(),
+                            0,
+                            br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#,
+                        )),
+                    },
+                },
                 &service_config,
-                &ServiceID::new("foobar").unwrap(),
-                &workflow_id,
-                TriggerId::new(12345),
-                br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#.into(),
             )
             .unwrap_err();
         assert!(matches!(result, EngineError::ComponentError(_)));
@@ -531,7 +568,7 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id: WorkflowID::new("default").unwrap(),
+                        workflow_id: workflow_id,
                         trigger: Trigger::Test,
                     },
                     data: TriggerData::CosmosContractEvent {
@@ -544,7 +581,7 @@ mod tests {
                         )),
                     },
                 },
-                &service_config
+                &service_config,
             )
             .unwrap_err();
 

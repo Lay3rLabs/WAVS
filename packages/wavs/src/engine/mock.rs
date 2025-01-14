@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::{trigger::TriggerAction, dispatcher::ServiceConfig};
+use crate::apis::{dispatcher::ServiceConfig, trigger::TriggerAction};
+use crate::triggers::mock::get_mock_trigger_data;
 use crate::Digest;
 use tracing::instrument;
 
@@ -52,14 +53,14 @@ impl Engine for MockEngine {
         &self,
         component: &crate::apis::dispatcher::Component,
         trigger: TriggerAction,
-        _service_config: &ServiceConfig
+        _service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
             .get(&component.wasm)
             .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
-        let result = fx.execute(trigger.data.into_vec().unwrap())?;
+        let result = fx.execute(get_mock_trigger_data(&trigger.data))?;
         Ok(result)
     }
 }
@@ -128,7 +129,7 @@ mod test {
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),
                 },
-                &ServiceConfig::default()
+                &ServiceConfig::default(),
             )
             .unwrap();
         assert_eq!(res, r1);
@@ -148,7 +149,7 @@ mod test {
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),
                 },
-                &ServiceConfig::default()
+                &ServiceConfig::default(),
             )
             .unwrap();
         assert_eq!(res, r2);
@@ -168,7 +169,7 @@ mod test {
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),
                 },
-                &ServiceConfig::default()
+                &ServiceConfig::default(),
             )
             .unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));

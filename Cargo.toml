@@ -40,10 +40,10 @@ tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
-layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
-layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
-layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
-layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.1" }
+layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.1" }
+layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.1" }
+layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.1" }
 ctrlc = "3.4.5"
 tempfile = "3.13.0"
 lavs-apis = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.1" }
@@ -74,6 +74,7 @@ alloy-rlp = {version = "0.3.10", features = ["derive"]}
 alloy-primitives = "0.8.15"
 alloy-sol-macro = "0.8.15"
 alloy-sol-types = "0.8.15"
+alloy-rpc-types = "0.9.2"
 tendermint-rpc = "0.40.1"
 tendermint = { version = "0.40.1", default-features = false}
 wstd = "0.4.0"

@@ -1,6 +1,6 @@
 use alloy::node_bindings::{Anvil, AnvilInstance};
 use utils::{
-    avs_client::{AvsClientBuilder, ServiceManagerClient},
+    avs_client::{AvsClientDeployer, ServiceManagerClient},
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
     example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
@@ -25,9 +25,9 @@ async fn deploy_layer_avs() {
         .await
         .unwrap();
 
-    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+    let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts)
-        .build(SimpleEthSubmitClient::deploy)
+        .deploy(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 

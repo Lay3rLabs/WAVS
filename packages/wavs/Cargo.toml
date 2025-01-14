@@ -9,6 +9,7 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [dependencies]
 layer-cosmwasm = { workspace = true }
+layer-wasi = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }

@@ -15,6 +15,8 @@ alloy-sol-types = {workspace = true}
 layer-climb-address = {workspace = true}
 serde = { workspace = true }
 anyhow = { workspace = true }
+cosmwasm-std = { workspace = true }
+cosmos-contract-simple-example = {path = "../../contracts/cosmwasm/simple", package = "simple-example"}
 
 [lib]
 crate-type = ["rlib", "cdylib"]

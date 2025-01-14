@@ -20,19 +20,13 @@ pub struct Config {
     /// Default is `/var/wavs-cli`
     pub data: PathBuf,
 
-    /// The chosen eth chain name (default is `local`)
-    pub eth_chain: Option<String>,
-
-    /// The chosen eth chain name (default is None)
-    pub cosmos_chain: Option<String>,
-
     /// All the available chains
     pub chains: ChainConfigs,
 
-    /// The mnemonic to use for submitting transactions on cosmos chains (usually set via env var)
+    /// The mnemonic to use for submitting transactions on cosmos chains (usually None, set via env var)
     pub cosmos_mnemonic: Option<String>,
 
-    /// The mnemonic to use for submitting transactions on ethereum chains (usually set via env var)
+    /// The mnemonic to use for submitting transactions on ethereum chains (usually None, set via env var)
     pub eth_mnemonic: Option<String>,
 }
 
@@ -57,8 +51,6 @@ impl Default for Config {
             wavs_endpoint: "http://127.0.0.1:8000".to_string(),
             log_level: vec!["info".to_string()],
             data: PathBuf::from("/var/wavs-cli"),
-            eth_chain: Some("local".to_string()),
-            cosmos_chain: None,
             chains: ChainConfigs {
                 cosmos: HashMap::new(),
                 eth: HashMap::new(),

@@ -3,6 +3,7 @@ use tracing::instrument;
 use crate::apis::dispatcher::{Component, ServiceConfig};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::trigger::TriggerAction;
+use crate::triggers::mock::get_mock_trigger_data;
 use crate::Digest;
 use utils::{ServiceID, WorkflowID};
 
@@ -33,9 +34,9 @@ impl Engine for IdentityEngine {
         &self,
         _component: &Component,
         trigger: TriggerAction,
-        _service_config: &ServiceConfig
+        _service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(trigger.data.into_vec().unwrap())
+        Ok(get_mock_trigger_data(&trigger.data))
     }
 }
 
@@ -79,7 +80,7 @@ mod test {
                     .unwrap(),
                     data: TriggerData::new_raw(request.clone()),
                 },
-                &ServiceConfig::default()
+                &ServiceConfig::default(),
             )
             .unwrap();
         assert_eq!(request, result);

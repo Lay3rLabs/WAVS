@@ -1,5 +1,7 @@
 use std::{
-    process::{Child, Command, Stdio}, sync::Arc, time::{Duration, Instant}
+    process::{Child, Command, Stdio},
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
@@ -8,16 +10,25 @@ use layer_climb::{prelude::*, proto::abci::TxResponse, signing::SigningClient};
 use serde::Serialize;
 use tempfile::tempfile;
 use utils::config::CosmosChainConfig;
-use wavs::{apis::{dispatcher::{ComponentWorld, Submit}, trigger::Trigger}, config::Config, AppContext};
+use wavs::{
+    apis::{
+        dispatcher::{ComponentWorld, Submit},
+        trigger::Trigger,
+    },
+    config::Config,
+    AppContext,
+};
 
 use super::{http::HttpClient, wavs_path, workspace_path, Digests, ServiceIds};
 
 const IC_API_URL: &str = "http://127.0.0.1:8080";
 
 #[allow(dead_code)]
-pub fn start_chain(ctx: AppContext, index: u8) -> (String, CosmosChainConfig, Option<IcTestHandle>) {
+pub fn start_chain(
+    ctx: AppContext,
+    index: u8,
+) -> (String, CosmosChainConfig, Option<IcTestHandle>) {
     let mut ic_test_handle = None;
-    
 
     let chain_info = ctx.rt.block_on(async {
         tokio::time::timeout(Duration::from_secs(30), async {
@@ -80,8 +91,11 @@ pub fn start_chain(ctx: AppContext, index: u8) -> (String, CosmosChainConfig, Op
         faucet_endpoint: None,
     };
 
-    (format!("local-cosmos-test-{}", index), config, ic_test_handle)
-        
+    (
+        format!("local-cosmos-test-{}", index),
+        config,
+        ic_test_handle,
+    )
 }
 
 /// A wrapper around a Child process that kills it when dropped.
@@ -151,7 +165,11 @@ pub struct CosmosTestApp {
 }
 
 impl CosmosTestApp {
-    pub async fn new(chain_name: String, chain_config: CosmosChainConfig, handle: Option<IcTestHandle>) -> Self {
+    pub async fn new(
+        chain_name: String,
+        chain_config: CosmosChainConfig,
+        handle: Option<IcTestHandle>,
+    ) -> Self {
         // get all env vars
         let seed_phrase = "decorate bright ozone fork gallery riot bus exhaust worth way bone indoor calm squirrel merry zero scheme cotton until shop any excess stage laundry";
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
@@ -163,11 +181,18 @@ impl CosmosTestApp {
 
         tracing::info!("Cosmos signing client: {}", signing_client.addr);
 
-        Self { chain_name, signing_client, chain_config, handle: handle.map(Arc::new) }
+        Self {
+            chain_name,
+            signing_client,
+            chain_config,
+            handle: handle.map(Arc::new),
+        }
     }
 
     pub async fn deploy_contracts(&self) -> CosmosContracts {
-        let contract_path = workspace_path().join("artifacts").join("simple_example.wasm");
+        let contract_path = workspace_path()
+            .join("artifacts")
+            .join("simple_example.wasm");
 
         if !contract_path.exists() {
             panic!("Contract not found at {:?}", contract_path);
@@ -175,7 +200,11 @@ impl CosmosTestApp {
 
         let wasm_byte_code = std::fs::read(contract_path).unwrap();
 
-        let (code_id, _) = self.signing_client.contract_upload_file(wasm_byte_code, None).await.unwrap();
+        let (code_id, _) = self
+            .signing_client
+            .contract_upload_file(wasm_byte_code, None)
+            .await
+            .unwrap();
 
         let (trigger_addr, _) = self
             .signing_client
@@ -183,7 +212,7 @@ impl CosmosTestApp {
                 None,
                 code_id,
                 "trigger".to_string(),
-                &Empty{},
+                &Empty {},
                 vec![],
                 None,
             )
@@ -192,14 +221,7 @@ impl CosmosTestApp {
 
         let (submit_addr, _) = self
             .signing_client
-            .contract_instantiate(
-                None,
-                code_id,
-                "submit".to_string(),
-                &Empty{},
-                vec![],
-                None,
-            )
+            .contract_instantiate(None, code_id, "submit".to_string(), &Empty {}, vec![], None)
             .await
             .unwrap();
 
@@ -213,7 +235,7 @@ impl CosmosTestApp {
 #[derive(Debug)]
 pub struct CosmosContracts {
     pub trigger: Address,
-    pub submit: Address
+    pub submit: Address,
 }
 
 pub async fn run_tests(
@@ -235,7 +257,10 @@ pub async fn run_tests(
                 service_id.clone(),
                 wasm_digest,
                 Trigger::contract_event(contracts.trigger.clone(), app.chain_name.clone()),
-                Submit::CosmosContract { chain_name: app.chain_name.clone(), contract_addr: contracts.submit.clone() }, 
+                Submit::CosmosContract {
+                    chain_name: app.chain_name.clone(),
+                    contract_addr: contracts.submit.clone(),
+                },
                 ComponentWorld::ChainEvent,
             )
             .await
@@ -243,7 +268,7 @@ pub async fn run_tests(
 
         tracing::info!("Service created: {}", service_id);
 
-
+        /*
 
 
         let tx_resp = app
@@ -298,6 +323,6 @@ pub async fn run_tests(
         tracing::info!("success!");
         assert!(result.filecount > 0);
         tracing::info!("{:#?}", result);
+        */
     }
- */
 }

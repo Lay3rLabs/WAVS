@@ -1,24 +1,25 @@
 use std::path::PathBuf;
 
-use alloy::primitives::Address;
 use clap::{arg, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 use utils::{
-    avs_client::AvsAddresses,
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
 };
-use wavs::apis::dispatcher::ServiceConfig;
 use wavs::apis::dispatcher::ComponentWorld;
+use wavs::apis::dispatcher::ServiceConfig;
 
 use crate::config::Config;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub enum Command {
-    DeployCore {
+    DeployEigenCore {
         #[clap(long, default_value_t = true)]
         register_operator: bool,
+
+        #[clap(long, default_value = "local")]
+        chain: String,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -41,21 +42,33 @@ pub enum Command {
         #[clap(long, default_value_t = CliTriggerKind::SimpleEthContract)]
         trigger: CliTriggerKind,
 
+        /// The chain to deploy the trigger on, if applicable
+        #[clap(long, default_value = "local")]
+        trigger_chain: Option<String>,
+
+        /// if the trigger is a cosmos trigger, the optional code id to use to avoid a re-upload
+        #[clap(long, default_value = None)]
+        cosmos_trigger_code_id: Option<u64>,
+
         /// The kind of submit to deploy
         #[clap(long, default_value_t = CliSubmitKind::SimpleEthContract)]
         submit: CliSubmitKind,
 
+        /// The chain to deploy the submit on, if applicable
+        #[clap(long, default_value = "local")]
+        submit_chain: Option<String>,
+
         #[clap(flatten)]
         args: CliArgs,
 
-        /// Override the service manager address
-        #[clap(long)]
-        service_manager: Option<Address>,
-
         #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
         service_config: Option<ServiceConfig>,
+
+        #[clap(long, default_value_t = false)]
+        aggregate: bool,
     },
 
+    /// Adds a task to a service that was previously deployed via CLI (uses stored deploy info)
     AddTask {
         #[clap(long)]
         service_id: String,
@@ -141,7 +154,7 @@ impl std::str::FromStr for CliSubmitKind {
 impl Command {
     pub fn args(&self) -> CliArgs {
         let args = match self {
-            Self::DeployCore { args, .. } => args,
+            Self::DeployEigenCore { args, .. } => args,
             Self::DeployService { args, .. } => args,
             Self::AddTask { args, .. } => args,
             Self::Exec { args, .. } => args,
@@ -169,6 +182,11 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub home: Option<PathBuf>,
 
+    /// The WAVS endpoint
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wavs_endpoint: Option<PathBuf>,
+
     /// The path to an optional dotenv file to try and load
     /// if not set, will be the current working directory's .env
     #[arg(long)]
@@ -188,26 +206,15 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<PathBuf>,
 
-    /// The chain to use for the application
-    /// will load from the config file
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub eth_chain: Option<String>,
-
-    /// mnemonic (usually leave this as None and override in env)
+    /// eth mnemonic (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eth_mnemonic: Option<String>,
 
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_chain: Option<String>,
-
-    /// mnemonic (usually leave this as None and override in env)
+    /// cosmos mnemonic (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_mnemonic: Option<String>,
-
 }
 
 impl CliEnvExt for CliArgs {
@@ -219,38 +226,5 @@ impl CliEnvExt for CliArgs {
 
     fn dotenv_path(&self) -> Option<PathBuf> {
         self.dotenv.clone()
-    }
-}
-
-#[derive(Parser, Debug, Clone)]
-pub struct EnvServiceAddresses {
-    #[arg(long, env = "CLI_EIGEN_SERVICE_PROXY_ADMIN")]
-    pub service_proxy_admin: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_SERVICE_MANAGER")]
-    pub service_manager: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_SERVICE_STAKE_REGISTRY")]
-    pub service_stake_registry: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_SERVICE_TOKEN")]
-    pub service_token: Option<alloy::primitives::Address>,
-    #[arg(long, env = "CLI_EIGEN_SERVICE_TRIGGER")]
-    pub service_trigger: Option<alloy::primitives::Address>,
-}
-
-impl From<EnvServiceAddresses> for AvsAddresses {
-    fn from(opt: EnvServiceAddresses) -> Self {
-        Self {
-            proxy_admin: opt
-                .service_proxy_admin
-                .expect("set --service-proxy-admin or CLI_EIGEN_SERVICE_PROXY_ADMIN"),
-            service_manager: opt
-                .service_manager
-                .expect("set --service-manager or CLI_EIGEN_SERVICE_MANAGER"),
-            stake_registry: opt
-                .service_stake_registry
-                .expect("set --service-stake-registry or CLI_EIGEN_SERVICE_STAKE_REGISTRY"),
-            token: opt
-                .service_token
-                .expect("set --service-token or CLI_EIGEN_SERVICE_TOKEN"),
-        }
     }
 }

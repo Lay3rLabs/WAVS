@@ -5,8 +5,14 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
 
+use crate::apis::dispatcher::Submit;
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
+use crate::test_utils::address::rand_address_eth;
 use crate::AppContext;
+
+pub fn mock_eigen_submit() -> Submit {
+    Submit::eigen_contract("eth".to_string(), rand_address_eth(), false)
+}
 
 #[derive(Clone)]
 pub struct MockSubmission {

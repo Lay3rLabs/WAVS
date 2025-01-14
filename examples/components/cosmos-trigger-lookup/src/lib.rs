@@ -1,7 +1,10 @@
 #[allow(warnings)]
 mod bindings;
-use bindings::{Contract, Guest};
-use example_helpers::trigger::{decode_trigger_input, encode_trigger_output, ChainQuerierExt};
+use bindings::{Guest, Input};
+use example_helpers::{
+    query_trigger,
+    trigger::{encode_trigger_output, ChainQuerierExt},
+};
 use layer_climb_config::{AddrKind, ChainConfig};
 use layer_wasi::{cosmos::CosmosQuerier, parse_address};
 use serde::{Deserialize, Serialize};
@@ -9,42 +12,23 @@ use serde::{Deserialize, Serialize};
 struct Component;
 
 impl Guest for Component {
-    fn run(contract: Contract, input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
-        let (input_trigger_id, event_data) = decode_trigger_input(input)?;
+    fn run(input: Input) -> std::result::Result<Vec<u8>, String> {
+        Err("TODO".to_string())
+        // wstd::runtime::block_on(move |reactor| async move {
+        //     let (trigger_id, req) = query_trigger!(CosmosQueryRequest, &input, reactor.clone()).await?;
 
-        let address = parse_address!(bindings::lay3r::avs::layer_types::Address, contract.address);
+        //     let querier = CosmosQuerier::new(chain_config, reactor);
+        //     let resp = querier
+        //         .event_trigger::<TriggerDataResp>(address, event_data)
+        //         .await?;
 
-        let chain_config = match contract.chain_id.as_str() {
-            "local-osmosis" => ChainConfig {
-                chain_id: contract.chain_id.parse().unwrap(),
-                rpc_endpoint: Some("http://127.0.0.1:26657".to_string()),
-                grpc_endpoint: None,
-                grpc_web_endpoint: None,
-                gas_price: 0.025,
-                gas_denom: "uosmo".to_string(),
-                address_kind: AddrKind::Cosmos {
-                    prefix: "osmo".to_string(),
-                },
-            },
-            _ => {
-                return Err(format!("Unsupported chain_id: {}", contract.chain_id));
-            }
-        };
-
-        let (trigger_id, resp) = wstd::runtime::block_on(|reactor| async move {
-            let querier = CosmosQuerier::new(chain_config, reactor);
-            querier
-                .event_trigger::<TriggerDataResp>(address, event_data)
-                .await
-                .map_err(|e| e.to_string())
-        })?;
-
-        serde_json::to_vec(&Response {
-            result: resp.data,
-            trigger_id,
-        })
-        .map_err(|e| e.to_string())
-        .map(|output| encode_trigger_output(input_trigger_id, output))
+        //     serde_json::to_vec(&Response {
+        //         result: resp.data,
+        //         trigger_id,
+        //     })
+        //     .map_err(|e| anyhow!("{:?}", e))
+        //     .map(|output| encode_trigger_output(input_trigger_id, output))
+        // }).map_err(|e| e.to_string())
     }
 }
 

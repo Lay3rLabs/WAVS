@@ -35,7 +35,7 @@ package = "component:cosmos-query"
 
 [package.metadata.component.target]
 path = "../../../sdk/wit"
-world = "layer-chain-event-world"
+world = "layer-any-contract-event-world"
 
 [package.metadata.component.target.dependencies]
 "wasi:io" = "=0.2.0"

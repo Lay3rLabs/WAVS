@@ -8,7 +8,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use bindings::{Contract, Guest};
+use bindings::{Guest, Input};
+use example_helpers::{query_trigger, trigger::encode_trigger_output};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use wasi::{
@@ -22,11 +23,19 @@ use wasi::{
 struct Component;
 
 impl Guest for Component {
-    fn run(_contract: Contract, input: Vec<u8>) -> Result<Vec<u8>, String> {
-        match inner_run_task(serde_json::from_slice(&input).map_err(|x| x.to_string())?) {
-            Ok(response) => serde_json::to_vec(&response).map_err(|x| x.to_string()),
-            Err(e) => Err(e.to_string()),
-        }
+    fn run(input: Input) -> std::result::Result<Vec<u8>, String> {
+        wstd::runtime::block_on(move |reactor| async move {
+            let (trigger_id, req) =
+                query_trigger!(PermissionsInput, &input, reactor.clone()).await?;
+
+            let resp = inner_run_task(req)?;
+
+            anyhow::Ok(encode_trigger_output(
+                trigger_id,
+                serde_json::to_vec(&resp)?,
+            ))
+        })
+        .map_err(|e| e.to_string())
     }
 }
 

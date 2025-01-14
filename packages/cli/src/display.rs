@@ -1,32 +1,25 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utils::{avs_client::SignedData, eigen_client::CoreAVSAddresses};
 use wavs::apis::{ServiceID, WorkflowID};
 
-use crate::deploy::EthService;
+use crate::deploy::ServiceInfo;
 
 #[derive(Debug)]
 pub struct DisplayBuilder {
     pub core_contracts: Option<CoreAVSAddresses>,
-    pub eth_service: Option<EthService>,
-    pub service: Option<ServiceAndWorkflow>,
-    pub workflow_id: Option<ServiceID>,
+    pub service_info: Option<ServiceInfo>,
+    pub service_id: Option<ServiceID>,
+    pub workflow_id: Option<WorkflowID>,
     pub signed_data: Option<SignedData>,
     pub gas_used: Option<u64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ServiceAndWorkflow {
-    pub service_id: ServiceID,
-    pub workflow_id: WorkflowID,
 }
 
 impl DisplayBuilder {
     pub fn new() -> Self {
         Self {
             core_contracts: None,
-            eth_service: None,
-            service: None,
+            service_info: None,
+            service_id: None,
             workflow_id: None,
             signed_data: None,
             gas_used: None,
@@ -41,13 +34,13 @@ impl DisplayBuilder {
             pub core_contracts: Option<CoreAVSAddresses>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub eth_service: Option<EthService>,
+            pub service_info: Option<ServiceInfo>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub service: Option<ServiceAndWorkflow>,
+            pub service_id: Option<ServiceID>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub workflow_id: Option<ServiceID>,
+            pub workflow_id: Option<WorkflowID>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub signed_data: Option<SignedDataJson>,
@@ -74,8 +67,8 @@ impl DisplayBuilder {
             "{}",
             serde_json::to_string_pretty(&DisplayJson {
                 core_contracts: self.core_contracts,
-                eth_service: self.eth_service,
-                service: self.service,
+                service_info: self.service_info,
+                service_id: self.service_id,
                 workflow_id: self.workflow_id,
                 signed_data,
                 gas_used: self.gas_used,

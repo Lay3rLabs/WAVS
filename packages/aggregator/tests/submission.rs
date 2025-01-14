@@ -10,7 +10,7 @@ use alloy::{
 };
 use utils::{
     aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
-    avs_client::{AvsClientBuilder, ServiceManagerClient},
+    avs_client::{AvsClientDeployer, ServiceManagerClient},
     eigen_client::EigenClient,
     example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
 };
@@ -32,9 +32,9 @@ async fn submit_to_chain() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+    let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .build(SimpleEthSubmitClient::deploy)
+        .deploy(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 
@@ -120,9 +120,9 @@ async fn submit_to_chain_three() {
 
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+    let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .build(SimpleEthSubmitClient::deploy)
+        .deploy(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 
@@ -269,9 +269,9 @@ async fn invalid_operator_signature() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
+    let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .build(SimpleEthSubmitClient::deploy)
+        .deploy(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 

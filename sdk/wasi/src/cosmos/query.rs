@@ -1,9 +1,11 @@
 use anyhow::Result;
 use layer_climb_address::Address;
-use layer_climb_config::ChainConfig;
+use layer_climb_config::{AddrKind, ChainConfig, ChainId};
 use layer_climb_proto::Coin;
 use serde::{de::DeserializeOwned, Serialize};
 use wstd::runtime::Reactor;
+
+use crate::collection::HashMapLike;
 
 use super::rpc;
 
@@ -12,7 +14,42 @@ pub struct CosmosQuerier {
     pub reactor: Reactor,
 }
 
+impl From<crate::wit_bindings::CosmosChainConfig> for ChainConfig {
+    fn from(config: crate::wit_bindings::CosmosChainConfig) -> ChainConfig {
+        ChainConfig {
+            chain_id: ChainId::new(config.chain_id),
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            grpc_web_endpoint: config.grpc_web_endpoint,
+            gas_denom: config.gas_denom,
+            gas_price: config.gas_price,
+            address_kind: AddrKind::Cosmos {
+                prefix: config.bech32_prefix,
+            },
+        }
+    }
+}
+
 impl CosmosQuerier {
+    pub fn new_from_chain_name(
+        chain_name: &str,
+        chain_configs: &crate::bindings::lay3r::avs::layer_types::ChainConfigs,
+        reactor: Reactor,
+    ) -> Result<Self> {
+        let chain_config = chain_configs
+            .get_key(chain_name)
+            .ok_or_else(|| anyhow::anyhow!("chain config not found"))?;
+        match chain_config.clone() {
+            crate::wit_bindings::AnyChainConfig::Cosmos(chain_config) => Ok(Self {
+                chain_config: chain_config.into(),
+                reactor,
+            }),
+            crate::wit_bindings::AnyChainConfig::Eth(..) => Err(anyhow::anyhow!(
+                "expected cosmos chain config, got eth chain"
+            )),
+        }
+    }
+
     pub fn new(chain_config: ChainConfig, reactor: Reactor) -> Self {
         Self {
             chain_config,

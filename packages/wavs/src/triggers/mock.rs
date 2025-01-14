@@ -1,16 +1,38 @@
+use rand::prelude::*;
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
 use crate::apis::trigger::{
-    TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
+    Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
-use utils::{IDError, ServiceID, WorkflowID};
+use crate::apis::{IDError, ServiceID, WorkflowID};
+use crate::test_utils::address::{rand_address_eth, rand_address_layer};
 
 use layer_climb::prelude::Address;
+use rand::thread_rng;
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
+
+pub fn mock_cosmos_event_trigger() -> Trigger {
+    Trigger::cosmos_contract_event(
+        rand_address_layer(),
+        "layer",
+        hex::encode(thread_rng().gen::<[u8; 32]>()),
+    )
+}
+
+pub fn mock_eth_event_trigger() -> Trigger {
+    Trigger::eth_contract_event(rand_address_eth(), "eth", thread_rng().gen::<[u8; 32]>())
+}
+
+pub fn get_mock_trigger_data(trigger_data: &TriggerData) -> Vec<u8> {
+    match trigger_data {
+        TriggerData::Raw(data) => data.to_vec(),
+        _ => panic!("mocks need raw trigger data"),
+    }
+}
 
 pub struct MockTriggerManagerVec {
     triggers: RwLock<Vec<TriggerAction>>,
@@ -169,13 +191,24 @@ impl MockTriggerManagerChannel {
     ) {
         self.sender
             .send(TriggerAction {
-                config: TriggerConfig::contract_event(
-                    service_id,
-                    workflow_id,
-                    contract_address.clone(),
-                    chain_id,
-                )
-                .unwrap(),
+                config: match contract_address {
+                    Address::Eth(_) => TriggerConfig::eth_contract_event(
+                        service_id,
+                        workflow_id,
+                        contract_address.clone(),
+                        chain_id,
+                        thread_rng().gen::<[u8; 32]>(),
+                    )
+                    .unwrap(),
+                    Address::Cosmos { .. } => TriggerConfig::cosmos_contract_event(
+                        service_id,
+                        workflow_id,
+                        contract_address.clone(),
+                        chain_id,
+                        hex::encode(thread_rng().gen::<[u8; 32]>()),
+                    )
+                    .unwrap(),
+                },
                 data: TriggerData::new_raw(serde_json::to_string(data).unwrap().as_bytes()),
             })
             .await

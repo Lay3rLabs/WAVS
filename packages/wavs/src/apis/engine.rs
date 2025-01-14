@@ -3,7 +3,11 @@ use thiserror::Error;
 
 use crate::{storage::CAStorageError, Digest};
 
-use super::{dispatcher::{Component, ServiceConfig}, trigger::TriggerAction, ComponentID, ServiceID, WorkflowID};
+use super::{
+    dispatcher::{Component, ServiceConfig},
+    trigger::TriggerAction,
+    ComponentID, ServiceID, WorkflowID,
+};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;

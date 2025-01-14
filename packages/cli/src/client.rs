@@ -1,11 +1,13 @@
 use layer_climb::prelude::*;
 use utils::{
-    avs_client::{AvsClient, AvsClientBuilder, ServiceManagerDeps}, config::CosmosChainConfig, eigen_client::{CoreAVSAddresses, EigenClient}, eth_client::{EthChainConfig, EthClientBuilder}
+    config::CosmosChainConfig,
+    eigen_client::EigenClient,
+    eth_client::{EthChainConfig, EthClientBuilder},
 };
 use utils::{ServiceID, WorkflowID};
 use wavs::{
     apis::{
-        dispatcher::{AllowedHostPermission, ComponentWorld, ServiceConfig, Permissions, Submit},
+        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, ServiceConfig, Submit},
         trigger::Trigger,
         ServiceID, WorkflowID,
     },
@@ -16,87 +18,28 @@ use wavs::{
     Digest,
 };
 
-use crate::config::Config;
+use crate::{
+    config::Config,
+    deploy::{ServiceInfo, ServiceSubmitInfo, ServiceTriggerInfo},
+};
 
-pub async fn try_get_eigen_client(config: &Config) -> Option<EigenClient> {
-    let chain_config = config.eth_chain.as_ref().map(|chain| {
-        config
-            .chains
-            .get_chain(chain)
-            .unwrap()
-            .unwrap_or_else(|| panic!("chain not found for {}", chain))
-    });
+pub async fn get_eigen_client(config: &Config, chain_config: EthChainConfig) -> EigenClient {
+    let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone());
 
-    let chain_config = match chain_config {
-        Some(chain_config) => chain_config,
-        None => {
-            return None;
-        }
-    };
+    let eth_client = EthClientBuilder::new(client_config)
+        .build_signing()
+        .await
+        .unwrap();
 
-    match EthChainConfig::try_from(chain_config) {
-        Ok(chain_config) => {
-            let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone());
-
-            let eth_client = EthClientBuilder::new(client_config)
-                .build_signing()
-                .await
-                .unwrap();
-            Some(EigenClient::new(eth_client))
-        }
-        Err(e) => {
-            None
-        }
-    }
+    EigenClient::new(eth_client)
 }
 
-pub async fn try_get_cosmos_client(config: &Config) -> Option<SigningClient> {
-    let chain_config = config.cosmos_chain.as_ref().map(|chain| {
-        config
-            .chains
-            .get_chain(chain)
-            .unwrap()
-            .unwrap_or_else(|| panic!("chain not found for {}", chain))
-    });
+pub async fn get_cosmos_client(config: &Config, chain_config: CosmosChainConfig) -> SigningClient {
+    let key_signer =
+        KeySigner::new_mnemonic_str(config.cosmos_mnemonic.as_ref().unwrap(), None).unwrap();
 
-    let chain_config = match chain_config {
-        Some(chain_config) => chain_config,
-        None => {
-            return None;
-        }
-    };
-
-    match CosmosChainConfig::try_from(chain_config) {
-        Ok(chain_config) => {
-            let key_signer = KeySigner::new_mnemonic_str(config.cosmos_mnemonic.as_ref().unwrap(), None).unwrap();
-
-            let climb_chain_config: ChainConfig = chain_config.into();
-            let signing_client = SigningClient::new(climb_chain_config, key_signer, None)
-                .await
-                .unwrap();
-
-            Some(signing_client)
-        }
-        Err(e) => {
-            None
-        }
-    }
-}
-
-pub async fn get_avs_client<F, Fut>(
-    eigen_client: &EigenClient,
-    core_contracts: CoreAVSAddresses,
-    service_manager_override: Option<alloy::primitives::Address>,
-    deploy_service_manager: F,
-) -> AvsClient
-where
-    F: FnOnce(ServiceManagerDeps) -> Fut,
-    Fut: std::future::Future<Output = anyhow::Result<alloy::primitives::Address>>,
-{
-    AvsClientBuilder::new(eigen_client.eth.clone())
-        .core_addresses(core_contracts)
-        .override_service_manager(service_manager_override)
-        .build(deploy_service_manager)
+    let climb_chain_config: ChainConfig = chain_config.into();
+    SigningClient::new(climb_chain_config, key_signer, None)
         .await
         .unwrap()
 }
@@ -131,25 +74,39 @@ impl HttpClient {
 
     pub async fn create_service(
         &self,
-        trigger_chain_name: impl ToString,
-        trigger_address: Address,
-        submit_chain_name: impl ToString,
-        submit_address: Address,
+        service_info: ServiceInfo,
+        aggregate: bool,
         digest: Digest,
         config: ServiceConfig,
         world: ComponentWorld,
     ) -> (ServiceID, WorkflowID) {
-        let submit = Submit::EigenContract {
-            chain_name: submit_chain_name.to_string(),
-            service_manager: submit_address,
-            aggregate: false,
-            max_gas: config.max_gas,
+        let trigger = match service_info.trigger {
+            ServiceTriggerInfo::EthSimpleContract {
+                chain_name,
+                address,
+            } => Trigger::contract_event(address, chain_name),
+            ServiceTriggerInfo::CosmosSimpleContract {
+                chain_name,
+                address,
+            } => Trigger::contract_event(address, chain_name),
+        };
+
+        let submit = match service_info.submit {
+            ServiceSubmitInfo::EigenLayer {
+                chain_name,
+                avs_addresses,
+            } => Submit::EigenContract {
+                chain_name,
+                service_manager: avs_addresses.service_manager.into(),
+                aggregate,
+                max_gas: config.max_gas,
+            },
         };
 
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
-            trigger: Trigger::contract_event(trigger_address, trigger_chain_name.to_string()),
+            trigger,
             world,
             id: id.clone(),
             digest: digest.into(),

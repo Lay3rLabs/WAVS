@@ -11,8 +11,8 @@ log_level = ["info", "wavs=debug"]
 # the directory to store the data. Default is "/var/wavs"
 # data = "~/wavs/cli"
 
-# chosen chain name
-chain = "local"
+# wavs endpoint
+# wavs_endpoint = "http://localhost:8000"
 
 [chains.cosmos.layer-local]
 chain_id = "slay3r-local"

@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         dispatcher::{
-            Component, ComponentWorld, ServiceConfig, Permissions, Service, ServiceStatus, Submit, Workflow,
+            Component, ComponentWorld, Permissions, Service, ServiceConfig, ServiceStatus, Submit,
+            Workflow,
         },
         trigger::Trigger,
     },
@@ -123,7 +124,7 @@ mod test {
 
     use crate::{
         apis::{
-            dispatcher::{ComponentWorld,ServiceConfig, Permissions, Submit},
+            dispatcher::{ComponentWorld, Permissions, ServiceConfig, Submit},
             trigger::Trigger,
             ServiceID,
         },
@@ -145,7 +146,7 @@ mod test {
                 permissions: Permissions::default(),
                 testable: Some(true),
                 submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
-                config: ServiceConfig::default()
+                config: ServiceConfig::default(),
             }
         }
 

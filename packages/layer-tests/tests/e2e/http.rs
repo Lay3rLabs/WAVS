@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 use utils::config::EthereumChainConfig;
 use wavs::{
     apis::{
-        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, Submit, ServiceConfig},
+        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, ServiceConfig, Submit},
         trigger::{Trigger, TriggerData},
         ServiceID,
     },

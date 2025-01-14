@@ -5,6 +5,7 @@ use super::{
     trigger::{Trigger, TriggerAction},
 };
 use crate::{AppContext, Digest};
+use clap::ValueEnum;
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use utils::{ComponentID, ServiceID, WorkflowID};
@@ -104,10 +105,6 @@ pub struct Workflow {
 pub enum Submit {
     // useful for when the component just does something with its own state
     None,
-    CosmosContract {
-        chain_name: String,
-        contract_addr: Address,
-    },
     EigenContract {
         chain_name: String,
         service_manager: Address,
@@ -185,8 +182,9 @@ impl Default for ServiceConfig {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum ComponentWorld {
-    ChainEvent,
-    EthLog,
+    AnyContractEvent,
+    CosmosContractEvent,
+    EthContractEvent,
     Raw,
 }
 

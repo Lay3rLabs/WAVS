@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::http::{map_response, TestHttpApp};
 use crate::{
     apis::{
-        dispatcher::{ComponentWorld, DispatchManager, ServiceConfig, Permissions, Submit},
+        dispatcher::{ComponentWorld, DispatchManager, Permissions, ServiceConfig, Submit},
         engine::EngineError,
         trigger::{Trigger, TriggerData},
         ServiceID,
@@ -21,13 +21,14 @@ use crate::{
     },
     submission::mock::MockSubmission,
     test_utils::address::rand_address_eth,
-    triggers::mock::MockTriggerManagerChannel,
+    triggers::mock::{mock_eth_event_trigger, MockTriggerManagerChannel},
     AppContext, Digest,
 };
 use axum::{
     body::Body,
     http::{Method, Request},
 };
+use rand::rngs::mock;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tower::Service;
 use utils::ServiceID;
@@ -122,7 +123,7 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: Trigger::contract_event(rand_address_eth(), "eth"),
+                trigger: mock_eth_event_trigger(),
                 id: service_id,
                 digest: digest.into(),
                 world: ComponentWorld::Raw,

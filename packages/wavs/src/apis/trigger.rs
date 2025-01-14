@@ -1,10 +1,17 @@
 use alloy::primitives::LogData;
 use layer_climb::prelude::*;
+use layer_wasi::{canonicalize_any_contract, canonicalize_any_event, canonicalize_chain_configs};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
+use utils::config::ChainConfigs;
 
-use crate::AppContext;
+use crate::{
+    bindings::{
+        convert_wit_chain_configs, eth_contract_event::lay3r::avs::layer_types::EthEventLogData,
+    },
+    AppContext,
+};
 
 use utils::{IDError, ServiceID, WorkflowID};
 
@@ -13,16 +20,41 @@ use utils::{IDError, ServiceID, WorkflowID};
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     // A contract that emits an event
-    ContractEvent { address: Address, chain_id: String },
+    CosmosContractEvent {
+        address: Address,
+        chain_id: String,
+        event_type: String,
+    },
+    EthContractEvent {
+        address: Address,
+        chain_id: String,
+        event_hash: Vec<u8>,
+    },
     // not a real trigger, just for testing
     Test,
 }
 
 impl Trigger {
-    pub fn contract_event(address: Address, chain_id: impl ToString) -> Self {
-        Trigger::ContractEvent {
+    pub fn cosmos_contract_event(
+        address: Address,
+        chain_id: impl ToString,
+        event_type: impl ToString,
+    ) -> Self {
+        Trigger::CosmosContractEvent {
             address,
             chain_id: chain_id.to_string(),
+            event_type: event_type.to_string(),
+        }
+    }
+    pub fn eth_contract_event(
+        address: Address,
+        chain_id: impl ToString,
+        event_hash: impl AsRef<[u8]>,
+    ) -> Self {
+        Trigger::EthContractEvent {
+            address,
+            chain_id: chain_id.to_string(),
+            event_hash: event_hash.as_ref().to_vec(),
         }
     }
 }
@@ -57,16 +89,31 @@ pub struct TriggerConfig {
 }
 
 impl TriggerConfig {
-    pub fn contract_event(
+    pub fn cosmos_contract_event(
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         contract_address: Address,
         chain_name: impl ToString,
+        event_type: impl ToString,
     ) -> Result<Self, IDError> {
         Ok(Self {
             service_id: service_id.try_into()?,
             workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::contract_event(contract_address, chain_name),
+            trigger: Trigger::cosmos_contract_event(contract_address, chain_name, event_type),
+        })
+    }
+
+    pub fn eth_contract_event(
+        service_id: impl TryInto<ServiceID, Error = IDError>,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+        contract_address: Address,
+        chain_name: impl ToString,
+        event_hash: impl AsRef<[u8]>,
+    ) -> Result<Self, IDError> {
+        Ok(Self {
+            service_id: service_id.try_into()?,
+            workflow_id: workflow_id.try_into()?,
+            trigger: Trigger::eth_contract_event(contract_address, chain_name, event_hash),
         })
     }
 }
@@ -87,20 +134,22 @@ pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
         contract_address: Address,
-        /// The chain id of the chain where the event was emitted
-        chain_id: String,
-        /// The data that was emitted by the contract, if any
-        event_data: Option<Vec<u8>>,
+        /// The chain name of the chain where the event was emitted
+        chain_name: String,
+        /// The data that was emitted by the contract
+        event: cosmwasm_std::Event,
+        /// The block height where the event was emitted
+        block_height: u64,
     },
     EthContractEvent {
         /// The address of the contract that emitted the event
         contract_address: Address,
-        /// The chain id of the chain where the event was emitted
-        chain_id: String,
+        /// The chain name of the chain where the event was emitted
+        chain_name: String,
         /// The raw event log
         log: LogData,
-        /// The data that was emitted by the contract, if any
-        event_data: Option<Vec<u8>>,
+        /// The block height where the event was emitted
+        block_height: u64,
     },
     Raw(Vec<u8>),
 }
@@ -110,11 +159,114 @@ impl TriggerData {
         TriggerData::Raw(data.as_ref().to_vec())
     }
 
-    pub fn into_vec(self) -> Option<Vec<u8>> {
+    pub fn try_into_component_input_eth(
+        self,
+        chain_configs: ChainConfigs,
+    ) -> Result<crate::bindings::eth_contract_event::Input, TriggerError> {
         match self {
-            Self::CosmosContractEvent { event_data, .. } => event_data,
-            Self::EthContractEvent { event_data, .. } => event_data,
-            Self::Raw(data) => Some(data),
+            TriggerData::EthContractEvent {
+                contract_address,
+                chain_name,
+                log,
+                block_height,
+            } => {
+                let chain_configs = convert_wit_chain_configs(chain_configs);
+                Ok(crate::bindings::eth_contract_event::Input {
+                    contract: alloy::primitives::Address::try_from(contract_address).map_err(TriggerError::Climb)?.to_vec(),
+                    chain_name: chain_name.to_string(),
+                    event_log_data: crate::bindings::eth_contract_event::EthEventLogData {
+                        data: log.data.to_vec(),
+                        topics: log.topics().iter().map(|t| t.to_vec()).collect(),
+                    },
+                    block_height,
+                    chain_configs: canonicalize_chain_configs!(crate::bindings::eth_contract_event::lay3r::avs::layer_types::AnyChainConfig, chain_configs)
+                })
+            }
+            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
+        }
+    }
+
+    pub fn try_into_component_input_cosmos(
+        self,
+        chain_configs: ChainConfigs,
+    ) -> Result<crate::bindings::cosmos_contract_event::Input, TriggerError> {
+        match self {
+            TriggerData::CosmosContractEvent {
+                contract_address,
+                chain_name,
+                event,
+                block_height,
+            } => {
+                let chain_configs = convert_wit_chain_configs(chain_configs);
+                Ok(crate::bindings::cosmos_contract_event::Input {
+                    contract: match contract_address {
+                        layer_climb::prelude::Address::Cosmos { bech32_addr, prefix_len } => {
+                            crate::bindings::cosmos_contract_event::CosmosContract{
+                                bech32_addr: bech32_addr,
+                                prefix_len: prefix_len as u32,
+                            }
+                        },
+                        _ => return Err(TriggerError::Climb(anyhow::anyhow!("Invalid address type for component input")))
+                    },
+                    chain_name: chain_name.to_string(),
+                    event: crate::bindings::cosmos_contract_event::CosmosEvent {
+                        ty: event.ty,
+                        attributes: event.attributes.iter().map(|a| (a.key, a.value)).collect()
+                    },
+                    chain_configs: canonicalize_chain_configs!(crate::bindings::cosmos_contract_event::lay3r::avs::layer_types::AnyChainConfig, chain_configs),
+                    block_height,
+                })
+            }
+            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
+        }
+    }
+
+    pub fn try_into_component_input_any(
+        self,
+        chain_configs: ChainConfigs,
+    ) -> Result<crate::bindings::any_contract_event::Input, TriggerError> {
+        match self {
+            TriggerData::CosmosContractEvent {
+                contract_address,
+                chain_name,
+                event,
+                block_height,
+            } => {
+                let chain_configs = convert_wit_chain_configs(chain_configs);
+                Ok(crate::bindings::any_contract_event::Input{
+                    chain_name,
+                    contract: canonicalize_any_contract!(crate::bindings::any_contract_event::AnyContract, contract_address),
+                    event: canonicalize_any_event!(crate::bindings::any_contract_event::AnyEvent, event),
+                    block_height,
+                    chain_configs: canonicalize_chain_configs!(crate::bindings::any_contract_event::lay3r::avs::layer_types::AnyChainConfig, chain_configs),
+                })
+            }
+            TriggerData::EthContractEvent {
+                contract_address,
+                chain_name,
+                log,
+                block_height,
+            } => Ok(crate::bindings::any_contract_event::Input {
+                chain_name,
+                contract: canonicalize_any_contract!(
+                    crate::bindings::any_contract_event::AnyContract,
+                    contract_address
+                ),
+                event: canonicalize_any_event!(crate::bindings::any_contract_event::AnyEvent, log),
+                block_height,
+                chain_configs: canonicalize_chain_configs!(
+                    crate::bindings::any_contract_event::lay3r::avs::layer_types::AnyChainConfig,
+                    chain_configs
+                ),
+            }),
+            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
+        }
+    }
+
+    pub fn try_into_component_input_raw(self) -> Result<Vec<u8>, TriggerError> {
+        match self {
+            TriggerData::Raw(data) => Ok(data),
+            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
         }
     }
 }
@@ -133,12 +285,18 @@ pub enum TriggerError {
     NoSuchWorkflow(ServiceID, WorkflowID),
     #[error("Cannot find trigger data: {0}")]
     NoSuchTriggerData(usize),
-    #[error("Cannot find trigger contract: {0} / {1}")]
-    NoSuchContract(String, Address),
+    #[error("Trigger to component world input mismatch")]
+    TriggerToComponentWorldInputMismatch,
+    #[error("Cannot find cosmos trigger contract: {0} / {1} / {2}")]
+    NoSuchCosmosContractEvent(String, Address, String),
+    #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
+    NoSuchEthContractEvent(String, Address, String),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
-    #[error("Contract address already registered: {0} / {1}")]
-    ContractAddressAlreadyRegistered(String, Address),
+    #[error("Cosmos Contract Event already registered: {0} / {1} / {2}")]
+    CosmosContractEventAlreadyRegistered(String, Address, String),
+    #[error("Eth Contract Event already registered: {0} / {1} / {2}")]
+    EthContractEventAlreadyRegistered(String, Address, String),
 }

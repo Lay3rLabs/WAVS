@@ -18,48 +18,21 @@ use alloy::{
 };
 use anyhow::anyhow;
 use layer_climb::prelude::*;
-use layer_cosmwasm::msg::LayerExecuteMsg;
 use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
     avs_client::{layer_service_manager::LayerServiceManager, SignedPayload},
-    config::{CosmosChainConfig, EthereumChainConfig},
+    config::EthereumChainConfig,
     eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig, EthSigningClient},
 };
 
 #[derive(Clone)]
 pub struct CoreSubmission {
-    cosmos_clients: Arc<Mutex<HashMap<u32, SigningClient>>>,
-    cosmos_chain: Option<ChainCosmosSubmission>,
     eth_clients: Arc<Mutex<HashMap<(String, u32), EthSigningClient>>>,
     eth_chains: HashMap<String, ChainEthSubmission>,
     http_client: reqwest::Client,
-}
-
-#[derive(Clone)]
-struct ChainCosmosSubmission {
-    chain_config: ChainConfig,
-    mnemonic: String,
-    faucet_url: Option<Url>,
-}
-
-impl ChainCosmosSubmission {
-    #[instrument(level = "debug", fields(subsys = "Submission"))]
-    fn new(config: CosmosChainConfig, mnemonic: String) -> Result<Self, SubmissionError> {
-        let faucet_url = config
-            .faucet_endpoint
-            .as_ref()
-            .map(|url| Url::parse(url).map_err(SubmissionError::FaucetUrl))
-            .transpose()?;
-
-        Ok(Self {
-            chain_config: config.into(),
-            mnemonic,
-            faucet_url,
-        })
-    }
 }
 
 #[derive(Clone)]
@@ -94,19 +67,6 @@ impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
-        let cosmos_chain = config
-            .try_cosmos_chain_config()
-            .map_err(SubmissionError::Climb)?
-            .map(|x| {
-                let mnemonic = config
-                    .cosmos_submission_mnemonic
-                    .clone()
-                    .ok_or(SubmissionError::MissingMnemonic)?;
-
-                ChainCosmosSubmission::new(x.clone(), mnemonic)
-            })
-            .transpose()?;
-
         let mut eth_chains = HashMap::new();
         let active_ethereum_chain_configs = config.active_ethereum_chain_configs();
         if !active_ethereum_chain_configs.is_empty() {
@@ -124,53 +84,10 @@ impl CoreSubmission {
         }
 
         Ok(Self {
-            cosmos_clients: Arc::new(Mutex::new(HashMap::new())),
-            cosmos_chain,
             eth_clients: Arc::new(Mutex::new(HashMap::new())),
             eth_chains,
             http_client: reqwest::Client::new(),
         })
-    }
-
-    fn get_cosmos_chain(&self) -> Result<&ChainCosmosSubmission, SubmissionError> {
-        self.cosmos_chain
-            .as_ref()
-            .ok_or(SubmissionError::MissingCosmosChain)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn get_cosmos_client(
-        &self,
-        chain_name: String,
-    ) -> Result<SigningClient, SubmissionError> {
-        // TODO - where should hd_index come from?
-        let hd_index = 0;
-
-        {
-            let lock = self.cosmos_clients.lock().unwrap();
-
-            if let Some(client) = lock.get(&hd_index) {
-                return Ok(client.clone());
-            }
-        }
-
-        let derivation = cosmos_hub_derivation(hd_index).map_err(SubmissionError::Climb)?;
-
-        let signer =
-            KeySigner::new_mnemonic_str(&self.get_cosmos_chain()?.mnemonic, Some(&derivation))
-                .map_err(SubmissionError::Climb)?;
-
-        let client =
-            SigningClient::new(self.get_cosmos_chain()?.chain_config.clone(), signer, None)
-                .await
-                .map_err(SubmissionError::Climb)?;
-
-        {
-            let mut lock = self.cosmos_clients.lock().unwrap();
-            lock.insert(hd_index, client.clone());
-        }
-
-        Ok(client)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
@@ -209,67 +126,6 @@ impl CoreSubmission {
         }
 
         Ok(client)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn maybe_tap_cosmos_faucet(&self, client: &SigningClient) -> Result<(), SubmissionError> {
-        let faucet_url = match self.get_cosmos_chain()?.faucet_url.clone() {
-            Some(url) => url,
-            None => {
-                tracing::debug!("No faucet configured, skipping");
-                return Ok(());
-            }
-        };
-
-        let balance = client
-            .querier
-            .balance(client.addr.clone(), None)
-            .await
-            .map_err(SubmissionError::Climb)?
-            .unwrap_or_default();
-
-        tracing::debug!("Client {} has balance: {}", client.addr, balance);
-
-        let required_funds =
-            (10_000_000f32 * self.get_cosmos_chain()?.chain_config.gas_price).round() as u128;
-
-        if balance > required_funds {
-            return Ok(());
-        }
-
-        let body = serde_json::json!({
-            "address": client.addr.to_string(),
-            "denom": self.get_cosmos_chain()?.chain_config.gas_denom.clone()
-        })
-        .to_string();
-
-        tracing::debug!("Tapping faucet at {} with {}", faucet_url, body);
-
-        let res = self
-            .http_client
-            .post(faucet_url)
-            .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-            .map_err(SubmissionError::Reqwest)?;
-
-        if !res.status().is_success() {
-            let body = res.text().await.map_err(SubmissionError::Reqwest)?;
-            return Err(SubmissionError::Faucet(body));
-        }
-
-        if cfg!(debug_assertions) {
-            let balance = client
-                .querier
-                .balance(client.addr.clone(), None)
-                .await
-                .map_err(SubmissionError::Climb)?
-                .unwrap_or_default();
-            tracing::debug!("After faucet tap, {} has balance: {}", client.addr, balance);
-        }
-
-        Ok(())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
@@ -400,25 +256,6 @@ impl CoreSubmission {
 
         Ok(())
     }
-
-    async fn submit_to_cosmos(
-        &self,
-        _chain_name: String,
-        cosmos_client: SigningClient,
-        contract_addr: Address,
-        data: Vec<u8>,
-    ) -> Result<(), SubmissionError> {
-        // TODO - commitments etc.
-        let signature = Vec::new();
-        let contract_msg = LayerExecuteMsg::new(data, signature);
-
-        let _tx_resp = cosmos_client
-            .contract_execute(&contract_addr, &contract_msg, Vec::new(), None)
-            .await
-            .map_err(SubmissionError::FailedToSubmitCosmos)?;
-
-        Ok(())
-    }
 }
 
 impl Submission for CoreSubmission {
@@ -459,23 +296,6 @@ impl Submission for CoreSubmission {
                                         if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), client, service_manager, msg.wasm_result, aggregate).await {
                                             tracing::error!("{:?}", e);
                                         }
-                                    }
-                                },
-                                Submit::CosmosContract { chain_name, contract_addr } => {
-                                    let client = match _self.get_cosmos_client(chain_name.to_string()).await {
-                                        Ok(client) => client,
-                                        Err(e) => {
-                                            tracing::error!("Failed to get client: {:?}", e);
-                                            continue;
-                                        }
-                                    };
-
-                                    if let Err(err) = _self.maybe_tap_cosmos_faucet(&client).await {
-                                        tracing::error!("Failed to tap faucet for client {}: {:?}",client.addr, err);
-                                    }
-
-                                    if let Err(e) = _self.submit_to_cosmos(chain_name.to_string(), client, contract_addr, msg.wasm_result).await {
-                                        tracing::error!("{:?}", e);
                                     }
                                 },
                                 Submit::None => {

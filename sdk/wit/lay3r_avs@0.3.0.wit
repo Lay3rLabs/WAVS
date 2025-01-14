@@ -8,38 +8,100 @@ use wasi:http/types@0.2.0 as http-types;
 use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
 
 interface layer-types {
-  variant address {
-    eth(list<u8>),
-    // the bech32-encoded address, and length of the prefix
-    cosmos(tuple<string, u32>)
+  record cosmos-contract {
+    bech32-addr: string,
+    // prefix is the first part of the bech32 address
+    prefix-len: u32
+  } 
+
+  record cosmos-event {
+    ty: string,
+    attributes: list<tuple<string, string>>,
   }
 
-  record contract {
-    address: address,
-    chain-id: string
+  record cosmos-chain-config {
+    chain-id: string,
+    rpc-endpoint: option<string>,
+    grpc-endpoint: option<string>,
+    grpc-web-endpoint: option<string>,
+    gas-price: f32,
+    gas-denom: string,
+    bech32-prefix: string,
   }
 
-  // An alloy log can be recreated with the info here 
-  record eth-log {
+  type eth-contract = list<u8>;
+
+  record eth-event-log-data {
     // the raw log topics that can be decoded into an event
     topics: list<list<u8>>,
     // the raw log data that can be decoded into an event
     data: list<u8>,
   }
+
+  record eth-chain-config {
+    ws-endpoint: option<string>,
+    http-endpoint: string,
+  }
+
+  variant any-contract {
+    eth(list<u8>),
+    cosmos(cosmos-contract)
+  }
+
+  variant any-event {
+    eth(eth-event-log-data),
+    cosmos(cosmos-event)
+  }
+
+  variant any-chain-config {
+    eth(eth-chain-config),
+    cosmos(cosmos-chain-config)
+  }
+
+
+  type chain-configs = list<tuple<string, any-chain-config>>;
 }
 
-world layer-chain-event-world {
-  use layer-types.{contract};
+world layer-any-contract-event-world {
+  use layer-types.{any-contract, any-event, chain-configs};
 
-  // event-data is emitted from the chain via a specific event type
-  // which WAVS knows how to extract
-  export run: func(contract: contract, event-data: list<u8>) -> result<list<u8>, string>;
+  record input {
+    chain-name: string, 
+    block-height: u64, 
+    contract: any-contract, 
+    event: any-event,
+    chain-configs: chain-configs
+  }
+
+  export run: func(input: input) -> result<list<u8>, string>;
 }
 
-world layer-eth-log-world {
-  use layer-types.{contract, eth-log};
+world layer-cosmos-contract-event-world {
+  use layer-types.{cosmos-contract, cosmos-event, chain-configs};
+  
+  record input {
+    chain-name: string, 
+    block-height: u64, 
+    contract: cosmos-contract, 
+    event: cosmos-event,
+    chain-configs: chain-configs
+  }
 
-  export run: func(contract: contract, log: eth-log) -> result<list<u8>, string>;
+  export run: func(input: input) -> result<list<u8>, string>;
+}
+
+world layer-eth-contract-event-world {
+  use layer-types.{eth-contract, eth-event-log-data, chain-configs};
+
+  record input {
+    chain-name: string, 
+    block-height: u64, 
+    contract: eth-contract, 
+    event-log-data: eth-event-log-data,
+    chain-configs: chain-configs
+  }
+
+  export run: func(input: input) -> result<list<u8>, string>;
 }
 
 world layer-raw-world {
@@ -47,5 +109,16 @@ world layer-raw-world {
 }
 
 world layer-sdk-world {
-  use layer-types.{address, contract, eth-log};
+  use layer-types.{
+    cosmos-contract,
+    cosmos-event,
+    cosmos-chain-config,
+    eth-contract,
+    eth-event-log-data,
+    eth-chain-config,
+    any-contract,
+    any-event,
+    any-chain-config,
+    chain-configs
+  };
 }
