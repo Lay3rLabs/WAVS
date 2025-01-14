@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use alloy::{primitives::Address, providers::Provider};
 use anyhow::Result;
+use layer_climb::signing::SigningClient;
 use serde::{Deserialize, Serialize};
 use utils::{
     avs_client::AvsAddresses,
@@ -25,8 +26,7 @@ pub struct Deployment {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EthService {
     pub avs_addresses: AvsAddresses,
-    pub trigger_address: Address,
-    pub trigger_kind: CliTriggerKind,
+    pub trigger_address: layer_climb::prelude::Address,
     pub submit_kind: CliSubmitKind,
 }
 
@@ -51,26 +51,32 @@ impl Deployment {
         &mut self,
         command: &Command,
         config: &Config,
-        client: &EigenClient,
+        eth_client: Option<&EigenClient>,
+        _cosmos_client: Option<&SigningClient>,
     ) -> Result<()> {
         // sanitize core
         {
             let mut to_remove = HashSet::new();
-            for (chain, addresses) in self.eigen_core.iter() {
-                if chain != &config.chain {
-                    continue;
-                }
+            match (eth_client, config.eth_chain.as_ref()) {
+                (Some(client), Some(eth_chain)) => {
+                    for (chain, addresses) in self.eigen_core.iter() {
+                        if chain != eth_chain {
+                            continue;
+                        }
 
-                for address in addresses.as_vec() {
-                    if client.eth.provider.get_code_at(address).await?.0.is_empty() {
-                        to_remove.insert(chain.clone());
+                        for address in addresses.as_vec() {
+                            if client.eth.provider.get_code_at(address).await?.0.is_empty() {
+                                to_remove.insert(chain.clone());
+                            }
+                        }
+                    }
+
+                    for chain in to_remove.into_iter() {
+                        tracing::warn!("Core addresses for {chain} are invalid, filtering out");
+                        self.eigen_core.remove(&chain);
                     }
                 }
-            }
-
-            for chain in to_remove.into_iter() {
-                tracing::warn!("Core addresses for {chain} are invalid, filtering out");
-                self.eigen_core.remove(&chain);
+                _ => {}
             }
         }
 
@@ -81,26 +87,25 @@ impl Deployment {
             Command::Exec { .. } => None,
         } {
             let mut to_remove = HashSet::new();
-            for (deployed_service_id, workflows) in self.eth_services.iter() {
-                if *deployed_service_id != service_id {
-                    continue;
-                }
+            if let Some(client) = eth_client {
+                for (deployed_service_id, workflows) in self.eth_services.iter() {
+                    if *deployed_service_id != service_id {
+                        continue;
+                    }
 
-                for (deployed_workflow_id, addresses) in workflows.iter() {
-                    for address in addresses.avs_addresses.as_vec() {
-                        if client.eth.provider.get_code_at(address).await?.0.is_empty()
-                            || client
-                                .eth
-                                .provider
-                                .get_code_at(addresses.trigger_address)
-                                .await?
-                                .0
-                                .is_empty()
-                        {
-                            to_remove.insert((
-                                deployed_service_id.clone(),
-                                deployed_workflow_id.clone(),
-                            ));
+                    for (deployed_workflow_id, addresses) in workflows.iter() {
+                        for address in addresses.avs_addresses.as_vec() {
+                            let submit_address_exists = !client.eth.provider.get_code_at(address).await?.0.is_empty();
+                            let trigger_address_exists = match addresses.trigger_address {
+                                layer_climb::prelude::Address::Eth(addr) => !client.eth.provider.get_code_at(addr.as_bytes().into()).await?.0.is_empty(),
+                                _ => false,
+                            };
+                            if !submit_address_exists || !trigger_address_exists {
+                                to_remove.insert((
+                                    deployed_service_id.clone(),
+                                    deployed_workflow_id.clone(),
+                                ));
+                            }
                         }
                     }
                 }

@@ -20,8 +20,11 @@ pub struct Config {
     /// Default is `/var/wavs-cli`
     pub data: PathBuf,
 
-    /// The chosen chain name (default is `local`)
-    pub chain: String,
+    /// The chosen eth chain name (default is `local`)
+    pub eth_chain: Option<String>,
+
+    /// The chosen eth chain name (default is None)
+    pub cosmos_chain: Option<String>,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -54,7 +57,8 @@ impl Default for Config {
             wavs_endpoint: "http://127.0.0.1:8000".to_string(),
             log_level: vec!["info".to_string()],
             data: PathBuf::from("/var/wavs-cli"),
-            chain: "local".to_string(),
+            eth_chain: Some("local".to_string()),
+            cosmos_chain: None,
             chains: ChainConfigs {
                 cosmos: HashMap::new(),
                 eth: HashMap::new(),

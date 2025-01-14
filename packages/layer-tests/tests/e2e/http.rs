@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::de::DeserializeOwned;
+use utils::config::EthereumChainConfig;
 use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, Submit, ServiceConfig},
@@ -83,15 +84,10 @@ impl HttpClient {
         &self,
         chain_name: &str,
         service_manager_address: alloy::primitives::Address,
-        config: &Config,
+        chain_config: &EthereumChainConfig,
     ) -> Result<()> {
-        let configs = config.active_ethereum_chain_configs();
-        let aggregator_app_url = configs
-            .get(chain_name)
-            .unwrap()
-            .clone()
-            .aggregator_endpoint
-            .unwrap();
+        let aggregator_app_url = chain_config.aggregator_endpoint.clone().unwrap();
+
         self.inner
             .post(format!("{}/add-service", aggregator_app_url))
             .header("Content-Type", "application/json")

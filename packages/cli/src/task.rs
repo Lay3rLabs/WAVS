@@ -3,12 +3,12 @@ use std::time::Duration;
 use utils::{
     avs_client::SignedData,
     eth_client::EthSigningClient,
-    example_client::{SimpleSubmitClient, SimpleTriggerClient},
+    example_eth_client::{SimpleSubmitClient, SimpleTriggerClient},
 };
 
 use crate::deploy::EthService;
 
-pub async fn add_task(
+pub async fn add_task_eth_trigger(
     eth_signing_client: EthSigningClient,
     eth_service: &EthService,
     data: Vec<u8>,

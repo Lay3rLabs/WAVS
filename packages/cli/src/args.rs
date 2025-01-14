@@ -38,11 +38,11 @@ pub enum Command {
         world: ComponentWorld,
 
         /// The kind of trigger to deploy
-        #[clap(long, default_value_t = CliTriggerKind::SimpleContract)]
+        #[clap(long, default_value_t = CliTriggerKind::SimpleEthContract)]
         trigger: CliTriggerKind,
 
         /// The kind of submit to deploy
-        #[clap(long, default_value_t = CliSubmitKind::SimpleContract)]
+        #[clap(long, default_value_t = CliSubmitKind::SimpleEthContract)]
         submit: CliSubmitKind,
 
         #[clap(flatten)]
@@ -89,13 +89,15 @@ pub enum Command {
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum CliTriggerKind {
-    SimpleContract,
+    SimpleEthContract,
+    SimpleCosmosContract,
 }
 
 impl std::fmt::Display for CliTriggerKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::SimpleContract => write!(f, "simple-contract"),
+            Self::SimpleEthContract => write!(f, "simple-eth-contract"),
+            Self::SimpleCosmosContract => write!(f, "simple-cosmos-contract"),
         }
     }
 }
@@ -105,7 +107,8 @@ impl std::str::FromStr for CliTriggerKind {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "simple-contract" => Ok(Self::SimpleContract),
+            "simple-eth-contract" => Ok(Self::SimpleEthContract),
+            "simple-cosmos-contract" => Ok(Self::SimpleCosmosContract),
             _ => Err(format!("unknown trigger kind: {}", s)),
         }
     }
@@ -113,13 +116,13 @@ impl std::str::FromStr for CliTriggerKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum CliSubmitKind {
-    SimpleContract,
+    SimpleEthContract,
 }
 
 impl std::fmt::Display for CliSubmitKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::SimpleContract => write!(f, "simple-contract"),
+            Self::SimpleEthContract => write!(f, "simple-eth-contract"),
         }
     }
 }
@@ -129,7 +132,7 @@ impl std::str::FromStr for CliSubmitKind {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "simple-contract" => Ok(Self::SimpleContract),
+            "simple-eth-contract" => Ok(Self::SimpleEthContract),
             _ => Err(format!("unknown submit kind: {}", s)),
         }
     }
@@ -189,17 +192,22 @@ pub struct CliArgs {
     /// will load from the config file
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain: Option<String>,
+    pub eth_chain: Option<String>,
+
+    /// mnemonic (usually leave this as None and override in env)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eth_mnemonic: Option<String>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cosmos_chain: Option<String>,
 
     /// mnemonic (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_mnemonic: Option<String>,
 
-    /// mnemonic (usually leave this as None and override in env)
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub eth_mnemonic: Option<String>,
 }
 
 impl CliEnvExt for CliArgs {

@@ -1,8 +1,6 @@
 use layer_climb::prelude::*;
 use utils::{
-    avs_client::{AvsClient, AvsClientBuilder, ServiceManagerDeps},
-    eigen_client::{CoreAVSAddresses, EigenClient},
-    eth_client::{EthChainConfig, EthClientBuilder},
+    avs_client::{AvsClient, AvsClientBuilder, ServiceManagerDeps}, config::CosmosChainConfig, eigen_client::{CoreAVSAddresses, EigenClient}, eth_client::{EthChainConfig, EthClientBuilder}
 };
 use utils::{ServiceID, WorkflowID};
 use wavs::{
@@ -20,20 +18,69 @@ use wavs::{
 
 use crate::config::Config;
 
-pub async fn get_eigen_client(config: &Config) -> EigenClient {
-    let chain_config = config
-        .chains
-        .get_chain(&config.chain)
-        .unwrap()
-        .unwrap_or_else(|| panic!("chain not found for {}", config.chain));
-    let chain_config = EthChainConfig::try_from(chain_config).unwrap();
-    let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone());
+pub async fn try_get_eigen_client(config: &Config) -> Option<EigenClient> {
+    let chain_config = config.eth_chain.as_ref().map(|chain| {
+        config
+            .chains
+            .get_chain(chain)
+            .unwrap()
+            .unwrap_or_else(|| panic!("chain not found for {}", chain))
+    });
 
-    let eth_client = EthClientBuilder::new(client_config)
-        .build_signing()
-        .await
-        .unwrap();
-    EigenClient::new(eth_client)
+    let chain_config = match chain_config {
+        Some(chain_config) => chain_config,
+        None => {
+            return None;
+        }
+    };
+
+    match EthChainConfig::try_from(chain_config) {
+        Ok(chain_config) => {
+            let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone());
+
+            let eth_client = EthClientBuilder::new(client_config)
+                .build_signing()
+                .await
+                .unwrap();
+            Some(EigenClient::new(eth_client))
+        }
+        Err(e) => {
+            None
+        }
+    }
+}
+
+pub async fn try_get_cosmos_client(config: &Config) -> Option<SigningClient> {
+    let chain_config = config.cosmos_chain.as_ref().map(|chain| {
+        config
+            .chains
+            .get_chain(chain)
+            .unwrap()
+            .unwrap_or_else(|| panic!("chain not found for {}", chain))
+    });
+
+    let chain_config = match chain_config {
+        Some(chain_config) => chain_config,
+        None => {
+            return None;
+        }
+    };
+
+    match CosmosChainConfig::try_from(chain_config) {
+        Ok(chain_config) => {
+            let key_signer = KeySigner::new_mnemonic_str(config.cosmos_mnemonic.as_ref().unwrap(), None).unwrap();
+
+            let climb_chain_config: ChainConfig = chain_config.into();
+            let signing_client = SigningClient::new(climb_chain_config, key_signer, None)
+                .await
+                .unwrap();
+
+            Some(signing_client)
+        }
+        Err(e) => {
+            None
+        }
+    }
 }
 
 pub async fn get_avs_client<F, Fut>(
@@ -57,7 +104,6 @@ where
 pub struct HttpClient {
     inner: reqwest::Client,
     endpoint: String,
-    chain_name: String,
 }
 
 impl HttpClient {
@@ -65,7 +111,6 @@ impl HttpClient {
         Self {
             inner: reqwest::Client::new(),
             endpoint: config.wavs_endpoint.clone(),
-            chain_name: config.chain.clone(),
         }
     }
 
@@ -86,25 +131,25 @@ impl HttpClient {
 
     pub async fn create_service(
         &self,
-        trigger_address: alloy::primitives::Address,
-        service_manager_address: alloy::primitives::Address,
+        trigger_chain_name: impl ToString,
+        trigger_address: Address,
+        submit_chain_name: impl ToString,
+        submit_address: Address,
         digest: Digest,
         config: ServiceConfig,
         world: ComponentWorld,
-        chain_id: impl ToString,
     ) -> (ServiceID, WorkflowID) {
-        let trigger_address = trigger_address.into(); 
         let submit = Submit::EigenContract {
-            chain_name: self.chain_name.clone(),
-            max_gas: config.max_gas,
-            service_manager: service_manager_address.into() 
+            chain_name: submit_chain_name.to_string(),
+            service_manager: submit_address,
             aggregate: false,
+            max_gas: config.max_gas,
         };
 
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
         let service = ServiceRequest {
-            trigger: Trigger::contract_event(trigger_address, chain_id),
+            trigger: Trigger::contract_event(trigger_address, trigger_chain_name.to_string()),
             world,
             id: id.clone(),
             digest: digest.into(),

@@ -3,7 +3,7 @@ use utils::{
     avs_client::{AvsClientBuilder, ServiceManagerClient},
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
-    example_client::{SimpleSubmitClient, SimpleTriggerClient},
+    example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
     init_tracing_tests,
 };
 
@@ -27,7 +27,7 @@ async fn deploy_layer_avs() {
 
     let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
         .core_addresses(core_contracts)
-        .build(SimpleSubmitClient::deploy)
+        .build(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 
@@ -37,10 +37,10 @@ async fn deploy_layer_avs() {
         .unwrap();
 
     let avs_client: ServiceManagerClient = avs_client.into();
-    let trigger_addr = SimpleTriggerClient::deploy(avs_client.eth.provider.clone())
+    let trigger_addr = SimpleEthTriggerClient::deploy(avs_client.eth.provider.clone())
         .await
         .unwrap();
-    let trigger_client = SimpleTriggerClient::new(avs_client.eth.clone(), trigger_addr);
+    let trigger_client = SimpleEthTriggerClient::new(avs_client.eth.clone(), trigger_addr);
 
     // Create and respond first task
     let new_trigger_id = trigger_client

@@ -1,22 +1,23 @@
 use std::{
-    process::{Child, Command, Stdio},
-    time::{Duration, Instant},
+    process::{Child, Command, Stdio}, sync::Arc, time::{Duration, Instant}
 };
 
 use anyhow::{Context, Result};
+use cosmwasm_std::Empty;
 use layer_climb::{prelude::*, proto::abci::TxResponse, signing::SigningClient};
 use serde::Serialize;
 use tempfile::tempfile;
 use utils::config::CosmosChainConfig;
-use wavs::{config::Config, AppContext};
+use wavs::{apis::{dispatcher::{ComponentWorld, Submit}, trigger::Trigger}, config::Config, AppContext};
 
 use super::{http::HttpClient, wavs_path, workspace_path, Digests, ServiceIds};
 
 const IC_API_URL: &str = "http://127.0.0.1:8080";
 
 #[allow(dead_code)]
-pub fn start_chain(ctx: AppContext) -> CosmosChainConfig {
-    let ic_test_handle = IcTestHandle::spawn();
+pub fn start_chain(ctx: AppContext, index: u8) -> (String, CosmosChainConfig, Option<IcTestHandle>) {
+    let mut ic_test_handle = None;
+    
 
     let chain_info = ctx.rt.block_on(async {
         tokio::time::timeout(Duration::from_secs(30), async {
@@ -45,6 +46,9 @@ pub fn start_chain(ctx: AppContext) -> CosmosChainConfig {
                         return chain_info;
                     }
                     None => {
+                        if ic_test_handle.is_none() {
+                            ic_test_handle = Some(IcTestHandle::spawn());
+                        }
                         tokio::time::sleep(sleep_duration).await;
                         if Instant::now() - log_clock > Duration::from_secs(3) {
                             tracing::info!("Waiting for server to start...");
@@ -58,7 +62,7 @@ pub fn start_chain(ctx: AppContext) -> CosmosChainConfig {
         .unwrap()
     });
 
-    CosmosChainConfig {
+    let config = CosmosChainConfig {
         chain_id: chain_info
             .get("chain_id")
             .unwrap()
@@ -74,7 +78,10 @@ pub fn start_chain(ctx: AppContext) -> CosmosChainConfig {
         gas_denom: "ujuno".to_string(),
         bech32_prefix: "juno".to_string(),
         faucet_endpoint: None,
-    }
+    };
+
+    (format!("local-cosmos-test-{}", index), config, ic_test_handle)
+        
 }
 
 /// A wrapper around a Child process that kills it when dropped.
@@ -135,54 +142,109 @@ impl Drop for IcTestHandle {
     }
 }
 
+#[derive(Clone)]
 pub struct CosmosTestApp {
     pub signing_client: SigningClient,
+    pub chain_name: String,
+    pub chain_config: CosmosChainConfig,
+    handle: Option<Arc<IcTestHandle>>,
 }
 
 impl CosmosTestApp {
-    pub async fn new(config: Config) -> Self {
+    pub async fn new(chain_name: String, chain_config: CosmosChainConfig, handle: Option<IcTestHandle>) -> Self {
         // get all env vars
         let seed_phrase = "decorate bright ozone fork gallery riot bus exhaust worth way bone indoor calm squirrel merry zero scheme cotton until shop any excess stage laundry";
         let key_signer = KeySigner::new_mnemonic_str(&seed_phrase, None).unwrap();
 
-        let chain_config: ChainConfig = config.cosmos_chain_config().unwrap().clone().into();
-        let signing_client = SigningClient::new(chain_config.clone(), key_signer, None)
+        let climb_chain_config: ChainConfig = chain_config.clone().into();
+        let signing_client = SigningClient::new(climb_chain_config, key_signer, None)
             .await
             .unwrap();
 
         tracing::info!("Cosmos signing client: {}", signing_client.addr);
 
-        Self { signing_client }
+        Self { chain_name, signing_client, chain_config, handle: handle.map(Arc::new) }
+    }
+
+    pub async fn deploy_contracts(&self) -> CosmosContracts {
+        let contract_path = workspace_path().join("artifacts").join("simple_example.wasm");
+
+        if !contract_path.exists() {
+            panic!("Contract not found at {:?}", contract_path);
+        }
+
+        let wasm_byte_code = std::fs::read(contract_path).unwrap();
+
+        let (code_id, _) = self.signing_client.contract_upload_file(wasm_byte_code, None).await.unwrap();
+
+        let (trigger_addr, _) = self
+            .signing_client
+            .contract_instantiate(
+                None,
+                code_id,
+                "trigger".to_string(),
+                &Empty{},
+                vec![],
+                None,
+            )
+            .await
+            .unwrap();
+
+        let (submit_addr, _) = self
+            .signing_client
+            .contract_instantiate(
+                None,
+                code_id,
+                "submit".to_string(),
+                &Empty{},
+                vec![],
+                None,
+            )
+            .await
+            .unwrap();
+
+        CosmosContracts {
+            trigger: trigger_addr,
+            submit: submit_addr,
+        }
     }
 }
 
-pub async fn run_tests_cosmos(
+#[derive(Debug)]
+pub struct CosmosContracts {
+    pub trigger: Address,
+    pub submit: Address
+}
+
+pub async fn run_tests(
+    cosmos_apps: Vec<CosmosTestApp>,
     http_client: HttpClient,
-    config: Config,
     digests: Digests,
     service_ids: ServiceIds,
 ) {
-    let app = CosmosTestApp::new(config).await;
-    /*
-    tracing::info!("Running e2e cosmos tests");
+    let app = cosmos_apps.first().unwrap();
+    let contracts = app.deploy_contracts().await;
 
-    let app = CosmosTestApp::new(config).await;
+    tracing::info!("Contracts deployed: {:#?}", contracts);
 
-    if let Some(service_id) = service_ids.cosmos_permissions() {
-        let wasm_digest = digests.permissions_digest().await.unwrap();
+    if let Some(service_id) = service_ids.cosmos_permissions {
+        let wasm_digest = digests.permissions.unwrap();
 
         http_client
             .create_service(
                 service_id.clone(),
                 wasm_digest,
-                Trigger::contract_event(app.task_queue.addr.clone()),
-                Submit::CosmosContract { chain_name: "foo".to_string(), contract_addr: app.verifier_addr.clone() },
+                Trigger::contract_event(contracts.trigger.clone(), app.chain_name.clone()),
+                Submit::CosmosContract { chain_name: app.chain_name.clone(), contract_addr: contracts.submit.clone() }, 
                 ComponentWorld::ChainEvent,
             )
             .await
             .unwrap();
 
         tracing::info!("Service created: {}", service_id);
+
+
+
 
         let tx_resp = app
             .task_queue
@@ -237,5 +299,5 @@ pub async fn run_tests_cosmos(
         assert!(result.filecount > 0);
         tracing::info!("{:#?}", result);
     }
-    */
+ */
 }

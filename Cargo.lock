@@ -6481,6 +6481,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap 4.5.23",
+ "cosmwasm-std",
  "dirs 5.0.1",
  "dotenvy",
  "figment",

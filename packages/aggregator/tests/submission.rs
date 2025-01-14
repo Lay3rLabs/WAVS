@@ -12,7 +12,7 @@ use utils::{
     aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
     avs_client::{AvsClientBuilder, ServiceManagerClient},
     eigen_client::EigenClient,
-    example_client::{SimpleSubmitClient, SimpleTriggerClient},
+    example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
 };
 
 #[tokio::test]
@@ -34,12 +34,12 @@ async fn submit_to_chain() {
 
     let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .build(SimpleSubmitClient::deploy)
+        .build(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 
     let submit_client =
-        SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
 
     // Register operator
     eigen_client
@@ -62,7 +62,7 @@ async fn submit_to_chain() {
     .await
     .unwrap();
 
-    let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+    let trigger_client = SimpleEthTriggerClient::new_deploy(avs_client.eth.clone())
         .await
         .unwrap();
     let task_message = b"world".to_vec();
@@ -73,7 +73,7 @@ async fn submit_to_chain() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+        .sign_payload(SimpleEthSubmitClient::data_with_id_bytes(
             *trigger_id,
             task_message,
         ))
@@ -122,12 +122,12 @@ async fn submit_to_chain_three() {
 
     let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .build(SimpleSubmitClient::deploy)
+        .build(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 
     let submit_client =
-        SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
 
     // Register operator
     eigen_client
@@ -153,7 +153,7 @@ async fn submit_to_chain_three() {
     // first task - should just aggregate
     let task_message = b"foo".to_vec();
 
-    let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+    let trigger_client = SimpleEthTriggerClient::new_deploy(avs_client.eth.clone())
         .await
         .unwrap();
 
@@ -163,7 +163,7 @@ async fn submit_to_chain_three() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+        .sign_payload(SimpleEthSubmitClient::data_with_id_bytes(
             *trigger_id,
             task_message,
         ))
@@ -192,7 +192,7 @@ async fn submit_to_chain_three() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+        .sign_payload(SimpleEthSubmitClient::data_with_id_bytes(
             *trigger_id,
             task_message,
         ))
@@ -221,7 +221,7 @@ async fn submit_to_chain_three() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+        .sign_payload(SimpleEthSubmitClient::data_with_id_bytes(
             *trigger_id,
             task_message,
         ))
@@ -271,12 +271,12 @@ async fn invalid_operator_signature() {
 
     let avs_client = AvsClientBuilder::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .build(SimpleSubmitClient::deploy)
+        .build(SimpleEthSubmitClient::deploy)
         .await
         .unwrap();
 
     let _submit_client =
-        SimpleSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
 
     // Register operator
     eigen_client
@@ -302,7 +302,7 @@ async fn invalid_operator_signature() {
     .await
     .unwrap();
 
-    let trigger_client = SimpleTriggerClient::new_deploy(avs_client.eth.clone())
+    let trigger_client = SimpleEthTriggerClient::new_deploy(avs_client.eth.clone())
         .await
         .unwrap();
 
@@ -314,7 +314,7 @@ async fn invalid_operator_signature() {
         .unwrap();
 
     let signed_payload = avs_client
-        .sign_payload(SimpleSubmitClient::data_with_id_bytes(
+        .sign_payload(SimpleEthSubmitClient::data_with_id_bytes(
             *trigger_id,
             task_message,
         ))

@@ -7,22 +7,24 @@ mod display;
 mod exec;
 mod task;
 
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::{Path, PathBuf}};
 
-use args::Command;
+use args::{CliTriggerKind, Command};
 use clap::Parser;
-use client::{get_avs_client, HttpClient};
+use client::{get_avs_client, try_get_cosmos_client, HttpClient};
 use context::ChainContext;
 use deploy::EthService;
 use display::{DisplayBuilder, ServiceAndWorkflow};
 use exec::{exec_component, ExecComponentResponse};
+use layer_climb::prelude::{AddrEth, Address};
 use rand::rngs::OsRng;
-use task::add_task;
+use task::add_task_eth_trigger;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     avs_client::SignedData,
     config::ConfigExt,
-    example_client::{SimpleSubmitClient, SimpleTriggerClient},
+    example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
+    example_cosmos_client::SimpleCosmosTriggerClient,
 };
 use wavs::apis::{ServiceID, WorkflowID};
 
@@ -55,33 +57,37 @@ async fn main() {
             let ChainContext {
                 eigen_client,
                 mut deployment,
+                ..
             } = ctx.unwrap();
+            if let Some(eigen_client) = eigen_client.as_ref() {
+                let eth_chain = config.eth_chain.as_ref().unwrap();
 
-            let core_contracts = match deployment.eigen_core.get(&config.chain) {
-                Some(core_contracts) => {
-                    tracing::warn!("Core contracts already deployed for chain {}", config.chain);
-                    core_contracts.clone()
-                }
-                None => {
-                    let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
-
-                    if register_operator {
-                        eigen_client
-                            .register_operator(&core_contracts)
-                            .await
-                            .unwrap();
+                let core_contracts = match deployment.eigen_core.get(eth_chain) {
+                    Some(core_contracts) => {
+                        tracing::warn!("Core contracts already deployed for chain {}", eth_chain);
+                        core_contracts.clone()
                     }
+                    None => {
+                        let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-                    core_contracts
-                }
-            };
+                        if register_operator {
+                            eigen_client
+                                .register_operator(&core_contracts)
+                                .await
+                                .unwrap();
+                        }
 
-            deployment
-                .eigen_core
-                .insert(config.chain.clone(), core_contracts.clone());
-            deployment.save(&config).unwrap();
+                        core_contracts
+                    }
+                };
 
-            display.core_contracts = Some(core_contracts);
+                deployment
+                    .eigen_core
+                    .insert(eth_chain.to_string(), core_contracts.clone());
+                deployment.save(&config).unwrap();
+
+                display.core_contracts = Some(core_contracts);
+            }
         }
 
         Command::DeployService {
@@ -96,15 +102,20 @@ async fn main() {
         } => {
             let ChainContext {
                 eigen_client,
+                cosmos_client,
                 mut deployment,
             } = ctx.unwrap();
 
-            let core_contracts = match deployment.eigen_core.get(&config.chain) {
+
+
+            let eigen_client = eigen_client.unwrap(); 
+            let eth_chain = config.eth_chain.as_ref().unwrap();
+            let core_contracts = match deployment.eigen_core.get(eth_chain) {
                 Some(core_contracts) => core_contracts.clone(),
                 None => {
                     tracing::error!(
                         "Core contracts not deployed for chain {}, deploy those first!",
-                        config.chain
+                        eth_chain
                     );
                     return;
                 }
@@ -115,7 +126,7 @@ async fn main() {
                 core_contracts.clone(),
                 service_manager,
                 match submit {
-                    args::CliSubmitKind::SimpleContract => SimpleSubmitClient::deploy,
+                    args::CliSubmitKind::SimpleEthContract => SimpleEthSubmitClient::deploy,
                 },
             )
             .await;
@@ -129,29 +140,41 @@ async fn main() {
             let wasm_bytes = read_component(component);
             let digest = http_client.upload_component(wasm_bytes).await;
 
-            let trigger_address = match trigger {
-                args::CliTriggerKind::SimpleContract => {
-                    SimpleTriggerClient::deploy(avs_client.eth.provider.clone())
+            let (trigger_chain_name, trigger_address) = match trigger {
+                args::CliTriggerKind::SimpleEthContract => {
+                    let address = SimpleEthTriggerClient::deploy(avs_client.eth.provider.clone())
                         .await
-                        .unwrap()
+                        .unwrap();
+
+                    (eth_chain, Address::Eth(AddrEth::new(**address)))
+                },
+                args::CliTriggerKind::SimpleCosmosContract => {
+                    let signing_client = try_get_cosmos_client(&config).await.unwrap();
+                    let cosmos_chain = config.cosmos_chain.as_ref().unwrap();
+
+                    let address = SimpleCosmosTriggerClient::deploy_bytes(signing_client, workspace_path().join("examples").join("build").join("contracts").join("simple_example.wasm"))
+                        .await
+                        .unwrap();
+
+                    (cosmos_chain, address)
                 }
             };
 
             let (service_id, workflow_id) = http_client
                 .create_service(
+                    trigger_chain_name,
                     trigger_address,
-                    avs_client.layer.service_manager,
+                    eth_chain.to_string(),
+                    Address::Eth(AddrEth::new(**avs_client.layer.service_manager)),
                     digest,
                     service_config.unwrap_or_default(),
                     world,
-                    config.chain.clone(),
                 )
                 .await;
 
             let eth_service = EthService {
                 avs_addresses: avs_client.layer.clone(),
                 trigger_address,
-                trigger_kind: trigger,
                 submit_kind: submit,
             };
 
@@ -179,18 +202,13 @@ async fn main() {
         } => {
             let ChainContext {
                 eigen_client,
+                cosmos_client,
                 deployment,
+                ..
             } = ctx.unwrap();
 
             let input = decode_input(&input);
 
-            if !deployment.eigen_core.contains_key(&config.chain) {
-                tracing::error!(
-                    "Core contracts not deployed for chain {}, deploy those first!",
-                    config.chain
-                );
-                return;
-            };
 
             let service_id = ServiceID::new(service_id).unwrap();
             let workflow_id = match workflow_id {
@@ -198,36 +216,61 @@ async fn main() {
                 None => WorkflowID::new("default").unwrap(),
             };
 
-            let eth_service = match deployment.eth_services.get(&service_id) {
-                Some(workflow_contracts) => match workflow_contracts.get(&workflow_id) {
-                    Some(service_contracts) => service_contracts.clone(),
-                    None => {
+
+            let trigger_address:Address = todo!();
+
+
+            match trigger_address {
+                Address::Eth(addr) => {
+                    let chain_name = config.eth_chain.as_ref().unwrap();
+                    if !deployment.eigen_core.contains_key(chain_name) {
                         tracing::error!(
-                            "Service contracts not deployed for service {} and workflow {}, deploy those first!",
-                            service_id,
-                            workflow_id
+                            "Core contracts not deployed for chain {}, deploy those first!",
+                            chain_name
                         );
-                        return;
-                    }
-                },
-                None => {
-                    tracing::error!(
-                        "Service contracts not deployed for service {}, deploy those first!",
-                        service_id
-                    );
-                    return;
+                            return;
+                    };
+                    let eth_service = match deployment.eth_services.get(&service_id) {
+                        Some(workflow_contracts) => match workflow_contracts.get(&workflow_id) {
+                            Some(service_contracts) => service_contracts.clone(),
+                            None => {
+                                tracing::error!(
+                                    "Service contracts not deployed for service {} and workflow {}, deploy those first!",
+                                    service_id,
+                                    workflow_id
+                                );
+                                return;
+                            }
+                        },
+                        None => {
+                            tracing::error!(
+                                "Service contracts not deployed for service {}, deploy those first!",
+                                service_id
+                            );
+                            return;
+                        }
+                    };
+
+                    let signed_data = add_task_eth_trigger(eigen_client.unwrap().eth, &eth_service, input).await;
+
+                    display.eth_service = Some(eth_service);
+                    display.service = Some(ServiceAndWorkflow {
+                        service_id,
+                        workflow_id,
+                    });
+                    display.signed_data = Some(signed_data);
                 }
-            };
+                Address::Cosmos { bech32_addr, prefix_len } => {
+                    let signed_data = add_task_cosmos_trigger(cosmos_client.unwrap(), &eth_service, input).await;
 
-            let signed_data = add_task(eigen_client.eth, &eth_service, input).await;
-
-            display.eth_service = Some(eth_service);
-            display.service = Some(ServiceAndWorkflow {
-                service_id,
-                workflow_id,
-            });
-            display.signed_data = Some(signed_data);
-        }
+                    display.service = Some(ServiceAndWorkflow {
+                        service_id,
+                        workflow_id,
+                    });
+                    display.signed_data = Some(signed_data);
+                }
+            }
+        },
 
         Command::Exec {
             component, input, ..
@@ -290,4 +333,13 @@ fn read_component(path: impl AsRef<Path>) -> Vec<u8> {
     };
 
     std::fs::read(path).unwrap()
+}
+
+fn workspace_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf()
 }

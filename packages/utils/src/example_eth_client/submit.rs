@@ -9,13 +9,13 @@ use super::{
 };
 
 #[derive(Clone)]
-pub struct SimpleSubmitClient {
+pub struct SimpleEthSubmitClient {
     pub eth: EthSigningClient,
     pub contract_address: Address,
     pub contract: SimpleSubmitT,
 }
 
-impl SimpleSubmitClient {
+impl SimpleEthSubmitClient {
     pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
         let contract = SimpleSubmit::new(contract_address, eth.provider.clone());
 

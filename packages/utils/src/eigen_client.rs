@@ -28,7 +28,7 @@ impl Debug for EigenClient {
 
 impl EigenClient {
     pub fn new(eth: EthSigningClient) -> Self {
-        Self { eth }
+        Self { eth}
     }
 }
 

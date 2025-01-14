@@ -1,10 +1,11 @@
 use wavs::config::Config;
 
-use super::{http::HttpClient, Digests, ServiceIds};
+use super::{cosmos::CosmosTestApp, eth::EthTestApp, http::HttpClient, Digests, ServiceIds};
 
 pub async fn run_tests_crosschain(
+    _eth_apps: Vec<EthTestApp>,
+    _cosmos_apps: Vec<CosmosTestApp>,
     _http_client: HttpClient,
-    _config: Config,
     _digests: Digests,
     _service_ids: ServiceIds,
 ) {

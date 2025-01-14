@@ -17,13 +17,13 @@ use super::{
 };
 
 #[derive(Clone)]
-pub struct SimpleTriggerClient {
+pub struct SimpleEthTriggerClient {
     pub eth: EthSigningClient,
     pub contract_address: Address,
     pub contract: SimpleTriggerT,
 }
 
-impl SimpleTriggerClient {
+impl SimpleEthTriggerClient {
     pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
         let contract = SimpleTrigger::new(contract_address, eth.provider.clone());
 
@@ -84,20 +84,6 @@ impl SimpleTriggerClient {
             .data
             .to_vec())
     }
-
-    // // Returns the same payload emitted from the event
-    // // mostly just used in test flows
-    // pub async fn get_trigger_info_payload(&self, trigger_id: TriggerId) -> Result<Vec<u8>> {
-    //     Ok(self
-    //         .contract
-    //         .getTrigger(*trigger_id)
-    //         .call()
-    //         .await
-    //         .context("Failed to get trigger")?
-    //         ._0
-    //         .abi_encode()
-    //     )
-    // }
 }
 
 // Rust-friendly API around types

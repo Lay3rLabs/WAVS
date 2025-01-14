@@ -18,6 +18,7 @@ mod e2e {
     };
 
     use alloy::node_bindings::{Anvil, AnvilInstance};
+    use cosmos::{CosmosTestApp, IcTestHandle};
     use eth::EthTestApp;
     use http::HttpClient;
     use layer_climb::prelude::*;
@@ -25,7 +26,7 @@ mod e2e {
     use tracing_subscriber::EnvFilter;
     use utils::{
         avs_client::ServiceManagerClient,
-        config::{ConfigBuilder, CosmosChainConfig},
+        config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
     };
     use wavs::{
         apis::{
@@ -60,36 +61,30 @@ mod e2e {
             println!("Failed to load .env file");
         }
 
-        let ctx = AppContext::new();
-
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .init();
 
+        let ctx = AppContext::new();
+
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_ethereum")] {
-                tracing::info!("Running Ethereum e2e tests");
-                // should match the wavs.toml
-                let anvil = Some(Anvil::new().port(8545u16).chain_id(31337).spawn());
-                let anvil2 = Some(Anvil::new().port(8645u16).chain_id(31338).spawn());
+                let mut eth_chains = vec![
+                    eth::start_chain(ctx.clone(), 0),
+                    eth::start_chain(ctx.clone(), 1),
+                ];
             } else {
-                let anvil: Option<AnvilInstance> = None;
-                let anvil2: Option<AnvilInstance> = None;
+                let mut eth_chains:Vec<(String, EthereumChainConfig, Option<AnvilInstance>)> = Vec::new();
             }
         }
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "e2e_tests_cosmos")] {
-                tracing::info!("Running Cosmos e2e tests");
-                let cosmos_chain_config = Some(cosmos::start_chain(ctx.clone()));
+                let mut cosmos_chains = vec![
+                    cosmos::start_chain(ctx.clone(), 0),
+                ];
             } else {
-                let cosmos_chain_config: Option<ChainConfig> = None;
-            }
-        }
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "e2e_tests_crosschain")] {
-                tracing::info!("Running Crosschain e2e tests");
+                let mut cosmos_chains:Vec<(String, CosmosChainConfig, Option<IcTestHandle>)> = Vec::new();
             }
         }
 
@@ -98,20 +93,17 @@ mod e2e {
             home: Some(wavs_path()),
             // deliberately point to a non-existing file
             dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
-            port: None,
-            log_level: Vec::new(),
-            host: None,
-            cors_allowed_origins: Vec::new(),
-            chain: None,
-            cosmos_chain: None,
-            wasm_lru_size: None,
-            wasm_threads: None,
-            submission_mnemonic: None,
-            cosmos_submission_mnemonic: None,
-            max_wasm_fuel: None,
+            ..Default::default()
         })
         .build()
         .unwrap();
+
+        config.eth_chains = eth_chains.iter().map(|(name, _, _)| name.clone()).collect();
+        config.cosmos_chain = cosmos_chains.first().map(|(name, _, _)| name.clone());
+        config.chains = ChainConfigs{
+            cosmos: cosmos_chains.iter().map(|(name, chain, _)| (name.clone(), chain.clone())).collect(), 
+            eth: eth_chains.iter().map(|(name, chain, _)| (name.clone(), chain.clone())).collect(), 
+        };
 
         let aggregator_config: aggregator::config::Config = {
             let mut cli_args = aggregator::test_utils::app::TestApp::zeroed_cli_args();
@@ -120,24 +112,6 @@ mod e2e {
             cli_args.chain = Some("local".to_string());
             ConfigBuilder::new(cli_args).build().unwrap()
         };
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "e2e_tests_cosmos")] {
-                let chain_name = "layer-test-cosmos".to_string();
-                config.cosmos_chain = Some(chain_name.clone());
-                config.chains.cosmos.insert(chain_name, cosmos_chain_config.unwrap());
-            } else {
-                config.cosmos_chain = None;
-            }
-        }
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "e2e_tests_ethereum")] {
-                config.eth_chains = vec!["local".to_string(), "local2".to_string()];
-            } else {
-                config.eth_chains = Vec::new();
-            }
-        }
 
         let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
 
@@ -179,41 +153,37 @@ mod e2e {
                         .await
                         .unwrap();
 
-                        let digests = Digests::new(http_client.clone());
+                        let digests = Digests::new(&http_client).await;
                         let service_ids = ServiceIds::new();
 
-                        match (config.cosmos_chain.is_some(), !config.eth_chains.is_empty()) {
-                            (true, false) => {
-                                cosmos::run_tests_cosmos(http_client, config, digests, service_ids)
-                                    .await
-                            }
-                            (false, true) => {
-                                eth::run_tests_ethereum(
-                                    config.eth_chains[0].clone(),
-                                    config.eth_chains[1].clone(),
-                                    #[allow(clippy::unnecessary_literal_unwrap)]
-                                    anvil.unwrap(),
-                                    #[allow(clippy::unnecessary_literal_unwrap)]
-                                    anvil2.unwrap(),
-                                    http_client,
-                                    config,
-                                    digests,
-                                    service_ids,
-                                )
-                                .await;
-                            }
-                            (true, true) => {
-                                cross_chain::run_tests_crosschain(
-                                    http_client,
-                                    config,
-                                    digests,
-                                    service_ids,
-                                )
+                        let mut eth_apps = Vec::new();
+                        for (name, chain_config, handle) in eth_chains.drain(..) {
+                            eth_apps.push(EthTestApp::new(name, chain_config, handle).await);
+                        }
+
+                        let mut cosmos_apps = Vec::new();
+                        for (name, chain_config, handle) in cosmos_chains.drain(..) {
+                            cosmos_apps.push(CosmosTestApp::new(name, chain_config, handle).await);
+                        }
+
+                        if !eth_apps.is_empty() {
+                            eth::run_tests(eth_apps.clone(), http_client.clone(), digests.clone(), service_ids.clone())
                                 .await
-                            }
-                            (false, false) => panic!(
-                                "No chain selected at all for e2e tests (see e2e_tests_* features)"
-                            ),
+                        }
+                        if !cosmos_apps.is_empty() {
+                            cosmos::run_tests(cosmos_apps.clone(), http_client.clone(), digests.clone(), service_ids.clone())
+                                .await
+                        }
+
+                        if !eth_apps.is_empty() && !cosmos_apps.is_empty() && cfg!(feature = "e2e_tests_crosschain") {
+                            cross_chain::run_tests_crosschain(
+                                eth_apps.clone(),
+                                cosmos_apps.clone(),
+                                http_client,
+                                digests,
+                                service_ids,
+                            )
+                            .await
                         }
                         ctx.kill();
                     }
@@ -226,160 +196,134 @@ mod e2e {
         aggregator_handle.join().unwrap();
     }
 
-    pub struct ServiceIds {}
+    #[derive(Clone)]
+    pub struct ServiceIds {
+        pub eth_square: Option<ServiceID>,
+        pub eth_echo_1: Option<ServiceID>,
+        pub eth_echo_2: Option<ServiceID>,
+        pub eth_echo_aggregate: Option<ServiceID>,
+        pub eth_cosmos_query: Option<ServiceID>,
+        pub eth_permissions: Option<ServiceID>,
+        pub cosmos_permissions: Option<ServiceID>,
+    }
 
     impl ServiceIds {
         pub fn new() -> Self {
-            Self {}
-        }
-
-        #[cfg(feature = "e2e_tests_ethereum_trigger_square")]
-        pub fn eth_trigger_square(&self) -> Option<ServiceID> {
-            Some(ServiceID::new("eth-trigger-square").unwrap())
-        }
-
-        #[cfg(feature = "e2e_tests_ethereum_trigger_echo_1")]
-        pub fn eth_trigger_echo_1(&self) -> Option<ServiceID> {
-            Some(ServiceID::new("eth-trigger-echo-1").unwrap())
-        }
-
-        #[cfg(feature = "e2e_tests_ethereum_trigger_echo_2")]
-        pub fn eth_trigger_echo_2(&self) -> Option<ServiceID> {
-            Some(ServiceID::new("eth-trigger-echo-2").unwrap())
-        }
-
-        #[cfg(feature = "e2e_tests_ethereum_trigger_echo_aggregate")]
-        pub fn eth_trigger_echo_aggregate(&self) -> Option<ServiceID> {
-            Some(ServiceID::new("eth-trigger-echo-aggregate").unwrap())
-        }
-
-        #[cfg(feature = "e2e_tests_ethereum_cosmos_query")]
-        pub fn eth_cosmos_query(&self) -> Option<ServiceID> {
-            Some(ServiceID::new("eth-cosmos-query").unwrap())
-        }
-
-        #[cfg(feature = "e2e_tests_cosmos_permissions")]
-        pub fn cosmos_permissions(&self) -> Option<ServiceID> {
-            Some(ServiceID::new("cosmos-permissions").unwrap())
-        }
-
-        #[cfg(not(feature = "e2e_tests_ethereum_trigger_square"))]
-        pub fn eth_trigger_square(&self) -> Option<ServiceID> {
-            None
-        }
-
-        #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo_1"))]
-        pub fn eth_trigger_echo_1(&self) -> Option<ServiceID> {
-            None
-        }
-
-        #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo_2"))]
-        pub fn eth_trigger_echo_2(&self) -> Option<ServiceID> {
-            None
-        }
-
-        #[cfg(not(feature = "e2e_tests_ethereum_trigger_echo_aggregate"))]
-        pub fn eth_trigger_echo_aggregate(&self) -> Option<ServiceID> {
-            None
-        }
-
-        #[cfg(not(feature = "e2e_tests_ethereum_cosmos_query"))]
-        pub fn eth_cosmos_query(&self) -> Option<ServiceID> {
-            None
-        }
-
-        #[cfg(not(feature = "e2e_tests_cosmos_permissions"))]
-        pub fn cosmos_permissions(&self) -> Option<ServiceID> {
-            None
+            Self {
+                eth_square: if cfg!(feature = "e2e_tests_ethereum_trigger_square") {
+                        Some(ServiceID::new("eth-trigger-square").unwrap())
+                } else {
+                    None
+                },
+                eth_echo_1: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_1") {
+                    Some(ServiceID::new("eth-trigger-echo-1").unwrap())
+                } else {
+                    None
+                },
+                eth_echo_2: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_2") {
+                        Some(ServiceID::new("eth-trigger-echo-2").unwrap())
+                } else {
+                    None
+                },
+                eth_echo_aggregate: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_aggregate") { 
+                        Some(ServiceID::new("eth-trigger-echo-aggregate").unwrap())
+                } else {
+                    None
+                },
+                eth_cosmos_query: if cfg!(feature = "e2e_tests_ethereum_cosmos_query") {
+                        Some(ServiceID::new("eth-cosmos-query").unwrap())
+                } else {
+                    None
+                },
+                eth_permissions: if cfg!(feature = "e2e_tests_ethereum_permissions") {
+                        Some(ServiceID::new("eth-permissions").unwrap())
+                } else {
+                    None
+                },
+                cosmos_permissions: if cfg!(feature = "e2e_tests_cosmos_permissions") {
+                        Some(ServiceID::new("cosmos-permissions").unwrap())
+                } else {
+                    None
+                },
+            }
         }
     }
 
+    #[derive(Clone)]
     pub struct Digests {
-        http_client: HttpClient,
+        permissions: Option<Digest>,
+        square: Option<Digest>,
+        echo_eth_event: Option<Digest>,
+        echo_cosmos_event: Option<Digest>,
+        echo_raw: Option<Digest>,
+        cosmos_query: Option<Digest>,
+        cosmos_trigger_lookup: Option<Digest>,
     }
 
     impl Digests {
-        pub fn new(http_client: HttpClient) -> Self {
-            Self { http_client }
-        }
+        pub async fn new(http_client: &HttpClient) -> Self {
+            async fn get_digest(http_client: &HttpClient, env_var_key: &str, wasm_filename: &str) -> Option<Digest> {
+                let digest = std::env::var(env_var_key);
 
-        #[cfg(feature = "e2e_tests_cosmos_permissions")]
-        pub async fn permissions_digest(&self) -> Option<Digest> {
-            self.get_digest("WAVS_E2E_PERMISSIONS_WASM_DIGEST", "permissions")
-                .await
-        }
+                let digest: Digest = match digest {
+                    Ok(digest) => digest.parse().unwrap(),
+                    Err(_) => {
+                        let wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                            .parent()
+                            .unwrap()
+                            .parent()
+                            .unwrap()
+                            .join("examples")
+                            .join("build")
+                            .join("components")
+                            .join(format!("{}.wasm", wasm_filename));
 
-        #[cfg(feature = "e2e_tests_ethereum_trigger_square")]
-        pub async fn eth_trigger_square_digest(&self) -> Option<Digest> {
-            self.get_digest("WAVS_E2E_ETH_TRIGGER_SQUARE_WASM_DIGEST", "square")
-                .await
-        }
+                        tracing::info!("Uploading wasm: {}", wasm_path.display());
 
-        #[cfg(any(
-            feature = "e2e_tests_ethereum_trigger_echo_1",
-            feature = "e2e_tests_ethereum_trigger_echo_2"
-        ))]
-        pub async fn eth_trigger_echo_digest(&self) -> Option<Digest> {
-            self.get_digest("WAVS_E2E_ETH_TRIGGER_ECHO_WASM_DIGEST", "echo_data")
-                .await
-        }
+                        let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
 
-        #[cfg(feature = "e2e_tests_ethereum_cosmos_query")]
-        pub async fn eth_cosmos_query(&self) -> Option<Digest> {
-            self.get_digest("WAVS_E2E_ETH_COSMOS_QUERY_WASM_DIGEST", "cosmos_query")
-                .await
-        }
+                        http_client
+                            .upload_wasm(wasm_bytes.to_vec())
+                            .await
+                            .unwrap()
+                    }
+                };
 
-        #[cfg(not(feature = "e2e_tests_cosmos_permissions"))]
-        pub async fn permissions_digest(&self) -> Option<Digest> {
-            None
-        }
-
-        #[cfg(not(feature = "e2e_tests_ethereum_trigger_square"))]
-        pub async fn eth_trigger_square_digest(&self) -> Option<Digest> {
-            None
-        }
-
-        #[cfg(not(any(
-            feature = "e2e_tests_ethereum_trigger_echo_1",
-            feature = "e2e_tests_ethereum_trigger_echo_2"
-        )))]
-        pub async fn eth_trigger_echo_digest(&self) -> Option<Digest> {
-            None
-        }
-
-        #[cfg(not(feature = "e2e_tests_ethereum_cosmos_query"))]
-        pub async fn eth_cosmos_query(&self) -> Option<Digest> {
-            None
-        }
-
-        async fn get_digest(&self, env_var_key: &str, wasm_filename: &str) -> Option<Digest> {
-            let digest = std::env::var(env_var_key);
-
-            let digest: Digest = match digest {
-                Ok(digest) => digest.parse().unwrap(),
-                Err(_) => {
-                    let wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                        .parent()
-                        .unwrap()
-                        .parent()
-                        .unwrap()
-                        .join("examples")
-                        .join("build")
-                        .join("components")
-                        .join(format!("{}.wasm", wasm_filename));
-
-                    tracing::info!("Uploading wasm: {}", wasm_path.display());
-
-                    let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
-                    self.http_client
-                        .upload_wasm(wasm_bytes.to_vec())
-                        .await
-                        .unwrap()
-                }
-            };
-
-            Some(digest)
+                Some(digest)
+            }
+            Self { 
+                permissions: if cfg!(feature = "e2e_tests_cosmos_permissions") {
+                    Some(get_digest(http_client, "WAVS_E2E_PERMISSIONS_WASM_DIGEST", "permissions").await.unwrap())
+                } else {
+                    None
+                },
+                square: if cfg!(feature = "e2e_tests_ethereum_trigger_square") {
+                    Some(get_digest(http_client, "WAVS_E2E_SQUARE_WASM_DIGEST", "square").await.unwrap())
+                } else {
+                    None
+                },
+                echo_eth_event: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_1") || cfg!(feature = "e2e_tests_ethereum_trigger_echo_2") || cfg!(feature = "e2e_tests_ethereum_trigger_echo_aggregate") {
+                    Some(get_digest(http_client, "WAVS_E2E_ECHO_ETH_EVENT_WASM_DIGEST", "echo_eth_event").await.unwrap())
+                } else {
+                    None
+                },
+                echo_cosmos_event: if cfg!(feature = "e2e_tests_cosmos_trigger_echo") {
+                    Some(get_digest(http_client, "WAVS_E2E_ECHO_COSMOS_EVENT_WASM_DIGEST", "echo_cosmos_event").await.unwrap())
+                } else {
+                    None
+                },
+                echo_raw: None,
+                cosmos_query: if cfg!(feature = "e2e_tests_ethereum_cosmos_query") {
+                    Some(get_digest(http_client, "WAVS_E2E_COSMOS_QUERY_WASM_DIGEST", "cosmos_query").await.unwrap())
+                } else {
+                    None
+                },
+                cosmos_trigger_lookup: if cfg!(feature = "e2e_tests_ethereum_cosmos_query") {
+                    Some(get_digest(http_client, "WAVS_E2E_COSMOS_TRIGGER_LOOKUP_WASM_DIGEST", "cosmos_trigger_lookup").await.unwrap())
+                } else {
+                    None
+                },
+            }
         }
     }
 }

@@ -1,41 +1,60 @@
 use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
+    collections::{HashMap, HashSet}, sync::Arc, time::Duration
 };
 
-use alloy::node_bindings::AnvilInstance;
+use alloy::node_bindings::{Anvil, AnvilInstance};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use utils::{
-    avs_client::AvsClientBuilder,
-    eigen_client::{CoreAVSAddresses, EigenClient},
-    eth_client::{EthClientBuilder, EthClientConfig},
-    example_client::{SimpleSubmitClient, SimpleTriggerClient},
+    avs_client::AvsClientBuilder, config::EthereumChainConfig, eigen_client::{CoreAVSAddresses, EigenClient}, eth_client::{EthClientBuilder, EthClientConfig}, example_eth_client::{SimpleSubmitClient, SimpleTriggerClient}
 };
 use wavs::{
     apis::{
         dispatcher::{ComponentWorld, Submit},
         trigger::Trigger,
     },
-    config::Config,
+    config::Config, AppContext,
 };
 
 use crate::e2e::payload::{CosmosQueryRequest, CosmosQueryResponse, SquareRequest, SquareResponse};
 
 use super::{http::HttpClient, Digests, ServiceIds};
 
+pub fn start_chain(ctx: AppContext, index: u8) -> (String, EthereumChainConfig, Option<AnvilInstance>) {
+    let port = 8545 + index as u16;
+    let chain_id = 31337 + index as u64;
+
+    let anvil = Anvil::new().port(port).chain_id(chain_id).spawn();
+
+    (
+        format!("local-eth-test-{}", index),
+        EthereumChainConfig {
+            chain_id: 31337.to_string(),
+            http_endpoint: anvil.endpoint(), 
+            ws_endpoint: anvil.ws_endpoint(),
+            aggregator_endpoint: None,
+            faucet_endpoint: None,
+        },
+        Some(anvil)
+    )
+}
+        
+
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct EthTestApp {
     pub eigen_client: EigenClient,
     pub core_contracts: CoreAVSAddresses,
-    anvil: AnvilInstance,
+    pub chain_name: String,
+    pub chain_config: EthereumChainConfig,
+    anvil: Option<Arc<AnvilInstance>>,
 }
 
 impl EthTestApp {
-    pub async fn new(_config: Config, anvil: AnvilInstance) -> Self {
+    pub async fn new(chain_name: String, chain_config: EthereumChainConfig, anvil: Option<AnvilInstance>) -> Self {
         let config = EthClientConfig {
-            ws_endpoint: Some(anvil.ws_endpoint().to_string()),
-            http_endpoint: anvil.endpoint().to_string(),
+            ws_endpoint: Some(chain_config.ws_endpoint.clone()),
+            http_endpoint: chain_config.http_endpoint.clone(),
             mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),
@@ -56,8 +75,10 @@ impl EthTestApp {
 
         Self {
             eigen_client,
-            anvil,
+            anvil: anvil.map(Arc::new),
             core_contracts,
+            chain_name,
+            chain_config,
         }
     }
 
@@ -84,99 +105,73 @@ impl EthTestApp {
     }
 }
 
-pub async fn run_tests_ethereum(
-    chain_name: String,
-    chain_name2: String,
-    anvil: AnvilInstance,
-    anvil2: AnvilInstance,
+pub async fn run_tests(
+    eth_apps: Vec<EthTestApp>,
     http_client: HttpClient,
-    config: Config,
     digests: Digests,
     service_ids: ServiceIds,
 ) {
     tracing::info!("Running e2e ethereum tests");
 
-    let app = EthTestApp::new(config.clone(), anvil).await;
-    let app_2 = EthTestApp::new(config.clone(), anvil2).await;
-
-    let trigger_echo_digest = digests.eth_trigger_echo_digest().await;
-    let trigger_square_digest = digests.eth_trigger_square_digest().await;
-    let cosmos_query_digest = digests.eth_cosmos_query().await;
-
-    let trigger_echo_service_id_1 = service_ids.eth_trigger_echo_1();
-    let trigger_echo_service_id_2 = service_ids.eth_trigger_echo_2();
-    let trigger_echo_aggregate_service_id = service_ids.eth_trigger_echo_aggregate();
-    let trigger_square_service_id = service_ids.eth_trigger_square();
-    let cosmos_query_service_id = service_ids.eth_cosmos_query();
-
     let mut clients = HashMap::new();
     let mut contract_addrs = HashSet::new();
 
-    for (service_id, digest, world, is_aggregate, is_second_ethereum) in [
+    for (service_id, digest, world, is_aggregate, app) in [
         (
-            trigger_echo_service_id_1.clone(),
-            trigger_echo_digest.clone(),
+            service_ids.eth_echo_1.clone(),
+            digests.echo_eth_event.clone(),
             ComponentWorld::ChainEvent,
             false,
-            false,
+            eth_apps[0].clone(),
         ),
         (
-            trigger_echo_service_id_2.clone(),
-            trigger_echo_digest.clone(),
+            service_ids.eth_echo_2.clone(),
+            digests.echo_eth_event.clone(),
             ComponentWorld::ChainEvent,
             false,
+            eth_apps[1].clone(),
+        ),
+        (
+            service_ids.eth_echo_aggregate.clone(),
+            digests.echo_eth_event.clone(),
+            ComponentWorld::ChainEvent,
             true,
+            eth_apps[0].clone(),
         ),
         (
-            trigger_echo_aggregate_service_id.clone(),
-            trigger_echo_digest,
+            service_ids.eth_square.clone(),
+            digests.square.clone(),
             ComponentWorld::ChainEvent,
-            true,
             false,
+            eth_apps[0].clone(),
         ),
         (
-            trigger_square_service_id.clone(),
-            trigger_square_digest,
+            service_ids.eth_cosmos_query.clone(),
+            digests.cosmos_query.clone(),
             ComponentWorld::ChainEvent,
             false,
-            false,
-        ),
-        (
-            cosmos_query_service_id.clone(),
-            cosmos_query_digest,
-            ComponentWorld::ChainEvent,
-            false,
-            false,
+            eth_apps[0].clone(),
         ),
     ] {
         if service_id.is_some() {
             let service_id = service_id.unwrap();
             let digest = digest.unwrap();
 
-            let (trigger_client, submit_client) = match is_second_ethereum {
-                false => app.deploy_service_contracts().await,
-                true => app_2.deploy_service_contracts().await,
-            };
+            let (trigger_client, submit_client) = app.deploy_service_contracts().await; 
 
-            let chain_name = match is_second_ethereum {
-                false => chain_name.clone(),
-                true => chain_name2.clone(),
-            };
-
-            let app_name = match is_second_ethereum {
-                false => "app",
-                true => "app_2",
-            };
-
-            if !contract_addrs.insert((app_name, trigger_client.contract_address.clone())) {
+            if !contract_addrs.insert((app.chain_name.clone(), trigger_client.contract_address.clone())) {
                 panic!(
-                    "({app_name}) ({service_id}) Duplicate trigger contract address: {}",
+                    "({}) ({}) Duplicate trigger contract address: {}",
+                    app.chain_name,
+                    service_id,
                     trigger_client.contract_address
                 );
             }
-            if !contract_addrs.insert((app_name, submit_client.contract_address.clone())) {
+            if !contract_addrs.insert((app.chain_name.clone(), submit_client.contract_address.clone())) {
                 panic!(
-                    "({app_name}) ({service_id}) Duplicate submit contract address: {}",
+                    "({}) ({}) Duplicate submit contract address: {}",
+                    app.chain_name,
+                    service_id,
                     submit_client.contract_address
                 );
             }
@@ -190,9 +185,9 @@ pub async fn run_tests_ethereum(
                 .create_service(
                     service_id.clone(),
                     digest,
-                    Trigger::contract_event(trigger_contract_address.clone(), chain_name.clone()),
+                    Trigger::contract_event(trigger_contract_address.clone(), app.chain_name.clone()),
                     Submit::eigen_contract(
-                        chain_name.to_string(),
+                        app.chain_name.to_string(),
                         submit_contract_address.clone(),
                         false, // FIXME, use is_aggregate: https://github.com/Lay3rLabs/WAVS/issues/254
                     ),
@@ -206,9 +201,9 @@ pub async fn run_tests_ethereum(
             if is_aggregate {
                 http_client
                     .register_service_on_aggregator(
-                        &chain_name,
+                        &app.chain_name,
                         submit_client.contract_address.clone(),
-                        &config,
+                        &app.chain_config,
                     )
                     .await
                     .unwrap();
@@ -223,7 +218,7 @@ pub async fn run_tests_ethereum(
         }
     }
 
-    if let Some(service_id) = trigger_echo_service_id_1 {
+    if let Some(service_id) = service_ids.eth_echo_1 {
         let (trigger_client, submit_client) = clients.get(&service_id).unwrap();
         tracing::info!("Submitting trigger_echo task...");
         let echo_trigger_id = trigger_client.add_trigger(b"foo".to_vec()).await.unwrap();
@@ -250,7 +245,7 @@ pub async fn run_tests_ethereum(
         .unwrap();
     }
 
-    if let Some(service_id) = trigger_echo_service_id_2 {
+    if let Some(service_id) = service_ids.eth_echo_2 {
         let (trigger_client, submit_client) = clients.get(&service_id).unwrap();
         tracing::info!("Submitting trigger_echo task...");
         let echo_trigger_id = trigger_client.add_trigger(b"foo".to_vec()).await.unwrap();
@@ -277,7 +272,7 @@ pub async fn run_tests_ethereum(
         .unwrap();
     }
 
-    if let Some(service_id) = trigger_square_service_id {
+    if let Some(service_id) = service_ids.eth_square {
         let (trigger_client, submit_client) = clients.get(&service_id).unwrap();
         tracing::info!("Submitting square task...");
         let square_trigger_id = trigger_client
@@ -317,7 +312,7 @@ pub async fn run_tests_ethereum(
         .unwrap();
     }
 
-    if let Some(service_id) = trigger_echo_aggregate_service_id {
+    if let Some(service_id) = service_ids.eth_echo_aggregate {
         let (trigger_client, submit_client) = clients.get(&service_id).unwrap();
         let echo_aggregate_trigger_id_1 = trigger_client
             .add_trigger(b"foo-aggregate".to_vec())
@@ -369,7 +364,7 @@ pub async fn run_tests_ethereum(
         .unwrap();
     }
 
-    if let Some(service_id) = cosmos_query_service_id {
+    if let Some(service_id) = service_ids.eth_cosmos_query {
         let (trigger_client, submit_client) = clients.get(&service_id).unwrap();
         tracing::info!("Submitting cosmos query tasks...");
         let trigger_id = trigger_client

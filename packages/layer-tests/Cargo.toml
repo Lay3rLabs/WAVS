@@ -7,8 +7,8 @@ authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 
 [features]
-default = []
-# default = ["e2e_tests_cosmos"]
+# default = []
+default = ["e2e_tests_cosmos"]
 # default = ["e2e_tests_ethereum_baseline", "e2e_tests_cosmos_baseline", "e2e_tests_crosschain"]
 e2e_tests_cosmos = []
 e2e_tests_ethereum = []

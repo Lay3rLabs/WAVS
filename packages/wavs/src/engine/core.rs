@@ -361,7 +361,7 @@ mod tests {
         dispatcher::ServiceConfig,
         ServiceID, WorkflowID,
     };
-    use utils::example_client::{SimpleSubmitClient, SimpleTriggerClient};
+    use utils::example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient};
 
     use crate::{
         storage::memory::MemoryStorage,
@@ -432,7 +432,7 @@ mod tests {
                     data: TriggerData::CosmosContractEvent {
                         contract_address: rand_address_layer(),
                         chain_id: "cosmos".to_string(),
-                        event_data: Some(SimpleTriggerClient::trigger_info_bytes(
+                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
                             rand_address_eth_alloy(),
                             0,
                             br#"{"x":12}"#,
@@ -443,7 +443,7 @@ mod tests {
             )
             .unwrap();
 
-        let (_, data) = SimpleSubmitClient::decode_data_with_id_bytes(&result).unwrap();
+        let (_, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
 
         assert_eq!(&data, br#"{"y":144}"#);
     }
@@ -537,7 +537,7 @@ mod tests {
                     data: TriggerData::CosmosContractEvent {
                         contract_address: rand_address_layer(),
                         chain_id: "cosmos".to_string(),
-                        event_data: Some(SimpleTriggerClient::trigger_info_bytes(
+                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
                             rand_address_eth_alloy(),
                             0,
                             br#"{"x":12}"#,

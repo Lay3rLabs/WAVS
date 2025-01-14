@@ -14,6 +14,7 @@ impl NewMessageEvent {
 impl From<NewMessageEvent> for Event {
     fn from(src: NewMessageEvent) -> Self {
         Event::new(NewMessageEvent::KEY).add_attributes(vec![
+            ("id", src.id.to_string()),
             ("data", hex::encode(src.data)),
         ])
     }

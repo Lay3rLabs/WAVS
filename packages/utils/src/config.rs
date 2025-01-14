@@ -218,7 +218,7 @@ impl ConfigFilePath {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
     pub cosmos: HashMap<String, CosmosChainConfig>,
