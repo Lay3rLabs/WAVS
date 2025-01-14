@@ -110,8 +110,9 @@ impl ServiceRequestParser {
     }
 
     async fn parse(&self, req: ServiceRequest) -> anyhow::Result<Service> {
-        let component_id = req.config.clone().component_id;
-        let workflow_id = req.config.clone().workflow_id;
+        let service_config = req.config.clone();
+        let component_id = service_config.component_id;
+        let workflow_id = service_config.workflow_id;
         let service_id = req.id;
 
         let component = Component {

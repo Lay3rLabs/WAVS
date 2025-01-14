@@ -127,7 +127,7 @@ impl MockE2ETestRunner {
                 id: service_id,
                 digest: digest.into(),
                 permissions,
-                config: config.clone(),
+                config,
                 testable: None,
                 submit: Submit::eth_aggregator_tx(
                     "eth".to_string(),
