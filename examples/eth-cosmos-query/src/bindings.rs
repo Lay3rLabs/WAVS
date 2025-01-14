@@ -113,14 +113,14 @@ macro_rules! __export_eth_trigger_world_impl {
 #[doc(inline)]
 pub(crate) use __export_eth_trigger_world_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[link_section = "component-type:wit-bindgen:0.30.0:eth-trigger-world:encoded world"]
+#[link_section = "component-type:wit-bindgen:0.35.0:lay3r:avs@0.3.0:eth-trigger-world:encoded world"]
 #[doc(hidden)]
 pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 224] = *b"\
 \0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07Y\x01A\x02\x01A\x04\x01\
 p}\x01j\x01\0\x01s\x01@\x01\x05input\0\0\x01\x04\0\x13process-eth-trigger\x01\x02\
-\x04\x01!lay3r:avs/eth-trigger-world@0.3.0\x04\0\x0b\x17\x01\0\x11eth-trigger-wo\
-rld\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.215.0\x10\
-wit-bindgen-rust\x060.30.0";
+\x04\0!lay3r:avs/eth-trigger-world@0.3.0\x04\0\x0b\x17\x01\0\x11eth-trigger-worl\
+d\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.220.0\x10\
+wit-bindgen-rust\x060.35.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

@@ -203,14 +203,11 @@ fn mock_e2e_service_settings() {
                 ..Default::default()
             };
 
-            let envs = vec![("KEY".to_string(), "VALUE".to_string())];
-
             runner
                 .create_service(
                     service_id.clone(),
                     digest.clone(),
                     permissions.clone(),
-                    envs.clone(),
                     BigSquare,
                 )
                 .await;
@@ -218,7 +215,6 @@ fn mock_e2e_service_settings() {
             let services = runner.list_services().await;
 
             assert_eq!(services.services[0].permissions, permissions);
-            assert_eq!(services.services[0].envs, envs);
         }
     })
 }

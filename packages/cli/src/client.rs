@@ -103,7 +103,6 @@ impl HttpClient {
                 allowed_http_hosts: AllowedHostPermission::All,
                 file_system: true,
             },
-            envs: Vec::new(),
             testable: Some(true),
             submit,
         };
