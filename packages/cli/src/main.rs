@@ -19,7 +19,7 @@ use rand::rngs::OsRng;
 use task::add_task;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{config::ConfigExt, layer_contract_client::SignedData};
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{ServiceID, WorkflowID};
 
 #[tokio::main]
 async fn main() {

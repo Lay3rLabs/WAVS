@@ -3,7 +3,7 @@ use utils::{
     eigen_client::CoreAVSAddresses,
     layer_contract_client::{LayerAddresses, SignedData},
 };
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{ServiceID, WorkflowID};
 
 #[derive(Debug)]
 pub struct DisplayBuilder {

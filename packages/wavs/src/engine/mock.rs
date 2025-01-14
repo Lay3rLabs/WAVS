@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
 use crate::apis::dispatcher::ServiceConfig;
-use crate::apis::{ServiceID, WorkflowID};
 use crate::Digest;
 use lavs_apis::id::TaskId;
 use tracing::instrument;
 use utils::layer_contract_client::TriggerId;
+use utils::{ServiceID, WorkflowID};
 
 use super::{Engine, EngineError};
 

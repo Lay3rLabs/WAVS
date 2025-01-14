@@ -10,7 +10,6 @@ use crate::{
             Component, Permissions, Service, ServiceConfig, ServiceStatus, Submit, Workflow,
         },
         trigger::Trigger,
-        ComponentID, ServiceID, WorkflowID,
     },
     http::{
         error::HttpResult,
@@ -18,6 +17,7 @@ use crate::{
         types::{ShaDigest, TriggerRequest},
     },
 };
+use utils::{ComponentID, ServiceID, WorkflowID};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -158,14 +158,12 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        apis::{
-            dispatcher::{Permissions, ServiceConfig, ServiceStatus, Submit},
-            ServiceID,
-        },
+        apis::dispatcher::{Permissions, ServiceConfig, ServiceStatus, Submit},
         http::{handlers::service::add::TriggerRequest, types::ShaDigest},
         test_utils::address::rand_address_eth,
         Digest,
     };
+    use utils::ServiceID;
 
     use super::{ServiceRequest, ServiceRequestParser};
 

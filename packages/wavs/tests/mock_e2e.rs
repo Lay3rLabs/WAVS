@@ -2,11 +2,9 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
+use utils::{ServiceID, WorkflowID};
 use wavs::{
-    apis::{
-        dispatcher::{AllowedHostPermission, Permissions, ServiceConfig},
-        ServiceID, WorkflowID,
-    },
+    apis::dispatcher::{AllowedHostPermission, Permissions, ServiceConfig},
     engine::runner::EngineRunner,
     test_utils::{
         address::rand_address_eth,

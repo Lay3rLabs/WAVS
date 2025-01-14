@@ -5,7 +5,6 @@ use crate::{
     apis::{
         dispatcher::{DispatchManager, Permissions, ServiceConfig, Submit},
         engine::EngineError,
-        ServiceID,
     },
     dispatcher::Dispatcher,
     engine::{
@@ -32,6 +31,7 @@ use axum::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tower::Service;
+use utils::ServiceID;
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,

@@ -1,11 +1,9 @@
 use anyhow::Result;
 use serde::{de::DeserializeOwned, Serialize};
+use utils::ServiceID;
 use wavs::apis::dispatcher::ServiceConfig;
 use wavs::{
-    apis::{
-        dispatcher::{AllowedHostPermission, Permissions, Submit},
-        ServiceID,
-    },
+    apis::dispatcher::{AllowedHostPermission, Permissions, Submit},
     config::Config,
     http::{
         handlers::service::{

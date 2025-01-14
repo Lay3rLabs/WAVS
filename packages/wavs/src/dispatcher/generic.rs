@@ -11,7 +11,7 @@ use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
 use crate::apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager};
-use crate::apis::{IDError, ServiceID};
+use utils::{IDError, ServiceID};
 
 use crate::engine::runner::EngineRunner;
 use crate::storage::db::{DBError, RedbStorage, Table, JSON};
@@ -322,7 +322,6 @@ mod tests {
             dispatcher::{Component, ServiceStatus, Submit},
             submission::ChainMessage,
             trigger::{Trigger, TriggerData},
-            ComponentID, WorkflowID,
         },
         engine::{
             identity::IdentityEngine,
@@ -335,6 +334,7 @@ mod tests {
         triggers::mock::MockTriggerManagerVec,
         Digest,
     };
+    use utils::{ComponentID, ServiceID, WorkflowID};
 
     use super::*;
 

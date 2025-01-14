@@ -20,12 +20,9 @@ mod e2e {
     };
     use layer_climb::prelude::*;
     use serde::{Deserialize, Serialize};
+    use utils::ServiceID;
     use utils::{config::ConfigBuilder, layer_contract_client::LayerContractClientSimple};
-    use wavs::{
-        apis::{dispatcher::Submit, ServiceID},
-        http::types::TriggerRequest,
-        test_utils::app::TestApp,
-    };
+    use wavs::{apis::dispatcher::Submit, http::types::TriggerRequest, test_utils::app::TestApp};
     use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};
 
     fn workspace_path() -> PathBuf {

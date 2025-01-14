@@ -3,11 +3,11 @@ use std::{collections::BTreeMap, ops::Bound};
 use super::{
     submission::ChainMessage,
     trigger::{Trigger, TriggerAction},
-    ComponentID, ServiceID, WorkflowID,
 };
 use crate::{AppContext, Digest};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
+use utils::{ComponentID, ServiceID, WorkflowID};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
