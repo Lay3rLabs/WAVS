@@ -94,6 +94,8 @@ impl HttpClient {
         };
 
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
+        let workflow_id = config.workflow_id.clone();
+        let component_id = config.component_id.clone();
 
         let service = ServiceRequest {
             trigger: TriggerRequest::eth_event(trigger_address),
@@ -106,6 +108,8 @@ impl HttpClient {
             testable: Some(true),
             submit,
             config,
+            workflow_id,
+            component_id,
         };
 
         let body = serde_json::to_string(&AddServiceRequest {

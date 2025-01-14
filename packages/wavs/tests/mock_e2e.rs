@@ -18,8 +18,12 @@ fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
     let service_id = ServiceID::new("service1").unwrap();
-    let workflow_id = WorkflowID::new("default").unwrap();
+    let workflow_id = WorkflowID::new("test-workflow").unwrap();
     let task_queue_address = rand_address_eth();
+    let config = ServiceConfig {
+        workflow_id: workflow_id.clone(),
+        ..Default::default()
+    };
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
@@ -28,8 +32,15 @@ fn mock_e2e_trigger_flow() {
 
         async move {
             let digest = Digest::new(b"wasm");
+
             runner
-                .create_service_simple(service_id.clone(), digest, BigSquare)
+                .create_service(
+                    service_id.clone(),
+                    digest,
+                    Permissions::default(),
+                    config,
+                    BigSquare,
+                )
                 .await;
         }
     });

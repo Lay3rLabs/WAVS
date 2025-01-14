@@ -91,6 +91,18 @@ new_id_type!(ServiceID);
 new_id_type!(ComponentID);
 new_id_type!(WorkflowID);
 
+impl Default for WorkflowID {
+    fn default() -> Self {
+        WorkflowID::new("default").unwrap()
+    }
+}
+
+impl Default for ComponentID {
+    fn default() -> Self {
+        ComponentID::new("default").unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

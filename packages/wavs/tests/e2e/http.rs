@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{de::DeserializeOwned, Serialize};
-use utils::ServiceID;
+use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::apis::dispatcher::ServiceConfig;
 use wavs::{
     apis::dispatcher::{AllowedHostPermission, Permissions, Submit},
@@ -60,6 +60,8 @@ impl HttpClient {
             testable: Some(true),
             config: ServiceConfig::default(),
             submit,
+            workflow_id: WorkflowID::default(),
+            component_id: ComponentID::default(),
         };
 
         let body = serde_json::to_string(&AddServiceRequest {

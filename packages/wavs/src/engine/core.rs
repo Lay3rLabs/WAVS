@@ -282,6 +282,7 @@ impl WasiHttpView for Host {
 #[cfg(test)]
 mod tests {
     use apis::dispatcher::ServiceConfig;
+    use utils::ComponentID;
 
     use crate::storage::memory::MemoryStorage;
 
@@ -359,11 +360,15 @@ mod tests {
 
         let digest = engine.store_wasm(ETH_TRIGGER_ECHO).unwrap();
         let component = crate::apis::dispatcher::Component::new(&digest);
+
+        let workflow_id = WorkflowID::default();
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
             max_gas: None,
+            component_id: ComponentID::default(),
+            workflow_id: workflow_id.clone(),
         };
 
         // verify service config kv is accessible
@@ -372,7 +377,7 @@ mod tests {
                 &component,
                 &service_config,
                 &ServiceID::new("foobar").unwrap(),
-                &WorkflowID::new("default").unwrap(),
+                &workflow_id,
                 TriggerId::new(12345),
                 br#"envvar:foo"#.into(),
             )
@@ -385,7 +390,7 @@ mod tests {
                 &component,
                 &service_config,
                 &ServiceID::new("foobar").unwrap(),
-                &WorkflowID::new("default").unwrap(),
+                &workflow_id,
                 TriggerId::new(12345),
                 br#"envvar:WAVS_ENV_TEST"#.into(),
             )
@@ -398,7 +403,7 @@ mod tests {
                 &component,
                 &service_config,
                 &ServiceID::new("foobar").unwrap(),
-                &WorkflowID::new("default").unwrap(),
+                &workflow_id,
                 TriggerId::new(12345),
                 br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#.into(),
             )

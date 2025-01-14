@@ -37,6 +37,8 @@ pub struct ServiceRequest {
     // so we'll just treat it as an ID for here, and keep "name" field for backwards compat
     #[serde(rename = "name")]
     pub id: ServiceID,
+    pub workflow_id: WorkflowID,
+    pub component_id: ComponentID,
     pub digest: ShaDigest,
     pub trigger: TriggerRequest,
     pub permissions: Permissions,
@@ -110,8 +112,8 @@ impl ServiceRequestParser {
     }
 
     async fn parse(&self, req: ServiceRequest) -> anyhow::Result<Service> {
-        let component_id = ComponentID::new("default")?;
-        let workflow_id = WorkflowID::new("default")?;
+        let component_id = req.component_id;
+        let workflow_id = req.workflow_id;
         let service_id = req.id;
 
         let component = Component {
@@ -163,7 +165,7 @@ mod test {
         test_utils::address::rand_address_eth,
         Digest,
     };
-    use utils::ServiceID;
+    use utils::{ComponentID, ServiceID, WorkflowID};
 
     use super::{ServiceRequest, ServiceRequestParser};
 
@@ -200,6 +202,8 @@ mod test {
                 testable: Some(true),
                 submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth(), None),
                 config: ServiceConfig::default(),
+                workflow_id: WorkflowID::default(),
+                component_id: ComponentID::default(),
             }
         }
 
