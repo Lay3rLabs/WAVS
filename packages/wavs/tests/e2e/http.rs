@@ -60,8 +60,6 @@ impl HttpClient {
             testable: Some(true),
             config: ServiceConfig::default(),
             submit,
-            workflow_id: WorkflowID::default(),
-            component_id: ComponentID::default(),
         };
 
         let body = serde_json::to_string(&AddServiceRequest {

@@ -134,8 +134,6 @@ impl MockE2ETestRunner {
                     rand_address_eth(),
                     config.max_gas,
                 ),
-                workflow_id: config.workflow_id,
-                component_id: config.component_id,
             },
             wasm_url: None,
         })
