@@ -73,16 +73,25 @@ impl LayerContractClientSimple {
     }
 
     // helper to add a single signed payload to the contract
-    pub async fn add_signed_payload(&self, signed_payload: SignedPayload) -> Result<()> {
+    pub async fn add_signed_payload(
+        &self,
+        signed_payload: SignedPayload,
+        gas: Option<u64>,
+    ) -> Result<()> {
         let trigger_id = signed_payload.trigger_id;
         tracing::debug!("Signing and responding to trigger {}", trigger_id);
 
         let signed_payload_abi = signed_payload.into_submission_abi();
 
+        // EIP-1559 has a default 30m gas limit per block without override. Else:
+        // 'a intrinsic gas too high -- tx.gas_limit > env.block.gas_limit' is thrown
+        let gas = gas.unwrap_or(500_000).min(30_000_000);
+        tracing::debug!("Adding signed payload for trigger {} with gas {}", trigger_id, gas);
+
         let result = self
             .service_manager_contract
             .addSignedPayloadForTrigger(signed_payload_abi)
-            .gas(500000)
+            .gas(gas)
             .send()
             .await;
 

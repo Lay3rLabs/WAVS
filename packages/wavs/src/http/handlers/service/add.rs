@@ -200,7 +200,7 @@ mod test {
                 trigger: TriggerRequest::eth_event(addr),
                 permissions: Permissions::default(),
                 testable: Some(true),
-                submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth()),
+                submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth(), None),
                 config: ServiceConfig::default(),
             }
         }

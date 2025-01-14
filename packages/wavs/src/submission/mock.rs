@@ -105,7 +105,8 @@ mod test {
             trigger_config: TriggerConfig::eth_event(service, service, rand_address_eth()).unwrap(),
             trigger_id: TriggerId::new(rand::thread_rng().gen::<u64>()),
             wasm_result: payload.as_bytes().to_vec(),
-            submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth()),
+            submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth(), None),
+            // service_config: ServiceConfig::default(),
         }
     }
 

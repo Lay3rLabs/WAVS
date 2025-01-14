@@ -117,6 +117,7 @@ pub enum Submit {
     EthAggregatorTx {
         chain_name: String,
         service_manager_addr: Address,
+        max_gas: Option<u64>,
     },
     /// Sending a message to the eth chain directly
     EthSignedMessage {
@@ -124,6 +125,7 @@ pub enum Submit {
         service_manager_addr: Address,
         /// The hd index of the mnemonic to sign with
         hd_index: u32,
+        max_gas: Option<u64>,
     },
 }
 
@@ -134,21 +136,28 @@ impl Submit {
             verifier_addr,
         }
     }
-    pub fn eth_aggregator_tx(chain_name: String, service_manager_addr: Address) -> Self {
+    pub fn eth_aggregator_tx(
+        chain_name: String,
+        service_manager_addr: Address,
+        max_gas: Option<u64>,
+    ) -> Self {
         Submit::EthAggregatorTx {
             chain_name,
             service_manager_addr,
+            max_gas,
         }
     }
     pub fn eth_signed_message(
         chain_name: String,
         hd_index: u32,
         service_manager_addr: Address,
+        max_gas: Option<u64>,
     ) -> Self {
         Submit::EthSignedMessage {
             chain_name,
             hd_index,
             service_manager_addr,
+            max_gas,
         }
     }
 }
@@ -186,12 +195,15 @@ pub struct ServiceConfig {
     /// Components read the values with `std::env::var`, case sensitive & no prefix required.
     /// Values here are viewable by anyone. Use host_envs to set private values.
     pub kv: Vec<(String, String)>,
+    /// The maximum on chain gas to use for a submission
+    pub max_gas: Option<u64>,
 }
 
 impl Default for ServiceConfig {
     fn default() -> Self {
         Self {
             fuel_limit: 100_000_000,
+            max_gas: None,
             host_envs: vec![],
             kv: vec![],
         }

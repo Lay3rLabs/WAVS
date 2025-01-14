@@ -50,7 +50,7 @@ pub trait EngineRunner: Send + Sync {
 
                 let wasm_result = self.engine().execute_queue(
                     component,
-                    &service.config.unwrap_or_default(),
+                    &service.config.clone().unwrap_or_default(),
                     &service.id,
                     task_id,
                     payload,
@@ -62,6 +62,7 @@ pub trait EngineRunner: Send + Sync {
                     wasm_result,
                     task_id,
                     submit,
+                    // service_config: service.config.unwrap_or_default(),
                 }))
             }
             TriggerData::EthEvent {
@@ -72,7 +73,7 @@ pub trait EngineRunner: Send + Sync {
             } => {
                 let wasm_result = self.engine().execute_eth_event(
                     component,
-                    &service.config.unwrap_or_default(),
+                    &service.config.clone().unwrap_or_default(),
                     &service_id,
                     &workflow_id,
                     trigger_id,
@@ -84,6 +85,7 @@ pub trait EngineRunner: Send + Sync {
                     wasm_result,
                     trigger_id,
                     submit,
+                    // service_config: service.config.unwrap_or_default(),
                 }))
             }
         }

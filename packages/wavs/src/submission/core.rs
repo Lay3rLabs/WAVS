@@ -282,6 +282,7 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    #[allow(clippy::too_many_arguments)]
     async fn submit_to_ethereum(
         &self,
         chain_name: String,
@@ -289,6 +290,7 @@ impl CoreSubmission {
         trigger_address: Address,
         service_manager_address: Address,
         msg: ChainMessage,
+        max_gas: Option<u64>,
         aggregate: bool,
     ) -> Result<(), SubmissionError> {
         let trigger_address = match trigger_address {
@@ -372,7 +374,7 @@ impl CoreSubmission {
                 }
             }
         } else {
-            match avs_client.add_signed_payload(signed_payload).await {
+            match avs_client.add_signed_payload(signed_payload, max_gas).await {
                 Ok(_) => {
                     tracing::debug!(
                         "Submission to Eth for trigger id {} successful!",
@@ -516,27 +518,31 @@ impl Submission for CoreSubmission {
                             };
 
                             match msg.submit() {
-                                Submit::EthSignedMessage{service_manager_addr, chain_name, ..} => {
+                                Submit::EthSignedMessage{service_manager_addr, chain_name, max_gas, ..} => {
+                                    let max_gas = *max_gas;
+
                                     match &msg.trigger_config().trigger {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
                                         Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, false).await {
+                                            // let config = msg.service_config()
+                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, max_gas, false).await {
                                                 tracing::error!("{:?}", e);
                                             }
                                         },
                                     }
                                 },
-                                Submit::EthAggregatorTx{service_manager_addr, chain_name} => {
+                                Submit::EthAggregatorTx{service_manager_addr, chain_name, max_gas} => {
+                                    let max_gas = *max_gas;
                                     match &msg.trigger_config().trigger  {
                                         Trigger::LayerQueue { .. } => {
                                             tracing::error!("Cross chain from Layer trigger to Ethereum submission is not supported yet");
                                             continue;
                                         },
                                         Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, true).await {
+                                            if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, max_gas, true).await {
                                                 tracing::error!("{:?}", e);
                                             }
                                         },

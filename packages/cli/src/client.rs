@@ -92,6 +92,7 @@ impl HttpClient {
             chain_name: self.chain_name.clone(),
             hd_index: 0,
             service_manager_addr: Address::Eth(AddrEth::new(service_manager_address.into())),
+            max_gas: config.max_gas,
         };
 
         let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
