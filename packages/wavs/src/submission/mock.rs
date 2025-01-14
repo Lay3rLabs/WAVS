@@ -106,7 +106,6 @@ mod test {
             trigger_id: TriggerId::new(rand::thread_rng().gen::<u64>()),
             wasm_result: payload.as_bytes().to_vec(),
             submit: Submit::eth_aggregator_tx("eth".to_string(), rand_address_eth(), None),
-            // service_config: ServiceConfig::default(),
         }
     }
 

@@ -527,7 +527,6 @@ impl Submission for CoreSubmission {
                                             continue;
                                         },
                                         Trigger::EthEvent { contract_address: trigger_addr } => {
-                                            // let config = msg.service_config()
                                             if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), eth_client.unwrap(), trigger_addr.clone(), service_manager_addr.clone(), msg, max_gas, false).await {
                                                 tracing::error!("{:?}", e);
                                             }

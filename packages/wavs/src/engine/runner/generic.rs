@@ -62,7 +62,6 @@ pub trait EngineRunner: Send + Sync {
                     wasm_result,
                     task_id,
                     submit,
-                    // service_config: service.config.unwrap_or_default(),
                 }))
             }
             TriggerData::EthEvent {
@@ -85,7 +84,6 @@ pub trait EngineRunner: Send + Sync {
                     wasm_result,
                     trigger_id,
                     submit,
-                    // service_config: service.config.unwrap_or_default(),
                 }))
             }
         }
