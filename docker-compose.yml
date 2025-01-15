@@ -56,7 +56,7 @@ services:
   deploy-eigenlayer:
     image: "ghcr.io/lay3rlabs/wavs:local"
     container_name: "wavs-deploy-eigenlayer"
-    depends_on: ["wavs"]
+    depends_on: ["wavs", "anvil", "aggregator"]
     restart: "no"
     env_file: "./packages/cli/.env"
     command: ["wavs-cli", "deploy-core"]
