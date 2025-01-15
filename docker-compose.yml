@@ -8,6 +8,7 @@
 services:
   anvil:
     image: "ghcr.io/foundry-rs/foundry:stable"
+    platform: linux/amd64
     container_name: "anvil"
     network_mode: "host"
     ports:
