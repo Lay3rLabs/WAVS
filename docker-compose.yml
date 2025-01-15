@@ -53,11 +53,11 @@ services:
       - "./packages/aggregator:/wavs"
     network_mode: "host"
 
-  # TODO: Eigenlayer load state
   deploy-eigenlayer:
     image: "ghcr.io/lay3rlabs/wavs:local"
     container_name: "wavs-deploy-eigenlayer"
     depends_on: ["wavs"]
+    restart: "no"
     env_file: "./packages/cli/.env"
     command: ["wavs-cli", "deploy-core"]
     volumes:
