@@ -4,10 +4,10 @@ use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::{
     apis::{
         dispatcher::{Component, ComponentWorld, Service, ServiceStatus, Submit, Workflow},
-        trigger::Trigger,
+        ComponentID, ServiceID, WorkflowID,
     },
     storage::db::{RedbStorage, Table, JSON},
-    test_utils::address::rand_address_eth,
+    triggers::mock::mock_eth_event_trigger,
     Digest,
 };
 
@@ -84,7 +84,7 @@ fn db_service_store() {
         (
             WorkflowID::new("workflow-id-1").unwrap(),
             Workflow {
-                trigger: Trigger::contract_event(rand_address_eth(), "eth"),
+                trigger: mock_eth_event_trigger(),
                 component: ComponentID::new("component-id-1").unwrap(),
                 submit: Submit::None,
             },
@@ -92,7 +92,7 @@ fn db_service_store() {
         (
             WorkflowID::new("workflow-id-2").unwrap(),
             Workflow {
-                trigger: Trigger::contract_event(rand_address_eth(), "eth"),
+                trigger: mock_eth_event_trigger(),
                 component: ComponentID::new("component-id-2").unwrap(),
                 submit: Submit::None,
             },

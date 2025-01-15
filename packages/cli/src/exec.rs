@@ -4,7 +4,6 @@ use wasmtime::{
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs::bindings::raw::LayerRawWorld;
 
 // This is pretty much all just copy/pasted from wavs... see over there for explanation :)
 pub struct ExecComponentResponse {
@@ -51,9 +50,11 @@ pub async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> ExecCo
     let mut store = wasmtime::Store::new(&engine, host);
     store.set_fuel(u64::MAX).unwrap();
 
-    let instance = LayerRawWorld::instantiate_async(&mut store, &component, &linker)
-        .await
-        .expect("Wasm instantiate failed");
+    let instance = wavs::bindings::worlds::raw::LayerRawWorld::instantiate_async(
+        &mut store, &component, &linker,
+    )
+    .await
+    .expect("Wasm instantiate failed");
 
     let response = instance
         .call_run(&mut store, &input_bytes)

@@ -1,17 +1,11 @@
 use alloy::primitives::LogData;
 use layer_climb::prelude::*;
-use layer_wasi::{canonicalize_any_contract, canonicalize_any_event, canonicalize_chain_configs};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use utils::config::ChainConfigs;
 
-use crate::{
-    bindings::{
-        convert_wit_chain_configs, eth_contract_event::lay3r::avs::layer_types::EthEventLogData,
-    },
-    AppContext,
-};
+use crate::AppContext;
 
 use utils::{IDError, ServiceID, WorkflowID};
 
@@ -159,10 +153,10 @@ impl TriggerData {
         TriggerData::Raw(data.as_ref().to_vec())
     }
 
-    pub fn try_into_component_input_eth(
+    pub fn try_into_component_input_eth_contract_event(
         self,
         chain_configs: ChainConfigs,
-    ) -> Result<crate::bindings::eth_contract_event::Input, TriggerError> {
+    ) -> Result<crate::bindings::worlds::eth_contract_event::Input, TriggerError> {
         match self {
             TriggerData::EthContractEvent {
                 contract_address,
@@ -170,75 +164,76 @@ impl TriggerData {
                 log,
                 block_height,
             } => {
-                let chain_configs = convert_wit_chain_configs(chain_configs);
-                Ok(crate::bindings::eth_contract_event::Input {
-                    contract: alloy::primitives::Address::try_from(contract_address).map_err(TriggerError::Climb)?.to_vec(),
-                    chain_name: chain_name.to_string(),
-                    event_log_data: crate::bindings::eth_contract_event::EthEventLogData {
-                        data: log.data.to_vec(),
-                        topics: log.topics().iter().map(|t| t.to_vec()).collect(),
-                    },
-                    block_height,
-                    chain_configs: canonicalize_chain_configs!(crate::bindings::eth_contract_event::lay3r::avs::layer_types::AnyChainConfig, chain_configs)
-                })
-            }
-            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
-        }
-    }
+                let contract = layer_wasi::bindings::interface::EthAddr::try_from(contract_address)
+                    .map_err(TriggerError::Climb)?;
+                let chain_name: String = chain_name.to_string();
+                let event_log_data: layer_wasi::bindings::interface::EthEventLogData = log.into();
+                let block_height: u64 = block_height;
 
-    pub fn try_into_component_input_cosmos(
-        self,
-        chain_configs: ChainConfigs,
-    ) -> Result<crate::bindings::cosmos_contract_event::Input, TriggerError> {
-        match self {
-            TriggerData::CosmosContractEvent {
-                contract_address,
-                chain_name,
-                event,
-                block_height,
-            } => {
-                let chain_configs = convert_wit_chain_configs(chain_configs);
-                Ok(crate::bindings::cosmos_contract_event::Input {
-                    contract: match contract_address {
-                        layer_climb::prelude::Address::Cosmos { bech32_addr, prefix_len } => {
-                            crate::bindings::cosmos_contract_event::CosmosContract{
-                                bech32_addr: bech32_addr,
-                                prefix_len: prefix_len as u32,
-                            }
-                        },
-                        _ => return Err(TriggerError::Climb(anyhow::anyhow!("Invalid address type for component input")))
-                    },
-                    chain_name: chain_name.to_string(),
-                    event: crate::bindings::cosmos_contract_event::CosmosEvent {
-                        ty: event.ty,
-                        attributes: event.attributes.iter().map(|a| (a.key, a.value)).collect()
-                    },
-                    chain_configs: canonicalize_chain_configs!(crate::bindings::cosmos_contract_event::lay3r::avs::layer_types::AnyChainConfig, chain_configs),
-                    block_height,
-                })
-            }
-            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
-        }
-    }
-
-    pub fn try_into_component_input_any(
-        self,
-        chain_configs: ChainConfigs,
-    ) -> Result<crate::bindings::any_contract_event::Input, TriggerError> {
-        match self {
-            TriggerData::CosmosContractEvent {
-                contract_address,
-                chain_name,
-                event,
-                block_height,
-            } => {
-                let chain_configs = convert_wit_chain_configs(chain_configs);
-                Ok(crate::bindings::any_contract_event::Input{
+                Ok(crate::bindings::worlds::eth_contract_event::Input {
+                    contract: contract.into(),
                     chain_name,
-                    contract: canonicalize_any_contract!(crate::bindings::any_contract_event::AnyContract, contract_address),
-                    event: canonicalize_any_event!(crate::bindings::any_contract_event::AnyEvent, event),
+                    event_log_data: event_log_data.into(),
                     block_height,
-                    chain_configs: canonicalize_chain_configs!(crate::bindings::any_contract_event::lay3r::avs::layer_types::AnyChainConfig, chain_configs),
+                    chain_configs: chain_configs.into(),
+                })
+            }
+            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
+        }
+    }
+
+    pub fn try_into_component_input_cosmos_contract_event(
+        self,
+        chain_configs: ChainConfigs,
+    ) -> Result<crate::bindings::worlds::cosmos_contract_event::Input, TriggerError> {
+        match self {
+            TriggerData::CosmosContractEvent {
+                contract_address,
+                chain_name,
+                event,
+                block_height,
+            } => {
+                let contract =
+                    layer_wasi::bindings::interface::CosmosAddr::try_from(contract_address)
+                        .map_err(TriggerError::Climb)?;
+                let chain_name: String = chain_name.to_string();
+                let event: layer_wasi::bindings::interface::CosmosEvent = event.into();
+                let block_height: u64 = block_height;
+
+                Ok(crate::bindings::worlds::cosmos_contract_event::Input {
+                    contract: contract.into(),
+                    chain_name,
+                    event: event.into(),
+                    block_height,
+                    chain_configs: chain_configs.into(),
+                })
+            }
+            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
+        }
+    }
+
+    pub fn try_into_component_input_any_contract_event(
+        self,
+        chain_configs: ChainConfigs,
+    ) -> Result<crate::bindings::worlds::any_contract_event::Input, TriggerError> {
+        match self {
+            TriggerData::CosmosContractEvent {
+                contract_address,
+                chain_name,
+                event,
+                block_height,
+            } => {
+                let contract = layer_wasi::bindings::interface::AnyAddr::from(contract_address);
+                let chain_name: String = chain_name.to_string();
+                let event: layer_wasi::bindings::interface::AnyEvent = event.into();
+                let block_height: u64 = block_height;
+
+                Ok(crate::bindings::worlds::any_contract_event::Input {
+                    contract: contract.into(),
+                    chain_name,
+                    event: event.into(),
+                    block_height,
+                    chain_configs: chain_configs.into(),
                 })
             }
             TriggerData::EthContractEvent {
@@ -246,19 +241,20 @@ impl TriggerData {
                 chain_name,
                 log,
                 block_height,
-            } => Ok(crate::bindings::any_contract_event::Input {
-                chain_name,
-                contract: canonicalize_any_contract!(
-                    crate::bindings::any_contract_event::AnyContract,
-                    contract_address
-                ),
-                event: canonicalize_any_event!(crate::bindings::any_contract_event::AnyEvent, log),
-                block_height,
-                chain_configs: canonicalize_chain_configs!(
-                    crate::bindings::any_contract_event::lay3r::avs::layer_types::AnyChainConfig,
-                    chain_configs
-                ),
-            }),
+            } => {
+                let contract = layer_wasi::bindings::interface::AnyAddr::from(contract_address);
+                let chain_name: String = chain_name.to_string();
+                let event: layer_wasi::bindings::interface::AnyEvent = log.into();
+                let block_height: u64 = block_height;
+
+                Ok(crate::bindings::worlds::any_contract_event::Input {
+                    contract: contract.into(),
+                    chain_name,
+                    event: event.into(),
+                    block_height,
+                    chain_configs: chain_configs.into(),
+                })
+            }
             _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
         }
     }

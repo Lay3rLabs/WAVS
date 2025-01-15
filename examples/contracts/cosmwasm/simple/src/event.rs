@@ -1,10 +1,10 @@
+use anyhow::{anyhow, Error};
 use cosmwasm_std::{Event, Uint64};
-use anyhow::{Error, anyhow};
 
 #[derive(Debug)]
 pub struct NewMessageEvent {
     pub data: Vec<u8>,
-    pub id: Uint64
+    pub id: Uint64,
 }
 
 impl NewMessageEvent {
@@ -20,12 +20,18 @@ impl From<NewMessageEvent> for Event {
     }
 }
 
-impl TryFrom<Event> for NewMessageEvent{
+impl TryFrom<Event> for NewMessageEvent {
     type Error = Error;
 
     fn try_from(evt: Event) -> anyhow::Result<Self> {
-        if evt.ty.as_str() != format!("wasm-{}", NewMessageEvent::KEY) {
-            return Err(anyhow!("unexpected event type: {}, should be {}", evt.ty, NewMessageEvent::KEY));
+        if evt.ty.as_str() != format!("wasm-{}", NewMessageEvent::KEY)
+            && evt.ty.as_str() != NewMessageEvent::KEY
+        {
+            return Err(anyhow!(
+                "unexpected event type: {}, should be {}",
+                evt.ty,
+                NewMessageEvent::KEY
+            ));
         }
 
         let mut id = None;
@@ -40,11 +46,8 @@ impl TryFrom<Event> for NewMessageEvent{
         }
 
         match (id, data) {
-            (Some(id), Some(data)) => Ok(NewMessageEvent {
-                id,
-                data
-            }),
-            _ => Err(anyhow!("missing required attributes"))
+            (Some(id), Some(data)) => Ok(NewMessageEvent { id, data }),
+            _ => Err(anyhow!("missing required attributes")),
         }
     }
 }

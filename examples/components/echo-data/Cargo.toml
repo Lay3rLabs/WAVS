@@ -7,6 +7,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+layer-wasi = { workspace = true }
 wit-bindgen-rt = { workspace = true }
 example-helpers = { workspace = true }
 wstd = { workspace = true }
@@ -24,13 +25,3 @@ lto = true
 
 [package.metadata.component]
 package = "component:echo-data"
-
-[package.metadata.component.target]
-path = "../../../sdk/wit"
-world = "layer-any-contract-event-world"
-
-[package.metadata.component.target.dependencies]
-"wasi:io" = "=0.2.0"
-"wasi:clocks" = "=0.2.0"
-"wasi:http" = "=0.2.0"
-"wasi:random" = "=0.2.0"

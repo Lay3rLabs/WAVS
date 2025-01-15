@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 example-helpers = { workspace = true }
 wit-bindgen-rt = { workspace = true, features = ["bitflags"] }
 wstd = { workspace = true }
+layer-wasi = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
@@ -26,13 +27,3 @@ lto = true
 
 [package.metadata.component]
 package = "component:square"
-
-[package.metadata.component.target]
-path = "../../../sdk/wit"
-world = "layer-any-contract-event-world"
-
-[package.metadata.component.target.dependencies]
-"wasi:io" = "=0.2.0"
-"wasi:clocks" = "=0.2.0"
-"wasi:http" = "=0.2.0"
-"wasi:random" = "=0.2.0"

@@ -1,4 +1,3 @@
-mod event;
 mod query;
 mod rpc;
 pub use query::*;

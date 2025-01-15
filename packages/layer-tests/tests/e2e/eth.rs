@@ -4,15 +4,21 @@ use std::{
     time::Duration,
 };
 
-use alloy::node_bindings::{Anvil, AnvilInstance};
+use alloy::{
+    node_bindings::{Anvil, AnvilInstance},
+    sol_types::SolEvent,
+};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use utils::{
-    avs_client::AvsClientBuilder,
+    avs_client::AvsClientDeployer,
     config::EthereumChainConfig,
     eigen_client::{CoreAVSAddresses, EigenClient},
     eth_client::{EthClientBuilder, EthClientConfig},
-    example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
+    example_eth_client::{
+        example_submit::SimpleSubmit, example_trigger::SimpleTrigger, SimpleEthSubmitClient,
+        SimpleEthTriggerClient,
+    },
 };
 use wavs::{
     apis::{
@@ -98,9 +104,9 @@ impl EthTestApp {
     pub async fn deploy_service_contracts(
         &self,
     ) -> (SimpleEthTriggerClient, SimpleEthSubmitClient) {
-        let avs_client = AvsClientBuilder::new(self.eigen_client.eth.clone())
+        let avs_client = AvsClientDeployer::new(self.eigen_client.eth.clone())
             .core_addresses(self.core_contracts.clone())
-            .build(SimpleEthSubmitClient::deploy)
+            .deploy(SimpleEthSubmitClient::deploy)
             .await
             .unwrap();
 
@@ -134,36 +140,36 @@ pub async fn run_tests(
     for (service_id, digest, world, is_aggregate, app) in [
         (
             service_ids.eth_echo_1.clone(),
-            digests.echo_eth_event.clone(),
-            ComponentWorld::ChainEvent,
+            digests.echo_data.clone(),
+            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[0].clone(),
         ),
         (
             service_ids.eth_echo_2.clone(),
-            digests.echo_eth_event.clone(),
-            ComponentWorld::ChainEvent,
+            digests.echo_data.clone(),
+            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[1].clone(),
         ),
         (
             service_ids.eth_echo_aggregate.clone(),
-            digests.echo_eth_event.clone(),
-            ComponentWorld::ChainEvent,
+            digests.echo_data.clone(),
+            ComponentWorld::AnyContractEvent,
             true,
             eth_apps[0].clone(),
         ),
         (
             service_ids.eth_square.clone(),
             digests.square.clone(),
-            ComponentWorld::ChainEvent,
+            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[0].clone(),
         ),
         (
             service_ids.eth_cosmos_query.clone(),
             digests.cosmos_query.clone(),
-            ComponentWorld::ChainEvent,
+            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[0].clone(),
         ),
@@ -202,9 +208,10 @@ pub async fn run_tests(
                 .create_service(
                     service_id.clone(),
                     digest,
-                    Trigger::contract_event(
+                    Trigger::eth_contract_event(
                         trigger_contract_address.clone(),
                         app.chain_name.clone(),
+                        SimpleTrigger::NewTrigger::SIGNATURE_HASH,
                     ),
                     Submit::eigen_contract(
                         app.chain_name.to_string(),

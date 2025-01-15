@@ -1,30 +1,30 @@
-#[allow(warnings)]
-mod bindings;
-
 use anyhow::anyhow;
-use example_helpers::{query_trigger, trigger::encode_trigger_output};
+use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use layer_climb_address::Address;
-use layer_wasi::{canonicalize_chain_configs, cosmos::CosmosQuerier};
+use layer_wasi::{
+    bindings::worlds::any_contract_event::{Guest, Input},
+    cosmos::CosmosQuerier,
+    export_any_contract_event_world,
+};
 use serde::{Deserialize, Serialize};
 
 struct Component;
 
-use bindings::{Guest, Input};
-
 impl Guest for Component {
     fn run(input: Input) -> std::result::Result<Vec<u8>, String> {
         wstd::runtime::block_on(move |reactor| async move {
-            let (trigger_id, req) =
-                query_trigger!(CosmosQueryRequest, &input, reactor.clone()).await?;
-            let chain_configs = canonicalize_chain_configs!(
-                crate::bindings::lay3r::avs::layer_types::AnyChainConfig,
-                input.chain_configs
-            );
+            let (trigger_id, req) = decode_trigger_event(input.event.into())?;
+
+            let req: CosmosQueryRequest =
+                serde_json::from_slice(&req).map_err(|e| anyhow!("{:?}", e))?;
 
             let resp = match req {
                 CosmosQueryRequest::BlockHeight { chain_name } => {
-                    let querier =
-                        CosmosQuerier::new_from_chain_name(&chain_name, &chain_configs, reactor)?;
+                    let querier = CosmosQuerier::new_from_chain_name(
+                        &chain_name,
+                        &input.chain_configs.into(),
+                        reactor,
+                    )?;
 
                     querier
                         .block_height()
@@ -36,8 +36,11 @@ impl Guest for Component {
                     chain_name,
                     address,
                 } => {
-                    let querier =
-                        CosmosQuerier::new_from_chain_name(&chain_name, &chain_configs, reactor)?;
+                    let querier = CosmosQuerier::new_from_chain_name(
+                        &chain_name,
+                        &input.chain_configs.into(),
+                        reactor,
+                    )?;
 
                     querier.balance(&address).await.map(|coin| match coin {
                         Some(coin) => CosmosQueryResponse::Balance(coin.amount),
@@ -53,8 +56,6 @@ impl Guest for Component {
         .map_err(|e| e.to_string())
     }
 }
-
-bindings::export!(Component with_types_in bindings);
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -74,3 +75,5 @@ pub enum CosmosQueryResponse {
     BlockHeight(u64),
     Balance(String),
 }
+
+export_any_contract_event_world!(Component);

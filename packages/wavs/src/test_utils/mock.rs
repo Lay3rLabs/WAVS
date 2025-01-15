@@ -5,7 +5,7 @@ use crate::{
     apis::{
         dispatcher::{ComponentWorld, DispatchManager, Permissions, ServiceConfig, Submit},
         engine::EngineError,
-        trigger::{Trigger, TriggerData},
+        trigger::TriggerData,
         ServiceID,
     },
     dispatcher::Dispatcher,
@@ -28,7 +28,6 @@ use axum::{
     body::Body,
     http::{Method, Request},
 };
-use rand::rngs::mock;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tower::Service;
 use utils::ServiceID;

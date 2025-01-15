@@ -75,7 +75,7 @@ impl ChainContext {
                 .chains
                 .get_chain(&chain_name)
                 .unwrap()
-                .expect(&format!("chain {chain_name} not found"));
+                .unwrap_or_else(|| panic!("chain {chain_name} not found"));
 
             match chain {
                 AnyChainConfig::Eth(eth_chain_config) => {
@@ -87,9 +87,7 @@ impl ChainContext {
                 AnyChainConfig::Cosmos(cosmos_chain_config) => {
                     clients.insert(
                         chain_name,
-                        AnyClient::Cosmos(
-                            get_cosmos_client(&config, cosmos_chain_config.into()).await,
-                        ),
+                        AnyClient::Cosmos(get_cosmos_client(&config, cosmos_chain_config).await),
                     );
                 }
             }
@@ -117,7 +115,7 @@ impl ChainContext {
         match self
             ._clients
             .get(chain_name)
-            .expect(&format!("chain {chain_name} not found"))
+            .unwrap_or_else(|| panic!("chain {chain_name} not found"))
         {
             AnyClient::Eth(client) => client.clone(),
             _ => panic!("expected eth client"),
@@ -128,7 +126,7 @@ impl ChainContext {
         match self
             ._clients
             .get(chain_name)
-            .expect(&format!("chain {chain_name} not found"))
+            .unwrap_or_else(|| panic!("chain {chain_name} not found"))
         {
             AnyClient::Cosmos(client) => client.clone(),
             _ => panic!("expected cosmos client"),
@@ -143,7 +141,7 @@ impl ChainContext {
         match self
             ._clients
             .get(chain_name)
-            .expect(&format!("chain {chain_name} not found"))
+            .unwrap_or_else(|| panic!("chain {chain_name} not found"))
         {
             AnyClient::Eth(client) => {
                 let address = address.try_into().unwrap();

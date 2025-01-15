@@ -1,6 +1,5 @@
 pragma solidity ^0.8.0;
 
-import {ILayerTrigger} from "@layer-contracts/interfaces/ILayerTrigger.sol";
 import {ISimpleTrigger} from "./interfaces/ISimpleTrigger.sol";
 
 contract SimpleTrigger {
@@ -17,7 +16,7 @@ contract SimpleTrigger {
     mapping(address => ISimpleTrigger.TriggerId[]) public triggerIdsByCreator;
 
     // Events
-    event NewTriggerId(ISimpleTrigger.TriggerId);
+    event NewTrigger(bytes);
 
     // Global vars
     ISimpleTrigger.TriggerId public nextTriggerId;
@@ -45,7 +44,6 @@ contract SimpleTrigger {
         triggerIdsByCreator[msg.sender].push(triggerId);
 
         // emit the id directly in an event
-        emit NewTriggerId(triggerId);
 
         // now be layer-compatible
         ISimpleTrigger.TriggerInfo memory triggerInfo = ISimpleTrigger.TriggerInfo({
@@ -54,7 +52,7 @@ contract SimpleTrigger {
             data: trigger.data
         });
 
-        emit ILayerTrigger.LayerTriggerEvent(abi.encode(triggerInfo));
+        emit NewTrigger(abi.encode(triggerInfo));
     }
 
     /**

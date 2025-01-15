@@ -68,7 +68,8 @@ temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
 chrono = "0.4.38"
 shellexpand = "3.1.0"
-wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
+wit-bindgen-rt = {version = "0.37.0", features = ["bitflags"]}
+wit-bindgen = "0.37.0"
 alloy = { version = "0.6.4", features = ["full", "signer-mnemonic", "node-bindings"] }
 alloy-rlp = {version = "0.3.10", features = ["derive"]}
 alloy-primitives = "0.8.15"

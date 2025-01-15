@@ -43,11 +43,8 @@ impl Engine for IdentityEngine {
 #[cfg(test)]
 mod test {
     use crate::{
-        apis::{
-            dispatcher::ComponentWorld,
-            trigger::{TriggerConfig, TriggerData},
-        },
-        test_utils::address::rand_address_eth,
+        apis::{dispatcher::ComponentWorld, trigger::TriggerData},
+        triggers::mock::mock_eth_event_trigger_config,
     };
 
     use super::*;
@@ -71,13 +68,7 @@ mod test {
             .execute(
                 &component,
                 TriggerAction {
-                    config: TriggerConfig::contract_event(
-                        "foobar",
-                        "baz",
-                        rand_address_eth(),
-                        "eth",
-                    )
-                    .unwrap(),
+                    config: mock_eth_event_trigger_config("foobar", "baz"),
                     data: TriggerData::new_raw(request.clone()),
                 },
                 &ServiceConfig::default(),

@@ -42,16 +42,4 @@ pub mod layer_service_manager {
     );
 }
 
-pub mod layer_trigger {
-    use super::*;
-    pub use ILayerTrigger::LayerTriggerEvent;
-
-    sol!(
-        #[allow(missing_docs)]
-        #[sol(rpc)]
-        ILayerTrigger,
-        "../../sdk/solidity/contracts/abi/ILayerTrigger.sol/ILayerTrigger.json"
-    );
-}
-
 pub type LayerServiceManagerT = LayerServiceManagerInstance<BoxTransport, BoxSigningProvider>;

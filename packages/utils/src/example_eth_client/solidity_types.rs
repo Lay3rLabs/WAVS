@@ -6,7 +6,7 @@ use crate::eigen_client::solidity_types::BoxSigningProvider;
 
 pub mod example_trigger {
     use alloy::sol;
-    pub use SimpleTrigger::NewTriggerId;
+    pub use SimpleTrigger::NewTrigger;
 
     sol!(
         #[allow(missing_docs)]

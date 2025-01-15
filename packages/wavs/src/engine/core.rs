@@ -1,10 +1,10 @@
 use anyhow::Context;
-use layer_climb::prelude::Address;
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::instrument;
+use utils::config::ChainConfigs;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -14,14 +14,14 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::{AllowedHostPermission, ComponentWorld, ServiceConfig};
-use crate::apis::trigger::{TriggerAction, TriggerData};
+use crate::apis::trigger::TriggerAction;
 use crate::storage::{CAStorage, CAStorageError};
-use crate::{apis, bindings, Digest};
-use utils::{ServiceID, WorkflowID};
+use crate::{apis, Digest};
 
 use super::{Engine, EngineError};
 
 pub struct WasmEngine<S: CAStorage> {
+    chain_configs: ChainConfigs,
     wasm_storage: S,
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
@@ -30,7 +30,12 @@ pub struct WasmEngine<S: CAStorage> {
 
 impl<S: CAStorage> WasmEngine<S> {
     /// Create a new Wasm Engine manager.
-    pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>, lru_size: usize) -> Self {
+    pub fn new(
+        wasm_storage: S,
+        app_data_dir: impl AsRef<Path>,
+        lru_size: usize,
+        chain_configs: ChainConfigs,
+    ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
         config.async_support(true);
@@ -50,6 +55,7 @@ impl<S: CAStorage> WasmEngine<S> {
             wasm_engine,
             memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
+            chain_configs,
         }
     }
 }
@@ -87,6 +93,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
         let world = wasi.world;
+
         let (mut store, component, linker) =
             self.get_instance_deps(wasi, &trigger, service_config)?;
 
@@ -95,129 +102,52 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             .map_err(EngineError::Other)?;
 
         self.block_on_run(async move {
-            let contract = match &trigger.data {
-                TriggerData::CosmosContractEvent {
-                    contract_address, ..
-                } => Some(contract_address.clone()),
-                TriggerData::EthContractEvent {
-                    contract_address, ..
-                } => Some(contract_address.clone()),
-                TriggerData::Raw(_) => None,
-            };
-
-            let chain_id = match &trigger.data {
-                TriggerData::CosmosContractEvent { chain_id, .. } => Some(chain_id.clone()),
-                TriggerData::EthContractEvent { chain_id, .. } => Some(chain_id.clone()),
-                TriggerData::Raw(_) => None,
-            };
-
             tracing::debug!("Running task on world {:?}", world);
 
             let res = match world {
-                ComponentWorld::EthContractEvent => {
-                    let contract = match (contract, chain_id) {
-                        (Some(contract), Some(chain_id)) => bindings::eth_contract_event::Contract {
-                            address: match contract {
-                                Address::Cosmos {
-                                    bech32_addr,
-                                    prefix_len,
-                                } => {
-                                    bindings::chain_event::lay3r::avs::layer_types::Address::Cosmos(
-                                        (bech32_addr, prefix_len.try_into().unwrap()),
-                                    )
-                                }
-                                Address::Eth(addr) => {
-                                    bindings::chain_event::lay3r::avs::layer_types::Address::Eth(
-                                        addr.as_bytes().to_vec(),
-                                    )
-                                }
-                            },
-                            chain_id,
-                        },
-                        _ => {
-                            return Err(EngineError::ComponentError(
-                                "No contract address provided".to_string(),
-                            ));
-                        }
-                    };
+                ComponentWorld::AnyContractEvent => {
+                    let input = trigger.data.try_into_component_input_any_contract_event(self.chain_configs.clone()).map_err(|_| EngineError::WasmInterfaceMismatch)?;
 
-                    let data = match trigger.data.into_vec() {
-                        Some(data) => data,
-                        None => {
-                            return Err(EngineError::ComponentError(
-                                "No data provided".to_string(),
-                            ));
-                        }
-                    };
-
-                    bindings::chain_event::LayerChainEventWorld::instantiate_async(
+                    crate::bindings::worlds::any_contract_event::LayerAnyContractEventWorld::instantiate_async(
                         &mut store, &component, &linker,
                     )
                     .await
                     .context("Wasm instantiate failed")?
-                    .call_run(store, &contract, &data)
+                    .call_run(store, &input)
                     .await
                 }
-                ComponentWorld::EthLog => {
-                    let eth_log = match trigger.data {
-                        TriggerData::EthContractEvent { log, .. } => {
-                            bindings::eth_log::lay3r::avs::layer_types::EthLog {
-                                topics: log.topics().iter().map(|t| t.to_vec()).collect(),
-                                data: log.data.to_vec(),
-                            }
-                        }
-                        _ => {
-                            return Err(EngineError::ComponentError("No log provided".to_string()));
-                        }
-                    };
-                    let contract = match (contract, chain_id) {
-                        (Some(contract), Some(chain_id)) => bindings::eth_log::Contract {
-                            address: match contract {
-                                Address::Cosmos {
-                                    bech32_addr,
-                                    prefix_len,
-                                } => bindings::eth_log::lay3r::avs::layer_types::Address::Cosmos((
-                                    bech32_addr,
-                                    prefix_len.try_into().unwrap(),
-                                )),
-                                Address::Eth(addr) => {
-                                    bindings::eth_log::lay3r::avs::layer_types::Address::Eth(
-                                        addr.as_bytes().to_vec(),
-                                    )
-                                }
-                            },
-                            chain_id,
-                        },
-                        _ => {
-                            return Err(EngineError::ComponentError(
-                                "No contract address provided".to_string(),
-                            ));
-                        }
-                    };
+                ComponentWorld::EthContractEvent => {
+                    let input = trigger.data.try_into_component_input_eth_contract_event(self.chain_configs.clone()).map_err(|_| EngineError::WasmInterfaceMismatch)?;
 
-                    bindings::eth_log::LayerEthLogWorld::instantiate_async(
+                    crate::bindings::worlds::eth_contract_event::LayerEthContractEventWorld::instantiate_async(
                         &mut store, &component, &linker,
                     )
                     .await
                     .context("Wasm instantiate failed")?
-                    .call_run(store, &contract, &eth_log)
+                    .call_run(store, &input)
+                    .await
+                }
+                ComponentWorld::CosmosContractEvent => {
+                    let input = trigger.data.try_into_component_input_cosmos_contract_event(self.chain_configs.clone()).map_err(|_| EngineError::WasmInterfaceMismatch)?;
+
+                    crate::bindings::worlds::cosmos_contract_event::LayerCosmosContractEventWorld::instantiate_async(
+                        &mut store, &component, &linker,
+                    )
+                    .await
+                    .context("Wasm instantiate failed")?
+                    .call_run(store, &input)
                     .await
                 }
                 ComponentWorld::Raw => {
-                    let data = match trigger.data.into_vec() {
-                        Some(data) => data,
-                        None => {
-                            return Err(EngineError::ComponentError(
-                                "No data provided".to_string(),
-                            ));
-                        }
-                    };
+                    let input = trigger.data.try_into_component_input_raw().map_err(|_| EngineError::WasmInterfaceMismatch)?;
 
-                    bindings::raw::LayerRawWorld::instantiate_async(&mut store, &component, &linker)
-                        .await
-                        .context("Wasm instantiate failed")?
-                        .call_run(store, &data)
-                        .await
+                    crate::bindings::worlds::raw::LayerRawWorld::instantiate_async(
+                        &mut store, &component, &linker,
+                    )
+                    .await
+                    .context("Wasm instantiate failed")?
+                    .call_run(store, &input)
+                    .await
                 }
             };
 
@@ -357,34 +287,29 @@ impl WasiHttpView for Host {
 
 #[cfg(test)]
 mod tests {
-    use apis::{
-        dispatcher::ServiceConfig,
-        trigger::{Trigger, TriggerConfig},
-        ServiceID, WorkflowID,
-    };
-    use utils::example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient};
+    use apis::{dispatcher::ServiceConfig, trigger::TriggerConfig, ServiceID, WorkflowID};
+    use utils::example_eth_client::SimpleEthSubmitClient;
 
     use crate::{
+        engine::mock::mock_chain_configs,
         storage::memory::MemoryStorage,
-        test_utils::address::{rand_address_eth_alloy, rand_address_layer},
+        triggers::mock::{mock_cosmos_event_trigger, mock_cosmos_event_trigger_data},
     };
 
     use super::*;
 
     const SQUARE: &[u8] = include_bytes!("../../../../examples/build/components/square.wasm");
-    const PERMISSIONS: &[u8] =
-        include_bytes!("../../../../examples/build/components/permissions.wasm");
-    const DEFAULT_FUEL_LIMIT: u64 = 1_000_000;
+    const ECHO_DATA: &[u8] = include_bytes!("../../../../examples/build/components/echo_data.wasm");
 
     #[test]
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
 
         // store two blobs
         let digest = engine.store_wasm(SQUARE).unwrap();
-        let digest2 = engine.store_wasm(PERMISSIONS).unwrap();
+        let digest2 = engine.store_wasm(ECHO_DATA).unwrap();
         assert_ne!(digest, digest2);
 
         // list them
@@ -398,7 +323,7 @@ mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
 
         // store valid wasm
         let digest = engine.store_wasm(SQUARE).unwrap();
@@ -414,13 +339,14 @@ mod tests {
     fn execute_square() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
-        let component = crate::apis::dispatcher::Component::new(digest, ComponentWorld::ChainEvent);
+        let component =
+            crate::apis::dispatcher::Component::new(digest, ComponentWorld::AnyContractEvent);
 
-        // execute it and get square
+        // execute it and get bytes back
         let result = engine
             .execute(
                 &component,
@@ -428,24 +354,17 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: WorkflowID::new("default").unwrap(),
-                        trigger: Trigger::Test,
+                        trigger: mock_cosmos_event_trigger(),
                     },
-                    data: TriggerData::CosmosContractEvent {
-                        contract_address: rand_address_layer(),
-                        chain_id: "cosmos".to_string(),
-                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
-                            rand_address_eth_alloy(),
-                            0,
-                            br#"{"x":12}"#,
-                        )),
-                    },
+                    data: mock_cosmos_event_trigger_data(1, br#"{"x":12}"#),
                 },
                 &ServiceConfig::default(),
             )
             .unwrap();
 
-        let (_, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
+        let (trigger_id, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
 
+        assert_eq!(trigger_id.u64(), 1);
         assert_eq!(&data, br#"{"y":144}"#);
     }
 
@@ -453,13 +372,14 @@ mod tests {
     fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        let digest = engine.store_wasm(PERMISSIONS).unwrap();
-        let component = crate::apis::dispatcher::Component::new(digest, ComponentWorld::ChainEvent);
+        let digest = engine.store_wasm(ECHO_DATA).unwrap();
+        let component =
+            crate::apis::dispatcher::Component::new(digest, ComponentWorld::AnyContractEvent);
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
@@ -477,22 +397,16 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: &workflow_id,
-                        trigger: Trigger::Test,
+                        trigger: mock_cosmos_event_trigger(),
                     },
-                    data: TriggerData::CosmosContractEvent {
-                        contract_address: rand_address_layer(),
-                        chain_id: "cosmos".to_string(),
-                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
-                            rand_address_eth_alloy(),
-                            0,
-                            br#"envvar:foo"#,
-                        )),
-                    },
+                    data: mock_cosmos_event_trigger_data(1, br#"envvar:foo"#),
                 },
                 &service_config,
             )
             .unwrap();
-        assert_eq!(&result, br#"bar"#);
+
+        let (_, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
+        assert_eq!(&data, br#"bar"#);
 
         // verify whitelisted host env var is accessible
         let result = engine
@@ -502,22 +416,17 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: &workflow_id,
-                        trigger: Trigger::Test,
+                        trigger: mock_cosmos_event_trigger(),
                     },
-                    data: TriggerData::CosmosContractEvent {
-                        contract_address: rand_address_layer(),
-                        chain_id: "cosmos".to_string(),
-                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
-                            rand_address_eth_alloy(),
-                            0,
-                            br#"envvar:WAVS_ENV_TEST"#,
-                        )),
-                    },
+                    data: mock_cosmos_event_trigger_data(2, br#"envvar:WAVS_ENV_TEST"#),
                 },
                 &service_config,
             )
             .unwrap();
-        assert_eq!(&result, br#"testing"#);
+
+        let (_, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
+
+        assert_eq!(&data, br#"testing"#);
 
         // verify the non-enabled env var is not accessible
         let result = engine
@@ -527,17 +436,9 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: &workflow_id,
-                        trigger: Trigger::Test,
+                        trigger: mock_cosmos_event_trigger(),
                     },
-                    data: TriggerData::CosmosContractEvent {
-                        contract_address: rand_address_layer(),
-                        chain_id: "cosmos".to_string(),
-                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
-                            rand_address_eth_alloy(),
-                            0,
-                            br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#,
-                        )),
-                    },
+                    data: mock_cosmos_event_trigger_data(3, br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
                 },
                 &service_config,
             )
@@ -551,11 +452,12 @@ mod tests {
         let app_data = tempfile::tempdir().unwrap();
 
         let low_fuel_limit = 1;
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
-        let component = crate::apis::dispatcher::Component::new(digest, ComponentWorld::ChainEvent);
+        let component =
+            crate::apis::dispatcher::Component::new(digest, ComponentWorld::AnyContractEvent);
         let service_config = ServiceConfig {
             fuel_limit: low_fuel_limit,
             ..Default::default()
@@ -568,18 +470,10 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id: workflow_id,
-                        trigger: Trigger::Test,
+                        workflow_id,
+                        trigger: mock_cosmos_event_trigger(),
                     },
-                    data: TriggerData::CosmosContractEvent {
-                        contract_address: rand_address_layer(),
-                        chain_id: "cosmos".to_string(),
-                        event_data: Some(SimpleEthTriggerClient::trigger_info_bytes(
-                            rand_address_eth_alloy(),
-                            0,
-                            br#"{"x":12}"#,
-                        )),
-                    },
+                    data: mock_cosmos_event_trigger_data(4, br#"{"x":12}"#),
                 },
                 &service_config,
             )

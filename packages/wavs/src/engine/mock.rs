@@ -5,6 +5,7 @@ use crate::apis::{dispatcher::ServiceConfig, trigger::TriggerAction};
 use crate::triggers::mock::get_mock_trigger_data;
 use crate::Digest;
 use tracing::instrument;
+use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
 
 use super::{Engine, EngineError};
 
@@ -15,6 +16,37 @@ use super::{Engine, EngineError};
 pub struct MockEngine {
     digests: Arc<RwLock<BTreeSet<Digest>>>,
     functions: Arc<RwLock<BTreeMap<Digest, Box<dyn Function>>>>,
+}
+
+pub fn mock_chain_configs() -> ChainConfigs {
+    ChainConfigs {
+        eth: vec![(
+            "eth".to_string(),
+            EthereumChainConfig {
+                chain_id: 31337.to_string(),
+                ws_endpoint: "ws://localhost:8546".to_string(),
+                http_endpoint: "http://localhost:8545".to_string(),
+                aggregator_endpoint: None,
+                faucet_endpoint: None,
+            },
+        )]
+        .into_iter()
+        .collect(),
+        cosmos: vec![(
+            "cosmos".to_string(),
+            CosmosChainConfig {
+                chain_id: "cosmos".to_string(),
+                rpc_endpoint: Some("http://localhost:26657".to_string()),
+                grpc_endpoint: Some("http://localhost:9090".to_string()),
+                bech32_prefix: "cosmos".to_string(),
+                gas_denom: "ustake".to_string(),
+                gas_price: 0.025,
+                faucet_endpoint: None,
+            },
+        )]
+        .into_iter()
+        .collect(),
+    }
 }
 
 impl MockEngine {
@@ -71,7 +103,7 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use crate::apis::dispatcher::ComponentWorld;
+    use crate::{apis::dispatcher::ComponentWorld, test_utils::address::rand_event_eth};
 
     use super::*;
 
@@ -120,11 +152,12 @@ mod test {
             .execute(
                 &c1,
                 TriggerAction {
-                    config: crate::apis::trigger::TriggerConfig::contract_event(
+                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
                         "eth",
+                        rand_event_eth(),
                     )
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),
@@ -140,11 +173,12 @@ mod test {
             .execute(
                 &c2,
                 TriggerAction {
-                    config: crate::apis::trigger::TriggerConfig::contract_event(
+                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
                         "eth",
+                        rand_event_eth(),
                     )
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),
@@ -160,11 +194,12 @@ mod test {
             .execute(
                 &c3,
                 TriggerAction {
-                    config: crate::apis::trigger::TriggerConfig::contract_event(
+                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
                         "eth",
+                        rand_event_eth(),
                     )
                     .unwrap(),
                     data: crate::apis::trigger::TriggerData::new_raw(b"123"),

@@ -14,6 +14,7 @@ alloy-sol-macro = {workspace = true}
 alloy-sol-types = {workspace = true}
 layer-climb-address = {workspace = true}
 serde = { workspace = true }
+serde_json = { workspace = true }
 anyhow = { workspace = true }
 cosmwasm-std = { workspace = true }
 cosmos-contract-simple-example = {path = "../../contracts/cosmwasm/simple", package = "simple-example"}

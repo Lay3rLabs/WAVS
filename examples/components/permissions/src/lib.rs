@@ -1,6 +1,8 @@
-#[allow(warnings)]
-mod bindings;
-
+use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
+use layer_wasi::{
+    bindings::worlds::any_contract_event::{Guest, Input},
+    export_any_contract_event_world,
+};
 use std::{
     fs,
     io::Write,
@@ -8,8 +10,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use bindings::{Guest, Input};
-use example_helpers::{query_trigger, trigger::encode_trigger_output};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use wasi::{
@@ -24,18 +24,12 @@ struct Component;
 
 impl Guest for Component {
     fn run(input: Input) -> std::result::Result<Vec<u8>, String> {
-        wstd::runtime::block_on(move |reactor| async move {
-            let (trigger_id, req) =
-                query_trigger!(PermissionsInput, &input, reactor.clone()).await?;
-
-            let resp = inner_run_task(req)?;
-
-            anyhow::Ok(encode_trigger_output(
-                trigger_id,
-                serde_json::to_vec(&resp)?,
-            ))
-        })
-        .map_err(|e| e.to_string())
+        let (trigger_id, req) =
+            decode_trigger_event(input.event.into()).map_err(|e| e.to_string())?;
+        let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
+        let resp = inner_run_task(req).map_err(|e| e.to_string())?;
+        let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
+        Ok(encode_trigger_output(trigger_id, resp))
     }
 }
 
@@ -135,4 +129,4 @@ struct Response {
     pub filecount: usize,
 }
 
-bindings::export!(Component with_types_in bindings);
+export_any_contract_event_world!(Component);

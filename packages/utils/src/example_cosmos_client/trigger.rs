@@ -11,6 +11,8 @@ pub struct SimpleCosmosTriggerClient {
 
 type TriggerId = Uint64;
 
+pub use simple_example_cosmos::event::NewMessageEvent;
+
 impl SimpleCosmosTriggerClient {
     pub fn new(signing_client: SigningClient, contract_address: Address) -> Self {
         Self {

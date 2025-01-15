@@ -270,13 +270,12 @@ mod e2e {
 
     #[derive(Clone)]
     pub struct Digests {
-        permissions: Option<Digest>,
-        square: Option<Digest>,
-        echo_eth_event: Option<Digest>,
-        echo_cosmos_event: Option<Digest>,
-        echo_raw: Option<Digest>,
         cosmos_query: Option<Digest>,
         cosmos_trigger_lookup: Option<Digest>,
+        echo_data: Option<Digest>,
+        echo_raw: Option<Digest>,
+        permissions: Option<Digest>,
+        square: Option<Digest>,
     }
 
     impl Digests {
@@ -334,31 +333,15 @@ mod e2e {
                 } else {
                     None
                 },
-                echo_eth_event: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_1")
+                echo_data: if cfg!(feature = "e2e_tests_ethereum_trigger_echo_1")
                     || cfg!(feature = "e2e_tests_ethereum_trigger_echo_2")
                     || cfg!(feature = "e2e_tests_ethereum_trigger_echo_aggregate")
+                    || cfg!(feature = "e2e_tests_cosmos_trigger_echo")
                 {
                     Some(
-                        get_digest(
-                            http_client,
-                            "WAVS_E2E_ECHO_ETH_EVENT_WASM_DIGEST",
-                            "echo_eth_event",
-                        )
-                        .await
-                        .unwrap(),
-                    )
-                } else {
-                    None
-                },
-                echo_cosmos_event: if cfg!(feature = "e2e_tests_cosmos_trigger_echo") {
-                    Some(
-                        get_digest(
-                            http_client,
-                            "WAVS_E2E_ECHO_COSMOS_EVENT_WASM_DIGEST",
-                            "echo_cosmos_event",
-                        )
-                        .await
-                        .unwrap(),
+                        get_digest(http_client, "WAVS_E2E_ECHO_DATA_WASM_DIGEST", "echo_data")
+                            .await
+                            .unwrap(),
                     )
                 } else {
                     None

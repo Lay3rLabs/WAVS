@@ -94,18 +94,19 @@ mod test {
 
     use crate::{
         apis::{dispatcher::Submit, trigger::TriggerConfig},
-        test_utils::address::rand_address_eth,
+        test_utils::address::{rand_address_eth, rand_event_eth},
     };
 
     use super::*;
 
     fn dummy_message(service: &str, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_config: TriggerConfig::contract_event(
+            trigger_config: TriggerConfig::eth_contract_event(
                 service,
                 service,
                 rand_address_eth(),
                 "eth",
+                rand_event_eth(),
             )
             .unwrap(),
             wasm_result: payload.as_bytes().to_vec(),

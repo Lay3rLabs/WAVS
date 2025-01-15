@@ -252,21 +252,18 @@ pub async fn run_tests(
     if let Some(service_id) = service_ids.cosmos_permissions {
         let wasm_digest = digests.permissions.unwrap();
 
-        http_client
-            .create_service(
-                service_id.clone(),
-                wasm_digest,
-                Trigger::contract_event(contracts.trigger.clone(), app.chain_name.clone()),
-                Submit::CosmosContract {
-                    chain_name: app.chain_name.clone(),
-                    contract_addr: contracts.submit.clone(),
-                },
-                ComponentWorld::ChainEvent,
-            )
-            .await
-            .unwrap();
+        // http_client
+        //     .create_service(
+        //         service_id.clone(),
+        //         wasm_digest,
+        //         Trigger::cosmos_contract_event(contracts.trigger.clone(), app.chain_name.clone(), simple_example_cosmos::event::NewMessageEvent::KEY),
+        //         Submit::eigen_contract(chain_name, service_manager, aggregate),
+        //         ComponentWorld::AnyContractEvent,
+        //     )
+        //     .await
+        //     .unwrap();
 
-        tracing::info!("Service created: {}", service_id);
+        // tracing::info!("Service created: {}", service_id);
 
         /*
 

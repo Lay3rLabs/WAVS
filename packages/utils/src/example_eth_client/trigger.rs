@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     example_trigger::ISimpleTrigger::TriggerInfo,
     solidity_types::{
-        example_trigger::SimpleTrigger::{self, NewTriggerId},
+        example_trigger::SimpleTrigger::{self, NewTrigger},
         SimpleTriggerT,
     },
 };
@@ -59,7 +59,7 @@ impl SimpleEthTriggerClient {
     }
 
     pub async fn add_trigger(&self, data: Vec<u8>) -> Result<TriggerId> {
-        let event: NewTriggerId = self
+        let event: NewTrigger = self
             .contract
             .addTrigger(data.into())
             .send()
@@ -69,7 +69,9 @@ impl SimpleEthTriggerClient {
             .solidity_event()
             .context("Not found new task creation event")?;
 
-        Ok(TriggerId::new(event._0))
+        let trigger_info = TriggerInfo::abi_decode(&event._0, false)?;
+
+        Ok(TriggerId::new(trigger_info.triggerId))
     }
 
     // Returns the inner trigger data (i.e. the data that was sent via add_trigger)

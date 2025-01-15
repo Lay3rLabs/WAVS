@@ -1,8 +1,10 @@
+use alloy::sol_types::SolEvent;
 use layer_climb::prelude::*;
 use utils::{
     config::CosmosChainConfig,
     eigen_client::EigenClient,
     eth_client::{EthChainConfig, EthClientBuilder},
+    example_eth_client::example_trigger::SimpleTrigger,
 };
 use utils::{ServiceID, WorkflowID};
 use wavs::{
@@ -84,11 +86,19 @@ impl HttpClient {
             ServiceTriggerInfo::EthSimpleContract {
                 chain_name,
                 address,
-            } => Trigger::contract_event(address, chain_name),
+            } => Trigger::eth_contract_event(
+                address,
+                chain_name,
+                SimpleTrigger::NewTrigger::SIGNATURE_HASH,
+            ),
             ServiceTriggerInfo::CosmosSimpleContract {
                 chain_name,
                 address,
-            } => Trigger::contract_event(address, chain_name),
+            } => Trigger::cosmos_contract_event(
+                address,
+                chain_name,
+                simple_example_cosmos::event::NewMessageEvent::KEY,
+            ),
         };
 
         let submit = match service_info.submit {

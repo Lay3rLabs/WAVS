@@ -1,4 +1,3 @@
-use rand::prelude::*;
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
@@ -6,25 +5,63 @@ use crate::apis::trigger::{
     Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
 use crate::apis::{IDError, ServiceID, WorkflowID};
-use crate::test_utils::address::{rand_address_eth, rand_address_layer};
+use crate::test_utils::address::{
+    rand_address_eth, rand_address_layer, rand_event_cosmos, rand_event_eth,
+};
 
 use layer_climb::prelude::Address;
-use rand::thread_rng;
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
 
-pub fn mock_cosmos_event_trigger() -> Trigger {
-    Trigger::cosmos_contract_event(
-        rand_address_layer(),
-        "layer",
-        hex::encode(thread_rng().gen::<[u8; 32]>()),
+pub fn mock_eth_event_trigger_config(
+    service_id: impl TryInto<ServiceID, Error = IDError>,
+    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+) -> TriggerConfig {
+    TriggerConfig::eth_contract_event(
+        service_id,
+        workflow_id,
+        rand_address_eth(),
+        "eth",
+        rand_event_eth(),
     )
+    .unwrap()
+}
+
+pub fn mock_cosmos_event_trigger_config(
+    service_id: impl TryInto<ServiceID, Error = IDError>,
+    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+) -> TriggerConfig {
+    TriggerConfig::cosmos_contract_event(
+        service_id,
+        workflow_id,
+        rand_address_layer(),
+        "cosmos",
+        rand_event_cosmos(),
+    )
+    .unwrap()
 }
 
 pub fn mock_eth_event_trigger() -> Trigger {
-    Trigger::eth_contract_event(rand_address_eth(), "eth", thread_rng().gen::<[u8; 32]>())
+    Trigger::eth_contract_event(rand_address_eth(), "eth", rand_event_eth())
+}
+
+pub fn mock_cosmos_event_trigger() -> Trigger {
+    Trigger::cosmos_contract_event(rand_address_layer(), "cosmos", rand_event_cosmos())
+}
+
+pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -> TriggerData {
+    TriggerData::CosmosContractEvent {
+        contract_address: rand_address_layer(),
+        chain_name: "layer".to_string(),
+        event: utils::example_cosmos_client::NewMessageEvent {
+            id: trigger_id.into(),
+            data: data.as_ref().to_vec(),
+        }
+        .into(),
+        block_height: 0,
+    }
 }
 
 pub fn get_mock_trigger_data(trigger_data: &TriggerData) -> Vec<u8> {
@@ -197,7 +234,7 @@ impl MockTriggerManagerChannel {
                         workflow_id,
                         contract_address.clone(),
                         chain_id,
-                        thread_rng().gen::<[u8; 32]>(),
+                        rand_event_eth(),
                     )
                     .unwrap(),
                     Address::Cosmos { .. } => TriggerConfig::cosmos_contract_event(
@@ -205,7 +242,7 @@ impl MockTriggerManagerChannel {
                         workflow_id,
                         contract_address.clone(),
                         chain_id,
-                        hex::encode(thread_rng().gen::<[u8; 32]>()),
+                        hex::encode(rand_event_eth()),
                     )
                     .unwrap(),
                 },
@@ -265,33 +302,20 @@ impl TriggerManager for MockTriggerManagerChannel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{apis::trigger::TriggerData, test_utils::address::rand_address_eth};
+
+    use crate::apis::trigger::TriggerData;
 
     use super::*;
 
     #[test]
     fn mock_trigger_sends() {
-        let contract_address = rand_address_eth();
-
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::contract_event(
-                    "service1",
-                    "workflow1",
-                    contract_address.clone(),
-                    "eth",
-                )
-                .unwrap(),
+                config: mock_eth_event_trigger_config("service1", "workflow1"),
                 data: TriggerData::new_raw(b"foobar"),
             },
             TriggerAction {
-                config: TriggerConfig::contract_event(
-                    "service2",
-                    "workflow2",
-                    contract_address,
-                    "eth",
-                )
-                .unwrap(),
+                config: mock_eth_event_trigger_config("service2", "workflow2"),
                 data: TriggerData::new_raw(b"zoomba"),
             },
         ];
@@ -309,8 +333,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data =
-            TriggerConfig::contract_event("abcd", "abcd", rand_address_eth(), "eth").unwrap();
+        let data = mock_eth_event_trigger_config("abcd", "abcd");
         triggers.add_trigger(data).unwrap();
     }
 
@@ -321,8 +344,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data =
-            TriggerConfig::contract_event("abcd", "abcd", rand_address_eth(), "eth").unwrap();
+        let data = mock_eth_event_trigger_config("abcd", "abcd");
         triggers.add_trigger(data).unwrap_err();
     }
 }

@@ -8,7 +8,7 @@ use wasi:http/types@0.2.0 as http-types;
 use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
 
 interface layer-types {
-  record cosmos-contract {
+  record cosmos-addr {
     bech32-addr: string,
     // prefix is the first part of the bech32 address
     prefix-len: u32
@@ -29,7 +29,9 @@ interface layer-types {
     bech32-prefix: string,
   }
 
-  type eth-contract = list<u8>;
+  record eth-addr {
+    raw-bytes: list<u8>
+  }
 
   record eth-event-log-data {
     // the raw log topics that can be decoded into an event
@@ -39,13 +41,14 @@ interface layer-types {
   }
 
   record eth-chain-config {
+    chain-id: string,
     ws-endpoint: option<string>,
     http-endpoint: string,
   }
 
-  variant any-contract {
-    eth(list<u8>),
-    cosmos(cosmos-contract)
+  variant any-addr {
+    eth(eth-addr),
+    cosmos(cosmos-addr)
   }
 
   variant any-event {
@@ -53,22 +56,19 @@ interface layer-types {
     cosmos(cosmos-event)
   }
 
-  variant any-chain-config {
-    eth(eth-chain-config),
-    cosmos(cosmos-chain-config)
+  record chain-configs {
+    eth: list<tuple<string, eth-chain-config>>,
+    cosmos: list<tuple<string, cosmos-chain-config>>,
   }
-
-
-  type chain-configs = list<tuple<string, any-chain-config>>;
 }
 
 world layer-any-contract-event-world {
-  use layer-types.{any-contract, any-event, chain-configs};
+  use layer-types.{any-addr, any-event, chain-configs};
 
   record input {
     chain-name: string, 
     block-height: u64, 
-    contract: any-contract, 
+    contract: any-addr, 
     event: any-event,
     chain-configs: chain-configs
   }
@@ -77,12 +77,12 @@ world layer-any-contract-event-world {
 }
 
 world layer-cosmos-contract-event-world {
-  use layer-types.{cosmos-contract, cosmos-event, chain-configs};
+  use layer-types.{cosmos-addr, cosmos-event, chain-configs};
   
   record input {
     chain-name: string, 
     block-height: u64, 
-    contract: cosmos-contract, 
+    contract: cosmos-addr, 
     event: cosmos-event,
     chain-configs: chain-configs
   }
@@ -91,12 +91,12 @@ world layer-cosmos-contract-event-world {
 }
 
 world layer-eth-contract-event-world {
-  use layer-types.{eth-contract, eth-event-log-data, chain-configs};
+  use layer-types.{eth-addr, eth-event-log-data, chain-configs};
 
   record input {
     chain-name: string, 
     block-height: u64, 
-    contract: eth-contract, 
+    contract: eth-addr, 
     event-log-data: eth-event-log-data,
     chain-configs: chain-configs
   }
@@ -110,15 +110,14 @@ world layer-raw-world {
 
 world layer-sdk-world {
   use layer-types.{
-    cosmos-contract,
+    cosmos-addr,
     cosmos-event,
     cosmos-chain-config,
-    eth-contract,
+    eth-addr,
     eth-event-log-data,
     eth-chain-config,
-    any-contract,
+    any-addr,
     any-event,
-    any-chain-config,
     chain-configs
   };
 }
