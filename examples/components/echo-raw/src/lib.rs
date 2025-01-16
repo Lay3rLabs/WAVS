@@ -1,12 +1,19 @@
-#[allow(warnings, dead_code)]
-use layer_wasi::bindings::worlds::raw::Guest;
-use layer_wasi::export_raw_world;
+use layer_wasi::{
+    bindings::{
+        compat::TriggerData,
+        world::{Guest, TriggerAction},
+    },
+    export_layer_trigger_world,
+};
 struct Component;
 
 impl Guest for Component {
-    fn run(input: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
-        Ok(input)
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
+        match trigger_action.data {
+            TriggerData::Raw(data) => Ok(data),
+            _ => Err("expected raw trigger data".to_string()),
+        }
     }
 }
 
-export_raw_world!(Component);
+export_layer_trigger_world!(Component);

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::http::{map_response, TestHttpApp};
 use crate::{
     apis::{
-        dispatcher::{ComponentWorld, DispatchManager, Permissions, ServiceConfig, Submit},
+        dispatcher::{DispatchManager, Permissions, ServiceConfig, Submit},
         engine::EngineError,
         trigger::TriggerData,
         ServiceID,
@@ -125,7 +125,6 @@ impl MockE2ETestRunner {
                 trigger: mock_eth_event_trigger(),
                 id: service_id,
                 digest: digest.into(),
-                world: ComponentWorld::Raw,
                 permissions,
                 config: config.clone(),
                 testable: None,

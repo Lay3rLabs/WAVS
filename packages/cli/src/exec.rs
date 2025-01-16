@@ -4,6 +4,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wavs::apis::trigger::{TriggerConfig, TriggerData};
 
 // This is pretty much all just copy/pasted from wavs... see over there for explanation :)
 pub struct ExecComponentResponse {
@@ -50,14 +51,19 @@ pub async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> ExecCo
     let mut store = wasmtime::Store::new(&engine, host);
     store.set_fuel(u64::MAX).unwrap();
 
-    let instance = wavs::bindings::worlds::raw::LayerRawWorld::instantiate_async(
+    let instance = wavs::bindings::world::LayerTriggerWorld::instantiate_async(
         &mut store, &component, &linker,
     )
     .await
     .expect("Wasm instantiate failed");
 
+    let input = wavs::apis::trigger::TriggerAction {
+        config: TriggerConfig::manual("service-1", "default").unwrap(),
+        data: TriggerData::new_raw(input_bytes),
+    };
+
     let response = instance
-        .call_run(&mut store, &input_bytes)
+        .call_run(&mut store, &input.try_into().unwrap())
         .await
         .unwrap()
         .unwrap();

@@ -1,4 +1,4 @@
-use crate::bindings::interface::EthEventLogData;
+use crate::bindings::compat::EthEventLogData;
 use alloy_primitives::FixedBytes;
 use anyhow::{anyhow, Result};
 

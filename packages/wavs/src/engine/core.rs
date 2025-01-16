@@ -13,8 +13,8 @@ use wasmtime::{Store, Trap};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use crate::apis::dispatcher::{AllowedHostPermission, ComponentWorld, ServiceConfig};
-use crate::apis::trigger::TriggerAction;
+use crate::apis::dispatcher::{AllowedHostPermission, ServiceConfig};
+use crate::apis::trigger::{TriggerAction, TriggerError};
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{apis, Digest};
 
@@ -92,8 +92,6 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
-        let world = wasi.world;
-
         let (mut store, component, linker) =
             self.get_instance_deps(wasi, &trigger, service_config)?;
 
@@ -102,64 +100,26 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             .map_err(EngineError::Other)?;
 
         self.block_on_run(async move {
-            tracing::debug!("Running task on world {:?}", world);
+            let service_id = trigger.config.service_id.clone();
+            let workflow_id = trigger.config.workflow_id.clone();
 
-            let res = match world {
-                ComponentWorld::AnyContractEvent => {
-                    let input = trigger.data.try_into_component_input_any_contract_event(self.chain_configs.clone()).map_err(|_| EngineError::WasmInterfaceMismatch)?;
+            let input: crate::bindings::world::lay3r::avs::layer_types::TriggerAction = trigger
+                .try_into()
+                .map_err(|e: TriggerError| EngineError::TriggerData(e.into()))?;
 
-                    crate::bindings::worlds::any_contract_event::LayerAnyContractEventWorld::instantiate_async(
-                        &mut store, &component, &linker,
-                    )
-                    .await
-                    .context("Wasm instantiate failed")?
-                    .call_run(store, &input)
-                    .await
-                }
-                ComponentWorld::EthContractEvent => {
-                    let input = trigger.data.try_into_component_input_eth_contract_event(self.chain_configs.clone()).map_err(|_| EngineError::WasmInterfaceMismatch)?;
-
-                    crate::bindings::worlds::eth_contract_event::LayerEthContractEventWorld::instantiate_async(
-                        &mut store, &component, &linker,
-                    )
-                    .await
-                    .context("Wasm instantiate failed")?
-                    .call_run(store, &input)
-                    .await
-                }
-                ComponentWorld::CosmosContractEvent => {
-                    let input = trigger.data.try_into_component_input_cosmos_contract_event(self.chain_configs.clone()).map_err(|_| EngineError::WasmInterfaceMismatch)?;
-
-                    crate::bindings::worlds::cosmos_contract_event::LayerCosmosContractEventWorld::instantiate_async(
-                        &mut store, &component, &linker,
-                    )
-                    .await
-                    .context("Wasm instantiate failed")?
-                    .call_run(store, &input)
-                    .await
-                }
-                ComponentWorld::Raw => {
-                    let input = trigger.data.try_into_component_input_raw().map_err(|_| EngineError::WasmInterfaceMismatch)?;
-
-                    crate::bindings::worlds::raw::LayerRawWorld::instantiate_async(
-                        &mut store, &component, &linker,
-                    )
-                    .await
-                    .context("Wasm instantiate failed")?
-                    .call_run(store, &input)
-                    .await
-                }
-            };
-
-            res.context("Failed to run task")
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(
-                        trigger.config.service_id,
-                        trigger.config.workflow_id,
-                    ),
-                    _ => EngineError::ComponentError(e.to_string()),
-                })?
-                .map_err(EngineError::ComponentError)
+            crate::bindings::world::LayerTriggerWorld::instantiate_async(
+                &mut store, &component, &linker,
+            )
+            .await
+            .context("Wasm instantiate failed")?
+            .call_run(store, &input)
+            .await
+            .context("Failed to run task")
+            .map_err(|e| match e.downcast_ref::<Trap>() {
+                Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
+                _ => EngineError::ComponentError(e.to_string()),
+            })?
+            .map_err(EngineError::ComponentError)
         })
     }
 }
@@ -185,7 +145,7 @@ impl<S: CAStorage> WasmEngine<S> {
         wasi: &apis::dispatcher::Component,
         trigger: &TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<(Store<Host>, Component, Linker<L>), EngineError> {
+    ) -> Result<(Store<HostComponent>, Component, Linker<L>), EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
         let digest = wasi.wasm.clone();
@@ -245,7 +205,8 @@ impl<S: CAStorage> WasmEngine<S> {
         let ctx = builder.build();
 
         // create host (what is this actually? some state needed for the linker?)
-        let host = Host {
+        let host = HostComponent {
+            chain_configs: self.chain_configs.clone(),
             table: wasmtime::component::ResourceTable::new(),
             ctx,
             http: WasiHttpCtx::new(),
@@ -259,13 +220,14 @@ impl<S: CAStorage> WasmEngine<S> {
 
 // TODO: revisit this an understand it.
 // Copied blindly from old code
-pub(crate) struct Host {
+pub struct HostComponent {
+    pub chain_configs: ChainConfigs,
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,
 }
 
-impl WasiView for Host {
+impl WasiView for HostComponent {
     fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
         &mut self.table
     }
@@ -275,7 +237,7 @@ impl WasiView for Host {
     }
 }
 
-impl WasiHttpView for Host {
+impl WasiHttpView for HostComponent {
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
@@ -343,8 +305,7 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
-        let component =
-            crate::apis::dispatcher::Component::new(digest, ComponentWorld::AnyContractEvent);
+        let component = crate::apis::dispatcher::Component::new(digest);
 
         // execute it and get bytes back
         let result = engine
@@ -378,8 +339,7 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
         let digest = engine.store_wasm(ECHO_DATA).unwrap();
-        let component =
-            crate::apis::dispatcher::Component::new(digest, ComponentWorld::AnyContractEvent);
+        let component = crate::apis::dispatcher::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
@@ -456,8 +416,7 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(SQUARE).unwrap();
-        let component =
-            crate::apis::dispatcher::Component::new(digest, ComponentWorld::AnyContractEvent);
+        let component = crate::apis::dispatcher::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: low_fuel_limit,
             ..Default::default()

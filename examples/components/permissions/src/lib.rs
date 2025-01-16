@@ -1,7 +1,7 @@
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use layer_wasi::{
-    bindings::worlds::any_contract_event::{Guest, Input},
-    export_any_contract_event_world,
+    bindings::world::{Guest, TriggerAction},
+    export_layer_trigger_world,
 };
 use std::{
     fs,
@@ -23,9 +23,9 @@ use wasi::{
 struct Component;
 
 impl Guest for Component {
-    fn run(input: Input) -> std::result::Result<Vec<u8>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
         let (trigger_id, req) =
-            decode_trigger_event(input.event.into()).map_err(|e| e.to_string())?;
+            decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
         let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
         let resp = inner_run_task(req).map_err(|e| e.to_string())?;
         let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
@@ -129,4 +129,4 @@ struct Response {
     pub filecount: usize,
 }
 
-export_any_contract_event_world!(Component);
+export_layer_trigger_world!(Component);

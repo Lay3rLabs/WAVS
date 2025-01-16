@@ -1,2 +1,2 @@
-pub mod interface;
-pub mod worlds;
+pub mod compat;
+pub mod world;

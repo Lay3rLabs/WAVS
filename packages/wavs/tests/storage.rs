@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::{
     apis::{
-        dispatcher::{Component, ComponentWorld, Service, ServiceStatus, Submit, Workflow},
+        dispatcher::{Component, Service, ServiceStatus, Submit, Workflow},
         ComponentID, ServiceID, WorkflowID,
     },
     storage::db::{RedbStorage, Table, JSON},
@@ -71,11 +71,11 @@ fn db_service_store() {
     let components: BTreeMap<ComponentID, Component> = [
         (
             ComponentID::new("component-id-1").unwrap(),
-            Component::new(Digest::new(b"digest-1"), ComponentWorld::Raw),
+            Component::new(Digest::new(b"digest-1")),
         ),
         (
             ComponentID::new("component-id-2").unwrap(),
-            Component::new(Digest::new(b"digest-2"), ComponentWorld::Raw),
+            Component::new(Digest::new(b"digest-2")),
         ),
     ]
     .into();

@@ -342,7 +342,7 @@ impl TriggerManager for CoreTriggerManager {
         match config.trigger.clone() {
             Trigger::EthContractEvent {
                 address,
-                chain_id,
+                chain_name,
                 event_hash,
             } => {
                 let mut lock = self
@@ -350,10 +350,10 @@ impl TriggerManager for CoreTriggerManager {
                     .triggers_by_eth_contract_event
                     .write()
                     .unwrap();
-                let key = (chain_id.clone(), address.clone(), event_hash.clone());
+                let key = (chain_name.clone(), address.clone(), event_hash.clone());
                 if lock.contains_key(&key) {
                     return Err(TriggerError::EthContractEventAlreadyRegistered(
-                        chain_id,
+                        chain_name,
                         address,
                         hex::encode(event_hash),
                     ));
@@ -363,7 +363,7 @@ impl TriggerManager for CoreTriggerManager {
             }
             Trigger::CosmosContractEvent {
                 address,
-                chain_id,
+                chain_name,
                 event_type,
             } => {
                 let mut lock = self
@@ -371,16 +371,16 @@ impl TriggerManager for CoreTriggerManager {
                     .triggers_by_cosmos_contract_event
                     .write()
                     .unwrap();
-                let key = (chain_id.clone(), address.clone(), event_type.clone());
+                let key = (chain_name.clone(), address.clone(), event_type.clone());
                 if lock.contains_key(&key) {
                     return Err(TriggerError::CosmosContractEventAlreadyRegistered(
-                        chain_id, address, event_type,
+                        chain_name, address, event_type,
                     ));
                 }
 
                 lock.insert(key, lookup_id);
             }
-            Trigger::Test { .. } => {}
+            Trigger::Manual => {}
         }
 
         // adding it to our lookups is the same, regardless of type
@@ -518,29 +518,29 @@ fn remove_trigger_data(
     match trigger_data.trigger {
         Trigger::EthContractEvent {
             address,
-            chain_id,
+            chain_name,
             event_hash,
         } => {
             triggers_by_eth_contract_address
-                .remove(&(chain_id.clone(), address.clone(), event_hash.clone()))
+                .remove(&(chain_name.clone(), address.clone(), event_hash.clone()))
                 .ok_or(TriggerError::NoSuchEthContractEvent(
-                    chain_id,
+                    chain_name,
                     address,
                     hex::encode(event_hash),
                 ))?;
         }
         Trigger::CosmosContractEvent {
             address,
-            chain_id,
+            chain_name,
             event_type,
         } => {
             triggers_by_cosmos_contract_address
-                .remove(&(chain_id.clone(), address.clone(), event_type.clone()))
+                .remove(&(chain_name.clone(), address.clone(), event_type.clone()))
                 .ok_or(TriggerError::NoSuchCosmosContractEvent(
-                    chain_id, address, event_type,
+                    chain_name, address, event_type,
                 ))?;
         }
-        Trigger::Test => {}
+        Trigger::Manual => {}
     }
 
     Ok(())

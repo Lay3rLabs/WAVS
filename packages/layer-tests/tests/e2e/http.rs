@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 use utils::config::EthereumChainConfig;
 use wavs::{
     apis::{
-        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, ServiceConfig, Submit},
+        dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
         trigger::{Trigger, TriggerData},
         ServiceID,
     },
@@ -48,12 +48,10 @@ impl HttpClient {
         digest: Digest,
         trigger: Trigger,
         submit: Submit,
-        world: ComponentWorld,
     ) -> Result<()> {
         let service = ServiceRequest {
             trigger,
             id,
-            world,
             digest: digest.into(),
             permissions: Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,

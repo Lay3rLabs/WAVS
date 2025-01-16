@@ -112,7 +112,6 @@ async fn main() {
             register_operator,
             component,
             service_config,
-            world,
             aggregate,
             args: _,
         } => {
@@ -218,7 +217,6 @@ async fn main() {
                     aggregate,
                     digest,
                     service_config.unwrap_or_default(),
-                    world,
                 )
                 .await;
 

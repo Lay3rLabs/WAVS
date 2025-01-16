@@ -2,29 +2,27 @@ use anyhow::anyhow;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use layer_climb_address::Address;
 use layer_wasi::{
-    bindings::worlds::any_contract_event::{Guest, Input},
+    bindings::world::{host, Guest, TriggerAction},
     cosmos::CosmosQuerier,
-    export_any_contract_event_world,
+    export_layer_trigger_world,
 };
 use serde::{Deserialize, Serialize};
 
 struct Component;
 
 impl Guest for Component {
-    fn run(input: Input) -> std::result::Result<Vec<u8>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
         wstd::runtime::block_on(move |reactor| async move {
-            let (trigger_id, req) = decode_trigger_event(input.event.into())?;
+            let (trigger_id, req) = decode_trigger_event(trigger_action.data)?;
 
             let req: CosmosQueryRequest =
                 serde_json::from_slice(&req).map_err(|e| anyhow!("{:?}", e))?;
 
             let resp = match req {
                 CosmosQueryRequest::BlockHeight { chain_name } => {
-                    let querier = CosmosQuerier::new_from_chain_name(
-                        &chain_name,
-                        &input.chain_configs.into(),
-                        reactor,
-                    )?;
+                    let chain_config = host::get_cosmos_chain_config(&chain_name)
+                        .ok_or(anyhow!("chain config for {chain_name} not found"))?;
+                    let querier = CosmosQuerier::new(chain_config, reactor);
 
                     querier
                         .block_height()
@@ -36,11 +34,9 @@ impl Guest for Component {
                     chain_name,
                     address,
                 } => {
-                    let querier = CosmosQuerier::new_from_chain_name(
-                        &chain_name,
-                        &input.chain_configs.into(),
-                        reactor,
-                    )?;
+                    let chain_config = host::get_cosmos_chain_config(&chain_name)
+                        .ok_or(anyhow!("chain config for {chain_name} not found"))?;
+                    let querier = CosmosQuerier::new(chain_config, reactor);
 
                     querier.balance(&address).await.map(|coin| match coin {
                         Some(coin) => CosmosQueryResponse::Balance(coin.amount),
@@ -76,4 +72,4 @@ pub enum CosmosQueryResponse {
     Balance(String),
 }
 
-export_any_contract_event_world!(Component);
+export_layer_trigger_world!(Component);

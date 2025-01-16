@@ -11,10 +11,7 @@ use serde::Serialize;
 use tempfile::tempfile;
 use utils::config::CosmosChainConfig;
 use wavs::{
-    apis::{
-        dispatcher::{ComponentWorld, Submit},
-        trigger::Trigger,
-    },
+    apis::{dispatcher::Submit, trigger::Trigger},
     config::Config,
     AppContext,
 };
@@ -258,7 +255,6 @@ pub async fn run_tests(
         //         wasm_digest,
         //         Trigger::cosmos_contract_event(contracts.trigger.clone(), app.chain_name.clone(), simple_example_cosmos::event::NewMessageEvent::KEY),
         //         Submit::eigen_contract(chain_name, service_manager, aggregate),
-        //         ComponentWorld::AnyContractEvent,
         //     )
         //     .await
         //     .unwrap();

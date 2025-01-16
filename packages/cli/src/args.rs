@@ -6,7 +6,6 @@ use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
 };
-use wavs::apis::dispatcher::ComponentWorld;
 use wavs::apis::dispatcher::ServiceConfig;
 
 use crate::config::Config;
@@ -33,10 +32,6 @@ pub enum Command {
         /// Path to the WASI component
         #[clap(long)]
         component: PathBuf,
-
-        /// The kind of world the component adheres to
-        #[clap(long)]
-        world: ComponentWorld,
 
         /// The kind of trigger to deploy
         #[clap(long, default_value_t = CliTriggerKind::SimpleEthContract)]

@@ -5,7 +5,6 @@ use super::{
     trigger::{Trigger, TriggerAction},
 };
 use crate::{AppContext, Digest};
-use clap::ValueEnum;
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use utils::{ComponentID, ServiceID, WorkflowID};
@@ -142,7 +141,6 @@ pub struct Component {
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
-    pub world: ComponentWorld,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -178,21 +176,10 @@ impl Default for ServiceConfig {
     }
 }
 
-// These correspond to the WIT component worlds
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-#[serde(rename_all = "snake_case")]
-pub enum ComponentWorld {
-    AnyContractEvent,
-    CosmosContractEvent,
-    EthContractEvent,
-    Raw,
-}
-
 impl Component {
-    pub fn new(digest: Digest, world: ComponentWorld) -> Self {
+    pub fn new(digest: Digest) -> Self {
         Self {
             wasm: digest,
-            world,
             permissions: Default::default(),
         }
     }

@@ -75,6 +75,9 @@ pub enum EngineError {
     #[error{"invalid address: {0}"}]
     InvalidAddress(Address),
 
+    #[error{"unable to get trigger data as component input: {0}"}]
+    TriggerData(anyhow::Error),
+
     #[error{"{0}"}]
     Other(#[from] anyhow::Error),
 

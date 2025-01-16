@@ -9,7 +9,7 @@ use utils::{
 use utils::{ServiceID, WorkflowID};
 use wavs::{
     apis::{
-        dispatcher::{AllowedHostPermission, ComponentWorld, Permissions, ServiceConfig, Submit},
+        dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
         trigger::Trigger,
         ServiceID, WorkflowID,
     },
@@ -80,7 +80,6 @@ impl HttpClient {
         aggregate: bool,
         digest: Digest,
         config: ServiceConfig,
-        world: ComponentWorld,
     ) -> (ServiceID, WorkflowID) {
         let trigger = match service_info.trigger {
             ServiceTriggerInfo::EthSimpleContract {
@@ -117,7 +116,6 @@ impl HttpClient {
 
         let service = ServiceRequest {
             trigger,
-            world,
             id: id.clone(),
             digest: digest.into(),
             permissions: Permissions {

@@ -21,10 +21,7 @@ use utils::{
     },
 };
 use wavs::{
-    apis::{
-        dispatcher::{ComponentWorld, Submit},
-        trigger::Trigger,
-    },
+    apis::{dispatcher::Submit, trigger::Trigger},
     config::Config,
     AppContext,
 };
@@ -137,39 +134,34 @@ pub async fn run_tests(
     let mut clients = HashMap::new();
     let mut contract_addrs = HashSet::new();
 
-    for (service_id, digest, world, is_aggregate, app) in [
+    for (service_id, digest, is_aggregate, app) in [
         (
             service_ids.eth_echo_1.clone(),
             digests.echo_data.clone(),
-            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[0].clone(),
         ),
         (
             service_ids.eth_echo_2.clone(),
             digests.echo_data.clone(),
-            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[1].clone(),
         ),
         (
             service_ids.eth_echo_aggregate.clone(),
             digests.echo_data.clone(),
-            ComponentWorld::AnyContractEvent,
             true,
             eth_apps[0].clone(),
         ),
         (
             service_ids.eth_square.clone(),
             digests.square.clone(),
-            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[0].clone(),
         ),
         (
             service_ids.eth_cosmos_query.clone(),
             digests.cosmos_query.clone(),
-            ComponentWorld::AnyContractEvent,
             false,
             eth_apps[0].clone(),
         ),
@@ -218,7 +210,6 @@ pub async fn run_tests(
                         submit_contract_address.clone(),
                         false, // FIXME, use is_aggregate: https://github.com/Lay3rLabs/WAVS/issues/254
                     ),
-                    world,
                 )
                 .await
                 .unwrap();

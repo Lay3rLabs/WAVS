@@ -29,11 +29,7 @@ mod e2e {
         config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
     };
     use wavs::{
-        apis::{
-            dispatcher::{ComponentWorld, Submit},
-            trigger::Trigger,
-            ServiceID,
-        },
+        apis::{dispatcher::Submit, trigger::Trigger, ServiceID},
         args::CliArgs,
     };
     use wavs::{config::Config, dispatcher::CoreDispatcher, AppContext, Digest};

@@ -3,7 +3,6 @@ use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use utils::config::ChainConfigs;
 
 use crate::AppContext;
 
@@ -16,38 +15,38 @@ pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
         address: Address,
-        chain_id: String,
+        chain_name: String,
         event_type: String,
     },
     EthContractEvent {
         address: Address,
-        chain_id: String,
+        chain_name: String,
         event_hash: Vec<u8>,
     },
     // not a real trigger, just for testing
-    Test,
+    Manual,
 }
 
 impl Trigger {
     pub fn cosmos_contract_event(
         address: Address,
-        chain_id: impl ToString,
+        chain_name: impl ToString,
         event_type: impl ToString,
     ) -> Self {
         Trigger::CosmosContractEvent {
             address,
-            chain_id: chain_id.to_string(),
+            chain_name: chain_name.to_string(),
             event_type: event_type.to_string(),
         }
     }
     pub fn eth_contract_event(
         address: Address,
-        chain_id: impl ToString,
+        chain_name: impl ToString,
         event_hash: impl AsRef<[u8]>,
     ) -> Self {
         Trigger::EthContractEvent {
             address,
-            chain_id: chain_id.to_string(),
+            chain_name: chain_name.to_string(),
             event_hash: event_hash.as_ref().to_vec(),
         }
     }
@@ -110,6 +109,17 @@ impl TriggerConfig {
             trigger: Trigger::eth_contract_event(contract_address, chain_name, event_hash),
         })
     }
+
+    pub fn manual(
+        service_id: impl TryInto<ServiceID, Error = IDError>,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+    ) -> Result<Self, IDError> {
+        Ok(Self {
+            service_id: service_id.try_into()?,
+            workflow_id: workflow_id.try_into()?,
+            trigger: Trigger::Manual,
+        })
+    }
 }
 
 /// A bundle of the trigger and the associated data needed to take action on it
@@ -152,119 +162,6 @@ impl TriggerData {
     pub fn new_raw(data: impl AsRef<[u8]>) -> Self {
         TriggerData::Raw(data.as_ref().to_vec())
     }
-
-    pub fn try_into_component_input_eth_contract_event(
-        self,
-        chain_configs: ChainConfigs,
-    ) -> Result<crate::bindings::worlds::eth_contract_event::Input, TriggerError> {
-        match self {
-            TriggerData::EthContractEvent {
-                contract_address,
-                chain_name,
-                log,
-                block_height,
-            } => {
-                let contract = layer_wasi::bindings::interface::EthAddr::try_from(contract_address)
-                    .map_err(TriggerError::Climb)?;
-                let chain_name: String = chain_name.to_string();
-                let event_log_data: layer_wasi::bindings::interface::EthEventLogData = log.into();
-                let block_height: u64 = block_height;
-
-                Ok(crate::bindings::worlds::eth_contract_event::Input {
-                    contract: contract.into(),
-                    chain_name,
-                    event_log_data: event_log_data.into(),
-                    block_height,
-                    chain_configs: chain_configs.into(),
-                })
-            }
-            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
-        }
-    }
-
-    pub fn try_into_component_input_cosmos_contract_event(
-        self,
-        chain_configs: ChainConfigs,
-    ) -> Result<crate::bindings::worlds::cosmos_contract_event::Input, TriggerError> {
-        match self {
-            TriggerData::CosmosContractEvent {
-                contract_address,
-                chain_name,
-                event,
-                block_height,
-            } => {
-                let contract =
-                    layer_wasi::bindings::interface::CosmosAddr::try_from(contract_address)
-                        .map_err(TriggerError::Climb)?;
-                let chain_name: String = chain_name.to_string();
-                let event: layer_wasi::bindings::interface::CosmosEvent = event.into();
-                let block_height: u64 = block_height;
-
-                Ok(crate::bindings::worlds::cosmos_contract_event::Input {
-                    contract: contract.into(),
-                    chain_name,
-                    event: event.into(),
-                    block_height,
-                    chain_configs: chain_configs.into(),
-                })
-            }
-            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
-        }
-    }
-
-    pub fn try_into_component_input_any_contract_event(
-        self,
-        chain_configs: ChainConfigs,
-    ) -> Result<crate::bindings::worlds::any_contract_event::Input, TriggerError> {
-        match self {
-            TriggerData::CosmosContractEvent {
-                contract_address,
-                chain_name,
-                event,
-                block_height,
-            } => {
-                let contract = layer_wasi::bindings::interface::AnyAddr::from(contract_address);
-                let chain_name: String = chain_name.to_string();
-                let event: layer_wasi::bindings::interface::AnyEvent = event.into();
-                let block_height: u64 = block_height;
-
-                Ok(crate::bindings::worlds::any_contract_event::Input {
-                    contract: contract.into(),
-                    chain_name,
-                    event: event.into(),
-                    block_height,
-                    chain_configs: chain_configs.into(),
-                })
-            }
-            TriggerData::EthContractEvent {
-                contract_address,
-                chain_name,
-                log,
-                block_height,
-            } => {
-                let contract = layer_wasi::bindings::interface::AnyAddr::from(contract_address);
-                let chain_name: String = chain_name.to_string();
-                let event: layer_wasi::bindings::interface::AnyEvent = log.into();
-                let block_height: u64 = block_height;
-
-                Ok(crate::bindings::worlds::any_contract_event::Input {
-                    contract: contract.into(),
-                    chain_name,
-                    event: event.into(),
-                    block_height,
-                    chain_configs: chain_configs.into(),
-                })
-            }
-            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
-        }
-    }
-
-    pub fn try_into_component_input_raw(self) -> Result<Vec<u8>, TriggerError> {
-        match self {
-            TriggerData::Raw(data) => Ok(data),
-            _ => Err(TriggerError::TriggerToComponentWorldInputMismatch),
-        }
-    }
 }
 
 #[derive(Error, Debug)]
@@ -281,8 +178,8 @@ pub enum TriggerError {
     NoSuchWorkflow(ServiceID, WorkflowID),
     #[error("Cannot find trigger data: {0}")]
     NoSuchTriggerData(usize),
-    #[error("Trigger to component world input mismatch")]
-    TriggerToComponentWorldInputMismatch,
+    #[error("Unable to parse trigger data: {0}")]
+    TriggerDataParse(String),
     #[error("Cannot find cosmos trigger contract: {0} / {1} / {2}")]
     NoSuchCosmosContractEvent(String, Address, String),
     #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]

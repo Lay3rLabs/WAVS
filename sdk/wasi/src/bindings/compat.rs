@@ -1,0 +1,139 @@
+pub use super::world::lay3r::avs::layer_types::*;
+
+impl From<CosmosEvent> for cosmwasm_std::Event {
+    fn from(event: CosmosEvent) -> Self {
+        cosmwasm_std::Event::new(event.ty).add_attributes(event.attributes)
+    }
+}
+
+impl From<cosmwasm_std::Event> for CosmosEvent {
+    fn from(event: cosmwasm_std::Event) -> Self {
+        CosmosEvent {
+            ty: event.ty,
+            attributes: event
+                .attributes
+                .into_iter()
+                .map(|attr| (attr.key, attr.value))
+                .collect(),
+        }
+    }
+}
+
+impl From<alloy_primitives::LogData> for EthEventLogData {
+    fn from(log_data: alloy_primitives::LogData) -> Self {
+        EthEventLogData {
+            topics: log_data
+                .topics()
+                .iter()
+                .map(|topic| topic.to_vec())
+                .collect(),
+            data: log_data.data.to_vec(),
+        }
+    }
+}
+
+impl From<EthEventLogData> for alloy_primitives::LogData {
+    fn from(log_data: EthEventLogData) -> Self {
+        alloy_primitives::LogData::new(
+            log_data
+                .topics
+                .into_iter()
+                .map(|topic| alloy_primitives::FixedBytes::<32>::from_slice(&topic))
+                .collect(),
+            log_data.data.into(),
+        )
+        .unwrap()
+    }
+}
+
+impl TryFrom<layer_climb_address::Address> for CosmosAddress {
+    type Error = anyhow::Error;
+
+    fn try_from(addr: layer_climb_address::Address) -> Result<Self, Self::Error> {
+        match addr {
+            layer_climb_address::Address::Cosmos {
+                bech32_addr,
+                prefix_len,
+            } => Ok(CosmosAddress {
+                bech32_addr,
+                prefix_len: prefix_len as u32,
+            }),
+            _ => Err(anyhow::anyhow!("Cannot convert to CosmosAddr")),
+        }
+    }
+}
+
+impl From<CosmosAddress> for layer_climb_address::Address {
+    fn from(addr: CosmosAddress) -> Self {
+        layer_climb_address::Address::Cosmos {
+            bech32_addr: addr.bech32_addr,
+            prefix_len: addr.prefix_len as usize,
+        }
+    }
+}
+
+impl TryFrom<layer_climb_address::Address> for EthAddress {
+    type Error = anyhow::Error;
+
+    fn try_from(addr: layer_climb_address::Address) -> Result<Self, Self::Error> {
+        match addr {
+            layer_climb_address::Address::Eth(eth) => Ok(EthAddress {
+                raw_bytes: eth.as_bytes().to_vec(),
+            }),
+            _ => Err(anyhow::anyhow!("Cannot convert to EthAddr")),
+        }
+    }
+}
+
+impl From<EthAddress> for layer_climb_address::Address {
+    fn from(addr: EthAddress) -> Self {
+        alloy_primitives::Address::from(addr).into()
+    }
+}
+
+impl From<alloy_primitives::Address> for EthAddress {
+    fn from(addr: alloy_primitives::Address) -> Self {
+        EthAddress {
+            raw_bytes: addr.to_vec(),
+        }
+    }
+}
+
+impl From<EthAddress> for alloy_primitives::Address {
+    fn from(addr: EthAddress) -> Self {
+        alloy_primitives::Address::from_slice(&addr.raw_bytes)
+    }
+}
+
+impl From<CosmosChainConfig> for layer_climb_config::ChainConfig {
+    fn from(config: CosmosChainConfig) -> layer_climb_config::ChainConfig {
+        layer_climb_config::ChainConfig {
+            chain_id: layer_climb_config::ChainId::new(config.chain_id),
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            grpc_web_endpoint: config.grpc_web_endpoint,
+            gas_denom: config.gas_denom,
+            gas_price: config.gas_price,
+            address_kind: layer_climb_config::AddrKind::Cosmos {
+                prefix: config.bech32_prefix,
+            },
+        }
+    }
+}
+
+impl From<layer_climb_config::ChainConfig> for CosmosChainConfig {
+    fn from(config: layer_climb_config::ChainConfig) -> CosmosChainConfig {
+        CosmosChainConfig {
+            chain_id: config.chain_id.as_str().to_string(),
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            grpc_web_endpoint: config.grpc_web_endpoint,
+            gas_denom: config.gas_denom,
+            gas_price: config.gas_price,
+            bech32_prefix: match config.address_kind {
+                layer_climb_config::AddrKind::Cosmos { prefix } => prefix,
+                _ => "".to_string(),
+            },
+        }
+    }
+}

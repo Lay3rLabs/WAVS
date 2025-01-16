@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     apis::{
         dispatcher::{
-            Component, ComponentWorld, Permissions, Service, ServiceConfig, ServiceStatus, Submit,
-            Workflow,
+            Component, Permissions, Service, ServiceConfig, ServiceStatus, Submit, Workflow,
         },
         trigger::Trigger,
     },
@@ -35,7 +34,6 @@ pub struct ServiceRequest {
     pub id: ServiceID,
     pub digest: ShaDigest,
     pub trigger: Trigger,
-    pub world: ComponentWorld,
     pub permissions: Permissions,
     pub config: ServiceConfig,
     pub testable: Option<bool>,
@@ -92,7 +90,6 @@ impl ServiceRequestParser {
         let component = Component {
             wasm: req.digest.into(),
             permissions: req.permissions,
-            world: req.world,
         };
 
         let components = BTreeMap::from([(component_id.clone(), component)]);
@@ -124,7 +121,7 @@ mod test {
 
     use crate::{
         apis::{
-            dispatcher::{ComponentWorld, Permissions, ServiceConfig, Submit},
+            dispatcher::{Permissions, ServiceConfig, Submit},
             trigger::Trigger,
             ServiceID,
         },
@@ -140,7 +137,6 @@ mod test {
         fn make_service_req(addr: Address) -> ServiceRequest {
             ServiceRequest {
                 id: ServiceID::new("test-name").unwrap(),
-                world: ComponentWorld::Raw,
                 digest: Digest::new(&[0; 32]).into(),
                 trigger: Trigger::eth_contract_event(addr, "eth", [0; 32]),
                 permissions: Permissions::default(),

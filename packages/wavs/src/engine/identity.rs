@@ -42,10 +42,7 @@ impl Engine for IdentityEngine {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        apis::{dispatcher::ComponentWorld, trigger::TriggerData},
-        triggers::mock::mock_eth_event_trigger_config,
-    };
+    use crate::{apis::trigger::TriggerData, triggers::mock::mock_eth_event_trigger_config};
 
     use super::*;
 
@@ -63,7 +60,7 @@ mod test {
 
         // execute returns self
         let request = b"this is only a test".to_vec();
-        let component = Component::new(d1, ComponentWorld::Raw);
+        let component = Component::new(d1);
         let result = engine
             .execute(
                 &component,

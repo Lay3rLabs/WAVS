@@ -8,7 +8,7 @@ use wasi:http/types@0.2.0 as http-types;
 use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
 
 interface layer-types {
-  record cosmos-addr {
+  record cosmos-address {
     bech32-addr: string,
     // prefix is the first part of the bech32 address
     prefix-len: u32
@@ -29,7 +29,7 @@ interface layer-types {
     bech32-prefix: string,
   }
 
-  record eth-addr {
+  record eth-address {
     raw-bytes: list<u8>
   }
 
@@ -46,78 +46,65 @@ interface layer-types {
     http-endpoint: string,
   }
 
-  variant any-addr {
-    eth(eth-addr),
-    cosmos(cosmos-addr)
+  record trigger-action {
+    config: trigger-config,
+    data: trigger-data
   }
 
-  variant any-event {
-    eth(eth-event-log-data),
-    cosmos(cosmos-event)
+  record trigger-config {
+    service-id: string,
+    workflow-id: string,
+    trigger-source: trigger-source
   }
 
-  record chain-configs {
-    eth: list<tuple<string, eth-chain-config>>,
-    cosmos: list<tuple<string, cosmos-chain-config>>,
-  }
-}
-
-world layer-any-contract-event-world {
-  use layer-types.{any-addr, any-event, chain-configs};
-
-  record input {
-    chain-name: string, 
-    block-height: u64, 
-    contract: any-addr, 
-    event: any-event,
-    chain-configs: chain-configs
+  variant trigger-source {
+    eth-contract-event(trigger-source-eth-contract-event),
+    cosmos-contract-event(trigger-source-cosmos-contract-event),
+    manual
   }
 
-  export run: func(input: input) -> result<list<u8>, string>;
-}
+  record trigger-source-eth-contract-event {
+    address: eth-address,
+    chain-name: string,
+    event-hash: list<u8>
+  }
 
-world layer-cosmos-contract-event-world {
-  use layer-types.{cosmos-addr, cosmos-event, chain-configs};
-  
-  record input {
-    chain-name: string, 
-    block-height: u64, 
-    contract: cosmos-addr, 
+  record trigger-source-cosmos-contract-event {
+    address: cosmos-address,
+    chain-name: string,
+    event-type: string
+  }
+
+  variant trigger-data {
+    eth-contract-event(trigger-data-eth-contract-event),
+    cosmos-contract-event(trigger-data-cosmos-contract-event),
+    raw(list<u8>)
+  }
+
+  record trigger-data-eth-contract-event {
+    contract-address: eth-address,
+    chain-name: string,
+    log: eth-event-log-data,
+    block-height: u64
+  }
+
+  record trigger-data-cosmos-contract-event {
+    contract-address: cosmos-address,
+    chain-name: string,
     event: cosmos-event,
-    chain-configs: chain-configs
+    block-height: u64
+  }
+}
+
+world layer-trigger-world {
+  import host: interface {
+    use layer-types.{eth-chain-config, cosmos-chain-config};
+
+    get-eth-chain-config: func(chain-name: string) -> option<eth-chain-config>;
+    get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
   }
 
-  export run: func(input: input) -> result<list<u8>, string>;
-}
+  use layer-types.{trigger-action};
 
-world layer-eth-contract-event-world {
-  use layer-types.{eth-addr, eth-event-log-data, chain-configs};
-
-  record input {
-    chain-name: string, 
-    block-height: u64, 
-    contract: eth-addr, 
-    event-log-data: eth-event-log-data,
-    chain-configs: chain-configs
-  }
-
-  export run: func(input: input) -> result<list<u8>, string>;
-}
-
-world layer-raw-world {
-  export run: func(input: list<u8>) -> result<list<u8>, string>;
-}
-
-world layer-sdk-world {
-  use layer-types.{
-    cosmos-addr,
-    cosmos-event,
-    cosmos-chain-config,
-    eth-addr,
-    eth-event-log-data,
-    eth-chain-config,
-    any-addr,
-    any-event,
-    chain-configs
-  };
+  export run: func(trigger-action: trigger-action) -> result<list<u8>, string>;
 }

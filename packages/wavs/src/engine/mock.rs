@@ -103,7 +103,7 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use crate::{apis::dispatcher::ComponentWorld, test_utils::address::rand_event_eth};
+    use crate::test_utils::address::rand_event_eth;
 
     use super::*;
 
@@ -147,7 +147,7 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let c1 = crate::apis::dispatcher::Component::new(d1, ComponentWorld::Raw);
+        let c1 = crate::apis::dispatcher::Component::new(d1);
         let res = engine
             .execute(
                 &c1,
@@ -168,7 +168,7 @@ mod test {
         assert_eq!(res, r1);
 
         // d2 call gets r2
-        let c2 = crate::apis::dispatcher::Component::new(d2, ComponentWorld::Raw);
+        let c2 = crate::apis::dispatcher::Component::new(d2);
         let res = engine
             .execute(
                 &c2,
@@ -189,7 +189,7 @@ mod test {
         assert_eq!(res, r2);
 
         // d3 call returns missing error
-        let c3 = crate::apis::dispatcher::Component::new(d3, ComponentWorld::Raw);
+        let c3 = crate::apis::dispatcher::Component::new(d3);
         let err = engine
             .execute(
                 &c3,
