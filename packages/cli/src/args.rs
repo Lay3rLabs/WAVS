@@ -75,6 +75,11 @@ pub enum Command {
         #[clap(long)]
         input: String,
 
+        /// Optional time to wait for a result, in milliseconds
+        /// if none, will return immediately without showing the result
+        #[clap(long, default_value = "10_000")]
+        result_timeout_ms: Option<u64>,
+
         #[clap(flatten)]
         args: CliArgs,
     },

@@ -1,5 +1,5 @@
 [package]
-name = "cosmos-trigger-lookup"
+name = "chain-trigger-lookup"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true

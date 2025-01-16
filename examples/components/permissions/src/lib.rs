@@ -122,7 +122,7 @@ struct PermissionsInput {
     pub timestamp: u64,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 struct Response {
     pub filename: PathBuf,
     pub contents: String,

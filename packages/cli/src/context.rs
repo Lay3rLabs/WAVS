@@ -1,18 +1,22 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
 use crate::{
-    client::{get_cosmos_client, get_eigen_client},
+    clients::{get_cosmos_client, get_eigen_client},
     config::Config,
 };
 use alloy::providers::Provider;
+use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
 use utils::{config::AnyChainConfig, eigen_client::EigenClient};
 use wavs::apis::{ServiceID, WorkflowID};
 
 use crate::{args::Command, deploy::Deployment};
 
-pub struct ChainContext {
-    pub deployment: Deployment,
+pub struct CliContext {
+    pub deployment: Mutex<Deployment>,
     pub config: Config,
     _clients: HashMap<String, AnyClient>,
 }
@@ -22,11 +26,18 @@ enum AnyClient {
     Cosmos(SigningClient),
 }
 
-impl ChainContext {
-    pub async fn try_new(command: &Command, config: Config) -> Self {
+impl CliContext {
+    pub async fn try_new(
+        command: &Command,
+        config: Config,
+        deployment: Option<Deployment>,
+    ) -> Result<Self> {
         let mut chains = HashSet::new();
 
-        let deployment = Deployment::load(&config).unwrap();
+        let deployment = match deployment {
+            None => Deployment::load(&config)?,
+            Some(deployment) => deployment,
+        };
 
         match command {
             Command::DeployEigenCore { chain, .. } => {
@@ -50,8 +61,8 @@ impl ChainContext {
                 workflow_id,
                 ..
             } => {
-                let service_id = ServiceID::new(service_id).unwrap();
-                let workflow_id = workflow_id.as_ref().map(|x| WorkflowID::new(x).unwrap());
+                let service_id = ServiceID::new(service_id)?;
+                let workflow_id = workflow_id.as_ref().map(WorkflowID::new).transpose()?;
 
                 if let Some((chain, _)) =
                     deployment.get_trigger_info(&service_id, workflow_id.as_ref())
@@ -68,68 +79,81 @@ impl ChainContext {
             Command::Exec { .. } => {}
         }
 
+        Self::new_chains(chains.into_iter().collect(), config, Some(deployment)).await
+    }
+
+    pub async fn new_chains(
+        chains: Vec<String>,
+        config: Config,
+        deployment: Option<Deployment>,
+    ) -> Result<Self> {
+        let deployment = match deployment {
+            None => Deployment::load(&config)?,
+            Some(deployment) => deployment,
+        };
+
         let mut clients = HashMap::new();
 
         for chain_name in chains {
             let chain = config
                 .chains
-                .get_chain(&chain_name)
-                .unwrap()
-                .unwrap_or_else(|| panic!("chain {chain_name} not found"));
+                .get_chain(&chain_name)?
+                .context(format!("chain {chain_name} not found"))?;
 
             match chain {
                 AnyChainConfig::Eth(eth_chain_config) => {
                     clients.insert(
                         chain_name,
-                        AnyClient::Eth(get_eigen_client(&config, eth_chain_config.into()).await),
+                        AnyClient::Eth(get_eigen_client(&config, eth_chain_config.into()).await?),
                     );
                 }
                 AnyChainConfig::Cosmos(cosmos_chain_config) => {
                     clients.insert(
                         chain_name,
-                        AnyClient::Cosmos(get_cosmos_client(&config, cosmos_chain_config).await),
+                        AnyClient::Cosmos(get_cosmos_client(&config, cosmos_chain_config).await?),
                     );
                 }
             }
         }
 
-        Self {
+        Ok(Self {
             config,
-            deployment,
+            deployment: Mutex::new(deployment),
             _clients: clients,
-        }
+        })
     }
 
-    pub fn save_deployment(&mut self) {
+    pub fn save_deployment(&mut self) -> Result<()> {
         if !self.config.data.exists() {
-            std::fs::create_dir_all(&self.config.data).unwrap();
+            std::fs::create_dir_all(&self.config.data)?;
         }
         let path = Deployment::path(&self.config);
         tracing::debug!("Saving deployment to {}", path.display());
-        let file = std::fs::File::create(path).unwrap();
+        let file = std::fs::File::create(path)?;
         let writer = std::io::BufWriter::new(file);
-        serde_json::to_writer(writer, &self.deployment).unwrap();
+        serde_json::to_writer(writer, &self.deployment)?;
+        Ok(())
     }
 
-    pub fn get_eth_client(&self, chain_name: &str) -> EigenClient {
+    pub fn get_eth_client(&self, chain_name: &str) -> Result<EigenClient> {
         match self
             ._clients
             .get(chain_name)
-            .unwrap_or_else(|| panic!("chain {chain_name} not found"))
+            .context(format!("chain {chain_name} not found"))?
         {
-            AnyClient::Eth(client) => client.clone(),
-            _ => panic!("expected eth client"),
+            AnyClient::Eth(client) => Ok(client.clone()),
+            _ => Err(anyhow::anyhow!("expected eth client")),
         }
     }
 
-    pub fn get_cosmos_client(&self, chain_name: &str) -> SigningClient {
+    pub fn get_cosmos_client(&self, chain_name: &str) -> Result<SigningClient> {
         match self
             ._clients
             .get(chain_name)
-            .unwrap_or_else(|| panic!("chain {chain_name} not found"))
+            .context(format!("chain {chain_name} not found"))?
         {
-            AnyClient::Cosmos(client) => client.clone(),
-            _ => panic!("expected cosmos client"),
+            AnyClient::Cosmos(client) => Ok(client.clone()),
+            _ => Err(anyhow::anyhow!("expected cosmos client")),
         }
     }
 
@@ -137,21 +161,23 @@ impl ChainContext {
         &self,
         chain_name: &str,
         address: layer_climb::prelude::Address,
-    ) -> bool {
-        match self
-            ._clients
-            .get(chain_name)
-            .unwrap_or_else(|| panic!("chain {chain_name} not found"))
-        {
-            AnyClient::Eth(client) => {
-                let address = address.try_into().unwrap();
+    ) -> Result<bool> {
+        Ok(
+            match self
+                ._clients
+                .get(chain_name)
+                .context(format!("chain {chain_name} not found"))?
+            {
+                AnyClient::Eth(client) => {
+                    let address = address.try_into()?;
 
-                match client.eth.provider.get_code_at(address).await {
-                    Ok(addr) => **addr != alloy::primitives::Address::ZERO,
-                    Err(_) => false,
+                    match client.eth.provider.get_code_at(address).await {
+                        Ok(addr) => **addr != alloy::primitives::Address::ZERO,
+                        Err(_) => false,
+                    }
                 }
-            }
-            AnyClient::Cosmos(client) => client.querier.contract_info(&address).await.is_ok(),
-        }
+                AnyClient::Cosmos(client) => client.querier.contract_info(&address).await.is_ok(),
+            },
+        )
     }
 }

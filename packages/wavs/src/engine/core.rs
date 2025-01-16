@@ -249,19 +249,19 @@ impl WasiHttpView for HostComponent {
 
 #[cfg(test)]
 mod tests {
-    use apis::{dispatcher::ServiceConfig, trigger::TriggerConfig, ServiceID, WorkflowID};
-    use utils::example_eth_client::SimpleEthSubmitClient;
-
-    use crate::{
-        engine::mock::mock_chain_configs,
-        storage::memory::MemoryStorage,
-        triggers::mock::{mock_cosmos_event_trigger, mock_cosmos_event_trigger_data},
+    use apis::{
+        dispatcher::ServiceConfig,
+        trigger::{Trigger, TriggerConfig, TriggerData},
+        ServiceID, WorkflowID,
     };
+
+    use crate::{engine::mock::mock_chain_configs, storage::memory::MemoryStorage};
 
     use super::*;
 
-    const SQUARE: &[u8] = include_bytes!("../../../../examples/build/components/square.wasm");
-    const ECHO_DATA: &[u8] = include_bytes!("../../../../examples/build/components/echo_data.wasm");
+    const ECHO_RAW: &[u8] = include_bytes!("../../../../examples/build/components/echo_raw.wasm");
+    const PERMISSIONS: &[u8] =
+        include_bytes!("../../../../examples/build/components/permissions.wasm");
 
     #[test]
     fn store_and_list_wasm() {
@@ -270,8 +270,8 @@ mod tests {
         let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
 
         // store two blobs
-        let digest = engine.store_wasm(SQUARE).unwrap();
-        let digest2 = engine.store_wasm(ECHO_DATA).unwrap();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let digest2 = engine.store_wasm(PERMISSIONS).unwrap();
         assert_ne!(digest, digest2);
 
         // list them
@@ -288,7 +288,7 @@ mod tests {
         let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
 
         // store valid wasm
-        let digest = engine.store_wasm(SQUARE).unwrap();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
         // fail on invalid wasm
         engine.store_wasm(b"foobarbaz").unwrap_err();
 
@@ -298,13 +298,13 @@ mod tests {
     }
 
     #[test]
-    fn execute_square() {
+    fn execute_echo() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         // store square digest
-        let digest = engine.store_wasm(SQUARE).unwrap();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
         let component = crate::apis::dispatcher::Component::new(digest);
 
         // execute it and get bytes back
@@ -315,18 +315,15 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: WorkflowID::new("default").unwrap(),
-                        trigger: mock_cosmos_event_trigger(),
+                        trigger: Trigger::Manual,
                     },
-                    data: mock_cosmos_event_trigger_data(1, br#"{"x":12}"#),
+                    data: TriggerData::new_raw(br#"{"x":12}"#),
                 },
                 &ServiceConfig::default(),
             )
             .unwrap();
 
-        let (trigger_id, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
-
-        assert_eq!(trigger_id.u64(), 1);
-        assert_eq!(&data, br#"{"y":144}"#);
+        assert_eq!(&result, br#"{"y":144}"#);
     }
 
     #[test]
@@ -338,7 +335,7 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        let digest = engine.store_wasm(ECHO_DATA).unwrap();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
         let component = crate::apis::dispatcher::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
@@ -357,16 +354,15 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: &workflow_id,
-                        trigger: mock_cosmos_event_trigger(),
+                        trigger: Trigger::Manual,
                     },
-                    data: mock_cosmos_event_trigger_data(1, br#"envvar:foo"#),
+                    data: TriggerData::new_raw(br#"envvar:foo"#),
                 },
                 &service_config,
             )
             .unwrap();
 
-        let (_, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
-        assert_eq!(&data, br#"bar"#);
+        assert_eq!(&result, br#"bar"#);
 
         // verify whitelisted host env var is accessible
         let result = engine
@@ -376,17 +372,15 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: &workflow_id,
-                        trigger: mock_cosmos_event_trigger(),
+                        trigger: Trigger::Manual,
                     },
-                    data: mock_cosmos_event_trigger_data(2, br#"envvar:WAVS_ENV_TEST"#),
+                    data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
                 },
                 &service_config,
             )
             .unwrap();
 
-        let (_, data) = SimpleEthSubmitClient::decode_data_with_id_bytes(&result).unwrap();
-
-        assert_eq!(&data, br#"testing"#);
+        assert_eq!(&result, br#"testing"#);
 
         // verify the non-enabled env var is not accessible
         let result = engine
@@ -396,9 +390,9 @@ mod tests {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: &workflow_id,
-                        trigger: mock_cosmos_event_trigger(),
+                        trigger: Trigger::Manual,
                     },
-                    data: mock_cosmos_event_trigger_data(3, br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
+                    data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
                 },
                 &service_config,
             )
@@ -415,7 +409,7 @@ mod tests {
         let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         // store square digest
-        let digest = engine.store_wasm(SQUARE).unwrap();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
         let component = crate::apis::dispatcher::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: low_fuel_limit,
@@ -429,10 +423,10 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id,
-                        trigger: mock_cosmos_event_trigger(),
+                        workflow_id: &workflow_id,
+                        trigger: Trigger::Manual,
                     },
-                    data: mock_cosmos_event_trigger_data(4, br#"{"x":12}"#),
+                    data: TriggerData::new_raw(br#"{"x":12}"#),
                 },
                 &service_config,
             )

@@ -4021,7 +4021,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.8",
  "shellexpand 3.1.0",
- "simple-example",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
@@ -4037,6 +4036,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wavs",
+ "wavs-cli",
  "wildmatch",
 ]
 
@@ -6743,7 +6743,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.8",
  "shellexpand 3.1.0",
- "simple-example",
  "temp-env",
  "tempfile",
  "thiserror 1.0.69",
@@ -7396,6 +7395,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "clap 4.5.26",
+ "cosmwasm-std",
  "dotenvy",
  "hex",
  "lavs-apis",

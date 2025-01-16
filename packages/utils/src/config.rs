@@ -282,6 +282,12 @@ impl ChainConfigs {
             (None, None) => Ok(None),
         }
     }
+
+    pub fn all_chain_names(&self) -> Vec<String> {
+        let mut names = self.eth.keys().cloned().collect::<Vec<_>>();
+        names.extend(self.cosmos.keys().cloned());
+        names
+    }
 }
 
 /// Cosmos chain config with extra info like faucet

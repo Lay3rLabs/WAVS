@@ -55,11 +55,10 @@ pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -
     TriggerData::CosmosContractEvent {
         contract_address: rand_address_layer(),
         chain_name: "layer".to_string(),
-        event: utils::example_cosmos_client::NewMessageEvent {
-            id: trigger_id.into(),
-            data: data.as_ref().to_vec(),
-        }
-        .into(),
+        // matches example_cosmos_client::NewMessageEvent
+        event: cosmwasm_std::Event::new("new-message")
+            .add_attribute("id", trigger_id.to_string())
+            .add_attribute("data", hex::encode(data.as_ref())),
         block_height: 0,
     }
 }

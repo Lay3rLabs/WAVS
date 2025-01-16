@@ -21,7 +21,7 @@ pub enum Trigger {
     EthContractEvent {
         address: Address,
         chain_name: String,
-        event_hash: Vec<u8>,
+        event_hash: [u8; 32],
     },
     // not a real trigger, just for testing
     Manual,
@@ -42,12 +42,12 @@ impl Trigger {
     pub fn eth_contract_event(
         address: Address,
         chain_name: impl ToString,
-        event_hash: impl AsRef<[u8]>,
+        event_hash: [u8; 32],
     ) -> Self {
         Trigger::EthContractEvent {
             address,
             chain_name: chain_name.to_string(),
-            event_hash: event_hash.as_ref().to_vec(),
+            event_hash,
         }
     }
 }
@@ -101,7 +101,7 @@ impl TriggerConfig {
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         contract_address: Address,
         chain_name: impl ToString,
-        event_hash: impl AsRef<[u8]>,
+        event_hash: [u8; 32],
     ) -> Result<Self, IDError> {
         Ok(Self {
             service_id: service_id.try_into()?,

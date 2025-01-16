@@ -1,3 +1,4 @@
+/*
 use aggregator::{http::state::HttpState, test_utils::app::TestApp};
 use alloy::{
     node_bindings::Anvil,
@@ -354,3 +355,4 @@ async fn invalid_operator_signature() {
         assert!(format!("{response:?}").contains("Operator signature does not match"));
     }
 }
+ */

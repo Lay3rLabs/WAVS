@@ -17,6 +17,7 @@ rust-version = "1.80.0"
 [workspace.dependencies]
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
+wavs-cli = { path = "packages/cli" }
 aggregator = { path = "packages/aggregator" }
 layer-wasi = { path = "sdk/wasi" }
 layer-cosmwasm = { path = "sdk/cosmwasm" }

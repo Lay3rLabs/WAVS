@@ -1,3 +1,5 @@
+use anyhow::Result;
+use std::path::PathBuf;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -6,26 +8,40 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs::apis::trigger::{TriggerConfig, TriggerData};
 
-// This is pretty much all just copy/pasted from wavs... see over there for explanation :)
-pub struct ExecComponentResponse {
+use crate::util::{read_component, ComponentInput};
+
+pub struct ExecComponent {
     pub output_bytes: Vec<u8>,
     pub gas_used: u64,
 }
 
-pub async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> ExecComponentResponse {
+pub struct ExecComponentArgs {
+    pub component: PathBuf,
+    pub input: ComponentInput,
+}
+
+impl ExecComponent {
+    pub async fn run(ExecComponentArgs { component, input }: ExecComponentArgs) -> Result<Self> {
+        let wasm_bytes = read_component(component)?;
+        exec_component(wasm_bytes, input.decode()?).await
+    }
+}
+
+// This is pretty much all just copy/pasted from wavs... see over there for explanation :)
+async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> Result<ExecComponent> {
     let mut config = WTConfig::new();
     config.wasm_component_model(true);
     config.async_support(true);
     config.consume_fuel(true);
 
-    let engine = WTEngine::new(&config).unwrap();
-    let app_data_dir = tempfile::tempdir().unwrap().into_path();
+    let engine = WTEngine::new(&config)?;
+    let app_data_dir = tempfile::tempdir()?.into_path();
 
-    let component = Component::new(&engine, &wasm_bytes).unwrap();
+    let component = Component::new(&engine, &wasm_bytes)?;
 
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
-    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
+    wasmtime_wasi::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
 
     let mut builder = WasiCtxBuilder::new();
     builder
@@ -49,7 +65,7 @@ pub async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> ExecCo
     };
 
     let mut store = wasmtime::Store::new(&engine, host);
-    store.set_fuel(u64::MAX).unwrap();
+    store.set_fuel(u64::MAX)?;
 
     let instance = wavs::bindings::world::LayerTriggerWorld::instantiate_async(
         &mut store, &component, &linker,
@@ -58,25 +74,24 @@ pub async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> ExecCo
     .expect("Wasm instantiate failed");
 
     let input = wavs::apis::trigger::TriggerAction {
-        config: TriggerConfig::manual("service-1", "default").unwrap(),
+        config: TriggerConfig::manual("service-1", "default")?,
         data: TriggerData::new_raw(input_bytes),
     };
 
     let response = instance
-        .call_run(&mut store, &input.try_into().unwrap())
-        .await
-        .unwrap()
-        .unwrap();
+        .call_run(&mut store, &input.try_into()?)
+        .await?
+        .map_err(|e| anyhow::anyhow!("Wasm call failed: {:?}", e))?;
 
-    let gas_used = u64::MAX - store.get_fuel().unwrap();
+    let gas_used = u64::MAX - store.get_fuel()?;
 
-    ExecComponentResponse {
+    Ok(ExecComponent {
         output_bytes: response,
         gas_used,
-    }
+    })
 }
 
-pub(crate) struct Host {
+struct Host {
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,

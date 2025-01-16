@@ -8,7 +8,6 @@ use crate::{
 use alloy::{
     providers::Provider,
     rpc::types::{Filter, Log},
-    sol_types::SolEvent,
 };
 use anyhow::{Context, Result};
 use futures::{Stream, StreamExt};
@@ -38,7 +37,7 @@ struct LookupMaps {
     pub triggers_by_cosmos_contract_event:
         Arc<RwLock<HashMap<(String, Address, String), LookupId>>>,
     /// lookup id by (chain id, contract event address, event hash)
-    pub triggers_by_eth_contract_event: Arc<RwLock<HashMap<(String, Address, Vec<u8>), LookupId>>>,
+    pub triggers_by_eth_contract_event: Arc<RwLock<HashMap<(String, Address, [u8; 32]), LookupId>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -181,9 +180,7 @@ impl CoreTriggerManager {
 
             // Start the event stream
             // TODO - just grab every event and filter in the stream
-            let filter = Filter::new().event_signature(
-                utils::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH,
-            );
+            let filter = Filter::new();
 
             let stream = query_client
                 .provider
@@ -225,39 +222,34 @@ impl CoreTriggerManager {
                     chain_name,
                     block_height,
                 } => {
-                    println!("DEBUG: Ethereum event: {:?}", log);
+                    if let Some(event_hash) = log.topic0() {
+                        let contract_address = layer_climb::prelude::Address::from(log.address());
 
-                    // TODO - derive this from log
-                    let event_hash =
-                        utils::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH
-                            .to_vec();
-
-                    let contract_address = layer_climb::prelude::Address::from(log.address());
-
-                    if let Some(trigger_config) = self
-                        .lookup_maps
-                        .triggers_by_eth_contract_event
-                        .read()
-                        .unwrap()
-                        .get(&(chain_name.clone(), contract_address.clone(), event_hash))
-                        .and_then(|id| {
-                            self.lookup_maps
-                                .trigger_configs
-                                .read()
-                                .unwrap()
-                                .get(id)
-                                .cloned()
-                        })
-                    {
-                        trigger_actions.push(TriggerAction {
-                            data: TriggerData::EthContractEvent {
-                                contract_address,
-                                chain_name,
-                                log: log.inner.data,
-                                block_height,
-                            },
-                            config: trigger_config,
-                        });
+                        if let Some(trigger_config) = self
+                            .lookup_maps
+                            .triggers_by_eth_contract_event
+                            .read()
+                            .unwrap()
+                            .get(&(chain_name.clone(), contract_address.clone(), **event_hash))
+                            .and_then(|id| {
+                                self.lookup_maps
+                                    .trigger_configs
+                                    .read()
+                                    .unwrap()
+                                    .get(id)
+                                    .cloned()
+                            })
+                        {
+                            trigger_actions.push(TriggerAction {
+                                data: TriggerData::EthContractEvent {
+                                    contract_address,
+                                    chain_name,
+                                    log: log.inner.data,
+                                    block_height,
+                                },
+                                config: trigger_config,
+                            });
+                        }
                     }
                 }
                 StreamTriggers::Cosmos {
@@ -295,7 +287,6 @@ impl CoreTriggerManager {
             }
 
             for action in trigger_actions {
-                println!("DEBUG - sending action: {:?}", action);
                 action_sender.send(action).await.unwrap();
             }
         }
@@ -350,7 +341,7 @@ impl TriggerManager for CoreTriggerManager {
                     .triggers_by_eth_contract_event
                     .write()
                     .unwrap();
-                let key = (chain_name.clone(), address.clone(), event_hash.clone());
+                let key = (chain_name.clone(), address.clone(), event_hash);
                 if lock.contains_key(&key) {
                     return Err(TriggerError::EthContractEventAlreadyRegistered(
                         chain_name,
@@ -505,7 +496,7 @@ impl TriggerManager for CoreTriggerManager {
 
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_eth_contract_address: &mut HashMap<(String, Address, Vec<u8>), LookupId>,
+    triggers_by_eth_contract_address: &mut HashMap<(String, Address, [u8; 32]), LookupId>,
     triggers_by_cosmos_contract_address: &mut HashMap<(String, Address, String), LookupId>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
@@ -522,7 +513,7 @@ fn remove_trigger_data(
             event_hash,
         } => {
             triggers_by_eth_contract_address
-                .remove(&(chain_name.clone(), address.clone(), event_hash.clone()))
+                .remove(&(chain_name.clone(), address.clone(), event_hash))
                 .ok_or(TriggerError::NoSuchEthContractEvent(
                     chain_name,
                     address,

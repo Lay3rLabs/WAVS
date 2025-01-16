@@ -853,6 +853,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "chain-trigger-lookup"
+version = "0.2.0-rc1"
+dependencies = [
+ "anyhow",
+ "example-helpers",
+ "layer-climb-address",
+ "layer-climb-config",
+ "layer-wasi",
+ "serde",
+ "serde_json",
+ "wit-bindgen-rt 0.37.0",
+ "wstd",
+]
+
+[[package]]
 name = "const-hex"
 version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -898,21 +913,6 @@ dependencies = [
  "prost",
  "tendermint-proto 0.39.1",
  "tonic",
-]
-
-[[package]]
-name = "cosmos-trigger-lookup"
-version = "0.2.0-rc1"
-dependencies = [
- "anyhow",
- "example-helpers",
- "layer-climb-address",
- "layer-climb-config",
- "layer-wasi",
- "serde",
- "serde_json",
- "wit-bindgen-rt 0.37.0",
- "wstd",
 ]
 
 [[package]]

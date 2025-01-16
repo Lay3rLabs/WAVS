@@ -66,6 +66,28 @@ async fn add_service_inner(
         .await?;
     let service_id = service.id.clone();
 
+    for workflow in service.workflows.values() {
+        match workflow.submit {
+            Submit::None => {}
+            Submit::EigenContract { aggregate, .. } => {
+                if aggregate {
+                    tracing::error!("FIXME: aggregate is not yet supported");
+                    // possible example:
+                    // self.inner
+                    // .post(format!("{}/add-service", aggregator_app_url))
+                    // .header("Content-Type", "application/json")
+                    // .json(
+                    //     &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
+                    //         service_manager_address,
+                    //     },
+                    // )
+                    // .send()
+                    // .await?;
+                }
+            }
+        }
+    }
+
     state.dispatcher.add_service(service)?;
 
     Ok(AddServiceResponse { id: service_id })

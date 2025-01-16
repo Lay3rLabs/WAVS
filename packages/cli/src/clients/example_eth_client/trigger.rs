@@ -1,12 +1,12 @@
 use std::ops::Deref;
 
-use crate::{
-    alloy_helpers::SolidityEventFinder, eigen_client::solidity_types::BoxSigningProvider,
-    eth_client::EthSigningClient,
-};
 use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use utils::{
+    alloy_helpers::SolidityEventFinder, eigen_client::solidity_types::BoxSigningProvider,
+    eth_client::EthSigningClient,
+};
 
 use super::{
     example_trigger::ISimpleTrigger::TriggerInfo,

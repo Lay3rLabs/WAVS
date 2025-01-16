@@ -1,6 +1,6 @@
-use crate::{avs_client::ServiceManagerDeps, eth_client::EthSigningClient};
 use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::Result;
+use utils::{avs_client::ServiceManagerDeps, eth_client::EthSigningClient};
 
 use super::{
     example_submit::DataWithId,

@@ -1,10 +1,11 @@
 use example_helpers::trigger::{decode_trigger_event, ChainQuerierExt};
 use layer_wasi::{
     bindings::{
-        compat::{TriggerData, TriggerDataCosmosContractEvent},
+        compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
         world::{host, Guest, TriggerAction},
     },
     cosmos::CosmosQuerier,
+    ethereum::EthereumQuerier,
     export_layer_trigger_world,
 };
 use serde::{Deserialize, Serialize};
@@ -14,26 +15,39 @@ struct Component;
 impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
         wstd::runtime::block_on(move |reactor| async move {
-            let (chain_name, contract_address) = match &trigger_action.data {
+            let (trigger_id, _) = decode_trigger_event(trigger_action.data.clone())?;
+
+            let resp: TriggerDataResp = match trigger_action.data {
                 TriggerData::CosmosContractEvent(TriggerDataCosmosContractEvent {
                     chain_name,
                     contract_address,
                     ..
-                }) => (chain_name.clone(), contract_address.clone()),
+                }) => {
+                    let chain_config = host::get_cosmos_chain_config(&chain_name).ok_or(
+                        anyhow::anyhow!("cosmos chain config for {chain_name} not found"),
+                    )?;
+
+                    CosmosQuerier::new(chain_config, reactor)
+                        .trigger_data(contract_address.into(), trigger_id)
+                        .await?
+                }
+                TriggerData::EthContractEvent(TriggerDataEthContractEvent {
+                    chain_name,
+                    contract_address,
+                    ..
+                }) => {
+                    let chain_config = host::get_eth_chain_config(&chain_name).ok_or(
+                        anyhow::anyhow!("eth chain config for {chain_name} not found"),
+                    )?;
+
+                    EthereumQuerier::new(chain_config, reactor)
+                        .trigger_data(contract_address.into(), trigger_id)
+                        .await?
+                }
                 _ => {
                     return Err(anyhow::anyhow!("expected cosmos contract event"));
                 }
             };
-
-            let (trigger_id, _) = decode_trigger_event(trigger_action.data)?;
-
-            let chain_config = host::get_cosmos_chain_config(&chain_name)
-                .ok_or(anyhow::anyhow!("chain config for {chain_name} not found"))?;
-            let querier = CosmosQuerier::new(chain_config, reactor);
-
-            let resp: TriggerDataResp = querier
-                .trigger_data(contract_address.into(), trigger_id)
-                .await?;
 
             let resp = serde_json::to_vec(&resp)?;
 

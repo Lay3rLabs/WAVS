@@ -1,32 +1,25 @@
+use std::collections::HashMap;
+
+use crate::deploy::ServiceInfo;
+use anyhow::Result;
 use serde::Serialize;
 use utils::{avs_client::SignedData, eigen_client::CoreAVSAddresses};
 use wavs::apis::{ServiceID, WorkflowID};
 
-use crate::deploy::ServiceInfo;
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DisplayBuilder {
     pub core_contracts: Option<CoreAVSAddresses>,
-    pub service_info: Option<ServiceInfo>,
-    pub service_id: Option<ServiceID>,
-    pub workflow_id: Option<WorkflowID>,
+    pub service: Option<(ServiceID, HashMap<WorkflowID, ServiceInfo>)>,
     pub signed_data: Option<SignedData>,
     pub gas_used: Option<u64>,
 }
 
 impl DisplayBuilder {
     pub fn new() -> Self {
-        Self {
-            core_contracts: None,
-            service_info: None,
-            service_id: None,
-            workflow_id: None,
-            signed_data: None,
-            gas_used: None,
-        }
+        Self::default()
     }
 
-    pub fn show(self) {
+    pub fn show(self) -> Result<()> {
         #[derive(Debug, Serialize)]
         #[serde(rename_all = "snake_case")]
         pub struct DisplayJson {
@@ -34,13 +27,7 @@ impl DisplayBuilder {
             pub core_contracts: Option<CoreAVSAddresses>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub service_info: Option<ServiceInfo>,
-
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub service_id: Option<ServiceID>,
-
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub workflow_id: Option<WorkflowID>,
+            pub service: Option<(ServiceID, HashMap<WorkflowID, ServiceInfo>)>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub signed_data: Option<SignedDataJson>,
@@ -67,13 +54,12 @@ impl DisplayBuilder {
             "{}",
             serde_json::to_string_pretty(&DisplayJson {
                 core_contracts: self.core_contracts,
-                service_info: self.service_info,
-                service_id: self.service_id,
-                workflow_id: self.workflow_id,
+                service: self.service,
                 signed_data,
                 gas_used: self.gas_used,
-            })
-            .unwrap()
+            })?
         );
+
+        Ok(())
     }
 }

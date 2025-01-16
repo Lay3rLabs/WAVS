@@ -251,6 +251,9 @@ impl CoreSubmission {
                 .gas(max_gas.unwrap_or(500_000).min(30_000_000))
                 .send()
                 .await
+                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(anyhow!("{}", e)))?
+                .watch()
+                .await
                 .map_err(|e| SubmissionError::FailedToSubmitEthDirect(anyhow!("{}", e)))?;
         }
 

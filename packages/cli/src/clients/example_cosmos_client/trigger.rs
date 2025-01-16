@@ -2,6 +2,7 @@ use anyhow::Result;
 use cosmwasm_std::{Empty, Uint64};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
+use simple_example_cosmos::event::NewMessageEvent;
 
 #[derive(Clone)]
 pub struct SimpleCosmosTriggerClient {
@@ -10,8 +11,6 @@ pub struct SimpleCosmosTriggerClient {
 }
 
 type TriggerId = Uint64;
-
-pub use simple_example_cosmos::event::NewMessageEvent;
 
 impl SimpleCosmosTriggerClient {
     pub fn new(signing_client: SigningClient, contract_address: Address) -> Self {
@@ -47,11 +46,17 @@ impl SimpleCosmosTriggerClient {
             )
             .await?;
 
-        CosmosTxEvents::from(&res)
-            .attr_first("new-message", "id")
-            .map_err(|_| anyhow::anyhow!("missing trigger id"))
-            .and_then(|attr| {
-                Uint64::try_from(attr.value()).map_err(|_| anyhow::anyhow!("invalid trigger id"))
+        let id = CosmosTxEvents::from(&res)
+            .events_iter()
+            .find_map(|event| {
+                let event: cosmwasm_std::Event = event.into();
+                match NewMessageEvent::try_from(event) {
+                    Ok(event) => Some(event.id),
+                    Err(_) => None,
+                }
             })
+            .ok_or_else(|| anyhow::anyhow!("missing trigger id"))?;
+
+        Ok(id)
     }
 }

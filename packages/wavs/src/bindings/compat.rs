@@ -43,7 +43,7 @@ impl TryFrom<api::Trigger> for component::TriggerSource {
                     crate::bindings::world::lay3r::avs::layer_types::TriggerSourceEthContractEvent {
                         address: address.try_into()?,
                         chain_name,
-                        event_hash,
+                        event_hash: event_hash.to_vec(),
                     }
                 )
             },

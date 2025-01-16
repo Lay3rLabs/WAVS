@@ -29,15 +29,17 @@ docker-stop:
 # compile WASI components, places the output in components dir
 wasi-build COMPONENT="*":
     @if [ "{{COMPONENT}}" = "*" ]; then \
-        cd sdk/wasi && cargo component build --release; \
         rm -f ./examples/target/wasm32-wasip1/release/*.wasm; \
-        rm -rf {{WASI_OUT_DIR}}; \
     fi
+
     @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
-        echo "Building WASI component in $(dirname $C)"; \
-        `cd $(dirname $C); cargo component build --release; cargo fmt;`; \
+        if [ "{{COMPONENT}}" != "_helpers" ]; then \
+            echo "Building WASI component in $(dirname $C)"; \
+            ( cd $(dirname $C) && cargo component build --release && cargo fmt ); \
+        fi; \
     done
 
+    rm -rf {{WASI_OUT_DIR}}
     mkdir -p {{WASI_OUT_DIR}} 
     @cp ./examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
     @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt

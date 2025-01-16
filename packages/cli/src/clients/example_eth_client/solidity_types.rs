@@ -2,7 +2,7 @@ use alloy::transports::BoxTransport;
 use example_submit::SimpleSubmit::SimpleSubmitInstance;
 use example_trigger::SimpleTrigger::SimpleTriggerInstance;
 
-use crate::eigen_client::solidity_types::BoxSigningProvider;
+use utils::eigen_client::solidity_types::BoxSigningProvider;
 
 pub mod example_trigger {
     use alloy::sol;

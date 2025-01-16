@@ -7,7 +7,7 @@ use wavs::apis::{ServiceID, WorkflowID};
 
 use crate::config::Config;
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Deployment {
     // keyed by chain name (not necessarily the same as chainId)
