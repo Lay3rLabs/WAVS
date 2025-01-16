@@ -90,7 +90,7 @@ jobs:
         with:
           toolchain: 1.83.0
           command: test
-          args: --workspace --locked --features e2e_tests_ethereum_baseline -- --nocapture
+          args: --workspace --locked -- --nocapture
         env:
           RUST_BACKTRACE: 1
           WAVS_LOCAL_IC_BIN_PATH: /tmp/local-ic
