@@ -20,16 +20,19 @@ WAVS is designed for the multichain, enabling services to be triggered and resul
 ## Run locally
 
 ```bash
-# copy over private env files
+# copy env files
 cp packages/aggregator/.env.example packages/aggregator/.env
 cp packages/cli/.env.example packages/cli/.env
 cp packages/wavs/.env.example packages/wavs/.env
 
 # brew install just
-# if you get 'ERROR [internal] load metadata ...': https://stackoverflow.com/a/71665244
+# - if you get 'ERROR [internal] load metadata ...': https://stackoverflow.com/a/71665244
 just docker-build
 
+# MacOS Docker:
 # Docker Engine -> Settings -> Resources -> Network -> 'Enable Host Networking'
+# or
+# brew install chipmk/tap/docker-mac-net-connect && sudo brew services start chipmk/tap/docker-mac-net-connect
 docker compose up
 
 # Interact
