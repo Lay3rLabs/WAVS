@@ -179,7 +179,6 @@ impl CoreTriggerManager {
             tracing::debug!("Trigger Manager for Ethereum chain {} started", chain_name);
 
             // Start the event stream
-            // TODO - just grab every event and filter in the stream
             let filter = Filter::new();
 
             let stream = query_client
