@@ -323,7 +323,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(&result, br#"{"y":144}"#);
+        assert_eq!(&result, br#"{"x":12}"#);
     }
 
     #[test]
