@@ -85,6 +85,12 @@ jobs:
       - name: Set env
         run: echo "WAVS_SUBMISSION_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
 
+      - name: Set env
+        run: echo "WAVS_CLI_ETH_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
+
+      - name: Set env
+        run: echo "WAVS_AGGREGATOR_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
+
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
