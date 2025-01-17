@@ -1,25 +1,25 @@
-FROM rust:1.81-bookworm AS builder
-WORKDIR /myapp
-
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
-COPY Cargo.lock Cargo.toml /myapp/
-COPY packages/aggregator /myapp/packages/aggregator
-COPY packages/wavs/Cargo.toml /myapp/packages/wavs/Cargo.toml
-COPY packages/utils/Cargo.toml /myapp/packages/utils/Cargo.toml
-COPY dummy.rs /myapp/packages/wavs/benches/mock_bench.rs
-COPY dummy.rs /myapp/packages/wavs/src/mock_bench.rs
-COPY dummy.rs /myapp/packages/utils/src/lib.rs
-RUN cargo build --manifest-path /myapp/packages/wavs/Cargo.toml --release
+FROM rust:1.81-bookworm AS planner
+WORKDIR /myapp
+# We only pay the installation cost once,
+# it will be cached from the second build onwards
+RUN cargo install cargo-chef
+COPY . .
+RUN cargo chef prepare  --recipe-path recipe.json
 
-# clean up these fake local deps so we compile for real later
-RUN rm /myapp/packages/wavs/src/*.rs
-RUN rm /myapp/packages/wavs/benches/*.rs
-RUN rm /myapp/packages/utils/src/*.rs
-RUN rm -rf target/release/.fingerprint/wavs*
+FROM rust:1.81-bookworm AS cacher
+WORKDIR /myapp
+RUN cargo install cargo-chef
+COPY --from=planner /myapp/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 
 # This build step should just compile the local code and be faster
+FROM rust:1.81-bookworm AS builder
+WORKDIR /myapp
 COPY . .
-RUN cargo build --manifest-path /myapp/packages/wavs/Cargo.toml --release
+# Copy over the cached dependencies
+COPY --from=cacher /myapp/target target
+RUN cargo build --release
 
 ### PRODUCTION
 
@@ -28,8 +28,16 @@ FROM debian:bookworm-slim
 WORKDIR /wavs
 
 RUN apt-get update && apt-get upgrade -y
-RUN apt install -y libcurl4
+RUN apt install -y libcurl4 jq
+
 COPY --from=builder /myapp/target/release/wavs /usr/local/bin/wavs
-COPY --from=builder /myapp/packages/wavs/wavs.toml /etc/wavs/wavs.toml
-EXPOSE 8000
+COPY --from=builder /myapp/packages/wavs/wavs.toml /var/wavs/wavs.toml
+
+COPY --from=builder /myapp/target/release/wavs-cli /usr/local/bin/wavs-cli
+COPY --from=builder /myapp/packages/cli/wavs-cli.toml /var/wavs-cli/wavs-cli.toml
+
+COPY --from=builder /myapp/target/release/aggregator /usr/local/bin/aggregator
+COPY --from=builder /myapp/packages/aggregator/aggregator.toml /var/wavs-aggregator/aggregator.toml
+
+EXPOSE 8000 8001
 CMD ["/usr/local/bin/wavs"]

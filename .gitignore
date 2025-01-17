@@ -11,3 +11,4 @@ cache
 broadcast
 out
 deployments
+.docker

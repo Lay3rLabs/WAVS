@@ -1,5 +1,4 @@
 SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" }
-TAG := env_var_or_default("TAG", "")
 WASI_OUT_DIR := "./components"
 REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
@@ -7,17 +6,9 @@ DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
 help:
   just --list
 
-# builds wavs:latest
-docker-build:
-    {{SUDO}} docker build . -t ghcr.io/lay3rlabs/wavs:latest
-
-# push wavs:latest to ghcr with optional TAG environment variable
-docker-push:
-    {{SUDO}} docker push ghcr.io/lay3rlabs/wavs:latest
-    @if [ "{{TAG}}" != "" ]; then \
-        {{SUDO}} docker tag ghcr.io/lay3rlabs/wavs:latest ghcr.io/lay3rlabs/wavs:{{TAG}}; \
-        {{SUDO}} docker push ghcr.io/lay3rlabs/wavs:{{TAG}}; \
-    fi
+# builds wavs
+docker-build TAG="local":
+    {{SUDO}} docker build . -t ghcr.io/lay3rlabs/wavs:{{TAG}}
 
 # run wavs:latest
 docker-run:
