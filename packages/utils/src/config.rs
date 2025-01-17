@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{collections::HashMap, marker::PhantomData, path::PathBuf};
+use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 
 use crate::{error::ChainConfigError, eth_client::EthChainConfig};
 
@@ -221,9 +221,9 @@ impl ConfigFilePath {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
-    pub cosmos: HashMap<String, CosmosChainConfig>,
+    pub cosmos: BTreeMap<String, CosmosChainConfig>,
     /// Ethereum-style chains
-    pub eth: HashMap<String, EthereumChainConfig>,
+    pub eth: BTreeMap<String, EthereumChainConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

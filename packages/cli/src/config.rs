@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 use utils::config::{ChainConfigs, ConfigExt};
 
 /// The fully parsed and validated config struct we use in the application
@@ -52,8 +52,8 @@ impl Default for Config {
             log_level: vec!["info".to_string()],
             data: PathBuf::from("/var/wavs-cli"),
             chains: ChainConfigs {
-                cosmos: HashMap::new(),
-                eth: HashMap::new(),
+                cosmos: BTreeMap::new(),
+                eth: BTreeMap::new(),
             },
             cosmos_mnemonic: None,
             eth_mnemonic: None,

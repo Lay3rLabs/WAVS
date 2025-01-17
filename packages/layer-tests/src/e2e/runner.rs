@@ -1,14 +1,11 @@
 use std::path::PathBuf;
 
-use alloy::dyn_abi::SolType;
 use anyhow::{anyhow, Context, Result};
-use futures::{stream::FuturesUnordered, StreamExt};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use utils::avs_client::SignedData;
 use wavs::AppContext;
 use wavs_cli::{
-    clients::example_eth_client::example_trigger::ISimpleTrigger::TriggerInfo,
     command::{
         add_task::{AddTask, AddTaskArgs},
         deploy_service::DeployService,
@@ -73,7 +70,7 @@ async fn test_service(
     clients: &Clients,
 ) -> Result<ServiceName> {
     let service_id = service.service_id.to_string();
-    let (workflow_id, service) = service.workflows.into_iter().next().unwrap().clone();
+    let (workflow_id, _) = service.workflows.into_iter().next().unwrap().clone();
 
     tracing::info!("Testing service: {:?}", name);
 

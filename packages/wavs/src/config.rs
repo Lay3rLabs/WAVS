@@ -1,6 +1,9 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+};
 use utils::config::{ChainConfigs, ConfigExt, CosmosChainConfig, EthereumChainConfig};
 
 /// The fully parsed and validated config struct we use in the application
@@ -73,8 +76,8 @@ impl Default for Config {
             cosmos_chain: None,
             eth_chains: Vec::new(),
             chains: ChainConfigs {
-                cosmos: HashMap::new(),
-                eth: HashMap::new(),
+                cosmos: BTreeMap::new(),
+                eth: BTreeMap::new(),
             },
             wasm_lru_size: 20,
             wasm_threads: 4,

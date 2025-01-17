@@ -1,20 +1,16 @@
 use std::sync::Arc;
 
 use alloy::node_bindings::AnvilInstance;
-use utils::{
-    config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
-    context::AppContext,
-    filesystem::workspace_path,
-};
+use utils::context::AppContext;
 use wavs::dispatcher::CoreDispatcher;
 
-use super::{config::Configs, cosmos::IcTestHandle, matrix::TestMatrix};
+use super::{config::Configs, cosmos::IcTestHandle};
 
 pub struct AppHandles {
-    pub eth_chains: Vec<AnvilInstance>,
-    pub cosmos_chains: Vec<Option<IcTestHandle>>,
+    pub _eth_chains: Vec<AnvilInstance>,
+    pub _cosmos_chains: Vec<Option<IcTestHandle>>,
     pub wavs_handle: std::thread::JoinHandle<()>,
-    pub aggregator_handle: std::thread::JoinHandle<()>,
+    pub aggregator_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl AppHandles {
@@ -35,24 +31,27 @@ impl AppHandles {
             }
         });
 
-        let aggregator_handle = std::thread::spawn({
-            let config = configs.aggregator.clone();
-            let ctx = ctx.clone();
-            move || {
-                aggregator::run_server(ctx, config);
-            }
+        let aggregator_handle = configs.aggregator.clone().map(|config| {
+            std::thread::spawn({
+                let ctx = ctx.clone();
+                move || {
+                    aggregator::run_server(ctx, config);
+                }
+            })
         });
 
         Self {
             wavs_handle,
             aggregator_handle,
-            eth_chains,
-            cosmos_chains,
+            _eth_chains: eth_chains,
+            _cosmos_chains: cosmos_chains,
         }
     }
 
-    pub fn join(mut self) {
+    pub fn join(self) {
         self.wavs_handle.join().unwrap();
-        self.aggregator_handle.join().unwrap();
+        if let Some(handle) = self.aggregator_handle {
+            handle.join().unwrap();
+        }
     }
 }

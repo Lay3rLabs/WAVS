@@ -6,13 +6,6 @@ version = "0.2.0-rc1"
 authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 
-[features]
-default = ["ethereum"]
-ethereum = []
-cosmos = []
-cross-chain = []
-aggregator = []
-
 [dependencies]
 wavs = { workspace = true }
 utils = { workspace = true }

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use super::{clients::Clients, config::Configs, digests::Digests, eth, matrix::TestMatrix};
-use futures::{stream::FuturesUnordered, StreamExt};
+use super::{clients::Clients, config::Configs, digests::Digests};
 use utils::{context::AppContext, eigen_client::CoreAVSAddresses};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -16,7 +15,7 @@ pub struct Services {
     pub eth_eigen_core: HashMap<String, CoreAVSAddresses>,
     pub eth: EthServices,
     pub cosmos: CosmosServices,
-    pub cross_chain: CrossChainServices,
+    pub _cross_chain: CrossChainServices,
 }
 
 #[derive(Default)]
@@ -42,14 +41,10 @@ pub struct CosmosServices {
 pub struct CrossChainServices {}
 
 impl Services {
-    pub fn new(
-        ctx: AppContext,
-        configs: &Configs,
-        clients: &Clients,
-        digests: &Digests,
-        matrix: &TestMatrix,
-    ) -> Self {
+    pub fn new(ctx: AppContext, configs: &Configs, clients: &Clients, digests: &Digests) -> Self {
         ctx.rt.block_on(async move {
+            let matrix = &configs.test_config.matrix;
+
             let eth_chain_names = configs.chains.eth.keys().cloned().collect::<Vec<_>>();
             let cosmos_chain_names = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
 
@@ -80,8 +75,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::EthChainTriggerLookup,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -93,8 +88,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::EthCosmosQuery,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -106,8 +101,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::EthEchoData,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -119,8 +114,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::EthEchoDataAggregator,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -132,8 +127,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::EthPermissions,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -145,8 +140,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::EthSquare,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -158,8 +153,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::CosmosChainTriggerLookup,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -171,8 +166,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::CosmosCosmosQuery,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -184,8 +179,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::CosmosEchoData,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -197,8 +192,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::CosmosPermissions,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )
@@ -210,8 +205,8 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::CosmosSquare,
-                        &clients,
-                        &digests,
+                        clients,
+                        digests,
                         &eth_chain_names,
                         &cosmos_chain_names,
                     )

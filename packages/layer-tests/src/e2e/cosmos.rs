@@ -5,28 +5,25 @@ use std::{
 
 use utils::{config::CosmosChainConfig, context::AppContext, filesystem::workspace_path};
 
+use crate::config::TestConfig;
+
 const IC_API_URL: &str = "http://127.0.0.1:8080";
 
-pub fn start_chains(ctx: AppContext) -> Vec<(CosmosChainConfig, Option<IcTestHandle>)> {
+pub fn start_chains(
+    ctx: AppContext,
+    config: &TestConfig,
+) -> Vec<(CosmosChainConfig, Option<IcTestHandle>)> {
     let mut chains = Vec::new();
 
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "cosmos")] {
-            chains.push(start_chain(ctx.clone(), 0));
-
-            // cfg_if::cfg_if! {
-            //     if #[cfg(feature = "aggregator")] {
-            //         cosmos_chains.push(start_chain(ctx.clone(), 1));
-            //     }
-            // }
-        }
+    for index in 0..config.matrix.cosmos_chain_count() {
+        chains.push(start_chain(ctx.clone(), index));
     }
 
     chains
 }
 
 #[allow(dead_code)]
-fn start_chain(ctx: AppContext, index: u8) -> (CosmosChainConfig, Option<IcTestHandle>) {
+fn start_chain(ctx: AppContext, _index: usize) -> (CosmosChainConfig, Option<IcTestHandle>) {
     let mut ic_test_handle = None;
 
     let chain_info = ctx.rt.block_on(async {
@@ -95,7 +92,7 @@ fn start_chain(ctx: AppContext, index: u8) -> (CosmosChainConfig, Option<IcTestH
 /// A wrapper around a Child process that kills it when dropped.
 pub struct IcTestHandle {
     child: Child,
-    data_dir: tempfile::TempDir,
+    _data_dir: tempfile::TempDir,
 }
 
 impl IcTestHandle {
@@ -135,7 +132,7 @@ impl IcTestHandle {
         tracing::info!("starting LocalIc (pid {})", child.id());
         Self {
             child,
-            data_dir: temp_data,
+            _data_dir: temp_data,
         }
     }
 }

@@ -1,10 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use utils::{config::ConfigBuilder, filesystem::workspace_path};
 use wavs::AppContext;
 use wavs_cli::clients::HttpClient;
 
-use super::{config::Configs, handles::AppHandles};
+use super::config::Configs;
 
 #[derive(Clone)]
 pub struct Clients {

@@ -1,11 +1,9 @@
-use std::path::PathBuf;
-
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::filesystem::workspace_path;
 use wavs::{AppContext, Digest};
 use wavs_cli::clients::HttpClient;
 
-use super::matrix::TestMatrix;
+use super::config::Configs;
 
 #[derive(Debug, Clone, Default)]
 pub struct Digests {
@@ -17,9 +15,10 @@ pub struct Digests {
 }
 
 impl Digests {
-    pub fn new(ctx: AppContext, http_client: &HttpClient, matrix: &TestMatrix) -> Self {
+    pub fn new(ctx: AppContext, configs: &Configs, http_client: &HttpClient) -> Self {
         ctx.rt.block_on(async {
             let mut digests = Self::default();
+            let matrix = &configs.test_config.matrix;
 
             let mut futures = FuturesUnordered::new();
 
