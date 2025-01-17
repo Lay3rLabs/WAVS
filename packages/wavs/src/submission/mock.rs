@@ -11,7 +11,7 @@ use crate::test_utils::address::rand_address_eth;
 use crate::AppContext;
 
 pub fn mock_eigen_submit() -> Submit {
-    Submit::eigen_contract("eth".to_string(), rand_address_eth(), false)
+    Submit::eigen_contract("eth".to_string(), rand_address_eth())
 }
 
 #[derive(Clone)]
@@ -110,7 +110,7 @@ mod test {
             )
             .unwrap(),
             wasm_result: payload.as_bytes().to_vec(),
-            submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
+            submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
         }
     }
 

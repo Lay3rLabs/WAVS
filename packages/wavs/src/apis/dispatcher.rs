@@ -107,17 +107,15 @@ pub enum Submit {
     EigenContract {
         chain_name: String,
         service_manager: Address,
-        aggregate: bool,
         max_gas: Option<u64>,
     },
 }
 
 impl Submit {
-    pub fn eigen_contract(chain_name: String, service_manager: Address, aggregate: bool, max_gas: Option<u64>) -> Self {
+    pub fn eigen_contract(chain_name: String, service_manager: Address, max_gas: Option<u64>) -> Self {
         Submit::EigenContract {
             chain_name,
             service_manager,
-            aggregate,
             max_gas
         }
     }

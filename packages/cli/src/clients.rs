@@ -95,7 +95,6 @@ impl HttpClient {
     pub async fn create_service(
         &self,
         service_info: ServiceInfo,
-        aggregate: bool,
         digest: Digest,
         config: ServiceConfig,
     ) -> Result<(ServiceID, WorkflowID)> {
@@ -125,7 +124,6 @@ impl HttpClient {
             } => Submit::EigenContract {
                 chain_name,
                 service_manager: avs_addresses.service_manager.into(),
-                aggregate,
                 max_gas: config.max_gas,
             },
         };

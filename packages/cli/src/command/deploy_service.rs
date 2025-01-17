@@ -33,7 +33,6 @@ pub struct DeployServiceArgs {
     pub submit: CliSubmitKind,
     pub submit_chain: Option<String>,
     pub service_config: Option<ServiceConfig>,
-    pub aggregate: bool,
 }
 
 pub enum ComponentSource {
@@ -53,7 +52,6 @@ impl DeployService {
             submit,
             submit_chain,
             service_config,
-            aggregate,
         }: DeployServiceArgs,
     ) -> Result<Option<Self>> {
         let deployment = ctx.deployment.lock().unwrap().clone();
@@ -158,7 +156,6 @@ impl DeployService {
         let (service_id, workflow_id) = http_client
             .create_service(
                 service_info.clone(),
-                aggregate,
                 digest,
                 service_config.unwrap_or_default(),
             )

@@ -67,7 +67,6 @@ async fn main() {
             submit,
             submit_chain,
             service_config,
-            aggregate,
             args: _,
         } => {
             let res = DeployService::run(
@@ -81,7 +80,6 @@ async fn main() {
                     submit,
                     submit_chain,
                     service_config,
-                    aggregate,
                 },
             )
             .await

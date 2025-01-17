@@ -7,6 +7,7 @@ pub struct HttpState {
     pub config: Config,
     pub dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
     pub is_mock_chain_client: bool,
+    pub http_client: reqwest::Client,
 }
 
 impl HttpState {
@@ -19,6 +20,7 @@ impl HttpState {
             config,
             dispatcher,
             is_mock_chain_client,
+            http_client: reqwest::Client::new(),
         })
     }
 }

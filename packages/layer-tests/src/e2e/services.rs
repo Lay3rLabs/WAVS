@@ -349,14 +349,12 @@ async fn deploy_service(
 
     let submit_chain = match submit {
         CliSubmitKind::SimpleEthContract => match name {
+            ServiceName::EthEchoDataAggregator => {
+                todo!("get aggregator chain");
+            }
             ServiceName::EthEchoDataMultichain2 => Some(eth_chain_names[1].clone()),
             _ => Some(eth_chain_names[0].clone()),
         },
-    };
-
-    let aggregate = match name {
-        ServiceName::EthEchoDataAggregator => true,
-        _ => false,
     };
 
     tracing::info!(
@@ -377,7 +375,6 @@ async fn deploy_service(
             submit,
             submit_chain,
             service_config: None,
-            aggregate,
         },
     )
     .await

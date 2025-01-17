@@ -58,9 +58,6 @@ pub enum Command {
 
         #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
         service_config: Option<ServiceConfig>,
-
-        #[clap(long, default_value_t = false)]
-        aggregate: bool,
     },
 
     /// Adds a task to a service that was previously deployed via CLI (uses stored deploy info)

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
@@ -67,22 +68,30 @@ async fn add_service_inner(
     let service_id = service.id.clone();
 
     for workflow in service.workflows.values() {
-        match workflow.submit {
+        match &workflow.submit {
             Submit::None => {}
-            Submit::EigenContract { aggregate, .. } => {
-                if aggregate {
-                    tracing::error!("FIXME: aggregate is not yet supported");
-                    // possible example:
-                    // self.inner
-                    // .post(format!("{}/add-service", aggregator_app_url))
-                    // .header("Content-Type", "application/json")
-                    // .json(
-                    //     &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
-                    //         service_manager_address,
-                    //     },
-                    // )
-                    // .send()
-                    // .await?;
+            Submit::EigenContract {
+                chain_name,
+                service_manager,
+            } => {
+                let chain_config = state
+                    .config
+                    .chains
+                    .eth
+                    .get(chain_name)
+                    .context(format!("No chain config found for chain: {chain_name}"))?;
+                if let Some(aggregator_endpoint) = &chain_config.aggregator_endpoint {
+                    state
+                        .http_client
+                        .post(format!("{}/add-service", aggregator_endpoint))
+                        .header("Content-Type", "application/json")
+                        .json(
+                            &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
+                                service_manager_address: service_manager.clone().try_into()?,
+                            },
+                        )
+                        .send()
+                        .await?;
                 }
             }
         }
@@ -163,7 +172,7 @@ mod test {
                 trigger: Trigger::eth_contract_event(addr, "eth", [0; 32]),
                 permissions: Permissions::default(),
                 testable: Some(true),
-                submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
+                submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
                 config: ServiceConfig::default(),
             }
         }

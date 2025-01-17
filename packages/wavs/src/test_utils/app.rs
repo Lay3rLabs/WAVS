@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use utils::config::{ConfigBuilder, ConfigExt};
 
-use crate::{args::CliArgs, config::Config};
+use crate::{args::CliArgs, config::Config, engine::mock::mock_chain_configs};
 
 #[derive(Clone)]
 pub struct TestApp {
@@ -41,10 +41,14 @@ impl TestApp {
     }
 
     pub async fn new_with_args(cli_args: CliArgs) -> Self {
-        let config = Arc::new(ConfigBuilder::new(cli_args).build().unwrap());
+        let mut config: Config = ConfigBuilder::new(cli_args).build().unwrap();
+
+        config.chains = mock_chain_configs();
 
         crate::init_tracing_tests();
 
-        Self { config }
+        Self {
+            config: Arc::new(config),
+        }
     }
 }

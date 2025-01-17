@@ -154,20 +154,17 @@ impl CoreSubmission {
     async fn submit_to_ethereum(
         &self,
         chain_name: String,
-        eth_client: EthSigningClient,
         service_manager_address: Address,
         data: Vec<u8>,
-        aggregate: bool,
         max_gas: Option<u64>,
     ) -> Result<(), SubmissionError> {
-        let service_manager_address = match service_manager_address {
-            Address::Eth(addr) => addr.as_bytes().into(),
-            _ => {
-                return Err(SubmissionError::ExpectedEthAddress(
-                    service_manager_address.to_string(),
-                ))
-            }
-        };
+        let eth_client = self
+            .get_eth_client(chain_name.to_string())
+            .await
+            .map_err(|_| SubmissionError::MissingEthereumChain)?;
+        let service_manager_address = service_manager_address
+            .try_into()
+            .map_err(SubmissionError::Climb)?;
 
         let service_manager_contract =
             LayerServiceManager::new(service_manager_address, eth_client.provider.clone());
@@ -179,46 +176,37 @@ impl CoreSubmission {
             .map_err(|_| SubmissionError::FailedToSignPayload)?
             .into();
 
-        if aggregate {
-            let request = AggregateAvsRequest::EigenContract {
-                signed_payload: SignedPayload {
-                    operator: eth_client.address(),
-                    data,
-                    data_hash,
-                    signature,
-                    signed_block_height: eth_client
-                        .provider
-                        .get_block_number()
-                        .await
-                        .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
-                        - 1,
-                },
-                service_manager_address,
-            };
-
-            let chain_config = self
-                .eth_chains
-                .get(&chain_name)
-                .ok_or(SubmissionError::MissingEthereumChain)?;
-
-            let aggregator_msg_url = chain_config
-                .aggregator_url
-                .as_ref()
-                .ok_or(SubmissionError::MissingAggregatorEndpoint)?
-                .join("/add-payload")
-                .unwrap();
-
+        if let Some(aggregator_endpoint) = self
+            .eth_chains
+            .get(&chain_name)
+            .and_then(|chain| chain.aggregator_url.clone())
+        {
             let response = self
                 .http_client
-                .post(aggregator_msg_url)
+                .post(format!("{}/add-payload", aggregator_endpoint))
                 .header("Content-Type", "application/json")
-                .json(&request)
+                .json(&AggregateAvsRequest::EigenContract {
+                    signed_payload: SignedPayload {
+                        operator: eth_client.address(),
+                        data,
+                        data_hash,
+                        signature,
+                        signed_block_height: eth_client
+                            .provider
+                            .get_block_number()
+                            .await
+                            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
+                            - 1,
+                    },
+                    service_manager_address,
+                })
                 .send()
                 .await
                 .map_err(SubmissionError::Reqwest)?;
 
             let response: AggregateAvsResponse =
                 response.json().await.map_err(SubmissionError::Reqwest)?;
+
             match response {
                 AggregateAvsResponse::Sent { tx_hash, count } => {
                     tracing::debug!(
@@ -232,6 +220,17 @@ impl CoreSubmission {
                 }
             }
         } else {
+            if let Err(err) = self
+                .maybe_tap_eth_faucet(chain_name.to_string(), &eth_client)
+                .await
+            {
+                tracing::error!(
+                    "Failed to tap faucet for client {}: {:?}",
+                    eth_client.address(),
+                    err
+                );
+            }
+
             let _ = service_manager_contract
                 .addPayload(
                     SignedPayload {
@@ -281,24 +280,9 @@ impl Submission for CoreSubmission {
                     } => {
                         while let Some(msg) = rx.recv().await {
                             match msg.submit {
-                                Submit::EigenContract {chain_name, aggregate, service_manager } => {
-                                    if aggregate {
-                                    } else {
-                                        let client = match _self.get_eth_client(chain_name.to_string()).await {
-                                            Ok(client) => client,
-                                            Err(e) => {
-                                                tracing::error!("Failed to get client: {:?}", e);
-                                                continue;
-                                            }
-                                        };
-
-                                        if let Err(err) = _self.maybe_tap_eth_faucet(chain_name.to_string(), &client).await {
-                                            tracing::error!("Failed to tap faucet for client {}: {:?}",client.address(), err);
-                                        }
-
-                                        if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), client, service_manager, msg.wasm_result, aggregate).await {
-                                            tracing::error!("{:?}", e);
-                                        }
+                                Submit::EigenContract {chain_name, service_manager } => {
+                                    if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), service_manager, msg.wasm_result).await {
+                                        tracing::error!("{:?}", e);
                                     }
                                 },
                                 Submit::None => {

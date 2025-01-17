@@ -377,12 +377,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract(
-                        "eth".to_string(),
-                        service_manager_addr.clone(),
-                        true,
-                        None
-                    ),
+                    submit: Submit::eigen_contract("eth".to_string(), service_manager_addr.clone(), None),
                 },
             )]
             .into(),
@@ -402,7 +397,7 @@ mod tests {
         let expected = ChainMessage {
             trigger_config: action.config,
             wasm_result: payload.into(),
-            submit: Submit::eigen_contract("eth".to_string(), service_manager_addr, true, None),
+            submit: Submit::eigen_contract("eth".to_string(), service_manager_addr, None),
         };
         assert_eq!(processed[0], expected);
     }
@@ -469,7 +464,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
+                    submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
                 },
             )]
             .into(),
@@ -554,7 +549,7 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), true, None),
+                    submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
                 },
             )]
             .into(),
