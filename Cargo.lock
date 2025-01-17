@@ -74,6 +74,7 @@ dependencies = [
  "tracing-subscriber",
  "utils",
  "wavs",
+ "wavs-cli",
  "wildmatch",
 ]
 

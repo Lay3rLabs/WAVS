@@ -1,4 +1,3 @@
-/*
 use aggregator::{http::state::HttpState, test_utils::app::TestApp};
 use alloy::{
     node_bindings::Anvil,
@@ -13,8 +12,8 @@ use utils::{
     aggregator::{AddAggregatorServiceRequest, AggregateAvsResponse},
     avs_client::{AvsClientDeployer, ServiceManagerClient},
     eigen_client::EigenClient,
-    example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
 };
+use wavs_cli::clients::example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient};
 
 #[tokio::test]
 async fn submit_to_chain() {
@@ -355,4 +354,3 @@ async fn invalid_operator_signature() {
         assert!(format!("{response:?}").contains("Operator signature does not match"));
     }
 }
- */
