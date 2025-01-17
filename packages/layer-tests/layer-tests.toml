@@ -7,7 +7,7 @@
 # cosmos-query = true
 echo-data = true
 echo-data-multichain = true
-# echo-data-aggregator = true
+echo-data-aggregator = true
 permissions = true
 square = true
 

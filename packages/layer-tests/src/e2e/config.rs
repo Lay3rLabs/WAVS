@@ -64,10 +64,10 @@ impl Configs {
 
             aggregator_config.chains = chain_configs.clone();
 
-            // for now, we just assume it's always the first eth chain...
+            // for now, we just assume it's always the last eth chain...
             // down the line, we might want to make this configurable
             aggregator_config.chain = eth_chains
-                .first()
+                .last()
                 .map(|chain_config| chain_config.chain_id.clone())
                 .unwrap();
 
