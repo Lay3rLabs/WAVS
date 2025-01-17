@@ -36,29 +36,6 @@ pub struct TestMatrixCrossChain {
 }
 
 impl TestMatrix {
-    pub fn has_aggregator(&self) -> bool {
-        self.eth.has_aggregator() || self.cosmos.has_aggregator()
-    }
-
-    pub fn eth_chain_count(&self) -> usize {
-        if self.eth.multichain_enabled() {
-            2
-        } else if self.eth.any_enabled() || self.crosschain.any_eth_enabled() {
-            1
-        } else {
-            0
-        }
-    }
-
-    pub fn cosmos_chain_count(&self) -> usize {
-        if self.cosmos.multichain_enabled() {
-            2
-        } else if self.cosmos.any_enabled() || self.crosschain.any_cosmos_enabled() {
-            1
-        } else {
-            0
-        }
-    }
     pub fn overwrite_isolated(&mut self, isolated: &str) {
         *self = Self::default();
 
@@ -110,48 +87,39 @@ impl TestMatrix {
 }
 
 impl TestMatrixEth {
-    pub fn any_enabled(&self) -> bool {
+    pub fn regular_chain_enabled(&self) -> bool {
         self.chain_trigger_lookup
             || self.cosmos_query
             || self.echo_data
-            || self.echo_data_aggregator
             || self.permissions
             || self.square
-            || self.echo_data_multichain
+            || self.echo_data_multichain // both regular _and_ secondary
     }
 
-    pub fn multichain_enabled(&self) -> bool {
+    pub fn secondary_chain_enabled(&self) -> bool {
         self.echo_data_multichain
     }
 
-    pub fn has_aggregator(&self) -> bool {
+    pub fn aggregator_chain_enabled(&self) -> bool {
         self.echo_data_aggregator
     }
 }
 
 impl TestMatrixCosmos {
-    pub fn any_enabled(&self) -> bool {
+    pub fn chain_enabled(&self) -> bool {
         self.chain_trigger_lookup
             || self.cosmos_query
             || self.echo_data
             || self.permissions
             || self.square
     }
-
-    pub fn multichain_enabled(&self) -> bool {
-        false
-    }
-
-    pub fn has_aggregator(&self) -> bool {
-        false
-    }
 }
 
 impl TestMatrixCrossChain {
-    pub fn any_eth_enabled(&self) -> bool {
+    pub fn eth_enabled(&self) -> bool {
         self.eth_to_cosmos_echo_data
     }
-    pub fn any_cosmos_enabled(&self) -> bool {
+    pub fn cosmos_enabled(&self) -> bool {
         self.eth_to_cosmos_echo_data
     }
 }

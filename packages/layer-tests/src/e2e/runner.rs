@@ -15,57 +15,59 @@ use wavs_cli::{
 
 use super::{
     clients::Clients,
+    config::Configs,
     services::{ServiceName, Services},
 };
 
-pub fn run_tests(ctx: AppContext, clients: Clients, services: Services) {
-    // nonce errors :(
-    // let mut futures = FuturesUnordered::new();
-    let mut futures = Vec::new();
+pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: Services) {
+    let mut services_to_run = Vec::new();
 
     if let Some(service) = services.eth.chain_trigger_lookup {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.eth.cosmos_query {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.eth.echo_data {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.eth.echo_data_multichain_1 {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.eth.echo_data_multichain_2 {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.eth.echo_data_aggregator {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.eth.permissions {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.eth.square {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.cosmos.chain_trigger_lookup {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.cosmos.cosmos_query {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.cosmos.echo_data {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.cosmos.permissions {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
     if let Some(service) = services.cosmos.square {
-        futures.push(test_service(service, &clients));
+        services_to_run.push(service);
     }
 
+    // nonce errors :(
+    // let mut futures = FuturesUnordered::new();
+
     ctx.rt.block_on(async move {
-        for fut in futures {
-            let name = fut.await.unwrap();
+        for service in services_to_run {
+            let name = test_service(service, &configs, &clients).await.unwrap();
             tracing::info!("Service {:?} passed", name);
         }
     });
@@ -73,31 +75,53 @@ pub fn run_tests(ctx: AppContext, clients: Clients, services: Services) {
 
 async fn test_service(
     (name, service): (ServiceName, DeployService),
+    configs: &Configs,
     clients: &Clients,
 ) -> Result<ServiceName> {
     let service_id = service.service_id.to_string();
-    let (workflow_id, _) = service.workflows.into_iter().next().unwrap().clone();
+    let (workflow_id, workflow) = service.workflows.into_iter().next().unwrap().clone();
 
     tracing::info!("Testing service: {:?}", name);
 
-    // TODO - how to test aggregation?
-    // idea: just submit multiple tasks and check that the aggregation works
+    let n_tasks = match workflow.submit {
+        wavs_cli::deploy::ServiceSubmitInfo::EigenLayer { chain_name, .. } => {
+            let chain = configs
+                .chains
+                .eth
+                .get(&chain_name)
+                .context("couldn't get submission chain to detect aggregation")?;
+            match chain.aggregator_endpoint.is_some() {
+                true => configs.aggregator.as_ref().unwrap().tasks_quorum,
+                false => 1,
+            }
+        }
+    };
 
-    let signed_data = AddTask::run(
-        &clients.cli_ctx,
-        AddTaskArgs {
-            service_id,
-            workflow_id: Some(workflow_id.to_string()),
-            input: get_input_for_service(name),
-            result_timeout: Some(std::time::Duration::from_secs(10)),
-        },
-    )
-    .await?
-    .context("failed to add task")?
-    .signed_data
-    .context("no signed data returned")?;
+    for task_number in 1..=n_tasks {
+        let is_final = task_number == n_tasks;
 
-    verify_signed_data(name, signed_data)?;
+        let signed_data = AddTask::run(
+            &clients.cli_ctx,
+            AddTaskArgs {
+                service_id: service_id.clone(),
+                workflow_id: Some(workflow_id.to_string()),
+                input: get_input_for_service(name),
+                result_timeout: if is_final {
+                    Some(std::time::Duration::from_secs(10))
+                } else {
+                    None
+                },
+            },
+        )
+        .await?
+        .context("failed to add task")?
+        .signed_data;
+
+        if is_final {
+            let signed_data = signed_data.context("no signed data returned")?;
+            verify_signed_data(name, signed_data)?;
+        }
+    }
 
     Ok(name)
 }

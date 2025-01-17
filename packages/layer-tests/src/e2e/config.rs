@@ -50,7 +50,7 @@ impl Configs {
             .map(|chain_config| chain_config.chain_id.clone());
         wavs_config.chains = chain_configs.clone();
 
-        let aggregator_config = if test_config.matrix.has_aggregator() {
+        let aggregator_config = if test_config.matrix.eth.aggregator_chain_enabled() {
             let mut aggregator_config: aggregator::config::Config =
                 ConfigBuilder::new(aggregator::args::CliArgs {
                     data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
@@ -70,6 +70,7 @@ impl Configs {
                 .first()
                 .map(|chain_config| chain_config.chain_id.clone())
                 .unwrap();
+
             Some(aggregator_config)
         } else {
             None
@@ -87,6 +88,20 @@ impl Configs {
             .unwrap();
 
         cli_config.chains = chain_configs.clone();
+
+        // Sanity check
+
+        if let Some(aggregator_config) = aggregator_config.as_ref() {
+            let aggregator_endpoint = format!(
+                "http://{}:{}",
+                aggregator_config.host, aggregator_config.port
+            );
+            for eth_chain in eth_chains.iter() {
+                if let Some(endpoint) = eth_chain.aggregator_endpoint.as_ref() {
+                    assert_eq!(*endpoint, aggregator_endpoint);
+                }
+            }
+        }
 
         Self {
             test_config,

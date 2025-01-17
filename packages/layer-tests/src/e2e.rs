@@ -62,7 +62,7 @@ pub fn run(args: TestArgs) {
 
     let services = Services::new(ctx.clone(), &configs, &clients, &digests);
 
-    runner::run_tests(ctx.clone(), clients, services);
+    runner::run_tests(ctx.clone(), configs, clients, services);
 
     ctx.kill();
     handles.join();

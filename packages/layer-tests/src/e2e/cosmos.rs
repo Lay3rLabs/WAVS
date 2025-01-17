@@ -15,8 +15,8 @@ pub fn start_chains(
 ) -> Vec<(CosmosChainConfig, Option<IcTestHandle>)> {
     let mut chains = Vec::new();
 
-    for index in 0..config.matrix.cosmos_chain_count() {
-        chains.push(start_chain(ctx.clone(), index));
+    if config.matrix.cosmos.chain_enabled() || config.matrix.crosschain.cosmos_enabled() {
+        chains.push(start_chain(ctx.clone(), 0));
     }
 
     chains

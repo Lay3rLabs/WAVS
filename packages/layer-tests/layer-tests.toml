@@ -3,11 +3,11 @@
 # isolated = "eth-echo-data-aggregator" 
 
 [matrix.eth]
-# echo-data-aggregator = true
 # chain-trigger-lookup = true
 # cosmos-query = true
 echo-data = true
 echo-data-multichain = true
+# echo-data-aggregator = true
 permissions = true
 square = true
 

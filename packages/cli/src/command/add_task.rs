@@ -88,17 +88,22 @@ impl AddTask {
             }
         };
 
-        let result_timeout = match result_timeout {
-            Some(timeout) => timeout,
-            None => {
-                return Ok(Some(Self { signed_data: None }));
-            }
-        };
         match service.submit {
             ServiceSubmitInfo::EigenLayer {
                 chain_name,
                 avs_addresses,
             } => {
+                let result_timeout = match result_timeout {
+                    Some(timeout) => timeout,
+                    None => {
+                        tracing::info!(
+                            "Not waiting for task response on trigger {}, chain {}",
+                            trigger_id,
+                            chain_name
+                        );
+                        return Ok(Some(Self { signed_data: None }));
+                    }
+                };
                 let submit_client = SimpleEthSubmitClient::new(
                     ctx.get_eth_client(&chain_name)?.eth,
                     avs_addresses.service_manager,

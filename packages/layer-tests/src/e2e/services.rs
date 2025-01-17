@@ -47,14 +47,28 @@ impl Services {
         ctx.rt.block_on(async move {
             let matrix = &configs.test_config.matrix;
 
-            let eth_chain_names = configs.chains.eth.keys().cloned().collect::<Vec<_>>();
-            let cosmos_chain_names = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
+            let mut chain_names = ChainNames::default();
+
+            for (chain_name, chain) in configs.chains.eth.iter() {
+                if chain.aggregator_endpoint.is_some() {
+                    chain_names.eth_aggregator.push(chain_name.clone());
+                } else {
+                    chain_names.eth.push(chain_name.clone());
+                }
+            }
+
+            chain_names.cosmos = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
 
             let mut services = Self::default();
 
             // hrmf, "nonce too low" errors, gotta go sequentially...
 
-            for chain in eth_chain_names.iter() {
+            for chain in chain_names
+                .eth
+                .iter()
+                .chain(chain_names.eth_aggregator.iter())
+            {
+                let chain = chain.to_string();
                 tracing::info!("Deploying Eigen Core contracts on {chain}");
                 let DeployEigenCore { addresses } = DeployEigenCore::run(
                     &clients.cli_ctx,
@@ -66,181 +80,68 @@ impl Services {
                 .await
                 .unwrap();
 
-                services.eth_eigen_core.insert(chain.to_string(), addresses);
+                services.eth_eigen_core.insert(chain, addresses);
+            }
+
+            let mut names: Vec<ServiceName> = Vec::new();
+            if matrix.eth.chain_trigger_lookup {
+                names.push(ServiceName::EthChainTriggerLookup);
+            }
+
+            if matrix.eth.cosmos_query {
+                names.push(ServiceName::EthCosmosQuery);
+            }
+
+            if matrix.eth.echo_data {
+                names.push(ServiceName::EthEchoData);
+            }
+
+            if matrix.eth.echo_data_multichain {
+                names.push(ServiceName::EthEchoDataMultichain1);
+                names.push(ServiceName::EthEchoDataMultichain2);
+            }
+
+            if matrix.eth.echo_data_aggregator {
+                names.push(ServiceName::EthEchoDataAggregator);
+            }
+
+            if matrix.eth.permissions {
+                names.push(ServiceName::EthPermissions);
+            }
+
+            if matrix.eth.square {
+                names.push(ServiceName::EthSquare);
+            }
+
+            if matrix.cosmos.chain_trigger_lookup {
+                names.push(ServiceName::CosmosChainTriggerLookup);
+            }
+
+            if matrix.cosmos.cosmos_query {
+                names.push(ServiceName::CosmosCosmosQuery);
+            }
+
+            if matrix.cosmos.echo_data {
+                names.push(ServiceName::CosmosEchoData);
+            }
+
+            if matrix.cosmos.permissions {
+                names.push(ServiceName::CosmosPermissions);
+            }
+
+            if matrix.cosmos.square {
+                names.push(ServiceName::CosmosSquare);
             }
 
             // nonce errors :(
             // let mut futures = FuturesUnordered::new();
 
-            let mut futures = Vec::new();
-            if matrix.eth.chain_trigger_lookup {
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthChainTriggerLookup,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
+            for name in names {
+                let res = deploy_service(name, clients, digests, &chain_names).await;
 
-            if matrix.eth.cosmos_query {
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthCosmosQuery,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
+                let service = (name, res);
 
-            if matrix.eth.echo_data {
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthEchoData,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.eth.echo_data_multichain {
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthEchoDataMultichain1,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthEchoDataMultichain2,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.eth.echo_data_aggregator {
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthEchoDataAggregator,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.eth.permissions {
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthPermissions,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.eth.square {
-                futures.push(
-                    deploy_service(
-                        ServiceName::EthSquare,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.cosmos.chain_trigger_lookup {
-                futures.push(
-                    deploy_service(
-                        ServiceName::CosmosChainTriggerLookup,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.cosmos.cosmos_query {
-                futures.push(
-                    deploy_service(
-                        ServiceName::CosmosCosmosQuery,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.cosmos.echo_data {
-                futures.push(
-                    deploy_service(
-                        ServiceName::CosmosEchoData,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.cosmos.permissions {
-                futures.push(
-                    deploy_service(
-                        ServiceName::CosmosPermissions,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            if matrix.cosmos.square {
-                futures.push(
-                    deploy_service(
-                        ServiceName::CosmosSquare,
-                        clients,
-                        digests,
-                        &eth_chain_names,
-                        &cosmos_chain_names,
-                    )
-                    .await,
-                );
-            }
-
-            for service in futures {
-                match service.0 {
+                match name {
                     ServiceName::EthChainTriggerLookup => {
                         services.eth.chain_trigger_lookup = Some(service)
                     }
@@ -293,9 +194,8 @@ async fn deploy_service(
     name: ServiceName,
     clients: &Clients,
     digests: &Digests,
-    eth_chain_names: &[String],
-    cosmos_chain_names: &[String],
-) -> (ServiceName, DeployService) {
+    chain_names: &ChainNames,
+) -> DeployService {
     let digest = match name {
         ServiceName::EthChainTriggerLookup | ServiceName::CosmosChainTriggerLookup => {
             digests.chain_trigger_lookup.clone().unwrap()
@@ -341,30 +241,28 @@ async fn deploy_service(
 
     let trigger_chain = match trigger {
         CliTriggerKind::SimpleEthContract => match name {
-            ServiceName::EthEchoDataMultichain2 => Some(eth_chain_names[1].clone()),
-            _ => Some(eth_chain_names[0].clone()),
+            ServiceName::EthEchoDataAggregator => Some(chain_names.eth_aggregator[0].clone()),
+            ServiceName::EthEchoDataMultichain2 => Some(chain_names.eth[1].clone()),
+            _ => Some(chain_names.eth[0].clone()),
         },
-        CliTriggerKind::SimpleCosmosContract => Some(cosmos_chain_names[0].clone()),
+        CliTriggerKind::SimpleCosmosContract => Some(chain_names.cosmos[0].clone()),
     };
 
     let submit_chain = match submit {
-        CliSubmitKind::SimpleEthContract => match name {
-            ServiceName::EthEchoDataAggregator => {
-                todo!("get aggregator chain");
-            }
-            ServiceName::EthEchoDataMultichain2 => Some(eth_chain_names[1].clone()),
-            _ => Some(eth_chain_names[0].clone()),
+        CliSubmitKind::SimpleEthContract => match trigger {
+            CliTriggerKind::SimpleEthContract => trigger_chain.clone(), // not strictly necessary, just convenient
+            CliTriggerKind::SimpleCosmosContract => Some(chain_names.eth[0].clone()),
         },
     };
 
     tracing::info!(
-        "Deploying Service {:?} on trigger: {} submit: {}",
+        "Deploying Service {:?} on trigger_chain: {} submit_chain: {}",
         name,
         trigger_chain.as_deref().unwrap_or("none"),
         submit_chain.as_deref().unwrap_or("none")
     );
 
-    let service = DeployService::run(
+    DeployService::run(
         &clients.cli_ctx,
         DeployServiceArgs {
             register_operator: true,
@@ -379,7 +277,12 @@ async fn deploy_service(
     )
     .await
     .unwrap()
-    .unwrap();
+    .unwrap()
+}
 
-    (name, service)
+#[derive(Default)]
+struct ChainNames {
+    eth: Vec<String>,
+    eth_aggregator: Vec<String>,
+    cosmos: Vec<String>,
 }

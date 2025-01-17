@@ -6,14 +6,22 @@ use crate::config::TestConfig;
 pub fn start_chains(config: &TestConfig) -> Vec<(EthereumChainConfig, AnvilInstance)> {
     let mut chains = Vec::new();
 
-    for index in 0..config.matrix.eth_chain_count() {
-        chains.push(start_chain(index));
+    if config.matrix.eth.regular_chain_enabled() {
+        chains.push(start_chain(0, false));
+    }
+
+    if config.matrix.eth.secondary_chain_enabled() {
+        chains.push(start_chain(1, false));
+    }
+
+    if config.matrix.eth.aggregator_chain_enabled() {
+        chains.push(start_chain(2, true));
     }
 
     chains
 }
 
-fn start_chain(index: usize) -> (EthereumChainConfig, AnvilInstance) {
+fn start_chain(index: usize, aggregator: bool) -> (EthereumChainConfig, AnvilInstance) {
     let port = 8545 + index as u16;
     let chain_id = 31337 + index as u64;
 
@@ -24,7 +32,11 @@ fn start_chain(index: usize) -> (EthereumChainConfig, AnvilInstance) {
             chain_id: chain_id.to_string(),
             http_endpoint: anvil.endpoint(),
             ws_endpoint: anvil.ws_endpoint(),
-            aggregator_endpoint: None,
+            aggregator_endpoint: if aggregator {
+                Some("http://127.0.0.1:8001".to_string())
+            } else {
+                None
+            },
             faucet_endpoint: None,
         },
         anvil,

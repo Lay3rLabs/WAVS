@@ -33,6 +33,8 @@ pub enum SubmissionError {
     FaucetUrl(url::ParseError),
     #[error("reqwest: {0}")]
     Reqwest(reqwest::Error),
+    #[error("aggregator: {0}")]
+    Aggregator(String),
     #[error("faucet: {0}")]
     Faucet(String),
     #[error("missing cosmos chain")]

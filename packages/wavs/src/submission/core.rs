@@ -48,7 +48,7 @@ impl ChainEthSubmission {
         let aggregator_url = config
             .aggregator_endpoint
             .as_ref()
-            .map(|endpoint| endpoint.parse())
+            .map(|endpoint| format!("{endpoint}/add-payload").parse())
             .transpose()
             .map_err(SubmissionError::AggregatorUrl)?;
 
@@ -176,14 +176,14 @@ impl CoreSubmission {
             .map_err(|_| SubmissionError::FailedToSignPayload)?
             .into();
 
-        if let Some(aggregator_endpoint) = self
+        if let Some(aggregator_url) = self
             .eth_chains
             .get(&chain_name)
             .and_then(|chain| chain.aggregator_url.clone())
         {
             let response = self
                 .http_client
-                .post(format!("{}/add-payload", aggregator_endpoint))
+                .post(aggregator_url.clone())
                 .header("Content-Type", "application/json")
                 .json(&AggregateAvsRequest::EigenContract {
                     signed_payload: SignedPayload {
@@ -203,6 +203,13 @@ impl CoreSubmission {
                 .send()
                 .await
                 .map_err(SubmissionError::Reqwest)?;
+
+            if !response.status().is_success() {
+                return Err(SubmissionError::Aggregator(format!(
+                    "error hitting {aggregator_url} response: {:?}",
+                    response
+                )));
+            }
 
             let response: AggregateAvsResponse =
                 response.json().await.map_err(SubmissionError::Reqwest)?;
