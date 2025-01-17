@@ -23,6 +23,8 @@ pub struct EthServices {
     pub chain_trigger_lookup: Option<(ServiceName, DeployService)>,
     pub cosmos_query: Option<(ServiceName, DeployService)>,
     pub echo_data: Option<(ServiceName, DeployService)>,
+    pub echo_data_multichain_1: Option<(ServiceName, DeployService)>,
+    pub echo_data_multichain_2: Option<(ServiceName, DeployService)>,
     pub echo_data_aggregator: Option<(ServiceName, DeployService)>,
     pub permissions: Option<(ServiceName, DeployService)>,
     pub square: Option<(ServiceName, DeployService)>,
@@ -101,6 +103,29 @@ impl Services {
                 futures.push(
                     deploy_service(
                         ServiceName::EthEchoData,
+                        clients,
+                        digests,
+                        &eth_chain_names,
+                        &cosmos_chain_names,
+                    )
+                    .await,
+                );
+            }
+
+            if matrix.eth.echo_data_multichain {
+                futures.push(
+                    deploy_service(
+                        ServiceName::EthEchoDataMultichain1,
+                        clients,
+                        digests,
+                        &eth_chain_names,
+                        &cosmos_chain_names,
+                    )
+                    .await,
+                );
+                futures.push(
+                    deploy_service(
+                        ServiceName::EthEchoDataMultichain2,
                         clients,
                         digests,
                         &eth_chain_names,
@@ -221,6 +246,12 @@ impl Services {
                     }
                     ServiceName::EthCosmosQuery => services.eth.cosmos_query = Some(service),
                     ServiceName::EthEchoData => services.eth.echo_data = Some(service),
+                    ServiceName::EthEchoDataMultichain1 => {
+                        services.eth.echo_data_multichain_1 = Some(service)
+                    }
+                    ServiceName::EthEchoDataMultichain2 => {
+                        services.eth.echo_data_multichain_2 = Some(service)
+                    }
                     ServiceName::EthEchoDataAggregator => {
                         services.eth.echo_data_aggregator = Some(service)
                     }
@@ -246,6 +277,8 @@ pub enum ServiceName {
     EthChainTriggerLookup,
     EthCosmosQuery,
     EthEchoData,
+    EthEchoDataMultichain1,
+    EthEchoDataMultichain2,
     EthEchoDataAggregator,
     EthPermissions,
     EthSquare,
@@ -272,11 +305,11 @@ async fn deploy_service(
             digests.cosmos_query.clone().unwrap()
         }
 
-        ServiceName::EthEchoData | ServiceName::CosmosEchoData => {
-            digests.echo_data.clone().unwrap()
-        }
-
-        ServiceName::EthEchoDataAggregator => digests.echo_data.clone().unwrap(),
+        ServiceName::EthEchoData
+        | ServiceName::CosmosEchoData
+        | ServiceName::EthEchoDataMultichain1
+        | ServiceName::EthEchoDataMultichain2
+        | ServiceName::EthEchoDataAggregator => digests.echo_data.clone().unwrap(),
 
         ServiceName::EthPermissions | ServiceName::CosmosPermissions => {
             digests.permissions.clone().unwrap()
@@ -289,6 +322,8 @@ async fn deploy_service(
         ServiceName::EthChainTriggerLookup
         | ServiceName::EthCosmosQuery
         | ServiceName::EthEchoData
+        | ServiceName::EthEchoDataMultichain1
+        | ServiceName::EthEchoDataMultichain2
         | ServiceName::EthEchoDataAggregator
         | ServiceName::EthPermissions
         | ServiceName::EthSquare => CliTriggerKind::SimpleEthContract,
@@ -305,12 +340,18 @@ async fn deploy_service(
     };
 
     let trigger_chain = match trigger {
-        CliTriggerKind::SimpleEthContract => Some(eth_chain_names[0].clone()),
+        CliTriggerKind::SimpleEthContract => match name {
+            ServiceName::EthEchoDataMultichain2 => Some(eth_chain_names[1].clone()),
+            _ => Some(eth_chain_names[0].clone()),
+        },
         CliTriggerKind::SimpleCosmosContract => Some(cosmos_chain_names[0].clone()),
     };
 
     let submit_chain = match submit {
-        CliSubmitKind::SimpleEthContract => Some(eth_chain_names[0].clone()),
+        CliSubmitKind::SimpleEthContract => match name {
+            ServiceName::EthEchoDataMultichain2 => Some(eth_chain_names[1].clone()),
+            _ => Some(eth_chain_names[0].clone()),
+        },
     };
 
     let aggregate = match name {
@@ -318,7 +359,12 @@ async fn deploy_service(
         _ => false,
     };
 
-    tracing::info!("Deploying Service {:?}", name);
+    tracing::info!(
+        "Deploying Service {:?} on trigger: {} submit: {}",
+        name,
+        trigger_chain.as_deref().unwrap_or("none"),
+        submit_chain.as_deref().unwrap_or("none")
+    );
 
     let service = DeployService::run(
         &clients.cli_ctx,

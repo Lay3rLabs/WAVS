@@ -115,7 +115,11 @@ impl AddTask {
                                 return anyhow::Ok(SignedData { data, signature });
                             }
                             false => {
-                                tracing::info!("Waiting for task response on {}", trigger_id);
+                                tracing::info!(
+                                    "Waiting for task response on trigger {}, chain {}",
+                                    trigger_id,
+                                    chain_name
+                                );
                             }
                         }
                         // still open, waiting...

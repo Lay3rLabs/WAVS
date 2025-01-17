@@ -1,10 +1,12 @@
 # See matrix.rs for all the available options
 
+# isolated = "eth-echo-data-multichain" 
+
 [matrix.eth]
 # chain-trigger-lookup = true
 # cosmos-query = true
 echo-data = true
-echo-data_multichain = true
+echo-data-multichain = true
 # echo-data_aggregator = true
 permissions = true
 square = true

@@ -32,6 +32,12 @@ pub fn run_tests(ctx: AppContext, clients: Clients, services: Services) {
     if let Some(service) = services.eth.echo_data {
         futures.push(test_service(service, &clients));
     }
+    if let Some(service) = services.eth.echo_data_multichain_1 {
+        futures.push(test_service(service, &clients));
+    }
+    if let Some(service) = services.eth.echo_data_multichain_2 {
+        futures.push(test_service(service, &clients));
+    }
     if let Some(service) = services.eth.echo_data_aggregator {
         futures.push(test_service(service, &clients));
     }
@@ -102,6 +108,8 @@ fn get_input_for_service(name: ServiceName) -> ComponentInput {
         ServiceName::EthCosmosQuery => CosmosQueryRequest::BlockHeight.to_vec(),
         ServiceName::EthEchoData => b"The times".to_vec(),
         ServiceName::EthEchoDataAggregator => b"Chancellor".to_vec(),
+        ServiceName::EthEchoDataMultichain1 => b"collapse".to_vec(),
+        ServiceName::EthEchoDataMultichain2 => b"satoshi".to_vec(),
         ServiceName::EthPermissions => PermissionsRequest {
             url: "https://httpbin.org/get".to_string(),
             timestamp: std::time::SystemTime::now()
@@ -125,11 +133,17 @@ fn verify_signed_data(name: ServiceName, signed_data: SignedData) -> Result<()> 
     let expected_data = match name {
         ServiceName::EthChainTriggerLookup => todo!(),
         ServiceName::CosmosChainTriggerLookup => todo!(),
-        ServiceName::EthEchoData => b"The times".to_vec(),
-        ServiceName::EthEchoDataAggregator => b"Chancellor".to_vec(),
         ServiceName::EthSquare => SquareResponse { y: 9 }.to_vec(),
-        ServiceName::CosmosEchoData => b"on brink".to_vec(),
         ServiceName::CosmosSquare => SquareResponse { y: 9 }.to_vec(),
+        // just echo
+        ServiceName::EthEchoData
+        | ServiceName::EthEchoDataMultichain1
+        | ServiceName::EthEchoDataMultichain2
+        | ServiceName::EthEchoDataAggregator
+        | ServiceName::CosmosEchoData => match get_input_for_service(name) {
+            ComponentInput::Raw(data) => data,
+            _ => unreachable!(),
+        },
         // these are not static, handled specially
         ServiceName::EthCosmosQuery => Vec::new(),
         ServiceName::CosmosCosmosQuery => Vec::new(),

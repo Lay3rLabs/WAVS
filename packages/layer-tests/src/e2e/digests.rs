@@ -30,7 +30,11 @@ impl Digests {
                 futures.push(get_digest(http_client, "cosmos_query"));
             }
 
-            if matrix.eth.echo_data || matrix.cosmos.echo_data || matrix.eth.echo_data_aggregator {
+            if matrix.eth.echo_data
+                || matrix.cosmos.echo_data
+                || matrix.eth.echo_data_multichain
+                || matrix.eth.echo_data_aggregator
+            {
                 futures.push(get_digest(http_client, "echo_data"));
             }
 
