@@ -425,7 +425,8 @@ impl CoreSubmission {
         let contract_msg = VerifierExecuteMsg::ExecutedTask {
             task_queue_contract: task_queue_addr.to_string(),
             task_id,
-            result,
+            #[allow(clippy::useless_conversion)]
+            result: result.into(),
         };
 
         let _tx_resp = cosmos_client
