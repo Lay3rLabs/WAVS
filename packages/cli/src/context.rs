@@ -104,7 +104,7 @@ impl CliContext {
                 AnyChainConfig::Eth(eth_chain_config) => {
                     clients.insert(
                         chain_name,
-                        AnyClient::Eth(get_eigen_client(&config, eth_chain_config.into()).await?),
+                        AnyClient::Eth(get_eigen_client(&config, eth_chain_config).await?),
                     );
                 }
                 AnyChainConfig::Cosmos(cosmos_chain_config) => {

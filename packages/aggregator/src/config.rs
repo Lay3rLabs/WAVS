@@ -4,9 +4,9 @@ use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySig
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use utils::{
-    config::{ChainConfigs, ConfigExt},
+    config::{ChainConfigs, ConfigExt, EthereumChainConfig},
     error::EthClientError,
-    eth_client::{EthChainConfig, EthClientBuilder, EthSigningClient},
+    eth_client::{EthClientBuilder, EthSigningClient},
 };
 
 /// The fully parsed and validated config struct we use in the application
@@ -77,8 +77,8 @@ impl Config {
             .chains
             .get_chain(&self.chain)?
             .context(format!("chain not found for {}", self.chain))?;
-        let chain_config = EthChainConfig::try_from(chain_config)?;
-        let client_config = chain_config.to_client_config(None, self.mnemonic.clone());
+        let chain_config = EthereumChainConfig::try_from(chain_config)?;
+        let client_config = chain_config.to_client_config(None, self.mnemonic.clone(), None);
 
         let eth_client = EthClientBuilder::new(client_config)
             .build_signing()

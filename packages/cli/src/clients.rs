@@ -5,9 +5,9 @@ use alloy::sol_types::SolEvent;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
-    config::CosmosChainConfig,
+    config::{CosmosChainConfig, EthereumChainConfig},
     eigen_client::EigenClient,
-    eth_client::{EthChainConfig, EthClientBuilder},
+    eth_client::EthClientBuilder,
 };
 use utils::{ServiceID, WorkflowID};
 use wavs::{
@@ -30,9 +30,9 @@ use crate::{
 
 pub async fn get_eigen_client(
     config: &Config,
-    chain_config: EthChainConfig,
+    chain_config: EthereumChainConfig,
 ) -> Result<EigenClient> {
-    let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone());
+    let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone(), None);
 
     let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
 

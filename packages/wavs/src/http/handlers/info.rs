@@ -21,7 +21,13 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     // TODO - get the operators from the dispatcher, and/or Eigenlayer?
 
-    let cosmos_chain_config = state.config.cosmos_chain_config()?.clone();
+    let cosmos_chain_config = state
+        .config
+        .active_cosmos_chain_configs()
+        .values()
+        .next()
+        .context("no active cosmos chain")?
+        .clone();
 
     let mnemonic = state
         .config

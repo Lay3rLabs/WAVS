@@ -4,7 +4,10 @@ use layer_climb::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 
-use crate::{error::ChainConfigError, eth_client::EthChainConfig};
+use crate::{
+    error::ChainConfigError,
+    eth_client::{EthClientConfig, EthClientTransport},
+};
 
 /// The builder we use to build Config
 #[derive(Debug)]
@@ -233,6 +236,7 @@ pub enum AnyChainConfig {
     Eth(EthereumChainConfig),
 }
 
+// Cosmos From/Into impls
 impl TryFrom<AnyChainConfig> for CosmosChainConfig {
     type Error = ChainConfigError;
 
@@ -244,7 +248,13 @@ impl TryFrom<AnyChainConfig> for CosmosChainConfig {
     }
 }
 
-impl TryFrom<AnyChainConfig> for ChainConfig {
+impl From<CosmosChainConfig> for AnyChainConfig {
+    fn from(config: CosmosChainConfig) -> Self {
+        AnyChainConfig::Cosmos(config)
+    }
+}
+
+impl TryFrom<AnyChainConfig> for layer_climb::prelude::ChainConfig {
     type Error = ChainConfigError;
 
     fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
@@ -252,6 +262,15 @@ impl TryFrom<AnyChainConfig> for ChainConfig {
     }
 }
 
+impl TryFrom<layer_climb::prelude::ChainConfig> for AnyChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: layer_climb::prelude::ChainConfig) -> Result<Self, Self::Error> {
+        Ok(CosmosChainConfig::try_from(config)?.into())
+    }
+}
+
+// Ethereum From/Into impls
 impl TryFrom<AnyChainConfig> for EthereumChainConfig {
     type Error = ChainConfigError;
 
@@ -263,11 +282,9 @@ impl TryFrom<AnyChainConfig> for EthereumChainConfig {
     }
 }
 
-impl TryFrom<AnyChainConfig> for EthChainConfig {
-    type Error = ChainConfigError;
-
-    fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
-        EthereumChainConfig::try_from(config).map(Into::into)
+impl From<EthereumChainConfig> for AnyChainConfig {
+    fn from(config: EthereumChainConfig) -> Self {
+        AnyChainConfig::Eth(config)
     }
 }
 
@@ -290,7 +307,7 @@ impl ChainConfigs {
     }
 }
 
-/// Cosmos chain config with extra info like faucet
+/// Cosmos chain config with extra info like faucet and mnemonic
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CosmosChainConfig {
     pub chain_id: String,
@@ -302,14 +319,31 @@ pub struct CosmosChainConfig {
     pub faucet_endpoint: Option<String>,
 }
 
-/// Ethereum chain config with extra info like faucet
+/// Ethereum chain config with extra info like faucet and mnemonic
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EthereumChainConfig {
     pub chain_id: String,
-    pub ws_endpoint: String,
-    pub http_endpoint: String,
+    pub ws_endpoint: Option<String>,
+    pub http_endpoint: Option<String>,
     pub aggregator_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
+}
+
+impl EthereumChainConfig {
+    pub fn to_client_config(
+        &self,
+        hd_index: Option<u32>,
+        mnemonic: Option<String>,
+        transport: Option<EthClientTransport>,
+    ) -> EthClientConfig {
+        EthClientConfig {
+            ws_endpoint: self.ws_endpoint.clone(),
+            http_endpoint: self.http_endpoint.clone(),
+            transport,
+            hd_index,
+            mnemonic,
+        }
+    }
 }
 
 impl From<CosmosChainConfig> for ChainConfig {
@@ -328,13 +362,22 @@ impl From<CosmosChainConfig> for ChainConfig {
     }
 }
 
-impl From<EthereumChainConfig> for EthChainConfig {
-    fn from(config: EthereumChainConfig) -> Self {
-        Self {
-            ws_endpoint: Some(config.ws_endpoint),
-            http_endpoint: config.http_endpoint,
-            transport: None,
-        }
+impl TryFrom<ChainConfig> for CosmosChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: ChainConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: config.chain_id.to_string(),
+            bech32_prefix: match config.address_kind {
+                AddrKind::Cosmos { prefix } => prefix,
+                _ => return Err(ChainConfigError::ExpectedCosmosChain),
+            },
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            gas_price: config.gas_price,
+            gas_denom: config.gas_denom,
+            faucet_endpoint: None,
+        })
     }
 }
 
@@ -667,8 +710,8 @@ mod test {
                     "eth".to_string(),
                     EthereumChainConfig {
                         chain_id: "eth".to_string(),
-                        ws_endpoint: "ws://127.0.0.1:8546".to_string(),
-                        http_endpoint: "http://127.0.0.1:8545".to_string(),
+                        ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
+                        http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                     },
@@ -677,8 +720,8 @@ mod test {
                     "polygon".to_string(),
                     EthereumChainConfig {
                         chain_id: "polygon".to_string(),
-                        ws_endpoint: "ws://127.0.0.1:8546".to_string(),
-                        http_endpoint: "http://127.0.0.1:8545".to_string(),
+                        ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
+                        http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                     },

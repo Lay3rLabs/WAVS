@@ -30,8 +30,8 @@ fn start_chain(index: usize, aggregator: bool) -> (EthereumChainConfig, AnvilIns
     (
         EthereumChainConfig {
             chain_id: chain_id.to_string(),
-            http_endpoint: anvil.endpoint(),
-            ws_endpoint: anvil.ws_endpoint(),
+            http_endpoint: Some(anvil.endpoint()),
+            ws_endpoint: Some(anvil.ws_endpoint()),
             aggregator_endpoint: if aggregator {
                 Some("http://127.0.0.1:8001".to_string())
             } else {

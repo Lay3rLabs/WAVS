@@ -19,12 +19,11 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig};
+use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
-    pub cosmos_chain_config: Option<layer_climb::prelude::ChainConfig>,
-    pub chain_configs: HashMap<String, EthClientConfig>,
+    pub chain_configs: HashMap<String, AnyChainConfig>,
     pub channel_bound: usize,
     lookup_maps: Arc<LookupMaps>,
 }
@@ -80,22 +79,8 @@ impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
-        let cosmos_chain_config = config
-            .try_cosmos_chain_config()
-            .map_err(TriggerError::Climb)?
-            .map(|chain_config| chain_config.clone().into());
-
-        let mut chain_configs = HashMap::new();
-        for (chain_name, chain_config) in config.active_ethereum_chain_configs() {
-            chain_configs.insert(
-                chain_name,
-                EthChainConfig::from(chain_config).to_client_config(None, None),
-            );
-        }
-
         Ok(Self {
-            cosmos_chain_config,
-            chain_configs,
+            chain_configs: config.active_any_chain_configs(),
             channel_bound: 100, // TODO: get from config
             lookup_maps: Arc::new(LookupMaps::new()),
         })
@@ -110,32 +95,34 @@ impl CoreTriggerManager {
         let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<StreamTriggers>> + Send>>> =
             Vec::new();
 
-        let cosmos_client = match self.cosmos_chain_config.clone() {
-            Some(chain_config) => Some(
-                QueryClient::new(chain_config, None)
+        let mut cosmos_clients = HashMap::new();
+        for (chain_name, chain_config) in self.chain_configs.clone() {
+            if let AnyChainConfig::Cosmos(chain_config) = chain_config {
+                let client = QueryClient::new(chain_config.into(), None)
                     .await
-                    .map_err(TriggerError::Climb)?,
-            ),
-            None => None,
-        };
+                    .map_err(TriggerError::Climb)?;
+
+                cosmos_clients.insert(chain_name, client);
+            }
+        }
 
         let mut ethereum_clients = HashMap::new();
         for (chain_name, chain_config) in self.chain_configs.clone() {
-            let client = EthClientBuilder::new(chain_config)
-                .build_query()
-                .await
-                .map_err(TriggerError::Ethereum)?;
+            if let AnyChainConfig::Eth(chain_config) = chain_config {
+                let client = EthClientBuilder::new(chain_config.to_client_config(None, None, None))
+                    .build_query()
+                    .await
+                    .map_err(TriggerError::Ethereum)?;
 
-            ethereum_clients.insert(chain_name, client);
+                ethereum_clients.insert(chain_name, client);
+            }
         }
 
-        if let Some(query_client) = cosmos_client.clone() {
-            tracing::debug!(
-                "Trigger Manager for Cosmos chain started on {}",
-                query_client.chain_config.chain_id
-            );
+        for (chain_name, query_client) in cosmos_clients.into_iter() {
+            tracing::debug!("Trigger Manager for Cosmos chain {} started", chain_name);
 
             let chain_config = query_client.chain_config.clone();
+
             let event_stream = Box::pin(
                 query_client
                     .stream_block_events(None)
@@ -553,14 +540,14 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            eth_chains: vec!["test".to_string()],
+            active_chains: vec!["test".to_string()],
             chains: ChainConfigs {
                 eth: [(
                     "test-eth".to_string(),
                     EthereumChainConfig {
                         chain_id: "eth-local".parse().unwrap(),
-                        ws_endpoint: "ws://127.0.0.1:26657".to_string(),
-                        http_endpoint: "http://127.0.0.1:26657".to_string(),
+                        ws_endpoint: Some("ws://127.0.0.1:26657".to_string()),
+                        http_endpoint: Some("http://127.0.0.1:26657".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
                         faucet_endpoint: None,
                     },

@@ -18,75 +18,36 @@ use alloy::{
 };
 use anyhow::anyhow;
 use layer_climb::prelude::*;
-use reqwest::Url;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
     avs_client::{layer_service_manager::LayerServiceManager, SignedPayload},
-    config::EthereumChainConfig,
-    eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig, EthSigningClient},
+    config::{AnyChainConfig, EthereumChainConfig},
+    eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
 };
 
 #[derive(Clone)]
 pub struct CoreSubmission {
-    eth_clients: Arc<Mutex<HashMap<(String, u32), EthSigningClient>>>,
-    eth_chains: HashMap<String, ChainEthSubmission>,
+    chain_configs: HashMap<String, AnyChainConfig>,
     http_client: reqwest::Client,
-}
-
-#[derive(Clone)]
-struct ChainEthSubmission {
-    client_config: EthClientConfig,
-    aggregator_url: Option<Url>,
-    faucet_url: Option<Url>,
-}
-
-impl ChainEthSubmission {
-    #[instrument(level = "debug", fields(subsys = "Submission"))]
-    fn new(config: EthereumChainConfig, mnemonic: String) -> Result<Self, SubmissionError> {
-        let aggregator_url = config
-            .aggregator_endpoint
-            .as_ref()
-            .map(|endpoint| format!("{endpoint}/add-payload").parse())
-            .transpose()
-            .map_err(SubmissionError::AggregatorUrl)?;
-
-        let client_config = EthChainConfig::from(config).to_client_config(None, Some(mnemonic));
-
-        Ok(Self {
-            client_config,
-            aggregator_url,
-            // TODO: Ethereum faucet
-            faucet_url: None,
-        })
-    }
+    // created on-demand from chain_name and hd_index
+    eth_clients: Arc<Mutex<HashMap<(String, u32), EthSigningClient>>>,
+    eth_mnemonic: String,
 }
 
 impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
-        let mut eth_chains = HashMap::new();
-        let active_ethereum_chain_configs = config.active_ethereum_chain_configs();
-        if !active_ethereum_chain_configs.is_empty() {
-            let mnemonic = config
+        Ok(Self {
+            chain_configs: config.active_any_chain_configs(),
+            http_client: reqwest::Client::new(),
+            eth_clients: Arc::new(Mutex::new(HashMap::new())),
+            eth_mnemonic: config
                 .submission_mnemonic
                 .clone()
-                .ok_or(SubmissionError::MissingMnemonic)?;
-
-            for (name, chain_config) in config.active_ethereum_chain_configs() {
-                eth_chains.insert(
-                    name.clone(),
-                    ChainEthSubmission::new(chain_config, mnemonic.clone())?,
-                );
-            }
-        }
-
-        Ok(Self {
-            eth_clients: Arc::new(Mutex::new(HashMap::new())),
-            eth_chains,
-            http_client: reqwest::Client::new(),
+                .ok_or(SubmissionError::MissingMnemonic)?,
         })
     }
 
@@ -98,32 +59,38 @@ impl CoreSubmission {
         // TODO - where should hd_index come from?
         let hd_index = 0;
 
+        if let Some(client) = self
+            .eth_clients
+            .lock()
+            .unwrap()
+            .get(&(chain_name.clone(), hd_index))
         {
-            let lock = self.eth_clients.lock().unwrap();
-
-            if let Some(client) = lock.get(&(chain_name.clone(), hd_index)) {
-                return Ok(client.clone());
-            }
+            return Ok(client.clone());
         }
 
-        let mut client_config = self
-            .eth_chains
+        let config = self
+            .chain_configs
             .get(&chain_name)
-            .ok_or(SubmissionError::MissingCosmosChain)?
-            .client_config
-            .clone();
+            .ok_or(SubmissionError::MissingEthereumChain)?;
 
-        client_config.hd_index = Some(hd_index);
+        let config: EthereumChainConfig = config
+            .clone()
+            .try_into()
+            .map_err(|_| SubmissionError::MissingEthereumChain)?;
 
-        let client = EthClientBuilder::new(client_config)
-            .build_signing()
-            .await
-            .map_err(SubmissionError::Ethereum)?;
+        let client = EthClientBuilder::new(config.to_client_config(
+            Some(hd_index),
+            Some(self.eth_mnemonic.clone()),
+            Some(EthClientTransport::Http),
+        ))
+        .build_signing()
+        .await
+        .map_err(SubmissionError::Ethereum)?;
 
-        {
-            let mut lock = self.eth_clients.lock().unwrap();
-            lock.insert((chain_name, hd_index), client.clone());
-        }
+        self.eth_clients
+            .lock()
+            .unwrap()
+            .insert((chain_name.clone(), hd_index), client.clone());
 
         Ok(client)
     }
@@ -135,10 +102,15 @@ impl CoreSubmission {
         client: &EthSigningClient,
     ) -> Result<(), SubmissionError> {
         let chain_config = self
-            .eth_chains
+            .chain_configs
             .get(&chain_name)
             .ok_or(SubmissionError::MissingEthereumChain)?;
-        let _faucet_url = match chain_config.faucet_url.clone() {
+        let chain_config: EthereumChainConfig = chain_config
+            .clone()
+            .try_into()
+            .map_err(|_| SubmissionError::MissingEthereumChain)?;
+
+        let _faucet_url = match chain_config.faucet_endpoint.clone() {
             Some(url) => url,
             None => {
                 tracing::debug!("No faucet configured, skipping");
@@ -177,13 +149,14 @@ impl CoreSubmission {
             .into();
 
         if let Some(aggregator_url) = self
-            .eth_chains
+            .chain_configs
             .get(&chain_name)
-            .and_then(|chain| chain.aggregator_url.clone())
+            .and_then(|chain| EthereumChainConfig::try_from(chain.clone()).ok())
+            .and_then(|config| config.aggregator_endpoint.clone())
         {
             let response = self
                 .http_client
-                .post(aggregator_url.clone())
+                .post(format!("{aggregator_url}/add-payload"))
                 .header("Content-Type", "application/json")
                 .json(&AggregateAvsRequest::EigenContract {
                     signed_payload: SignedPayload {

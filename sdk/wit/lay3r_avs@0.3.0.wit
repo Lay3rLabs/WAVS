@@ -43,7 +43,7 @@ interface layer-types {
   record eth-chain-config {
     chain-id: string,
     ws-endpoint: option<string>,
-    http-endpoint: string,
+    http-endpoint: option<string>,
   }
 
   record trigger-action {

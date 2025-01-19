@@ -163,10 +163,7 @@ impl From<utils::config::EthereumChainConfig> for super::world::host::EthChainCo
     fn from(config: utils::config::EthereumChainConfig) -> Self {
         Self {
             chain_id: config.chain_id,
-            ws_endpoint: match config.ws_endpoint.is_empty() {
-                true => None,
-                false => Some(config.ws_endpoint),
-            },
+            ws_endpoint: config.ws_endpoint,
             http_endpoint: config.http_endpoint,
         }
     }

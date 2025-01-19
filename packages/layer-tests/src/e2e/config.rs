@@ -41,13 +41,16 @@ impl Configs {
         .build()
         .unwrap();
 
-        wavs_config.eth_chains = eth_chains
+        wavs_config.active_chains = eth_chains
             .iter()
             .map(|chain_config| chain_config.chain_id.clone())
+            .chain(
+                cosmos_chains
+                    .iter()
+                    .map(|chain_config| chain_config.chain_id.clone()),
+            )
             .collect();
-        wavs_config.cosmos_chain = cosmos_chains
-            .first()
-            .map(|chain_config| chain_config.chain_id.clone());
+
         wavs_config.chains = chain_configs.clone();
 
         let aggregator_config = if test_config.matrix.eth.aggregator_chain_enabled() {

@@ -24,8 +24,8 @@ pub fn mock_chain_configs() -> ChainConfigs {
             "eth".to_string(),
             EthereumChainConfig {
                 chain_id: 31337.to_string(),
-                ws_endpoint: "ws://localhost:8546".to_string(),
-                http_endpoint: "http://localhost:8545".to_string(),
+                ws_endpoint: Some("ws://localhost:8546".to_string()),
+                http_endpoint: Some("http://localhost:8545".to_string()),
                 aggregator_endpoint: None,
                 faucet_endpoint: None,
             },
