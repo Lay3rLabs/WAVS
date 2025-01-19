@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, Mutex},
 };
 
@@ -29,7 +29,7 @@ use utils::{
 
 #[derive(Clone)]
 pub struct CoreSubmission {
-    chain_configs: HashMap<String, AnyChainConfig>,
+    chain_configs: BTreeMap<String, AnyChainConfig>,
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     eth_clients: Arc<Mutex<HashMap<(String, u32), EthSigningClient>>>,
@@ -41,7 +41,7 @@ impl CoreSubmission {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config) -> Result<Self, SubmissionError> {
         Ok(Self {
-            chain_configs: config.active_any_chain_configs(),
+            chain_configs: config.chains.clone().into(),
             http_client: reqwest::Client::new(),
             eth_clients: Arc::new(Mutex::new(HashMap::new())),
             eth_mnemonic: config

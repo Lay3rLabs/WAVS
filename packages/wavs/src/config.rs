@@ -3,9 +3,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
 };
-use utils::config::{
-    AnyChainConfig, ChainConfigs, ConfigExt, CosmosChainConfig, EthereumChainConfig,
-};
+use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -35,8 +33,8 @@ pub struct Config {
     pub wasm_lru_size: usize,
     pub wasm_threads: usize,
 
-    /// The active chain names
-    pub active_chains: Vec<String>,
+    /// The active chain names to watch for triggers
+    pub active_trigger_chains: Vec<String>,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -71,7 +69,7 @@ impl Default for Config {
             host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
-            active_chains: Vec::new(),
+            active_trigger_chains: Vec::new(),
             chains: ChainConfigs {
                 cosmos: BTreeMap::new(),
                 eth: BTreeMap::new(),
@@ -85,47 +83,19 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn active_eth_chain_configs(&self) -> HashMap<String, EthereumChainConfig> {
-        self.chains
-            .eth
-            .iter()
-            .filter_map(|(chain_name, chain)| {
-                if self.active_chains.contains(chain_name) {
-                    Some((chain_name.clone(), chain.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn active_cosmos_chain_configs(&self) -> HashMap<String, CosmosChainConfig> {
+    pub fn active_trigger_chain_configs(&self) -> HashMap<String, AnyChainConfig> {
         self.chains
             .cosmos
             .iter()
             .filter_map(|(chain_name, chain)| {
-                if self.active_chains.contains(chain_name) {
-                    Some((chain_name.clone(), chain.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn active_any_chain_configs(&self) -> HashMap<String, AnyChainConfig> {
-        self.chains
-            .cosmos
-            .iter()
-            .filter_map(|(chain_name, chain)| {
-                if self.active_chains.contains(chain_name) {
+                if self.active_trigger_chains.contains(chain_name) {
                     Some((chain_name.clone(), chain.clone().into()))
                 } else {
                     None
                 }
             })
             .chain(self.chains.eth.iter().filter_map(|(chain_name, chain)| {
-                if self.active_chains.contains(chain_name) {
+                if self.active_trigger_chains.contains(chain_name) {
                     Some((chain_name.clone(), chain.clone().into()))
                 } else {
                     None

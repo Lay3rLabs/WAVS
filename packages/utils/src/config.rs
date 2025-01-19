@@ -236,6 +236,19 @@ pub enum AnyChainConfig {
     Eth(EthereumChainConfig),
 }
 
+impl From<ChainConfigs> for BTreeMap<String, AnyChainConfig> {
+    fn from(configs: ChainConfigs) -> Self {
+        let mut map = BTreeMap::new();
+        for (name, config) in configs.cosmos {
+            map.insert(name, AnyChainConfig::Cosmos(config));
+        }
+        for (name, config) in configs.eth {
+            map.insert(name, AnyChainConfig::Eth(config));
+        }
+        map
+    }
+}
+
 // Cosmos From/Into impls
 impl TryFrom<AnyChainConfig> for CosmosChainConfig {
     type Error = ChainConfigError;

@@ -80,7 +80,7 @@ impl CoreTriggerManager {
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config) -> Result<Self, TriggerError> {
         Ok(Self {
-            chain_configs: config.active_any_chain_configs(),
+            chain_configs: config.active_trigger_chain_configs(),
             channel_bound: 100, // TODO: get from config
             lookup_maps: Arc::new(LookupMaps::new()),
         })
@@ -540,7 +540,7 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            active_chains: vec!["test".to_string()],
+            active_trigger_chains: vec!["test".to_string()],
             chains: ChainConfigs {
                 eth: [(
                     "test-eth".to_string(),

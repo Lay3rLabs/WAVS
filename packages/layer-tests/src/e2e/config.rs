@@ -41,7 +41,7 @@ impl Configs {
         .build()
         .unwrap();
 
-        wavs_config.active_chains = eth_chains
+        wavs_config.active_trigger_chains = eth_chains
             .iter()
             .map(|chain_config| chain_config.chain_id.clone())
             .chain(

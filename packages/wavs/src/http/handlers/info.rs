@@ -3,6 +3,7 @@ use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
+use utils::config::AnyChainConfig;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,8 +24,12 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
 
     let cosmos_chain_config = state
         .config
-        .active_cosmos_chain_configs()
+        .active_trigger_chain_configs()
         .values()
+        .filter_map(|c| match c {
+            AnyChainConfig::Cosmos(c) => Some(ChainConfig::from(c.clone())),
+            _ => None,
+        })
         .next()
         .context("no active cosmos chain")?
         .clone();
@@ -37,7 +42,7 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
 
     let mut operators = Vec::new();
 
-    let climb_address_kind = ChainConfig::from(cosmos_chain_config).address_kind;
+    let climb_address_kind = cosmos_chain_config.address_kind;
 
     for i in 0..10 {
         let key_signer =
