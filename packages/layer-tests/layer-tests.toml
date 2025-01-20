@@ -1,10 +1,10 @@
 # See matrix.rs for all the available options
 
-# isolated = "eth-square" 
+# isolated = "eth-cosmos-query" 
 
 [matrix.eth]
 # chain-trigger-lookup = true
-# cosmos-query = true
+cosmos-query = true
 echo-data = true
 echo-data-secondary-chain= true
 echo-data-aggregator = true
@@ -12,5 +12,13 @@ permissions = true
 square = true
 
 [matrix.cosmos]
+chain-trigger-lookup = true
+cosmos-query = true
+echo-data = true
+echo-data-secondary-chain= true
+echo-data-aggregator = true
+permissions = true
+square = true
 
 [matrix.crosschain]
+cosmos-to-eth-echo-data = true

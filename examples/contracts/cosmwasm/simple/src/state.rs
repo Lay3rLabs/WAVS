@@ -1,13 +1,16 @@
 use anyhow::Result;
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Order, Storage, Uint64};
 use cw_storage_plus::{Bound, Map};
 
-use crate::{
-    component::ComponentOutput,
-    entry::query::{Message, MessageWithId, MessagesResponse},
-};
+use crate::entry::query::{MessageWithId, MessagesResponse};
 
 const MESSAGES: Map<u64, Message> = Map::new("messages");
+
+#[cw_serde]
+pub struct Message {
+    pub data: Vec<u8>,
+}
 
 pub fn get_message(store: &dyn Storage, id: Uint64) -> Result<Message> {
     MESSAGES.load(store, id.u64()).map_err(Into::into)
@@ -31,7 +34,6 @@ pub fn get_messages(
             x.map(|(id, msg)| MessageWithId {
                 id: id.into(),
                 data: msg.data,
-                verified: msg.verified,
             })
             .map_err(Into::into)
         })
@@ -46,26 +48,6 @@ pub fn push_message(store: &mut dyn Storage, data: Vec<u8>) -> Result<Uint64> {
         .next()
         .unwrap_or(Ok(0))?
         + 1;
-    MESSAGES.save(
-        store,
-        next_index,
-        &Message {
-            data,
-            verified: false,
-        },
-    )?;
+    MESSAGES.save(store, next_index, &Message { data })?;
     Ok(next_index.into())
-}
-
-pub fn verify_message(store: &mut dyn Storage, resp: ComponentOutput) -> Result<()> {
-    let message_id = resp.message_id.u64();
-    let mut message = MESSAGES.load(store, message_id)?;
-    if message.data != resp.message_data {
-        return Err(anyhow::anyhow!("data mismatch"));
-    }
-
-    message.verified = true;
-    MESSAGES.save(store, message_id, &message)?;
-
-    Ok(())
 }

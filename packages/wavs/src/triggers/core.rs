@@ -134,17 +134,28 @@ impl CoreTriggerManager {
                             let events = CosmosTxEvents::from(block_events.events);
 
                             for event in events.events_iter() {
-                                let contract_address = event.attributes().find_map(|attr| {
-                                    if attr.key() == "_contract_address" {
-                                        chain_config.parse_address(attr.value()).ok()
-                                    } else {
-                                        None
+                                if event.ty().starts_with("wasm-") {
+                                    let contract_address = event.attributes().find_map(|attr| {
+                                        if attr.key() == "_contract_address" {
+                                            chain_config.parse_address(attr.value()).ok()
+                                        } else {
+                                            None
+                                        }
+                                    });
+                                    match contract_address {
+                                        Some(contract_address) => {
+                                            let mut event = cosmwasm_std::Event::from(event);
+                                            event.ty =
+                                                event.ty.strip_prefix("wasm-").unwrap().to_string();
+                                            contract_events.push((contract_address, event));
+                                        }
+                                        None => {
+                                            tracing::warn!(
+                                                "Missing contract address in event: {:?}",
+                                                event
+                                            );
+                                        }
                                     }
-                                });
-
-                                if let Some(contract_address) = contract_address {
-                                    let event = cosmwasm_std::Event::from(event);
-                                    contract_events.push((contract_address, event));
                                 }
                             }
 

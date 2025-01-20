@@ -61,14 +61,8 @@ impl From<CrossChainService> for AnyService {
 
 impl TestMatrix {
     pub fn eth_regular_chain_enabled(&self) -> bool {
-        self.eth.contains(&EthService::ChainTriggerLookup)
-            || self.eth.contains(&EthService::CosmosQuery)
-            || self.eth.contains(&EthService::EchoData)
-            || self.eth.contains(&EthService::Permissions)
-            || self.eth.contains(&EthService::Square)
-            || self
-                .cross_chain
-                .contains(&CrossChainService::CosmosToEthEchoData)
+        // since we currently only submit to eth, it's always enabled
+        true
     }
 
     pub fn eth_secondary_chain_enabled(&self) -> bool {
@@ -80,7 +74,8 @@ impl TestMatrix {
     }
 
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
-        self.cosmos.contains(&CosmosService::ChainTriggerLookup)
+        self.eth.contains(&EthService::CosmosQuery)
+            || self.cosmos.contains(&CosmosService::ChainTriggerLookup)
             || self.cosmos.contains(&CosmosService::CosmosQuery)
             || self.cosmos.contains(&CosmosService::EchoData)
             || self.cosmos.contains(&CosmosService::Permissions)

@@ -1,133 +1,171 @@
-use std::{
-    process::{Child, Command},
-    time::{Duration, Instant},
-};
+use std::process::{Command, Stdio};
 
-use utils::{config::CosmosChainConfig, context::AppContext, filesystem::workspace_path};
+use layer_climb::prelude::*;
+use utils::config::CosmosChainConfig;
+use wavs::AppContext;
 
-const IC_API_URL: &str = "http://127.0.0.1:8080";
+use crate::e2e::config::Configs;
 
-#[allow(dead_code)]
-fn start_chain(ctx: AppContext, _index: usize) -> (CosmosChainConfig, Option<IcTestHandle>) {
-    let mut ic_test_handle = None;
-
-    let chain_info = ctx.rt.block_on(async {
-        tokio::time::timeout(Duration::from_secs(30), async {
-            let client = reqwest::Client::new();
-            let sleep_duration = Duration::from_millis(100);
-            let mut log_clock = Instant::now();
-            loop {
-                let chain_info = match client.get(format!("{IC_API_URL}/info")).send().await {
-                    Ok(resp) => match resp.json::<serde_json::Value>().await {
-                        Ok(json) => json
-                            .as_object()
-                            .and_then(|json| json.get("logs"))
-                            .and_then(|logs| logs.get("chains"))
-                            .and_then(|logs| logs.as_array())
-                            .and_then(|logs| {
-                                logs.iter().find(|log| log["chain_id"] == "localjuno-1")
-                            })
-                            .cloned(),
-                        Err(_) => None,
-                    },
-                    Err(_) => None,
-                };
-
-                match chain_info {
-                    Some(chain_info) => {
-                        return chain_info;
-                    }
-                    None => {
-                        if ic_test_handle.is_none() {
-                            ic_test_handle = Some(IcTestHandle::spawn());
-                        }
-                        tokio::time::sleep(sleep_duration).await;
-                        if Instant::now() - log_clock > Duration::from_secs(3) {
-                            tracing::info!("Waiting for server to start...");
-                            log_clock = Instant::now();
-                        }
-                    }
-                }
-            }
-        })
-        .await
-        .unwrap()
-    });
-
-    let config = CosmosChainConfig {
-        chain_id: chain_info
-            .get("chain_id")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .to_string(),
-        rpc_endpoint: chain_info
-            .get("rpc_address")
-            .map(|rpc| rpc.as_str().unwrap().to_string()),
-        grpc_endpoint: None,
-        gas_price: 0.025,
-        gas_denom: "ujuno".to_string(),
-        bech32_prefix: "juno".to_string(),
-        faucet_endpoint: None,
-    };
-
-    (config, ic_test_handle)
+/// A handle that represents a running Docker container. When dropped, it will attempt
+/// to kill (and remove) the container automatically.
+pub struct CosmosInstance {
+    pub chain_config: layer_climb::prelude::ChainConfig,
 }
 
-/// A wrapper around a Child process that kills it when dropped.
-pub struct IcTestHandle {
-    child: Child,
-    _data_dir: tempfile::TempDir,
-}
+impl CosmosInstance {
+    pub fn setup(
+        ctx: AppContext,
+        configs: &Configs,
+        chain_config: CosmosChainConfig,
+    ) -> std::io::Result<Self> {
+        tracing::info!("Setting up Cosmos chain: {}", chain_config.chain_id);
+        let mnemonic = configs.cli.cosmos_mnemonic.as_ref().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Missing 'cosmos_mnemonic' in CLI config.",
+            )
+        })?;
 
-impl IcTestHandle {
-    /// Spawns a new process, returning a guard that will kill it when dropped.
-    pub fn spawn() -> Self {
-        let bin_path = match std::env::var("WAVS_LOCAL_IC_BIN_PATH") {
-            Ok(bin_path) => shellexpand::tilde(&bin_path).to_string(),
-            Err(_) => "local-ic".to_string(),
-        };
-        let repo_data_path = workspace_path()
-            .join("packages")
-            .join("layer-tests")
-            .join("interchain");
+        let chain_config: layer_climb::prelude::ChainConfig = chain_config.clone().into();
+        let signer = layer_climb::prelude::KeySigner::new_mnemonic_str(mnemonic, None).unwrap();
+        let addr: layer_climb::prelude::Address = ctx.rt.block_on(async {
+            chain_config
+                .address_from_pub_key(&signer.public_key().await.unwrap())
+                .unwrap()
+        });
 
-        let temp_data = tempfile::tempdir().unwrap();
+        let _self = Self { chain_config };
+        _self.clean();
 
-        // recursively copy all files and directories from repo_data_path to data_path
-        let _ = fs_extra::dir::copy(
-            repo_data_path,
-            temp_data.path(),
-            &fs_extra::dir::CopyOptions {
-                overwrite: true,
-                content_only: true,
-                ..Default::default()
-            },
-        );
+        let name = _self.name();
 
-        let child = Command::new(bin_path)
-            .args(["start", "juno", "--api-port", "8080"])
-            .env("ICTEST_HOME", temp_data.path())
-            // can be more quiet by uncommenting these
-            // .stdout(Stdio::null())
-            // .stderr(Stdio::null())
-            .spawn()
+        let _output = Command::new("docker")
+            .args([
+                "run",
+                "--rm",
+                "--name",
+                &name,
+                "--mount",
+                &format!("type=volume,source={}_data,target=/root", &name),
+                "--env",
+                &format!("CHAIN_ID={}", _self.chain_config.chain_id),
+                "--env",
+                &format!("FEE={}", _self.chain_config.gas_denom),
+                "cosmwasm/wasmd:latest",
+                "/opt/setup_wasmd.sh",
+                &addr.to_string(),
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output()?;
+
+        let _output = Command::new("docker")
+            .args([
+                "run",
+                "--rm",
+                "--name",
+                &name,
+                "--mount",
+                &format!("type=volume,source={}_data,target=/root", &name),
+                "cosmwasm/wasmd:latest",
+                "sed",
+                "-E",
+                "-i",
+                "/timeout_(propose|prevote|precommit|commit)/s/[0-9]+m?s/200ms/",
+                "/root/.wasmd/config/config.toml",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output()?;
+
+        Ok(_self)
+    }
+
+    pub fn name(&self) -> String {
+        format!("layer-tests-cosmos-{}", self.chain_config.chain_id)
+    }
+
+    pub fn run(self) -> std::io::Result<Self> {
+        tracing::info!("Starting Cosmos chain: {}", self.chain_config.chain_id);
+        let rpc_port = self
+            .chain_config
+            .rpc_endpoint
+            .as_ref()
+            .unwrap()
+            .split(':')
+            .last()
             .unwrap();
 
-        tracing::info!("starting LocalIc (pid {})", child.id());
-        Self {
-            child,
-            _data_dir: temp_data,
-        }
+        let name = self.name();
+
+        let _output = Command::new("docker")
+            .args([
+                "run",
+                "-d",
+                "--name",
+                &name,
+                "-p",
+                &format!("{rpc_port}:26657"),
+                "-p",
+                "26656:26656",
+                "-p",
+                "1317:1317",
+                "--mount",
+                &format!("type=volume,source={}_data,target=/root", &name),
+                "cosmwasm/wasmd:latest",
+                "/opt/run_wasmd.sh",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output()?;
+
+        Ok(self)
+    }
+
+    pub fn wait_for_block(&self, ctx: AppContext) {
+        ctx.rt.block_on(async {
+            let query_client =
+                QueryClient::new(self.chain_config.clone(), Some(ConnectionMode::Rpc))
+                    .await
+                    .unwrap();
+
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                loop {
+                    if query_client.block_height().await.unwrap_or_default() > 0 {
+                        break;
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                }
+            })
+            .await
+            .unwrap();
+        });
+    }
+
+    fn clean(&self) {
+        let name = self.name();
+        let _ = Command::new("docker")
+            .args(["kill", &name])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
+
+        let _ = Command::new("docker")
+            .args(["rm", &name])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
+
+        let _ = Command::new("docker")
+            .args(["volume", "rm", "-f", &format!("{}_data", name)])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
     }
 }
 
-impl Drop for IcTestHandle {
+impl Drop for CosmosInstance {
     fn drop(&mut self) {
-        tracing::info!("dropping IcTestHandle, killing process {}", self.child.id());
-        // Attempt to kill the child process. Ignore errors if it's already dead.
-        let _ = self.child.kill();
-        // We can wait on it to ensure it has actually terminated.
-        let _ = self.child.wait();
+        self.clean();
     }
 }

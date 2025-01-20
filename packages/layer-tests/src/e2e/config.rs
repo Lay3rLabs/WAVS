@@ -14,6 +14,7 @@ pub struct Configs {
     pub cli: wavs_cli::config::Config,
     pub aggregator: Option<aggregator::config::Config>,
     pub chains: ChainConfigs,
+    pub anvil_interval_seconds: Option<u64>,
 }
 
 impl From<TestConfig> for Configs {
@@ -21,6 +22,20 @@ impl From<TestConfig> for Configs {
         let matrix = test_config
             .matrix
             .into_validated(test_config.isolated.as_deref());
+
+        // ideally we want anvil to run as fast as possible, not on an interval
+        // but this causes bugs when we don't have any ethereum trigger chains
+        // since the signing will be at the same block height as the operator registering itself
+        let anvil_interval_seconds = {
+            if matrix.eth.is_empty() && matrix.cross_chain.is_empty() {
+                tracing::warn!(
+                    "No ethereum or cross-chain tests enabled, setting anvil to 1 second intervals"
+                );
+                Some(1)
+            } else {
+                None
+            }
+        };
 
         let mut chain_configs = ChainConfigs::default();
 
@@ -51,23 +66,25 @@ impl From<TestConfig> for Configs {
         };
 
         let mut cosmos_port = 9545;
-        let mut cosmos_chain_id = 41337;
+        let mut cosmos_chain_id = 1;
 
         let mut push_cosmos_chain = |_aggregator: bool| {
             let rpc_endpoint = format!("http://127.0.0.1:{}", cosmos_port);
-            let chain_id = cosmos_chain_id.to_string();
+            let chain_id = format!("wasmd-{}", cosmos_chain_id);
 
             let chain_config = CosmosChainConfig {
-                chain_id: cosmos_chain_id.to_string(),
+                chain_id: chain_id.to_string(),
                 rpc_endpoint: Some(rpc_endpoint),
                 grpc_endpoint: None,
                 gas_price: 0.025,
-                gas_denom: "ujuno".to_string(),
-                bech32_prefix: "juno".to_string(),
+                gas_denom: "ucosm".to_string(),
+                bech32_prefix: "wasm".to_string(),
                 faucet_endpoint: None,
             };
 
-            chain_configs.cosmos.insert(chain_id.clone(), chain_config);
+            chain_configs
+                .cosmos
+                .insert(chain_id.to_string(), chain_config);
 
             cosmos_port += 1;
             cosmos_chain_id += 1;
@@ -159,6 +176,7 @@ impl From<TestConfig> for Configs {
             aggregator: aggregator_config,
             wavs: wavs_config,
             chains: chain_configs,
+            anvil_interval_seconds,
         }
     }
 }

@@ -1,19 +1,20 @@
 mod cosmos;
+mod eth;
 
 use std::sync::Arc;
 
-use alloy::node_bindings::{Anvil, AnvilInstance};
-use cosmos::IcTestHandle;
+use cosmos::CosmosInstance;
+use eth::EthereumInstance;
 use utils::context::AppContext;
 use wavs::dispatcher::CoreDispatcher;
 
 use super::config::Configs;
 
 pub struct AppHandles {
-    pub _eth_chains: Vec<AnvilInstance>,
-    pub _cosmos_chains: Vec<Option<IcTestHandle>>,
     pub wavs_handle: std::thread::JoinHandle<()>,
     pub aggregator_handle: Option<std::thread::JoinHandle<()>>,
+    _eth_chains: Vec<EthereumInstance>,
+    _cosmos_chains: Vec<CosmosInstance>,
 }
 
 impl AppHandles {
@@ -22,28 +23,18 @@ impl AppHandles {
         let mut cosmos_chains = Vec::new();
 
         for chain_config in configs.chains.eth.values() {
-            let anvil = Anvil::new()
-                .port(
-                    chain_config
-                        .http_endpoint
-                        .as_ref()
-                        .unwrap()
-                        .split(':')
-                        .last()
-                        .unwrap()
-                        .parse::<u16>()
-                        .unwrap(),
-                )
-                .chain_id(chain_config.chain_id.parse().unwrap())
-                .spawn();
-
-            eth_chains.push(anvil);
+            let handle = EthereumInstance::spawn(configs, chain_config.clone());
+            eth_chains.push(handle);
         }
 
-        for _chain_config in configs.chains.cosmos.values() {
+        for chain_config in configs.chains.cosmos.values() {
             // TODO - replace with wasmd
-            let handle = IcTestHandle::spawn();
-            cosmos_chains.push(Some(handle));
+            let handle = CosmosInstance::setup(ctx.clone(), configs, chain_config.clone()).unwrap();
+            let handle = CosmosInstance::run(handle).unwrap();
+
+            handle.wait_for_block(ctx.clone());
+
+            cosmos_chains.push(handle);
         }
 
         let dispatcher = Arc::new(CoreDispatcher::new_core(&configs.wavs).unwrap());

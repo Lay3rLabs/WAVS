@@ -118,6 +118,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-json-rpc"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2008bedb8159a255b46b7c8614516eda06679ea82f620913679afbd8031fea72"
+dependencies = [
+ "alloy-primitives",
+ "alloy-sol-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.11",
+ "tracing",
+]
+
+[[package]]
 name = "alloy-network-primitives"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2153,20 +2167,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "layer-cosmwasm"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "cosmwasm-std",
- "hex",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "layer-wasi"
 version = "0.2.0"
 dependencies = [
+ "alloy-json-rpc",
  "alloy-primitives",
  "alloy-rpc-types",
  "alloy-sol-types",
@@ -3117,7 +3121,6 @@ dependencies = [
  "cw-storage-plus",
  "cw2",
  "hex",
- "layer-cosmwasm",
 ]
 
 [[package]]

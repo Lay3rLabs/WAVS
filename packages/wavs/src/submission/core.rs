@@ -211,6 +211,7 @@ impl CoreSubmission {
                 );
             }
 
+            tracing::info!("adding signed payload...");
             let _ = service_manager_contract
                 .addPayload(
                     SignedPayload {

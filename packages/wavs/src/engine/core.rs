@@ -140,12 +140,12 @@ impl<S: CAStorage> WasmEngine<S> {
         rt.block_on(fut)
     }
 
-    fn get_instance_deps<L: WasiView + WasiHttpView>(
+    fn get_instance_deps(
         &self,
         wasi: &apis::dispatcher::Component,
         trigger: &TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<(Store<HostComponent>, Component, Linker<L>), EngineError> {
+    ) -> Result<(Store<HostComponent>, Component, Linker<HostComponent>), EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
         let digest = wasi.wasm.clone();
@@ -159,6 +159,7 @@ impl<S: CAStorage> WasmEngine<S> {
 
         // create linker
         let mut linker = Linker::new(&self.wasm_engine);
+        crate::bindings::world::host::add_to_linker(&mut linker, |state| state).unwrap();
         // wasmtime_wasi::add_to_linker_sync(&mut linker).unwrap();
         // wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker).unwrap();
         wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();

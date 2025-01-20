@@ -118,13 +118,13 @@ async fn deploy_service(
 
     let submit_chain = match submit {
         CliSubmitKind::SimpleEthContract => match trigger {
-            CliTriggerKind::SimpleEthContract => trigger_chain.clone(), // not strictly necessary, just convenient
-            CliTriggerKind::SimpleCosmosContract => Some(chain_names.eth[0].clone()),
+            CliTriggerKind::SimpleEthContract => trigger_chain.clone(), // not strictly necessary, just easier to reason about same-chain
+            CliTriggerKind::SimpleCosmosContract => Some(chain_names.eth[0].clone()), // always eth for now
         },
     };
 
     tracing::info!(
-        "Deploying Service {} on trigger_chain: {} submit_chain: {}",
+        "Deploying Service {} on trigger_chain: [{}] submit_chain: [{}]",
         match service {
             AnyService::Eth(service) => format!("Ethereum {:?}", service),
             AnyService::Cosmos(service) => format!("Cosmos {:?}", service),

@@ -2,7 +2,6 @@
 members = [
   "packages/*",
   "sdk/wasi",
-  "sdk/cosmwasm",
 ]
 resolver = "2"
 
@@ -20,7 +19,6 @@ wavs = { path = "packages/wavs" }
 wavs-cli = { path = "packages/cli" }
 aggregator = { path = "packages/aggregator" }
 layer-wasi = { path = "sdk/wasi" }
-layer-cosmwasm = { path = "sdk/cosmwasm" }
 clap = { version = "4.5.20", features = ["derive", "env"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }
@@ -77,6 +75,7 @@ alloy-primitives = "0.8.15"
 alloy-sol-macro = "0.8.15"
 alloy-sol-types = "0.8.15"
 alloy-rpc-types = "0.9.2"
+alloy-json-rpc = "0.9.2"
 tendermint-rpc = "0.40.1"
 tendermint = { version = "0.40.1", default-features = false}
 wstd = "0.4.0"

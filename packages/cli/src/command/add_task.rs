@@ -120,7 +120,7 @@ impl AddTask {
                                 return anyhow::Ok(SignedData { data, signature });
                             }
                             false => {
-                                tracing::info!(
+                                tracing::debug!(
                                     "Waiting for task response on trigger {}, chain {}",
                                     trigger_id,
                                     chain_name

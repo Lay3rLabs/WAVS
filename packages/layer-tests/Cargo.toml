@@ -11,7 +11,6 @@ wavs = { workspace = true }
 utils = { workspace = true }
 wavs-cli = { workspace = true }
 aggregator = { workspace = true }
-layer-cosmwasm = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }

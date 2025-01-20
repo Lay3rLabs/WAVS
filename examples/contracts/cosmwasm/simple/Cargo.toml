@@ -8,7 +8,6 @@ license = "Apache-2.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-layer-cosmwasm = {workspace = true}
 cosmwasm-std = {workspace = true}
 anyhow = {workspace = true} 
 cw-storage-plus = {workspace = true} 

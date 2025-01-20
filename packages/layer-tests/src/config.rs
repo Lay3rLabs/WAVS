@@ -165,19 +165,19 @@ impl TestMatrixConfig {
 impl From<&str> for AnyService {
     fn from(src: &str) -> Self {
         match src {
-            "eth_chain_trigger_lookup" => AnyService::Eth(EthService::ChainTriggerLookup),
-            "eth_cosmos_query" => AnyService::Eth(EthService::CosmosQuery),
-            "eth_echo_data" => AnyService::Eth(EthService::EchoData),
-            "eth_echo_data_secondary_chain" => AnyService::Eth(EthService::EchoDataSecondaryChain),
-            "eth_echo_data_aggregator" => AnyService::Eth(EthService::EchoDataAggregator),
-            "eth_permissions" => AnyService::Eth(EthService::Permissions),
-            "eth_square" => AnyService::Eth(EthService::Square),
-            "cosmos_chain_trigger_lookup" => AnyService::Cosmos(CosmosService::ChainTriggerLookup),
-            "cosmos_cosmos_query" => AnyService::Cosmos(CosmosService::CosmosQuery),
-            "cosmos_echo_data" => AnyService::Cosmos(CosmosService::EchoData),
-            "cosmos_permissions" => AnyService::Cosmos(CosmosService::Permissions),
-            "cosmos_square" => AnyService::Cosmos(CosmosService::Square),
-            "crosschain_cosmos_to_eth_echo_data" => {
+            "eth-chain-trigger-lookup" => AnyService::Eth(EthService::ChainTriggerLookup),
+            "eth-cosmos-query" => AnyService::Eth(EthService::CosmosQuery),
+            "eth-echo-data" => AnyService::Eth(EthService::EchoData),
+            "eth-echo-data-secondary-chain" => AnyService::Eth(EthService::EchoDataSecondaryChain),
+            "eth-echo-data-aggregator" => AnyService::Eth(EthService::EchoDataAggregator),
+            "eth-permissions" => AnyService::Eth(EthService::Permissions),
+            "eth-square" => AnyService::Eth(EthService::Square),
+            "cosmos-chain-trigger-lookup" => AnyService::Cosmos(CosmosService::ChainTriggerLookup),
+            "cosmos-cosmos-query" => AnyService::Cosmos(CosmosService::CosmosQuery),
+            "cosmos-echo-data" => AnyService::Cosmos(CosmosService::EchoData),
+            "cosmos-permissions" => AnyService::Cosmos(CosmosService::Permissions),
+            "cosmos-square" => AnyService::Cosmos(CosmosService::Square),
+            "crosschain-cosmos-to-eth-echo-data" => {
                 AnyService::CrossChain(CrossChainService::CosmosToEthEchoData)
             }
             _ => panic!("Unknown service: {}", src),

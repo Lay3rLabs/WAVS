@@ -25,6 +25,7 @@ cosmwasm-std = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = {workspace = true }
 alloy-rpc-types = {workspace = true }
+alloy-json-rpc = "0.9.2"
 
 [lib]
 crate-type = ["rlib", "cdylib"]

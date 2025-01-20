@@ -15,30 +15,6 @@ env:
 
 # TODO: perform other tests on wasi examples
 jobs:
-  # build-local-ic:
-  #   runs-on: ubuntu-latest
-  #   name: build
-  #   steps:
-  #     - name: Checkout interchaintest
-  #       uses: actions/checkout@v4
-  #       with:
-  #           repository: strangelove-ventures/interchaintest
-  #           path: interchaintest
-
-  #     - name: Setup go ${{ env.GO_VERSION }}
-  #       uses: actions/setup-go@v5
-  #       with:
-  #           go-version: ${{ env.GO_VERSION }}
-
-  #     - name: build local-interchain
-  #       run: cd interchaintest/local-interchain && make install
-
-  #     - name: Upload localic artifact
-  #       uses: actions/upload-artifact@v3
-  #       with:
-  #         name: local-ic
-  #         path: ~/go/bin/local-ic
-
   test:
     name: Wavs Test Suite
     runs-on: linux-8-core
@@ -66,18 +42,6 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
-
-      # - name: Download local-ic Artifact
-      #   uses: actions/download-artifact@v3
-      #   with:
-      #     name: local-ic
-      #     path: /tmp
-
-      # - name: Make local-ic executable
-      #   run: chmod +x /tmp/local-ic
-
-      # - name: Set local-ic env
-      #   run: echo "WAVS_LOCAL_IC_BIN_PATH=\"/tmp/local-ic\"" >> $GITHUB_ENV
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1

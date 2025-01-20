@@ -1,8 +1,7 @@
 use anyhow::Result;
 use cosmwasm_std::{Empty, Uint64};
 use layer_climb::prelude::*;
-use serde::{Deserialize, Serialize};
-use simple_example_cosmos::event::NewMessageEvent;
+use simple_example_cosmos::{entry::execute::ExecuteMsg, event::NewMessageEvent};
 
 #[derive(Clone)]
 pub struct SimpleCosmosTriggerClient {
@@ -29,18 +28,11 @@ impl SimpleCosmosTriggerClient {
     }
 
     pub async fn add_trigger(&self, data: Vec<u8>) -> Result<TriggerId> {
-        // The execute message and event are from `examples/contracts/cosmwasm/simple`
-        #[derive(Serialize, Deserialize, Clone, Debug)]
-        pub enum ExecuteMsg {
-            // Proprietary per-app... but will emit an event registered with layer
-            AddTrigger { data: Vec<u8> },
-        }
-
         let res = self
             .signing_client
             .contract_execute(
                 &self.contract_address,
-                &ExecuteMsg::AddTrigger { data },
+                &ExecuteMsg::AddMessage { data },
                 Vec::new(),
                 None,
             )

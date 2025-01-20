@@ -122,6 +122,7 @@ impl DeployService {
 
                 let eth_client = ctx.get_eth_client(&chain_name)?;
 
+                tracing::info!("deploying eth submit contract on eigenlayer");
                 let avs_client = AvsClientDeployer::new(eth_client.eth)
                     .core_addresses(core_contracts)
                     .deploy(SimpleEthSubmitClient::deploy)

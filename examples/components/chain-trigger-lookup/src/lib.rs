@@ -1,4 +1,4 @@
-use example_helpers::trigger::{decode_trigger_event, ChainQuerierExt};
+use example_helpers::trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt};
 use layer_wasi::{
     bindings::{
         compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
@@ -17,7 +17,7 @@ impl Guest for Component {
         wstd::runtime::block_on(move |reactor| async move {
             let (trigger_id, _) = decode_trigger_event(trigger_action.data.clone())?;
 
-            let resp: TriggerDataResp = match trigger_action.data {
+            let resp = match trigger_action.data {
                 TriggerData::CosmosContractEvent(TriggerDataCosmosContractEvent {
                     chain_name,
                     contract_address,
@@ -49,23 +49,10 @@ impl Guest for Component {
                 }
             };
 
-            let resp = serde_json::to_vec(&resp)?;
-
-            serde_json::to_vec(&Response {
-                trigger_id: trigger_id.to_string(),
-                result: resp,
-            })
-            .map_err(|e| anyhow::anyhow!("{:?}", e))
+            Ok(encode_trigger_output(trigger_id, resp))
         })
         .map_err(|e| e.to_string())
     }
-}
-
-// The response we send back from the component, serialized to a Vec<u8>
-#[derive(Serialize)]
-struct Response {
-    pub result: Vec<u8>,
-    pub trigger_id: String,
 }
 
 // The response from the contract query
