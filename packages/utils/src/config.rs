@@ -314,9 +314,7 @@ impl ChainConfigs {
     }
 
     pub fn all_chain_names(&self) -> Vec<String> {
-        let mut names = self.eth.keys().cloned().collect::<Vec<_>>();
-        names.extend(self.cosmos.keys().cloned());
-        names
+        self.eth.keys().chain(self.cosmos.keys()).cloned().collect()
     }
 }
 

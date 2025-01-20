@@ -1,8 +1,6 @@
 mod clients;
 mod config;
-mod cosmos;
 mod digests;
-mod eth;
 mod handles;
 pub mod matrix;
 mod runner;
@@ -13,12 +11,15 @@ use digests::Digests;
 use handles::AppHandles;
 use services::Services;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::{config::ConfigExt, context::AppContext};
+use utils::{
+    config::{ConfigBuilder, ConfigExt},
+    context::AppContext,
+};
 
 use crate::{args::TestArgs, config::TestConfig};
 
 pub fn run(args: TestArgs) {
-    let config = TestConfig::new(args);
+    let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
 
     tracing_subscriber::registry()
         .with(
@@ -30,31 +31,11 @@ pub fn run(args: TestArgs) {
         .try_init()
         .unwrap();
 
+    let configs: Configs = config.into();
+
     let ctx = AppContext::new();
 
-    let (mut eth_chains, mut cosmos_chains) = (
-        eth::start_chains(&config),
-        cosmos::start_chains(ctx.clone(), &config),
-    );
-
-    let configs = Configs::new(
-        config,
-        eth_chains
-            .iter()
-            .map(|(chain_config, _)| chain_config.clone())
-            .collect(),
-        cosmos_chains
-            .iter()
-            .map(|(chain_config, _)| chain_config.clone())
-            .collect(),
-    );
-
-    let handles = AppHandles::start(
-        &ctx,
-        &configs,
-        eth_chains.drain(..).map(|(_, handle)| handle).collect(),
-        cosmos_chains.drain(..).map(|(_, handle)| handle).collect(),
-    );
+    let handles = AppHandles::start(&ctx, &configs);
 
     let clients = clients::Clients::new(ctx.clone(), &configs);
 

@@ -1,6 +1,11 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
-use super::{clients::Clients, config::Configs, digests::Digests};
+use super::{
+    clients::Clients,
+    config::Configs,
+    digests::Digests,
+    matrix::{AnyService, CrossChainService, EthService},
+};
 use utils::{context::AppContext, eigen_client::CoreAVSAddresses};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -12,41 +17,14 @@ use wavs_cli::{
 
 #[derive(Default)]
 pub struct Services {
-    pub eth_eigen_core: HashMap<String, CoreAVSAddresses>,
-    pub eth: EthServices,
-    pub cosmos: CosmosServices,
-    pub _cross_chain: CrossChainServices,
+    #[allow(dead_code)]
+    pub eth_eigen_core: BTreeMap<String, CoreAVSAddresses>,
+    pub lookup: BTreeMap<AnyService, DeployService>,
 }
-
-#[derive(Default)]
-pub struct EthServices {
-    pub chain_trigger_lookup: Option<(ServiceName, DeployService)>,
-    pub cosmos_query: Option<(ServiceName, DeployService)>,
-    pub echo_data: Option<(ServiceName, DeployService)>,
-    pub echo_data_multichain_1: Option<(ServiceName, DeployService)>,
-    pub echo_data_multichain_2: Option<(ServiceName, DeployService)>,
-    pub echo_data_aggregator: Option<(ServiceName, DeployService)>,
-    pub permissions: Option<(ServiceName, DeployService)>,
-    pub square: Option<(ServiceName, DeployService)>,
-}
-
-#[derive(Default)]
-pub struct CosmosServices {
-    pub chain_trigger_lookup: Option<(ServiceName, DeployService)>,
-    pub cosmos_query: Option<(ServiceName, DeployService)>,
-    pub echo_data: Option<(ServiceName, DeployService)>,
-    pub permissions: Option<(ServiceName, DeployService)>,
-    pub square: Option<(ServiceName, DeployService)>,
-}
-
-#[derive(Default)]
-pub struct CrossChainServices {}
 
 impl Services {
     pub fn new(ctx: AppContext, configs: &Configs, clients: &Clients, digests: &Digests) -> Self {
         ctx.rt.block_on(async move {
-            let matrix = &configs.test_config.matrix;
-
             let mut chain_names = ChainNames::default();
 
             for (chain_name, chain) in configs.chains.eth.iter() {
@@ -59,8 +37,7 @@ impl Services {
 
             chain_names.cosmos = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
 
-            let mut services = Self::default();
-
+            let mut eth_eigen_core = BTreeMap::default();
             // hrmf, "nonce too low" errors, gotta go sequentially...
 
             for chain in chain_names
@@ -80,169 +57,60 @@ impl Services {
                 .await
                 .unwrap();
 
-                services.eth_eigen_core.insert(chain, addresses);
+                eth_eigen_core.insert(chain, addresses);
             }
 
-            let mut names: Vec<ServiceName> = Vec::new();
-            if matrix.eth.chain_trigger_lookup {
-                names.push(ServiceName::EthChainTriggerLookup);
+            let all_services = configs
+                .matrix
+                .eth
+                .iter()
+                .map(|s| (*s).into())
+                .chain(configs.matrix.cosmos.iter().map(|s| (*s).into()))
+                .chain(configs.matrix.cross_chain.iter().map(|s| (*s).into()))
+                .collect::<Vec<AnyService>>();
+
+            let mut lookup = BTreeMap::default();
+
+            // nonce errors here too, gotta go sequentially :/
+            for service in all_services {
+                let res = deploy_service(service, clients, digests, &chain_names).await;
+                lookup.insert(service, res);
             }
 
-            if matrix.eth.cosmos_query {
-                names.push(ServiceName::EthCosmosQuery);
+            Self {
+                eth_eigen_core,
+                lookup,
             }
-
-            if matrix.eth.echo_data {
-                names.push(ServiceName::EthEchoData);
-            }
-
-            if matrix.eth.echo_data_multichain {
-                names.push(ServiceName::EthEchoDataMultichain1);
-                names.push(ServiceName::EthEchoDataMultichain2);
-            }
-
-            if matrix.eth.echo_data_aggregator {
-                names.push(ServiceName::EthEchoDataAggregator);
-            }
-
-            if matrix.eth.permissions {
-                names.push(ServiceName::EthPermissions);
-            }
-
-            if matrix.eth.square {
-                names.push(ServiceName::EthSquare);
-            }
-
-            if matrix.cosmos.chain_trigger_lookup {
-                names.push(ServiceName::CosmosChainTriggerLookup);
-            }
-
-            if matrix.cosmos.cosmos_query {
-                names.push(ServiceName::CosmosCosmosQuery);
-            }
-
-            if matrix.cosmos.echo_data {
-                names.push(ServiceName::CosmosEchoData);
-            }
-
-            if matrix.cosmos.permissions {
-                names.push(ServiceName::CosmosPermissions);
-            }
-
-            if matrix.cosmos.square {
-                names.push(ServiceName::CosmosSquare);
-            }
-
-            // nonce errors :(
-            // let mut futures = FuturesUnordered::new();
-
-            for name in names {
-                let res = deploy_service(name, clients, digests, &chain_names).await;
-
-                let service = (name, res);
-
-                match name {
-                    ServiceName::EthChainTriggerLookup => {
-                        services.eth.chain_trigger_lookup = Some(service)
-                    }
-                    ServiceName::EthCosmosQuery => services.eth.cosmos_query = Some(service),
-                    ServiceName::EthEchoData => services.eth.echo_data = Some(service),
-                    ServiceName::EthEchoDataMultichain1 => {
-                        services.eth.echo_data_multichain_1 = Some(service)
-                    }
-                    ServiceName::EthEchoDataMultichain2 => {
-                        services.eth.echo_data_multichain_2 = Some(service)
-                    }
-                    ServiceName::EthEchoDataAggregator => {
-                        services.eth.echo_data_aggregator = Some(service)
-                    }
-                    ServiceName::EthPermissions => services.eth.permissions = Some(service),
-                    ServiceName::EthSquare => services.eth.square = Some(service),
-                    ServiceName::CosmosChainTriggerLookup => {
-                        services.cosmos.chain_trigger_lookup = Some(service)
-                    }
-                    ServiceName::CosmosCosmosQuery => services.cosmos.cosmos_query = Some(service),
-                    ServiceName::CosmosEchoData => services.cosmos.echo_data = Some(service),
-                    ServiceName::CosmosPermissions => services.cosmos.permissions = Some(service),
-                    ServiceName::CosmosSquare => services.cosmos.square = Some(service),
-                }
-            }
-
-            services
         })
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ServiceName {
-    EthChainTriggerLookup,
-    EthCosmosQuery,
-    EthEchoData,
-    EthEchoDataMultichain1,
-    EthEchoDataMultichain2,
-    EthEchoDataAggregator,
-    EthPermissions,
-    EthSquare,
-    CosmosChainTriggerLookup,
-    CosmosCosmosQuery,
-    CosmosEchoData,
-    CosmosPermissions,
-    CosmosSquare,
-}
-
 async fn deploy_service(
-    name: ServiceName,
+    service: AnyService,
     clients: &Clients,
     digests: &Digests,
     chain_names: &ChainNames,
 ) -> DeployService {
-    let digest = match name {
-        ServiceName::EthChainTriggerLookup | ServiceName::CosmosChainTriggerLookup => {
-            digests.chain_trigger_lookup.clone().unwrap()
-        }
+    let digest = digests.lookup.get(&service.into()).unwrap().clone();
 
-        ServiceName::EthCosmosQuery | ServiceName::CosmosCosmosQuery => {
-            digests.cosmos_query.clone().unwrap()
-        }
-
-        ServiceName::EthEchoData
-        | ServiceName::CosmosEchoData
-        | ServiceName::EthEchoDataMultichain1
-        | ServiceName::EthEchoDataMultichain2
-        | ServiceName::EthEchoDataAggregator => digests.echo_data.clone().unwrap(),
-
-        ServiceName::EthPermissions | ServiceName::CosmosPermissions => {
-            digests.permissions.clone().unwrap()
-        }
-
-        ServiceName::EthSquare | ServiceName::CosmosSquare => digests.square.clone().unwrap(),
+    let trigger = match service {
+        AnyService::Eth(_) => CliTriggerKind::SimpleEthContract,
+        AnyService::Cosmos(_) => CliTriggerKind::SimpleCosmosContract,
+        AnyService::CrossChain(service) => match service {
+            CrossChainService::CosmosToEthEchoData => CliTriggerKind::SimpleEthContract,
+        },
     };
 
-    let trigger = match name {
-        ServiceName::EthChainTriggerLookup
-        | ServiceName::EthCosmosQuery
-        | ServiceName::EthEchoData
-        | ServiceName::EthEchoDataMultichain1
-        | ServiceName::EthEchoDataMultichain2
-        | ServiceName::EthEchoDataAggregator
-        | ServiceName::EthPermissions
-        | ServiceName::EthSquare => CliTriggerKind::SimpleEthContract,
-
-        ServiceName::CosmosChainTriggerLookup
-        | ServiceName::CosmosCosmosQuery
-        | ServiceName::CosmosEchoData
-        | ServiceName::CosmosPermissions
-        | ServiceName::CosmosSquare => CliTriggerKind::SimpleCosmosContract,
-    };
-
-    let submit = match name {
+    let submit = match service {
         _ => CliSubmitKind::SimpleEthContract,
     };
 
     let trigger_chain = match trigger {
-        CliTriggerKind::SimpleEthContract => match name {
-            ServiceName::EthEchoDataAggregator => Some(chain_names.eth_aggregator[0].clone()),
-            ServiceName::EthEchoDataMultichain2 => Some(chain_names.eth[1].clone()),
+        CliTriggerKind::SimpleEthContract => match service {
+            AnyService::Eth(EthService::EchoDataAggregator) => {
+                Some(chain_names.eth_aggregator[0].clone())
+            }
+            AnyService::Eth(EthService::EchoDataSecondaryChain) => Some(chain_names.eth[1].clone()),
             _ => Some(chain_names.eth[0].clone()),
         },
         CliTriggerKind::SimpleCosmosContract => Some(chain_names.cosmos[0].clone()),
@@ -256,8 +124,12 @@ async fn deploy_service(
     };
 
     tracing::info!(
-        "Deploying Service {:?} on trigger_chain: {} submit_chain: {}",
-        name,
+        "Deploying Service {} on trigger_chain: {} submit_chain: {}",
+        match service {
+            AnyService::Eth(service) => format!("Ethereum {:?}", service),
+            AnyService::Cosmos(service) => format!("Cosmos {:?}", service),
+            AnyService::CrossChain(service) => format!("CrossChain {:?}", service),
+        },
         trigger_chain.as_deref().unwrap_or("none"),
         submit_chain.as_deref().unwrap_or("none")
     );

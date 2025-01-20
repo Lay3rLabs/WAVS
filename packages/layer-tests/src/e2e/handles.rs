@@ -1,10 +1,13 @@
+mod cosmos;
+
 use std::sync::Arc;
 
-use alloy::node_bindings::AnvilInstance;
+use alloy::node_bindings::{Anvil, AnvilInstance};
+use cosmos::IcTestHandle;
 use utils::context::AppContext;
 use wavs::dispatcher::CoreDispatcher;
 
-use super::{config::Configs, cosmos::IcTestHandle};
+use super::config::Configs;
 
 pub struct AppHandles {
     pub _eth_chains: Vec<AnvilInstance>,
@@ -14,12 +17,35 @@ pub struct AppHandles {
 }
 
 impl AppHandles {
-    pub fn start(
-        ctx: &AppContext,
-        configs: &Configs,
-        eth_chains: Vec<AnvilInstance>,
-        cosmos_chains: Vec<Option<IcTestHandle>>,
-    ) -> Self {
+    pub fn start(ctx: &AppContext, configs: &Configs) -> Self {
+        let mut eth_chains = Vec::new();
+        let mut cosmos_chains = Vec::new();
+
+        for chain_config in configs.chains.eth.values() {
+            let anvil = Anvil::new()
+                .port(
+                    chain_config
+                        .http_endpoint
+                        .as_ref()
+                        .unwrap()
+                        .split(':')
+                        .last()
+                        .unwrap()
+                        .parse::<u16>()
+                        .unwrap(),
+                )
+                .chain_id(chain_config.chain_id.parse().unwrap())
+                .spawn();
+
+            eth_chains.push(anvil);
+        }
+
+        for _chain_config in configs.chains.cosmos.values() {
+            // TODO - replace with wasmd
+            let handle = IcTestHandle::spawn();
+            cosmos_chains.push(Some(handle));
+        }
+
         let dispatcher = Arc::new(CoreDispatcher::new_core(&configs.wavs).unwrap());
 
         let wavs_handle = std::thread::spawn({

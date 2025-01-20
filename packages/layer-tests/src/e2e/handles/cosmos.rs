@@ -5,22 +5,7 @@ use std::{
 
 use utils::{config::CosmosChainConfig, context::AppContext, filesystem::workspace_path};
 
-use crate::config::TestConfig;
-
 const IC_API_URL: &str = "http://127.0.0.1:8080";
-
-pub fn start_chains(
-    ctx: AppContext,
-    config: &TestConfig,
-) -> Vec<(CosmosChainConfig, Option<IcTestHandle>)> {
-    let mut chains = Vec::new();
-
-    if config.matrix.cosmos.chain_enabled() || config.matrix.crosschain.cosmos_enabled() {
-        chains.push(start_chain(ctx.clone(), 0));
-    }
-
-    chains
-}
 
 #[allow(dead_code)]
 fn start_chain(ctx: AppContext, _index: usize) -> (CosmosChainConfig, Option<IcTestHandle>) {

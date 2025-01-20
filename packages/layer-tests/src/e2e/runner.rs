@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use utils::avs_client::SignedData;
@@ -16,68 +16,28 @@ use wavs_cli::{
 use super::{
     clients::Clients,
     config::Configs,
-    services::{ServiceName, Services},
+    matrix::{AnyService, CosmosService, CrossChainService, EthService},
+    services::Services,
 };
 
 pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: Services) {
-    let mut services_to_run = Vec::new();
-
-    if let Some(service) = services.eth.chain_trigger_lookup {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.eth.cosmos_query {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.eth.echo_data {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.eth.echo_data_multichain_1 {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.eth.echo_data_multichain_2 {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.eth.echo_data_aggregator {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.eth.permissions {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.eth.square {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.cosmos.chain_trigger_lookup {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.cosmos.cosmos_query {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.cosmos.echo_data {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.cosmos.permissions {
-        services_to_run.push(service);
-    }
-    if let Some(service) = services.cosmos.square {
-        services_to_run.push(service);
-    }
-
-    // nonce errors :(
-    // let mut futures = FuturesUnordered::new();
-
+    // nonce errors, gotta run sequentially :(
     ctx.rt.block_on(async move {
-        for service in services_to_run {
-            let name = test_service(service, &configs, &clients).await.unwrap();
+        for (name, service) in services.lookup.into_iter() {
+            test_service(name, service, &configs, &clients)
+                .await
+                .unwrap();
             tracing::info!("Service {:?} passed", name);
         }
     });
 }
 
 async fn test_service(
-    (name, service): (ServiceName, DeployService),
+    name: AnyService,
+    service: DeployService,
     configs: &Configs,
     clients: &Clients,
-) -> Result<ServiceName> {
+) -> Result<()> {
     let service_id = service.service_id.to_string();
     let (workflow_id, workflow) = service.workflows.into_iter().next().unwrap().clone();
 
@@ -123,77 +83,97 @@ async fn test_service(
         }
     }
 
-    Ok(name)
+    Ok(())
 }
 
-fn get_input_for_service(name: ServiceName) -> ComponentInput {
+fn get_input_for_service(name: AnyService) -> ComponentInput {
     let input_data = match name {
-        ServiceName::EthChainTriggerLookup => todo!(),
-        ServiceName::EthCosmosQuery => CosmosQueryRequest::BlockHeight.to_vec(),
-        ServiceName::EthEchoData => b"The times".to_vec(),
-        ServiceName::EthEchoDataAggregator => b"Chancellor".to_vec(),
-        ServiceName::EthEchoDataMultichain1 => b"collapse".to_vec(),
-        ServiceName::EthEchoDataMultichain2 => b"satoshi".to_vec(),
-        ServiceName::EthPermissions => PermissionsRequest {
-            url: "https://httpbin.org/get".to_string(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        }
-        .to_vec(),
-        ServiceName::EthSquare => SquareRequest { x: 3 }.to_vec(),
-        ServiceName::CosmosChainTriggerLookup => todo!(),
-        ServiceName::CosmosCosmosQuery => CosmosQueryRequest::BlockHeight.to_vec(),
-        ServiceName::CosmosEchoData => b"on brink".to_vec(),
-        ServiceName::CosmosPermissions => todo!(),
-        ServiceName::CosmosSquare => SquareRequest { x: 3 }.to_vec(),
+        AnyService::Eth(name) => match name {
+            EthService::ChainTriggerLookup => todo!(),
+            EthService::CosmosQuery => CosmosQueryRequest::BlockHeight.to_vec(),
+            EthService::EchoData => b"The times".to_vec(),
+            EthService::EchoDataAggregator => b"Chancellor".to_vec(),
+            EthService::EchoDataSecondaryChain => b"collapse".to_vec(),
+            EthService::Permissions => PermissionsRequest {
+                url: "https://httpbin.org/get".to_string(),
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            }
+            .to_vec(),
+            EthService::Square => SquareRequest { x: 3 }.to_vec(),
+        },
+        AnyService::Cosmos(name) => match name {
+            CosmosService::ChainTriggerLookup => todo!(),
+            CosmosService::CosmosQuery => CosmosQueryRequest::BlockHeight.to_vec(),
+            CosmosService::EchoData => b"on brink".to_vec(),
+            CosmosService::Permissions => todo!(),
+            CosmosService::Square => SquareRequest { x: 3 }.to_vec(),
+        },
+        AnyService::CrossChain(name) => match name {
+            CrossChainService::CosmosToEthEchoData => b"hello eth world from cosmos".to_vec(),
+        },
     };
 
     ComponentInput::Raw(input_data)
 }
 
-fn verify_signed_data(name: ServiceName, signed_data: SignedData) -> Result<()> {
-    let expected_data = match name {
-        ServiceName::EthChainTriggerLookup => todo!(),
-        ServiceName::CosmosChainTriggerLookup => todo!(),
-        ServiceName::EthSquare => SquareResponse { y: 9 }.to_vec(),
-        ServiceName::CosmosSquare => SquareResponse { y: 9 }.to_vec(),
-        // just echo
-        ServiceName::EthEchoData
-        | ServiceName::EthEchoDataMultichain1
-        | ServiceName::EthEchoDataMultichain2
-        | ServiceName::EthEchoDataAggregator
-        | ServiceName::CosmosEchoData => match get_input_for_service(name) {
-            ComponentInput::Raw(data) => data,
-            _ => unreachable!(),
-        },
-        // these are not static, handled specially
-        ServiceName::EthCosmosQuery => Vec::new(),
-        ServiceName::CosmosCosmosQuery => Vec::new(),
-        ServiceName::EthPermissions => Vec::new(),
-        ServiceName::CosmosPermissions => todo!(),
-    };
-
+fn verify_signed_data(name: AnyService, signed_data: SignedData) -> Result<()> {
     let data = signed_data.data;
 
-    match name {
-        ServiceName::EthCosmosQuery | ServiceName::CosmosCosmosQuery => {
-            let _: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
-            return Ok(());
-        }
-        ServiceName::EthPermissions | ServiceName::CosmosPermissions => {
-            let _: PermissionsResponse = serde_json::from_slice(&data).unwrap();
-            return Ok(());
-        }
-        _ => {}
+    let expected_data = match name {
+        AnyService::Eth(eth_name) => match eth_name {
+            // Just echo
+            EthService::EchoData
+            | EthService::EchoDataSecondaryChain
+            | EthService::EchoDataAggregator => Some(get_input_for_service(name).decode().unwrap()),
+
+            EthService::Square => Some(SquareResponse { y: 9 }.to_vec()),
+
+            EthService::CosmosQuery => {
+                let _: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                None
+            }
+
+            EthService::Permissions => {
+                let _: PermissionsResponse = serde_json::from_slice(&data).unwrap();
+                None
+            }
+
+            EthService::ChainTriggerLookup => todo!(),
+        },
+        AnyService::Cosmos(cosmos_name) => match cosmos_name {
+            CosmosService::EchoData => Some(get_input_for_service(name).decode().unwrap()),
+
+            CosmosService::Square => Some(SquareResponse { y: 9 }.to_vec()),
+
+            CosmosService::Permissions => {
+                let _: PermissionsResponse = serde_json::from_slice(&data).unwrap();
+                None
+            }
+
+            CosmosService::CosmosQuery => {
+                let _: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                None
+            }
+
+            CosmosService::ChainTriggerLookup => todo!(),
+        },
+        AnyService::CrossChain(crosschain_name) => match crosschain_name {
+            CrossChainService::CosmosToEthEchoData => {
+                Some(get_input_for_service(name).decode().unwrap())
+            }
+        },
+    };
+
+    // in some cases we just verify that we could deserialize the data
+    // in others, we know what we expect exactly, make sure we got it
+    if let Some(expected_data) = expected_data {
+        assert_eq!(data, expected_data);
     }
 
-    if data != expected_data {
-        Err(anyhow!("did not receive expected data in {:?}", name))
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug)]

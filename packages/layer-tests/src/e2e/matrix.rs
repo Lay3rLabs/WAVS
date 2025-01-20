@@ -1,125 +1,136 @@
-use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+use super::digests::DigestName;
+
+#[derive(Clone, Debug, Default)]
 pub struct TestMatrix {
-    pub eth: TestMatrixEth,
-    pub cosmos: TestMatrixCosmos,
-    pub crosschain: TestMatrixCrossChain,
+    pub eth: HashSet<EthService>,
+    pub cosmos: HashSet<CosmosService>,
+    pub cross_chain: HashSet<CrossChainService>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct TestMatrixEth {
-    pub chain_trigger_lookup: bool,
-    pub cosmos_query: bool,
-    pub echo_data: bool,
-    pub echo_data_multichain: bool,
-    pub echo_data_aggregator: bool,
-    pub permissions: bool,
-    pub square: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum EthService {
+    ChainTriggerLookup,
+    CosmosQuery,
+    EchoData,
+    EchoDataSecondaryChain,
+    EchoDataAggregator,
+    Permissions,
+    Square,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct TestMatrixCosmos {
-    pub chain_trigger_lookup: bool,
-    pub cosmos_query: bool,
-    pub echo_data: bool,
-    pub permissions: bool,
-    pub square: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum CosmosService {
+    ChainTriggerLookup,
+    CosmosQuery,
+    EchoData,
+    Permissions,
+    Square,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct TestMatrixCrossChain {
-    pub eth_to_cosmos_echo_data: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum CrossChainService {
+    CosmosToEthEchoData,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum AnyService {
+    Eth(EthService),
+    Cosmos(CosmosService),
+    CrossChain(CrossChainService),
+}
+
+impl From<EthService> for AnyService {
+    fn from(service: EthService) -> Self {
+        AnyService::Eth(service)
+    }
+}
+
+impl From<CosmosService> for AnyService {
+    fn from(service: CosmosService) -> Self {
+        AnyService::Cosmos(service)
+    }
+}
+
+impl From<CrossChainService> for AnyService {
+    fn from(service: CrossChainService) -> Self {
+        AnyService::CrossChain(service)
+    }
 }
 
 impl TestMatrix {
-    pub fn overwrite_isolated(&mut self, isolated: &str) {
-        *self = Self::default();
+    pub fn eth_regular_chain_enabled(&self) -> bool {
+        self.eth.contains(&EthService::ChainTriggerLookup)
+            || self.eth.contains(&EthService::CosmosQuery)
+            || self.eth.contains(&EthService::EchoData)
+            || self.eth.contains(&EthService::Permissions)
+            || self.eth.contains(&EthService::Square)
+            || self
+                .cross_chain
+                .contains(&CrossChainService::CosmosToEthEchoData)
+    }
 
-        match isolated {
-            "eth-chain-trigger-lookup" => {
-                self.eth.chain_trigger_lookup = true;
-            }
-            "eth-cosmos-query" => {
-                self.eth.cosmos_query = true;
-            }
-            "eth-echo-data" => {
-                self.eth.echo_data = true;
-            }
-            "eth-echo-data-multichain" => {
-                self.eth.echo_data_multichain = true;
-            }
-            "eth-echo-data-aggregator" => {
-                self.eth.echo_data_aggregator = true;
-            }
-            "eth-permissions" => {
-                self.eth.permissions = true;
-            }
-            "eth-square" => {
-                self.eth.square = true;
-            }
-            "cosmos-chain-trigger-lookup" => {
-                self.cosmos.chain_trigger_lookup = true;
-            }
-            "cosmos-cosmos-query" => {
-                self.cosmos.cosmos_query = true;
-            }
-            "cosmos-echo-data" => {
-                self.cosmos.echo_data = true;
-            }
-            "cosmos-permissions" => {
-                self.cosmos.permissions = true;
-            }
-            "cosmos-square" => {
-                self.cosmos.square = true;
-            }
-            "crosschain-eth-to-cosmos-echo-data" => {
-                self.crosschain.eth_to_cosmos_echo_data = true;
-            }
-            _ => {
-                panic!("Unknown isolated test: {}", isolated);
-            }
+    pub fn eth_secondary_chain_enabled(&self) -> bool {
+        self.eth.contains(&EthService::EchoDataSecondaryChain)
+    }
+
+    pub fn eth_aggregator_chain_enabled(&self) -> bool {
+        self.eth.contains(&EthService::EchoDataAggregator)
+    }
+
+    pub fn cosmos_regular_chain_enabled(&self) -> bool {
+        self.cosmos.contains(&CosmosService::ChainTriggerLookup)
+            || self.cosmos.contains(&CosmosService::CosmosQuery)
+            || self.cosmos.contains(&CosmosService::EchoData)
+            || self.cosmos.contains(&CosmosService::Permissions)
+            || self.cosmos.contains(&CosmosService::Square)
+            || self
+                .cross_chain
+                .contains(&CrossChainService::CosmosToEthEchoData)
+    }
+}
+
+impl From<EthService> for DigestName {
+    fn from(service: EthService) -> Self {
+        match service {
+            EthService::ChainTriggerLookup => DigestName::ChainTriggerLookup,
+            EthService::CosmosQuery => DigestName::CosmosQuery,
+            EthService::EchoData => DigestName::EchoData,
+            EthService::Permissions => DigestName::Permissions,
+            EthService::Square => DigestName::Square,
+            EthService::EchoDataSecondaryChain => DigestName::EchoData,
+            EthService::EchoDataAggregator => DigestName::EchoData,
         }
     }
 }
 
-impl TestMatrixEth {
-    pub fn regular_chain_enabled(&self) -> bool {
-        self.chain_trigger_lookup
-            || self.cosmos_query
-            || self.echo_data
-            || self.permissions
-            || self.square
-            || self.echo_data_multichain // both regular _and_ secondary
-    }
-
-    pub fn secondary_chain_enabled(&self) -> bool {
-        self.echo_data_multichain
-    }
-
-    pub fn aggregator_chain_enabled(&self) -> bool {
-        self.echo_data_aggregator
+impl From<CosmosService> for DigestName {
+    fn from(service: CosmosService) -> Self {
+        match service {
+            CosmosService::ChainTriggerLookup => DigestName::ChainTriggerLookup,
+            CosmosService::CosmosQuery => DigestName::CosmosQuery,
+            CosmosService::EchoData => DigestName::EchoData,
+            CosmosService::Permissions => DigestName::Permissions,
+            CosmosService::Square => DigestName::Square,
+        }
     }
 }
 
-impl TestMatrixCosmos {
-    pub fn chain_enabled(&self) -> bool {
-        self.chain_trigger_lookup
-            || self.cosmos_query
-            || self.echo_data
-            || self.permissions
-            || self.square
+impl From<CrossChainService> for DigestName {
+    fn from(service: CrossChainService) -> Self {
+        match service {
+            CrossChainService::CosmosToEthEchoData => DigestName::EchoData,
+        }
     }
 }
 
-impl TestMatrixCrossChain {
-    pub fn eth_enabled(&self) -> bool {
-        self.eth_to_cosmos_echo_data
-    }
-    pub fn cosmos_enabled(&self) -> bool {
-        self.eth_to_cosmos_echo_data
+impl From<AnyService> for DigestName {
+    fn from(service: AnyService) -> Self {
+        match service {
+            AnyService::Eth(service) => service.into(),
+            AnyService::Cosmos(service) => service.into(),
+            AnyService::CrossChain(service) => service.into(),
+        }
     }
 }
