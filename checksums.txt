@@ -1,4 +1,4 @@
-749df9f46508b427b0eccfe46676bc3bde196af851e4856ddcc4838b18928ca4  ./examples/build/components/chain_trigger_lookup.wasm
+642bd6231dbe31043f97235cb9d7c9fa3f6b97177d0b5a5431263c21feefe991  ./examples/build/components/chain_trigger_lookup.wasm
 3ee175a098e7b83704821193ae3a2dc75a11eded28b3a493f4ca3b3bbfbb86a8  ./examples/build/components/cosmos_query.wasm
 5fc7b3edc573a0b7f3e76ecc8309551bcb07d2058064481a3329c2687958e225  ./examples/build/components/echo_data.wasm
 8723959045c442a08733a562d5086f377447ec61e37e22cb7dfa6504f0d21eeb  ./examples/build/components/echo_raw.wasm
