@@ -55,6 +55,12 @@ jobs:
       - name: Set env
         run: echo "WAVS_AGGREGATOR_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
 
+      - name: Set env
+        run: echo "WAVS_COSMOS_SUBMISSION_MNEMONIC=\"reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff\"" >> $GITHUB_ENV
+
+      - name: Set env
+        run: echo "WAVS_CLI_COSMOS_MNEMONIC=\"reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff\"" >> $GITHUB_ENV
+
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
@@ -63,7 +69,6 @@ jobs:
           args: --workspace --locked -- --nocapture
         env:
           RUST_BACKTRACE: 1
-          WAVS_LOCAL_IC_BIN_PATH: /tmp/local-ic
 
   lints:
     name: Lints
