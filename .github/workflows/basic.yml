@@ -69,6 +69,7 @@ jobs:
           args: --workspace --locked -- --nocapture
         env:
           RUST_BACKTRACE: 1
+          RUST_LOG: info
 
   lints:
     name: Lints
