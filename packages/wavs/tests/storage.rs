@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
+use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::{
     apis::{
         dispatcher::{Component, Service, ServiceStatus, Workflow},
         trigger::Trigger,
-        ComponentID, ServiceID, WorkflowID,
     },
     storage::db::{RedbStorage, Table, JSON},
     test_utils::address::rand_address_eth,

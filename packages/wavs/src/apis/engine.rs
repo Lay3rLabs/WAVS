@@ -5,10 +5,8 @@ use utils::layer_contract_client::TriggerId;
 
 use crate::{storage::CAStorageError, Digest};
 
-use super::{
-    dispatcher::{Component, ServiceConfig},
-    ComponentID, ServiceID, WorkflowID,
-};
+use super::dispatcher::{Component, ServiceConfig};
+use utils::{ComponentID, ServiceID, WorkflowID};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;

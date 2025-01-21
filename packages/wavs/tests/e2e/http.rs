@@ -1,11 +1,9 @@
 use anyhow::Result;
 use serde::{de::DeserializeOwned, Serialize};
+use utils::ServiceID;
 use wavs::apis::dispatcher::ServiceConfig;
 use wavs::{
-    apis::{
-        dispatcher::{AllowedHostPermission, Permissions, Submit},
-        ServiceID,
-    },
+    apis::dispatcher::{AllowedHostPermission, Permissions, Submit},
     config::Config,
     http::{
         handlers::service::{
@@ -100,7 +98,7 @@ impl HttpClient {
             .json(
                 &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
                     service_manager_address,
-                    service_id: service_id.to_string(),
+                    service_id,
                 },
             )
             .send()

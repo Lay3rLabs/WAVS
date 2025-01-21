@@ -8,6 +8,7 @@ use anyhow::bail;
 use utils::{
     layer_contract_client::SignedPayload,
     storage::db::{DBError, RedbStorage, Table, JSON},
+    ServiceID,
 };
 
 use crate::config::Config;
@@ -17,7 +18,7 @@ use crate::config::Config;
 // 1. maintain a count that doesn't need to load the whole thing
 // 2. re-assess to see if we need to store the whole payload
 // also, gotta move ServiceID to utils
-pub type PayloadsByServiceId = HashMap<String, Vec<SignedPayload>>;
+pub type PayloadsByServiceId = HashMap<ServiceID, Vec<SignedPayload>>;
 
 // Note: If service exists in db it's considered registered
 const PAYLOADS_BY_SERVICE_ID: Table<&str, JSON<PayloadsByServiceId>> =
@@ -67,7 +68,7 @@ impl HttpState {
     pub fn register_service(
         &self,
         service_manager: Address,
-        service_id: String,
+        service_id: ServiceID,
     ) -> anyhow::Result<()> {
         let service_manager = service_manager.to_string();
 

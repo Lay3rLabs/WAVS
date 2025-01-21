@@ -4,8 +4,8 @@ use utils::layer_contract_client::TriggerId;
 
 use crate::apis::dispatcher::{Component, ServiceConfig};
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::{ServiceID, WorkflowID};
 use crate::Digest;
+use utils::{ServiceID, WorkflowID};
 
 /// Simply returns the request as the result.
 /// MVP for just testing inputs and outputs and wiring

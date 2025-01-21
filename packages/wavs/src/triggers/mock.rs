@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::apis::trigger::{
     TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
-use crate::apis::{IDError, ServiceID, WorkflowID};
+use utils::{IDError, ServiceID, WorkflowID};
 
 use lavs_apis::id::TaskId;
 use layer_climb::prelude::Address;

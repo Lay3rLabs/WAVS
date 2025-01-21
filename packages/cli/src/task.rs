@@ -4,7 +4,7 @@ use utils::{
     eth_client::EthSigningClient,
     layer_contract_client::{LayerAddresses, LayerContractClientSimple, SignedData},
 };
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{ServiceID, WorkflowID};
 
 pub async fn add_task(
     eth_signing_client: EthSigningClient,

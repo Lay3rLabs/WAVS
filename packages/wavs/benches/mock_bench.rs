@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
+use utils::{ServiceID, WorkflowID};
 use wavs::{
-    apis::{ServiceID, WorkflowID},
     test_utils::{
         address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn},

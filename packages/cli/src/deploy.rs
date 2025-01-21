@@ -7,7 +7,7 @@ use utils::{
     eigen_client::{CoreAVSAddresses, EigenClient},
     layer_contract_client::LayerAddresses,
 };
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{ServiceID, WorkflowID};
 
 use crate::{args::Command, config::Config};
 

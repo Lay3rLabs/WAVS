@@ -4,11 +4,9 @@ use utils::{
     eth_client::{EthChainConfig, EthClientBuilder},
     layer_contract_client::{LayerContractClientFull, LayerContractClientFullBuilder},
 };
+use utils::{ServiceID, WorkflowID};
 use wavs::{
-    apis::{
-        dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
-        ServiceID, WorkflowID,
-    },
+    apis::dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
     http::{
         handlers::service::{
             add::{AddServiceRequest, ServiceRequest},

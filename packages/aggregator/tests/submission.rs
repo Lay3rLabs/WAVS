@@ -16,6 +16,7 @@ use utils::{
         layer_service_manager::ILayerServiceManager::Payload, LayerContractClientFullBuilder,
         LayerContractClientSimple,
     },
+    ServiceID,
 };
 
 #[tokio::test]
@@ -57,7 +58,7 @@ async fn submit_to_chain() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
-            service_id: "default".to_string(),
+            service_id: ServiceID::new("default").unwrap(),
         },
     )
     .await
@@ -80,7 +81,7 @@ async fn submit_to_chain() {
         state,
         signed_payload,
         avs_client.service_manager_contract_address,
-        "default".to_string(),
+        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -143,7 +144,7 @@ async fn submit_to_chain_three() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
-            service_id: "default".to_string(),
+            service_id: ServiceID::new("default").unwrap(),
         },
     )
     .await
@@ -167,7 +168,7 @@ async fn submit_to_chain_three() {
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
-        "default".to_string(),
+        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -195,7 +196,7 @@ async fn submit_to_chain_three() {
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
-        "default".to_string(),
+        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -223,7 +224,7 @@ async fn submit_to_chain_three() {
         state.clone(),
         signed_payload,
         avs_client.service_manager_contract_address,
-        "default".to_string(),
+        ServiceID::new("default").unwrap(),
     )
     .await
     .unwrap();
@@ -290,7 +291,7 @@ async fn invalid_operator_signature() {
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
             service_manager_address: avs_client.service_manager_contract_address,
-            service_id: "default".to_string(),
+            service_id: ServiceID::new("default").unwrap(),
         },
     )
     .await
@@ -317,7 +318,7 @@ async fn invalid_operator_signature() {
             state.clone(),
             invalid_operator_payload,
             avs_client.service_manager_contract_address,
-            "default".to_string(),
+            ServiceID::new("default").unwrap(),
         )
         .await
         .unwrap_err();
@@ -341,7 +342,7 @@ async fn invalid_operator_signature() {
             state,
             invalid_signature_payload,
             avs_client.service_manager_contract_address,
-            "default".to_string(),
+            ServiceID::new("default").unwrap(),
         )
         .await
         .unwrap_err();

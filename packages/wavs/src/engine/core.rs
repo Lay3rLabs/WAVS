@@ -15,9 +15,9 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::{AllowedHostPermission, ServiceConfig};
-use crate::apis::{ServiceID, WorkflowID};
 use crate::storage::{CAStorage, CAStorageError};
 use crate::{apis, bindings, Digest};
+use utils::{ServiceID, WorkflowID};
 
 use super::{Engine, EngineError};
 

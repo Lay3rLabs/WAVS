@@ -7,7 +7,7 @@ use utils::layer_contract_client::TriggerId;
 
 use crate::AppContext;
 
-use super::{IDError, ServiceID, WorkflowID};
+use utils::{IDError, ServiceID, WorkflowID};
 
 // The TriggerManager reacts to these triggers
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

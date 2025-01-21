@@ -1,9 +1,6 @@
 use crate::{
-    apis::{
-        trigger::{
-            Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
-        },
-        ServiceID, WorkflowID,
+    apis::trigger::{
+        Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
     },
     config::Config,
     AppContext,
@@ -31,6 +28,7 @@ use utils::{
         TriggerId,
     },
 };
+use utils::{ServiceID, WorkflowID};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -457,8 +455,8 @@ impl TriggerManager for CoreTriggerManager {
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_trigger(
         &self,
-        service_id: crate::apis::ServiceID,
-        workflow_id: crate::apis::WorkflowID,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
     ) -> Result<(), TriggerError> {
         let mut service_lock = self
             .lookup_maps
@@ -485,7 +483,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: crate::apis::ServiceID) -> Result<(), TriggerError> {
+    fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
         let mut all_trigger_data_lock = self.lookup_maps.all_trigger_data.write().unwrap();
         let mut triggers_by_task_queue_lock =
             self.lookup_maps.triggers_by_task_queue.write().unwrap();
@@ -514,10 +512,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn list_triggers(
-        &self,
-        service_id: crate::apis::ServiceID,
-    ) -> Result<Vec<TriggerConfig>, TriggerError> {
+    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
         let mut triggers = Vec::new();
 
         let triggers_by_service_workflow_lock = self
@@ -575,13 +570,11 @@ fn remove_trigger_data(
 #[cfg(test)]
 mod tests {
     use crate::{
-        apis::{
-            trigger::{Trigger, TriggerConfig, TriggerManager},
-            ServiceID, WorkflowID,
-        },
+        apis::trigger::{Trigger, TriggerConfig, TriggerManager},
         config::Config,
         test_utils::address::rand_address_eth,
     };
+    use utils::{ServiceID, WorkflowID};
 
     use layer_climb::prelude::*;
     use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};

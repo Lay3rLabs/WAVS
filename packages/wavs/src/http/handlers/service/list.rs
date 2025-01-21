@@ -4,16 +4,14 @@ use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    apis::{
-        dispatcher::{Permissions, ServiceStatus, Submit},
-        ServiceID,
-    },
+    apis::dispatcher::{Permissions, ServiceStatus, Submit},
     http::{
         error::HttpResult,
         state::HttpState,
         types::{ShaDigest, TriggerResponse},
     },
 };
+use utils::ServiceID;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
