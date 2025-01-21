@@ -1,3 +1,4 @@
+use anyhow::Context;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt};
 use layer_wasi::{
     bindings::{
@@ -5,7 +6,7 @@ use layer_wasi::{
         world::{host, Guest, TriggerAction},
     },
     cosmos::new_cosmos_query_client,
-    ethereum::EthereumQuerier,
+    ethereum::new_eth_provider,
     export_layer_trigger_world,
 };
 use serde::{Deserialize, Serialize};
@@ -41,9 +42,14 @@ impl Guest for Component {
                         anyhow::anyhow!("eth chain config for {chain_name} not found"),
                     )?;
 
-                    EthereumQuerier::new(chain_config, reactor)
-                        .trigger_data(contract_address.into(), trigger_id)
-                        .await?
+                    new_eth_provider(
+                        reactor,
+                        chain_config
+                            .http_endpoint
+                            .context("http_endpoint is missing")?,
+                    )
+                    .trigger_data(contract_address.into(), trigger_id)
+                    .await?
                 }
                 _ => {
                     return Err(anyhow::anyhow!("expected cosmos contract event"));

@@ -1,24 +1,26 @@
+all = true
+
 # See matrix.rs for all the available options
 
-# isolated = "eth-cosmos-query" 
+# isolated = "eth-chain-trigger-lookup" 
 
-[matrix.eth]
+# [matrix.eth]
 # chain-trigger-lookup = true
-cosmos-query = true
-echo-data = true
-echo-data-secondary-chain= true
-echo-data-aggregator = true
-permissions = true
-square = true
+# cosmos-query = true
+# echo-data = true
+# echo-data-secondary-chain= true
+# echo-data-aggregator = true
+# permissions = true
+# square = true
 
-[matrix.cosmos]
-chain-trigger-lookup = true
-cosmos-query = true
-echo-data = true
-echo-data-secondary-chain= true
-echo-data-aggregator = true
-permissions = true
-square = true
+# [matrix.cosmos]
+# chain-trigger-lookup = true
+# cosmos-query = true
+# echo-data = true
+# echo-data-secondary-chain= true
+# echo-data-aggregator = true
+# permissions = true
+# square = true
 
-[matrix.crosschain]
-cosmos-to-eth-echo-data = true
+# [matrix.crosschain]
+# cosmos-to-eth-echo-data = true

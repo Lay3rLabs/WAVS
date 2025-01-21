@@ -5,7 +5,7 @@ use example_submit::DataWithId;
 use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
 use layer_wasi::{
     bindings::compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
-    ethereum::EthereumQuerier,
+    ethereum::WasiProvider,
 };
 use serde::{Deserialize, Serialize};
 
@@ -77,25 +77,22 @@ impl ChainQuerierExt for layer_climb::prelude::QueryClient {
     }
 }
 
-impl ChainQuerierExt for EthereumQuerier {
+impl ChainQuerierExt for WasiProvider {
     // convenience helper for typical use-case of querying an ethereum event trigger
     async fn trigger_data(
         &self,
         address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>> {
-        let resp = layer_wasi::ethereum::eth_call_http_raw::<SimpleTrigger::getTriggerCall>(
-            &self.reactor,
-            self.chain_config
-                .http_endpoint
-                .as_ref()
-                .expect("http_endpoint not set"),
-            address.try_into()?,
-            (trigger_id,),
-        )
-        .await?;
+        let contract = SimpleTrigger::new(address.try_into()?, self);
 
-        Ok(resp._0.data.to_vec())
+        Ok(contract
+            .getTrigger(trigger_id)
+            .call()
+            .await?
+            ._0
+            .data
+            .to_vec())
     }
 }
 
@@ -106,6 +103,7 @@ mod example_trigger {
 
     sol!(
         #[allow(missing_docs)]
+        #[sol(rpc)]
         SimpleTrigger,
         "../../contracts/solidity/abi/SimpleTrigger.sol/SimpleTrigger.json"
     );

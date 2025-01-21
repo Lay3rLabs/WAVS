@@ -21,7 +21,7 @@ impl From<TestConfig> for Configs {
     fn from(test_config: TestConfig) -> Self {
         let matrix = test_config
             .matrix
-            .into_validated(test_config.isolated.as_deref());
+            .into_validated(test_config.all, test_config.isolated.as_deref());
 
         // ideally we want anvil to run as fast as possible, not on an interval
         // but this causes bugs when we don't have any ethereum trigger chains

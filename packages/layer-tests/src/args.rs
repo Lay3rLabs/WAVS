@@ -16,6 +16,11 @@ pub struct TestArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub isolated: Option<String>,
+
+    /// Run all tests
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub all: Option<bool>,
 }
 
 impl CliEnvExt for TestArgs {

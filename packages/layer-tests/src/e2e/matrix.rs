@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use derive_enum_all_values::AllValues;
+
 use super::digests::DigestName;
 
 #[derive(Clone, Debug, Default)]
@@ -9,7 +11,7 @@ pub struct TestMatrix {
     pub cross_chain: HashSet<CrossChainService>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum EthService {
     ChainTriggerLookup,
     CosmosQuery,
@@ -20,7 +22,7 @@ pub enum EthService {
     Square,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum CosmosService {
     ChainTriggerLookup,
     CosmosQuery,
@@ -29,7 +31,7 @@ pub enum CosmosService {
     Square,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum CrossChainService {
     CosmosToEthEchoData,
 }

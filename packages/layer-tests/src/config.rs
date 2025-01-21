@@ -15,6 +15,7 @@ use crate::e2e::matrix::{AnyService, CosmosService, CrossChainService, EthServic
 pub struct TestConfig {
     pub matrix: TestMatrixConfig,
     pub isolated: Option<String>,
+    pub all: Option<bool>,
     _log_levels: Vec<String>,
     _data_dir: PathBuf,
 }
@@ -45,6 +46,7 @@ impl Default for TestConfig {
                 .collect(),
             _data_dir: tempfile::tempdir().unwrap().into_path(),
             isolated: None,
+            all: None,
         }
     }
 }
@@ -85,23 +87,42 @@ pub struct TestMatrixCrossChainConfig {
 }
 
 impl TestMatrixConfig {
-    pub fn into_validated(self, isolated: Option<&str>) -> TestMatrix {
+    pub fn into_validated(self, all: Option<bool>, isolated: Option<&str>) -> TestMatrix {
         let mut matrix = TestMatrix::default();
 
-        if let Some(isolated) = isolated {
-            match AnyService::from(isolated) {
-                AnyService::Eth(service) => {
-                    matrix.eth.insert(service);
+        match (all, isolated) {
+            (Some(true), Some(_)) => {
+                panic!("Cannot specify both --all and --isolated");
+            }
+            (Some(true), _) => {
+                for service in EthService::all_values() {
+                    matrix.eth.insert(*service);
                 }
-                AnyService::Cosmos(service) => {
-                    matrix.cosmos.insert(service);
+
+                for service in CosmosService::all_values() {
+                    matrix.cosmos.insert(*service);
                 }
-                AnyService::CrossChain(service) => {
-                    matrix.cross_chain.insert(service);
+
+                for service in CrossChainService::all_values() {
+                    matrix.cross_chain.insert(*service);
                 }
             }
+            (_, Some(isolated)) => {
+                match AnyService::from(isolated) {
+                    AnyService::Eth(service) => {
+                        matrix.eth.insert(service);
+                    }
+                    AnyService::Cosmos(service) => {
+                        matrix.cosmos.insert(service);
+                    }
+                    AnyService::CrossChain(service) => {
+                        matrix.cross_chain.insert(service);
+                    }
+                }
 
-            return matrix;
+                return matrix;
+            }
+            _ => {}
         }
 
         if self.eth.chain_trigger_lookup {

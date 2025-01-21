@@ -1,6 +1,4 @@
 mod event;
-mod http;
-mod query;
+mod provider;
 pub use event::*;
-pub use http::*;
-pub use query::*;
+pub use provider::*;
