@@ -253,8 +253,8 @@ mod tests {
     use apis::{
         dispatcher::ServiceConfig,
         trigger::{Trigger, TriggerConfig, TriggerData},
-        ServiceID, WorkflowID,
     };
+    use utils::{ServiceID, WorkflowID};
 
     use crate::{engine::mock::mock_chain_configs, storage::memory::MemoryStorage};
 

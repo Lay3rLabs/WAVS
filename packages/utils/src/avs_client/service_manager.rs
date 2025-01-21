@@ -45,7 +45,7 @@ impl ServiceManagerClient {
     ) -> Result<()> {
         // EIP-1559 has a default 30m gas limit per block without override. Else:
         // 'a intrinsic gas too high -- tx.gas_limit > env.block.gas_limit' is thrown
-        let gas = gas.unwrap_or(1000_000).min(30_000_000);
+        let gas = gas.unwrap_or(1_000_000).min(30_000_000);
         tracing::debug!("Adding signed payload with gas {}", gas);
 
         let result = self

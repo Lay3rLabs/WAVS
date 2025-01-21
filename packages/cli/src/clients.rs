@@ -14,7 +14,6 @@ use wavs::{
     apis::{
         dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
         trigger::Trigger,
-        ServiceID, WorkflowID,
     },
     http::handlers::service::{
         add::{AddServiceRequest, ServiceRequest},

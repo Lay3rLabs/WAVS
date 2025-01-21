@@ -4,7 +4,6 @@ use alloy::primitives::Address;
 use utils::{
     avs_client::SignedPayload,
     storage::db::{DBError, RedbStorage, Table, JSON},
-    ServiceID,
 };
 
 use crate::config::Config;

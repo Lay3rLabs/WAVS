@@ -4,7 +4,6 @@ use std::time::Duration;
 use crate::apis::trigger::{
     Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
-use crate::apis::{IDError, ServiceID, WorkflowID};
 use crate::test_utils::address::{
     rand_address_eth, rand_address_layer, rand_event_cosmos, rand_event_eth,
 };
@@ -14,6 +13,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
+use utils::{IDError, ServiceID, WorkflowID};
 
 pub fn mock_eth_event_trigger_config(
     service_id: impl TryInto<ServiceID, Error = IDError>,

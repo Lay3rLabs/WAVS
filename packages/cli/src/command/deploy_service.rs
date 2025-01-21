@@ -1,11 +1,8 @@
 use anyhow::{Context, Result};
 use rand::rngs::OsRng;
 use std::{collections::HashMap, path::PathBuf};
-use utils::{avs_client::AvsClientDeployer, filesystem::workspace_path};
-use wavs::{
-    apis::{dispatcher::ServiceConfig, ServiceID, WorkflowID},
-    Digest,
-};
+use utils::{avs_client::AvsClientDeployer, filesystem::workspace_path, ServiceID, WorkflowID};
+use wavs::{apis::dispatcher::ServiceConfig, Digest};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},

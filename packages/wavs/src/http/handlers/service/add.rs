@@ -155,7 +155,6 @@ mod test {
         apis::{
             dispatcher::{Permissions, ServiceConfig, Submit},
             trigger::Trigger,
-            ServiceID,
         },
         test_utils::address::rand_address_eth,
         Digest,

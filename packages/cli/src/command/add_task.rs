@@ -1,8 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use utils::avs_client::SignedData;
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{avs_client::SignedData, ServiceID, WorkflowID};
 
 use crate::{
     clients::{

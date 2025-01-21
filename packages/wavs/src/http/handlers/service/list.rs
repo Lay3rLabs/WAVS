@@ -7,7 +7,6 @@ use crate::{
     apis::{
         dispatcher::{Permissions, ServiceStatus},
         trigger::Trigger,
-        ServiceID,
     },
     http::{error::HttpResult, state::HttpState, types::ShaDigest},
 };

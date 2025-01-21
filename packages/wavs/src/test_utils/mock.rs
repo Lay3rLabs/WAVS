@@ -6,7 +6,6 @@ use crate::{
         dispatcher::{DispatchManager, Permissions, ServiceConfig, Submit},
         engine::EngineError,
         trigger::TriggerData,
-        ServiceID,
     },
     dispatcher::Dispatcher,
     engine::{

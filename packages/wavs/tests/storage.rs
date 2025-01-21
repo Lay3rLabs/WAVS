@@ -2,10 +2,7 @@ use std::collections::BTreeMap;
 
 use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::{
-    apis::{
-        dispatcher::{Component, Service, ServiceStatus, Submit, Workflow},
-        ComponentID, ServiceID, WorkflowID,
-    },
+    apis::dispatcher::{Component, Service, ServiceStatus, Submit, Workflow},
     storage::db::{RedbStorage, Table, JSON},
     triggers::mock::mock_eth_event_trigger,
     Digest,

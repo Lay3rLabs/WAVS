@@ -228,7 +228,7 @@ impl CoreSubmission {
                     }
                     .into_submission_abi(),
                 )
-                .gas(max_gas.unwrap_or(1000_000).min(30_000_000))
+                .gas(max_gas.unwrap_or(1_000_000).min(30_000_000))
                 .send()
                 .await
                 .map_err(|e| SubmissionError::FailedToSubmitEthDirect(anyhow!("{}", e)))?

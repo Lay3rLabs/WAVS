@@ -5,7 +5,6 @@ use crate::apis::engine::{Engine, EngineError};
 use crate::apis::trigger::TriggerAction;
 use crate::triggers::mock::get_mock_trigger_data;
 use crate::Digest;
-use utils::{ServiceID, WorkflowID};
 
 /// Simply returns the request as the result.
 /// MVP for just testing inputs and outputs and wiring

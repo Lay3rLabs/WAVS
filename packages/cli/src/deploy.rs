@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{avs_client::AvsAddresses, eigen_client::CoreAVSAddresses};
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{avs_client::AvsAddresses, eigen_client::CoreAVSAddresses, ServiceID, WorkflowID};
 
 use crate::config::Config;
 

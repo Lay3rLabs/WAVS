@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use crate::deploy::ServiceInfo;
 use anyhow::Result;
 use serde::Serialize;
-use utils::{avs_client::SignedData, eigen_client::CoreAVSAddresses};
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{avs_client::SignedData, eigen_client::CoreAVSAddresses, ServiceID, WorkflowID};
 
 #[derive(Debug, Default)]
 pub struct DisplayBuilder {

@@ -11,8 +11,7 @@ use crate::{
 use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
-use utils::{config::AnyChainConfig, eigen_client::EigenClient};
-use wavs::apis::{ServiceID, WorkflowID};
+use utils::{config::AnyChainConfig, eigen_client::EigenClient, ServiceID, WorkflowID};
 
 use crate::{args::Command, deploy::Deployment};
 

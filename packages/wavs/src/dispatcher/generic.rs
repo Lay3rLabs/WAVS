@@ -320,7 +320,6 @@ mod tests {
             dispatcher::{Component, ServiceStatus, Submit},
             submission::ChainMessage,
             trigger::TriggerData,
-            ComponentID, WorkflowID,
         },
         engine::{
             identity::IdentityEngine,

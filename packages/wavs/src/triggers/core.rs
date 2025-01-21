@@ -19,7 +19,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
+use utils::{config::AnyChainConfig, eth_client::EthClientBuilder, ServiceID, WorkflowID};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -428,7 +428,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: crate::apis::ServiceID) -> Result<(), TriggerError> {
+    fn remove_service(&self, service_id: utils::ServiceID) -> Result<(), TriggerError> {
         let mut trigger_configs = self.lookup_maps.trigger_configs.write().unwrap();
         let mut triggers_by_eth_contract_event = self
             .lookup_maps
