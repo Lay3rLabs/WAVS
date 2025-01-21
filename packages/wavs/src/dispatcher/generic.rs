@@ -381,6 +381,7 @@ mod tests {
                     submit: Some(Submit::eth_aggregator_tx(
                         "eth".to_string(),
                         service_manager_addr.clone(),
+                        None,
                     )),
                 },
             )]
@@ -402,7 +403,7 @@ mod tests {
             trigger_config: action.config,
             wasm_result: payload.into(),
             trigger_id: TriggerId::new(2),
-            submit: Submit::eth_aggregator_tx("eth".to_string(), service_manager_addr),
+            submit: Submit::eth_aggregator_tx("eth".to_string(), service_manager_addr, None),
         };
         assert_eq!(processed[0], expected);
     }
@@ -468,6 +469,7 @@ mod tests {
                     submit: Some(Submit::eth_aggregator_tx(
                         "eth".to_string(),
                         rand_address_eth(),
+                        None,
                     )),
                 },
             )]
@@ -548,6 +550,7 @@ mod tests {
                     submit: Some(Submit::eth_aggregator_tx(
                         "eth".to_string(),
                         rand_address_eth(),
+                        None,
                     )),
                 },
             )]

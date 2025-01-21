@@ -363,6 +363,7 @@ mod tests {
             fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
+            max_gas: None,
         };
 
         // verify service config kv is accessible

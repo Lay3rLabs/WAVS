@@ -276,6 +276,7 @@ mod e2e {
                             chain_name: chain_name.to_string(),
                             hd_index: 0,
                             service_manager_addr: avs_service_manager_addr.clone(),
+                            max_gas: None,
                         },
                     )
                     .await

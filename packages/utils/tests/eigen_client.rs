@@ -64,6 +64,7 @@ async fn deploy_layer_avs() {
                 .sign_payload(trigger.trigger_id, trigger.data)
                 .await
                 .unwrap(),
+            None,
         )
         .await
         .unwrap();
@@ -93,6 +94,7 @@ async fn deploy_layer_avs() {
                 .sign_payload(trigger.trigger_id, trigger.data)
                 .await
                 .unwrap(),
+            None,
         )
         .await
         .unwrap();
