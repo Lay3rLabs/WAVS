@@ -131,11 +131,12 @@ impl HttpClient {
             },
         };
 
-        let id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?;
+        let service_id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?;
+        let workflow_id = config.workflow_id.clone();
 
         let service = ServiceRequest {
             trigger,
-            id: id.clone(),
+            id: service_id.clone(),
             digest: digest.into(),
             permissions: Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,
@@ -159,7 +160,6 @@ impl HttpClient {
             .await?
             .error_for_status()?;
 
-        // for now, this is always the WorkflowID - see http service add
-        Ok((id, WorkflowID::new("default")?))
+        Ok((service_id, workflow_id))
     }
 }

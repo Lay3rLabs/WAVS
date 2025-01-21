@@ -41,7 +41,7 @@ impl AddTask {
         let service_id = ServiceID::new(service_id)?;
         let workflow_id = match workflow_id {
             Some(workflow_id) => WorkflowID::new(workflow_id)?,
-            None => WorkflowID::new("default")?,
+            None => WorkflowID::default(),
         };
 
         let service = match deployment.services.get(&service_id) {

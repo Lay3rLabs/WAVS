@@ -254,7 +254,7 @@ mod tests {
         dispatcher::ServiceConfig,
         trigger::{Trigger, TriggerConfig, TriggerData},
     };
-    use utils::{ServiceID, WorkflowID};
+    use utils::{ComponentID, ServiceID, WorkflowID};
 
     use crate::{engine::mock::mock_chain_configs, storage::memory::MemoryStorage};
 
@@ -315,7 +315,7 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id: WorkflowID::new("default").unwrap(),
+                        workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
@@ -344,7 +344,7 @@ mod tests {
             kv: vec![("foo".to_string(), "bar".to_string())],
             max_gas: None,
             component_id: ComponentID::default(),
-            workflow_id: workflow_id.clone(),
+            workflow_id: WorkflowID::default(),
         };
 
         // verify service config kv is accessible
@@ -354,7 +354,7 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id: &workflow_id,
+                        workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:foo"#),
@@ -372,7 +372,7 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id: &workflow_id,
+                        workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
@@ -390,7 +390,7 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id: &workflow_id,
+                        workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
@@ -424,7 +424,7 @@ mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
-                        workflow_id: &workflow_id,
+                        workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
