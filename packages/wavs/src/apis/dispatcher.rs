@@ -112,11 +112,15 @@ pub enum Submit {
 }
 
 impl Submit {
-    pub fn eigen_contract(chain_name: String, service_manager: Address, max_gas: Option<u64>) -> Self {
+    pub fn eigen_contract(
+        chain_name: String,
+        service_manager: Address,
+        max_gas: Option<u64>,
+    ) -> Self {
         Submit::EigenContract {
             chain_name,
             service_manager,
-            max_gas
+            max_gas,
         }
     }
 }

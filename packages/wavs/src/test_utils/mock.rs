@@ -128,7 +128,11 @@ impl MockE2ETestRunner {
                 permissions,
                 config: config.clone(),
                 testable: None,
-                submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), config.max_gas),
+                submit: Submit::eigen_contract(
+                    "eth".to_string(),
+                    rand_address_eth(),
+                    config.max_gas,
+                ),
             },
             wasm_url: None,
         })

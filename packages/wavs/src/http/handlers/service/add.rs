@@ -73,6 +73,7 @@ async fn add_service_inner(
             Submit::EigenContract {
                 chain_name,
                 service_manager,
+                max_gas: _,
             } => {
                 let chain_config = state
                     .config

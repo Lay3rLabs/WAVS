@@ -377,7 +377,11 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract("eth".to_string(), service_manager_addr.clone(), None),
+                    submit: Submit::eigen_contract(
+                        "eth".to_string(),
+                        service_manager_addr.clone(),
+                        None,
+                    ),
                 },
             )]
             .into(),
