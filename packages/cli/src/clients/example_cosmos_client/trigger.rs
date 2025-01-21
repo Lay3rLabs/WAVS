@@ -1,7 +1,8 @@
 use anyhow::Result;
 use cosmwasm_std::{Empty, Uint64};
 use layer_climb::prelude::*;
-use simple_example_cosmos::{entry::execute::ExecuteMsg, event::NewMessageEvent};
+use simple_example_cosmos::entry::execute::ExecuteMsg;
+pub use simple_example_cosmos::event::NewMessageEvent;
 
 #[derive(Clone)]
 pub struct SimpleCosmosTriggerClient {

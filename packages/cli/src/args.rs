@@ -34,8 +34,12 @@ pub enum Command {
         component: PathBuf,
 
         /// The kind of trigger to deploy
-        #[clap(long, default_value_t = CliTriggerKind::SimpleEthContract)]
+        #[clap(long, default_value_t = CliTriggerKind::EthContractEvent)]
         trigger: CliTriggerKind,
+
+        /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
+        #[clap(long)]
+        trigger_event_name: Option<String>,
 
         /// The chain to deploy the trigger on, if applicable
         #[clap(long, default_value = "local")]
@@ -99,15 +103,15 @@ pub enum Command {
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum CliTriggerKind {
-    SimpleEthContract,
-    SimpleCosmosContract,
+    EthContractEvent,
+    CosmosContractEvent,
 }
 
 impl std::fmt::Display for CliTriggerKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::SimpleEthContract => write!(f, "simple-eth-contract"),
-            Self::SimpleCosmosContract => write!(f, "simple-cosmos-contract"),
+            Self::EthContractEvent => write!(f, "eth-contract-event"),
+            Self::CosmosContractEvent => write!(f, "cosmos-contract-event"),
         }
     }
 }
@@ -117,8 +121,8 @@ impl std::str::FromStr for CliTriggerKind {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "simple-eth-contract" => Ok(Self::SimpleEthContract),
-            "simple-cosmos-contract" => Ok(Self::SimpleCosmosContract),
+            "eth-contract-event" => Ok(Self::EthContractEvent),
+            "cosmos-contract-event" => Ok(Self::CosmosContractEvent),
             _ => Err(format!("unknown trigger kind: {}", s)),
         }
     }

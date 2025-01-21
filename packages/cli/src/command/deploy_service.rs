@@ -28,6 +28,7 @@ pub struct DeployServiceArgs {
     pub register_operator: bool,
     pub component: ComponentSource,
     pub trigger: CliTriggerKind,
+    pub trigger_event_name: Option<String>,
     pub trigger_chain: Option<String>,
     pub cosmos_trigger_code_id: Option<u64>,
     pub submit: CliSubmitKind,
@@ -47,6 +48,7 @@ impl DeployService {
             register_operator,
             component,
             trigger,
+            trigger_event_name,
             trigger_chain,
             cosmos_trigger_code_id,
             submit,
@@ -57,21 +59,30 @@ impl DeployService {
         let deployment = ctx.deployment.lock().unwrap().clone();
 
         let trigger_info: ServiceTriggerInfo = match trigger {
-            CliTriggerKind::SimpleEthContract => {
+            CliTriggerKind::EthContractEvent => {
                 let chain_name = trigger_chain.context("must have trigger chain for contract")?;
+                let trigger_event_name =
+                    trigger_event_name.context("must have trigger event name")?;
 
+                // for right now we just use our hardcoded simple contract
                 let address = SimpleEthTriggerClient::deploy(
                     ctx.get_eth_client(&chain_name)?.eth.provider.clone(),
                 )
                 .await?;
 
+                let mut event_hash: [u8; 32] = [0; 32];
+                event_hash.copy_from_slice(&hex::decode(trigger_event_name)?);
+
                 ServiceTriggerInfo::EthSimpleContract {
                     chain_name,
                     address: address.into(),
+                    event_hash,
                 }
             }
-            CliTriggerKind::SimpleCosmosContract => {
+            CliTriggerKind::CosmosContractEvent => {
                 let chain_name = trigger_chain.context("must have trigger chain for contract")?;
+                let trigger_event_name =
+                    trigger_event_name.context("must have trigger event name")?;
 
                 let signing_client = ctx.get_cosmos_client(&chain_name)?;
 
@@ -101,6 +112,7 @@ impl DeployService {
                 ServiceTriggerInfo::CosmosSimpleContract {
                     chain_name,
                     address,
+                    event_type: trigger_event_name,
                 }
             }
         };

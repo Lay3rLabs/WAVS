@@ -67,6 +67,7 @@ async fn main() {
             submit,
             submit_chain,
             service_config,
+            trigger_event_name,
             args: _,
         } => {
             let res = DeployService::run(
@@ -75,6 +76,7 @@ async fn main() {
                     register_operator,
                     component: ComponentSource::Path(component),
                     trigger,
+                    trigger_event_name,
                     trigger_chain,
                     cosmos_trigger_code_id,
                     submit,

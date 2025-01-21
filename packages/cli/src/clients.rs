@@ -102,19 +102,23 @@ impl HttpClient {
             ServiceTriggerInfo::EthSimpleContract {
                 chain_name,
                 address,
-            } => Trigger::eth_contract_event(
-                address,
-                chain_name,
-                *example_eth_client::example_trigger::SimpleTrigger::NewTrigger::SIGNATURE_HASH,
-            ),
+                event_hash,
+            } => {
+                if event_hash != *example_eth_client::example_trigger::SimpleTrigger::NewTrigger::SIGNATURE_HASH {
+                        tracing::warn!("for right now, we always use a specific event hash... odd for it to be different!");
+                    }
+                Trigger::eth_contract_event(address, chain_name, event_hash)
+            }
             ServiceTriggerInfo::CosmosSimpleContract {
                 chain_name,
                 address,
-            } => Trigger::cosmos_contract_event(
-                address,
-                chain_name,
-                simple_example_cosmos::event::NewMessageEvent::KEY,
-            ),
+                event_type,
+            } => {
+                if event_type != simple_example_cosmos::event::NewMessageEvent::KEY {
+                    tracing::warn!("for right now, we always use a specific event type... odd for it to be different!");
+                }
+                Trigger::cosmos_contract_event(address, chain_name, event_type)
+            }
         };
 
         let submit = match service_info.submit {

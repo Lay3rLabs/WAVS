@@ -25,11 +25,13 @@ pub struct ServiceInfo {
 pub enum ServiceTriggerInfo {
     EthSimpleContract {
         chain_name: String,
+        event_hash: [u8; 32],
         address: layer_climb::prelude::Address,
     },
 
     CosmosSimpleContract {
         chain_name: String,
+        event_type: String,
         address: layer_climb::prelude::Address,
     },
 }
@@ -69,25 +71,14 @@ impl Deployment {
         &self,
         service_id: &ServiceID,
         workflow_id: Option<&WorkflowID>,
-    ) -> Option<(String, layer_climb::prelude::Address)> {
+    ) -> Option<ServiceTriggerInfo> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
             Some(workflow_id) => service.get(workflow_id)?,
             None => service.values().next()?,
         };
 
-        let any_trigger_info = workflow.trigger.clone();
-
-        match any_trigger_info {
-            ServiceTriggerInfo::EthSimpleContract {
-                chain_name,
-                address,
-            } => Some((chain_name, address)),
-            ServiceTriggerInfo::CosmosSimpleContract {
-                chain_name,
-                address,
-            } => Some((chain_name, address)),
-        }
+        Some(workflow.trigger.clone())
     }
 
     // for now - all of our submits use the same pattern of chain+avs_addresses

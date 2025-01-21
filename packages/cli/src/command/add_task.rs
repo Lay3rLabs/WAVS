@@ -70,6 +70,7 @@ impl AddTask {
             ServiceTriggerInfo::EthSimpleContract {
                 chain_name,
                 address,
+                event_hash: _,
             } => {
                 let client = SimpleEthTriggerClient::new(
                     ctx.get_eth_client(&chain_name)?.eth,
@@ -80,6 +81,7 @@ impl AddTask {
             ServiceTriggerInfo::CosmosSimpleContract {
                 chain_name,
                 address,
+                event_type: _,
             } => {
                 let client =
                     SimpleCosmosTriggerClient::new(ctx.get_cosmos_client(&chain_name)?, address);

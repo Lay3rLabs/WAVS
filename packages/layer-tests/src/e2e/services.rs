@@ -6,6 +6,7 @@ use super::{
     digests::Digests,
     matrix::{AnyService, CrossChainService, EthService},
 };
+use alloy::sol_types::SolEvent;
 use utils::{context::AppContext, eigen_client::CoreAVSAddresses};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -94,11 +95,20 @@ async fn deploy_service(
     let digest = digests.lookup.get(&service.into()).unwrap().clone();
 
     let trigger = match service {
-        AnyService::Eth(_) => CliTriggerKind::SimpleEthContract,
-        AnyService::Cosmos(_) => CliTriggerKind::SimpleCosmosContract,
+        AnyService::Eth(_) => CliTriggerKind::EthContractEvent,
+        AnyService::Cosmos(_) => CliTriggerKind::CosmosContractEvent,
         AnyService::CrossChain(service) => match service {
-            CrossChainService::CosmosToEthEchoData => CliTriggerKind::SimpleEthContract,
+            CrossChainService::CosmosToEthEchoData => CliTriggerKind::CosmosContractEvent,
         },
+    };
+
+    let trigger_event_name = match trigger {
+        CliTriggerKind::EthContractEvent => Some(hex::encode(
+            wavs_cli::clients::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH,
+        )),
+        CliTriggerKind::CosmosContractEvent => {
+            Some(wavs_cli::clients::example_cosmos_client::NewMessageEvent::KEY.to_string())
+        }
     };
 
     let submit = match service {
@@ -106,20 +116,20 @@ async fn deploy_service(
     };
 
     let trigger_chain = match trigger {
-        CliTriggerKind::SimpleEthContract => match service {
+        CliTriggerKind::EthContractEvent => match service {
             AnyService::Eth(EthService::EchoDataAggregator) => {
                 Some(chain_names.eth_aggregator[0].clone())
             }
             AnyService::Eth(EthService::EchoDataSecondaryChain) => Some(chain_names.eth[1].clone()),
             _ => Some(chain_names.eth[0].clone()),
         },
-        CliTriggerKind::SimpleCosmosContract => Some(chain_names.cosmos[0].clone()),
+        CliTriggerKind::CosmosContractEvent => Some(chain_names.cosmos[0].clone()),
     };
 
     let submit_chain = match submit {
         CliSubmitKind::SimpleEthContract => match trigger {
-            CliTriggerKind::SimpleEthContract => trigger_chain.clone(), // not strictly necessary, just easier to reason about same-chain
-            CliTriggerKind::SimpleCosmosContract => Some(chain_names.eth[0].clone()), // always eth for now
+            CliTriggerKind::EthContractEvent => trigger_chain.clone(), // not strictly necessary, just easier to reason about same-chain
+            CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()), // always eth for now
         },
     };
 
@@ -141,6 +151,7 @@ async fn deploy_service(
             component: ComponentSource::Digest(digest),
             trigger,
             trigger_chain,
+            trigger_event_name,
             cosmos_trigger_code_id: None,
             submit,
             submit_chain,

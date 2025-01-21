@@ -6,6 +6,7 @@ use std::{
 use crate::{
     clients::{get_cosmos_client, get_eigen_client},
     config::Config,
+    deploy::ServiceTriggerInfo,
 };
 use alloy::providers::Provider;
 use anyhow::{Context, Result};
@@ -64,16 +65,24 @@ impl CliContext {
                 let service_id = ServiceID::new(service_id)?;
                 let workflow_id = workflow_id.as_ref().map(WorkflowID::new).transpose()?;
 
-                if let Some((chain, _)) =
+                if let Some(trigger_info) =
                     deployment.get_trigger_info(&service_id, workflow_id.as_ref())
                 {
-                    chains.insert(chain);
+                    let chain_name = match trigger_info {
+                        ServiceTriggerInfo::EthSimpleContract { chain_name, .. } => {
+                            chain_name.clone()
+                        }
+                        ServiceTriggerInfo::CosmosSimpleContract { chain_name, .. } => {
+                            chain_name.clone()
+                        }
+                    };
+                    chains.insert(chain_name);
                 }
 
-                if let Some((chain, _)) =
+                if let Some((chain_name, _)) =
                     deployment.get_submit_info(&service_id, workflow_id.as_ref())
                 {
-                    chains.insert(chain);
+                    chains.insert(chain_name);
                 }
             }
             Command::Exec { .. } => {}
