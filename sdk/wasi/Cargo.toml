@@ -11,6 +11,7 @@ publish = false
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+layer-climb = { workspace = true }
 layer-climb-proto = { workspace = true }
 layer-climb-address = { workspace = true }
 layer-climb-config = { workspace = true }
@@ -25,7 +26,9 @@ cosmwasm-std = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = {workspace = true }
 alloy-rpc-types = {workspace = true }
-alloy-json-rpc = "0.9.2"
+alloy-json-rpc = {workspace = true} 
+async-trait = {workspace = true} 
+cfg-if = {workspace = true} 
 
 [lib]
 crate-type = ["rlib", "cdylib"]

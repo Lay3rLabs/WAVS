@@ -12,7 +12,7 @@ alloy-rlp = {workspace = true}
 alloy-primitives = {workspace = true}
 alloy-sol-macro = {workspace = true}
 alloy-sol-types = {workspace = true}
-layer-climb-address = {workspace = true}
+layer-climb = {workspace = true}
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

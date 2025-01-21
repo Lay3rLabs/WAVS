@@ -3,7 +3,7 @@ use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use layer_climb_address::Address;
 use layer_wasi::{
     bindings::world::{host, Guest, TriggerAction},
-    cosmos::CosmosQuerier,
+    cosmos::new_cosmos_query_client,
     export_layer_trigger_world,
 };
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ impl Guest for Component {
                 CosmosQueryRequest::BlockHeight { chain_name } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = CosmosQuerier::new(chain_config, reactor);
+                    let querier = new_cosmos_query_client(chain_config, reactor).await?;
 
                     querier
                         .block_height()
@@ -36,12 +36,15 @@ impl Guest for Component {
                 } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = CosmosQuerier::new(chain_config, reactor);
+                    let querier = new_cosmos_query_client(chain_config, reactor).await?;
 
-                    querier.balance(&address).await.map(|coin| match coin {
-                        Some(coin) => CosmosQueryResponse::Balance(coin.amount),
-                        None => CosmosQueryResponse::Balance("0".to_string()),
-                    })
+                    querier
+                        .balance(address, None)
+                        .await
+                        .map(|amount| match amount {
+                            Some(amount) => CosmosQueryResponse::Balance(amount.to_string()),
+                            None => CosmosQueryResponse::Balance("0".to_string()),
+                        })
                 }
             }?;
 

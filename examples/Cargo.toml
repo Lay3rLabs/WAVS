@@ -35,9 +35,10 @@ alloy-rlp = {version = "0.3.10", features = ["derive"]}
 alloy-primitives = "0.8.15"
 alloy-sol-macro = {version = "0.8.15", features = ["json"]}
 alloy-sol-types = "0.8.15"
-layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.1" }
-layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.1" }
-layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.1" }
+layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
+layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
+layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
+layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
 tendermint-rpc = "0.40.1"
 tendermint = { version = "0.40.1", default-features = false}
 wstd = "0.4.0"

@@ -3901,8 +3901,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.3.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.1#95032987696b5d4ed7ae7a982a1ebb89840c1403"
+version = "0.3.3"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.3#7be72a07f6878c25dfd194b8a5470eb225904d6e"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -3912,8 +3912,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.3.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.1#95032987696b5d4ed7ae7a982a1ebb89840c1403"
+version = "0.3.3"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.3#7be72a07f6878c25dfd194b8a5470eb225904d6e"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -3939,8 +3939,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.3.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.1#95032987696b5d4ed7ae7a982a1ebb89840c1403"
+version = "0.3.3"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.3#7be72a07f6878c25dfd194b8a5470eb225904d6e"
 dependencies = [
  "anyhow",
  "serde",
@@ -3949,8 +3949,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.3.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.1#95032987696b5d4ed7ae7a982a1ebb89840c1403"
+version = "0.3.3"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.3#7be72a07f6878c25dfd194b8a5470eb225904d6e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3983,8 +3983,8 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.3.1"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.1#95032987696b5d4ed7ae7a982a1ebb89840c1403"
+version = "0.3.3"
+source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.3#7be72a07f6878c25dfd194b8a5470eb225904d6e"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto 0.25.0",
@@ -4052,7 +4052,10 @@ dependencies = [
  "alloy-rpc-types 0.9.2",
  "alloy-sol-types",
  "anyhow",
+ "async-trait",
+ "cfg-if",
  "cosmwasm-std",
+ "layer-climb",
  "layer-climb-address",
  "layer-climb-config",
  "layer-climb-proto",

@@ -124,10 +124,15 @@ impl CosmosInstance {
 
     pub fn wait_for_block(&self, ctx: AppContext) {
         ctx.rt.block_on(async {
-            let query_client =
-                QueryClient::new(self.chain_config.clone(), Some(ConnectionMode::Rpc))
-                    .await
-                    .unwrap();
+            let query_client = QueryClient::new(
+                self.chain_config.clone(),
+                Some(Connection {
+                    preferred_mode: Some(ConnectionMode::Rpc),
+                    ..Default::default()
+                }),
+            )
+            .await
+            .unwrap();
 
             tokio::time::timeout(std::time::Duration::from_secs(10), async {
                 loop {

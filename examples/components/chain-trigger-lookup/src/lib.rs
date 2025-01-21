@@ -4,7 +4,7 @@ use layer_wasi::{
         compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
         world::{host, Guest, TriggerAction},
     },
-    cosmos::CosmosQuerier,
+    cosmos::new_cosmos_query_client,
     ethereum::EthereumQuerier,
     export_layer_trigger_world,
 };
@@ -27,7 +27,8 @@ impl Guest for Component {
                         anyhow::anyhow!("cosmos chain config for {chain_name} not found"),
                     )?;
 
-                    CosmosQuerier::new(chain_config, reactor)
+                    new_cosmos_query_client(chain_config, reactor)
+                        .await?
                         .trigger_data(contract_address.into(), trigger_id)
                         .await?
                 }

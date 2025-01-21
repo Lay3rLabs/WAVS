@@ -2,14 +2,9 @@
 use alloy_sol_types::SolValue;
 use anyhow::Result;
 use example_submit::DataWithId;
-use example_trigger::{
-    NewTrigger,
-    SimpleTrigger::{self, SimpleTriggerCalls},
-    TriggerInfo,
-};
+use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
 use layer_wasi::{
     bindings::compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
-    cosmos::CosmosQuerier,
     ethereum::EthereumQuerier,
 };
 use serde::{Deserialize, Serialize};
@@ -44,26 +39,27 @@ pub fn encode_trigger_output(trigger_id: u64, output: impl AsRef<[u8]>) -> Vec<u
 pub trait ChainQuerierExt {
     async fn trigger_data(
         &self,
-        address: layer_climb_address::Address,
+        address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>>;
 }
 
-impl ChainQuerierExt for CosmosQuerier {
+//new_cosmos_query_client
+impl ChainQuerierExt for layer_climb::prelude::QueryClient {
     // on Cosmos, the contract *must* implement a handler for the QueryMsg::TriggerData variant
     async fn trigger_data(
         &self,
-        address: layer_climb_address::Address,
+        address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>> {
-        #[derive(Serialize)]
+        #[derive(Serialize, Debug)]
         #[serde(rename_all = "snake_case")]
         enum QueryMsg {
             TriggerData { trigger_id: String },
         }
 
         // The response from the contract query
-        #[derive(Deserialize)]
+        #[derive(Deserialize, Debug)]
         struct TriggerDataResp {
             pub data: Vec<u8>,
         }
@@ -71,7 +67,7 @@ impl ChainQuerierExt for CosmosQuerier {
         let resp: TriggerDataResp = self
             .contract_smart(
                 &address,
-                QueryMsg::TriggerData {
+                &QueryMsg::TriggerData {
                     trigger_id: trigger_id.to_string(),
                 },
             )
@@ -85,7 +81,7 @@ impl ChainQuerierExt for EthereumQuerier {
     // convenience helper for typical use-case of querying an ethereum event trigger
     async fn trigger_data(
         &self,
-        address: layer_climb_address::Address,
+        address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>> {
         let resp = layer_wasi::ethereum::eth_call_http_raw::<SimpleTrigger::getTriggerCall>(
