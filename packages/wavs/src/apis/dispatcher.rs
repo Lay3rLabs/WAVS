@@ -197,6 +197,9 @@ pub struct ServiceConfig {
     pub kv: Vec<(String, String)>,
     /// The maximum on chain gas to use for a submission
     pub max_gas: Option<u64>,
+
+    pub workflow_id: WorkflowID,
+    pub component_id: ComponentID,
 }
 
 impl Default for ServiceConfig {
@@ -206,6 +209,8 @@ impl Default for ServiceConfig {
             max_gas: None,
             host_envs: vec![],
             kv: vec![],
+            workflow_id: WorkflowID::default(),
+            component_id: ComponentID::default(),
         }
     }
 }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{de::DeserializeOwned, Serialize};
-use utils::ServiceID;
+use utils::{ComponentID, ServiceID, WorkflowID};
 use wavs::apis::dispatcher::ServiceConfig;
 use wavs::{
     apis::dispatcher::{AllowedHostPermission, Permissions, Submit},

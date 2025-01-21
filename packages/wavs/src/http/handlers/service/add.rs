@@ -17,7 +17,7 @@ use crate::{
         types::{ShaDigest, TriggerRequest},
     },
 };
-use utils::{ComponentID, ServiceID, WorkflowID};
+use utils::ServiceID;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -110,8 +110,9 @@ impl ServiceRequestParser {
     }
 
     async fn parse(&self, req: ServiceRequest) -> anyhow::Result<Service> {
-        let component_id = ComponentID::new("default")?;
-        let workflow_id = WorkflowID::new("default")?;
+        let service_config = req.config.clone();
+        let component_id = service_config.component_id;
+        let workflow_id = service_config.workflow_id;
         let service_id = req.id;
 
         let component = Component {
