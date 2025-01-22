@@ -26,7 +26,7 @@ pub enum Command {
     },
 
     /// Deploy a full service and (optionally) register as an Operator on the Submit target
-    /// Uses previously
+    /// Uses core contracts that were previously deployed via the CLI
     DeployService {
         /// If set, will register as an operator for the service too
         #[clap(long, default_value_t = true)]
