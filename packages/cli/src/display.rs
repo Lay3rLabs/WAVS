@@ -49,15 +49,19 @@ impl DisplayBuilder {
             data_utf8: String::from_utf8_lossy(&signed_data.data).into(),
         });
 
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&DisplayJson {
-                core_contracts: self.core_contracts,
-                service: self.service,
-                signed_data,
-                gas_used: self.gas_used,
-            })?
-        );
+        let display_json = DisplayJson {
+            core_contracts: self.core_contracts,
+            service: self.service,
+            signed_data,
+            gas_used: self.gas_used,
+        };
+
+        // For grabbing with tools like `jq` - pure printing without tracing info
+        println!("{}", serde_json::to_string_pretty(&display_json)?);
+
+        if let Some((service_id, _)) = display_json.service {
+            tracing::info!("Service ID: {}", service_id);
+        }
 
         Ok(())
     }

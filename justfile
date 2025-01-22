@@ -119,15 +119,11 @@ start-anvil:
     anvil
 
 cli-deploy-core:
-    @cd packages/cli && cargo run --quiet deploy-core
+    @cd packages/cli && cargo run --quiet deploy-eigen-core
 
-# e.g. just cli-deploy-service ./components/eth_trigger_square.wasm [SERVICE_MANAGER_ADDR]
-cli-deploy-service COMPONENT SERVICE_MANAGER_ADDR="":
-    @if [ "{{SERVICE_MANAGER_ADDR}}" == "" ]; then \
-        cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}"; \
-    else \
-        cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}" --service-manager '{{SERVICE_MANAGER_ADDR}}'; \
-    fi
+# e.g. just cli-deploy-service ./examples/build/components/echo_data.wasm
+cli-deploy-service COMPONENT TRIGGER_EVENT_NAME="86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68":
+    @cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}" --trigger-event-name "{{TRIGGER_EVENT_NAME}}"
 
 # e.g. `just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D` or `{\"x\":2}`
 cli-add-task SERVICE_ID INPUT:

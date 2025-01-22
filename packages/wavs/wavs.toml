@@ -71,6 +71,11 @@ gas_denom = "untrn"
 chain_id = "31337"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
+
+[chains.eth.local-aggregator]
+chain_id = "31337"
+ws_endpoint = "ws://localhost:8545"
+http_endpoint = "http://localhost:8545"
 aggregator_endpoint = "http://localhost:8001"
 
 [chains.eth.local2]

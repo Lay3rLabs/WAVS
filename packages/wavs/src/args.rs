@@ -12,7 +12,7 @@ use utils::{config::CliEnvExt, serde::deserialize_vec_string};
 #[serde(default)]
 pub struct CliArgs {
     /// The home directory of the application, where the wavs.toml configuration file is stored
-    /// if not provided, a series of default directories will be tried
+    /// if not provided here or in an env var, a series of default directories will be tried
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub home: Option<PathBuf>,
@@ -24,32 +24,28 @@ pub struct CliArgs {
     pub dotenv: Option<PathBuf>,
 
     /// The port to bind the server to.
-    /// See example config file for more info
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port: Option<u32>,
 
     /// Log level in the format of comma-separated tracing directives.
-    /// See example config file for more info
     #[arg(long, value_delimiter = ',')]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub log_level: Vec<String>,
 
     /// The host to bind the server to
-    /// See example config file for more info
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
 
     /// The directory to store all internal data files
-    /// See example config file for more info
+    /// Default is /var/wavs
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<PathBuf>,
 
     /// The allowed cors origins
-    /// See example config file for more info
     #[arg(long, value_delimiter = ',')]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(deserialize_with = "deserialize_vec_string")]
@@ -64,18 +60,6 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wasm_threads: Option<usize>,
-
-    /// The Ethereum-style chain to use for the application
-    /// will load from the config file
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain: Option<String>,
-
-    /// The Cosmos-style chain to use for the application
-    /// will load from the config file
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_chain: Option<String>,
 
     /// mnemonic for the submission client (usually leave this as None and override in env)
     #[arg(long)]
