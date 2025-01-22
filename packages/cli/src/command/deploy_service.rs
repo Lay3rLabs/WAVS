@@ -28,7 +28,6 @@ pub struct DeployServiceArgs {
     pub trigger: CliTriggerKind,
     pub trigger_event_name: Option<String>,
     pub trigger_chain: Option<String>,
-    /// If not supplied, will deploy fresh "example trigger" contracts
     pub trigger_address: Option<String>,
     pub cosmos_trigger_code_id: Option<u64>,
     pub submit: CliSubmitKind,
