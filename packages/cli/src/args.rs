@@ -13,6 +13,7 @@ use crate::config::Config;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub enum Command {
+    /// Deploy the core Eigenlayer contracts and (optionally) register as an Operator
     DeployEigenCore {
         #[clap(long, default_value_t = true)]
         register_operator: bool,
@@ -24,6 +25,8 @@ pub enum Command {
         args: CliArgs,
     },
 
+    /// Deploy a full service and (optionally) register as an Operator on the Submit target
+    /// Uses previously
     DeployService {
         /// If set, will register as an operator for the service too
         #[clap(long, default_value_t = true)]
@@ -40,6 +43,10 @@ pub enum Command {
         /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
         #[clap(long)]
         trigger_event_name: Option<String>,
+
+        /// The address used for trigger contracts. If not supplied, will deploy fresh "example trigger" contracts
+        #[clap(long)]
+        trigger_address: Option<String>,
 
         /// The chain to deploy the trigger on, if applicable
         #[clap(long, default_value = "local")]
@@ -79,12 +86,13 @@ pub enum Command {
         /// Optional time to wait for a result, in milliseconds
         /// if none, will return immediately without showing the result
         #[clap(long, default_value = "10000")]
-        result_timeout_ms: Option<u64>,
+        result_timeout_ms: u64,
 
         #[clap(flatten)]
         args: CliArgs,
     },
 
+    /// Execute a component directly, without going through WAVS
     Exec {
         /// Path to the WASI component
         /// The component must implement the eth-trigger-world WIT
@@ -177,13 +185,13 @@ impl Command {
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct CliArgs {
-    /// The home directory of the application, where the wavs.toml configuration file is stored
-    /// if not provided, a series of default directories will be tried
+    /// The home directory of the application, where the wavs-cli.toml configuration file is stored
+    /// if not provided here or in an env var, a series of default directories will be tried
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub home: Option<PathBuf>,
 
-    /// The WAVS endpoint
+    /// The WAVS endpoint. Default is `http://127.0.0.1:8000`
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wavs_endpoint: Option<PathBuf>,
@@ -195,14 +203,14 @@ pub struct CliArgs {
     pub dotenv: Option<PathBuf>,
 
     /// Log level in the format of comma-separated tracing directives.
-    /// See example config file for more info
+    /// Default is "info"
     #[arg(long, value_delimiter = ',')]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub log_level: Vec<String>,
 
     /// The directory to store all internal data files
-    /// See example config file for more info
+    /// Default is /var/wavs-cli
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<PathBuf>,

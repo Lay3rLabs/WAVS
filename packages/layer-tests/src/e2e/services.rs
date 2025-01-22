@@ -151,6 +151,7 @@ async fn deploy_service(
             component: ComponentSource::Digest(digest),
             trigger,
             trigger_chain,
+            trigger_address: None,
             trigger_event_name,
             cosmos_trigger_code_id: None,
             submit,

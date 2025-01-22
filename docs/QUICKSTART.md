@@ -1,42 +1,105 @@
-First, open up 4 different terminals:
+## One-time setup
 
-1. (local-only, from anywhere) - to run Anvil, the local Ethereum chain emulator 
-2. in `packages/wavs` to run wavs
-3. in `packages/aggregator` to run aggregator
-4. in `packages/cli` to run the CLI
+First, copy all the `.example.env` files into `.env` as needed, modifying anything you want to customize:
 
-Next, make sure you set the required `env` vars. An easy way is copy the `.env.example` file in each directory to `.env` and edit from there
+```bash
+# copy env files
+cp packages/aggregator/.env.example packages/aggregator/.env
+cp packages/cli/.env.example packages/cli/.env
+cp packages/wavs/.env.example packages/wavs/.env
+```
 
-Finally, run things in this order:
+## Up and running
 
-1. (local-only) `anvil`
-2. `cargo run` (in `packages/wavs`)
-3. `cargo run` (in `packages/aggregator`)
-4. `cargo run kitchen-sink --wavs` (in `packages/cli`)
+Next, open up two terminals. One will be for running all the background servers, the other will be for executing commands on them.
 
-This kitchen-sink command will go through all the steps of:
+Keep in mind that on the very first run, things may take a while since they're compiling the tools. Subsequent runs will be much faster.
 
-1. Deploying core Eigenlayer contracts
-2. Registering as an Eigenlayer operator
-3. Deploying hello-world AVS contracts
-4. Registering as a hello-world AVS operator
-5. Creating a service on WAVS
-6. Submitting a task to the hello-world on-chain contract
-7. Waiting for WAVS to do its thing and get the result back on-chain
+### Terminal 1 (servers)
 
-Other commands are available to fine-tune this and run specific steps.
+```bash
+just start-all
+```
 
-Executing `cargo run -- --help` from within the `packages/cli` directory will give more info.
+### Terminal 2 (client)
 
-### Local vs. Testnet/Mainnet/etc.
+1. Deploy the core eigenlayer contracts 
 
-The default `ws-endpoint` and `http-endpoint` for the CLI is pointing to the local `Anvil` instance, as is the default `local` chain in WAVS
+This needs to be done each time you (re)start the servers
 
-If hitting some other remote chain, make sure to change these accordingly, as well as the env vars. 
+```bash
+just cli-deploy-core
+```
+
+2. Deploy a service with one of the provided components
+
+Do this each time you want to deploy a new service, with those core contracts deployed above:
+
+```bash
+just cli-deploy-service examples/build/components/echo_data.wasm
+```
+
+This will output a bunch of info, and finally the `Service ID` - copy that for the next step
+
+3. Add a task for that service
+
+```bash
+just cli-add-task {Service ID} {Hex encoded data}
+```
+
+For example, if our Service ID is "01948ead04277a81ad84dcf6b3390912", we'd run the following to send a task with data of "hello world":
+
+```bash
+just cli-add-task 01948ead04277a81ad84dcf6b3390912 68656C6C6F20776F726C64
+```
+
+Or you can point to a file on disk with the `@` prefix on the input:
+
+```bash
+just cli-add-task 01948ead04277a81ad84dcf6b3390912 @~/my-file.txt
+```
+
+# Installing the CLI system-wide
+
+You can install the `wavs-cli` tool anywhere on your system, most of those `just` commands above are just shorthand for executing this tool.
+
+1. `cargo install --path ./packages/cli`
+
+Next, setup your `.env` file or however you like to populate environment variables in your system, based on all the [packages/cli/.env.example](packages/cli/.env.example) file provided
+
+Now you have `wavs-cli` and can run it from anywhere (but certain things like auto-deploy the example contracts won't work outside the repo)
+
+# Custom services
+
+The simple commands above all use the provided contracts and components. For developing new services, you'll want to pass different parameters and change some defaults. 
+
+Run `wavs-cli --help` or `wavs-cli [subcommand] --help` for all the options, but here are a few common ones:
+
+### Deploying a service
+
+* --trigger: either `eth-contract-event` or `cosmos-contract-event`
+* --trigger-event-name: the event hash (hex encoded) for ethereum, or event type for cosmos
+* --trigger-chain: the chain name to send the trigger on
+* --trigger-address: the address of a previously deployed trigger contract
+
+### Tasks
+
+The `add-task` command assumes a specific "example trigger" format for the trigger contract and payload data.
+
+This won't work with custom contracts, as of right now you'll need to write separate tooling for that.
+
+# Chains
+
+Edit [packages/wavs/wavs.toml](packages/wavs/wavs.toml) to change the active trigger chains, adjust chain configs, etc.
+
+If targetting something more than `local`, such as a Cosmos chain, make sure you're running this separately, it won't be launched automatically with the `just start-all` command above
 
 ### Debugging
 
-One common problem is that the wavs data directory is set to a place that requires superuser permissions or does not exist.
+One common problem is that the wavs data directories are set to a place that requires superuser permissions or does not exist.
 
-Simply uncomment the `WAVS_DATA` env var and set it to someplace reasonable.
+Make sure the `*_DATA` set in your env vars point to a valid location, and it's not unusual to need to delete these directories as new updates to WAVS are released.
 
+### Aggregator
+
+The default `local` chain does not use the Aggregator service. If you want to enable this, you can change the submission chain to `local-aggregator`, but make sure that you aren't expecting tasks to immediately propogate by passing `--result-timeout-ms 0` to the `add-task` subcommand

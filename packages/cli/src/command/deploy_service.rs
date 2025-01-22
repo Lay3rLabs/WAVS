@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use layer_climb::prelude::ConfigAddressExt;
 use rand::rngs::OsRng;
 use std::{collections::HashMap, path::PathBuf};
 use utils::{avs_client::AvsClientDeployer, filesystem::workspace_path, ServiceID, WorkflowID};
@@ -27,6 +28,8 @@ pub struct DeployServiceArgs {
     pub trigger: CliTriggerKind,
     pub trigger_event_name: Option<String>,
     pub trigger_chain: Option<String>,
+    /// If not supplied, will deploy fresh "example trigger" contracts
+    pub trigger_address: Option<String>,
     pub cosmos_trigger_code_id: Option<u64>,
     pub submit: CliSubmitKind,
     pub submit_chain: Option<String>,
@@ -47,6 +50,7 @@ impl DeployService {
             trigger,
             trigger_event_name,
             trigger_chain,
+            trigger_address,
             cosmos_trigger_code_id,
             submit,
             submit_chain,
@@ -61,11 +65,15 @@ impl DeployService {
                 let trigger_event_name =
                     trigger_event_name.context("must have trigger event name")?;
 
-                // for right now we just use our hardcoded simple contract
-                let address = SimpleEthTriggerClient::deploy(
-                    ctx.get_eth_client(&chain_name)?.eth.provider.clone(),
-                )
-                .await?;
+                let address = match trigger_address {
+                    None => {
+                        SimpleEthTriggerClient::deploy(
+                            ctx.get_eth_client(&chain_name)?.eth.provider.clone(),
+                        )
+                        .await?
+                    }
+                    Some(address) => address.parse()?,
+                };
 
                 let mut event_hash: [u8; 32] = [0; 32];
                 event_hash.copy_from_slice(&hex::decode(trigger_event_name)?);
@@ -83,28 +91,36 @@ impl DeployService {
 
                 let signing_client = ctx.get_cosmos_client(&chain_name)?;
 
-                let code_id = match cosmos_trigger_code_id {
-                    Some(code_id) => code_id,
+                let address = match trigger_address {
                     None => {
-                        let path_to_wasm = workspace_path()
-                            .join("examples")
-                            .join("build")
-                            .join("contracts")
-                            .join("simple_example.wasm");
+                        let code_id = match cosmos_trigger_code_id {
+                            Some(code_id) => code_id,
+                            None => {
+                                let path_to_wasm = workspace_path()
+                                    .join("examples")
+                                    .join("build")
+                                    .join("contracts")
+                                    .join("simple_example.wasm");
 
-                        let wasm_byte_code = std::fs::read(path_to_wasm)?;
+                                let wasm_byte_code = std::fs::read(path_to_wasm)?;
 
-                        let (code_id, _) = signing_client
-                            .contract_upload_file(wasm_byte_code, None)
-                            .await?;
+                                let (code_id, _) = signing_client
+                                    .contract_upload_file(wasm_byte_code, None)
+                                    .await?;
 
-                        code_id
+                                code_id
+                            }
+                        };
+
+                        SimpleCosmosTriggerClient::new_code_id(signing_client, code_id)
+                            .await?
+                            .contract_address
                     }
+                    Some(address) => signing_client
+                        .querier
+                        .chain_config
+                        .parse_address(&address)?,
                 };
-
-                let address = SimpleCosmosTriggerClient::new_code_id(signing_client, code_id)
-                    .await?
-                    .contract_address;
 
                 ServiceTriggerInfo::CosmosSimpleContract {
                     chain_name,

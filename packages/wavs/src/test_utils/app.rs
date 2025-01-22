@@ -26,8 +26,6 @@ impl TestApp {
             log_level: Vec::new(),
             host: None,
             cors_allowed_origins: Vec::new(),
-            chain: None,
-            cosmos_chain: None,
             wasm_lru_size: None,
             wasm_threads: None,
             submission_mnemonic: None,

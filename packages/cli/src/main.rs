@@ -63,6 +63,7 @@ async fn main() {
             component,
             trigger,
             trigger_chain,
+            trigger_address,
             cosmos_trigger_code_id,
             submit,
             submit_chain,
@@ -78,6 +79,7 @@ async fn main() {
                     trigger,
                     trigger_event_name,
                     trigger_chain,
+                    trigger_address,
                     cosmos_trigger_code_id,
                     submit,
                     submit_chain,
@@ -110,7 +112,11 @@ async fn main() {
                     service_id,
                     workflow_id,
                     input: ComponentInput::Stdin(input),
-                    result_timeout: result_timeout_ms.map(std::time::Duration::from_millis),
+                    result_timeout: if result_timeout_ms > 0 {
+                        Some(std::time::Duration::from_millis(result_timeout_ms))
+                    } else {
+                        None
+                    },
                 },
             )
             .await
