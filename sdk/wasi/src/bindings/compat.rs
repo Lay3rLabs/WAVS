@@ -46,12 +46,12 @@ impl From<EthEventLogData> for alloy_primitives::LogData {
     }
 }
 
-impl TryFrom<layer_climb_address::Address> for CosmosAddress {
+impl TryFrom<layer_climb::prelude::Address> for CosmosAddress {
     type Error = anyhow::Error;
 
-    fn try_from(addr: layer_climb_address::Address) -> Result<Self, Self::Error> {
+    fn try_from(addr: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         match addr {
-            layer_climb_address::Address::Cosmos {
+            layer_climb::prelude::Address::Cosmos {
                 bech32_addr,
                 prefix_len,
             } => Ok(CosmosAddress {
@@ -63,21 +63,21 @@ impl TryFrom<layer_climb_address::Address> for CosmosAddress {
     }
 }
 
-impl From<CosmosAddress> for layer_climb_address::Address {
+impl From<CosmosAddress> for layer_climb::prelude::Address {
     fn from(addr: CosmosAddress) -> Self {
-        layer_climb_address::Address::Cosmos {
+        layer_climb::prelude::Address::Cosmos {
             bech32_addr: addr.bech32_addr,
             prefix_len: addr.prefix_len as usize,
         }
     }
 }
 
-impl TryFrom<layer_climb_address::Address> for EthAddress {
+impl TryFrom<layer_climb::prelude::Address> for EthAddress {
     type Error = anyhow::Error;
 
-    fn try_from(addr: layer_climb_address::Address) -> Result<Self, Self::Error> {
+    fn try_from(addr: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         match addr {
-            layer_climb_address::Address::Eth(eth) => Ok(EthAddress {
+            layer_climb::prelude::Address::Eth(eth) => Ok(EthAddress {
                 raw_bytes: eth.as_bytes().to_vec(),
             }),
             _ => Err(anyhow::anyhow!("Cannot convert to EthAddr")),
@@ -85,7 +85,7 @@ impl TryFrom<layer_climb_address::Address> for EthAddress {
     }
 }
 
-impl From<EthAddress> for layer_climb_address::Address {
+impl From<EthAddress> for layer_climb::prelude::Address {
     fn from(addr: EthAddress) -> Self {
         alloy_primitives::Address::from(addr).into()
     }
@@ -105,24 +105,24 @@ impl From<EthAddress> for alloy_primitives::Address {
     }
 }
 
-impl From<CosmosChainConfig> for layer_climb_config::ChainConfig {
-    fn from(config: CosmosChainConfig) -> layer_climb_config::ChainConfig {
-        layer_climb_config::ChainConfig {
-            chain_id: layer_climb_config::ChainId::new(config.chain_id),
+impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
+    fn from(config: CosmosChainConfig) -> layer_climb::prelude::ChainConfig {
+        layer_climb::prelude::ChainConfig {
+            chain_id: layer_climb::prelude::ChainId::new(config.chain_id),
             rpc_endpoint: config.rpc_endpoint,
             grpc_endpoint: config.grpc_endpoint,
             grpc_web_endpoint: config.grpc_web_endpoint,
             gas_denom: config.gas_denom,
             gas_price: config.gas_price,
-            address_kind: layer_climb_config::AddrKind::Cosmos {
+            address_kind: layer_climb::prelude::AddrKind::Cosmos {
                 prefix: config.bech32_prefix,
             },
         }
     }
 }
 
-impl From<layer_climb_config::ChainConfig> for CosmosChainConfig {
-    fn from(config: layer_climb_config::ChainConfig) -> CosmosChainConfig {
+impl From<layer_climb::prelude::ChainConfig> for CosmosChainConfig {
+    fn from(config: layer_climb::prelude::ChainConfig) -> CosmosChainConfig {
         CosmosChainConfig {
             chain_id: config.chain_id.as_str().to_string(),
             rpc_endpoint: config.rpc_endpoint,
@@ -131,7 +131,7 @@ impl From<layer_climb_config::ChainConfig> for CosmosChainConfig {
             gas_denom: config.gas_denom,
             gas_price: config.gas_price,
             bech32_prefix: match config.address_kind {
-                layer_climb_config::AddrKind::Cosmos { prefix } => prefix,
+                layer_climb::prelude::AddrKind::Cosmos { prefix } => prefix,
                 _ => "".to_string(),
             },
         }

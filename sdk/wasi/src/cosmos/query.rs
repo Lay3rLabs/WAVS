@@ -43,7 +43,7 @@ cfg_if::cfg_if! {
         }
 
         pub async fn new_cosmos_query_client(chain_config: CosmosChainConfig, reactor: Reactor) -> Result<QueryClient> {
-            let chain_config:layer_climb_config::ChainConfig = chain_config.into();
+            let chain_config:layer_climb::prelude::ChainConfig = chain_config.into();
             QueryClient::new(chain_config.clone(), Some(Connection {
                 rpc: Arc::new(WasiCosmosRpcTransport {
                     reactor
@@ -54,7 +54,7 @@ cfg_if::cfg_if! {
     } else {
         // not used, just for making the IDE happy
         pub async fn new_cosmos_query_client(chain_config: CosmosChainConfig, _reactor: Reactor) -> Result<QueryClient> {
-            let chain_config:layer_climb_config::ChainConfig = chain_config.into();
+            let chain_config:layer_climb::prelude::ChainConfig = chain_config.into();
             QueryClient::new(chain_config.clone(), Some(Connection {
                 preferred_mode: Some(ConnectionMode::Rpc),
                 ..Default::default()

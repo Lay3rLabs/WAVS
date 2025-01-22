@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
-use layer_climb_address::Address;
+use layer_climb::prelude::Address;
 use layer_wasi::{
     bindings::world::{host, Guest, TriggerAction},
     cosmos::new_cosmos_query_client,

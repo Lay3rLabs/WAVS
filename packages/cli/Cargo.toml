@@ -21,7 +21,6 @@ serde_json = { workspace = true }
 dotenvy = { workspace = true }
 tokio = { workspace = true }
 rand = { workspace = true }
-lavs-apis = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }
 wavs = { workspace = true }
