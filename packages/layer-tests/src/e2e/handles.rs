@@ -28,11 +28,7 @@ impl AppHandles {
         }
 
         for chain_config in configs.chains.cosmos.values() {
-            // TODO - replace with wasmd
-            let handle = CosmosInstance::setup(ctx.clone(), configs, chain_config.clone()).unwrap();
-            let handle = CosmosInstance::run(handle).unwrap();
-
-            handle.wait_for_block(ctx.clone());
+            let handle = CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone());
 
             cosmos_chains.push(handle);
         }

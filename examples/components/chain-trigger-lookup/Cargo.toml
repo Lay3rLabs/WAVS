@@ -10,8 +10,7 @@ repository.workspace = true
 layer-wasi = { workspace = true}
 serde = { workspace = true}
 serde_json = { workspace = true}
-layer-climb-address = { workspace = true}
-layer-climb-config = { workspace = true}
+layer-climb = { workspace = true}
 wit-bindgen-rt = { workspace = true}
 wstd = { workspace = true }
 example-helpers = { workspace = true }
