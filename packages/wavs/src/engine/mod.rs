@@ -4,4 +4,4 @@ pub mod mock;
 pub mod runner;
 
 pub use crate::apis::engine::{Engine, EngineError};
-pub use core::WasmEngine;
+pub use core::{HostComponent, WasmEngine};

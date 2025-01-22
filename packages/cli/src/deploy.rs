@@ -1,22 +1,46 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use alloy::providers::Provider;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{
-    eigen_client::{CoreAVSAddresses, EigenClient},
-    layer_contract_client::LayerAddresses,
-};
-use utils::{ServiceID, WorkflowID};
+use utils::{avs_client::AvsAddresses, eigen_client::CoreAVSAddresses, ServiceID, WorkflowID};
 
-use crate::{args::Command, config::Config};
+use crate::config::Config;
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Deployment {
-    // keyed by chain NAME (not chain id)
+    // keyed by chain name (not necessarily the same as chainId)
     pub eigen_core: HashMap<String, CoreAVSAddresses>,
-    pub eth_services: HashMap<ServiceID, HashMap<WorkflowID, LayerAddresses>>,
+    pub services: HashMap<ServiceID, HashMap<WorkflowID, ServiceInfo>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ServiceInfo {
+    pub trigger: ServiceTriggerInfo,
+    pub submit: ServiceSubmitInfo,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ServiceTriggerInfo {
+    EthSimpleContract {
+        chain_name: String,
+        event_hash: [u8; 32],
+        address: layer_climb::prelude::Address,
+    },
+
+    CosmosSimpleContract {
+        chain_name: String,
+        event_type: String,
+        address: layer_climb::prelude::Address,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ServiceSubmitInfo {
+    EigenLayer {
+        chain_name: String,
+        avs_addresses: AvsAddresses,
+    },
 }
 
 impl Deployment {
@@ -36,84 +60,46 @@ impl Deployment {
         Ok(deployment)
     }
 
-    pub async fn sanitize(
-        &mut self,
-        command: &Command,
-        config: &Config,
-        client: &EigenClient,
-    ) -> Result<()> {
-        // sanitize core
-        {
-            let mut to_remove = HashSet::new();
-            for (chain, addresses) in self.eigen_core.iter() {
-                if chain != &config.chain {
-                    continue;
-                }
-
-                for address in addresses.as_vec() {
-                    if client.eth.provider.get_code_at(address).await?.0.is_empty() {
-                        to_remove.insert(chain.clone());
-                    }
-                }
-            }
-
-            for chain in to_remove.into_iter() {
-                tracing::warn!("Core addresses for {chain} are invalid, filtering out");
-                self.eigen_core.remove(&chain);
-            }
-        }
-
-        if let Some(service_id) = match command {
-            Command::DeployCore { .. } => None,
-            Command::DeployService { .. } => None,
-            Command::AddTask { service_id, .. } => Some(ServiceID::new(service_id)?),
-            Command::Exec { .. } => None,
-        } {
-            let mut to_remove = HashSet::new();
-            for (deployed_service_id, workflows) in self.eth_services.iter() {
-                if *deployed_service_id != service_id {
-                    continue;
-                }
-
-                for (deployed_workflow_id, addresses) in workflows.iter() {
-                    for address in addresses.as_vec() {
-                        if client.eth.provider.get_code_at(address).await?.0.is_empty() {
-                            to_remove.insert((
-                                deployed_service_id.clone(),
-                                deployed_workflow_id.clone(),
-                            ));
-                        }
-                    }
-                }
-            }
-
-            for (service_id, workflow_id) in to_remove.into_iter() {
-                tracing::warn!("Service addresses for service {service_id}, workflow {workflow_id} are invalid, filtering out");
-                let service = self.eth_services.get_mut(&service_id).unwrap();
-                service.remove(&workflow_id);
-                if service.is_empty() {
-                    self.eth_services.remove(&service_id);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn save(&self, config: &Config) -> Result<()> {
-        if !config.data.exists() {
-            std::fs::create_dir_all(&config.data)?;
-        }
-        let path = Self::path(config);
-        tracing::debug!("Saving deployment to {}", path.display());
-        let file = std::fs::File::create(path)?;
-        let writer = std::io::BufWriter::new(file);
-        serde_json::to_writer(writer, self)?;
-
-        Ok(())
-    }
-
     pub fn path(config: &Config) -> std::path::PathBuf {
         config.data.join("deployments.json")
+    }
+
+    // for now - all of our triggers use the same pattern of chain+address
+    // this will change in the future
+    pub fn get_trigger_info(
+        &self,
+        service_id: &ServiceID,
+        workflow_id: Option<&WorkflowID>,
+    ) -> Option<ServiceTriggerInfo> {
+        let service = self.services.get(service_id)?;
+        let workflow = match workflow_id {
+            Some(workflow_id) => service.get(workflow_id)?,
+            None => service.values().next()?,
+        };
+
+        Some(workflow.trigger.clone())
+    }
+
+    // for now - all of our submits use the same pattern of chain+avs_addresses
+    // this will change in the future
+    pub fn get_submit_info(
+        &self,
+        service_id: &ServiceID,
+        workflow_id: Option<&WorkflowID>,
+    ) -> Option<(String, AvsAddresses)> {
+        let service = self.services.get(service_id)?;
+        let workflow = match workflow_id {
+            Some(workflow_id) => service.get(workflow_id)?,
+            None => service.values().next()?,
+        };
+
+        let any_submit_info = workflow.submit.clone();
+
+        match any_submit_info {
+            ServiceSubmitInfo::EigenLayer {
+                chain_name,
+                avs_addresses,
+            } => Some((chain_name, avs_addresses)),
+        }
     }
 }

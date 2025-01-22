@@ -1,11 +1,10 @@
-use lavs_apis::id::TaskId;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
 
 use crate::apis::dispatcher::{Component, ServiceConfig};
 use crate::apis::engine::{Engine, EngineError};
+use crate::apis::trigger::TriggerAction;
+use crate::triggers::mock::get_mock_trigger_data;
 use crate::Digest;
-use utils::{ServiceID, WorkflowID};
 
 /// Simply returns the request as the result.
 /// MVP for just testing inputs and outputs and wiring
@@ -30,34 +29,20 @@ impl Engine for IdentityEngine {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
         _component: &Component,
+        trigger: TriggerAction,
         _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _task_id: TaskId,
-        request: Vec<u8>,
-        _timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        Ok(request)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        _component: &Component,
-        _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _workflow_id: &WorkflowID,
-        _trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        Ok(payload)
+        Ok(get_mock_trigger_data(&trigger.data))
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::{apis::trigger::TriggerData, triggers::mock::mock_eth_event_trigger_config};
+
     use super::*;
 
     #[test]
@@ -74,15 +59,15 @@ mod test {
 
         // execute returns self
         let request = b"this is only a test".to_vec();
-        let component = Component::new(&d1);
+        let component = Component::new(d1);
         let result = engine
-            .execute_queue(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: mock_eth_event_trigger_config("foobar", "baz"),
+                    data: TriggerData::new_raw(request.clone()),
+                },
                 &ServiceConfig::default(),
-                &ServiceID::new("foobar").unwrap(),
-                TaskId::new(123),
-                request.clone(),
-                1234567890,
             )
             .unwrap();
         assert_eq!(request, result);

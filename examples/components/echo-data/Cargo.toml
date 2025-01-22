@@ -1,0 +1,20 @@
+[package]
+name = "echo-data"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+layer-wasi = { workspace = true }
+wit-bindgen-rt = { workspace = true }
+example-helpers = { workspace = true }
+wstd = { workspace = true }
+anyhow = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "component:echo-data"

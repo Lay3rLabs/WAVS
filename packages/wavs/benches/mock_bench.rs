@@ -14,7 +14,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
     let service_id = ServiceID::new("default").unwrap();
-    let workflow_id = WorkflowID::new("default").unwrap();
+    let workflow_id = WorkflowID::default();
     let task_queue_address = rand_address_eth();
 
     // block and wait for creating the service
@@ -52,6 +52,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                                 &workflow_id,
                                 &task_queue_address,
                                 &SquareIn { x: i as u64 },
+                                "eth",
                             )
                             .await;
                     }

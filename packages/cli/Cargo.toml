@@ -8,6 +8,7 @@ rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [dependencies]
+simple-example-cosmos = {path = "../../examples/contracts/cosmwasm/simple", package = "simple-example"}
 utils = { workspace = true }
 aggregator = { workspace = true }
 clap = { workspace = true }
@@ -31,5 +32,6 @@ wasmtime-wasi-http = { workspace = true }
 wasmtime-wasi = { workspace = true }
 tempfile = { workspace = true }
 shellexpand = { workspace = true }
+cosmwasm-std = { workspace = true }
 
 uuid = { version = "1.11.0", features = ["v7", "serde"] }

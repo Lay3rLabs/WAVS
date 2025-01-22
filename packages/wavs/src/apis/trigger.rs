@@ -1,9 +1,8 @@
-use lavs_apis::id::TaskId;
+use alloy::primitives::LogData;
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use utils::layer_contract_client::TriggerId;
 
 use crate::AppContext;
 
@@ -11,35 +10,48 @@ use utils::{IDError, ServiceID, WorkflowID};
 
 // The TriggerManager reacts to these triggers
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum Trigger {
-    // TODO: add this variant later, not for now
-    // #[serde(rename_all = "camelCase")]
-    // Cron { schedule: String },
-    #[serde(rename_all = "camelCase")]
-    LayerQueue {
-        // FIXME: add some chain name. right now all triggers are on one chain
-        task_queue_addr: Address,
-        /// Frequency in seconds to poll the task queue (doubt this is over 3600 ever, but who knows)
-        poll_interval: u32,
+    // A contract that emits an event
+    CosmosContractEvent {
+        address: Address,
+        chain_name: String,
+        event_type: String,
     },
-    EthEvent {
-        contract_address: Address,
+    EthContractEvent {
+        address: Address,
+        chain_name: String,
+        event_hash: [u8; 32],
     },
+    // not a real trigger, just for testing
+    Manual,
 }
 
 impl Trigger {
-    pub fn layer_queue(task_queue_addr: Address, poll_interval: u32) -> Self {
-        Trigger::LayerQueue {
-            task_queue_addr,
-            poll_interval,
+    pub fn cosmos_contract_event(
+        address: Address,
+        chain_name: impl ToString,
+        event_type: impl ToString,
+    ) -> Self {
+        Trigger::CosmosContractEvent {
+            address,
+            chain_name: chain_name.to_string(),
+            event_type: event_type.to_string(),
         }
     }
-
-    pub fn eth_event(contract_address: Address) -> Self {
-        Trigger::EthEvent { contract_address }
+    pub fn eth_contract_event(
+        address: Address,
+        chain_name: impl ToString,
+        event_hash: [u8; 32],
+    ) -> Self {
+        Trigger::EthContractEvent {
+            address,
+            chain_name: chain_name.to_string(),
+            event_hash,
+        }
     }
 }
+
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
     /// This should only be called once in the lifetime of the object
@@ -70,28 +82,42 @@ pub struct TriggerConfig {
 }
 
 impl TriggerConfig {
-    pub fn layer_queue(
-        service_id: impl TryInto<ServiceID, Error = IDError>,
-        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-        task_queue_addr: Address,
-        poll_interval: u32,
-    ) -> Result<Self, IDError> {
-        Ok(Self {
-            service_id: service_id.try_into()?,
-            workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::layer_queue(task_queue_addr, poll_interval),
-        })
-    }
-
-    pub fn eth_event(
+    pub fn cosmos_contract_event(
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         contract_address: Address,
+        chain_name: impl ToString,
+        event_type: impl ToString,
     ) -> Result<Self, IDError> {
         Ok(Self {
             service_id: service_id.try_into()?,
             workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::eth_event(contract_address),
+            trigger: Trigger::cosmos_contract_event(contract_address, chain_name, event_type),
+        })
+    }
+
+    pub fn eth_contract_event(
+        service_id: impl TryInto<ServiceID, Error = IDError>,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+        contract_address: Address,
+        chain_name: impl ToString,
+        event_hash: [u8; 32],
+    ) -> Result<Self, IDError> {
+        Ok(Self {
+            service_id: service_id.try_into()?,
+            workflow_id: workflow_id.try_into()?,
+            trigger: Trigger::eth_contract_event(contract_address, chain_name, event_hash),
+        })
+    }
+
+    pub fn manual(
+        service_id: impl TryInto<ServiceID, Error = IDError>,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+    ) -> Result<Self, IDError> {
+        Ok(Self {
+            service_id: service_id.try_into()?,
+            workflow_id: workflow_id.try_into()?,
+            trigger: Trigger::Manual,
         })
     }
 }
@@ -102,33 +128,39 @@ pub struct TriggerAction {
     /// Identify which trigger this came from
     pub config: TriggerConfig,
 
-    /// The data that's required for the trigger to be processed
+    /// The data that came from the trigger
     pub data: TriggerData,
 }
 
-/// This is the actual data we got from the trigger, used to feed into the component
+/// The data that came from the trigger
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum TriggerData {
-    Queue {
-        /// The id from the task queue
-        task_id: TaskId,
-        /// The input data associated with that task
-        payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
+    CosmosContractEvent {
+        /// The address of the contract that emitted the event
+        contract_address: Address,
+        /// The chain name of the chain where the event was emitted
+        chain_name: String,
+        /// The data that was emitted by the contract
+        event: cosmwasm_std::Event,
+        /// The block height where the event was emitted
+        block_height: u64,
     },
-    EthEvent {
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
-        trigger_id: TriggerId,
-        payload: Vec<u8>, // TODO: type with better serialization - Binary or serde_json::Value
+    EthContractEvent {
+        /// The address of the contract that emitted the event
+        contract_address: Address,
+        /// The chain name of the chain where the event was emitted
+        chain_name: String,
+        /// The raw event log
+        log: LogData,
+        /// The block height where the event was emitted
+        block_height: u64,
     },
+    Raw(Vec<u8>),
 }
 
 impl TriggerData {
-    pub fn queue(task_id: TaskId, payload: &[u8]) -> Self {
-        TriggerData::Queue {
-            task_id,
-            payload: payload.to_vec(),
-        }
+    pub fn new_raw(data: impl AsRef<[u8]>) -> Self {
+        TriggerData::Raw(data.as_ref().to_vec())
     }
 }
 
@@ -146,10 +178,18 @@ pub enum TriggerError {
     NoSuchWorkflow(ServiceID, WorkflowID),
     #[error("Cannot find trigger data: {0}")]
     NoSuchTriggerData(usize),
-    #[error("Cannot find trigger data: {0}")]
-    NoSuchTaskQueueTrigger(Address),
+    #[error("Unable to parse trigger data: {0}")]
+    TriggerDataParse(String),
+    #[error("Cannot find cosmos trigger contract: {0} / {1} / {2}")]
+    NoSuchCosmosContractEvent(String, Address, String),
+    #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
+    NoSuchEthContractEvent(String, Address, String),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
+    #[error("Cosmos Contract Event already registered: {0} / {1} / {2}")]
+    CosmosContractEventAlreadyRegistered(String, Address, String),
+    #[error("Eth Contract Event already registered: {0} / {1} / {2}")]
+    EthContractEventAlreadyRegistered(String, Address, String),
 }

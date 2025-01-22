@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 
 use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
-use crate::apis::trigger::{TriggerAction, TriggerData};
+use crate::apis::trigger::TriggerAction;
 use crate::engine::{Engine, EngineError};
 use crate::AppContext;
 
@@ -26,7 +26,7 @@ pub trait EngineRunner: Send + Sync {
         &self,
         action: TriggerAction,
         service: Service,
-    ) -> Result<Option<ChainMessage>, EngineError> {
+    ) -> Result<ChainMessage, EngineError> {
         // look up the proper workflow
         let workflow = service
             .workflows
@@ -43,66 +43,27 @@ pub trait EngineRunner: Send + Sync {
             .get(&workflow.component)
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
-        match action.data {
-            TriggerData::Queue { task_id, payload } => {
-                // TODO: add the timestamp to the trigger, don't invent it
-                let timestamp = 1234567890;
+        let trigger_config = action.config.clone();
 
-                let wasm_result = self.engine().execute_queue(
-                    component,
-                    &service.config.clone().unwrap_or_default(),
-                    &service.id,
-                    task_id,
-                    payload,
-                    timestamp,
-                )?;
+        let wasi_result =
+            self.engine()
+                .execute(component, action, &service.config.unwrap_or_default())?;
 
-                Ok(workflow.submit.clone().map(|submit| ChainMessage::Cosmos {
-                    trigger_config: action.config,
-                    wasm_result,
-                    task_id,
-                    submit,
-                }))
-            }
-            TriggerData::EthEvent {
-                trigger_id,
-                workflow_id,
-                service_id,
-                payload,
-            } => {
-                let wasm_result = self.engine().execute_eth_event(
-                    component,
-                    &service.config.clone().unwrap_or_default(),
-                    &service_id,
-                    &workflow_id,
-                    trigger_id,
-                    payload,
-                )?;
-
-                Ok(workflow.submit.clone().map(|submit| ChainMessage::Eth {
-                    trigger_config: action.config,
-                    wasm_result,
-                    trigger_id,
-                    submit,
-                }))
-            }
-        }
+        Ok(ChainMessage {
+            trigger_config,
+            wasi_result,
+            submit: workflow.submit.clone(),
+        })
     }
 }
 
-pub fn submit_result(
-    out: &mpsc::Sender<ChainMessage>,
-    msg: Result<Option<ChainMessage>, EngineError>,
-) {
+pub fn submit_result(out: &mpsc::Sender<ChainMessage>, msg: Result<ChainMessage, EngineError>) {
     match msg {
-        Ok(Some(msg)) => {
+        Ok(msg) => {
             tracing::debug!("Ran action, got result to submit");
             if let Err(err) = out.blocking_send(msg) {
                 tracing::error!("Error submitting msg: {:?}", err);
             }
-        }
-        Ok(None) => {
-            tracing::debug!("Ran action, no submission");
         }
         Err(e) => {
             tracing::error!("Error running trigger: {:?}", e);

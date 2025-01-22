@@ -1,18 +1,74 @@
-use std::sync::atomic::AtomicU64;
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
 use crate::apis::trigger::{
-    TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
+    Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
 };
-use utils::{IDError, ServiceID, WorkflowID};
+use crate::test_utils::address::{
+    rand_address_eth, rand_address_layer, rand_event_cosmos, rand_event_eth,
+};
 
-use lavs_apis::id::TaskId;
 use layer_climb::prelude::Address;
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
+use utils::{IDError, ServiceID, WorkflowID};
+
+pub fn mock_eth_event_trigger_config(
+    service_id: impl TryInto<ServiceID, Error = IDError>,
+    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+) -> TriggerConfig {
+    TriggerConfig::eth_contract_event(
+        service_id,
+        workflow_id,
+        rand_address_eth(),
+        "eth",
+        rand_event_eth(),
+    )
+    .unwrap()
+}
+
+pub fn mock_cosmos_event_trigger_config(
+    service_id: impl TryInto<ServiceID, Error = IDError>,
+    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+) -> TriggerConfig {
+    TriggerConfig::cosmos_contract_event(
+        service_id,
+        workflow_id,
+        rand_address_layer(),
+        "cosmos",
+        rand_event_cosmos(),
+    )
+    .unwrap()
+}
+
+pub fn mock_eth_event_trigger() -> Trigger {
+    Trigger::eth_contract_event(rand_address_eth(), "eth", rand_event_eth())
+}
+
+pub fn mock_cosmos_event_trigger() -> Trigger {
+    Trigger::cosmos_contract_event(rand_address_layer(), "cosmos", rand_event_cosmos())
+}
+
+pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -> TriggerData {
+    TriggerData::CosmosContractEvent {
+        contract_address: rand_address_layer(),
+        chain_name: "layer".to_string(),
+        // matches example_cosmos_client::NewMessageEvent
+        event: cosmwasm_std::Event::new("new-message")
+            .add_attribute("id", trigger_id.to_string())
+            .add_attribute("data", hex::encode(data.as_ref())),
+        block_height: 0,
+    }
+}
+
+pub fn get_mock_trigger_data(trigger_data: &TriggerData) -> Vec<u8> {
+    match trigger_data {
+        TriggerData::Raw(data) => data.to_vec(),
+        _ => panic!("mocks need raw trigger data"),
+    }
+}
 
 pub struct MockTriggerManagerVec {
     triggers: RwLock<Vec<TriggerAction>>,
@@ -142,7 +198,6 @@ impl TriggerManager for MockTriggerManagerVec {
 // This mock is currently only used in mock_e2e.rs
 // it doesn't have the same coverage in unit tests here as MockTriggerManager
 pub struct MockTriggerManagerChannel {
-    trigger_count: AtomicU64,
     sender: mpsc::Sender<TriggerAction>,
     receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
     trigger_datas: Mutex<Vec<TriggerConfig>>,
@@ -155,7 +210,6 @@ impl MockTriggerManagerChannel {
         let (sender, receiver) = mpsc::channel(channel_bound);
 
         Self {
-            trigger_count: AtomicU64::new(1),
             receiver: Mutex::new(Some(receiver)),
             sender,
             trigger_datas: Mutex::new(Vec::new()),
@@ -169,17 +223,29 @@ impl MockTriggerManagerChannel {
         workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
         contract_address: &Address,
         data: &(impl Serialize + std::fmt::Debug),
+        chain_id: impl ToString + std::fmt::Debug,
     ) {
-        let task_id = TaskId::new(
-            self.trigger_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        );
-
         self.sender
             .send(TriggerAction {
-                config: TriggerConfig::eth_event(service_id, workflow_id, contract_address.clone())
+                config: match contract_address {
+                    Address::Eth(_) => TriggerConfig::eth_contract_event(
+                        service_id,
+                        workflow_id,
+                        contract_address.clone(),
+                        chain_id,
+                        rand_event_eth(),
+                    )
                     .unwrap(),
-                data: TriggerData::queue(task_id, serde_json::to_string(data).unwrap().as_bytes()),
+                    Address::Cosmos { .. } => TriggerConfig::cosmos_contract_event(
+                        service_id,
+                        workflow_id,
+                        contract_address.clone(),
+                        chain_id,
+                        hex::encode(rand_event_eth()),
+                    )
+                    .unwrap(),
+                },
+                data: TriggerData::new_raw(serde_json::to_string(data).unwrap().as_bytes()),
             })
             .await
             .unwrap();
@@ -236,32 +302,20 @@ impl TriggerManager for MockTriggerManagerChannel {
 #[cfg(test)]
 mod tests {
 
-    use lavs_apis::id::TaskId;
-
-    use crate::{apis::trigger::TriggerData, test_utils::address::rand_address_eth};
+    use crate::apis::trigger::TriggerData;
 
     use super::*;
 
     #[test]
     fn mock_trigger_sends() {
-        let contract_address = rand_address_eth();
-
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_event("service1", "workflow1", contract_address.clone())
-                    .unwrap(),
-                data: TriggerData::Queue {
-                    task_id: TaskId::new(2),
-                    payload: "foobar".into(),
-                },
+                config: mock_eth_event_trigger_config("service1", "workflow1"),
+                data: TriggerData::new_raw(b"foobar"),
             },
             TriggerAction {
-                config: TriggerConfig::eth_event("service2", "workflow2", contract_address)
-                    .unwrap(),
-                data: TriggerData::Queue {
-                    task_id: TaskId::new(4),
-                    payload: "zoomba".into(),
-                },
+                config: mock_eth_event_trigger_config("service2", "workflow2"),
+                data: TriggerData::new_raw(b"zoomba"),
             },
         ];
         let triggers = MockTriggerManagerVec::new().with_actions(actions.clone());
@@ -278,7 +332,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = TriggerConfig::eth_event("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = mock_eth_event_trigger_config("abcd", "abcd");
         triggers.add_trigger(data).unwrap();
     }
 
@@ -289,7 +343,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = TriggerConfig::eth_event("abcd", "abcd", rand_address_eth()).unwrap();
+        let data = mock_eth_event_trigger_config("abcd", "abcd");
         triggers.add_trigger(data).unwrap_err();
     }
 }

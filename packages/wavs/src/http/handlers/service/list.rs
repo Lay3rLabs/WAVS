@@ -4,12 +4,11 @@ use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    apis::dispatcher::{Permissions, ServiceStatus, Submit},
-    http::{
-        error::HttpResult,
-        state::HttpState,
-        types::{ShaDigest, TriggerResponse},
+    apis::{
+        dispatcher::{Permissions, ServiceStatus},
+        trigger::Trigger,
     },
+    http::{error::HttpResult, state::HttpState, types::ShaDigest},
 };
 use utils::ServiceID;
 
@@ -27,14 +26,10 @@ pub struct ListServicesResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceResponse {
-    /// In 0.2 this is called "name"
-    /// This is the ID of the service
-    #[serde(rename = "name")]
     pub id: ServiceID,
     pub status: ServiceStatus,
     pub digest: ShaDigest,
-    // for 0.3, it might be nice to make this just Trigger, but the address type breaks backwards compat
-    pub trigger: TriggerResponse,
+    pub trigger: Trigger,
     pub permissions: Permissions,
     pub testable: Option<bool>,
 }
@@ -66,19 +61,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                 // just first workflow for now
                 trigger: match service.workflows.values().next() {
                     None => return Err(anyhow::anyhow!("No workflows found").into()),
-                    Some(w) => {
-                        let hd_index = w
-                            .submit
-                            .as_ref()
-                            .map(|s| match s {
-                                Submit::LayerVerifierTx { hd_index, .. } => *hd_index,
-                                Submit::EthAggregatorTx { .. } => 0,
-                                Submit::EthSignedMessage { hd_index, .. } => *hd_index,
-                            })
-                            .unwrap_or(0);
-
-                        w.trigger.clone().into_response(hd_index)
-                    }
+                    Some(w) => w.trigger.clone(),
                 },
                 testable: Some(service.testable),
             });
@@ -89,81 +72,4 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
     let digests = digests.into_iter().map(Into::into).collect();
 
     Ok(ListServicesResponse { services, digests })
-}
-
-#[cfg(test)]
-mod test {
-    use serde::{Deserialize, Serialize};
-
-    use crate::{
-        apis::dispatcher::{Permissions, ServiceStatus},
-        http::{
-            handlers::service::list::ListServicesResponse,
-            types::{ShaDigest, TriggerResponse},
-        },
-        test_utils::address::rand_address_eth,
-        Digest,
-    };
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OldListAppsResponse {
-        pub apps: Vec<OldApp>,
-        pub digests: Vec<ShaDigest>,
-    }
-
-    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OldApp {
-        pub name: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub status: Option<ServiceStatus>,
-        pub digest: ShaDigest,
-        pub trigger: TriggerResponse,
-        pub permissions: Permissions,
-        pub testable: Option<bool>,
-    }
-
-    #[tokio::test]
-    async fn list_services_backwards_compat() {
-        let old = OldListAppsResponse {
-            apps: vec![
-                OldApp {
-                    name: "test-name-1".to_string(),
-                    status: Some(ServiceStatus::Active),
-                    digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::eth_event(rand_address_eth()),
-                    permissions: Permissions::default(),
-                    testable: Some(true),
-                },
-                OldApp {
-                    name: "test-name-2".to_string(),
-                    status: Some(ServiceStatus::Active),
-                    digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::eth_event(rand_address_eth()),
-                    permissions: Permissions::default(),
-                    testable: Some(true),
-                },
-                OldApp {
-                    name: "test-name-3".to_string(),
-                    status: Some(ServiceStatus::Active),
-                    digest: Digest::new(&[0; 32]).into(),
-                    trigger: TriggerResponse::eth_event(rand_address_eth()),
-                    permissions: Permissions::default(),
-                    testable: Some(true),
-                },
-            ],
-            digests: vec![Digest::new(&[0; 32]).into(), Digest::new(&[0; 32]).into()],
-        };
-
-        let old_str = serde_json::to_string_pretty(&old).unwrap();
-
-        let updated: ListServicesResponse = serde_json::from_str(&old_str).unwrap();
-
-        let updated_str = serde_json::to_string(&updated).unwrap();
-
-        let old_roundtrip: OldListAppsResponse = serde_json::from_str(&updated_str).unwrap();
-
-        assert_eq!(old, old_roundtrip);
-    }
 }

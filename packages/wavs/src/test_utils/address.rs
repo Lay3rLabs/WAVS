@@ -17,6 +17,21 @@ pub fn rand_address_eth() -> Address {
     Address::Eth(AddrEth::new(signer.address().into()))
 }
 
+pub fn rand_event_eth() -> [u8; 32] {
+    rand::thread_rng().gen()
+}
+
+pub fn rand_event_cosmos() -> String {
+    hex::encode(rand_event_eth())
+}
+
+pub fn rand_address_eth_alloy() -> alloy::primitives::Address {
+    match rand_address_eth() {
+        Address::Eth(addr) => alloy::primitives::Address(addr.as_bytes().into()),
+        _ => unreachable!(),
+    }
+}
+
 pub fn rand_address_layer() -> Address {
     let mut rng = rand::thread_rng();
 

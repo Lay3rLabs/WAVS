@@ -1,40 +1,24 @@
-use serde::{Deserialize, Serialize};
-use utils::{
-    eigen_client::CoreAVSAddresses,
-    layer_contract_client::{LayerAddresses, SignedData},
-};
-use utils::{ServiceID, WorkflowID};
+use std::collections::HashMap;
 
-#[derive(Debug)]
+use crate::deploy::ServiceInfo;
+use anyhow::Result;
+use serde::Serialize;
+use utils::{avs_client::SignedData, eigen_client::CoreAVSAddresses, ServiceID, WorkflowID};
+
+#[derive(Debug, Default)]
 pub struct DisplayBuilder {
     pub core_contracts: Option<CoreAVSAddresses>,
-    pub layer_addresses: Option<LayerAddresses>,
-    pub service: Option<ServiceAndWorkflow>,
-    pub workflow_id: Option<ServiceID>,
+    pub service: Option<(ServiceID, HashMap<WorkflowID, ServiceInfo>)>,
     pub signed_data: Option<SignedData>,
     pub gas_used: Option<u64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ServiceAndWorkflow {
-    pub service_id: ServiceID,
-    pub workflow_id: WorkflowID,
-}
-
 impl DisplayBuilder {
     pub fn new() -> Self {
-        Self {
-            core_contracts: None,
-            layer_addresses: None,
-            service: None,
-            workflow_id: None,
-            signed_data: None,
-            gas_used: None,
-        }
+        Self::default()
     }
 
-    pub fn show(self) {
+    pub fn show(self) -> Result<()> {
         #[derive(Debug, Serialize)]
         #[serde(rename_all = "snake_case")]
         pub struct DisplayJson {
@@ -42,13 +26,7 @@ impl DisplayBuilder {
             pub core_contracts: Option<CoreAVSAddresses>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub layer_addresses: Option<LayerAddresses>,
-
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub service: Option<ServiceAndWorkflow>,
-
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub workflow_id: Option<ServiceID>,
+            pub service: Option<(ServiceID, HashMap<WorkflowID, ServiceInfo>)>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub signed_data: Option<SignedDataJson>,
@@ -75,13 +53,12 @@ impl DisplayBuilder {
             "{}",
             serde_json::to_string_pretty(&DisplayJson {
                 core_contracts: self.core_contracts,
-                layer_addresses: self.layer_addresses,
                 service: self.service,
-                workflow_id: self.workflow_id,
                 signed_data,
                 gas_used: self.gas_used,
-            })
-            .unwrap()
+            })?
         );
+
+        Ok(())
     }
 }

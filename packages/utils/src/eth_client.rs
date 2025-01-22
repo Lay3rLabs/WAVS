@@ -61,35 +61,10 @@ impl EthSigningClient {
     }
 }
 
-// Just the raw config needed for talking to ethereum, not wavs-specific
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct EthChainConfig {
-    pub ws_endpoint: Option<String>,
-    pub http_endpoint: String,
-    /// Preferred transport
-    pub transport: Option<EthClientTransport>,
-}
-
-impl EthChainConfig {
-    pub fn to_client_config(
-        &self,
-        hd_index: Option<u32>,
-        mnemonic: Option<String>,
-    ) -> EthClientConfig {
-        EthClientConfig {
-            ws_endpoint: self.ws_endpoint.clone(),
-            http_endpoint: self.http_endpoint.clone(),
-            transport: self.transport,
-            hd_index,
-            mnemonic,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EthClientConfig {
     pub ws_endpoint: Option<String>,
-    pub http_endpoint: String,
+    pub http_endpoint: Option<String>,
     pub mnemonic: Option<String>,
     pub hd_index: Option<u32>,
     /// Preferred transport
@@ -124,7 +99,12 @@ impl EthClientBuilder {
         let provider: RootProvider<BoxTransport> = match self.preferred_transport() {
             // Http preferred or no preference and no websocket
             EthClientTransport::Http => {
-                let endpoint_url = self.config.http_endpoint.parse()?;
+                let endpoint_url = self
+                    .config
+                    .http_endpoint
+                    .as_ref()
+                    .context("no http endpoint")?
+                    .parse()?;
                 ProviderBuilder::new().on_http(endpoint_url).boxed()
             }
             EthClientTransport::WebSocket => {
@@ -179,7 +159,7 @@ mod test {
         // Not specified preference, websocket provided
         let transport = EthClientBuilder::new(EthClientConfig {
             ws_endpoint: Some("foo".to_owned()),
-            http_endpoint: "bar".to_owned(),
+            http_endpoint: Some("bar".to_owned()),
             transport: None,
             ..Default::default()
         })
@@ -189,7 +169,7 @@ mod test {
         // Not specified preference, websocket not provided
         let transport = EthClientBuilder::new(EthClientConfig {
             ws_endpoint: None,
-            http_endpoint: "bar".to_owned(),
+            http_endpoint: Some("bar".to_owned()),
             transport: None,
             ..Default::default()
         })
@@ -199,7 +179,7 @@ mod test {
         // Specified Http preference, websocket provided
         let transport = EthClientBuilder::new(EthClientConfig {
             ws_endpoint: Some("foo".to_owned()),
-            http_endpoint: "bar".to_owned(),
+            http_endpoint: Some("bar".to_owned()),
             transport: Some(EthClientTransport::Http),
             ..Default::default()
         })
@@ -209,7 +189,7 @@ mod test {
         // Specified Http preference, websocket not provided
         let transport = EthClientBuilder::new(EthClientConfig {
             ws_endpoint: None,
-            http_endpoint: "bar".to_owned(),
+            http_endpoint: Some("bar".to_owned()),
             transport: Some(EthClientTransport::Http),
             ..Default::default()
         })
@@ -219,7 +199,7 @@ mod test {
         // Specified Websocket preference, websocket provided
         let transport = EthClientBuilder::new(EthClientConfig {
             ws_endpoint: Some("foo".to_owned()),
-            http_endpoint: "bar".to_owned(),
+            http_endpoint: Some("bar".to_owned()),
             transport: Some(EthClientTransport::WebSocket),
             ..Default::default()
         })
@@ -229,7 +209,7 @@ mod test {
         // Specified Websocket preference, websocket not provided
         let transport = EthClientBuilder::new(EthClientConfig {
             ws_endpoint: None,
-            http_endpoint: "bar".to_owned(),
+            http_endpoint: Some("bar".to_owned()),
             transport: Some(EthClientTransport::WebSocket),
             ..Default::default()
         })

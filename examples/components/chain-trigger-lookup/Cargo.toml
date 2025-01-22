@@ -1,0 +1,24 @@
+[package]
+name = "chain-trigger-lookup"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+layer-wasi = { workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true}
+layer-climb-address = { workspace = true}
+layer-climb-config = { workspace = true}
+wit-bindgen-rt = { workspace = true}
+wstd = { workspace = true }
+example-helpers = { workspace = true }
+anyhow = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "component:cosmos-trigger-lookup"

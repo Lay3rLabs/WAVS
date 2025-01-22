@@ -1,17 +1,16 @@
-use alloy::primitives::{Address, U256};
+use alloy::primitives::{Address, PrimitiveSignature, U256};
 use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
+    avs_client::{
+        layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
+        SignedPayload,
+    },
     eigen_client::solidity_types::{
         misc::{AVSDirectory, IAVSDirectory::OperatorAVSRegistrationStatus},
         BoxSigningProvider,
     },
-    layer_contract_client::{
-        layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
-        SignedPayload,
-    },
-    ServiceID,
 };
 
 use crate::http::{error::HttpResult, state::HttpState};
@@ -22,11 +21,10 @@ pub async fn handle_add_payload(
     Json(req): Json<AggregateAvsRequest>,
 ) -> impl IntoResponse {
     let resp = match req {
-        AggregateAvsRequest::EthTrigger {
+        AggregateAvsRequest::EigenContract {
             signed_payload,
             service_manager_address,
-            service_id,
-        } => add_payload_trigger(state, signed_payload, service_manager_address, service_id).await,
+        } => add_payload(state, signed_payload, service_manager_address).await,
     };
 
     match resp {
@@ -35,11 +33,10 @@ pub async fn handle_add_payload(
     }
 }
 
-pub async fn add_payload_trigger(
+pub async fn add_payload(
     state: HttpState,
     signed_payload: SignedPayload,
     service_manager_address: Address,
-    service_id: ServiceID,
 ) -> HttpResult<AggregateAvsResponse> {
     let eth_client = state.config.signing_client().await?;
 
@@ -50,11 +47,7 @@ pub async fn add_payload_trigger(
     )
     .await?;
 
-    let mut payloads_map = state.load_all_payloads(service_manager_address)?;
-
-    let queue = payloads_map
-        .entry(service_id)
-        .or_insert_with(Default::default);
+    let mut queue = state.load_all_payloads(service_manager_address)?;
 
     queue.push(signed_payload);
 
@@ -80,7 +73,7 @@ pub async fn add_payload_trigger(
             .collect::<Vec<_>>();
 
         let pending_tx = LayerServiceManager::new(service_manager_address, &eth_client.provider)
-            .addSignedPayloadForTriggerMulti(payloads)
+            .addPayloadMulti(payloads)
             .send()
             .await?;
         let tx_hash = pending_tx.tx_hash();
@@ -94,7 +87,7 @@ pub async fn add_payload_trigger(
         AggregateAvsResponse::Aggregated { count }
     };
 
-    state.save_all_payloads(service_manager_address, payloads_map)?;
+    state.save_all_payloads(service_manager_address, queue)?;
 
     Ok(resp)
 }
@@ -130,10 +123,11 @@ pub async fn check_operator(
         .await?
         ._0;
 
-    let signed_payload_signature = signed_payload.signature;
+    let signed_payload_signature: PrimitiveSignature =
+        signed_payload.signature.as_slice().try_into()?;
 
     let signature_address =
-        signed_payload_signature.recover_address_from_prehash(&signed_payload.payload_hash)?;
+        signed_payload_signature.recover_address_from_prehash(&signed_payload.data_hash)?;
 
     if expected_address != signature_address {
         return Err(anyhow!(

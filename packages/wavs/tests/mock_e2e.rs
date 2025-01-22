@@ -60,6 +60,7 @@ fn mock_e2e_trigger_flow() {
                     &workflow_id,
                     &task_queue_address,
                     &SquareIn { x: 3 },
+                    "eth",
                 )
                 .await;
             runner
@@ -70,6 +71,7 @@ fn mock_e2e_trigger_flow() {
                     &workflow_id,
                     &task_queue_address,
                     &SquareIn { x: 21 },
+                    "eth",
                 )
                 .await;
         }
@@ -84,7 +86,7 @@ fn mock_e2e_trigger_flow() {
         .submission
         .received()
         .iter()
-        .map(|msg| serde_json::from_slice(msg.wasm_result()).unwrap())
+        .map(|msg| serde_json::from_slice(&msg.wasi_result).unwrap())
         .collect();
 
     assert_eq!(results, vec![SquareOut { y: 9 }, SquareOut { y: 441 }]);

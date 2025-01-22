@@ -23,6 +23,7 @@ impl CoreDispatcher {
             file_storage,
             app_storage,
             config.wasm_lru_size,
+            config.chains.clone(),
         ));
         let engine = MultiEngineRunner::new(engine, config.wasm_threads);
 

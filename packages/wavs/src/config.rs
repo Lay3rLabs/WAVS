@@ -1,7 +1,9 @@
-use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
-use utils::config::{ChainConfigs, ConfigExt, CosmosChainConfig, EthereumChainConfig};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+};
+use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -31,11 +33,8 @@ pub struct Config {
     pub wasm_lru_size: usize,
     pub wasm_threads: usize,
 
-    /// The chosen ethereum chain name
-    pub eth_chains: Vec<String>,
-
-    /// The chosen cosmos chain name
-    pub cosmos_chain: Option<String>,
+    /// The active chain names to watch for triggers
+    pub active_trigger_chains: Vec<String>,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -70,11 +69,10 @@ impl Default for Config {
             host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
-            cosmos_chain: None,
-            eth_chains: Vec::new(),
+            active_trigger_chains: Vec::new(),
             chains: ChainConfigs {
-                cosmos: HashMap::new(),
-                eth: HashMap::new(),
+                cosmos: BTreeMap::new(),
+                eth: BTreeMap::new(),
             },
             wasm_lru_size: 20,
             wasm_threads: 4,
@@ -85,34 +83,24 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn active_ethereum_chain_configs(&self) -> HashMap<String, EthereumChainConfig> {
+    pub fn active_trigger_chain_configs(&self) -> HashMap<String, AnyChainConfig> {
         self.chains
-            .eth
+            .cosmos
             .iter()
             .filter_map(|(chain_name, chain)| {
-                if self.eth_chains.contains(chain_name) {
-                    Some((chain_name.clone(), chain.clone()))
+                if self.active_trigger_chains.contains(chain_name) {
+                    Some((chain_name.clone(), chain.clone().into()))
                 } else {
                     None
                 }
             })
+            .chain(self.chains.eth.iter().filter_map(|(chain_name, chain)| {
+                if self.active_trigger_chains.contains(chain_name) {
+                    Some((chain_name.clone(), chain.clone().into()))
+                } else {
+                    None
+                }
+            }))
             .collect()
-    }
-
-    pub fn cosmos_chain_config(&self) -> Result<&CosmosChainConfig> {
-        match self.cosmos_chain.as_deref() {
-            Some(chain_name) => self.chains.cosmos.get(chain_name).ok_or(anyhow::anyhow!(
-                "No cosmos chain config found for chain: {}",
-                chain_name
-            )),
-            None => bail!("No cosmos chain specified in config"),
-        }
-    }
-
-    pub fn try_cosmos_chain_config(&self) -> Result<Option<&CosmosChainConfig>> {
-        match self.cosmos_chain.as_deref() {
-            Some(chain_name) => Ok(self.chains.cosmos.get(chain_name)),
-            None => Ok(None),
-        }
     }
 }

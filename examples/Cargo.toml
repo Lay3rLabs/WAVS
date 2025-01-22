@@ -1,14 +1,18 @@
 [workspace]
 members = [
-  "btc-avg",
-  "composition/http-allow-list/http-allowed-coingecko",
-  "square",
-  "permissions",
-  "ai-bouncer",
-  "eth-event-echo",
-  "eth-trigger-echo",
-  "eth-trigger-square",
-  "eth-cosmos-query",
+  "components/cosmos-query",
+  "components/chain-trigger-lookup",
+  "components/echo-data",
+  "components/echo-raw",
+  "components/square",
+  "components/permissions",
+  "components/_helpers",
+  # TODO - port from old/
+  # "composition/http-allow-list/http-allowed-coingecko",
+  # "ai-bouncer",
+  # "btc-avg",
+
+  "contracts/cosmwasm/simple",
 ]
 resolver = "2"
 
@@ -20,21 +24,32 @@ rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [workspace.dependencies]
+layer-wasi = { path = "../sdk/wasi" }
+example-helpers = { path = "./components/_helpers" }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 anyhow = "1.0.90"
-wit-bindgen-rt = { version = "0.32.0", features = ["bitflags"] }
+wit-bindgen-rt = {version = "0.37.0", features = ["bitflags"]}
+wit-bindgen = "0.37.0"
 alloy-rlp = {version = "0.3.10", features = ["derive"]}
 alloy-primitives = "0.8.15"
-alloy-sol-macro = "0.8.15"
+alloy-sol-macro = {version = "0.8.15", features = ["json"]}
 alloy-sol-types = "0.8.15"
-layer-wasi = { git = "https://github.com/Lay3rLabs/avs-toolkit", tag = "v0.2.1" }
-layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
-layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
-layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.0" }
+alloy-contract = "0.9.2"
+layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
+layer-climb-proto = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
+layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
+layer-climb-config = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.3" }
 tendermint-rpc = "0.40.1"
 tendermint = { version = "0.40.1", default-features = false}
 wstd = "0.4.0"
+url = "2.5.3"
+wasi = "0.13.3"
+cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
+cosmwasm-schema = "2.2.0"
+cw-storage-plus = "2.0.0"
+cw2 = "2.0.0"
+hex = "0.4.3"
 
 [profile.release]
 codegen-units = 1

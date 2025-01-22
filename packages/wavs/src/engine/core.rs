@@ -1,11 +1,10 @@
 use anyhow::Context;
-use lavs_apis::id::TaskId;
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
+use utils::config::ChainConfigs;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -15,13 +14,14 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::apis::dispatcher::{AllowedHostPermission, ServiceConfig};
+use crate::apis::trigger::{TriggerAction, TriggerError};
 use crate::storage::{CAStorage, CAStorageError};
-use crate::{apis, bindings, Digest};
-use utils::{ServiceID, WorkflowID};
+use crate::{apis, Digest};
 
 use super::{Engine, EngineError};
 
 pub struct WasmEngine<S: CAStorage> {
+    chain_configs: ChainConfigs,
     wasm_storage: S,
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
@@ -30,7 +30,12 @@ pub struct WasmEngine<S: CAStorage> {
 
 impl<S: CAStorage> WasmEngine<S> {
     /// Create a new Wasm Engine manager.
-    pub fn new(wasm_storage: S, app_data_dir: impl AsRef<Path>, lru_size: usize) -> Self {
+    pub fn new(
+        wasm_storage: S,
+        app_data_dir: impl AsRef<Path>,
+        lru_size: usize,
+        chain_configs: ChainConfigs,
+    ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
         config.async_support(true);
@@ -50,6 +55,7 @@ impl<S: CAStorage> WasmEngine<S> {
             wasm_engine,
             memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
+            chain_configs,
         }
     }
 }
@@ -80,83 +86,40 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
     /// This will execute a contract that implements the layer_avs:task-queue wit interface
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
         wasi: &apis::dispatcher::Component,
+        trigger: TriggerAction,
         service_config: &ServiceConfig,
-        service_id: &ServiceID,
-        task_id: TaskId,
-        request: Vec<u8>,
-        timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
         let (mut store, component, linker) =
-            self.get_instance_deps(wasi, service_id, service_config)?;
+            self.get_instance_deps(wasi, &trigger, service_config)?;
 
         store
             .set_fuel(service_config.fuel_limit)
             .map_err(EngineError::Other)?;
 
         self.block_on_run(async move {
-            let instance = bindings::task_queue::TaskQueueWorld::instantiate_async(
+            let service_id = trigger.config.service_id.clone();
+            let workflow_id = trigger.config.workflow_id.clone();
+
+            let input: crate::bindings::world::lay3r::avs::layer_types::TriggerAction = trigger
+                .try_into()
+                .map_err(|e: TriggerError| EngineError::TriggerData(e.into()))?;
+
+            crate::bindings::world::LayerTriggerWorld::instantiate_async(
                 &mut store, &component, &linker,
             )
             .await
-            .context("Wasm instantiate failed")?;
-            let input = bindings::task_queue::TaskQueueInput { timestamp, request };
-
-            instance
-                .call_run_task(&mut store, &input)
-                .await
-                .context("Failed to run task")
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => {
-                        EngineError::OutOfFuel(service_id.clone(), task_id.u64())
-                    }
-                    _ => EngineError::ComponentError(e.to_string()),
-                })?
-                .map_err(EngineError::ComponentError)
-        })
-    }
-
-    /// This will execute a contract that implements the layer_avs:eth-event wit interface
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        wasi: &apis::dispatcher::Component,
-        service_config: &ServiceConfig,
-        service_id: &ServiceID,
-        workflow_id: &WorkflowID,
-        trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        let (mut store, component, linker) =
-            self.get_instance_deps(wasi, service_id, service_config)?;
-
-        store
-            .set_fuel(service_config.fuel_limit)
-            .map_err(EngineError::Other)?;
-
-        self.block_on_run(async move {
-            // For right now, we use the hello-world pipeline (contract and component)
-            // eventually this will be a more generic system
-
-            let instance = bindings::eth_trigger::EthTriggerWorld::instantiate_async(
-                &mut store, &component, &linker,
-            )
+            .context("Wasm instantiate failed")?
+            .call_run(store, &input)
             .await
-            .context("Wasm instantiate failed")?;
-
-            instance
-                .call_process_eth_trigger(&mut store, &payload)
-                .await
-                .context("Failed to run task")
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => {
-                        EngineError::OutOfFuel(service_id.clone(), trigger_id.u64())
-                    }
-                    _ => EngineError::ComponentError(e.to_string()),
-                })?
-                .map_err(EngineError::ComponentError)
+            .context("Failed to run task")
+            .map_err(|e| match e.downcast_ref::<Trap>() {
+                Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
+                _ => EngineError::ComponentError(e.to_string()),
+            })?
+            .map_err(EngineError::ComponentError)
         })
     }
 }
@@ -177,12 +140,12 @@ impl<S: CAStorage> WasmEngine<S> {
         rt.block_on(fut)
     }
 
-    fn get_instance_deps<L: WasiView + WasiHttpView>(
+    fn get_instance_deps(
         &self,
         wasi: &apis::dispatcher::Component,
-        service_id: &ServiceID,
+        trigger: &TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<(Store<Host>, Component, Linker<L>), EngineError> {
+    ) -> Result<(Store<HostComponent>, Component, Linker<HostComponent>), EngineError> {
         // load component from memory cache or compile from wasm
         // TODO: use serialized precompile as well, pull this into a method
         let digest = wasi.wasm.clone();
@@ -196,6 +159,7 @@ impl<S: CAStorage> WasmEngine<S> {
 
         // create linker
         let mut linker = Linker::new(&self.wasm_engine);
+        crate::bindings::world::host::add_to_linker(&mut linker, |state| state).unwrap();
         // wasmtime_wasi::add_to_linker_sync(&mut linker).unwrap();
         // wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker).unwrap();
         wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
@@ -210,9 +174,12 @@ impl<S: CAStorage> WasmEngine<S> {
 
         // conditionally allow fs access
         if wasi.permissions.file_system {
-            let app_cache_path = self.app_data_dir.join(service_id.as_ref());
+            let app_cache_path = self
+                .app_data_dir
+                .join(trigger.config.service_id.as_ref())
+                .join(trigger.config.workflow_id.as_ref());
             if !app_cache_path.is_dir() {
-                std::fs::create_dir(&app_cache_path)?;
+                std::fs::create_dir_all(&app_cache_path)?;
             }
             builder
                 .preopened_dir(&app_cache_path, ".", DirPerms::all(), FilePerms::all())
@@ -239,7 +206,8 @@ impl<S: CAStorage> WasmEngine<S> {
         let ctx = builder.build();
 
         // create host (what is this actually? some state needed for the linker?)
-        let host = Host {
+        let host = HostComponent {
+            chain_configs: self.chain_configs.clone(),
             table: wasmtime::component::ResourceTable::new(),
             ctx,
             http: WasiHttpCtx::new(),
@@ -253,13 +221,14 @@ impl<S: CAStorage> WasmEngine<S> {
 
 // TODO: revisit this an understand it.
 // Copied blindly from old code
-pub(crate) struct Host {
+pub struct HostComponent {
+    pub chain_configs: ChainConfigs,
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,
 }
 
-impl WasiView for Host {
+impl WasiView for HostComponent {
     fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
         &mut self.table
     }
@@ -269,7 +238,7 @@ impl WasiView for Host {
     }
 }
 
-impl WasiHttpView for Host {
+impl WasiHttpView for HostComponent {
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
@@ -281,26 +250,29 @@ impl WasiHttpView for Host {
 
 #[cfg(test)]
 mod tests {
-    use apis::dispatcher::ServiceConfig;
-    use utils::ComponentID;
+    use apis::{
+        dispatcher::ServiceConfig,
+        trigger::{Trigger, TriggerConfig, TriggerData},
+    };
+    use utils::{ComponentID, ServiceID, WorkflowID};
 
-    use crate::storage::memory::MemoryStorage;
+    use crate::{engine::mock::mock_chain_configs, storage::memory::MemoryStorage};
 
     use super::*;
 
-    const SQUARE: &[u8] = include_bytes!("../../../../components/square.wasm");
-    const BTC_AVG: &[u8] = include_bytes!("../../../../components/btc_avg.wasm");
-    const ETH_TRIGGER_ECHO: &[u8] = include_bytes!("../../../../components/eth_trigger_echo.wasm");
+    const ECHO_RAW: &[u8] = include_bytes!("../../../../examples/build/components/echo_raw.wasm");
+    const PERMISSIONS: &[u8] =
+        include_bytes!("../../../../examples/build/components/permissions.wasm");
 
     #[test]
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
 
         // store two blobs
-        let digest = engine.store_wasm(SQUARE).unwrap();
-        let digest2 = engine.store_wasm(BTC_AVG).unwrap();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let digest2 = engine.store_wasm(PERMISSIONS).unwrap();
         assert_ne!(digest, digest2);
 
         // list them
@@ -314,10 +286,10 @@ mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
 
         // store valid wasm
-        let digest = engine.store_wasm(SQUARE).unwrap();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
         // fail on invalid wasm
         engine.store_wasm(b"foobarbaz").unwrap_err();
 
@@ -327,85 +299,103 @@ mod tests {
     }
 
     #[test]
-    fn execute_square() {
+    fn execute_echo() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         // store square digest
-        let digest = engine.store_wasm(SQUARE).unwrap();
-        let component = crate::apis::dispatcher::Component::new(&digest);
-        // execute it and get square
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let component = crate::apis::dispatcher::Component::new(digest);
+
+        // execute it and get bytes back
         let result = engine
-            .execute_queue(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"{"x":12}"#),
+                },
                 &ServiceConfig::default(),
-                &ServiceID::new("foobar").unwrap(),
-                TaskId::new(12345),
-                br#"{"x":12}"#.into(),
-                12345,
             )
             .unwrap();
-        assert_eq!(&result, br#"{"y":144}"#);
+
+        assert_eq!(&result, br#"{"x":12}"#);
     }
 
     #[test]
     fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        let digest = engine.store_wasm(ETH_TRIGGER_ECHO).unwrap();
-        let component = crate::apis::dispatcher::Component::new(&digest);
-
-        let workflow_id = WorkflowID::default();
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let component = crate::apis::dispatcher::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
             max_gas: None,
             component_id: ComponentID::default(),
-            workflow_id: workflow_id.clone(),
+            workflow_id: WorkflowID::default(),
         };
 
         // verify service config kv is accessible
         let result = engine
-            .execute_eth_event(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"envvar:foo"#),
+                },
                 &service_config,
-                &ServiceID::new("foobar").unwrap(),
-                &workflow_id,
-                TriggerId::new(12345),
-                br#"envvar:foo"#.into(),
             )
             .unwrap();
+
         assert_eq!(&result, br#"bar"#);
 
         // verify whitelisted host env var is accessible
         let result = engine
-            .execute_eth_event(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
+                },
                 &service_config,
-                &ServiceID::new("foobar").unwrap(),
-                &workflow_id,
-                TriggerId::new(12345),
-                br#"envvar:WAVS_ENV_TEST"#.into(),
             )
             .unwrap();
+
         assert_eq!(&result, br#"testing"#);
 
         // verify the non-enabled env var is not accessible
         let result = engine
-            .execute_eth_event(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
+                },
                 &service_config,
-                &ServiceID::new("foobar").unwrap(),
-                &workflow_id,
-                TriggerId::new(12345),
-                br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#.into(),
             )
             .unwrap_err();
         assert!(matches!(result, EngineError::ComponentError(_)));
@@ -417,11 +407,11 @@ mod tests {
         let app_data = tempfile::tempdir().unwrap();
 
         let low_fuel_limit = 1;
-        let engine = WasmEngine::new(storage, &app_data, 3);
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
 
         // store square digest
-        let digest = engine.store_wasm(SQUARE).unwrap();
-        let component = crate::apis::dispatcher::Component::new(&digest);
+        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let component = crate::apis::dispatcher::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: low_fuel_limit,
             ..Default::default()
@@ -429,13 +419,17 @@ mod tests {
 
         // execute it and get the error
         let err = engine
-            .execute_queue(
+            .execute(
                 &component,
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"{"x":12}"#),
+                },
                 &service_config,
-                &ServiceID::new("foobar").unwrap(),
-                TaskId::new(12345),
-                br#"{"x":12}"#.into(),
-                12345,
             )
             .unwrap_err();
 

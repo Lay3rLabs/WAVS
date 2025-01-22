@@ -13,7 +13,7 @@ async fn client_stream_blocks() {
 
     let config = EthClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),
-        http_endpoint: anvil.endpoint().to_string(),
+        http_endpoint: Some(anvil.endpoint().to_string()),
         ..Default::default()
     };
 
@@ -42,7 +42,7 @@ async fn client_sign_message() {
 
     let config = EthClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),
-        http_endpoint: anvil.endpoint().to_string(),
+        http_endpoint: Some(anvil.endpoint().to_string()),
         mnemonic: Some(
             "work man father plunge mystery proud hollow address reunion sauce theory bonus"
                 .to_string(),

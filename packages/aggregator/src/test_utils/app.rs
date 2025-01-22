@@ -2,7 +2,7 @@ use alloy::node_bindings::AnvilInstance;
 use std::{path::PathBuf, sync::Arc};
 use utils::{
     config::{ConfigBuilder, ConfigExt, EthereumChainConfig},
-    eth_client::{EthChainConfig, EthClientBuilder, EthClientConfig, EthSigningClient},
+    eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
 };
 
 use crate::{args::CliArgs, config::Config};
@@ -58,8 +58,8 @@ impl TestApp {
                 .unwrap()
                 .clone();
             let mut chain: EthereumChainConfig = chain.try_into().unwrap();
-            chain.ws_endpoint = anvil.ws_endpoint().to_string();
-            chain.http_endpoint = anvil.endpoint().to_string();
+            chain.ws_endpoint = Some(anvil.ws_endpoint().to_string());
+            chain.http_endpoint = Some(anvil.endpoint().to_string());
             config.chains.eth.insert(config.chain.clone(), chain);
         }
 
@@ -79,9 +79,8 @@ impl TestApp {
             .unwrap()
             .clone();
         let chain: EthereumChainConfig = chain.try_into().unwrap();
-        let chain: EthChainConfig = chain.into();
         let client_config: EthClientConfig =
-            chain.to_client_config(None, Some(ANVIL_DEFAULT_MNEMONIC.to_owned()));
+            chain.to_client_config(None, Some(ANVIL_DEFAULT_MNEMONIC.to_owned()), None);
 
         EthClientBuilder::new(client_config)
             .build_signing()

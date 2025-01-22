@@ -7,23 +7,8 @@ authors = ["Lay3r Labs Team"]
 rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
-[features]
-e2e_tests = []
-# general chain test gating
-e2e_tests_cosmos = ["e2e_tests"]
-e2e_tests_ethereum = ["e2e_tests"]
-# easy-to-use test groups (e.g. for CI) 
-e2e_tests_ethereum_baseline = ["e2e_tests_ethereum_trigger_square", "e2e_tests_ethereum_trigger_echo", "e2e_tests_ethereum_trigger_echo_2", "e2e_tests_ethereum_trigger_echo_aggregate"]
-e2e_tests_cosmos_baseline = ["e2e_tests_cosmos_permissions"]
-# specific test gating
-e2e_tests_ethereum_trigger_square = ["e2e_tests_ethereum"]
-e2e_tests_ethereum_trigger_echo = ["e2e_tests_ethereum"]
-e2e_tests_ethereum_trigger_echo_2 = ["e2e_tests_ethereum"]
-e2e_tests_ethereum_trigger_echo_aggregate = ["e2e_tests_ethereum"]
-e2e_tests_ethereum_cosmos_query = ["e2e_tests_ethereum"]
-e2e_tests_cosmos_permissions = ["e2e_tests_cosmos"]
-
 [dependencies]
+layer-wasi = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -48,7 +33,6 @@ wildmatch = { workspace = true }
 layer-climb = { workspace = true }
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
-lavs-apis = { workspace = true }
 futures = { workspace = true }
 cosmwasm-std = { workspace = true }
 reqwest = { workspace = true }

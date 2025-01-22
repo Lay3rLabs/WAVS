@@ -1,0 +1,24 @@
+[package]
+name = "permissions"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+wasi = { workspace = true }
+wit-bindgen-rt = { workspace = true }
+url = { workspace = true }
+example-helpers = { workspace = true }
+wstd = { workspace = true }
+layer-wasi = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "component:permissions"

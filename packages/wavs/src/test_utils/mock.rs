@@ -5,24 +5,22 @@ use crate::{
     apis::{
         dispatcher::{DispatchManager, Permissions, ServiceConfig, Submit},
         engine::EngineError,
+        trigger::TriggerData,
     },
     dispatcher::Dispatcher,
     engine::{
         mock::{Function, MockEngine},
         runner::{EngineRunner, SingleEngineRunner},
     },
-    http::{
-        handlers::service::{
-            add::{AddServiceRequest, ServiceRequest},
-            delete::DeleteServices,
-            list::ListServicesResponse,
-            test::{TestAppRequest, TestAppResponse},
-        },
-        types::TriggerRequest,
+    http::handlers::service::{
+        add::{AddServiceRequest, ServiceRequest},
+        delete::DeleteServices,
+        list::ListServicesResponse,
+        test::{TestAppRequest, TestAppResponse},
     },
     submission::mock::MockSubmission,
     test_utils::address::rand_address_eth,
-    triggers::mock::MockTriggerManagerChannel,
+    triggers::mock::{mock_eth_event_trigger, MockTriggerManagerChannel},
     AppContext, Digest,
 };
 use axum::{
@@ -123,13 +121,13 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
             service: ServiceRequest {
-                trigger: TriggerRequest::eth_event(rand_address_eth()),
+                trigger: mock_eth_event_trigger(),
                 id: service_id,
                 digest: digest.into(),
                 permissions,
                 config: config.clone(),
                 testable: None,
-                submit: Submit::eth_aggregator_tx(
+                submit: Submit::eigen_contract(
                     "eth".to_string(),
                     rand_address_eth(),
                     config.max_gas,
@@ -187,7 +185,7 @@ impl MockE2ETestRunner {
     ) -> D {
         let body = serde_json::to_string(&TestAppRequest {
             name: service_id.to_string(),
-            input: Some(serde_json::to_value(input).unwrap()),
+            input: TriggerData::Raw(serde_json::to_vec(&input).unwrap()),
         })
         .unwrap();
 
@@ -232,7 +230,7 @@ pub struct SquareOut {
 }
 
 impl Function for BigSquare {
-    fn execute(&self, request: Vec<u8>, _timestamp: u64) -> Result<Vec<u8>, EngineError> {
+    fn execute(&self, request: Vec<u8>) -> Result<Vec<u8>, EngineError> {
         let SquareIn { x } = serde_json::from_slice(&request).unwrap();
         let output = SquareOut { y: x * x };
         Ok(serde_json::to_vec(&output).unwrap())

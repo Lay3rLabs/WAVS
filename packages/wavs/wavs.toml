@@ -25,11 +25,8 @@ cors_allowed_origins = [
 # the directory to store the data. Default is "/var/wavs"
 # data = "~/wavs/data"
 
-# chosen eth chain names
-eth_chains = ["local"]
-
-# chosen cosmos chain name
-# cosmos_chain = "layer-local"
+# active chain names to watch for triggers
+active_trigger_chains = ["local"]
 
 max_wasm_fuel = 1_000_000
 

@@ -2,11 +2,10 @@ use std::ops::Bound;
 
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
-use lavs_apis::id::TaskId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    apis::trigger::{Trigger, TriggerAction, TriggerConfig, TriggerData},
+    apis::trigger::{TriggerAction, TriggerConfig, TriggerData},
     http::{error::HttpResult, state::HttpState},
 };
 
@@ -14,7 +13,7 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct TestAppRequest {
     pub name: String,
-    pub input: Option<serde_json::Value>,
+    pub input: TriggerData,
 }
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -35,8 +34,6 @@ pub async fn handle_test_service(
 }
 
 async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResult<TestAppResponse> {
-    let input = req.input.unwrap_or_default();
-
     let services = state
         .dispatcher
         .list_services(Bound::Included(&req.name), Bound::Included(&req.name))?;
@@ -58,14 +55,7 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
             workflow_id: workflow_id.clone(),
             trigger: workflow.trigger.clone(),
         },
-        data: match workflow.trigger {
-            Trigger::LayerQueue { .. } => {
-                TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
-            }
-            Trigger::EthEvent { .. } => {
-                TriggerData::queue(TaskId::new(0), serde_json::to_vec(&input)?.as_slice())
-            }
-        },
+        data: req.input,
     };
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -79,9 +69,9 @@ async fn test_service_inner(state: &HttpState, req: TestAppRequest) -> HttpResul
         }
     });
 
-    let chain_message = rx.await.unwrap()?.context("could not get chain message")?;
+    let chain_message = rx.await.unwrap()?;
 
-    let output = serde_json::from_slice(chain_message.wasm_result())?;
+    let output = serde_json::from_slice(&chain_message.wasi_result)?;
 
     let resp = TestAppResponse { output };
 

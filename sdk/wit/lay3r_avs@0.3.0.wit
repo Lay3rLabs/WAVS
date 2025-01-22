@@ -1,0 +1,110 @@
+package lay3r:avs@0.3.0;
+
+use wasi:io/poll@0.2.0;
+use wasi:clocks/monotonic-clock@0.2.0;
+use wasi:io/error@0.2.0;
+use wasi:io/streams@0.2.0;
+use wasi:http/types@0.2.0 as http-types;
+use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
+
+interface layer-types {
+  record cosmos-address {
+    bech32-addr: string,
+    // prefix is the first part of the bech32 address
+    prefix-len: u32
+  } 
+
+  record cosmos-event {
+    ty: string,
+    attributes: list<tuple<string, string>>,
+  }
+
+  record cosmos-chain-config {
+    chain-id: string,
+    rpc-endpoint: option<string>,
+    grpc-endpoint: option<string>,
+    grpc-web-endpoint: option<string>,
+    gas-price: f32,
+    gas-denom: string,
+    bech32-prefix: string,
+  }
+
+  record eth-address {
+    raw-bytes: list<u8>
+  }
+
+  record eth-event-log-data {
+    // the raw log topics that can be decoded into an event
+    topics: list<list<u8>>,
+    // the raw log data that can be decoded into an event
+    data: list<u8>,
+  }
+
+  record eth-chain-config {
+    chain-id: string,
+    ws-endpoint: option<string>,
+    http-endpoint: option<string>,
+  }
+
+  record trigger-action {
+    config: trigger-config,
+    data: trigger-data
+  }
+
+  record trigger-config {
+    service-id: string,
+    workflow-id: string,
+    trigger-source: trigger-source
+  }
+
+  variant trigger-source {
+    eth-contract-event(trigger-source-eth-contract-event),
+    cosmos-contract-event(trigger-source-cosmos-contract-event),
+    manual
+  }
+
+  record trigger-source-eth-contract-event {
+    address: eth-address,
+    chain-name: string,
+    event-hash: list<u8>
+  }
+
+  record trigger-source-cosmos-contract-event {
+    address: cosmos-address,
+    chain-name: string,
+    event-type: string
+  }
+
+  variant trigger-data {
+    eth-contract-event(trigger-data-eth-contract-event),
+    cosmos-contract-event(trigger-data-cosmos-contract-event),
+    raw(list<u8>)
+  }
+
+  record trigger-data-eth-contract-event {
+    contract-address: eth-address,
+    chain-name: string,
+    log: eth-event-log-data,
+    block-height: u64
+  }
+
+  record trigger-data-cosmos-contract-event {
+    contract-address: cosmos-address,
+    chain-name: string,
+    event: cosmos-event,
+    block-height: u64
+  }
+}
+
+world layer-trigger-world {
+  import host: interface {
+    use layer-types.{eth-chain-config, cosmos-chain-config};
+
+    get-eth-chain-config: func(chain-name: string) -> option<eth-chain-config>;
+    get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
+  }
+
+  use layer-types.{trigger-action};
+
+  export run: func(trigger-action: trigger-action) -> result<list<u8>, string>;
+}

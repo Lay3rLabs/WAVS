@@ -4,6 +4,15 @@ on: [pull_request]
 
 name: Basic Checks
 
+# Ensures that only a single workflow per PR will run at a time.
+# Cancels in-progress jobs if new commit is pushed.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+env:
+    GO_VERSION: 1.21
+
 # TODO: perform other tests on wasi examples
 jobs:
   test:
@@ -34,22 +43,30 @@ jobs:
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
 
-      #   # copies artifacts to a directory that can be used by deploy tests
-      #   - name: Prepare artifacts (wasm contracts)
-      #     run: bash ./scripts/collect_wasm.sh
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Set env
         run: echo "WAVS_SUBMISSION_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
 
+      - name: Set env
+        run: echo "WAVS_CLI_ETH_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
+
+      - name: Set env
+        run: echo "WAVS_AGGREGATOR_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
+
+      - name: Set env
+        run: echo "WAVS_COSMOS_SUBMISSION_MNEMONIC=\"reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff\"" >> $GITHUB_ENV
+
+      - name: Set env
+        run: echo "WAVS_CLI_COSMOS_MNEMONIC=\"reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff\"" >> $GITHUB_ENV
+
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           toolchain: 1.83.0
           command: test
-          args: --workspace --locked --features e2e_tests_ethereum_baseline -- --nocapture
+          args: --workspace --locked -- --nocapture
         env:
           RUST_BACKTRACE: 1
           RUST_LOG: info

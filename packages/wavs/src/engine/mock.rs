@@ -1,12 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::dispatcher::ServiceConfig;
+use crate::apis::{dispatcher::ServiceConfig, trigger::TriggerAction};
+use crate::triggers::mock::get_mock_trigger_data;
 use crate::Digest;
-use lavs_apis::id::TaskId;
 use tracing::instrument;
-use utils::layer_contract_client::TriggerId;
-use utils::{ServiceID, WorkflowID};
+use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
 
 use super::{Engine, EngineError};
 
@@ -17,6 +16,37 @@ use super::{Engine, EngineError};
 pub struct MockEngine {
     digests: Arc<RwLock<BTreeSet<Digest>>>,
     functions: Arc<RwLock<BTreeMap<Digest, Box<dyn Function>>>>,
+}
+
+pub fn mock_chain_configs() -> ChainConfigs {
+    ChainConfigs {
+        eth: vec![(
+            "eth".to_string(),
+            EthereumChainConfig {
+                chain_id: 31337.to_string(),
+                ws_endpoint: Some("ws://localhost:8546".to_string()),
+                http_endpoint: Some("http://localhost:8545".to_string()),
+                aggregator_endpoint: None,
+                faucet_endpoint: None,
+            },
+        )]
+        .into_iter()
+        .collect(),
+        cosmos: vec![(
+            "cosmos".to_string(),
+            CosmosChainConfig {
+                chain_id: "cosmos".to_string(),
+                rpc_endpoint: Some("http://localhost:26657".to_string()),
+                grpc_endpoint: Some("http://localhost:9090".to_string()),
+                bech32_prefix: "cosmos".to_string(),
+                gas_denom: "ustake".to_string(),
+                gas_price: 0.025,
+                faucet_endpoint: None,
+            },
+        )]
+        .into_iter()
+        .collect(),
+    }
 }
 
 impl MockEngine {
@@ -51,44 +81,30 @@ impl Engine for MockEngine {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_queue(
+    fn execute(
         &self,
         component: &crate::apis::dispatcher::Component,
+        trigger: TriggerAction,
         _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _task_id: TaskId,
-        request: Vec<u8>,
-        timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
             .get(&component.wasm)
             .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
-        let result = fx.execute(request, timestamp)?;
+        let result = fx.execute(get_mock_trigger_data(&trigger.data))?;
         Ok(result)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute_eth_event(
-        &self,
-        _component: &crate::apis::dispatcher::Component,
-        _service_config: &ServiceConfig,
-        _service_id: &ServiceID,
-        _workflow_id: &WorkflowID,
-        _trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        Ok(payload)
     }
 }
 
 pub trait Function: Send + Sync + 'static {
-    fn execute(&self, request: Vec<u8>, timestamp: u64) -> Result<Vec<u8>, EngineError>;
+    fn execute(&self, request: Vec<u8>) -> Result<Vec<u8>, EngineError>;
 }
 
 #[cfg(test)]
 mod test {
+    use crate::test_utils::address::rand_event_eth;
+
     use super::*;
 
     #[test]
@@ -110,7 +126,7 @@ mod test {
     pub struct FixedResult(Vec<u8>);
 
     impl Function for FixedResult {
-        fn execute(&self, _request: Vec<u8>, _timestamp: u64) -> Result<Vec<u8>, EngineError> {
+        fn execute(&self, _request: Vec<u8>) -> Result<Vec<u8>, EngineError> {
             Ok(self.0.clone())
         }
     }
@@ -131,43 +147,64 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let c1 = crate::apis::dispatcher::Component::new(&d1);
+        let c1 = crate::apis::dispatcher::Component::new(d1);
         let res = engine
-            .execute_queue(
+            .execute(
                 &c1,
+                TriggerAction {
+                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
+                        "321",
+                        "default",
+                        crate::test_utils::address::rand_address_eth(),
+                        "eth",
+                        rand_event_eth(),
+                    )
+                    .unwrap(),
+                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                },
                 &ServiceConfig::default(),
-                &ServiceID::new("321").unwrap(),
-                TaskId::new(123),
-                b"123".into(),
-                1234,
             )
             .unwrap();
         assert_eq!(res, r1);
 
         // d2 call gets r2
-        let c2 = crate::apis::dispatcher::Component::new(&d2);
+        let c2 = crate::apis::dispatcher::Component::new(d2);
         let res = engine
-            .execute_queue(
+            .execute(
                 &c2,
+                TriggerAction {
+                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
+                        "321",
+                        "default",
+                        crate::test_utils::address::rand_address_eth(),
+                        "eth",
+                        rand_event_eth(),
+                    )
+                    .unwrap(),
+                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                },
                 &ServiceConfig::default(),
-                &ServiceID::new("321").unwrap(),
-                TaskId::new(123),
-                b"123".into(),
-                1234,
             )
             .unwrap();
         assert_eq!(res, r2);
 
         // d3 call returns missing error
-        let c3 = crate::apis::dispatcher::Component::new(&d3);
+        let c3 = crate::apis::dispatcher::Component::new(d3);
         let err = engine
-            .execute_queue(
+            .execute(
                 &c3,
+                TriggerAction {
+                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
+                        "321",
+                        "default",
+                        crate::test_utils::address::rand_address_eth(),
+                        "eth",
+                        rand_event_eth(),
+                    )
+                    .unwrap(),
+                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                },
                 &ServiceConfig::default(),
-                &ServiceID::new("321").unwrap(),
-                TaskId::new(123),
-                b"123".into(),
-                1234,
             )
             .unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));

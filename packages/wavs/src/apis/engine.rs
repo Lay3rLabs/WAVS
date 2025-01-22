@@ -1,11 +1,12 @@
-use lavs_apis::id::TaskId;
 use layer_climb::prelude::Address;
 use thiserror::Error;
-use utils::layer_contract_client::TriggerId;
 
 use crate::{storage::CAStorageError, Digest};
 
-use super::dispatcher::{Component, ServiceConfig};
+use super::{
+    dispatcher::{Component, ServiceConfig},
+    trigger::TriggerAction,
+};
 use utils::{ComponentID, ServiceID, WorkflowID};
 
 pub trait Engine: Send + Sync {
@@ -14,26 +15,12 @@ pub trait Engine: Send + Sync {
     // TODO: paginate this
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError>;
 
-    /// This will execute a contract that implements the layer_avs:task-queue wit interface
-    fn execute_queue(
+    /// This will execute a component that implements one of our supported interfaces
+    fn execute(
         &self,
         component: &Component,
+        trigger: TriggerAction,
         service_config: &ServiceConfig,
-        service_id: &ServiceID,
-        task_id: TaskId,
-        request: Vec<u8>,
-        timestamp: u64,
-    ) -> Result<Vec<u8>, EngineError>;
-
-    /// This will execute a contract that implements the layer_avs:eth-event wit interface
-    fn execute_eth_event(
-        &self,
-        component: &Component,
-        service_config: &ServiceConfig,
-        service_id: &ServiceID,
-        workflow_id: &WorkflowID,
-        trigger_id: TriggerId,
-        payload: Vec<u8>,
     ) -> Result<Vec<u8>, EngineError>;
 }
 
@@ -46,42 +33,13 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
         self.as_ref().list_digests()
     }
 
-    fn execute_queue(
+    fn execute(
         &self,
         component: &Component,
+        trigger: TriggerAction,
         service_config: &ServiceConfig,
-        service_id: &ServiceID,
-        task_id: TaskId,
-        request: Vec<u8>,
-        timestamp: u64,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute_queue(
-            component,
-            service_config,
-            service_id,
-            task_id,
-            request,
-            timestamp,
-        )
-    }
-
-    fn execute_eth_event(
-        &self,
-        component: &Component,
-        service_config: &ServiceConfig,
-        service_id: &ServiceID,
-        workflow_id: &WorkflowID,
-        trigger_id: TriggerId,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute_eth_event(
-            component,
-            service_config,
-            service_id,
-            workflow_id,
-            trigger_id,
-            payload,
-        )
+        self.as_ref().execute(component, trigger, service_config)
     }
 }
 
@@ -117,9 +75,12 @@ pub enum EngineError {
     #[error{"invalid address: {0}"}]
     InvalidAddress(Address),
 
+    #[error{"unable to get trigger data as component input: {0}"}]
+    TriggerData(anyhow::Error),
+
     #[error{"{0}"}]
     Other(#[from] anyhow::Error),
 
-    #[error("Max fuel consumed by WasmEngine for service: {0}. Id: {1}")]
-    OutOfFuel(ServiceID, u64),
+    #[error("Max fuel consumed by WasmEngine for service: {0}, workflow: {1}")]
+    OutOfFuel(ServiceID, WorkflowID),
 }
