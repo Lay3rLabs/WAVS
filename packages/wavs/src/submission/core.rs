@@ -262,7 +262,7 @@ impl Submission for CoreSubmission {
                         while let Some(msg) = rx.recv().await {
                             match msg.submit {
                                 Submit::EigenContract {chain_name, service_manager, max_gas } => {
-                                    if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), service_manager, msg.wasm_result, max_gas).await {
+                                    if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), service_manager, msg.wasi_result, max_gas).await {
                                         tracing::error!("{:?}", e);
                                     }
                                 },

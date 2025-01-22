@@ -109,7 +109,7 @@ mod test {
                 rand_event_eth(),
             )
             .unwrap(),
-            wasm_result: payload.as_bytes().to_vec(),
+            wasi_result: payload.as_bytes().to_vec(),
             submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
         }
     }

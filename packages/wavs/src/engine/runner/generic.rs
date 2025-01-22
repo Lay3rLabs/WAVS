@@ -45,13 +45,13 @@ pub trait EngineRunner: Send + Sync {
 
         let trigger_config = action.config.clone();
 
-        let wasm_result =
+        let wasi_result =
             self.engine()
                 .execute(component, action, &service.config.unwrap_or_default())?;
 
         Ok(ChainMessage {
             trigger_config,
-            wasm_result,
+            wasi_result,
             submit: workflow.submit.clone(),
         })
     }

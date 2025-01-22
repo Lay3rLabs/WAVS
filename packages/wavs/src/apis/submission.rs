@@ -19,7 +19,7 @@ pub trait Submission: Send + Sync {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChainMessage {
     pub trigger_config: TriggerConfig,
-    pub wasm_result: Vec<u8>,
+    pub wasi_result: Vec<u8>,
     pub submit: Submit,
 }
 

@@ -399,7 +399,7 @@ mod tests {
         assert_eq!(processed.len(), 1);
         let expected = ChainMessage {
             trigger_config: action.config,
-            wasm_result: payload.into(),
+            wasi_result: payload.into(),
             submit: Submit::eigen_contract("eth".to_string(), service_manager_addr, None),
         };
         assert_eq!(processed[0], expected);
@@ -486,8 +486,8 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].wasi_result, br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasi_result, br#"{"y":441}"#);
     }
 
     /// Simulate big-square on a multi-threaded dispatcher
@@ -571,7 +571,7 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasm_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasm_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].wasi_result, br#"{"y":9}"#);
+        assert_eq!(&processed[1].wasi_result, br#"{"y":441}"#);
     }
 }
