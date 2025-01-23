@@ -123,21 +123,25 @@ When the command succeeds, it'll tell you to add the `WAVS_HOME` and `WAVS_DOTEN
 
 Start the servers in different terminals:
 
-```bash
-wavs
-```
-
-```bash
-wavs-aggregator
-```
-
-Start anvil for Ethereum:
+Start anvil for Ethereum important - _important: do this first so that WAVS has a chain to listen to_:
 
 ```bash
 anvil
 ```
 
-Run CLI commands:
+Then WAVS itself
+
+```bash
+wavs
+```
+
+And if your chain uses an aggregator:
+
+```bash
+wavs-aggregator
+```
+
+Now you can run CLI commands:
 
 ```bash
 wavs-cli deploy-eigen-core
