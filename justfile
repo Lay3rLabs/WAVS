@@ -26,7 +26,14 @@ docker-stop:
         echo "No container running"; \
     fi
 
-install-native HOME DATA:
+install-native HOME DATA="":
+    @if [ "{{DATA}}" != "" ]; then \
+        just _install-native {{HOME}} {{DATA}}; \
+    else \
+        just _install-native {{HOME}} {{HOME}}; \
+    fi
+
+_install-native HOME DATA:
     @mkdir -p "{{HOME}}"
     @mkdir -p "{{DATA}}"
     @cp "./packages/wavs/wavs.toml" "{{HOME}}"
