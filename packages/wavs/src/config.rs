@@ -47,7 +47,6 @@ pub struct Config {
 }
 
 impl ConfigExt for Config {
-    const DIRNAME: &'static str = "wavs";
     const FILENAME: &'static str = "wavs.toml";
 
     fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use utils::eigen_client::CoreAVSAddresses;
 
-use crate::context::CliContext;
+use crate::{context::CliContext, deploy::Deployment};
 
 pub struct DeployEigenCore {
     pub addresses: CoreAVSAddresses,
@@ -43,8 +43,8 @@ impl DeployEigenCore {
             None => None,
         };
 
-        let core_contracts = match core_contracts {
-            Some(core_contracts) => core_contracts,
+        let (core_contracts, fresh) = match core_contracts {
+            Some(core_contracts) => (core_contracts, false),
             None => {
                 let core_contracts = eigen_client.deploy_core_contracts().await?;
 
@@ -58,11 +58,17 @@ impl DeployEigenCore {
                         })?;
                 }
 
-                core_contracts
+                (core_contracts, true)
             }
         };
 
         let mut deployment = deployment;
+        if fresh {
+            if !deployment.eigen_core.is_empty() {
+                tracing::warn!("Overwriting deployment due to outdated core contracts");
+            }
+            deployment = Deployment::default();
+        }
         deployment.eigen_core.insert(chain, core_contracts.clone());
 
         *ctx.deployment.lock().unwrap() = deployment;

@@ -16,8 +16,6 @@ use wavs_cli::{
 
 #[tokio::main]
 async fn main() {
-    let _ = dotenvy::dotenv();
-
     let command = Command::parse();
     let config = command.config();
 

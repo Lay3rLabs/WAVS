@@ -101,8 +101,7 @@ impl Config {
 }
 
 impl ConfigExt for Config {
-    const DIRNAME: &'static str = "wavs-aggregator";
-    const FILENAME: &'static str = "wavs-aggregator.toml";
+    const FILENAME: &'static str = "aggregator.toml";
 
     fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
         f(&mut self.data);

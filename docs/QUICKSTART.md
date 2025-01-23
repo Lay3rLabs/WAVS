@@ -1,12 +1,9 @@
 ## One-time setup
 
-First, copy all the `.example.env` files into `.env` as needed, modifying anything you want to customize:
+First, copy the `.example.env` file to `.env`, and edit as needed
 
 ```bash
-# copy env files
 cp packages/aggregator/.env.example packages/aggregator/.env
-cp packages/cli/.env.example packages/cli/.env
-cp packages/wavs/.env.example packages/wavs/.env
 ```
 
 ## Up and running
@@ -65,7 +62,7 @@ You can install the `wavs-cli` tool anywhere on your system, most of those `just
 
 1. `cargo install --path ./packages/cli`
 
-Next, setup your `.env` file or however you like to populate environment variables in your system, based on all the [packages/cli/.env.example](packages/cli/.env.example) file provided
+Next, setup your `.env` file or however you like to populate environment variables in your system, based on all the vars in [.env.example](.env.example)
 
 Now you have `wavs-cli` and can run it from anywhere (but certain things like auto-deploy the example contracts won't work outside the repo)
 
@@ -120,7 +117,7 @@ For example, this will install everything and use `~/wavs-data` as the files pat
 just install-native ~/wavs-data
 ```
 
-When the command succeeds, it'll tell you to add some vars to your system environment. Make sure to do that!
+When the command succeeds, it'll tell you to add the `WAVS_HOME` and `WAVS_DOTENV` vars to your system environment. Make sure to do that!
 
 2. Now you're off to the races! 
 

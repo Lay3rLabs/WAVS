@@ -31,11 +31,6 @@ impl CliEnvExt for TestArgs {
     }
 
     fn dotenv_path(&self) -> Option<PathBuf> {
-        Some(
-            workspace_path()
-                .join("packages")
-                .join("layer-tests")
-                .join(".env"),
-        )
+        Some(workspace_path().join(".env"))
     }
 }

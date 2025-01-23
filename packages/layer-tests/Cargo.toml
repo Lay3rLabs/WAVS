@@ -20,7 +20,6 @@ dirs = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-dotenvy = { workspace = true }
 figment = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }

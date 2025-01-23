@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use utils::config::{ConfigBuilder, ConfigExt};
+use utils::config::ConfigBuilder;
 
 use crate::{args::CliArgs, config::Config, engine::mock::mock_chain_configs};
 
@@ -16,12 +16,7 @@ impl TestApp {
             home: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
             // while this technically isn't "zeroed", this purposefully points at a non-existing file
             // so that we don't load a real .env in tests
-            dotenv: Some(
-                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("tests")
-                    .join(Config::DIRNAME)
-                    .join("non-existant-file"),
-            ),
+            dotenv: Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("non-existant-file")),
             port: None,
             log_level: Vec::new(),
             host: None,
