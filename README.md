@@ -15,31 +15,8 @@ WAVS is designed for the multichain, enabling services to be triggered and resul
 ## Guides
 
 - [Quickstart](docs/QUICKSTART.md)
+- [Docker Quickstart](docs/QUICKSTART.md#running-with-docker)
 - [Docs](docs/README.md)
-
-## Run locally
-
-```bash
-# copy env files
-cp packages/aggregator/.env.example packages/aggregator/.env
-cp packages/cli/.env.example packages/cli/.env
-cp packages/wavs/.env.example packages/wavs/.env
-
-# brew install just
-# - if you get 'ERROR [internal] load metadata ...': https://stackoverflow.com/a/71665244
-just docker-build
-
-# MacOS Docker:
-# Docker Engine -> Settings -> Resources -> Network -> 'Enable Host Networking'
-# or
-# brew install chipmk/tap/docker-mac-net-connect && sudo brew services start chipmk/tap/docker-mac-net-connect
-docker compose up
-
-# Interact
-docker exec -it wavs bash
-wavs-cli deploy-service --component /wavs/components/eth_trigger_echo.wasm
-wavs-cli add-task --input "echo value" --service-id <SERVICE_ID>
-```
 
 ## Overview
 

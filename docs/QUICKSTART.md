@@ -22,7 +22,7 @@ just start-all
 
 ### Terminal 2 (client)
 
-1. Deploy the core eigenlayer contracts 
+1. Deploy the core eigenlayer contracts
 
 This needs to be done each time you (re)start the servers
 
@@ -70,7 +70,7 @@ You can install the `wavs-cli` tool anywhere on your system, most of those `just
 
 1. `cargo install --path ./packages/cli`
 
-Next, setup your `.env` file or however you like to populate environment variables in your system, based on all the vars in [.env.example](.env.example)
+Next, setup your `.env` file or however you like to populate environment variables in your system, based on all the vars in [.env.example](../.env.example)
 
 Now you have `wavs-cli` and can run it from anywhere (but certain things like auto-deploy the example contracts won't work outside the repo)
 
@@ -78,7 +78,7 @@ For convenience and to have the whole system setup, use full Docker or Native In
 
 # Custom services
 
-The simple commands above all use the provided contracts and components. For developing new services, you'll want to pass different parameters and change some defaults. 
+The simple commands above all use the provided contracts and components. For developing new services, you'll want to pass different parameters and change some defaults.
 
 Run `wavs-cli --help` or `wavs-cli [subcommand] --help` for all the options, but here are a few common ones:
 
@@ -97,9 +97,9 @@ This won't work with custom contracts, as of right now you'll need to write sepa
 
 # Chains
 
-Edit [packages/wavs/wavs.toml](packages/wavs/wavs.toml) to change the active trigger chains, adjust chain configs, etc.
+Edit [packages/wavs/wavs.toml](../packages/wavs/wavs.toml) to change the active trigger chains, adjust chain configs, etc.
 
-If targetting something more than `local`, such as a Cosmos chain, make sure you're running this separately, it won't be launched automatically with the `just start-all` command above
+If targeting something more than `local`, such as a Cosmos chain, make sure you're running this separately, it won't be launched automatically with the `just start-all` command above
 
 ### Debugging
 
@@ -109,11 +109,31 @@ Make sure the `*_DATA` set in your env vars point to a valid location, and it's 
 
 ### Aggregator
 
-The default `local` chain does not use the Aggregator service. If you want to enable this, you can change the submission chain to `local-aggregator`, but make sure that you aren't expecting tasks to immediately propogate by passing `--result-timeout-ms 0` to the `add-task` subcommand
+The default `local` chain does not use the Aggregator service. If you want to enable this, you can change the submission chain to `local-aggregator`, but make sure that you aren't expecting tasks to immediately propagate by passing `--result-timeout-ms 0` to the `add-task` subcommand
 
 # Running with Docker
 
-_TODO: document this :)_
+```bash
+# copy env files
+cp ./.env .env
+
+# brew install just
+# - if you get 'ERROR [internal] load metadata ...': https://stackoverflow.com/a/71665244
+just docker-build
+
+# MacOS Docker:
+# Docker Engine -> Settings -> Resources -> Network -> 'Enable Host Networking'
+# or
+# brew install chipmk/tap/docker-mac-net-connect && sudo brew services start chipmk/tap/docker-mac-net-connect
+docker compose up
+
+# Interact
+docker exec -it wavs bash
+
+wavs-cli deploy-service --data ~/wavs/cli --component /wavs/examples/build/components/echo_data.wasm --trigger eth-contract-event --trigger-event-name 86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68
+
+wavs-cli add-task --data ~/wavs/cli --input "echo value" --service-id <SERVICE_ID>
+```
 
 # Running natively
 
@@ -135,7 +155,7 @@ just install-native ~/wavs-config ~/wavs-data
 
 When the command succeeds, it'll tell you to add the `WAVS_HOME` and `WAVS_DOTENV` vars to your system environment. Make sure to do that!
 
-2. Now you're off to the races! 
+2. Now you're off to the races!
 
 Start the servers in different terminals:
 
