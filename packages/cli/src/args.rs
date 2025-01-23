@@ -12,6 +12,7 @@ use crate::config::Config;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
+#[allow(clippy::large_enum_variant)]
 pub enum Command {
     /// Deploy the core Eigenlayer contracts and (optionally) register as an Operator
     DeployEigenCore {
