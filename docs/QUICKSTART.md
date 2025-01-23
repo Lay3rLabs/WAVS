@@ -3,7 +3,7 @@
 First, copy the `.example.env` file to `.env`, and edit as needed
 
 ```bash
-cp packages/aggregator/.env.example packages/aggregator/.env
+cp ./.env.example ./.env
 ```
 
 ### Pay special attention to the `*_DATA` vars - odds are you'll need to delete these folders from time to time to clear out the cache
