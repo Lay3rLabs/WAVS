@@ -114,10 +114,10 @@ _TODO: document this :)_
 
 You need to decide where the configuration and runtime-data files should be.
 
-For example, if you want config in `~/wavs-config` and data in `~/wavs-data`, the command would be:
+For example, this will install everything and use `~/wavs-data` as the files path:
 
 ```bash
-just install-native ~/wavs-config ~/wavs-data
+just install-native ~/wavs-data
 ```
 
 When the command succeeds, it'll tell you to add some vars to your system environment. Make sure to do that!
