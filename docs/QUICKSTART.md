@@ -41,10 +41,16 @@ This will output a bunch of info, and finally the `Service ID` - copy that for t
 3. Add a task for that service
 
 ```bash
-just cli-add-task {Service ID} {Hex encoded data}
+just cli-add-task {Service ID} {utf8 or Hex encoded data}
 ```
 
-For example, if our Service ID is "01948ead04277a81ad84dcf6b3390912", we'd run the following to send a task with data of "hello world":
+For example, if our Service ID is "01948ead04277a81ad84dcf6b3390912", we'd run the following to send a task with data of "hello":
+
+```bash
+just cli-add-task 01948ead04277a81ad84dcf6b3390912 hello
+```
+
+Or, hex-encoded data:
 
 ```bash
 just cli-add-task 01948ead04277a81ad84dcf6b3390912 68656C6C6F20776F726C64
@@ -65,6 +71,8 @@ You can install the `wavs-cli` tool anywhere on your system, most of those `just
 Next, setup your `.env` file or however you like to populate environment variables in your system, based on all the vars in [.env.example](.env.example)
 
 Now you have `wavs-cli` and can run it from anywhere (but certain things like auto-deploy the example contracts won't work outside the repo)
+
+For convenience and to have the whole system setup, use full Docker or Native Install detailed below which handles env and config files for you.
 
 # Custom services
 
@@ -151,4 +159,10 @@ Now, since we're using the CLI outside of the repo, there are no defaults for th
 
 ```bash
 wavs-cli deploy-service --component ~/path/to/my/component.wasm --trigger eth-contract-event --trigger-event-name 86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68
+```
+
+If (and only if!) you happen to be deploying a component with the same example trigger/submission contracts from the `examples` here, you can add a task with the CLI too, e.g.
+
+```bash
+wavs-cli add-task --service-id 0194948fec2f79a098b789f504a459c1 --input "hello world"
 ```
