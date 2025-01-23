@@ -25,10 +25,7 @@ services:
     stop_signal: SIGKILL
     depends_on: ["anvil"]
     network_mode: "host"
-    env_file:
-      - "./packages/wavs/.env"
-      - "./packages/cli/.env"
-      - "./packages/aggregator/.env"
+    env_file: "./.env"
     ports:
       - "8000:8000"
     environment:
@@ -45,7 +42,7 @@ services:
     container_name: "wavs-aggregator"
     stop_signal: SIGKILL
     depends_on: ["wavs"]
-    env_file: "./packages/aggregator/.env"
+    env_file: "./.env"
     ports:
       - "8001:8001"
     command: ["wavs-aggregator"]
@@ -58,7 +55,7 @@ services:
     container_name: "wavs-deploy-eigenlayer"
     depends_on: ["wavs", "anvil", "aggregator"]
     restart: "no"
-    env_file: "./packages/cli/.env"
+    env_file: "./.env"
     command: ["wavs-cli", "deploy-eigen-core"]
     volumes:
       - "./packages/cli:/wavs"
