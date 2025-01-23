@@ -26,7 +26,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.83.0
+          toolchain: 1.84.0
           #   target: wasm32-unknown-unknown
           override: true
 
@@ -64,7 +64,7 @@ jobs:
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
-          toolchain: 1.83.0
+          toolchain: 1.84.0
           command: test
           args: --workspace --locked -- --nocapture
         env:
@@ -82,7 +82,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.83.0
+          toolchain: 1.84.0
           override: true
           components: rustfmt, clippy
 
@@ -105,13 +105,13 @@ jobs:
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
         with:
-          toolchain: 1.83.0
+          toolchain: 1.84.0
           command: fmt
           args: --all -- --check
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
         with:
-          toolchain: 1.83.0
+          toolchain: 1.84.0
           command: clippy
           args: --all-targets -- -D warnings
