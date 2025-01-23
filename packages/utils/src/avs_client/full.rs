@@ -4,7 +4,10 @@ use super::solidity_types::{
 };
 use crate::{
     alloy_helpers::SolidityEventFinder,
-    avs_client::stake_registry::ISignatureUtils::SignatureWithSaltAndExpiry,
+    avs_client::{
+        layer_service_manager::LayerServiceManager,
+        stake_registry::ISignatureUtils::SignatureWithSaltAndExpiry,
+    },
     eigen_client::{
         avs_deploy::setup_empty_proxy,
         solidity_types::{
@@ -159,7 +162,11 @@ impl AvsClientDeployer {
         })
     }
 
-    pub async fn deploy<F, Fut>(mut self, deploy_service_manager: F) -> Result<AvsClient>
+    pub async fn deploy<F, Fut>(
+        mut self,
+        deploy_service_manager: F,
+        service_manager_override: Option<String>,
+    ) -> Result<AvsClient>
     where
         F: FnOnce(ServiceManagerDeps) -> Fut,
         Fut: std::future::Future<Output = Result<Address>>,
@@ -177,44 +184,61 @@ impl AvsClientDeployer {
         );
 
         // Get or deploy stake registry
-        let impl_contract =
-            ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager).await?;
+        let ecdsa_stake_registry_address =
+            if let Some(service_manager) = service_manager_override.clone() {
+                LayerServiceManager::new(service_manager.parse()?, &self.eth.provider)
+                    .stakeRegistry()
+                    .call()
+                    .await?
+                    ._0
+            } else {
+                let impl_contract =
+                    ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager)
+                        .await?;
 
-        proxies
-            .admin
-            .upgradeAndCall(
-                proxies.ecdsa_stake_registry,
-                *impl_contract.address(),
-                ECDSAStakeRegistry::initializeCall {
-                    _serviceManager: proxies.service_manager,
-                    _thresholdWeight: U256::ZERO,
-                    _quorum: setup.quorum,
-                }
-                .abi_encode()
-                .into(),
-            )
-            .send()
-            .await?
-            .watch()
+                proxies
+                    .admin
+                    .upgradeAndCall(
+                        proxies.ecdsa_stake_registry,
+                        *impl_contract.address(),
+                        ECDSAStakeRegistry::initializeCall {
+                            _serviceManager: proxies.service_manager,
+                            _thresholdWeight: U256::ZERO,
+                            _quorum: setup.quorum,
+                        }
+                        .abi_encode()
+                        .into(),
+                    )
+                    .send()
+                    .await?
+                    .watch()
+                    .await?;
+                *impl_contract.address()
+            };
+
+        // Get or deploy service manager
+        let service_manager_address = if let Some(addr) = service_manager_override {
+            addr.parse()?
+        } else {
+            let service_manager_addr = deploy_service_manager(ServiceManagerDeps {
+                provider: self.eth.provider.clone(),
+                avs_directory: core.avs_directory,
+                stake_registry: proxies.ecdsa_stake_registry,
+                rewards_coordinator: core.rewards_coordinator,
+                delegation_manager: core.delegation_manager,
+            })
             .await?;
 
-        // Deploy service manager
-        let service_manager_addr = deploy_service_manager(ServiceManagerDeps {
-            provider: self.eth.provider.clone(),
-            avs_directory: core.avs_directory,
-            stake_registry: proxies.ecdsa_stake_registry,
-            rewards_coordinator: core.rewards_coordinator,
-            delegation_manager: core.delegation_manager,
-        })
-        .await?;
+            proxies
+                .admin
+                .upgrade(proxies.service_manager, service_manager_addr)
+                .send()
+                .await?
+                .watch()
+                .await?;
 
-        proxies
-            .admin
-            .upgrade(proxies.service_manager, service_manager_addr)
-            .send()
-            .await?
-            .watch()
-            .await?;
+            service_manager_addr
+        };
 
         let underlying_token = strategy.underlyingToken().call().await?._0;
         assert_ne!(underlying_token, Address::ZERO);
@@ -225,8 +249,8 @@ impl AvsClientDeployer {
             core,
             layer: AvsAddresses {
                 proxy_admin: *proxies.admin.address(),
-                service_manager: proxies.service_manager,
-                stake_registry: proxies.ecdsa_stake_registry,
+                service_manager: service_manager_address,
+                stake_registry: ecdsa_stake_registry_address,
                 token: setup.token,
             },
         })

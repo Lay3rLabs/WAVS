@@ -42,14 +42,18 @@ pub enum Command {
 
         /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
         #[clap(long, required_if_eq_any([
-            ("trigger", CliTriggerKind::EthContractEvent), 
+            ("trigger", CliTriggerKind::EthContractEvent),
             ("trigger", CliTriggerKind::CosmosContractEvent)
         ]))]
         trigger_event_name: Option<String>,
 
-        /// The address used for trigger contracts. If not supplied, will deploy fresh "example trigger" contracts
+        /// The address used for trigger contracts. If not supplied, will deploy fresh "example trigger" contract
         #[clap(long)]
         trigger_address: Option<String>,
+
+        /// The address used for the submit manager. If not supplied, will deploy fresh "example submit" contract
+        #[clap(long)]
+        submit_address: Option<String>,
 
         /// The chain to deploy the trigger on, if applicable
         #[clap(long, default_value = "local")]
