@@ -17,9 +17,9 @@ rust-version = "1.84.0"
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 wavs-cli = { path = "packages/cli" }
-aggregator = { path = "packages/aggregator" }
+wavs-aggregator = { path = "packages/aggregator" }
 layer-wasi = { path = "sdk/wasi" }
-clap = { version = "4.5.20", features = ["derive", "env"] }
+clap = { version = "4.5.20", features = ["derive", "env", "string"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }
 serde = { version = "1.0.211", features = ["derive"] }

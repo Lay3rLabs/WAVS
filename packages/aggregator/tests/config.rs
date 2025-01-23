@@ -1,5 +1,5 @@
-use aggregator::test_utils::app::TestApp;
 use alloy::{node_bindings::Anvil, primitives::Address};
+use wavs_aggregator::test_utils::app::TestApp;
 
 // tests that we load chain config section correctly
 #[tokio::test]

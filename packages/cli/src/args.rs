@@ -37,11 +37,14 @@ pub enum Command {
         component: PathBuf,
 
         /// The kind of trigger to deploy
-        #[clap(long, default_value_t = CliTriggerKind::EthContractEvent)]
+        #[clap(long)]
         trigger: CliTriggerKind,
 
         /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
-        #[clap(long)]
+        #[clap(long, required_if_eq_any([
+            ("trigger", CliTriggerKind::EthContractEvent), 
+            ("trigger", CliTriggerKind::CosmosContractEvent)
+        ]))]
         trigger_event_name: Option<String>,
 
         /// The address used for trigger contracts. If not supplied, will deploy fresh "example trigger" contracts
@@ -133,6 +136,12 @@ impl std::str::FromStr for CliTriggerKind {
             "cosmos-contract-event" => Ok(Self::CosmosContractEvent),
             _ => Err(format!("unknown trigger kind: {}", s)),
         }
+    }
+}
+
+impl From<CliTriggerKind> for clap::builder::OsStr {
+    fn from(trigger: CliTriggerKind) -> clap::builder::OsStr {
+        trigger.to_string().into()
     }
 }
 

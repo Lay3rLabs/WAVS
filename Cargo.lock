@@ -27,33 +27,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
-name = "aggregator"
-version = "0.1.0-rc1"
-dependencies = [
- "alloy",
- "anyhow",
- "axum",
- "clap 4.5.26",
- "ctrlc",
- "dirs 5.0.1",
- "dotenvy",
- "figment",
- "serde",
- "serde_json",
- "temp-env",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "utils",
- "wavs",
- "wavs-cli",
- "wildmatch",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3931,7 +3904,6 @@ dependencies = [
 name = "layer-tests"
 version = "0.2.0-rc1"
 dependencies = [
- "aggregator",
  "alloy",
  "alloy-rlp",
  "anyhow",
@@ -3975,6 +3947,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wavs",
+ "wavs-aggregator",
  "wavs-cli",
  "wildmatch",
 ]
@@ -6657,6 +6630,7 @@ dependencies = [
  "alloy",
  "alloy-rlp",
  "anyhow",
+ "cfg-if",
  "chrono",
  "clap 4.5.26",
  "cosmwasm-std",
@@ -7269,7 +7243,6 @@ dependencies = [
 name = "wavs"
 version = "0.2.0-rc1"
 dependencies = [
- "aggregator",
  "alloy",
  "alloy-rlp",
  "anyhow",
@@ -7312,6 +7285,34 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
+ "wavs-aggregator",
+ "wildmatch",
+]
+
+[[package]]
+name = "wavs-aggregator"
+version = "0.1.0-rc1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "axum",
+ "clap 4.5.26",
+ "ctrlc",
+ "dirs 5.0.1",
+ "dotenvy",
+ "figment",
+ "serde",
+ "serde_json",
+ "temp-env",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "utils",
+ "wavs",
+ "wavs-cli",
  "wildmatch",
 ]
 
@@ -7319,7 +7320,6 @@ dependencies = [
 name = "wavs-cli"
 version = "0.2.0-rc1"
 dependencies = [
- "aggregator",
  "alloy",
  "anyhow",
  "clap 4.5.26",
@@ -7344,6 +7344,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wavs",
+ "wavs-aggregator",
 ]
 
 [[package]]

@@ -26,6 +26,30 @@ docker-stop:
         echo "No container running"; \
     fi
 
+install-native HOME DATA:
+    @mkdir -p "{{HOME}}"
+    @mkdir -p "{{DATA}}"
+    @cp "./packages/wavs/wavs.toml" "{{HOME}}"
+    @cp "./packages/cli/wavs-cli.toml" "{{HOME}}"
+    @cp "./packages/aggregator/wavs-aggregator.toml" "{{HOME}}"
+    @sed -i '' "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"
+    @sed -i '' "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/wavs-cli.toml"
+    @sed -i '' "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/wavs-aggregator.toml"
+    @cargo install --path ./packages/wavs
+    @cargo install --path ./packages/cli
+    @cargo install --path ./packages/aggregator
+    @echo "Add these variables to your system environment:"
+    @echo ""
+    @echo "export WAVS_HOME=\"{{HOME}}\""
+    @echo "export WAVS_CLI_HOME=\"{{HOME}}\""
+    @echo "export WAVS_AGGREGATOR_HOME=\"{{HOME}}\""
+    @echo ""
+    @echo "Also remember to set your env vars, e.g.:"
+    @echo ""
+    @echo "export WAVS_SUBMISSION_MNEMONIC=\"test test test test test test test test test test test junk\""
+    @echo "export WAVS_AGGREGATOR_MNEMONIC=\"test test test test test test test test test test test junk\""
+    @echo "export WAVS_CLI_ETH_MNEMONIC=\"test test test test test test test test test test test junk\""
+
 # compile WASI components, places the output in components dir
 wasi-build COMPONENT="*":
     @if [ "{{COMPONENT}}" = "*" ]; then \
@@ -122,8 +146,8 @@ cli-deploy-core:
     @cd packages/cli && cargo run --quiet deploy-eigen-core
 
 # e.g. just cli-deploy-service ./examples/build/components/echo_data.wasm
-cli-deploy-service COMPONENT TRIGGER_EVENT_NAME="86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68":
-    @cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}" --trigger-event-name "{{TRIGGER_EVENT_NAME}}"
+cli-deploy-service COMPONENT TRIGGER="eth-contract-event" TRIGGER_EVENT_NAME="86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68":
+    @cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}" --trigger "{{TRIGGER}}" --trigger-event-name "{{TRIGGER_EVENT_NAME}}"
 
 # e.g. `just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D` or `{\"x\":2}`
 cli-add-task SERVICE_ID INPUT:

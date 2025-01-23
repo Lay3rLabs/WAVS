@@ -48,7 +48,7 @@ impl AppHandles {
             std::thread::spawn({
                 let ctx = ctx.clone();
                 move || {
-                    aggregator::run_server(ctx, config);
+                    wavs_aggregator::run_server(ctx, config);
                 }
             })
         });

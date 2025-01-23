@@ -1,5 +1,5 @@
 [package]
-name = "aggregator"
+name = "wavs-aggregator"
 description = "Lay3r Labs WAVS Aggregator Server"
 edition.workspace = true
 version = "0.1.0-rc1"

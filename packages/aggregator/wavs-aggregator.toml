@@ -5,6 +5,9 @@ cors_allowed_origins = [
   "http://127.0.0.1:*",
 ]
 
+# the directory to store the data. Default is "/var/wavs-aggregator"
+# data = "~/wavs/aggregator"
+
 chain = "local"
 
 [chains.eth.local]

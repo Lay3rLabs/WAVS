@@ -53,7 +53,7 @@ alloy-rlp = { workspace = true }
 [dev-dependencies]
 temp-env = { workspace = true }
 criterion = { workspace = true }
-aggregator = { workspace = true }
+wavs-aggregator = { workspace = true }
 
 [[bench]]
 name = "mock_bench"

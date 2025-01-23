@@ -103,3 +103,51 @@ Make sure the `*_DATA` set in your env vars point to a valid location, and it's 
 ### Aggregator
 
 The default `local` chain does not use the Aggregator service. If you want to enable this, you can change the submission chain to `local-aggregator`, but make sure that you aren't expecting tasks to immediately propogate by passing `--result-timeout-ms 0` to the `add-task` subcommand
+
+### Running with Docker
+
+_TODO: document this :)_
+
+### Running natively
+
+1. Install the binaries on your system
+
+You need to decide where the configuration and runtime-data files should be.
+
+For example, if you want config in `~/wavs-config` and data in `~/wavs-data`, the command would be:
+
+```bash
+just install-native ~/wavs-config ~/wavs-data
+```
+
+When the command succeeds, it'll tell you to add some vars to your system environment. Make sure to do that!
+
+2. Now you're off to the races! 
+
+Start the servers in different terminals:
+
+```bash
+wavs
+```
+
+```bash
+wavs-aggregator
+```
+
+Start anvil for Ethereum:
+
+```bash
+anvil
+```
+
+Run CLI commands:
+
+```bash
+wavs-cli deploy-eigen-core
+```
+
+Now, since we're using the CLI outside of the repo, there are no defaults for the component or trigger, we need to specify them, e.g.:
+
+```bash
+wavs-cli deploy-service --component ~/path/to/my/component.wasm --trigger eth-contract-event --trigger-event-name 86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68
+```
