@@ -45,8 +45,6 @@ pub trait CliEnvExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
 }
 
 pub trait ConfigExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
-    // e.g. "wavs"
-    const DIRNAME: &'static str;
     // e.g. "wavs.toml"
     const FILENAME: &'static str;
 
@@ -78,14 +76,23 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
 
     pub fn build(self) -> Result<CONFIG> {
         // try to load dotenv first, since it may affect env vars for filepaths
-        let dotenv_path = self
-            .cli_env_args
-            .dotenv_path()
-            .unwrap_or(std::env::current_dir()?.join(".env"));
+        let mut dotenv_paths = Vec::new();
 
-        if dotenv_path.exists() {
-            if let Err(e) = dotenvy::from_path(dotenv_path) {
-                bail!("Error loading dotenv file: {}", e);
+        if let Some(dotenv_path) = self.cli_env_args.dotenv_path() {
+            dotenv_paths.push(dotenv_path);
+        }
+
+        if let Ok(dotenv_path) = std::env::var("WAVS_DOTENV") {
+            dotenv_paths.push(PathBuf::from(dotenv_path));
+        }
+
+        dotenv_paths.push(std::env::current_dir()?.join(".env"));
+
+        for dotenv_path in dotenv_paths {
+            if dotenv_path.exists() {
+                if let Err(e) = dotenvy::from_path(dotenv_path) {
+                    bail!("Error loading dotenv file: {}", e);
+                }
             }
         }
 
@@ -93,15 +100,13 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
         let cli_env_args = self.cli_env_args.merge_cli_env_args()?;
 
         // then get the filepath for our file-based config
-        let filepath =
-            ConfigFilePath::new(CONFIG::FILENAME, CONFIG::DIRNAME, cli_env_args.home_dir())
-                .into_path()
-                .context(format!(
-                    "Error getting config file path (filename: {}, dirname: {}, homedir: {:?})",
-                    CONFIG::FILENAME,
-                    CONFIG::DIRNAME,
-                    cli_env_args.home_dir()
-                ))?;
+        let filepath = ConfigFilePath::new(CONFIG::FILENAME, cli_env_args.home_dir())
+            .into_path()
+            .context(format!(
+                "Error getting config file path (filename: {}, homedir: {:?})",
+                CONFIG::FILENAME,
+                cli_env_args.home_dir()
+            ))?;
 
         // lastly, our final config, which can have more complex types with easier TOML-like syntax
         // but is overriden by the cli/env args if they exist
@@ -127,21 +132,14 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
 pub struct ConfigFilePath {
     // the filename to look for in each directory, e.g. "wavs.toml"
     pub filename: String,
-    // the directory name to look for in user's home directory, config, etc., e.g. "wavs"
-    pub dirname: String,
     // the optional directory set via direct args or env
     pub arg_env_dir: Option<PathBuf>,
 }
 
 impl ConfigFilePath {
-    pub fn new(
-        filename: impl ToString,
-        dirname: impl ToString,
-        arg_env_dir: Option<PathBuf>,
-    ) -> Self {
+    pub fn new(filename: impl ToString, arg_env_dir: Option<PathBuf>) -> Self {
         Self {
             filename: filename.to_string(),
-            dirname: dirname.to_string(),
             arg_env_dir,
         }
     }
@@ -154,17 +152,23 @@ impl ConfigFilePath {
     pub fn into_possible(self) -> Vec<PathBuf> {
         let Self {
             filename,
-            dirname,
             arg_env_dir,
         } = self;
+
+        const DIRNAME: &str = "wavs";
 
         // the paths returned will be tried in order of pushing
         let mut dirs = Vec::new();
 
-        // explicit, e.g. passing --home /foo to a binary, or env var HOME="/foo"
+        // explicit, e.g. passing --home /foo to a binary, or env var {ENV_PREFIX}_HOME="/foo"
         // i.e. the path in this case will be /foo/{filename}
         if let Some(dir) = arg_env_dir {
             dirs.push(dir);
+        }
+
+        // literal env var WAVS_HOME
+        if let Ok(dir) = std::env::var("WAVS_HOME") {
+            dirs.push(dir.into());
         }
 
         // next, check the current working directory, wherever the command is run from
@@ -175,7 +179,7 @@ impl ConfigFilePath {
 
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
         // in this case, to not pollute the home directory, it looks for ~/.{dirname}/{filename} (e.g. ~/.wavs/wavs.toml)
-        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(format!(".{}", &dirname))) {
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(format!(".{}", DIRNAME))) {
             dirs.push(dir);
         }
 
@@ -184,7 +188,7 @@ impl ConfigFilePath {
         // Linux: ~/.config/wavs/wavs.toml
         // macOS: ~/Library/Application Support/wavs/wavs.toml
         // Windows: C:\Users\MyUserName\AppData\Roaming\wavs\wavs.toml
-        if let Some(dir) = dirs::config_dir().map(|dir| dir.join(&dirname)) {
+        if let Some(dir) = dirs::config_dir().map(|dir| dir.join(DIRNAME)) {
             dirs.push(dir);
         }
 
@@ -195,7 +199,7 @@ impl ConfigFilePath {
         if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
             .ok()
             .map(PathBuf::from)
-            .map(|dir| dir.join(&dirname))
+            .map(|dir| dir.join(DIRNAME))
         {
             dirs.push(dir);
         }
@@ -205,12 +209,12 @@ impl ConfigFilePath {
         // since the system may place the config dir in AppData/Roaming
         // but we want to check the user's home dir first
         // this will definitively become something like ~/.config/wavs/wavs.toml
-        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(&dirname)) {
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(DIRNAME)) {
             dirs.push(dir);
         }
 
         // Lastly, try /etc/wavs/wavs.toml
-        dirs.push(PathBuf::from("/etc").join(&dirname));
+        dirs.push(PathBuf::from("/etc").join(DIRNAME));
 
         // now we have a list of directories to check, we need to add the filename to each
         let mut all_files: Vec<PathBuf> = dirs.into_iter().map(|dir| dir.join(&filename)).collect();
@@ -428,7 +432,6 @@ mod test {
     }
 
     impl ConfigExt for TestConfig {
-        const DIRNAME: &'static str = "wavs";
         const FILENAME: &'static str = "wavs.toml";
 
         fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
@@ -468,7 +471,7 @@ mod test {
     impl TestCliEnv {
         pub fn new() -> Self {
             Self {
-                home: Some(workspace_path().join("packages").join(TestConfig::DIRNAME)),
+                home: Some(workspace_path().join("packages").join("wavs")),
                 // this purposefully points at a non-existing file
                 // so that we don't load a real .env in tests
                 dotenv: Some(utils_path().join("does-not-exist")),
@@ -504,7 +507,7 @@ mod test {
             .unwrap()
             .home;
 
-            ConfigFilePath::new(TestConfig::FILENAME, TestConfig::DIRNAME, home).into_possible()
+            ConfigFilePath::new(TestConfig::FILENAME, home).into_possible()
         }
 
         // make sure all the test directories are not there by default

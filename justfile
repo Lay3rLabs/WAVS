@@ -40,16 +40,17 @@ _install-native HOME DATA:
     @mkdir -p "{{HOME}}"
     @mkdir -p "{{DATA}}"
     @cp "./packages/wavs/wavs.toml" "{{HOME}}"
-    @cp "./packages/cli/wavs-cli.toml" "{{HOME}}"
-    @cp "./packages/aggregator/wavs-aggregator.toml" "{{HOME}}"
+    @cp "./packages/cli/cli.toml" "{{HOME}}"
+    @cp "./packages/aggregator/aggregator.toml" "{{HOME}}"
+    @cp "./.env.example" "{{HOME}}/.env"
     @if [ "$(uname)" == "Darwin" ]; then \
         sed -i '' -e "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"; \
-        sed -i '' -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/wavs-cli.toml"; \
-        sed -i '' -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/wavs-aggregator.toml"; \
+        sed -i '' -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/cli.toml"; \
+        sed -i '' -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/aggregator.toml"; \
     else \
         sed -i -e "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"; \
-        sed -i -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/wavs-cli.toml"; \
-        sed -i -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/wavs-aggregator.toml"; \
+        sed -i -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/cli.toml"; \
+        sed -i -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/aggregator.toml"; \
     fi
     @cargo install --path ./packages/wavs
     @cargo install --path ./packages/cli
@@ -57,14 +58,7 @@ _install-native HOME DATA:
     @echo "Add these variables to your system environment:"
     @echo ""
     @echo "export WAVS_HOME=\"{{HOME}}\""
-    @echo "export WAVS_CLI_HOME=\"{{HOME}}\""
-    @echo "export WAVS_AGGREGATOR_HOME=\"{{HOME}}\""
-    @echo ""
-    @echo "Also remember to set your env vars, e.g.:"
-    @echo ""
-    @echo "export WAVS_SUBMISSION_MNEMONIC=\"test test test test test test test test test test test junk\""
-    @echo "export WAVS_AGGREGATOR_MNEMONIC=\"test test test test test test test test test test test junk\""
-    @echo "export WAVS_CLI_ETH_MNEMONIC=\"test test test test test test test test test test test junk\""
+    @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
 # compile WASI components, places the output in components dir
 wasi-build COMPONENT="*":

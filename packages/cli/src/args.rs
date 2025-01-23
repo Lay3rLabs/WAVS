@@ -194,7 +194,7 @@ impl Command {
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct CliArgs {
-    /// The home directory of the application, where the wavs-cli.toml configuration file is stored
+    /// The home directory of the application, where the cli.toml configuration file is stored
     /// if not provided here or in an env var, a series of default directories will be tried
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]

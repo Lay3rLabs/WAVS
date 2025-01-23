@@ -1,7 +1,7 @@
 use alloy::node_bindings::AnvilInstance;
 use std::{path::PathBuf, sync::Arc};
 use utils::{
-    config::{ConfigBuilder, ConfigExt, EthereumChainConfig},
+    config::{ConfigBuilder, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientConfig, EthSigningClient},
 };
 
@@ -22,12 +22,7 @@ impl TestApp {
             home: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
             // while this technically isn't "zeroed", this purposefully points at a non-existing file
             // so that we don't load a real .env in tests
-            dotenv: Some(
-                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("tests")
-                    .join(Config::DIRNAME)
-                    .join("non-existant-file"),
-            ),
+            dotenv: Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("non-existant-file")),
             port: None,
             log_level: Vec::new(),
             host: None,
