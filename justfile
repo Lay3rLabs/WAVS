@@ -51,9 +51,9 @@ _install-native HOME DATA:
         sed -i -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/wavs-cli.toml"; \
         sed -i -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/wavs-aggregator.toml"; \
     fi
-    # @cargo install --path ./packages/wavs
-    # @cargo install --path ./packages/cli
-    # @cargo install --path ./packages/aggregator
+    @cargo install --path ./packages/wavs
+    @cargo install --path ./packages/cli
+    @cargo install --path ./packages/aggregator
     @echo "Add these variables to your system environment:"
     @echo ""
     @echo "export WAVS_HOME=\"{{HOME}}\""
