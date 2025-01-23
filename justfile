@@ -33,18 +33,27 @@ install-native HOME DATA="":
         just _install-native {{HOME}} {{HOME}}; \
     fi
 
+
 _install-native HOME DATA:
+    @rm -rf "{{HOME}}"
+    @rm -rf "{{DATA}}"
     @mkdir -p "{{HOME}}"
     @mkdir -p "{{DATA}}"
     @cp "./packages/wavs/wavs.toml" "{{HOME}}"
     @cp "./packages/cli/wavs-cli.toml" "{{HOME}}"
     @cp "./packages/aggregator/wavs-aggregator.toml" "{{HOME}}"
-    @sed -i -e "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"
-    @sed -i -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/wavs-cli.toml"
-    @sed -i -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/wavs-aggregator.toml"
-    @cargo install --path ./packages/wavs
-    @cargo install --path ./packages/cli
-    @cargo install --path ./packages/aggregator
+    @if [ "$(uname)" == "Darwin" ]; then \
+        sed -i '' -e "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"; \
+        sed -i '' -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/wavs-cli.toml"; \
+        sed -i '' -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/wavs-aggregator.toml"; \
+    else \
+        sed -i -e "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"; \
+        sed -i -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/wavs-cli.toml"; \
+        sed -i -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/wavs-aggregator.toml"; \
+    fi
+    # @cargo install --path ./packages/wavs
+    # @cargo install --path ./packages/cli
+    # @cargo install --path ./packages/aggregator
     @echo "Add these variables to your system environment:"
     @echo ""
     @echo "export WAVS_HOME=\"{{HOME}}\""
