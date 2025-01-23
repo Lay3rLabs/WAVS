@@ -74,7 +74,7 @@ wasi-build COMPONENT="*":
     done
 
     rm -rf {{WASI_OUT_DIR}}
-    mkdir -p {{WASI_OUT_DIR}} 
+    mkdir -p {{WASI_OUT_DIR}}
     @cp ./examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
     @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
 
@@ -156,8 +156,12 @@ cli-deploy-core:
     @cd packages/cli && cargo run --quiet deploy-eigen-core
 
 # e.g. just cli-deploy-service ./examples/build/components/echo_data.wasm
-cli-deploy-service COMPONENT TRIGGER="eth-contract-event" TRIGGER_EVENT_NAME="86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68":
-    @cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}" --trigger "{{TRIGGER}}" --trigger-event-name "{{TRIGGER_EVENT_NAME}}"
+cli-deploy-service COMPONENT TRIGGER="eth-contract-event" TRIGGER_EVENT_NAME="86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68" SUBMIT_ADDR="":
+    if [ "{{SUBMIT_ADDR}}" == "" ]; then \
+        cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}" --trigger "{{TRIGGER}}" --trigger-event-name "{{TRIGGER_EVENT_NAME}}"; \
+    else \
+        cd packages/cli && cargo run --quiet deploy-service --component "{{COMPONENT}}" --trigger "{{TRIGGER}}" --trigger-event-name "{{TRIGGER_EVENT_NAME}}" --submit-address "{{SUBMIT_ADDR}}"; \
+    fi
 
 # e.g. `just cli-add-task 01942c3a85987e209520df364b3ba85b 7B2278223A20337D` or `{\"x\":2}`
 cli-add-task SERVICE_ID INPUT:

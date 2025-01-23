@@ -29,6 +29,7 @@ pub struct DeployServiceArgs {
     pub trigger_event_name: Option<String>,
     pub trigger_chain: Option<String>,
     pub trigger_address: Option<String>,
+    pub submit_address: Option<String>,
     pub cosmos_trigger_code_id: Option<u64>,
     pub submit: CliSubmitKind,
     pub submit_chain: Option<String>,
@@ -50,6 +51,7 @@ impl DeployService {
             trigger_event_name,
             trigger_chain,
             trigger_address,
+            submit_address,
             cosmos_trigger_code_id,
             submit,
             submit_chain,
@@ -149,7 +151,7 @@ impl DeployService {
                 tracing::info!("deploying eth submit contract on eigenlayer");
                 let avs_client = AvsClientDeployer::new(eth_client.eth)
                     .core_addresses(core_contracts)
-                    .deploy(SimpleEthSubmitClient::deploy)
+                    .deploy(SimpleEthSubmitClient::deploy, submit_address)
                     .await?;
 
                 if register_operator {

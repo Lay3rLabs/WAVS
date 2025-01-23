@@ -34,7 +34,7 @@ async fn submit_to_chain() {
 
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy(SimpleEthSubmitClient::deploy)
+        .deploy(SimpleEthSubmitClient::deploy, None)
         .await
         .unwrap();
 
@@ -122,7 +122,7 @@ async fn submit_to_chain_three() {
 
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy(SimpleEthSubmitClient::deploy)
+        .deploy(SimpleEthSubmitClient::deploy, None)
         .await
         .unwrap();
 
@@ -271,7 +271,7 @@ async fn invalid_operator_signature() {
 
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy(SimpleEthSubmitClient::deploy)
+        .deploy(SimpleEthSubmitClient::deploy, None)
         .await
         .unwrap();
 

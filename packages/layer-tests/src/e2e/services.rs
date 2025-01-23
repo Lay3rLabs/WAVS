@@ -152,6 +152,7 @@ async fn deploy_service(
             trigger,
             trigger_chain,
             trigger_address: None,
+            submit_address: None,
             trigger_event_name,
             cosmos_trigger_code_id: None,
             submit,
