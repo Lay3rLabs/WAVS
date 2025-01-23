@@ -6,6 +6,8 @@ First, copy the `.example.env` file to `.env`, and edit as needed
 cp packages/aggregator/.env.example packages/aggregator/.env
 ```
 
+### Pay special attention to the `*_DATA` vars - odds are you'll need to delete these folders from time to time to clear out the cache
+
 ## Up and running
 
 Next, open up two terminals. One will be for running all the background servers, the other will be for executing commands on them.
@@ -109,20 +111,26 @@ Make sure the `*_DATA` set in your env vars point to a valid location, and it's 
 
 The default `local` chain does not use the Aggregator service. If you want to enable this, you can change the submission chain to `local-aggregator`, but make sure that you aren't expecting tasks to immediately propogate by passing `--result-timeout-ms 0` to the `add-task` subcommand
 
-### Running with Docker
+# Running with Docker
 
 _TODO: document this :)_
 
-### Running natively
+# Running natively
 
 1. Install the binaries on your system
 
 You need to decide where the configuration and runtime-data files should be.
 
-For example, this will install everything and use `~/wavs-data` as the files path:
+For example, this will install everything and use `~/wavs-data` as both the configuration-files path and the runtime-data path:
 
 ```bash
 just install-native ~/wavs-data
+```
+
+This will separate them into distinct paths:
+
+```bash
+just install-native ~/wavs-config ~/wavs-data
 ```
 
 When the command succeeds, it'll tell you to add the `WAVS_HOME` and `WAVS_DOTENV` vars to your system environment. Make sure to do that!
@@ -166,3 +174,5 @@ If (and only if!) you happen to be deploying a component with the same example t
 ```bash
 wavs-cli add-task --service-id 0194948fec2f79a098b789f504a459c1 --input "hello world"
 ```
+
+## As above, odds are you'll need to delete the `DATA` folder from time to time to clear out the cache
