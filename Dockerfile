@@ -36,8 +36,8 @@ COPY --from=builder /myapp/packages/wavs/wavs.toml /var/wavs/wavs.toml
 COPY --from=builder /myapp/target/release/wavs-cli /usr/local/bin/wavs-cli
 COPY --from=builder /myapp/packages/cli/wavs-cli.toml /var/wavs-cli/wavs-cli.toml
 
-COPY --from=builder /myapp/target/release/aggregator /usr/local/bin/aggregator
-COPY --from=builder /myapp/packages/aggregator/aggregator.toml /var/wavs-aggregator/aggregator.toml
+COPY --from=builder /myapp/target/release/wavs-aggregator /usr/local/bin/wavs-aggregator
+COPY --from=builder /myapp/packages/aggregator/wavs-aggregator.toml /var/wavs-aggregator/wavs-aggregator.toml
 
 EXPOSE 8000 8001
 CMD ["/usr/local/bin/wavs"]

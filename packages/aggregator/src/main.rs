@@ -1,8 +1,8 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use aggregator::{args::CliArgs, config::Config, run_server, AppContext};
 use utils::config::{ConfigBuilder, ConfigExt};
+use wavs_aggregator::{args::CliArgs, config::Config, run_server, AppContext};
 
 fn main() {
     let args = CliArgs::parse();

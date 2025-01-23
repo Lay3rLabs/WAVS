@@ -8,7 +8,7 @@
 # e.g. WAVS_CLI_LOG_LEVEL="info, wavs=debug"
 log_level = ["info", "wavs=debug"]
 
-# the directory to store the data. Default is "/var/wavs"
+# the directory to store the data. Default is "/var/wavs-cli"
 # data = "~/wavs/cli"
 
 # wavs endpoint

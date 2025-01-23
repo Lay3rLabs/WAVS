@@ -11,10 +11,16 @@ use super::{
     CoreAVSAddresses, EigenClient,
 };
 use crate::eth_client::EthSigningClient;
-use alloy::primitives::{Address, FixedBytes, U256};
-use alloy::providers::Provider;
+use alloy::primitives::{Address, U256};
 use alloy::sol_types::SolCall;
 use anyhow::Result;
+
+cfg_if::cfg_if! {
+    if #[cfg(debug_assertions)] {
+        use alloy::primitives::{FixedBytes};
+        use alloy::providers::Provider;
+    }
+}
 
 // TODO: read anvil config from: lib/eigenlayer-middleware/lib/eigenlayer-contracts/script/configs/local/deploy_from_scratch.anvil.config.json
 

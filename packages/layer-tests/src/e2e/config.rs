@@ -12,7 +12,7 @@ pub struct Configs {
     pub matrix: TestMatrix,
     pub wavs: wavs::config::Config,
     pub cli: wavs_cli::config::Config,
-    pub aggregator: Option<aggregator::config::Config>,
+    pub aggregator: Option<wavs_aggregator::config::Config>,
     pub chains: ChainConfigs,
     pub anvil_interval_seconds: Option<u64>,
 }
@@ -121,8 +121,8 @@ impl From<TestConfig> for Configs {
         wavs_config.chains = chain_configs.clone();
 
         let aggregator_config = if matrix.eth_aggregator_chain_enabled() {
-            let mut aggregator_config: aggregator::config::Config =
-                ConfigBuilder::new(aggregator::args::CliArgs {
+            let mut aggregator_config: wavs_aggregator::config::Config =
+                ConfigBuilder::new(wavs_aggregator::args::CliArgs {
                     data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
                     home: Some(workspace_path().join("packages").join("aggregator")),
                     // deliberately point to a non-existing file

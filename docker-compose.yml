@@ -48,7 +48,7 @@ services:
     env_file: "./packages/aggregator/.env"
     ports:
       - "8001:8001"
-    command: ["aggregator"]
+    command: ["wavs-aggregator"]
     volumes:
       - "./packages/aggregator:/wavs"
     network_mode: "host"
@@ -59,7 +59,7 @@ services:
     depends_on: ["wavs", "anvil", "aggregator"]
     restart: "no"
     env_file: "./packages/cli/.env"
-    command: ["wavs-cli", "deploy-core"]
+    command: ["wavs-cli", "deploy-eigen-core"]
     volumes:
       - "./packages/cli:/wavs"
       - "./.docker/cli:/root/wavs/cli/"
