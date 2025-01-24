@@ -213,7 +213,7 @@ impl AvsClientDeployer {
                     .await?
                     .watch()
                     .await?;
-                *impl_contract.address()
+                proxies.ecdsa_stake_registry
             };
 
         // Get or deploy service manager
@@ -237,7 +237,7 @@ impl AvsClientDeployer {
                 .watch()
                 .await?;
 
-            service_manager_addr
+            proxies.service_manager
         };
 
         let underlying_token = strategy.underlyingToken().call().await?._0;
