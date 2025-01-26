@@ -22,7 +22,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
-    avs_client::{layer_service_manager::LayerServiceManager, SignedPayload},
+    avs_client::{ServiceManagerClient, SignedPayload},
     config::{AnyChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
     types::ChainName,
@@ -139,15 +139,25 @@ impl CoreSubmission {
             .try_into()
             .map_err(SubmissionError::Climb)?;
 
-        let service_manager_contract =
-            LayerServiceManager::new(service_manager_address, eth_client.provider.clone());
-
         let data_hash = eip191_hash_message(keccak256(&data));
         let signature: Vec<u8> = eth_client
             .signer
             .sign_hash_sync(&data_hash)
             .map_err(|_| SubmissionError::FailedToSignPayload)?
             .into();
+
+        let signed_payload = SignedPayload {
+            operator: eth_client.address(),
+            data,
+            data_hash,
+            signature,
+            signed_block_height: eth_client
+                .provider
+                .get_block_number()
+                .await
+                .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
+                - 1,
+        };
 
         if let Some(aggregator_url) = self
             .chain_configs
@@ -160,18 +170,7 @@ impl CoreSubmission {
                 .post(format!("{aggregator_url}/add-payload"))
                 .header("Content-Type", "application/json")
                 .json(&AggregateAvsRequest::EigenContract {
-                    signed_payload: SignedPayload {
-                        operator: eth_client.address(),
-                        data,
-                        data_hash,
-                        signature,
-                        signed_block_height: eth_client
-                            .provider
-                            .get_block_number()
-                            .await
-                            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
-                            - 1,
-                    },
+                    signed_payload,
                     service_manager_address,
                 })
                 .send()
@@ -209,30 +208,10 @@ impl CoreSubmission {
                 );
             }
 
-            tracing::info!("adding signed payload...");
-            let _ = service_manager_contract
-                .addPayload(
-                    SignedPayload {
-                        operator: eth_client.address(),
-                        data,
-                        data_hash,
-                        signature,
-                        signed_block_height: eth_client
-                            .provider
-                            .get_block_number()
-                            .await
-                            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
-                            - 1,
-                    }
-                    .into_submission_abi(),
-                )
-                .gas(max_gas.unwrap_or(1_000_000).min(30_000_000))
-                .send()
+            ServiceManagerClient::new(eth_client.clone(), service_manager_address)
+                .add_signed_payload(signed_payload, max_gas)
                 .await
-                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(anyhow!("{}", e)))?
-                .watch()
-                .await
-                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(anyhow!("{}", e)))?;
+                .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?;
         }
 
         Ok(())

@@ -80,9 +80,10 @@ impl AvsClient {
             .await?
             .transaction_hash;
 
-        tracing::debug!(
-            "Operator registered on AVS successfully :{} , tx_hash :{}",
+        tracing::info!(
+            "Operator registered on AVS successfully: {} on {}, tx_hash :{}",
             self.eth.signer.address(),
+            self.service_manager,
             register_operator_hash
         );
         Ok(register_operator_hash)
@@ -198,7 +199,7 @@ impl AvsClientDeployer {
             .await?;
 
         // Get service manager
-        let service_manager = LayerServiceManager::deploy(
+        let service_manager_impl = LayerServiceManager::deploy(
             self.eth.provider.clone(),
             core.avs_directory,
             proxies.ecdsa_stake_registry,
@@ -208,11 +209,9 @@ impl AvsClientDeployer {
         )
         .await?;
 
-        let service_manager_address = *service_manager.address();
-
         proxies
             .admin
-            .upgrade(proxies.service_manager, service_manager_address)
+            .upgrade(proxies.service_manager, *service_manager_impl.address())
             .send()
             .await?
             .watch()

@@ -29,7 +29,10 @@ pub async fn handle_add_payload(
 
     match resp {
         Ok(resp) => Json(resp).into_response(),
-        Err(e) => e.into_response(),
+        Err(e) => {
+            tracing::error!("{:?}", e);
+            e.into_response()
+        }
     }
 }
 

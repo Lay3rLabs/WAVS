@@ -11,7 +11,7 @@ pub struct DeployEigenServiceManager {
 
 pub struct DeployEigenServiceManagerArgs {
     pub chain: String,
-    pub payload_handler: Address,
+    pub service_handler: Address,
     pub register_operator: bool,
 }
 
@@ -20,16 +20,29 @@ impl DeployEigenServiceManager {
         ctx: &CliContext,
         DeployEigenServiceManagerArgs {
             chain,
-            payload_handler,
+            service_handler,
             register_operator,
         }: DeployEigenServiceManagerArgs,
     ) -> Result<Self> {
+        let deployment = ctx.deployment.lock().unwrap().clone();
+
+        let core_contracts = match deployment.eigen_core.get(&chain) {
+            Some(core_contracts) => core_contracts.clone(),
+            None => {
+                tracing::error!(
+                    "Eigenlayer core contracts not deployed for chain {}, deploy those first!",
+                    chain
+                );
+                return Err(anyhow::anyhow!("Eigenlayer core contracts not deployed"));
+            }
+        };
+
         let eigen_client = ctx.get_eth_client(&chain)?;
-        let core_contracts = eigen_client.deploy_core_contracts().await?;
+
         let deployer = AvsClientDeployer::new(eigen_client.eth).core_addresses(core_contracts);
 
         let avs_client = deployer
-            .deploy_service_manager(payload_handler, None)
+            .deploy_service_manager(service_handler, None)
             .await?;
 
         if register_operator {
