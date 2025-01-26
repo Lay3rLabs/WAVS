@@ -9,6 +9,7 @@ use utils::{avs_client::SignedData, eigen_client::CoreAVSAddresses, ServiceID, W
 pub struct DisplayBuilder {
     pub core_contracts: Option<CoreAVSAddresses>,
     pub service: Option<(ServiceID, HashMap<WorkflowID, ServiceInfo>)>,
+    pub submit_contract: Option<layer_climb::prelude::Address>,
     pub signed_data: Option<SignedData>,
     pub gas_used: Option<u64>,
 }
@@ -30,6 +31,9 @@ impl DisplayBuilder {
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub signed_data: Option<SignedDataJson>,
+
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub submit_contract: Option<layer_climb::prelude::Address>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub gas_used: Option<u64>,
@@ -54,6 +58,7 @@ impl DisplayBuilder {
             service: self.service,
             signed_data,
             gas_used: self.gas_used,
+            submit_contract: self.submit_contract,
         };
 
         // For grabbing with tools like `jq` - pure printing without tracing info
@@ -61,6 +66,9 @@ impl DisplayBuilder {
 
         if let Some((service_id, _)) = display_json.service {
             tracing::info!("Service ID: {}", service_id);
+        }
+        if let Some(submit_contract) = display_json.submit_contract {
+            tracing::info!("Submit contract: {}", submit_contract);
         }
 
         Ok(())

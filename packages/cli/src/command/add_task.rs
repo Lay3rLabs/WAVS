@@ -92,7 +92,7 @@ impl AddTask {
         match service.submit {
             ServiceSubmitInfo::EigenLayer {
                 chain_name,
-                avs_addresses,
+                service_manager_address,
             } => {
                 let result_timeout = match result_timeout {
                     Some(timeout) => timeout,
@@ -107,7 +107,7 @@ impl AddTask {
                 };
                 let submit_client = SimpleEthSubmitClient::new(
                     ctx.get_eth_client(&chain_name)?.eth,
-                    avs_addresses.service_manager,
+                    service_manager_address,
                 );
 
                 let signed_data = tokio::time::timeout(result_timeout, async move {

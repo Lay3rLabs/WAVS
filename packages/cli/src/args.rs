@@ -27,6 +27,26 @@ pub enum Command {
         args: CliArgs,
     },
 
+    /// Deploy a submit contract for eigenlayer (a.k.a. Service Manager
+    /// Uses core contracts that were previously deployed via the CLI
+    /// Typically used for getting an address to pass to DeployService
+    DeployEigenSubmit {
+        /// The chain to deploy the submit on, if applicable
+        #[clap(long, default_value = "local")]
+        chain: String,
+
+        /// The payload handler contract address
+        #[clap(long)]
+        payload_handler: String,
+
+        /// If set, will register as an operator for the service too
+        #[clap(long, default_value_t = true)]
+        register_operator: bool,
+
+        #[clap(flatten)]
+        args: CliArgs,
+    },
+
     /// Deploy a full service and (optionally) register as an Operator on the Submit target
     /// Uses core contracts that were previously deployed via the CLI
     DeployService {
@@ -183,6 +203,7 @@ impl Command {
     pub fn args(&self) -> CliArgs {
         let args = match self {
             Self::DeployEigenCore { args, .. } => args,
+            Self::DeployEigenSubmit { args, .. } => args,
             Self::DeployService { args, .. } => args,
             Self::AddTask { args, .. } => args,
             Self::Exec { args, .. } => args,

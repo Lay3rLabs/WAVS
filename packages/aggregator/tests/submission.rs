@@ -34,12 +34,17 @@ async fn submit_to_chain() {
 
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy(SimpleEthSubmitClient::deploy, None)
+        .deploy_service_manager(
+            SimpleEthSubmitClient::deploy(eigen_client.eth.provider.clone())
+                .await
+                .unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
     let submit_client =
-        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.service_manager);
 
     // Register operator
     eigen_client
@@ -122,12 +127,17 @@ async fn submit_to_chain_three() {
 
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy(SimpleEthSubmitClient::deploy, None)
+        .deploy_service_manager(
+            SimpleEthSubmitClient::deploy(eigen_client.eth.provider.clone())
+                .await
+                .unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
     let submit_client =
-        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.service_manager);
 
     // Register operator
     eigen_client
@@ -271,12 +281,17 @@ async fn invalid_operator_signature() {
 
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy(SimpleEthSubmitClient::deploy, None)
+        .deploy_service_manager(
+            SimpleEthSubmitClient::deploy(eigen_client.eth.provider.clone())
+                .await
+                .unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
     let _submit_client =
-        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.layer.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.service_manager);
 
     // Register operator
     eigen_client

@@ -6,6 +6,7 @@ use wavs_cli::{
     command::{
         add_task::{AddTask, AddTaskArgs},
         deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
+        deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
         deploy_service::{ComponentSource, DeployService, DeployServiceArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
     },
@@ -98,6 +99,29 @@ async fn main() {
 
                 display.service = Some((service_id, workflows));
             }
+        }
+        Command::DeployEigenSubmit {
+            chain,
+            payload_handler,
+            register_operator,
+            args: _,
+        } => {
+            let res = DeployEigenServiceManager::run(
+                &ctx,
+                DeployEigenServiceManagerArgs {
+                    chain: chain.clone(),
+                    payload_handler: payload_handler.parse().unwrap(),
+                    register_operator,
+                },
+            )
+            .await
+            .unwrap();
+
+            let DeployEigenServiceManager { address } = res;
+
+            display.submit_contract = Some(address.into());
+
+            ctx.save_deployment().unwrap();
         }
         Command::AddTask {
             service_id,

@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
+use alloy::primitives::Address;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{
-    avs_client::AvsAddresses, eigen_client::CoreAVSAddresses, types::ChainName, ServiceID,
-    WorkflowID,
-};
+use utils::{eigen_client::CoreAVSAddresses, types::ChainName, ServiceID, WorkflowID};
 
 use crate::config::Config;
 
@@ -41,7 +39,7 @@ pub enum ServiceTriggerInfo {
 pub enum ServiceSubmitInfo {
     EigenLayer {
         chain_name: ChainName,
-        avs_addresses: AvsAddresses,
+        service_manager_address: Address,
     },
 }
 
@@ -88,7 +86,7 @@ impl Deployment {
         &self,
         service_id: &ServiceID,
         workflow_id: Option<&WorkflowID>,
-    ) -> Option<(ChainName, AvsAddresses)> {
+    ) -> Option<(ChainName, Address)> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
             Some(workflow_id) => service.get(workflow_id)?,
@@ -100,8 +98,8 @@ impl Deployment {
         match any_submit_info {
             ServiceSubmitInfo::EigenLayer {
                 chain_name,
-                avs_addresses,
-            } => Some((chain_name, avs_addresses)),
+                service_manager_address,
+            } => Some((chain_name, service_manager_address)),
         }
     }
 }
