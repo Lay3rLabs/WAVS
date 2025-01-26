@@ -12,7 +12,7 @@ use crate::{
     args::{CliSubmitKind, CliTriggerKind},
     clients::{
         example_cosmos_client::SimpleCosmosTriggerClient,
-        example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient},
+        example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient},
         HttpClient,
     },
     context::CliContext,
@@ -152,10 +152,21 @@ impl DeployService {
                 let eth_client = ctx.get_eth_client(&chain_name)?;
 
                 tracing::info!("deploying eth submit contract on eigenlayer");
-                let avs_client = AvsClientDeployer::new(eth_client.eth)
-                    .core_addresses(core_contracts)
-                    .deploy(SimpleEthSubmitClient::deploy, submit_address)
-                    .await?;
+
+                let deployer =
+                    AvsClientDeployer::new(eth_client.eth).core_addresses(core_contracts);
+
+                let avs_client = match submit_address {
+                    Some(submit_address) => deployer.into_client(submit_address.parse()?).await?,
+                    None => {
+                        let simple_submit =
+                            SimpleSubmit::deploy(deployer.eth.provider.clone()).await?;
+
+                        deployer
+                            .deploy_service_manager(*simple_submit.address(), None)
+                            .await?
+                    }
+                };
 
                 if register_operator {
                     avs_client.register_operator(&mut OsRng).await?;
@@ -163,7 +174,7 @@ impl DeployService {
 
                 ServiceSubmitInfo::EigenLayer {
                     chain_name,
-                    avs_addresses: avs_client.layer,
+                    service_manager_address: avs_client.service_manager,
                 }
             }
         };

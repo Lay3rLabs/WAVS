@@ -1,6 +1,6 @@
 use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::Result;
-use utils::{avs_client::ServiceManagerDeps, eth_client::EthSigningClient};
+use utils::{eigen_client::solidity_types::BoxSigningProvider, eth_client::EthSigningClient};
 
 use super::{
     example_submit::DataWithId,
@@ -26,25 +26,11 @@ impl SimpleEthSubmitClient {
         }
     }
 
-    pub async fn deploy(deps: ServiceManagerDeps) -> Result<Address> {
-        let ServiceManagerDeps {
-            provider,
-            avs_directory,
-            stake_registry,
-            rewards_coordinator,
-            delegation_manager,
-        } = deps;
-
-        let contract = SimpleSubmit::deploy(
-            provider,
-            avs_directory,
-            stake_registry,
-            rewards_coordinator,
-            delegation_manager,
-        )
-        .await?;
-
-        Ok(*contract.address())
+    pub async fn deploy(provider: BoxSigningProvider) -> Result<Address> {
+        SimpleSubmit::deploy(provider)
+            .await
+            .map(|c| *c.address())
+            .map_err(|e| e.into())
     }
 
     // just a static helper to simulate the data that would be sent to the contract

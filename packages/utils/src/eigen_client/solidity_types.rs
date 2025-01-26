@@ -24,7 +24,7 @@ pub mod delegation_manager {
     sol!(
         #[sol(rpc)]
         DelegationManager,
-        "../../sdk/solidity/contracts/abi/DelegationManager.sol/DelegationManager.json"
+        "../../contracts/solidity/abi/DelegationManager.sol/DelegationManager.json"
     );
 }
 
@@ -34,19 +34,19 @@ pub mod proxy {
     sol!(
         #[sol(rpc)]
         EmptyContract,
-        "../../sdk/solidity/contracts/abi/EmptyContract.sol/EmptyContract.json"
+        "../../contracts/solidity/abi/EmptyContract.sol/EmptyContract.json"
     );
 
     sol!(
         #[sol(rpc)]
         TransparentUpgradeableProxy,
-        "../../sdk/solidity/contracts/abi/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json"
+        "../../contracts/solidity/abi/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json"
     );
 
     sol!(
         #[sol(rpc)]
         ProxyAdmin,
-        "../../sdk/solidity/contracts/abi/ProxyAdmin.sol/ProxyAdmin.json"
+        "../../contracts/solidity/abi/ProxyAdmin.sol/ProxyAdmin.json"
     );
 }
 
@@ -56,55 +56,55 @@ pub mod misc {
     sol!(
         #[sol(rpc)]
         PauserRegistry,
-        "../../sdk/solidity/contracts/abi/PauserRegistry.sol/PauserRegistry.json"
+        "../../contracts/solidity/abi/PauserRegistry.sol/PauserRegistry.json"
     );
 
     sol!(
         #[sol(rpc)]
         AVSDirectory,
-        "../../sdk/solidity/contracts/abi/AVSDirectory.sol/AVSDirectory.json"
+        "../../contracts/solidity/abi/AVSDirectory.sol/AVSDirectory.json"
     );
 
     sol!(
         #[sol(rpc)]
         StrategyManager,
-        "../../sdk/solidity/contracts/abi/StrategyManager.sol/StrategyManager.json"
+        "../../contracts/solidity/abi/StrategyManager.sol/StrategyManager.json"
     );
 
     sol!(
         #[sol(rpc)]
         StrategyFactory,
-        "../../sdk/solidity/contracts/abi/StrategyFactory.sol/StrategyFactory.json"
+        "../../contracts/solidity/abi/StrategyFactory.sol/StrategyFactory.json"
     );
 
     sol!(
         #[sol(rpc)]
         EigenPodManager,
-        "../../sdk/solidity/contracts/abi/EigenPodManager.sol/EigenPodManager.json"
+        "../../contracts/solidity/abi/EigenPodManager.sol/EigenPodManager.json"
     );
 
     sol!(
         #[sol(rpc)]
         RewardsCoordinator,
-        "../../sdk/solidity/contracts/abi/RewardsCoordinator.sol/RewardsCoordinator.json"
+        "../../contracts/solidity/abi/RewardsCoordinator.sol/RewardsCoordinator.json"
     );
 
     sol!(
         #[sol(rpc)]
         EigenPod,
-        "../../sdk/solidity/contracts/abi/EigenPod.sol/EigenPod.json"
+        "../../contracts/solidity/abi/EigenPod.sol/EigenPod.json"
     );
 
     sol!(
         #[sol(rpc)]
         UpgradeableBeacon,
-        "../../sdk/solidity/contracts/abi/UpgradeableBeacon.sol/UpgradeableBeacon.json"
+        "../../contracts/solidity/abi/UpgradeableBeacon.sol/UpgradeableBeacon.json"
     );
 
     sol!(
         #[sol(rpc)]
         StrategyBase,
-        "../../sdk/solidity/contracts/abi/StrategyBase.sol/StrategyBase.json"
+        "../../contracts/solidity/abi/StrategyBase.sol/StrategyBase.json"
     );
 
     // It's enum, but alloy didn't generate helpers for it

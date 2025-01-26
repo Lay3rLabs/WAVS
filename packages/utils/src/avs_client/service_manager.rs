@@ -21,7 +21,7 @@ pub struct ServiceManagerClient {
 
 impl From<AvsClient> for ServiceManagerClient {
     fn from(full: AvsClient) -> Self {
-        Self::new(full.eth, full.layer.service_manager)
+        Self::new(full.eth, full.service_manager)
     }
 }
 
