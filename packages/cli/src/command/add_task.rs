@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use utils::{avs_client::SignedData, ServiceID, WorkflowID};
+use utils::{
+    avs_client::{ServiceManagerClient, SignedData},
+    ServiceID, WorkflowID,
+};
 
 use crate::{
     clients::{
@@ -13,6 +16,7 @@ use crate::{
     util::ComponentInput,
 };
 
+/// Add Task is specific for the example trigger contracts, mostly just for testing
 pub struct AddTask {
     pub signed_data: Option<SignedData>,
 }
@@ -105,10 +109,22 @@ impl AddTask {
                         return Ok(Some(Self { signed_data: None }));
                     }
                 };
+
+                let eigen_client = ctx.get_eth_client(&chain_name)?;
+
+                let service_handler =
+                    ServiceManagerClient::new(eigen_client.eth.clone(), service_manager_address);
+
                 let submit_client = SimpleEthSubmitClient::new(
                     ctx.get_eth_client(&chain_name)?.eth,
-                    service_manager_address,
+                    service_handler.handler_address().await?,
                 );
+
+                tracing::info!("service manager address: {}", service_manager_address);
+
+                if submit_client.get_service_manager_address().await? != service_manager_address {
+                    return Err(anyhow::anyhow!("service manager address mismatch"));
+                }
 
                 let signed_data = tokio::time::timeout(result_timeout, async move {
                     loop {

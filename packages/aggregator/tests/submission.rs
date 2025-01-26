@@ -13,10 +13,12 @@ use utils::{
     eigen_client::EigenClient,
 };
 use wavs_aggregator::{http::state::HttpState, test_utils::app::TestApp};
-use wavs_cli::clients::example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient};
+use wavs_cli::clients::example_eth_client::{
+    example_submit::SimpleSubmit, SimpleEthSubmitClient, SimpleEthTriggerClient,
+};
 
 #[tokio::test]
-async fn submit_to_chain() {
+async fn submit_to_chain_one() {
     let anvil = Anvil::new().spawn();
     let data_path = tempfile::tempdir().unwrap().path().to_path_buf();
     let _ = utils::storage::fs::FileStorage::new(data_path.clone());
@@ -32,19 +34,22 @@ async fn submit_to_chain() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
+    let simple_submit = SimpleSubmit::deploy(eigen_client.eth.provider.clone())
+        .await
+        .unwrap();
+
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy_service_manager(
-            SimpleEthSubmitClient::deploy(eigen_client.eth.provider.clone())
-                .await
-                .unwrap(),
-            None,
-        )
+        .deploy_service_manager(*simple_submit.address(), None)
         .await
         .unwrap();
 
     let submit_client =
-        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), *simple_submit.address());
+    submit_client
+        .set_service_manager_address(avs_client.service_manager)
+        .await
+        .unwrap();
 
     // Register operator
     eigen_client
@@ -125,19 +130,22 @@ async fn submit_to_chain_three() {
 
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
+    let simple_submit = SimpleSubmit::deploy(eigen_client.eth.provider.clone())
+        .await
+        .unwrap();
+
     let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
         .core_addresses(core_contracts.clone())
-        .deploy_service_manager(
-            SimpleEthSubmitClient::deploy(eigen_client.eth.provider.clone())
-                .await
-                .unwrap(),
-            None,
-        )
+        .deploy_service_manager(*simple_submit.address(), None)
         .await
         .unwrap();
 
     let submit_client =
-        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.service_manager);
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), *simple_submit.address());
+    submit_client
+        .set_service_manager_address(avs_client.service_manager)
+        .await
+        .unwrap();
 
     // Register operator
     eigen_client
@@ -279,19 +287,23 @@ async fn invalid_operator_signature() {
     let eigen_client = EigenClient::new(eth_client);
     let core_contracts = eigen_client.deploy_core_contracts().await.unwrap();
 
-    let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
-        .core_addresses(core_contracts.clone())
-        .deploy_service_manager(
-            SimpleEthSubmitClient::deploy(eigen_client.eth.provider.clone())
-                .await
-                .unwrap(),
-            None,
-        )
+    let simple_submit = SimpleSubmit::deploy(eigen_client.eth.provider.clone())
         .await
         .unwrap();
 
-    let _submit_client =
-        SimpleEthSubmitClient::new(avs_client.eth.clone(), avs_client.service_manager);
+    let avs_client = AvsClientDeployer::new(eigen_client.eth.clone())
+        .core_addresses(core_contracts.clone())
+        .deploy_service_manager(*simple_submit.address(), None)
+        .await
+        .unwrap();
+
+    let submit_client =
+        SimpleEthSubmitClient::new(avs_client.eth.clone(), *simple_submit.address());
+
+    submit_client
+        .set_service_manager_address(avs_client.service_manager)
+        .await
+        .unwrap();
 
     // Register operator
     eigen_client

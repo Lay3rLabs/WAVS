@@ -12,8 +12,13 @@ use crate::{
     args::{CliSubmitKind, CliTriggerKind},
     clients::{
         example_cosmos_client::SimpleCosmosTriggerClient,
-        example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient},
+        example_eth_client::{
+            example_submit::SimpleSubmit, SimpleEthSubmitClient, SimpleEthTriggerClient,
+        },
         HttpClient,
+    },
+    command::deploy_eigen_service_manager::{
+        DeployEigenServiceManager, DeployEigenServiceManagerArgs,
     },
     context::CliContext,
     deploy::{ServiceInfo, ServiceSubmitInfo, ServiceTriggerInfo},
@@ -151,30 +156,54 @@ impl DeployService {
 
                 let eth_client = ctx.get_eth_client(&chain_name)?;
 
-                tracing::info!("deploying eth submit contract on eigenlayer");
+                let service_manager_address = match submit_address {
+                    Some(submit_address) => {
+                        // already have a submit address, but maybe we still want to register as an operator
+                        if register_operator {
+                            let deployer = AvsClientDeployer::new(eth_client.eth)
+                                .core_addresses(core_contracts);
 
-                let deployer =
-                    AvsClientDeployer::new(eth_client.eth).core_addresses(core_contracts);
+                            let avs_client = deployer.into_client(submit_address.parse()?).await?;
 
-                let avs_client = match submit_address {
-                    Some(submit_address) => deployer.into_client(submit_address.parse()?).await?,
+                            avs_client.register_operator(&mut OsRng).await?;
+                        }
+
+                        submit_address.parse()?
+                    }
                     None => {
+                        // fresh deployment, using "SimpleSubmit" handler
                         let simple_submit =
-                            SimpleSubmit::deploy(deployer.eth.provider.clone()).await?;
+                            SimpleSubmit::deploy(eth_client.eth.provider.clone()).await?;
 
-                        deployer
-                            .deploy_service_manager(*simple_submit.address(), None)
-                            .await?
+                        // re-use the same code that we use to deploy the service manager explicitly
+                        let res = DeployEigenServiceManager::run(
+                            ctx,
+                            DeployEigenServiceManagerArgs {
+                                chain: chain_name.clone(),
+                                service_handler: *simple_submit.address(),
+                                register_operator,
+                            },
+                        )
+                        .await
+                        .unwrap();
+
+                        let DeployEigenServiceManager { address } = res;
+                        // but for our "simple submit", we want to set the serviceManager for its custom security rules
+                        let simple_submit_client = SimpleEthSubmitClient::new(
+                            eth_client.eth.clone(),
+                            *simple_submit.address(),
+                        );
+                        simple_submit_client
+                            .set_service_manager_address(address)
+                            .await?;
+
+                        address
                     }
                 };
 
-                if register_operator {
-                    avs_client.register_operator(&mut OsRng).await?;
-                }
-
                 ServiceSubmitInfo::EigenLayer {
                     chain_name,
-                    service_manager_address: avs_client.service_manager,
+                    service_manager_address,
                 }
             }
         };

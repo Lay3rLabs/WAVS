@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IPayloadHandler} from "@layer-sdk/interfaces/IPayloadHandler.sol";
+import {IServiceHandler} from "@layer-sdk/interfaces/IServiceHandler.sol";
 import {ECDSAServiceManagerBase} from "@eigenlayer/middleware/src/unaudited/ECDSAServiceManagerBase.sol";
 import {ECDSAStakeRegistry} from "@eigenlayer/middleware/src/unaudited/ECDSAStakeRegistry.sol";
 import {IERC1271Upgradeable} from "@openzeppelin-upgrades/contracts/interfaces/IERC1271Upgradeable.sol";
@@ -19,7 +19,7 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
     // State
     // ------------------------------------------------------------------------
     /// @notice The external contract to which payload-handling logic is delegated.
-    address public payloadHandler;
+    address public immutable serviceHandler;
 
     // ------------------------------------------------------------------------
     // Custom Errors
@@ -34,7 +34,7 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         address _stakeRegistry,
         address _rewardsCoordinator,
         address _delegationManager,
-        address _payloadHandler
+        address _serviceHandler
     )
         ECDSAServiceManagerBase(
             _avsDirectory,
@@ -43,8 +43,8 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
             _delegationManager
         )
     {
-        require(_payloadHandler != address(0), "Invalid payload handler address");
-        payloadHandler = _payloadHandler;
+        require(_serviceHandler != address(0), "Invalid service handler address");
+        serviceHandler = _serviceHandler;
     }
 
     // ------------------------------------------------------------------------
@@ -74,6 +74,7 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         external
     {
         require(validatePayloadMulti(signedPayloads), "Invalid signature");
+
         for (uint256 i = 0; i < signedPayloads.length; i++) {
             _delegateHandleAddPayload(signedPayloads[i].data, signedPayloads[i].signature);
         }
@@ -132,6 +133,6 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         internal
     {
         // If you want to impose additional checks, you can do them here
-        IPayloadHandler(payloadHandler).handleAddPayload(data, signature);
+        IServiceHandler(serviceHandler).handleAddPayload(data, signature);
     }
 }

@@ -33,7 +33,6 @@ pub mod token {
 
 pub mod layer_service_manager {
     use super::*;
-
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]

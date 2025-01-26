@@ -37,6 +37,15 @@ impl ServiceManagerClient {
         }
     }
 
+    pub async fn handler_address(&self) -> Result<Address> {
+        Ok(self
+            .service_manager_contract
+            .serviceHandler()
+            .call()
+            .await?
+            ._0)
+    }
+
     // helper to add a single signed payload to the contract
     pub async fn add_signed_payload(
         &self,

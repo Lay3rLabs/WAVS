@@ -101,7 +101,7 @@ solidity-build CLEAN="":
         ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager ILayerServiceManager EmptyContract; do \
         cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/contracts/solidity/abi; \
     done
-    cp -r {{REPO_ROOT}}/out/IPayloadHandler.sol {{REPO_ROOT}}/sdk/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/IServiceHandler.sol {{REPO_ROOT}}/sdk/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/

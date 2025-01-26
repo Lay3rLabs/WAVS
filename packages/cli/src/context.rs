@@ -45,7 +45,7 @@ impl CliContext {
             Command::DeployEigenCore { chain, .. } => {
                 chains.insert(chain.clone());
             }
-            Command::DeployEigenSubmit { chain, .. } => {
+            Command::DeployEigenServiceManager { chain, .. } => {
                 chains.insert(chain.to_string());
             }
             Command::DeployService {
