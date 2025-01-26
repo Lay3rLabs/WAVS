@@ -7,7 +7,6 @@ import {ECDSAStakeRegistry} from "@eigenlayer/middleware/src/unaudited/ECDSAStak
 import {IDelegationManager} from "@eigenlayer/middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
 import {Quorum, StrategyParams} from "@eigenlayer/middleware/src/interfaces/IECDSAStakeRegistryEventsAndErrors.sol";
 import {IStrategy} from "@eigenlayer/middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
-import {IPayloadHandler} from "@layer-sdk/interfaces/IPayloadHandler.sol";
 
 // forge script ./contracts/script/LayerServiceManager.s.sol
 contract LayerServiceManagerScript is Script {
@@ -15,6 +14,7 @@ contract LayerServiceManagerScript is Script {
     address public delegationManager = vm.envAddress("CLI_EIGEN_CORE_DELEGATION_MANAGER");
     address public rewardsCoordinator = vm.envAddress("CLI_EIGEN_CORE_REWARDS_COORDINATOR");
     address public avsDirectory = vm.envAddress("CLI_EIGEN_CORE_AVS_DIRECTORY");
+    address public serviceHandler = vm.envAddress("CLI_EIGEN_SERVICE_HANDLER");
 
     uint _privateKey = vm.envUint("FOUNDRY_ANVIL_PRIVATE_KEY");
 
@@ -24,8 +24,6 @@ contract LayerServiceManagerScript is Script {
         vm.startBroadcast(_privateKey);
 
         ECDSAStakeRegistry ecdsaRegistry = new ECDSAStakeRegistry(IDelegationManager(delegationManager));
-
-        address serviceHandler = address(new LayerServiceHandler());
 
         console.log("delegationManager:", delegationManager);
         console.log("rewardsCoordinator:", rewardsCoordinator);
@@ -55,28 +53,4 @@ contract LayerServiceManagerScript is Script {
         console.log("ecdssa_registry (deployed):", address(ecdsaRegistry));
     }
 
-}
-
-
-
-/**
- * @title LayerServiceHandler
- * @notice Example of a contract that knows how to handle validated payloads.
- */
-contract LayerServiceHandler is IPayloadHandler {
-    event PayloadAdded(address indexed caller, bytes data, bytes signature);
-
-    /**
-     * @notice Called by LayerServiceManager after successful payload signature validation.
-     * @dev In a real-world scenario, you could parse `data` or do some state updates here.
-     */
-    function handleAddPayload(bytes calldata data, bytes calldata signature)
-        external
-        override
-    {
-        // Example: Just emit an event
-        emit PayloadAdded(msg.sender, data, signature);
-
-        // Additional logic to process `data` would go here
-    }
 }

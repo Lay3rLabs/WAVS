@@ -100,9 +100,9 @@ async fn main() {
                 display.service = Some((service_id, workflows));
             }
         }
-        Command::DeployEigenSubmit {
+        Command::DeployEigenServiceManager {
             chain,
-            payload_handler,
+            service_handler,
             register_operator,
             args: _,
         } => {
@@ -110,7 +110,7 @@ async fn main() {
                 &ctx,
                 DeployEigenServiceManagerArgs {
                     chain: chain.clone(),
-                    payload_handler: payload_handler.parse().unwrap(),
+                    service_handler: service_handler.parse().unwrap(),
                     register_operator,
                 },
             )
