@@ -27,12 +27,11 @@ use alloy::{
 use anyhow::{Context, Result};
 use chrono::Utc;
 use rand::prelude::*;
-use serde::{Deserialize, Serialize};
 
 pub struct AvsClient {
     pub eth: EthSigningClient,
     pub core: CoreAVSAddresses,
-    pub layer: AvsAddresses,
+    pub service_manager: Address,
 }
 
 impl AvsClient {
@@ -48,7 +47,7 @@ impl AvsClient {
             .core
             .calculate_operator_avs_registration_digest_hash(
                 self.eth.address(),
-                self.layer.service_manager,
+                self.service_manager,
                 salt,
                 expiry,
                 self.eth.provider.clone(),
@@ -62,8 +61,15 @@ impl AvsClient {
             expiry,
         };
 
+        let stake_registry_address =
+            LayerServiceManager::new(self.service_manager, &self.eth.provider)
+                .stakeRegistry()
+                .call()
+                .await?
+                ._0;
+
         let contract_ecdsa_stake_registry =
-            ECDSAStakeRegistry::new(self.layer.stake_registry, self.eth.provider.clone());
+            ECDSAStakeRegistry::new(stake_registry_address, self.eth.provider.clone());
 
         let register_operator_hash = contract_ecdsa_stake_registry
             .registerOperatorWithSignature(operator_signature, self.eth.signer.clone().address())
@@ -80,25 +86,6 @@ impl AvsClient {
             register_operator_hash
         );
         Ok(register_operator_hash)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AvsAddresses {
-    pub proxy_admin: Address,
-    pub service_manager: Address,
-    pub stake_registry: Address,
-    pub token: Address,
-}
-
-impl AvsAddresses {
-    pub fn as_vec(&self) -> Vec<Address> {
-        vec![
-            self.proxy_admin,
-            self.service_manager,
-            self.stake_registry,
-            self.token,
-        ]
     }
 }
 
@@ -121,7 +108,7 @@ impl AvsClientDeployer {
     }
 }
 
-struct SetupAddrs {
+pub struct StrategyAndToken {
     pub token: Address,
     pub quorum: Quorum,
 }
@@ -135,7 +122,10 @@ pub struct ServiceManagerDeps {
 }
 
 impl AvsClientDeployer {
-    async fn set_up(&self, strategy_factory: Address) -> Result<SetupAddrs> {
+    pub async fn deploy_strategy_and_token(
+        &self,
+        strategy_factory: Address,
+    ) -> Result<StrategyAndToken> {
         let token = LayerToken::deploy(self.eth.provider.clone()).await?;
         let strategy_factory = StrategyFactory::new(strategy_factory, self.eth.provider.clone());
 
@@ -151,7 +141,7 @@ impl AvsClientDeployer {
             .solidity_event()
             .context("No strategy address found")?;
 
-        Ok(SetupAddrs {
+        Ok(StrategyAndToken {
             token: *token.address(),
             quorum: Quorum {
                 strategies: vec![StrategyParams {
@@ -162,18 +152,20 @@ impl AvsClientDeployer {
         })
     }
 
-    pub async fn deploy<F, Fut>(
+    pub async fn deploy_service_manager(
         mut self,
-        deploy_service_manager: F,
-        service_manager_override: Option<String>,
-    ) -> Result<AvsClient>
-    where
-        F: FnOnce(ServiceManagerDeps) -> Fut,
-        Fut: std::future::Future<Output = Result<Address>>,
-    {
+        payload_handler: Address,
+        setup: Option<StrategyAndToken>,
+    ) -> Result<AvsClient> {
         let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
         let proxies = Proxies::new(&self.eth).await?;
-        let setup = self.set_up(core.strategy_factory).await?;
+        let setup = match setup {
+            Some(setup) => setup,
+            None => {
+                self.deploy_strategy_and_token(core.strategy_factory)
+                    .await?
+            }
+        };
 
         // sanity check - we own the ProxyAdmin
         debug_assert_eq!(proxies.admin.owner().call().await?._0, self.eth.address());
@@ -183,62 +175,48 @@ impl AvsClientDeployer {
             self.eth.provider.clone(),
         );
 
-        // Get or deploy stake registry
-        let ecdsa_stake_registry_address =
-            if let Some(service_manager) = service_manager_override.clone() {
-                LayerServiceManager::new(service_manager.parse()?, &self.eth.provider)
-                    .stakeRegistry()
-                    .call()
-                    .await?
-                    ._0
-            } else {
-                let impl_contract =
-                    ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager)
-                        .await?;
+        // get ecdsa_stake_registry
+        let impl_contract =
+            ECDSAStakeRegistry::deploy(self.eth.provider.clone(), core.delegation_manager).await?;
 
-                proxies
-                    .admin
-                    .upgradeAndCall(
-                        proxies.ecdsa_stake_registry,
-                        *impl_contract.address(),
-                        ECDSAStakeRegistry::initializeCall {
-                            _serviceManager: proxies.service_manager,
-                            _thresholdWeight: U256::ZERO,
-                            _quorum: setup.quorum,
-                        }
-                        .abi_encode()
-                        .into(),
-                    )
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
-                proxies.ecdsa_stake_registry
-            };
-
-        // Get or deploy service manager
-        let service_manager_address = if let Some(addr) = service_manager_override {
-            addr.parse()?
-        } else {
-            let service_manager_addr = deploy_service_manager(ServiceManagerDeps {
-                provider: self.eth.provider.clone(),
-                avs_directory: core.avs_directory,
-                stake_registry: proxies.ecdsa_stake_registry,
-                rewards_coordinator: core.rewards_coordinator,
-                delegation_manager: core.delegation_manager,
-            })
+        proxies
+            .admin
+            .upgradeAndCall(
+                proxies.ecdsa_stake_registry,
+                *impl_contract.address(),
+                ECDSAStakeRegistry::initializeCall {
+                    _serviceManager: proxies.service_manager,
+                    _thresholdWeight: U256::ZERO,
+                    _quorum: setup.quorum,
+                }
+                .abi_encode()
+                .into(),
+            )
+            .send()
+            .await?
+            .watch()
             .await?;
 
-            proxies
-                .admin
-                .upgrade(proxies.service_manager, service_manager_addr)
-                .send()
-                .await?
-                .watch()
-                .await?;
+        // Get service manager
+        let service_manager = LayerServiceManager::deploy(
+            self.eth.provider.clone(),
+            core.avs_directory,
+            proxies.ecdsa_stake_registry,
+            core.rewards_coordinator,
+            core.delegation_manager,
+            payload_handler,
+        )
+        .await?;
 
-            proxies.service_manager
-        };
+        let service_manager_address = *service_manager.address();
+
+        proxies
+            .admin
+            .upgrade(proxies.service_manager, service_manager_address)
+            .send()
+            .await?
+            .watch()
+            .await?;
 
         let underlying_token = strategy.underlyingToken().call().await?._0;
         assert_ne!(underlying_token, Address::ZERO);
@@ -247,12 +225,17 @@ impl AvsClientDeployer {
         Ok(AvsClient {
             eth: self.eth,
             core,
-            layer: AvsAddresses {
-                proxy_admin: *proxies.admin.address(),
-                service_manager: service_manager_address,
-                stake_registry: ecdsa_stake_registry_address,
-                token: setup.token,
-            },
+            service_manager: proxies.service_manager,
+        })
+    }
+
+    pub async fn into_client(mut self, service_manager: Address) -> Result<AvsClient> {
+        let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
+
+        Ok(AvsClient {
+            eth: self.eth,
+            core,
+            service_manager,
         })
     }
 }

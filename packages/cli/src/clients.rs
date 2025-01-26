@@ -123,10 +123,10 @@ impl HttpClient {
         let submit = match service_info.submit {
             ServiceSubmitInfo::EigenLayer {
                 chain_name,
-                avs_addresses,
+                service_manager_address,
             } => Submit::EigenContract {
                 chain_name,
-                service_manager: avs_addresses.service_manager.into(),
+                service_manager: service_manager_address.into(),
                 max_gas: config.max_gas,
             },
         };
