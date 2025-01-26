@@ -196,3 +196,5 @@ wavs-cli add-task --service-id 0194948fec2f79a098b789f504a459c1 --input "hello w
 ```
 
 ## As above, odds are you'll need to delete the `DATA` folder from time to time to clear out the cache
+
+See [CONTRACTS](./CONTRACTS.md) or [AUTHORING_COMPONENTS](./AUTHORING_COMPONENTS.md) for next steps to build your totally custom service!
