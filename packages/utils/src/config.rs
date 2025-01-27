@@ -226,6 +226,8 @@ impl ConfigFilePath {
     }
 }
 
+// TODO - impl a custom Deserialize that ensures at *load-time* that keys are unique
+// currently we only get that guarantee when we call `get_chain()`
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
