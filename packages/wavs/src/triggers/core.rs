@@ -19,11 +19,13 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::{config::AnyChainConfig, eth_client::EthClientBuilder, ServiceID, WorkflowID};
+use utils::{
+    config::AnyChainConfig, eth_client::EthClientBuilder, types::ChainName, ServiceID, WorkflowID,
+};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
-    pub chain_configs: HashMap<String, AnyChainConfig>,
+    pub chain_configs: HashMap<ChainName, AnyChainConfig>,
     pub channel_bound: usize,
     lookup_maps: Arc<LookupMaps>,
 }
@@ -32,11 +34,12 @@ pub struct CoreTriggerManager {
 struct LookupMaps {
     /// single lookup for all triggers (in theory, can be more than just task queue addr)
     pub trigger_configs: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
-    /// lookup id by (chain id, contract event address, event type)
+    /// lookup id by (chain name, contract event address, event type)
     pub triggers_by_cosmos_contract_event:
-        Arc<RwLock<HashMap<(String, Address, String), LookupId>>>,
+        Arc<RwLock<HashMap<(ChainName, Address, String), LookupId>>>,
     /// lookup id by (chain id, contract event address, event hash)
-    pub triggers_by_eth_contract_event: Arc<RwLock<HashMap<(String, Address, [u8; 32]), LookupId>>>,
+    pub triggers_by_eth_contract_event:
+        Arc<RwLock<HashMap<(ChainName, Address, [u8; 32]), LookupId>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -63,13 +66,13 @@ type LookupId = usize;
 // and is used to ultimately filter+map to a TriggerAction
 enum StreamTriggers {
     Cosmos {
-        chain_name: String,
+        chain_name: ChainName,
         // these are not filtered yet, just all the contract-based events
         contract_events: Vec<(Address, cosmwasm_std::Event)>,
         block_height: u64,
     },
     Ethereum {
-        chain_name: String,
+        chain_name: ChainName,
         log: Log,
         block_height: u64,
     },
@@ -160,8 +163,7 @@ impl CoreTriggerManager {
                             }
 
                             Ok(StreamTriggers::Cosmos {
-                                // chain_name == chain_id until we have multiple cosmos chains
-                                chain_name: chain_config.chain_id.to_string(),
+                                chain_name: chain_name.clone(),
                                 contract_events,
                                 block_height: block_events.height,
                             })
@@ -493,8 +495,8 @@ impl TriggerManager for CoreTriggerManager {
 
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_eth_contract_address: &mut HashMap<(String, Address, [u8; 32]), LookupId>,
-    triggers_by_cosmos_contract_address: &mut HashMap<(String, Address, String), LookupId>,
+    triggers_by_eth_contract_address: &mut HashMap<(ChainName, Address, [u8; 32]), LookupId>,
+    triggers_by_cosmos_contract_address: &mut HashMap<(ChainName, Address, String), LookupId>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -541,7 +543,7 @@ mod tests {
         config::Config,
         test_utils::address::{rand_address_eth, rand_event_eth},
     };
-    use utils::{ServiceID, WorkflowID};
+    use utils::{types::ChainName, ServiceID, WorkflowID};
 
     use layer_climb::prelude::*;
     use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
@@ -551,10 +553,10 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            active_trigger_chains: vec!["test".to_string()],
+            active_trigger_chains: vec![ChainName::new("test").unwrap()],
             chains: ChainConfigs {
                 eth: [(
-                    "test-eth".to_string(),
+                    ChainName::new("test-eth").unwrap(),
                     EthereumChainConfig {
                         chain_id: "eth-local".parse().unwrap(),
                         ws_endpoint: Some("ws://127.0.0.1:26657".to_string()),
@@ -566,7 +568,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 cosmos: [(
-                    "test-cosmos".to_string(),
+                    ChainName::new("test-cosmos").unwrap(),
                     CosmosChainConfig {
                         chain_id: "layer-local".parse().unwrap(),
                         rpc_endpoint: Some("http://127.0.0.1:26657".to_string()),
@@ -600,7 +602,7 @@ mod tests {
             &service_id_1,
             &workflow_id_1,
             task_queue_addr_1_1.clone(),
-            "eth",
+            ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
         .unwrap();
@@ -608,7 +610,7 @@ mod tests {
             &service_id_1,
             &workflow_id_2,
             task_queue_addr_1_2.clone(),
-            "eth",
+            ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
         .unwrap();
@@ -616,7 +618,7 @@ mod tests {
             &service_id_2,
             &workflow_id_1,
             task_queue_addr_2_1.clone(),
-            "eth",
+            ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
         .unwrap();
@@ -624,7 +626,7 @@ mod tests {
             &service_id_2,
             &workflow_id_2,
             task_queue_addr_2_2.clone(),
-            "eth",
+            ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
         .unwrap();

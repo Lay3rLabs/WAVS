@@ -2,7 +2,10 @@ use anyhow::{Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
 use rand::rngs::OsRng;
 use std::{collections::HashMap, path::PathBuf};
-use utils::{avs_client::AvsClientDeployer, filesystem::workspace_path, ServiceID, WorkflowID};
+use utils::{
+    avs_client::AvsClientDeployer, filesystem::workspace_path, types::ChainName, ServiceID,
+    WorkflowID,
+};
 use wavs::{apis::dispatcher::ServiceConfig, Digest};
 
 use crate::{
@@ -27,12 +30,12 @@ pub struct DeployServiceArgs {
     pub component: ComponentSource,
     pub trigger: CliTriggerKind,
     pub trigger_event_name: Option<String>,
-    pub trigger_chain: Option<String>,
+    pub trigger_chain: Option<ChainName>,
     pub trigger_address: Option<String>,
     pub submit_address: Option<String>,
     pub cosmos_trigger_code_id: Option<u64>,
     pub submit: CliSubmitKind,
-    pub submit_chain: Option<String>,
+    pub submit_chain: Option<ChainName>,
     pub service_config: Option<ServiceConfig>,
 }
 

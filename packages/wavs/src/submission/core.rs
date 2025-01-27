@@ -25,14 +25,15 @@ use utils::{
     avs_client::{layer_service_manager::LayerServiceManager, SignedPayload},
     config::{AnyChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
+    types::ChainName,
 };
 
 #[derive(Clone)]
 pub struct CoreSubmission {
-    chain_configs: BTreeMap<String, AnyChainConfig>,
+    chain_configs: BTreeMap<ChainName, AnyChainConfig>,
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
-    eth_clients: Arc<Mutex<HashMap<(String, u32), EthSigningClient>>>,
+    eth_clients: Arc<Mutex<HashMap<(ChainName, u32), EthSigningClient>>>,
     eth_mnemonic: String,
 }
 
@@ -54,7 +55,7 @@ impl CoreSubmission {
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn get_eth_client(
         &self,
-        chain_name: String,
+        chain_name: &ChainName,
     ) -> Result<EthSigningClient, SubmissionError> {
         // TODO - where should hd_index come from?
         let hd_index = 0;
@@ -70,7 +71,7 @@ impl CoreSubmission {
 
         let config = self
             .chain_configs
-            .get(&chain_name)
+            .get(chain_name)
             .ok_or(SubmissionError::MissingEthereumChain)?;
 
         let config: EthereumChainConfig = config
@@ -98,7 +99,7 @@ impl CoreSubmission {
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn maybe_tap_eth_faucet(
         &self,
-        chain_name: String,
+        chain_name: ChainName,
         client: &EthSigningClient,
     ) -> Result<(), SubmissionError> {
         let chain_config = self
@@ -125,13 +126,13 @@ impl CoreSubmission {
     #[allow(clippy::too_many_arguments)]
     async fn submit_to_ethereum(
         &self,
-        chain_name: String,
+        chain_name: ChainName,
         service_manager_address: Address,
         data: Vec<u8>,
         max_gas: Option<u64>,
     ) -> Result<(), SubmissionError> {
         let eth_client = self
-            .get_eth_client(chain_name.to_string())
+            .get_eth_client(&chain_name)
             .await
             .map_err(|_| SubmissionError::MissingEthereumChain)?;
         let service_manager_address = service_manager_address
@@ -200,10 +201,7 @@ impl CoreSubmission {
                 }
             }
         } else {
-            if let Err(err) = self
-                .maybe_tap_eth_faucet(chain_name.to_string(), &eth_client)
-                .await
-            {
+            if let Err(err) = self.maybe_tap_eth_faucet(chain_name, &eth_client).await {
                 tracing::error!(
                     "Failed to tap faucet for client {}: {:?}",
                     eth_client.address(),
@@ -262,7 +260,7 @@ impl Submission for CoreSubmission {
                         while let Some(msg) = rx.recv().await {
                             match msg.submit {
                                 Submit::EigenContract {chain_name, service_manager, max_gas } => {
-                                    if let Err(e) = _self.submit_to_ethereum(chain_name.to_string(), service_manager, msg.wasi_result, max_gas).await {
+                                    if let Err(e) = _self.submit_to_ethereum(chain_name, service_manager, msg.wasi_result, max_gas).await {
                                         tracing::error!("{:?}", e);
                                     }
                                 },

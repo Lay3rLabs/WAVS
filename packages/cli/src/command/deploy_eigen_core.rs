@@ -1,5 +1,5 @@
 use anyhow::Result;
-use utils::eigen_client::CoreAVSAddresses;
+use utils::{eigen_client::CoreAVSAddresses, types::ChainName};
 
 use crate::{
     context::CliContext,
@@ -12,7 +12,7 @@ pub struct DeployEigenCore {
 
 pub struct DeployEigenCoreArgs {
     pub register_operator: bool,
-    pub chain: String,
+    pub chain: ChainName,
 }
 
 impl DeployEigenCore {

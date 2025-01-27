@@ -7,7 +7,7 @@ use super::{
 use crate::{AppContext, Digest};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
-use utils::{ComponentID, ServiceID, WorkflowID};
+use utils::{types::ChainName, ComponentID, ServiceID, WorkflowID};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -105,7 +105,7 @@ pub enum Submit {
     // useful for when the component just does something with its own state
     None,
     EigenContract {
-        chain_name: String,
+        chain_name: ChainName,
         service_manager: Address,
         max_gas: Option<u64>,
     },
@@ -113,7 +113,7 @@ pub enum Submit {
 
 impl Submit {
     pub fn eigen_contract(
-        chain_name: String,
+        chain_name: ChainName,
         service_manager: Address,
         max_gas: Option<u64>,
     ) -> Self {

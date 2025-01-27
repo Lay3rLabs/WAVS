@@ -90,6 +90,9 @@ macro_rules! new_id_type {
 new_id_type!(ServiceID);
 new_id_type!(ComponentID);
 new_id_type!(WorkflowID);
+// Distinct from a ChainConfig's ChainID - this is the *name* used within WAVS
+// It's allowed for multiple chains to have the same ChainID, but ChainName is unique
+new_id_type!(ChainName);
 
 impl Default for WorkflowID {
     fn default() -> Self {

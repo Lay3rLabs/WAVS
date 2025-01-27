@@ -13,6 +13,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
+use utils::types::ChainName;
 use utils::{IDError, ServiceID, WorkflowID};
 
 pub fn mock_eth_event_trigger_config(
@@ -23,7 +24,7 @@ pub fn mock_eth_event_trigger_config(
         service_id,
         workflow_id,
         rand_address_eth(),
-        "eth",
+        ChainName::new("eth").unwrap(),
         rand_event_eth(),
     )
     .unwrap()
@@ -37,24 +38,32 @@ pub fn mock_cosmos_event_trigger_config(
         service_id,
         workflow_id,
         rand_address_layer(),
-        "cosmos",
+        ChainName::new("cosmos").unwrap(),
         rand_event_cosmos(),
     )
     .unwrap()
 }
 
 pub fn mock_eth_event_trigger() -> Trigger {
-    Trigger::eth_contract_event(rand_address_eth(), "eth", rand_event_eth())
+    Trigger::eth_contract_event(
+        rand_address_eth(),
+        ChainName::new("eth").unwrap(),
+        rand_event_eth(),
+    )
 }
 
 pub fn mock_cosmos_event_trigger() -> Trigger {
-    Trigger::cosmos_contract_event(rand_address_layer(), "cosmos", rand_event_cosmos())
+    Trigger::cosmos_contract_event(
+        rand_address_layer(),
+        ChainName::new("cosmos").unwrap(),
+        rand_event_cosmos(),
+    )
 }
 
 pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -> TriggerData {
     TriggerData::CosmosContractEvent {
         contract_address: rand_address_layer(),
-        chain_name: "layer".to_string(),
+        chain_name: ChainName::new("layer").unwrap(),
         // matches example_cosmos_client::NewMessageEvent
         event: cosmwasm_std::Event::new("new-message")
             .add_attribute("id", trigger_id.to_string())
@@ -232,7 +241,7 @@ impl MockTriggerManagerChannel {
                         service_id,
                         workflow_id,
                         contract_address.clone(),
-                        chain_id,
+                        ChainName::new(chain_id.to_string()).unwrap(),
                         rand_event_eth(),
                     )
                     .unwrap(),
@@ -240,7 +249,7 @@ impl MockTriggerManagerChannel {
                         service_id,
                         workflow_id,
                         contract_address.clone(),
-                        chain_id,
+                        ChainName::new(chain_id.to_string()).unwrap(),
                         hex::encode(rand_event_eth()),
                     )
                     .unwrap(),

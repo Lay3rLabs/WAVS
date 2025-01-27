@@ -337,7 +337,7 @@ mod tests {
         },
         Digest,
     };
-    use utils::{ComponentID, ServiceID, WorkflowID};
+    use utils::{types::ChainName, ComponentID, ServiceID, WorkflowID};
 
     use super::*;
 
@@ -377,7 +377,7 @@ mod tests {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eigen_contract(
-                        "eth".to_string(),
+                        ChainName::new("eth").unwrap(),
                         service_manager_addr.clone(),
                         None,
                     ),
@@ -400,7 +400,11 @@ mod tests {
         let expected = ChainMessage {
             trigger_config: action.config,
             wasi_result: payload.into(),
-            submit: Submit::eigen_contract("eth".to_string(), service_manager_addr, None),
+            submit: Submit::eigen_contract(
+                ChainName::new("eth").unwrap(),
+                service_manager_addr,
+                None,
+            ),
         };
         assert_eq!(processed[0], expected);
     }
@@ -423,7 +427,7 @@ mod tests {
                     &service_id,
                     &workflow_id,
                     contract_address.clone(),
-                    "eth",
+                    ChainName::new("eth").unwrap(),
                     rand_event_eth(),
                 )
                 .unwrap(),
@@ -434,7 +438,7 @@ mod tests {
                     &service_id,
                     &workflow_id,
                     contract_address.clone(),
-                    "eth",
+                    ChainName::new("eth").unwrap(),
                     rand_event_eth(),
                 )
                 .unwrap(),
@@ -467,7 +471,11 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
+                    submit: Submit::eigen_contract(
+                        ChainName::new("eth").unwrap(),
+                        rand_address_eth(),
+                        None,
+                    ),
                 },
             )]
             .into(),
@@ -508,7 +516,7 @@ mod tests {
                     &service_id,
                     &workflow_id,
                     contract_address.clone(),
-                    "eth",
+                    ChainName::new("eth").unwrap(),
                     rand_event_eth(),
                 )
                 .unwrap(),
@@ -519,7 +527,7 @@ mod tests {
                     &service_id,
                     &workflow_id,
                     contract_address,
-                    "eth",
+                    ChainName::new("eth").unwrap(),
                     rand_event_eth(),
                 )
                 .unwrap(),
@@ -552,7 +560,11 @@ mod tests {
                 crate::apis::dispatcher::Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
+                    submit: Submit::eigen_contract(
+                        ChainName::new("eth").unwrap(),
+                        rand_address_eth(),
+                        None,
+                    ),
                 },
             )]
             .into(),

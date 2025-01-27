@@ -7,7 +7,7 @@ use super::{
     matrix::{AnyService, CrossChainService, EthService},
 };
 use alloy::sol_types::SolEvent;
-use utils::{context::AppContext, eigen_client::CoreAVSAddresses};
+use utils::{context::AppContext, eigen_client::CoreAVSAddresses, types::ChainName};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
     command::{
@@ -19,7 +19,7 @@ use wavs_cli::{
 #[derive(Default)]
 pub struct Services {
     #[allow(dead_code)]
-    pub eth_eigen_core: BTreeMap<String, CoreAVSAddresses>,
+    pub eth_eigen_core: BTreeMap<ChainName, CoreAVSAddresses>,
     pub lookup: BTreeMap<AnyService, DeployService>,
 }
 
@@ -46,7 +46,7 @@ impl Services {
                 .iter()
                 .chain(chain_names.eth_aggregator.iter())
             {
-                let chain = chain.to_string();
+                let chain = chain.clone();
                 tracing::info!("Deploying Eigen Core contracts on {chain}");
                 let DeployEigenCore { addresses } = DeployEigenCore::run(
                     &clients.cli_ctx,
@@ -167,7 +167,7 @@ async fn deploy_service(
 
 #[derive(Default)]
 struct ChainNames {
-    eth: Vec<String>,
-    eth_aggregator: Vec<String>,
-    cosmos: Vec<String>,
+    eth: Vec<ChainName>,
+    eth_aggregator: Vec<ChainName>,
+    cosmos: Vec<ChainName>,
 }

@@ -1,6 +1,7 @@
 use utils::{
     config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
     filesystem::workspace_path,
+    types::ChainName,
 };
 
 use crate::config::TestConfig;
@@ -59,7 +60,9 @@ impl From<TestConfig> for Configs {
                 faucet_endpoint: None,
             };
 
-            chain_configs.eth.insert(chain_id.clone(), chain_config);
+            chain_configs
+                .eth
+                .insert(ChainName::new(chain_id).unwrap(), chain_config);
 
             eth_port += 1;
             eth_chain_id += 1;
@@ -84,7 +87,7 @@ impl From<TestConfig> for Configs {
 
             chain_configs
                 .cosmos
-                .insert(chain_id.to_string(), chain_config);
+                .insert(ChainName::new(chain_id).unwrap(), chain_config);
 
             cosmos_port += 1;
             cosmos_chain_id += 1;

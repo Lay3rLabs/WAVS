@@ -11,7 +11,7 @@ use crate::test_utils::address::rand_address_eth;
 use crate::AppContext;
 
 pub fn mock_eigen_submit() -> Submit {
-    Submit::eigen_contract("eth".to_string(), rand_address_eth(), None)
+    Submit::eigen_contract("eth".try_into().unwrap(), rand_address_eth(), None)
 }
 
 #[derive(Clone)]
@@ -92,6 +92,8 @@ impl Submission for MockSubmission {
 mod test {
     use std::{thread::sleep, time::Duration};
 
+    use utils::types::ChainName;
+
     use crate::{
         apis::{dispatcher::Submit, trigger::TriggerConfig},
         test_utils::address::{rand_address_eth, rand_event_eth},
@@ -105,12 +107,16 @@ mod test {
                 service,
                 service,
                 rand_address_eth(),
-                "eth",
+                ChainName::new("eth").unwrap(),
                 rand_event_eth(),
             )
             .unwrap(),
             wasi_result: payload.as_bytes().to_vec(),
-            submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
+            submit: Submit::eigen_contract(
+                ChainName::new("eth").unwrap(),
+                rand_address_eth(),
+                None,
+            ),
         }
     }
 

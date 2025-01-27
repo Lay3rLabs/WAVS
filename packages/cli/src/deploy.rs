@@ -2,15 +2,17 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{avs_client::AvsAddresses, eigen_client::CoreAVSAddresses, ServiceID, WorkflowID};
+use utils::{
+    avs_client::AvsAddresses, eigen_client::CoreAVSAddresses, types::ChainName, ServiceID,
+    WorkflowID,
+};
 
 use crate::config::Config;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Deployment {
-    // keyed by chain name (not necessarily the same as chainId)
-    pub eigen_core: HashMap<String, CoreAVSAddresses>,
+    pub eigen_core: HashMap<ChainName, CoreAVSAddresses>,
     pub services: HashMap<ServiceID, HashMap<WorkflowID, ServiceInfo>>,
 }
 
@@ -23,13 +25,13 @@ pub struct ServiceInfo {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServiceTriggerInfo {
     EthSimpleContract {
-        chain_name: String,
+        chain_name: ChainName,
         event_hash: [u8; 32],
         address: layer_climb::prelude::Address,
     },
 
     CosmosSimpleContract {
-        chain_name: String,
+        chain_name: ChainName,
         event_type: String,
         address: layer_climb::prelude::Address,
     },
@@ -38,7 +40,7 @@ pub enum ServiceTriggerInfo {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServiceSubmitInfo {
     EigenLayer {
-        chain_name: String,
+        chain_name: ChainName,
         avs_addresses: AvsAddresses,
     },
 }
@@ -86,7 +88,7 @@ impl Deployment {
         &self,
         service_id: &ServiceID,
         workflow_id: Option<&WorkflowID>,
-    ) -> Option<(String, AvsAddresses)> {
+    ) -> Option<(ChainName, AvsAddresses)> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
             Some(workflow_id) => service.get(workflow_id)?,

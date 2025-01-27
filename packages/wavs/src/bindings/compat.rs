@@ -33,7 +33,7 @@ impl TryFrom<api::Trigger> for component::TriggerSource {
                 crate::bindings::world::lay3r::avs::layer_types::TriggerSource::CosmosContractEvent(
                     crate::bindings::world::lay3r::avs::layer_types::TriggerSourceCosmosContractEvent {
                         address: address.try_into()?,
-                        chain_name,
+                        chain_name: chain_name.to_string(),
                         event_type,
                     }
                 )
@@ -42,7 +42,7 @@ impl TryFrom<api::Trigger> for component::TriggerSource {
                 crate::bindings::world::lay3r::avs::layer_types::TriggerSource::EthContractEvent(
                     crate::bindings::world::lay3r::avs::layer_types::TriggerSourceEthContractEvent {
                         address: address.try_into()?,
-                        chain_name,
+                        chain_name: chain_name.to_string(),
                         event_hash: event_hash.to_vec(),
                     }
                 )
@@ -70,7 +70,7 @@ impl TryFrom<api::TriggerData> for component::TriggerData {
                         contract_address: crate::bindings::world::lay3r::avs::layer_types::EthAddress {
                             raw_bytes: contract_address.as_bytes()
                         },
-                        chain_name,
+                        chain_name: chain_name.to_string(),
                         log: crate::bindings::world::lay3r::avs::layer_types::EthEventLogData {
                             topics: log
                                 .topics()
@@ -87,7 +87,7 @@ impl TryFrom<api::TriggerData> for component::TriggerData {
                 Ok(crate::bindings::world::lay3r::avs::layer_types::TriggerData::CosmosContractEvent(
                     crate::bindings::world::lay3r::avs::layer_types::TriggerDataCosmosContractEvent {
                         contract_address: contract_address.try_into()?,
-                        chain_name,
+                        chain_name: chain_name.to_string(),
                         event: crate::bindings::world::lay3r::avs::layer_types::CosmosEvent {
                             ty: event.ty,
                             attributes: event
