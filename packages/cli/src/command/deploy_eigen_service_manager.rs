@@ -1,7 +1,7 @@
 use alloy::primitives::Address;
 use anyhow::Result;
 use rand::rngs::OsRng;
-use utils::avs_client::AvsClientDeployer;
+use utils::{avs_client::AvsClientDeployer, types::ChainName};
 
 use crate::context::CliContext;
 
@@ -10,7 +10,7 @@ pub struct DeployEigenServiceManager {
 }
 
 pub struct DeployEigenServiceManagerArgs {
-    pub chain: String,
+    pub chain: ChainName,
     pub service_handler: Address,
     pub register_operator: bool,
 }

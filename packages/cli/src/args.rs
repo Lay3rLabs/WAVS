@@ -32,8 +32,8 @@ pub enum Command {
     /// Typically used for getting an address to pass to DeployService
     DeployEigenServiceManager {
         /// The chain to deploy the submit on, if applicable
-        #[clap(long, default_value = "local")]
-        chain: String,
+        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
+        chain: ChainName,
 
         /// The handler contract address, implements IServiceHandler and receives a signed payload
         #[clap(long)]
