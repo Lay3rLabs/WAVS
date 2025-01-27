@@ -11,14 +11,16 @@ use crate::{
 use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
-use utils::{config::AnyChainConfig, eigen_client::EigenClient, ServiceID, WorkflowID};
+use utils::{
+    config::AnyChainConfig, eigen_client::EigenClient, types::ChainName, ServiceID, WorkflowID,
+};
 
 use crate::{args::Command, deploy::Deployment};
 
 pub struct CliContext {
     pub deployment: Mutex<Deployment>,
     pub config: Config,
-    _clients: HashMap<String, AnyClient>,
+    _clients: HashMap<ChainName, AnyClient>,
 }
 
 enum AnyClient {
@@ -32,7 +34,7 @@ impl CliContext {
         config: Config,
         deployment: Option<Deployment>,
     ) -> Result<Self> {
-        let mut chains = HashSet::new();
+        let mut chains: HashSet<ChainName> = HashSet::new();
 
         let deployment = match deployment {
             None => Deployment::load(&config)?,
@@ -41,7 +43,7 @@ impl CliContext {
 
         match command {
             Command::DeployEigenCore { chain, .. } => {
-                chains.insert(chain.to_string());
+                chains.insert(chain.clone());
             }
             Command::DeployService {
                 trigger_chain,
@@ -49,11 +51,11 @@ impl CliContext {
                 ..
             } => {
                 if let Some(chain) = trigger_chain {
-                    chains.insert(chain.to_string());
+                    chains.insert(chain.clone());
                 }
 
                 if let Some(chain) = submit_chain {
-                    chains.insert(chain.to_string());
+                    chains.insert(chain.clone());
                 }
             }
             Command::AddTask {
@@ -91,7 +93,7 @@ impl CliContext {
     }
 
     pub async fn new_chains(
-        chains: Vec<String>,
+        chains: Vec<ChainName>,
         config: Config,
         deployment: Option<Deployment>,
     ) -> Result<Self> {
@@ -143,7 +145,7 @@ impl CliContext {
         Ok(())
     }
 
-    pub fn get_eth_client(&self, chain_name: &str) -> Result<EigenClient> {
+    pub fn get_eth_client(&self, chain_name: &ChainName) -> Result<EigenClient> {
         match self
             ._clients
             .get(chain_name)
@@ -154,7 +156,7 @@ impl CliContext {
         }
     }
 
-    pub fn get_cosmos_client(&self, chain_name: &str) -> Result<SigningClient> {
+    pub fn get_cosmos_client(&self, chain_name: &ChainName) -> Result<SigningClient> {
         match self
             ._clients
             .get(chain_name)
@@ -167,7 +169,7 @@ impl CliContext {
 
     pub async fn address_exists_on_chain(
         &self,
-        chain_name: &str,
+        chain_name: &ChainName,
         address: layer_climb::prelude::Address,
     ) -> Result<bool> {
         Ok(

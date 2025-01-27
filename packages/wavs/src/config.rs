@@ -3,7 +3,10 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
 };
-use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
+use utils::{
+    config::{AnyChainConfig, ChainConfigs, ConfigExt},
+    types::ChainName,
+};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -34,7 +37,7 @@ pub struct Config {
     pub wasm_threads: usize,
 
     /// The active chain names to watch for triggers
-    pub active_trigger_chains: Vec<String>,
+    pub active_trigger_chains: Vec<ChainName>,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -82,7 +85,7 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn active_trigger_chain_configs(&self) -> HashMap<String, AnyChainConfig> {
+    pub fn active_trigger_chain_configs(&self) -> HashMap<ChainName, AnyChainConfig> {
         self.chains
             .cosmos
             .iter()

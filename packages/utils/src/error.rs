@@ -1,6 +1,8 @@
 use alloy::primitives::Address;
 use thiserror::Error;
 
+use crate::types::ChainName;
+
 #[derive(Debug, Error)]
 pub enum EthClientError {
     #[error("Missing mnemonic")]
@@ -22,5 +24,5 @@ pub enum ChainConfigError {
     ExpectedCosmosChain,
 
     #[error("Duplidate chain name for {0}")]
-    DuplicateChainName(String),
+    DuplicateChainName(ChainName),
 }

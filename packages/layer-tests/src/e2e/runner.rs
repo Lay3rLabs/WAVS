@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
-use utils::avs_client::SignedData;
+use utils::{avs_client::SignedData, types::ChainName};
 use wavs::AppContext;
 use wavs_cli::{
     command::{
@@ -249,7 +249,7 @@ impl SquareResponse {
 #[serde(rename_all = "snake_case")]
 pub enum CosmosQueryRequest {
     BlockHeight {
-        chain_name: String,
+        chain_name: ChainName,
     },
     Balance {
         chain_name: String,

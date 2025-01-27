@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
+    types::ChainName,
 };
 use wavs::apis::dispatcher::ServiceConfig;
 
@@ -19,8 +20,8 @@ pub enum Command {
         #[clap(long, default_value_t = true)]
         register_operator: bool,
 
-        #[clap(long, default_value = "local")]
-        chain: String,
+        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
+        chain: ChainName,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -57,8 +58,8 @@ pub enum Command {
         submit_address: Option<String>,
 
         /// The chain to deploy the trigger on, if applicable
-        #[clap(long, default_value = "local")]
-        trigger_chain: Option<String>,
+        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
+        trigger_chain: Option<ChainName>,
 
         /// if the trigger is a cosmos trigger, the optional code id to use to avoid a re-upload
         #[clap(long, default_value = None)]
@@ -69,8 +70,8 @@ pub enum Command {
         submit: CliSubmitKind,
 
         /// The chain to deploy the submit on, if applicable
-        #[clap(long, default_value = "local")]
-        submit_chain: Option<String>,
+        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
+        submit_chain: Option<ChainName>,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -115,6 +116,10 @@ pub enum Command {
         #[clap(long)]
         input: String,
     },
+}
+
+fn parse_chain_name(s: &str) -> Result<ChainName, String> {
+    ChainName::try_from(s).map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]

@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 use crate::{
     error::ChainConfigError,
     eth_client::{EthClientConfig, EthClientTransport},
+    types::ChainName,
 };
 
 /// The builder we use to build Config
@@ -228,9 +229,9 @@ impl ConfigFilePath {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
-    pub cosmos: BTreeMap<String, CosmosChainConfig>,
+    pub cosmos: BTreeMap<ChainName, CosmosChainConfig>,
     /// Ethereum-style chains
-    pub eth: BTreeMap<String, EthereumChainConfig>,
+    pub eth: BTreeMap<ChainName, EthereumChainConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -240,7 +241,7 @@ pub enum AnyChainConfig {
     Eth(EthereumChainConfig),
 }
 
-impl From<ChainConfigs> for BTreeMap<String, AnyChainConfig> {
+impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
     fn from(configs: ChainConfigs) -> Self {
         let mut map = BTreeMap::new();
         for (name, config) in configs.cosmos {
@@ -306,10 +307,10 @@ impl From<EthereumChainConfig> for AnyChainConfig {
 }
 
 impl ChainConfigs {
-    pub fn get_chain(&self, chain_name: &str) -> Result<Option<AnyChainConfig>> {
+    pub fn get_chain(&self, chain_name: &ChainName) -> Result<Option<AnyChainConfig>> {
         match (self.eth.get(chain_name), self.cosmos.get(chain_name)) {
             (Some(_), Some(_)) => {
-                Err(ChainConfigError::DuplicateChainName(chain_name.to_string()).into())
+                Err(ChainConfigError::DuplicateChainName(chain_name.clone()).into())
             }
             (Some(eth), None) => Ok(Some(AnyChainConfig::Eth(eth.clone()))),
             (None, Some(cosmos)) => Ok(Some(AnyChainConfig::Cosmos(cosmos.clone()))),
@@ -317,7 +318,7 @@ impl ChainConfigs {
         }
     }
 
-    pub fn all_chain_names(&self) -> Vec<String> {
+    pub fn all_chain_names(&self) -> Vec<ChainName> {
         self.eth.keys().chain(self.cosmos.keys()).cloned().collect()
     }
 }
@@ -653,7 +654,7 @@ mod test {
     fn chain_name_lookup() {
         let chain_configs = mock_chain_configs();
         let chain: CosmosChainConfig = chain_configs
-            .get_chain("cosmos")
+            .get_chain(&"cosmos".try_into().unwrap())
             .unwrap()
             .unwrap()
             .try_into()
@@ -661,7 +662,7 @@ mod test {
         assert_eq!(chain.chain_id, "cosmos");
 
         let chain: EthereumChainConfig = chain_configs
-            .get_chain("eth")
+            .get_chain(&"eth".try_into().unwrap())
             .unwrap()
             .unwrap()
             .try_into()
@@ -674,7 +675,7 @@ mod test {
         let mut chain_configs = mock_chain_configs();
 
         chain_configs.cosmos.insert(
-            "eth".to_string(),
+            "eth".try_into().unwrap(),
             CosmosChainConfig {
                 chain_id: "eth".to_string(),
                 bech32_prefix: "eth".to_string(),
@@ -686,14 +687,14 @@ mod test {
             },
         );
 
-        assert!(chain_configs.get_chain("eth").is_err());
+        assert!(chain_configs.get_chain(&"eth".try_into().unwrap()).is_err());
     }
 
     fn mock_chain_configs() -> ChainConfigs {
         ChainConfigs {
             cosmos: vec![
                 (
-                    "cosmos".to_string(),
+                    "cosmos".try_into().unwrap(),
                     CosmosChainConfig {
                         chain_id: "cosmos".to_string(),
                         bech32_prefix: "cosmos".to_string(),
@@ -705,7 +706,7 @@ mod test {
                     },
                 ),
                 (
-                    "layer".to_string(),
+                    "layer".try_into().unwrap(),
                     CosmosChainConfig {
                         chain_id: "layer".to_string(),
                         bech32_prefix: "layer".to_string(),
@@ -721,7 +722,7 @@ mod test {
             .collect(),
             eth: vec![
                 (
-                    "eth".to_string(),
+                    "eth".try_into().unwrap(),
                     EthereumChainConfig {
                         chain_id: "eth".to_string(),
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
@@ -731,7 +732,7 @@ mod test {
                     },
                 ),
                 (
-                    "polygon".to_string(),
+                    "polygon".try_into().unwrap(),
                     EthereumChainConfig {
                         chain_id: "polygon".to_string(),
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),

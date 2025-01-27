@@ -7,6 +7,7 @@ use utils::{
     config::{ChainConfigs, ConfigExt, EthereumChainConfig},
     error::EthClientError,
     eth_client::{EthClientBuilder, EthSigningClient},
+    types::ChainName,
 };
 
 /// The fully parsed and validated config struct we use in the application
@@ -34,7 +35,8 @@ pub struct Config {
     pub cors_allowed_origins: Vec<String>,
 
     /// The chosen chain name (default is `local`)
-    pub chain: String,
+    //TODO - why limit to one chain??
+    pub chain: ChainName,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -61,7 +63,7 @@ impl Default for Config {
             cors_allowed_origins: Vec::new(),
             mnemonic: None,
             hd_index: None,
-            chain: "local".to_string(),
+            chain: ChainName::new("local").unwrap(),
             chains: ChainConfigs {
                 cosmos: Default::default(),
                 eth: Default::default(),

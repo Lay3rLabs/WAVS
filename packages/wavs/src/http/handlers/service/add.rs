@@ -159,7 +159,7 @@ mod test {
         test_utils::address::rand_address_eth,
         Digest,
     };
-    use utils::ServiceID;
+    use utils::{types::ChainName, ServiceID};
 
     use super::{ServiceRequest, ServiceRequestParser};
 
@@ -169,10 +169,14 @@ mod test {
             ServiceRequest {
                 id: ServiceID::new("test-name").unwrap(),
                 digest: Digest::new(&[0; 32]).into(),
-                trigger: Trigger::eth_contract_event(addr, "eth", [0; 32]),
+                trigger: Trigger::eth_contract_event(addr, ChainName::new("eth").unwrap(), [0; 32]),
                 permissions: Permissions::default(),
                 testable: Some(true),
-                submit: Submit::eigen_contract("eth".to_string(), rand_address_eth(), None),
+                submit: Submit::eigen_contract(
+                    ChainName::new("eth").unwrap(),
+                    rand_address_eth(),
+                    None,
+                ),
                 config: ServiceConfig::default(),
             }
         }

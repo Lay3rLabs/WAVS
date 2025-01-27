@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::AppContext;
 
-use utils::{IDError, ServiceID, WorkflowID};
+use utils::{types::ChainName, IDError, ServiceID, WorkflowID};
 
 // The TriggerManager reacts to these triggers
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -15,12 +15,12 @@ pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
         address: Address,
-        chain_name: String,
+        chain_name: ChainName,
         event_type: String,
     },
     EthContractEvent {
         address: Address,
-        chain_name: String,
+        chain_name: ChainName,
         event_hash: [u8; 32],
     },
     // not a real trigger, just for testing
@@ -30,23 +30,23 @@ pub enum Trigger {
 impl Trigger {
     pub fn cosmos_contract_event(
         address: Address,
-        chain_name: impl ToString,
+        chain_name: impl Into<ChainName>,
         event_type: impl ToString,
     ) -> Self {
         Trigger::CosmosContractEvent {
             address,
-            chain_name: chain_name.to_string(),
+            chain_name: chain_name.into(),
             event_type: event_type.to_string(),
         }
     }
     pub fn eth_contract_event(
         address: Address,
-        chain_name: impl ToString,
+        chain_name: impl Into<ChainName>,
         event_hash: [u8; 32],
     ) -> Self {
         Trigger::EthContractEvent {
             address,
-            chain_name: chain_name.to_string(),
+            chain_name: chain_name.into(),
             event_hash,
         }
     }
@@ -86,7 +86,7 @@ impl TriggerConfig {
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         contract_address: Address,
-        chain_name: impl ToString,
+        chain_name: impl Into<ChainName>,
         event_type: impl ToString,
     ) -> Result<Self, IDError> {
         Ok(Self {
@@ -100,7 +100,7 @@ impl TriggerConfig {
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         contract_address: Address,
-        chain_name: impl ToString,
+        chain_name: impl Into<ChainName>,
         event_hash: [u8; 32],
     ) -> Result<Self, IDError> {
         Ok(Self {
@@ -139,7 +139,7 @@ pub enum TriggerData {
         /// The address of the contract that emitted the event
         contract_address: Address,
         /// The chain name of the chain where the event was emitted
-        chain_name: String,
+        chain_name: ChainName,
         /// The data that was emitted by the contract
         event: cosmwasm_std::Event,
         /// The block height where the event was emitted
@@ -149,7 +149,7 @@ pub enum TriggerData {
         /// The address of the contract that emitted the event
         contract_address: Address,
         /// The chain name of the chain where the event was emitted
-        chain_name: String,
+        chain_name: ChainName,
         /// The raw event log
         log: LogData,
         /// The block height where the event was emitted
@@ -181,15 +181,15 @@ pub enum TriggerError {
     #[error("Unable to parse trigger data: {0}")]
     TriggerDataParse(String),
     #[error("Cannot find cosmos trigger contract: {0} / {1} / {2}")]
-    NoSuchCosmosContractEvent(String, Address, String),
+    NoSuchCosmosContractEvent(ChainName, Address, String),
     #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
-    NoSuchEthContractEvent(String, Address, String),
+    NoSuchEthContractEvent(ChainName, Address, String),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
     #[error("Cosmos Contract Event already registered: {0} / {1} / {2}")]
-    CosmosContractEventAlreadyRegistered(String, Address, String),
+    CosmosContractEventAlreadyRegistered(ChainName, Address, String),
     #[error("Eth Contract Event already registered: {0} / {1} / {2}")]
-    EthContractEventAlreadyRegistered(String, Address, String),
+    EthContractEventAlreadyRegistered(ChainName, Address, String),
 }

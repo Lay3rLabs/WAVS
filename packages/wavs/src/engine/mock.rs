@@ -21,7 +21,7 @@ pub struct MockEngine {
 pub fn mock_chain_configs() -> ChainConfigs {
     ChainConfigs {
         eth: vec![(
-            "eth".to_string(),
+            "eth".try_into().unwrap(),
             EthereumChainConfig {
                 chain_id: 31337.to_string(),
                 ws_endpoint: Some("ws://localhost:8546".to_string()),
@@ -33,7 +33,7 @@ pub fn mock_chain_configs() -> ChainConfigs {
         .into_iter()
         .collect(),
         cosmos: vec![(
-            "cosmos".to_string(),
+            "cosmos".try_into().unwrap(),
             CosmosChainConfig {
                 chain_id: "cosmos".to_string(),
                 rpc_endpoint: Some("http://localhost:26657".to_string()),
@@ -103,6 +103,8 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
+    use utils::types::ChainName;
+
     use crate::test_utils::address::rand_event_eth;
 
     use super::*;
@@ -156,7 +158,7 @@ mod test {
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
-                        "eth",
+                        ChainName::new("eth").unwrap(),
                         rand_event_eth(),
                     )
                     .unwrap(),
@@ -177,7 +179,7 @@ mod test {
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
-                        "eth",
+                        ChainName::new("eth").unwrap(),
                         rand_event_eth(),
                     )
                     .unwrap(),
@@ -198,7 +200,7 @@ mod test {
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
-                        "eth",
+                        ChainName::new("eth").unwrap(),
                         rand_event_eth(),
                     )
                     .unwrap(),
