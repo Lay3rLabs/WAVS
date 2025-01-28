@@ -223,14 +223,14 @@ impl CoreTriggerManager {
                     block_height,
                 } => {
                     if let Some(event_hash) = log.topic0() {
-                        let contract_address = log.address().clone();
+                        let contract_address = log.address();
 
                         if let Some(trigger_config) = self
                             .lookup_maps
                             .triggers_by_eth_contract_event
                             .read()
                             .unwrap()
-                            .get(&(chain_name.clone(), contract_address.clone(), **event_hash))
+                            .get(&(chain_name.clone(), contract_address, **event_hash))
                             .and_then(|id| {
                                 self.lookup_maps
                                     .trigger_configs
@@ -341,7 +341,7 @@ impl TriggerManager for CoreTriggerManager {
                     .triggers_by_eth_contract_event
                     .write()
                     .unwrap();
-                let key = (chain_name.clone(), address.clone(), event_hash);
+                let key = (chain_name.clone(), address, event_hash);
                 if lock.contains_key(&key) {
                     return Err(TriggerError::EthContractEventAlreadyRegistered(
                         chain_name,
@@ -519,7 +519,7 @@ fn remove_trigger_data(
             event_hash,
         } => {
             triggers_by_eth_contract_address
-                .remove(&(chain_name.clone(), address.clone(), event_hash))
+                .remove(&(chain_name.clone(), address, event_hash))
                 .ok_or(TriggerError::NoSuchEthContractEvent(
                     chain_name,
                     address,
@@ -611,7 +611,7 @@ mod tests {
         let trigger_1_1 = TriggerConfig::eth_contract_event(
             &service_id_1,
             &workflow_id_1,
-            task_queue_addr_1_1.clone(),
+            task_queue_addr_1_1,
             ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
@@ -619,7 +619,7 @@ mod tests {
         let trigger_1_2 = TriggerConfig::eth_contract_event(
             &service_id_1,
             &workflow_id_2,
-            task_queue_addr_1_2.clone(),
+            task_queue_addr_1_2,
             ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
@@ -627,7 +627,7 @@ mod tests {
         let trigger_2_1 = TriggerConfig::eth_contract_event(
             &service_id_2,
             &workflow_id_1,
-            task_queue_addr_2_1.clone(),
+            task_queue_addr_2_1,
             ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
@@ -635,7 +635,7 @@ mod tests {
         let trigger_2_2 = TriggerConfig::eth_contract_event(
             &service_id_2,
             &workflow_id_2,
-            task_queue_addr_2_2.clone(),
+            task_queue_addr_2_2,
             ChainName::new("eth").unwrap(),
             rand_event_eth(),
         )
@@ -693,7 +693,7 @@ mod tests {
 
         fn get_trigger_addr(trigger: &Trigger) -> Address {
             match trigger {
-                Trigger::EthContractEvent { address, .. } => address.clone().into(),
+                Trigger::EthContractEvent { address, .. } => (*address).into(),
                 Trigger::CosmosContractEvent { address, .. } => address.clone(),
                 _ => panic!("unexpected trigger type"),
             }

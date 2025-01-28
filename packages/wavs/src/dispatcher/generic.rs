@@ -378,7 +378,7 @@ mod tests {
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eigen_contract(
                         ChainName::new("eth").unwrap(),
-                        service_manager_addr.clone(),
+                        service_manager_addr,
                         None,
                     ),
                 },
@@ -426,7 +426,7 @@ mod tests {
                 config: TriggerConfig::eth_contract_event(
                     &service_id,
                     &workflow_id,
-                    contract_address.clone(),
+                    contract_address,
                     ChainName::new("eth").unwrap(),
                     rand_event_eth(),
                 )
@@ -437,7 +437,7 @@ mod tests {
                 config: TriggerConfig::eth_contract_event(
                     &service_id,
                     &workflow_id,
-                    contract_address.clone(),
+                    contract_address,
                     ChainName::new("eth").unwrap(),
                     rand_event_eth(),
                 )
@@ -515,7 +515,7 @@ mod tests {
                 config: TriggerConfig::eth_contract_event(
                     &service_id,
                     &workflow_id,
-                    contract_address.clone(),
+                    contract_address,
                     ChainName::new("eth").unwrap(),
                     rand_event_eth(),
                 )

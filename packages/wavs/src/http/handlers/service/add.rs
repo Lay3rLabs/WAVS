@@ -26,7 +26,6 @@ async fn add_service_inner(
     let service = ServiceRequestParser::new(Some(state.clone()))
         .parse(req)
         .await?;
-    let service_id = service.id.clone();
 
     for workflow in service.workflows.values() {
         match &workflow.submit {
@@ -40,7 +39,7 @@ async fn add_service_inner(
                     .config
                     .chains
                     .eth
-                    .get(&chain_name)
+                    .get(chain_name)
                     .context(format!("No chain config found for chain: {chain_name}"))?;
                 if let Some(aggregator_endpoint) = &chain_config.aggregator_endpoint {
                     state
@@ -49,7 +48,7 @@ async fn add_service_inner(
                         .header("Content-Type", "application/json")
                         .json(
                             &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
-                                service_manager_address: service_manager.clone().try_into()?,
+                                service_manager_address: *service_manager,
                             },
                         )
                         .send()
@@ -59,9 +58,9 @@ async fn add_service_inner(
         }
     }
 
-    state.dispatcher.add_service(service)?;
+    state.dispatcher.add_service(service.clone())?;
 
-    Ok(AddServiceResponse { id: service_id })
+    Ok(AddServiceResponse { service })
 }
 
 #[allow(dead_code)]

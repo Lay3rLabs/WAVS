@@ -48,12 +48,12 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
 
 async fn test_service(
     name: AnyService,
-    service: DeployService,
+    deployment: DeployService,
     configs: &Configs,
     clients: &Clients,
 ) -> Result<()> {
-    let service_id = service.service_id.to_string();
-    let (workflow_id, workflow) = service.workflows.iter().next().unwrap();
+    let service_id = deployment.service.id.to_string();
+    let (workflow_id, workflow) = deployment.service.workflows.iter().next().unwrap();
 
     tracing::info!("Testing service: {:?}", name);
 
@@ -80,7 +80,7 @@ async fn test_service(
             AddTaskArgs {
                 service_id: service_id.clone(),
                 workflow_id: Some(workflow_id.to_string()),
-                input: get_input_for_service(name, &service, configs),
+                input: get_input_for_service(name, &deployment, configs),
                 result_timeout: if is_final {
                     Some(std::time::Duration::from_secs(10))
                 } else {
@@ -94,7 +94,7 @@ async fn test_service(
 
         if is_final {
             let signed_data = signed_data.context("no signed data returned")?;
-            verify_signed_data(name, signed_data, &service, configs)?;
+            verify_signed_data(name, signed_data, &deployment, configs)?;
         }
     }
 
@@ -103,7 +103,7 @@ async fn test_service(
 
 fn get_input_for_service(
     name: AnyService,
-    _service: &DeployService,
+    _deployment: &DeployService,
     configs: &Configs,
 ) -> ComponentInput {
     let permissions_req = || {
@@ -150,13 +150,13 @@ fn get_input_for_service(
 fn verify_signed_data(
     name: AnyService,
     signed_data: SignedData,
-    service: &DeployService,
+    deployment: &DeployService,
     configs: &Configs,
 ) -> Result<()> {
     let data = signed_data.data;
 
     let input_req = || {
-        get_input_for_service(name, service, configs)
+        get_input_for_service(name, deployment, configs)
             .decode()
             .unwrap()
     };
@@ -185,7 +185,7 @@ fn verify_signed_data(
         },
         AnyService::Cosmos(cosmos_name) => match cosmos_name {
             CosmosService::EchoData | CosmosService::ChainTriggerLookup => Some(
-                get_input_for_service(name, service, configs)
+                get_input_for_service(name, deployment, configs)
                     .decode()
                     .unwrap(),
             ),
@@ -206,7 +206,7 @@ fn verify_signed_data(
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
             CrossChainService::CosmosToEthEchoData => Some(
-                get_input_for_service(name, service, configs)
+                get_input_for_service(name, deployment, configs)
                     .decode()
                     .unwrap(),
             ),

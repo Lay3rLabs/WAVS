@@ -200,10 +200,7 @@ impl CliContext {
     }
 
     pub fn handle_deploy_result(&self, result: impl CommandDeployResult) -> Result<()> {
-        let mut deployment = self.deployment.lock().unwrap();
-
-        // update the deployment
-        result.update_deployment(&mut deployment);
+        let deployment = self.deployment.lock().unwrap();
 
         // save the updated deployment
         if !self.dry_run {

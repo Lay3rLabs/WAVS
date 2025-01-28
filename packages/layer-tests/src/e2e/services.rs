@@ -52,7 +52,7 @@ impl Services {
             {
                 let chain = chain.clone();
                 tracing::info!("Deploying Eigen Core contracts on {chain}");
-                let DeployEigenCore { addresses } = DeployEigenCore::run(
+                let DeployEigenCore { addresses, .. } = DeployEigenCore::run(
                     &clients.cli_ctx,
                     DeployEigenCoreArgs {
                         register_operator: true,

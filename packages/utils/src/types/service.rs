@@ -158,6 +158,7 @@ pub enum ServiceStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(default, rename_all = "snake_case")]
+#[derive(Default)]
 pub struct Permissions {
     /// If it can talk to http hosts on the network
     pub allowed_http_hosts: AllowedHostPermission,
@@ -166,14 +167,6 @@ pub struct Permissions {
 }
 
 // TODO: remove / change defaults?
-impl Default for Permissions {
-    fn default() -> Self {
-        Self {
-            allowed_http_hosts: AllowedHostPermission::default(),
-            file_system: false,
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -184,7 +177,8 @@ pub enum AllowedHostPermission {
     None,
 }
 
-#[cfg(debug_assertions)]
+// TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
+// will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
     use crate::{digest::Digest, types::ChainName};
 

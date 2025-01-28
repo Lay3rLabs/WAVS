@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
 use utils::{
     eigen_client::CoreAVSAddresses,
-    types::{ChainName, Submit, Trigger, Workflow},
+    types::{ChainName, Service, Submit, Trigger},
     ServiceID, WorkflowID,
 };
 
@@ -18,7 +18,8 @@ pub trait CommandDeployResult: Display {
 #[serde(default)]
 pub struct Deployment {
     pub eigen_core: BTreeMap<ChainName, CoreAVSAddresses>,
-    pub services: BTreeMap<ServiceID, BTreeMap<WorkflowID, Workflow>>,
+    pub eigen_service_managers: BTreeMap<ChainName, Vec<alloy::primitives::Address>>,
+    pub services: BTreeMap<ServiceID, Service>,
 }
 
 impl Deployment {
@@ -49,8 +50,8 @@ impl Deployment {
     ) -> Option<Trigger> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
-            Some(workflow_id) => service.get(workflow_id)?,
-            None => service.values().next()?,
+            Some(workflow_id) => service.workflows.get(workflow_id)?,
+            None => service.workflows.values().next()?,
         };
 
         Some(workflow.trigger.clone())
@@ -63,8 +64,8 @@ impl Deployment {
     ) -> Option<Submit> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
-            Some(workflow_id) => service.get(workflow_id)?,
-            None => service.values().next()?,
+            Some(workflow_id) => service.workflows.get(workflow_id)?,
+            None => service.workflows.values().next()?,
         };
 
         Some(workflow.submit.clone())

@@ -1,13 +1,10 @@
-use std::collections::BTreeMap;
-
 use anyhow::{Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
 use rand::rngs::OsRng;
 use utils::{
     avs_client::AvsClientDeployer,
     filesystem::workspace_path,
-    types::{ChainName, ComponentSource, ServiceConfig, Submit, Trigger, Workflow},
-    ServiceID, WorkflowID,
+    types::{ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger},
 };
 
 use crate::{
@@ -27,20 +24,43 @@ use crate::{
 };
 
 pub struct DeployService {
-    pub service_id: ServiceID,
-    pub workflows: BTreeMap<WorkflowID, Workflow>,
+    pub args: DeployServiceArgs,
+    pub service: Service,
+    pub new_eigenlayer_service_manager: Option<DeployEigenServiceManager>,
 }
 
 impl std::fmt::Display for DeployService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DeployService")
+        if let Some(new_eigenlayer_service_manager) = &self.new_eigenlayer_service_manager {
+            write!(f, "{}", new_eigenlayer_service_manager)?;
+        }
+
+        write!(f, "New Service deployed to wavs")?;
+        // we only register as an operator if we did not deploy a new eigenlayer service manager
+        if self.args.register_operator && self.new_eigenlayer_service_manager.is_none() {
+            write!(
+                f,
+                " (and registered as an operator on the Eigenlayer service manager)"
+            )?;
+        }
+
+        write!(f, "\n\n{:#?}", self.service)
     }
 }
 
 impl CommandDeployResult for DeployService {
-    fn update_deployment(&self, _deployment: &mut crate::deploy::Deployment) {}
+    fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {
+        if let Some(new_eigenlayer_service_manager) = &self.new_eigenlayer_service_manager {
+            new_eigenlayer_service_manager.update_deployment(deployment);
+        }
+
+        deployment
+            .services
+            .insert(self.service.id.clone(), self.service.clone());
+    }
 }
 
+#[derive(Clone)]
 pub struct DeployServiceArgs {
     pub register_operator: bool,
     pub component: ComponentSource,
@@ -56,9 +76,8 @@ pub struct DeployServiceArgs {
 }
 
 impl DeployService {
-    pub async fn run(
-        ctx: &CliContext,
-        DeployServiceArgs {
+    pub async fn run(ctx: &CliContext, args: DeployServiceArgs) -> Result<Option<Self>> {
+        let DeployServiceArgs {
             register_operator,
             component,
             trigger,
@@ -70,8 +89,8 @@ impl DeployService {
             submit,
             submit_chain,
             service_config,
-        }: DeployServiceArgs,
-    ) -> Result<Option<Self>> {
+        } = args.clone();
+
         let deployment = ctx.deployment.lock().unwrap().clone();
 
         let trigger: Trigger = match trigger {
@@ -95,7 +114,7 @@ impl DeployService {
 
                 Trigger::EthContractEvent {
                     chain_name,
-                    address: address.into(),
+                    address,
                     event_hash,
                 }
             }
@@ -145,6 +164,8 @@ impl DeployService {
             }
         };
 
+        let mut new_eigenlayer_service_manager = None;
+
         let submit: Submit = match submit {
             CliSubmitKind::SimpleEthContract => {
                 let chain_name = submit_chain.expect("must have submit chain for contract");
@@ -193,7 +214,7 @@ impl DeployService {
                         .await
                         .unwrap();
 
-                        let DeployEigenServiceManager { address } = res;
+                        let DeployEigenServiceManager { address, .. } = res;
                         // but for our "simple submit", we want to set the serviceManager for its custom security rules
                         let simple_submit_client = SimpleEthSubmitClient::new(
                             eth_client.eth.clone(),
@@ -202,6 +223,8 @@ impl DeployService {
                         simple_submit_client
                             .set_service_manager_address(address)
                             .await?;
+
+                        new_eigenlayer_service_manager = Some(res);
 
                         address
                     }
@@ -229,7 +252,7 @@ impl DeployService {
 
         let service_config = service_config.unwrap_or_default();
 
-        let (service_id, workflow_id) = http_client
+        let service = http_client
             .create_service(
                 trigger.clone(),
                 submit.clone(),
@@ -238,26 +261,14 @@ impl DeployService {
             )
             .await?;
 
-        let mut workflows = BTreeMap::new();
-        workflows.insert(
-            workflow_id.clone(),
-            Workflow {
-                trigger,
-                component: service_config.component_id,
-                submit,
-            },
-        );
+        let _self = Self {
+            args,
+            service,
+            new_eigenlayer_service_manager,
+        };
 
-        let mut deployment = deployment;
-        deployment
-            .services
-            .insert(service_id.clone(), workflows.clone());
+        _self.update_deployment(&mut ctx.deployment.lock().unwrap());
 
-        *ctx.deployment.lock().unwrap() = deployment;
-
-        Ok(Some(Self {
-            service_id,
-            workflows,
-        }))
+        Ok(Some(_self))
     }
 }

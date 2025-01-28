@@ -3,17 +3,18 @@ pub mod example_eth_client;
 
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
+use utils::types::AddServiceResponse;
+use utils::ServiceID;
 use utils::{
     config::{CosmosChainConfig, EthereumChainConfig},
     digest::Digest,
     eigen_client::EigenClient,
     eth_client::EthClientBuilder,
     types::{
-        AddServiceRequest, AllowedHostPermission, Permissions, ServiceConfig, Submit, Trigger,
-        UploadServiceResponse,
+        AddServiceRequest, AllowedHostPermission, Permissions, Service, ServiceConfig, Submit,
+        Trigger, UploadServiceResponse,
     },
 };
-use utils::{ServiceID, WorkflowID};
 
 use crate::config::Config;
 
@@ -87,9 +88,8 @@ impl HttpClient {
         submit: Submit,
         digest: Digest,
         config: ServiceConfig,
-    ) -> Result<(ServiceID, WorkflowID)> {
+    ) -> Result<Service> {
         let service_id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?;
-        let workflow_id = config.workflow_id.clone();
 
         let service = AddServiceRequest {
             trigger,
@@ -107,14 +107,16 @@ impl HttpClient {
 
         let body = serde_json::to_string(&service)?;
 
-        self.inner
+        let resp: AddServiceResponse = self
+            .inner
             .post(format!("{}/app", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
             .send()
             .await?
-            .error_for_status()?;
+            .json()
+            .await?;
 
-        Ok((service_id, workflow_id))
+        Ok(resp.service)
     }
 }

@@ -52,7 +52,6 @@ fn mock_e2e_trigger_flow() {
     // this spawned into the async runtime, so it's sortof like the real TriggerManager
     runner.ctx.rt.spawn({
         let runner = runner.clone();
-        let task_queue_address = task_queue_address.clone();
 
         async move {
             runner
