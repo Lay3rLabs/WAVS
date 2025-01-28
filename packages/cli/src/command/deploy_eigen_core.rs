@@ -3,11 +3,21 @@ use utils::{eigen_client::CoreAVSAddresses, types::ChainName};
 
 use crate::{
     context::CliContext,
-    deploy::{ServiceSubmitInfo, ServiceTriggerInfo},
+    deploy::{CommandDeployResult, ServiceSubmitInfo, ServiceTriggerInfo},
 };
 
 pub struct DeployEigenCore {
     pub addresses: CoreAVSAddresses,
+}
+
+impl std::fmt::Display for DeployEigenCore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DeployEigenCore")
+    }
+}
+
+impl CommandDeployResult for DeployEigenCore {
+    fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {}
 }
 
 pub struct DeployEigenCoreArgs {

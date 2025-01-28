@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use alloy::primitives::Address;
 use anyhow::Result;
@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 use utils::{eigen_client::CoreAVSAddresses, types::ChainName, ServiceID, WorkflowID};
 
 use crate::config::Config;
+
+// Commands that return a type which update the deployment should implement this
+pub trait CommandDeployResult: Display {
+    fn update_deployment(&self, deployment: &mut Deployment);
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(default)]

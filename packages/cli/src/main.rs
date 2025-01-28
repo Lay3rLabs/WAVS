@@ -1,6 +1,6 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::{avs_client::SignedData, config::ConfigExt};
+use utils::config::ConfigExt;
 use wavs_cli::{
     args::Command,
     command::{
@@ -11,7 +11,6 @@ use wavs_cli::{
         exec_component::{ExecComponent, ExecComponentArgs},
     },
     context::CliContext,
-    display::DisplayBuilder,
     util::ComponentInput,
 };
 
@@ -31,9 +30,7 @@ async fn main() {
         .try_init()
         .unwrap();
 
-    let mut display = DisplayBuilder::new();
-
-    let mut ctx = CliContext::try_new(&command, config, None).await.unwrap();
+    let ctx = CliContext::try_new(&command, config, None).await.unwrap();
 
     match command {
         Command::DeployEigenCore {
@@ -51,11 +48,7 @@ async fn main() {
             .await
             .unwrap();
 
-            let DeployEigenCore { addresses } = res;
-
-            display.core_contracts = Some(addresses);
-
-            ctx.save_deployment().unwrap();
+            ctx.handle_deploy_result(res).unwrap();
         }
         Command::DeployService {
             register_operator,
@@ -90,14 +83,8 @@ async fn main() {
             .await
             .unwrap();
 
-            if let Some(DeployService {
-                service_id,
-                workflows,
-            }) = res
-            {
-                ctx.save_deployment().unwrap();
-
-                display.service = Some((service_id, workflows));
+            if let Some(res) = res {
+                ctx.handle_deploy_result(res).unwrap();
             }
         }
         Command::DeployEigenServiceManager {
@@ -117,11 +104,7 @@ async fn main() {
             .await
             .unwrap();
 
-            let DeployEigenServiceManager { address } = res;
-
-            display.submit_contract = Some(address.into());
-
-            ctx.save_deployment().unwrap();
+            ctx.handle_deploy_result(res).unwrap();
         }
         Command::AddTask {
             service_id,
@@ -146,8 +129,8 @@ async fn main() {
             .await
             .unwrap();
 
-            if let Some(signed_data) = res.and_then(|res| res.signed_data) {
-                display.signed_data = Some(signed_data);
+            if let Some(res) = res {
+                ctx.handle_display_result(res);
             }
         }
         Command::Exec {
@@ -162,19 +145,7 @@ async fn main() {
             .await
             .unwrap();
 
-            let ExecComponent {
-                output_bytes,
-                gas_used,
-            } = res;
-
-            display.signed_data = Some(SignedData {
-                data: output_bytes,
-                signature: vec![],
-            });
-
-            display.gas_used = Some(gas_used);
+            ctx.handle_display_result(res);
         }
     }
-
-    display.show().unwrap();
 }

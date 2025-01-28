@@ -13,6 +13,7 @@ pub struct Configs {
     pub matrix: TestMatrix,
     pub wavs: wavs::config::Config,
     pub cli: wavs_cli::config::Config,
+    pub cli_args: wavs_cli::args::CliArgs,
     pub aggregator: Option<wavs_aggregator::config::Config>,
     pub chains: ChainConfigs,
     pub anvil_interval_seconds: Option<u64>,
@@ -146,16 +147,16 @@ impl From<TestConfig> for Configs {
             None
         };
 
+        let cli_args = wavs_cli::args::CliArgs {
+            data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
+            home: Some(workspace_path().join("packages").join("cli")),
+            // deliberately point to a non-existing file
+            dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
+            ..Default::default()
+        };
+
         let mut cli_config: wavs_cli::config::Config =
-            ConfigBuilder::new(wavs_cli::args::CliArgs {
-                data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
-                home: Some(workspace_path().join("packages").join("cli")),
-                // deliberately point to a non-existing file
-                dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
-                ..Default::default()
-            })
-            .build()
-            .unwrap();
+            ConfigBuilder::new(cli_args.clone()).build().unwrap();
 
         cli_config.chains = chain_configs.clone();
 
@@ -176,6 +177,7 @@ impl From<TestConfig> for Configs {
         Self {
             matrix,
             cli: cli_config,
+            cli_args,
             aggregator: aggregator_config,
             wavs: wavs_config,
             chains: chain_configs,
