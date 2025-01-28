@@ -21,13 +21,23 @@ use crate::{
         DeployEigenServiceManager, DeployEigenServiceManagerArgs,
     },
     context::CliContext,
-    deploy::{ServiceInfo, ServiceSubmitInfo, ServiceTriggerInfo},
+    deploy::{CommandDeployResult, ServiceInfo, ServiceSubmitInfo, ServiceTriggerInfo},
     util::read_component,
 };
 
 pub struct DeployService {
     pub service_id: ServiceID,
     pub workflows: HashMap<WorkflowID, ServiceInfo>,
+}
+
+impl std::fmt::Display for DeployService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DeployService")
+    }
+}
+
+impl CommandDeployResult for DeployService {
+    fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {}
 }
 
 pub struct DeployServiceArgs {

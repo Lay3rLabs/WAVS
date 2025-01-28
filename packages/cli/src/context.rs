@@ -1,12 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     sync::Mutex,
 };
 
 use crate::{
+    args::CliArgs,
     clients::{get_cosmos_client, get_eigen_client},
     config::Config,
-    deploy::ServiceTriggerInfo,
+    deploy::{CommandDeployResult, ServiceTriggerInfo},
 };
 use alloy::providers::Provider;
 use anyhow::{Context, Result};
@@ -20,6 +22,8 @@ use crate::{args::Command, deploy::Deployment};
 pub struct CliContext {
     pub deployment: Mutex<Deployment>,
     pub config: Config,
+    pub dry_run: bool,
+    pub quiet_results: bool,
     _clients: HashMap<ChainName, AnyClient>,
 }
 
@@ -92,10 +96,17 @@ impl CliContext {
             Command::Exec { .. } => {}
         }
 
-        Self::new_chains(chains.into_iter().collect(), config, Some(deployment)).await
+        Self::new_chains(
+            command.args(),
+            chains.into_iter().collect(),
+            config,
+            Some(deployment),
+        )
+        .await
     }
 
     pub async fn new_chains(
+        args: CliArgs,
         chains: Vec<ChainName>,
         config: Config,
         deployment: Option<Deployment>,
@@ -132,20 +143,10 @@ impl CliContext {
         Ok(Self {
             config,
             deployment: Mutex::new(deployment),
+            dry_run: args.dry_run.unwrap_or_default(),
+            quiet_results: args.quiet_results.unwrap_or_default(),
             _clients: clients,
         })
-    }
-
-    pub fn save_deployment(&mut self) -> Result<()> {
-        if !self.config.data.exists() {
-            std::fs::create_dir_all(&self.config.data)?;
-        }
-        let path = Deployment::path(&self.config);
-        tracing::debug!("Saving deployment to {}", path.display());
-        let file = std::fs::File::create(path)?;
-        let writer = std::io::BufWriter::new(file);
-        serde_json::to_writer(writer, &self.deployment)?;
-        Ok(())
     }
 
     pub fn get_eth_client(&self, chain_name: &ChainName) -> Result<EigenClient> {
@@ -192,5 +193,34 @@ impl CliContext {
                 AnyClient::Cosmos(client) => client.querier.contract_info(&address).await.is_ok(),
             },
         )
+    }
+
+    pub fn handle_deploy_result(&self, result: impl CommandDeployResult) -> Result<()> {
+        let mut deployment = self.deployment.lock().unwrap();
+
+        // update the deployment
+        result.update_deployment(&mut deployment);
+
+        // save the updated deployment
+        if !self.dry_run {
+            if !self.config.data.exists() {
+                std::fs::create_dir_all(&self.config.data)?;
+            }
+            let path = Deployment::path(&self.config);
+            tracing::debug!("Saving deployment to {}", path.display());
+            let file = std::fs::File::create(path)?;
+            let writer = std::io::BufWriter::new(file);
+            serde_json::to_writer(writer, &*deployment)?;
+        }
+
+        self.handle_display_result(result);
+
+        Ok(())
+    }
+
+    pub fn handle_display_result(&self, result: impl Display) {
+        if !self.quiet_results {
+            tracing::info!("{}", result);
+        }
     }
 }

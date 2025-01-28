@@ -32,6 +32,7 @@ impl Clients {
             .unwrap();
 
             let cli_ctx = wavs_cli::context::CliContext::new_chains(
+                configs.cli_args.clone(),
                 configs.chains.all_chain_names(),
                 configs.cli.clone(),
                 None,

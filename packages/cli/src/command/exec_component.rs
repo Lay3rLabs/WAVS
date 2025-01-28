@@ -15,6 +15,12 @@ pub struct ExecComponent {
     pub gas_used: u64,
 }
 
+impl std::fmt::Display for ExecComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExecComponent")
+    }
+}
+
 pub struct ExecComponentArgs {
     pub component: PathBuf,
     pub input: ComponentInput,

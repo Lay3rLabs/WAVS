@@ -264,6 +264,16 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_mnemonic: Option<String>,
+
+    /// Do not save the deployment
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dry_run: Option<bool>,
+
+    /// Do not display the results
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quiet_results: Option<bool>,
 }
 
 impl CliEnvExt for CliArgs {

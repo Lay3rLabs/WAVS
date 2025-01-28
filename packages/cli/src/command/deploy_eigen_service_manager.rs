@@ -3,7 +3,7 @@ use anyhow::Result;
 use rand::rngs::OsRng;
 use utils::{avs_client::AvsClientDeployer, types::ChainName};
 
-use crate::context::CliContext;
+use crate::{context::CliContext, deploy::CommandDeployResult};
 
 pub struct DeployEigenServiceManager {
     pub address: Address,
@@ -13,6 +13,16 @@ pub struct DeployEigenServiceManagerArgs {
     pub chain: ChainName,
     pub service_handler: Address,
     pub register_operator: bool,
+}
+
+impl std::fmt::Display for DeployEigenServiceManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DeployEigenServiceManager")
+    }
+}
+
+impl CommandDeployResult for DeployEigenServiceManager {
+    fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {}
 }
 
 impl DeployEigenServiceManager {
