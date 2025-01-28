@@ -1,10 +1,10 @@
 use tracing::instrument;
+use utils::digest::Digest;
+use utils::types::{Component, ServiceConfig};
 
-use crate::apis::dispatcher::{Component, ServiceConfig};
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::trigger::TriggerAction;
 use crate::triggers::mock::get_mock_trigger_data;
-use crate::Digest;
 
 /// Simply returns the request as the result.
 /// MVP for just testing inputs and outputs and wiring
@@ -41,7 +41,9 @@ impl Engine for IdentityEngine {
 
 #[cfg(test)]
 mod test {
-    use crate::{apis::trigger::TriggerData, triggers::mock::mock_eth_event_trigger_config};
+    use utils::types::TriggerData;
+
+    use crate::triggers::mock::mock_eth_event_trigger_config;
 
     use super::*;
 

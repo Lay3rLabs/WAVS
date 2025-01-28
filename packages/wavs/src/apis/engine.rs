@@ -1,13 +1,13 @@
 use layer_climb::prelude::Address;
 use thiserror::Error;
 
-use crate::{storage::CAStorageError, Digest};
+use utils::{digest::Digest, storage::CAStorageError};
 
-use super::{
-    dispatcher::{Component, ServiceConfig},
-    trigger::TriggerAction,
+use super::trigger::TriggerAction;
+use utils::{
+    types::{Component, ServiceConfig},
+    ComponentID, ServiceID, WorkflowID,
 };
-use utils::{ComponentID, ServiceID, WorkflowID};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;

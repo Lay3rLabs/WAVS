@@ -6,17 +6,19 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
+use utils::digest::Digest;
+use utils::types::{ComponentSource, Service};
 
-use crate::apis::dispatcher::{DispatchManager, Service, WasmSource};
+use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
 use crate::apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager};
 use utils::{IDError, ServiceID};
 
 use crate::engine::runner::EngineRunner;
-use crate::storage::db::{DBError, RedbStorage, Table, JSON};
-use crate::storage::CAStorageError;
 use crate::AppContext;
+use utils::storage::db::{DBError, RedbStorage, Table, JSON};
+use utils::storage::CAStorageError;
 
 /// This should auto-derive clone if T, E, S: Clone
 #[derive(Clone)]
@@ -129,9 +131,9 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn store_component(&self, source: WasmSource) -> Result<crate::Digest, Self::Error> {
+    fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error> {
         let bytecode = match source {
-            WasmSource::Bytecode(code) => code,
+            ComponentSource::Bytecode(code) => code,
             _ => todo!(),
         };
         let digest = self.engine.engine().store_wasm(&bytecode)?;
@@ -139,7 +141,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn list_component_digests(&self) -> Result<Vec<crate::Digest>, Self::Error> {
+    fn list_component_digests(&self) -> Result<Vec<Digest>, Self::Error> {
         let digests = self.engine.engine().list_digests()?;
 
         Ok(digests)
@@ -316,11 +318,7 @@ pub enum DispatcherError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        apis::{
-            dispatcher::{Component, ServiceStatus, Submit},
-            submission::ChainMessage,
-            trigger::TriggerData,
-        },
+        apis::submission::ChainMessage,
         engine::{
             identity::IdentityEngine,
             mock::MockEngine,
@@ -335,9 +333,11 @@ mod tests {
         triggers::mock::{
             mock_eth_event_trigger, mock_eth_event_trigger_config, MockTriggerManagerVec,
         },
-        Digest,
     };
-    use utils::{types::ChainName, ComponentID, ServiceID, WorkflowID};
+    use utils::{
+        types::{ChainName, Component, ServiceStatus, Submit, TriggerData, Workflow},
+        ComponentID, ServiceID, WorkflowID,
+    };
 
     use super::*;
 
@@ -373,7 +373,7 @@ mod tests {
             config: None,
             workflows: [(
                 action.config.workflow_id.clone(),
-                crate::apis::dispatcher::Workflow {
+                Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eigen_contract(
@@ -468,7 +468,7 @@ mod tests {
             config: None,
             workflows: [(
                 workflow_id.clone(),
-                crate::apis::dispatcher::Workflow {
+                Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eigen_contract(
@@ -557,7 +557,7 @@ mod tests {
             config: None,
             workflows: [(
                 workflow_id.clone(),
-                crate::apis::dispatcher::Workflow {
+                Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eigen_contract(

@@ -1,16 +1,6 @@
+use crate::http::{error::HttpResult, state::HttpState};
 use axum::{body::Bytes, extract::State, response::IntoResponse, Json};
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    apis::dispatcher::WasmSource,
-    http::{error::HttpResult, state::HttpState, types::ShaDigest},
-};
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UploadServiceResponse {
-    pub digest: ShaDigest,
-}
+use utils::types::{ComponentSource, UploadServiceResponse};
 
 #[axum::debug_handler]
 pub async fn handle_upload_service(
@@ -30,7 +20,7 @@ async fn inner_handle_upload_service(
     let digest = tokio::task::spawn_blocking(move || {
         state
             .dispatcher
-            .store_component(WasmSource::Bytecode(bytes.to_vec()))
+            .store_component(ComponentSource::Bytecode(bytes.to_vec()))
     })
     .await
     .unwrap()?

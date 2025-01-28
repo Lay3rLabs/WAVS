@@ -1,12 +1,14 @@
+use std::collections::BTreeMap;
+
 use anyhow::{Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
 use rand::rngs::OsRng;
-use std::{collections::HashMap, path::PathBuf};
 use utils::{
-    avs_client::AvsClientDeployer, filesystem::workspace_path, types::ChainName, ServiceID,
-    WorkflowID,
+    avs_client::AvsClientDeployer,
+    filesystem::workspace_path,
+    types::{ChainName, ComponentSource, ServiceConfig, Submit, Trigger, Workflow},
+    ServiceID, WorkflowID,
 };
-use wavs::{apis::dispatcher::ServiceConfig, Digest};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -21,13 +23,12 @@ use crate::{
         DeployEigenServiceManager, DeployEigenServiceManagerArgs,
     },
     context::CliContext,
-    deploy::{CommandDeployResult, ServiceInfo, ServiceSubmitInfo, ServiceTriggerInfo},
-    util::read_component,
+    deploy::CommandDeployResult,
 };
 
 pub struct DeployService {
     pub service_id: ServiceID,
-    pub workflows: HashMap<WorkflowID, ServiceInfo>,
+    pub workflows: BTreeMap<WorkflowID, Workflow>,
 }
 
 impl std::fmt::Display for DeployService {
@@ -37,7 +38,7 @@ impl std::fmt::Display for DeployService {
 }
 
 impl CommandDeployResult for DeployService {
-    fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {}
+    fn update_deployment(&self, _deployment: &mut crate::deploy::Deployment) {}
 }
 
 pub struct DeployServiceArgs {
@@ -52,11 +53,6 @@ pub struct DeployServiceArgs {
     pub submit: CliSubmitKind,
     pub submit_chain: Option<ChainName>,
     pub service_config: Option<ServiceConfig>,
-}
-
-pub enum ComponentSource {
-    Path(PathBuf),
-    Digest(Digest),
 }
 
 impl DeployService {
@@ -78,7 +74,7 @@ impl DeployService {
     ) -> Result<Option<Self>> {
         let deployment = ctx.deployment.lock().unwrap().clone();
 
-        let trigger_info: ServiceTriggerInfo = match trigger {
+        let trigger: Trigger = match trigger {
             CliTriggerKind::EthContractEvent => {
                 let chain_name = trigger_chain.context("must have trigger chain for contract")?;
                 let trigger_event_name =
@@ -97,7 +93,7 @@ impl DeployService {
                 let mut event_hash: [u8; 32] = [0; 32];
                 event_hash.copy_from_slice(&hex::decode(trigger_event_name)?);
 
-                ServiceTriggerInfo::EthSimpleContract {
+                Trigger::EthContractEvent {
                     chain_name,
                     address: address.into(),
                     event_hash,
@@ -141,7 +137,7 @@ impl DeployService {
                         .parse_address(&address)?,
                 };
 
-                ServiceTriggerInfo::CosmosSimpleContract {
+                Trigger::CosmosContractEvent {
                     chain_name,
                     address,
                     event_type: trigger_event_name,
@@ -149,7 +145,7 @@ impl DeployService {
             }
         };
 
-        let submit_info: ServiceSubmitInfo = match submit {
+        let submit: Submit = match submit {
             CliSubmitKind::SimpleEthContract => {
                 let chain_name = submit_chain.expect("must have submit chain for contract");
 
@@ -211,38 +207,46 @@ impl DeployService {
                     }
                 };
 
-                ServiceSubmitInfo::EigenLayer {
+                Submit::EigenContract {
                     chain_name,
-                    service_manager_address,
+                    service_manager: service_manager_address,
+                    max_gas: None,
                 }
             }
-        };
-
-        let service_info = ServiceInfo {
-            trigger: trigger_info,
-            submit: submit_info,
         };
 
         let http_client = HttpClient::new(&ctx.config);
 
         let digest = match component {
-            ComponentSource::Path(path) => {
-                let wasm_bytes = read_component(path)?;
-                http_client.upload_component(wasm_bytes).await?
-            }
+            ComponentSource::Bytecode(bytes) => http_client.upload_component(bytes).await?,
+            ComponentSource::Download { url: _, digest } => digest,
+            ComponentSource::Registry {
+                registry: _,
+                digest,
+            } => digest,
             ComponentSource::Digest(digest) => digest,
         };
 
+        let service_config = service_config.unwrap_or_default();
+
         let (service_id, workflow_id) = http_client
             .create_service(
-                service_info.clone(),
+                trigger.clone(),
+                submit.clone(),
                 digest,
-                service_config.unwrap_or_default(),
+                service_config.clone(),
             )
             .await?;
 
-        let mut workflows = HashMap::new();
-        workflows.insert(workflow_id.clone(), service_info.clone());
+        let mut workflows = BTreeMap::new();
+        workflows.insert(
+            workflow_id.clone(),
+            Workflow {
+                trigger,
+                component: service_config.component_id,
+                submit,
+            },
+        );
 
         let mut deployment = deployment;
         deployment

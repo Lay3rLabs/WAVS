@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use wavs::AppContext;
+use utils::context::AppContext;
 use wavs_cli::clients::HttpClient;
 
 use super::config::Configs;

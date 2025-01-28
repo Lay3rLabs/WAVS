@@ -1,10 +1,10 @@
 use anyhow::Result;
-use utils::{eigen_client::CoreAVSAddresses, types::ChainName};
-
-use crate::{
-    context::CliContext,
-    deploy::{CommandDeployResult, ServiceSubmitInfo, ServiceTriggerInfo},
+use utils::{
+    eigen_client::CoreAVSAddresses,
+    types::{ChainName, Submit, Trigger},
 };
+
+use crate::{context::CliContext, deploy::CommandDeployResult};
 
 pub struct DeployEigenCore {
     pub addresses: CoreAVSAddresses,
@@ -17,7 +17,7 @@ impl std::fmt::Display for DeployEigenCore {
 }
 
 impl CommandDeployResult for DeployEigenCore {
-    fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {}
+    fn update_deployment(&self, _deployment: &mut crate::deploy::Deployment) {}
 }
 
 pub struct DeployEigenCoreArgs {
@@ -55,12 +55,9 @@ impl DeployEigenCore {
             for workflows in deployment.services.values_mut() {
                 workflows.retain(|_, workflow| {
                     if let Some(chain_name) = match &workflow.trigger {
-                        ServiceTriggerInfo::EthSimpleContract { chain_name, .. } => {
-                            Some(chain_name)
-                        }
-                        ServiceTriggerInfo::CosmosSimpleContract { chain_name, .. } => {
-                            Some(chain_name)
-                        }
+                        Trigger::EthContractEvent { chain_name, .. } => Some(chain_name),
+                        Trigger::CosmosContractEvent { chain_name, .. } => Some(chain_name),
+                        Trigger::Manual => None,
                     } {
                         if *chain_name != chain {
                             deleted_services = true;
@@ -68,7 +65,8 @@ impl DeployEigenCore {
                         }
                     }
                     if let Some(chain_name) = match &workflow.submit {
-                        ServiceSubmitInfo::EigenLayer { chain_name, .. } => Some(chain_name),
+                        Submit::EigenContract { chain_name, .. } => Some(chain_name),
+                        Submit::None => None,
                     } {
                         if *chain_name != chain {
                             deleted_services = true;

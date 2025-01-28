@@ -1,6 +1,4 @@
-# all = true
-
-isolated = "eth-echo-data-aggregator" 
+all = true
 
 # See matrix.rs for all the available options
 

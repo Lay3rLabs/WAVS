@@ -1,9 +1,11 @@
-use std::{collections::HashMap, fmt::Display};
-
-use alloy::primitives::Address;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{eigen_client::CoreAVSAddresses, types::ChainName, ServiceID, WorkflowID};
+use std::{collections::BTreeMap, fmt::Display};
+use utils::{
+    eigen_client::CoreAVSAddresses,
+    types::{ChainName, Submit, Trigger, Workflow},
+    ServiceID, WorkflowID,
+};
 
 use crate::config::Config;
 
@@ -15,37 +17,8 @@ pub trait CommandDeployResult: Display {
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Deployment {
-    pub eigen_core: HashMap<ChainName, CoreAVSAddresses>,
-    pub services: HashMap<ServiceID, HashMap<WorkflowID, ServiceInfo>>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ServiceInfo {
-    pub trigger: ServiceTriggerInfo,
-    pub submit: ServiceSubmitInfo,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ServiceTriggerInfo {
-    EthSimpleContract {
-        chain_name: ChainName,
-        event_hash: [u8; 32],
-        address: layer_climb::prelude::Address,
-    },
-
-    CosmosSimpleContract {
-        chain_name: ChainName,
-        event_type: String,
-        address: layer_climb::prelude::Address,
-    },
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ServiceSubmitInfo {
-    EigenLayer {
-        chain_name: ChainName,
-        service_manager_address: Address,
-    },
+    pub eigen_core: BTreeMap<ChainName, CoreAVSAddresses>,
+    pub services: BTreeMap<ServiceID, BTreeMap<WorkflowID, Workflow>>,
 }
 
 impl Deployment {
@@ -69,13 +42,11 @@ impl Deployment {
         config.data.join("deployments.json")
     }
 
-    // for now - all of our triggers use the same pattern of chain+address
-    // this will change in the future
-    pub fn get_trigger_info(
+    pub fn get_trigger(
         &self,
         service_id: &ServiceID,
         workflow_id: Option<&WorkflowID>,
-    ) -> Option<ServiceTriggerInfo> {
+    ) -> Option<Trigger> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
             Some(workflow_id) => service.get(workflow_id)?,
@@ -85,26 +56,17 @@ impl Deployment {
         Some(workflow.trigger.clone())
     }
 
-    // for now - all of our submits use the same pattern of chain+avs_addresses
-    // this will change in the future
-    pub fn get_submit_info(
+    pub fn get_submit(
         &self,
         service_id: &ServiceID,
         workflow_id: Option<&WorkflowID>,
-    ) -> Option<(ChainName, Address)> {
+    ) -> Option<Submit> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
             Some(workflow_id) => service.get(workflow_id)?,
             None => service.values().next()?,
         };
 
-        let any_submit_info = workflow.submit.clone();
-
-        match any_submit_info {
-            ServiceSubmitInfo::EigenLayer {
-                chain_name,
-                service_manager_address,
-            } => Some((chain_name, service_manager_address)),
-        }
+        Some(workflow.submit.clone())
     }
 }

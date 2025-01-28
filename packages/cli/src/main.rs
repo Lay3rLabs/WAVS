@@ -1,17 +1,17 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::config::ConfigExt;
+use utils::{config::ConfigExt, types::ComponentSource};
 use wavs_cli::{
     args::Command,
     command::{
         add_task::{AddTask, AddTaskArgs},
         deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
         deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
-        deploy_service::{ComponentSource, DeployService, DeployServiceArgs},
+        deploy_service::{DeployService, DeployServiceArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
     },
     context::CliContext,
-    util::ComponentInput,
+    util::{read_component, ComponentInput},
 };
 
 #[tokio::main]
@@ -64,11 +64,13 @@ async fn main() {
             trigger_event_name,
             args: _,
         } => {
+            let component = ComponentSource::Bytecode(read_component(component).unwrap());
+
             let res = DeployService::run(
                 &ctx,
                 DeployServiceArgs {
                     register_operator,
-                    component: ComponentSource::Path(component),
+                    component,
                     trigger,
                     trigger_event_name,
                     trigger_chain,

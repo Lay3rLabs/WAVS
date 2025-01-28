@@ -11,11 +11,11 @@ pub mod triggers; // where we handle the trigger runtime
 
 use apis::dispatcher::DispatchManager;
 use config::Config;
-pub use utils::{context::AppContext, digest::Digest, storage};
 
 // This section is called from both main and end-to-end tests
 use dispatcher::CoreDispatcher;
 use std::sync::Arc;
+use utils::context::AppContext;
 
 /// Entry point to start up the whole server
 /// Called from main and end-to-end tests

@@ -8,13 +8,16 @@ use crate::{
     args::CliArgs,
     clients::{get_cosmos_client, get_eigen_client},
     config::Config,
-    deploy::{CommandDeployResult, ServiceTriggerInfo},
+    deploy::CommandDeployResult,
 };
 use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
 use utils::{
-    config::AnyChainConfig, eigen_client::EigenClient, types::ChainName, ServiceID, WorkflowID,
+    config::AnyChainConfig,
+    eigen_client::EigenClient,
+    types::{ChainName, Submit, Trigger},
+    ServiceID, WorkflowID,
 };
 
 use crate::{args::Command, deploy::Deployment};
@@ -73,24 +76,25 @@ impl CliContext {
                 let service_id = ServiceID::new(service_id)?;
                 let workflow_id = workflow_id.as_ref().map(WorkflowID::new).transpose()?;
 
-                if let Some(trigger_info) =
-                    deployment.get_trigger_info(&service_id, workflow_id.as_ref())
-                {
-                    let chain_name = match trigger_info {
-                        ServiceTriggerInfo::EthSimpleContract { chain_name, .. } => {
-                            chain_name.clone()
+                if let Some(trigger) = deployment.get_trigger(&service_id, workflow_id.as_ref()) {
+                    match trigger {
+                        Trigger::EthContractEvent { chain_name, .. } => {
+                            chains.insert(chain_name.clone());
                         }
-                        ServiceTriggerInfo::CosmosSimpleContract { chain_name, .. } => {
-                            chain_name.clone()
+                        Trigger::CosmosContractEvent { chain_name, .. } => {
+                            chains.insert(chain_name.clone());
                         }
-                    };
-                    chains.insert(chain_name);
+                        Trigger::Manual => {}
+                    }
                 }
 
-                if let Some((chain_name, _)) =
-                    deployment.get_submit_info(&service_id, workflow_id.as_ref())
-                {
-                    chains.insert(chain_name);
+                if let Some(submit) = deployment.get_submit(&service_id, workflow_id.as_ref()) {
+                    match submit {
+                        Submit::EigenContract { chain_name, .. } => {
+                            chains.insert(chain_name.clone());
+                        }
+                        Submit::None => {}
+                    }
                 }
             }
             Command::Exec { .. } => {}

@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::engine::runner::MultiEngineRunner;
 use crate::engine::WasmEngine;
-use crate::storage::fs::FileStorage;
 use crate::submission::core::CoreSubmission;
 use crate::triggers::core::CoreTriggerManager;
+use utils::storage::fs::FileStorage;
 
 use super::generic::{Dispatcher, DispatcherError};
 

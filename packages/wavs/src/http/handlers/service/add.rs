@@ -2,50 +2,11 @@ use std::collections::BTreeMap;
 
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
-use serde::{Deserialize, Serialize};
 
-use crate::{
-    apis::{
-        dispatcher::{
-            Component, Permissions, Service, ServiceConfig, ServiceStatus, Submit, Workflow,
-        },
-        trigger::Trigger,
-    },
-    http::{error::HttpResult, state::HttpState, types::ShaDigest},
+use crate::http::{error::HttpResult, state::HttpState};
+use utils::types::{
+    AddServiceRequest, AddServiceResponse, Component, Service, ServiceStatus, Submit, Workflow,
 };
-use utils::ServiceID;
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AddServiceRequest {
-    #[serde(flatten)]
-    pub service: ServiceRequest,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wasm_url: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
-pub struct ServiceRequest {
-    // on the wire, for v0.2, it's "name"
-    // however, internally we repurpose this as the ID
-    // so we'll just treat it as an ID for here, and keep "name" field for backwards compat
-    #[serde(rename = "name")]
-    pub id: ServiceID,
-    pub digest: ShaDigest,
-    pub trigger: Trigger,
-    pub permissions: Permissions,
-    pub config: ServiceConfig,
-    pub testable: Option<bool>,
-    pub submit: Submit,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AddServiceResponse {
-    pub id: ServiceID,
-}
 
 #[axum::debug_handler]
 pub async fn handle_add_service(
@@ -63,7 +24,7 @@ async fn add_service_inner(
     req: AddServiceRequest,
 ) -> HttpResult<AddServiceResponse> {
     let service = ServiceRequestParser::new(Some(state.clone()))
-        .parse(req.service)
+        .parse(req)
         .await?;
     let service_id = service.id.clone();
 
@@ -79,7 +40,7 @@ async fn add_service_inner(
                     .config
                     .chains
                     .eth
-                    .get(chain_name)
+                    .get(&chain_name)
                     .context(format!("No chain config found for chain: {chain_name}"))?;
                 if let Some(aggregator_endpoint) = &chain_config.aggregator_endpoint {
                     state
@@ -113,7 +74,7 @@ impl ServiceRequestParser {
         Self { state }
     }
 
-    async fn parse(&self, req: ServiceRequest) -> anyhow::Result<Service> {
+    async fn parse(&self, req: AddServiceRequest) -> anyhow::Result<Service> {
         let service_config = req.config.clone();
         let component_id = service_config.component_id;
         let workflow_id = service_config.workflow_id;
@@ -149,41 +110,36 @@ impl ServiceRequestParser {
 
 #[cfg(test)]
 mod test {
-    use layer_climb::prelude::Address;
-
-    use crate::{
-        apis::{
-            dispatcher::{Permissions, ServiceConfig, Submit},
-            trigger::Trigger,
-        },
-        test_utils::address::rand_address_eth,
-        Digest,
+    use crate::test_utils::address::rand_address_eth;
+    use utils::{
+        digest::Digest,
+        types::{AddServiceRequest, ChainName, Permissions, ServiceConfig, Submit, Trigger},
+        ServiceID,
     };
-    use utils::{types::ChainName, ServiceID};
 
-    use super::{ServiceRequest, ServiceRequestParser};
+    use super::ServiceRequestParser;
 
     #[tokio::test]
     async fn add_service_validation() {
-        fn make_service_req(addr: Address) -> ServiceRequest {
-            ServiceRequest {
-                id: ServiceID::new("test-name").unwrap(),
-                digest: Digest::new(&[0; 32]).into(),
-                trigger: Trigger::eth_contract_event(addr, ChainName::new("eth").unwrap(), [0; 32]),
-                permissions: Permissions::default(),
-                testable: Some(true),
-                submit: Submit::eigen_contract(
-                    ChainName::new("eth").unwrap(),
-                    rand_address_eth(),
-                    None,
-                ),
-                config: ServiceConfig::default(),
-            }
-        }
+        let req = AddServiceRequest {
+            id: ServiceID::new("test-name").unwrap(),
+            digest: Digest::new(&[0; 32]).into(),
+            trigger: Trigger::eth_contract_event(
+                rand_address_eth(),
+                ChainName::new("eth").unwrap(),
+                [0; 32],
+            ),
+            permissions: Permissions::default(),
+            testable: Some(true),
+            submit: Submit::eigen_contract(
+                ChainName::new("eth").unwrap(),
+                rand_address_eth(),
+                None,
+            ),
+            config: ServiceConfig::default(),
+            wasm_url: None,
+        };
 
-        ServiceRequestParser::new(None)
-            .parse(make_service_req(rand_address_eth()))
-            .await
-            .unwrap();
+        ServiceRequestParser::new(None).parse(req).await.unwrap();
     }
 }

@@ -1,4 +1,3 @@
-use alloy::primitives::LogData;
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -6,51 +5,10 @@ use tokio::sync::mpsc;
 
 use crate::AppContext;
 
-use utils::{types::ChainName, IDError, ServiceID, WorkflowID};
-
-// The TriggerManager reacts to these triggers
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum Trigger {
-    // A contract that emits an event
-    CosmosContractEvent {
-        address: Address,
-        chain_name: ChainName,
-        event_type: String,
-    },
-    EthContractEvent {
-        address: Address,
-        chain_name: ChainName,
-        event_hash: [u8; 32],
-    },
-    // not a real trigger, just for testing
-    Manual,
-}
-
-impl Trigger {
-    pub fn cosmos_contract_event(
-        address: Address,
-        chain_name: impl Into<ChainName>,
-        event_type: impl ToString,
-    ) -> Self {
-        Trigger::CosmosContractEvent {
-            address,
-            chain_name: chain_name.into(),
-            event_type: event_type.to_string(),
-        }
-    }
-    pub fn eth_contract_event(
-        address: Address,
-        chain_name: impl Into<ChainName>,
-        event_hash: [u8; 32],
-    ) -> Self {
-        Trigger::EthContractEvent {
-            address,
-            chain_name: chain_name.into(),
-            event_hash,
-        }
-    }
-}
+use utils::{
+    types::{ChainName, Trigger, TriggerData},
+    IDError, ServiceID, WorkflowID,
+};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -85,7 +43,7 @@ impl TriggerConfig {
     pub fn cosmos_contract_event(
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-        contract_address: Address,
+        contract_address: layer_climb::prelude::Address,
         chain_name: impl Into<ChainName>,
         event_type: impl ToString,
     ) -> Result<Self, IDError> {
@@ -99,7 +57,7 @@ impl TriggerConfig {
     pub fn eth_contract_event(
         service_id: impl TryInto<ServiceID, Error = IDError>,
         workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-        contract_address: Address,
+        contract_address: alloy::primitives::Address,
         chain_name: impl Into<ChainName>,
         event_hash: [u8; 32],
     ) -> Result<Self, IDError> {
@@ -132,38 +90,6 @@ pub struct TriggerAction {
     pub data: TriggerData,
 }
 
-/// The data that came from the trigger
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum TriggerData {
-    CosmosContractEvent {
-        /// The address of the contract that emitted the event
-        contract_address: Address,
-        /// The chain name of the chain where the event was emitted
-        chain_name: ChainName,
-        /// The data that was emitted by the contract
-        event: cosmwasm_std::Event,
-        /// The block height where the event was emitted
-        block_height: u64,
-    },
-    EthContractEvent {
-        /// The address of the contract that emitted the event
-        contract_address: Address,
-        /// The chain name of the chain where the event was emitted
-        chain_name: ChainName,
-        /// The raw event log
-        log: LogData,
-        /// The block height where the event was emitted
-        block_height: u64,
-    },
-    Raw(Vec<u8>),
-}
-
-impl TriggerData {
-    pub fn new_raw(data: impl AsRef<[u8]>) -> Self {
-        TriggerData::Raw(data.as_ref().to_vec())
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum TriggerError {
     #[error("climb: {0}")]
@@ -183,7 +109,7 @@ pub enum TriggerError {
     #[error("Cannot find cosmos trigger contract: {0} / {1} / {2}")]
     NoSuchCosmosContractEvent(ChainName, Address, String),
     #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
-    NoSuchEthContractEvent(ChainName, Address, String),
+    NoSuchEthContractEvent(ChainName, alloy::primitives::Address, String),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
@@ -191,5 +117,5 @@ pub enum TriggerError {
     #[error("Cosmos Contract Event already registered: {0} / {1} / {2}")]
     CosmosContractEventAlreadyRegistered(ChainName, Address, String),
     #[error("Eth Contract Event already registered: {0} / {1} / {2}")]
-    EthContractEventAlreadyRegistered(ChainName, Address, String),
+    EthContractEventAlreadyRegistered(ChainName, alloy::primitives::Address, String),
 }

@@ -1,9 +1,7 @@
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
-use crate::apis::trigger::{
-    Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
-};
+use crate::apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager};
 use crate::test_utils::address::{
     rand_address_eth, rand_address_layer, rand_event_cosmos, rand_event_eth,
 };
@@ -13,7 +11,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
-use utils::types::ChainName;
+use utils::types::{ChainName, Trigger, TriggerData};
 use utils::{IDError, ServiceID, WorkflowID};
 
 pub fn mock_eth_event_trigger_config(
@@ -240,7 +238,7 @@ impl MockTriggerManagerChannel {
                     Address::Eth(_) => TriggerConfig::eth_contract_event(
                         service_id,
                         workflow_id,
-                        contract_address.clone(),
+                        contract_address.clone().try_into().unwrap(),
                         ChainName::new(chain_id.to_string()).unwrap(),
                         rand_event_eth(),
                     )
@@ -311,7 +309,7 @@ impl TriggerManager for MockTriggerManagerChannel {
 #[cfg(test)]
 mod tests {
 
-    use crate::apis::trigger::TriggerData;
+    use TriggerData;
 
     use super::*;
 

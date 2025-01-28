@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
+use utils::types::Submit;
 
-use crate::apis::dispatcher::Submit;
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 use crate::test_utils::address::rand_address_eth;
 use crate::AppContext;
@@ -95,7 +95,7 @@ mod test {
     use utils::types::ChainName;
 
     use crate::{
-        apis::{dispatcher::Submit, trigger::TriggerConfig},
+        apis::trigger::TriggerConfig,
         test_utils::address::{rand_address_eth, rand_event_eth},
     };
 
