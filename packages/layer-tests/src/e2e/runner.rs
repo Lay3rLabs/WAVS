@@ -3,8 +3,11 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
-use utils::{avs_client::SignedData, types::ChainName};
-use wavs::AppContext;
+use utils::{
+    avs_client::SignedData,
+    context::AppContext,
+    types::{ChainName, Submit},
+};
 use wavs_cli::{
     command::{
         add_task::{AddTask, AddTaskArgs},
@@ -55,7 +58,7 @@ async fn test_service(
     tracing::info!("Testing service: {:?}", name);
 
     let n_tasks = match &workflow.submit {
-        wavs_cli::deploy::ServiceSubmitInfo::EigenLayer { chain_name, .. } => {
+        Submit::EigenContract { chain_name, .. } => {
             let chain = configs
                 .chains
                 .eth
@@ -66,6 +69,7 @@ async fn test_service(
                 false => 1,
             }
         }
+        Submit::None => 1,
     };
 
     for task_number in 1..=n_tasks {

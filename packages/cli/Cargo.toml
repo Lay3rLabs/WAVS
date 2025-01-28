@@ -10,7 +10,6 @@ repository = "https://github.com/Lay3rLabs/wasmatic"
 [dependencies]
 simple-example-cosmos = {path = "../../examples/contracts/cosmwasm/simple", package = "simple-example"}
 utils = { workspace = true }
-wavs-aggregator = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
@@ -22,7 +21,6 @@ tokio = { workspace = true }
 rand = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }
-wavs = { workspace = true }
 layer-climb = { workspace = true }
 toml = { workspace = true }
 wasmtime = { workspace = true }

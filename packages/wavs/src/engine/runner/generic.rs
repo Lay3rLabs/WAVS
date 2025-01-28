@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
+use utils::types::Service;
 
-use crate::apis::dispatcher::Service;
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::TriggerAction;
 use crate::engine::{Engine, EngineError};

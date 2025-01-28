@@ -24,12 +24,12 @@ impl TryFrom<api::TriggerConfig> for component::TriggerConfig {
     }
 }
 
-impl TryFrom<api::Trigger> for component::TriggerSource {
+impl TryFrom<utils::types::Trigger> for component::TriggerSource {
     type Error = api::TriggerError;
 
-    fn try_from(src: api::Trigger) -> Result<Self, Self::Error> {
+    fn try_from(src: utils::types::Trigger) -> Result<Self, Self::Error> {
         Ok(match src {
-            api::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
+            utils::types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
                 crate::bindings::world::lay3r::avs::layer_types::TriggerSource::CosmosContractEvent(
                     crate::bindings::world::lay3r::avs::layer_types::TriggerSourceCosmosContractEvent {
                         address: address.try_into()?,
@@ -38,28 +38,28 @@ impl TryFrom<api::Trigger> for component::TriggerSource {
                     }
                 )
             },
-            api::Trigger::EthContractEvent { address, chain_name, event_hash } => {
+            utils::types::Trigger::EthContractEvent { address, chain_name, event_hash } => {
                 crate::bindings::world::lay3r::avs::layer_types::TriggerSource::EthContractEvent(
                     crate::bindings::world::lay3r::avs::layer_types::TriggerSourceEthContractEvent {
-                        address: address.try_into()?,
+                        address: address.into(),
                         chain_name: chain_name.to_string(),
                         event_hash: event_hash.to_vec(),
                     }
                 )
             },
-            api::Trigger::Manual => {
+            utils::types::Trigger::Manual => {
                 crate::bindings::world::lay3r::avs::layer_types::TriggerSource::Manual
             },
         })
     }
 }
 
-impl TryFrom<api::TriggerData> for component::TriggerData {
+impl TryFrom<utils::types::TriggerData> for component::TriggerData {
     type Error = api::TriggerError;
 
-    fn try_from(src: api::TriggerData) -> Result<Self, Self::Error> {
+    fn try_from(src: utils::types::TriggerData) -> Result<Self, Self::Error> {
         match src {
-            api::TriggerData::EthContractEvent {
+            utils::types::TriggerData::EthContractEvent {
                 contract_address,
                 chain_name,
                 log,
@@ -68,7 +68,7 @@ impl TryFrom<api::TriggerData> for component::TriggerData {
                 Ok(crate::bindings::world::lay3r::avs::layer_types::TriggerData::EthContractEvent(
                     crate::bindings::world::lay3r::avs::layer_types::TriggerDataEthContractEvent {
                         contract_address: crate::bindings::world::lay3r::avs::layer_types::EthAddress {
-                            raw_bytes: contract_address.as_bytes()
+                            raw_bytes: contract_address.to_vec()
                         },
                         chain_name: chain_name.to_string(),
                         log: crate::bindings::world::lay3r::avs::layer_types::EthEventLogData {
@@ -83,7 +83,7 @@ impl TryFrom<api::TriggerData> for component::TriggerData {
                     }
                 ))
             },
-            api::TriggerData::CosmosContractEvent { contract_address, chain_name, event, block_height } => {
+            utils::types::TriggerData::CosmosContractEvent { contract_address, chain_name, event, block_height } => {
                 Ok(crate::bindings::world::lay3r::avs::layer_types::TriggerData::CosmosContractEvent(
                     crate::bindings::world::lay3r::avs::layer_types::TriggerDataCosmosContractEvent {
                         contract_address: contract_address.try_into()?,
@@ -100,7 +100,7 @@ impl TryFrom<api::TriggerData> for component::TriggerData {
                     }
                 ))
             },
-            api::TriggerData::Raw(data) => {
+            utils::types::TriggerData::Raw(data) => {
                 Ok(crate::bindings::world::lay3r::avs::layer_types::TriggerData::Raw(data))
             },
         }
@@ -141,6 +141,14 @@ impl TryFrom<layer_climb::prelude::Address> for component::EthAddress {
             _ => Err(api::TriggerError::TriggerDataParse(
                 "Not an ethereum address".to_string(),
             )),
+        }
+    }
+}
+
+impl From<alloy::primitives::Address> for component::EthAddress {
+    fn from(address: alloy::primitives::Address) -> Self {
+        Self {
+            raw_bytes: address.to_vec(),
         }
     }
 }

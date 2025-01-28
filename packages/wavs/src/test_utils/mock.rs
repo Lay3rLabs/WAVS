@@ -2,26 +2,16 @@ use std::sync::Arc;
 
 use super::http::{map_response, TestHttpApp};
 use crate::{
-    apis::{
-        dispatcher::{DispatchManager, Permissions, ServiceConfig, Submit},
-        engine::EngineError,
-        trigger::TriggerData,
-    },
+    apis::{dispatcher::DispatchManager, engine::EngineError},
     dispatcher::Dispatcher,
     engine::{
         mock::{Function, MockEngine},
         runner::{EngineRunner, SingleEngineRunner},
     },
-    http::handlers::service::{
-        add::{AddServiceRequest, ServiceRequest},
-        delete::DeleteServices,
-        list::ListServicesResponse,
-        test::{TestAppRequest, TestAppResponse},
-    },
     submission::mock::MockSubmission,
     test_utils::address::rand_address_eth,
     triggers::mock::{mock_eth_event_trigger, MockTriggerManagerChannel},
-    AppContext, Digest,
+    AppContext,
 };
 use axum::{
     body::Body,
@@ -29,7 +19,14 @@ use axum::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tower::Service;
-use utils::ServiceID;
+use utils::{
+    digest::Digest,
+    types::{
+        AddServiceRequest, DeleteServicesRequest, ListServicesResponse, Permissions, ServiceConfig,
+        Submit, TestAppRequest, TestAppResponse, TriggerData,
+    },
+    ServiceID,
+};
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,
@@ -120,19 +117,17 @@ impl MockE2ETestRunner {
 
         // but we can create a service via http router
         let body = serde_json::to_string(&AddServiceRequest {
-            service: ServiceRequest {
-                trigger: mock_eth_event_trigger(),
-                id: service_id,
-                digest: digest.into(),
-                permissions,
-                config: config.clone(),
-                testable: None,
-                submit: Submit::eigen_contract(
-                    "eth".try_into().unwrap(),
-                    rand_address_eth(),
-                    config.max_gas,
-                ),
-            },
+            trigger: mock_eth_event_trigger(),
+            id: service_id,
+            digest: digest.into(),
+            permissions,
+            config: config.clone(),
+            testable: None,
+            submit: Submit::eigen_contract(
+                "eth".try_into().unwrap(),
+                rand_address_eth(),
+                config.max_gas,
+            ),
             wasm_url: None,
         })
         .unwrap();
@@ -157,7 +152,7 @@ impl MockE2ETestRunner {
     }
 
     pub async fn delete_services(&self, service_ids: Vec<ServiceID>) {
-        let body = serde_json::to_string(&DeleteServices { service_ids }).unwrap();
+        let body = serde_json::to_string(&DeleteServicesRequest { service_ids }).unwrap();
 
         let req = Request::builder()
             .method(Method::DELETE)

@@ -1,7 +1,5 @@
 use crate::{
-    apis::trigger::{
-        Trigger, TriggerAction, TriggerConfig, TriggerData, TriggerError, TriggerManager,
-    },
+    apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager},
     config::Config,
     AppContext,
 };
@@ -20,7 +18,10 @@ use std::{
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    config::AnyChainConfig, eth_client::EthClientBuilder, types::ChainName, ServiceID, WorkflowID,
+    config::AnyChainConfig,
+    eth_client::EthClientBuilder,
+    types::{ChainName, Trigger, TriggerData},
+    ServiceID, WorkflowID,
 };
 
 #[derive(Clone)]
@@ -36,10 +37,10 @@ struct LookupMaps {
     pub trigger_configs: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
     /// lookup id by (chain name, contract event address, event type)
     pub triggers_by_cosmos_contract_event:
-        Arc<RwLock<HashMap<(ChainName, Address, String), LookupId>>>,
+        Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), LookupId>>>,
     /// lookup id by (chain id, contract event address, event hash)
     pub triggers_by_eth_contract_event:
-        Arc<RwLock<HashMap<(ChainName, Address, [u8; 32]), LookupId>>>,
+        Arc<RwLock<HashMap<(ChainName, alloy::primitives::Address, [u8; 32]), LookupId>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -222,7 +223,7 @@ impl CoreTriggerManager {
                     block_height,
                 } => {
                     if let Some(event_hash) = log.topic0() {
-                        let contract_address = layer_climb::prelude::Address::from(log.address());
+                        let contract_address = log.address().clone();
 
                         if let Some(trigger_config) = self
                             .lookup_maps
@@ -495,8 +496,14 @@ impl TriggerManager for CoreTriggerManager {
 
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_eth_contract_address: &mut HashMap<(ChainName, Address, [u8; 32]), LookupId>,
-    triggers_by_cosmos_contract_address: &mut HashMap<(ChainName, Address, String), LookupId>,
+    triggers_by_eth_contract_address: &mut HashMap<
+        (ChainName, alloy::primitives::Address, [u8; 32]),
+        LookupId,
+    >,
+    triggers_by_cosmos_contract_address: &mut HashMap<
+        (ChainName, layer_climb::prelude::Address, String),
+        LookupId,
+    >,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -539,11 +546,14 @@ fn remove_trigger_data(
 #[cfg(test)]
 mod tests {
     use crate::{
-        apis::trigger::{Trigger, TriggerConfig, TriggerManager},
+        apis::trigger::{TriggerConfig, TriggerManager},
         config::Config,
         test_utils::address::{rand_address_eth, rand_event_eth},
     };
-    use utils::{types::ChainName, ServiceID, WorkflowID};
+    use utils::{
+        types::{ChainName, Trigger},
+        ServiceID, WorkflowID,
+    };
 
     use layer_climb::prelude::*;
     use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
@@ -643,13 +653,13 @@ mod tests {
         assert_eq!(triggers_service_1[0].workflow_id, workflow_id_1);
         assert_eq!(
             get_trigger_addr(&triggers_service_1[0].trigger),
-            &task_queue_addr_1_1
+            task_queue_addr_1_1.into()
         );
         assert_eq!(triggers_service_1[1].service_id, service_id_1);
         assert_eq!(triggers_service_1[1].workflow_id, workflow_id_2);
         assert_eq!(
             get_trigger_addr(&triggers_service_1[1].trigger),
-            &task_queue_addr_1_2
+            task_queue_addr_1_2.into()
         );
 
         let triggers_service_2 = manager.list_triggers(service_id_2.clone()).unwrap();
@@ -659,13 +669,13 @@ mod tests {
         assert_eq!(triggers_service_2[0].workflow_id, workflow_id_1);
         assert_eq!(
             get_trigger_addr(&triggers_service_2[0].trigger),
-            &task_queue_addr_2_1
+            task_queue_addr_2_1.into()
         );
         assert_eq!(triggers_service_2[1].service_id, service_id_2);
         assert_eq!(triggers_service_2[1].workflow_id, workflow_id_2);
         assert_eq!(
             get_trigger_addr(&triggers_service_2[1].trigger),
-            &task_queue_addr_2_2
+            task_queue_addr_2_2.into()
         );
 
         manager
@@ -681,10 +691,10 @@ mod tests {
         let _triggers_service_2_err = manager.list_triggers(service_id_2.clone()).unwrap_err();
         assert_eq!(triggers_service_1.len(), 1);
 
-        fn get_trigger_addr(trigger: &Trigger) -> &Address {
+        fn get_trigger_addr(trigger: &Trigger) -> Address {
             match trigger {
-                Trigger::EthContractEvent { address, .. } => address,
-                Trigger::CosmosContractEvent { address, .. } => address,
+                Trigger::EthContractEvent { address, .. } => address.clone().into(),
+                Trigger::CosmosContractEvent { address, .. } => address.clone(),
                 _ => panic!("unexpected trigger type"),
             }
         }

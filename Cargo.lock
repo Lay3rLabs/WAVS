@@ -7339,8 +7339,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
- "wavs",
- "wavs-aggregator",
 ]
 
 [[package]]

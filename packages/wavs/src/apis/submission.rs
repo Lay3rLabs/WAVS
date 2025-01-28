@@ -1,9 +1,10 @@
 use thiserror::Error;
 use tokio::sync::mpsc;
+use utils::types::Submit;
 
 use crate::AppContext;
 
-use super::{dispatcher::Submit, trigger::TriggerConfig};
+use super::trigger::TriggerConfig;
 
 pub trait Submission: Send + Sync {
     /// Start running the submission manager

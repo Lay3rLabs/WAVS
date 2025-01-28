@@ -1,11 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::{dispatcher::ServiceConfig, trigger::TriggerAction};
+use crate::apis::trigger::TriggerAction;
 use crate::triggers::mock::get_mock_trigger_data;
-use crate::Digest;
 use tracing::instrument;
 use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
+use utils::digest::Digest;
+use utils::types::ServiceConfig;
 
 use super::{Engine, EngineError};
 
@@ -83,7 +84,7 @@ impl Engine for MockEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        component: &crate::apis::dispatcher::Component,
+        component: &utils::types::Component,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
@@ -103,7 +104,7 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use utils::types::ChainName;
+    use utils::types::{ChainName, Component, TriggerData};
 
     use crate::test_utils::address::rand_event_eth;
 
@@ -149,7 +150,7 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let c1 = crate::apis::dispatcher::Component::new(d1);
+        let c1 = utils::types::Component::new(d1);
         let res = engine
             .execute(
                 &c1,
@@ -162,7 +163,7 @@ mod test {
                         rand_event_eth(),
                     )
                     .unwrap(),
-                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                    data: TriggerData::new_raw(b"123"),
                 },
                 &ServiceConfig::default(),
             )
@@ -170,7 +171,7 @@ mod test {
         assert_eq!(res, r1);
 
         // d2 call gets r2
-        let c2 = crate::apis::dispatcher::Component::new(d2);
+        let c2 = Component::new(d2);
         let res = engine
             .execute(
                 &c2,
@@ -183,7 +184,7 @@ mod test {
                         rand_event_eth(),
                     )
                     .unwrap(),
-                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                    data: TriggerData::new_raw(b"123"),
                 },
                 &ServiceConfig::default(),
             )
@@ -191,7 +192,7 @@ mod test {
         assert_eq!(res, r2);
 
         // d3 call returns missing error
-        let c3 = crate::apis::dispatcher::Component::new(d3);
+        let c3 = Component::new(d3);
         let err = engine
             .execute(
                 &c3,
@@ -204,7 +205,7 @@ mod test {
                         rand_event_eth(),
                     )
                     .unwrap(),
-                    data: crate::apis::trigger::TriggerData::new_raw(b"123"),
+                    data: TriggerData::new_raw(b"123"),
                 },
                 &ServiceConfig::default(),
             )

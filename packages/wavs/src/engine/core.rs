@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::instrument;
 use utils::config::ChainConfigs;
+use utils::types::{AllowedHostPermission, ServiceConfig};
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -13,10 +14,9 @@ use wasmtime::{Store, Trap};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use crate::apis::dispatcher::{AllowedHostPermission, ServiceConfig};
 use crate::apis::trigger::{TriggerAction, TriggerError};
-use crate::storage::{CAStorage, CAStorageError};
-use crate::{apis, Digest};
+use utils::digest::Digest;
+use utils::storage::{CAStorage, CAStorageError};
 
 use super::{Engine, EngineError};
 
@@ -88,7 +88,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        wasi: &apis::dispatcher::Component,
+        wasi: &utils::types::Component,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
@@ -142,7 +142,7 @@ impl<S: CAStorage> WasmEngine<S> {
 
     fn get_instance_deps(
         &self,
-        wasi: &apis::dispatcher::Component,
+        wasi: &utils::types::Component,
         trigger: &TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<(Store<HostComponent>, Component, Linker<HostComponent>), EngineError> {
@@ -250,13 +250,13 @@ impl WasiHttpView for HostComponent {
 
 #[cfg(test)]
 mod tests {
-    use apis::{
-        dispatcher::ServiceConfig,
-        trigger::{Trigger, TriggerConfig, TriggerData},
+    use utils::{
+        storage::memory::MemoryStorage,
+        types::{Trigger, TriggerData},
+        ComponentID, ServiceID, WorkflowID,
     };
-    use utils::{ComponentID, ServiceID, WorkflowID};
 
-    use crate::{engine::mock::mock_chain_configs, storage::memory::MemoryStorage};
+    use crate::{apis::trigger::TriggerConfig, engine::mock::mock_chain_configs};
 
     use super::*;
 
@@ -306,7 +306,7 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
-        let component = crate::apis::dispatcher::Component::new(digest);
+        let component = utils::types::Component::new(digest);
 
         // execute it and get bytes back
         let result = engine
@@ -337,7 +337,7 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
-        let component = crate::apis::dispatcher::Component::new(digest);
+        let component = utils::types::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
@@ -411,7 +411,7 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
-        let component = crate::apis::dispatcher::Component::new(digest);
+        let component = utils::types::Component::new(digest);
         let service_config = ServiceConfig {
             fuel_limit: low_fuel_limit,
             ..Default::default()

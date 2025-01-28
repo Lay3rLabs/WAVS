@@ -4,10 +4,7 @@ use std::{
 };
 
 use crate::{
-    apis::{
-        dispatcher::Submit,
-        submission::{ChainMessage, Submission, SubmissionError},
-    },
+    apis::submission::{ChainMessage, Submission, SubmissionError},
     config::Config,
     AppContext,
 };
@@ -17,7 +14,6 @@ use alloy::{
     providers::Provider,
 };
 use anyhow::anyhow;
-use layer_climb::prelude::*;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
@@ -25,7 +21,7 @@ use utils::{
     avs_client::{ServiceManagerClient, SignedPayload},
     config::{AnyChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
-    types::ChainName,
+    types::{ChainName, Submit},
 };
 
 #[derive(Clone)]
@@ -127,7 +123,7 @@ impl CoreSubmission {
     async fn submit_to_ethereum(
         &self,
         chain_name: ChainName,
-        service_manager_address: Address,
+        service_manager_address: alloy::primitives::Address,
         data: Vec<u8>,
         max_gas: Option<u64>,
     ) -> Result<(), SubmissionError> {
@@ -135,9 +131,6 @@ impl CoreSubmission {
             .get_eth_client(&chain_name)
             .await
             .map_err(|_| SubmissionError::MissingEthereumChain)?;
-        let service_manager_address = service_manager_address
-            .try_into()
-            .map_err(SubmissionError::Climb)?;
 
         let data_hash = eip191_hash_message(keccak256(&data));
         let signature: Vec<u8> = eth_client

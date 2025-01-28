@@ -1,6 +1,5 @@
 use layer_climb::prelude::*;
-use utils::config::CosmosChainConfig;
-use wavs::AppContext;
+use utils::{config::CosmosChainConfig, context::AppContext};
 
 use crate::e2e::config::Configs;
 

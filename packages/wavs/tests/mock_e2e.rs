@@ -2,15 +2,18 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use utils::{ServiceID, WorkflowID};
+use utils::{
+    context::AppContext,
+    digest::Digest,
+    types::{AllowedHostPermission, Permissions, ServiceConfig},
+    ServiceID, WorkflowID,
+};
 use wavs::{
-    apis::dispatcher::{AllowedHostPermission, Permissions, ServiceConfig},
     engine::runner::EngineRunner,
     test_utils::{
         address::rand_address_eth,
         mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
     },
-    AppContext, Digest,
 };
 
 #[test]
@@ -58,7 +61,7 @@ fn mock_e2e_trigger_flow() {
                 .send_trigger(
                     &service_id,
                     &workflow_id,
-                    &task_queue_address,
+                    &task_queue_address.into(),
                     &SquareIn { x: 3 },
                     "eth",
                 )
@@ -69,7 +72,7 @@ fn mock_e2e_trigger_flow() {
                 .send_trigger(
                     &service_id,
                     &workflow_id,
-                    &task_queue_address,
+                    &task_queue_address.into(),
                     &SquareIn { x: 21 },
                     "eth",
                 )

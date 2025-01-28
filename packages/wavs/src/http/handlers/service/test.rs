@@ -2,24 +2,12 @@ use std::ops::Bound;
 
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
-use serde::{Deserialize, Serialize};
+use utils::types::{TestAppRequest, TestAppResponse};
 
 use crate::{
-    apis::trigger::{TriggerAction, TriggerConfig, TriggerData},
+    apis::trigger::{TriggerAction, TriggerConfig},
     http::{error::HttpResult, state::HttpState},
 };
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TestAppRequest {
-    pub name: String,
-    pub input: TriggerData,
-}
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TestAppResponse {
-    pub output: serde_json::Value,
-}
 
 #[axum::debug_handler]
 pub async fn handle_test_service(

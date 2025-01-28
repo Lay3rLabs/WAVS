@@ -1,13 +1,10 @@
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use utils::{ServiceID, WorkflowID};
-use wavs::{
-    test_utils::{
-        address::rand_address_eth,
-        mock::{BigSquare, MockE2ETestRunner, SquareIn},
-    },
-    AppContext, Digest,
+use utils::{context::AppContext, digest::Digest, ServiceID, WorkflowID};
+use wavs::test_utils::{
+    address::rand_address_eth,
+    mock::{BigSquare, MockE2ETestRunner, SquareIn},
 };
 
 pub fn criterion_benchmark(c: &mut Criterion) {
@@ -50,7 +47,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                             .send_trigger(
                                 &service_id,
                                 &workflow_id,
-                                &task_queue_address,
+                                &task_queue_address.into(),
                                 &SquareIn { x: i as u64 },
                                 "eth",
                             )

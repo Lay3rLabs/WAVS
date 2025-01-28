@@ -1,31 +1,21 @@
 pub mod example_cosmos_client;
 pub mod example_eth_client;
 
-use alloy::sol_types::SolEvent;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
     config::{CosmosChainConfig, EthereumChainConfig},
+    digest::Digest,
     eigen_client::EigenClient,
     eth_client::EthClientBuilder,
+    types::{
+        AddServiceRequest, AllowedHostPermission, Permissions, ServiceConfig, Submit, Trigger,
+        UploadServiceResponse,
+    },
 };
 use utils::{ServiceID, WorkflowID};
-use wavs::{
-    apis::{
-        dispatcher::{AllowedHostPermission, Permissions, ServiceConfig, Submit},
-        trigger::Trigger,
-    },
-    http::handlers::service::{
-        add::{AddServiceRequest, ServiceRequest},
-        upload::UploadServiceResponse,
-    },
-    Digest,
-};
 
-use crate::{
-    config::Config,
-    deploy::{ServiceInfo, ServiceSubmitInfo, ServiceTriggerInfo},
-};
+use crate::config::Config;
 
 pub async fn get_eigen_client(
     config: &Config,
@@ -68,7 +58,7 @@ impl HttpClient {
         }
     }
 
-    pub async fn get_config(&self) -> Result<wavs::config::Config> {
+    pub async fn get_config(&self) -> Result<serde_json::Value> {
         self.inner
             .get(format!("{}/config", self.endpoint))
             .send()
@@ -93,48 +83,15 @@ impl HttpClient {
 
     pub async fn create_service(
         &self,
-        service_info: ServiceInfo,
+        trigger: Trigger,
+        submit: Submit,
         digest: Digest,
         config: ServiceConfig,
     ) -> Result<(ServiceID, WorkflowID)> {
-        let trigger = match service_info.trigger {
-            ServiceTriggerInfo::EthSimpleContract {
-                chain_name,
-                address,
-                event_hash,
-            } => {
-                if event_hash != *example_eth_client::example_trigger::SimpleTrigger::NewTrigger::SIGNATURE_HASH {
-                        tracing::warn!("for right now, we always use a specific event hash... odd for it to be different!");
-                    }
-                Trigger::eth_contract_event(address, chain_name, event_hash)
-            }
-            ServiceTriggerInfo::CosmosSimpleContract {
-                chain_name,
-                address,
-                event_type,
-            } => {
-                if event_type != simple_example_cosmos::event::NewMessageEvent::KEY {
-                    tracing::warn!("for right now, we always use a specific event type... odd for it to be different!");
-                }
-                Trigger::cosmos_contract_event(address, chain_name, event_type)
-            }
-        };
-
-        let submit = match service_info.submit {
-            ServiceSubmitInfo::EigenLayer {
-                chain_name,
-                service_manager_address,
-            } => Submit::EigenContract {
-                chain_name,
-                service_manager: service_manager_address.into(),
-                max_gas: config.max_gas,
-            },
-        };
-
         let service_id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?;
         let workflow_id = config.workflow_id.clone();
 
-        let service = ServiceRequest {
+        let service = AddServiceRequest {
             trigger,
             id: service_id.clone(),
             digest: digest.into(),
@@ -145,12 +102,10 @@ impl HttpClient {
             testable: Some(true),
             submit,
             config,
+            wasm_url: None,
         };
 
-        let body = serde_json::to_string(&AddServiceRequest {
-            service,
-            wasm_url: None,
-        })?;
+        let body = serde_json::to_string(&service)?;
 
         self.inner
             .post(format!("{}/app", self.endpoint))

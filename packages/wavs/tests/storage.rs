@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-use utils::{ComponentID, ServiceID, WorkflowID};
-use wavs::{
-    apis::dispatcher::{Component, Service, ServiceStatus, Submit, Workflow},
+use utils::{
+    digest::Digest,
     storage::db::{RedbStorage, Table, JSON},
-    triggers::mock::mock_eth_event_trigger,
-    Digest,
+    types::{Component, Service, ServiceStatus, Submit, Workflow},
+    ComponentID, ServiceID, WorkflowID,
 };
+use wavs::triggers::mock::mock_eth_event_trigger;
 
 use redb::ReadableTable;
 use serde::{Deserialize, Serialize};
@@ -111,7 +111,9 @@ fn db_service_store() {
 
     let service_stored = storage.get(SERVICE_TABLE, &service_id).unwrap().unwrap();
 
-    assert_eq!(service, service_stored.value());
+    let expected_service_serialized = serde_json::to_vec(&service).unwrap();
+    let service_stored_serialized = serde_json::to_vec(&service_stored.value()).unwrap();
+    assert_eq!(expected_service_serialized, service_stored_serialized);
 
     // can read keys via iterator
     let keys = storage
@@ -142,7 +144,10 @@ fn db_service_store() {
                 })
                 .collect::<Vec<Service>>())
         })
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(|service| serde_json::to_vec(&service).unwrap())
+        .collect::<Vec<Vec<u8>>>();
 
-    assert_eq!(vec![service], values);
+    assert_eq!(vec![expected_service_serialized], values);
 }

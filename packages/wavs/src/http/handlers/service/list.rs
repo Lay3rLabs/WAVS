@@ -1,38 +1,7 @@
-use std::ops::Bound;
-
+use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    apis::{
-        dispatcher::{Permissions, ServiceStatus},
-        trigger::Trigger,
-    },
-    http::{error::HttpResult, state::HttpState, types::ShaDigest},
-};
-use utils::ServiceID;
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ListServicesResponse {
-    // on the wire, for v0.2, it's "apps"
-    // however, internally we are calling these "services"
-    // so we'll just treat it as a service here, and keep "apps" field for backwards compat
-    #[serde(rename = "apps")]
-    pub services: Vec<ServiceResponse>,
-    pub digests: Vec<ShaDigest>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct ServiceResponse {
-    pub id: ServiceID,
-    pub status: ServiceStatus,
-    pub digest: ShaDigest,
-    pub trigger: Trigger,
-    pub permissions: Permissions,
-    pub testable: Option<bool>,
-}
+use std::ops::Bound;
+use utils::types::{ListServiceResponse, ListServicesResponse};
 
 #[axum::debug_handler]
 pub async fn handle_list_services(State(state): State<HttpState>) -> impl IntoResponse {
@@ -53,7 +22,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
     // it will be nicer in 0.3
     for service in services_list {
         for component in service.components.values() {
-            services.push(ServiceResponse {
+            services.push(ListServiceResponse {
                 digest: component.wasm.clone().into(),
                 permissions: component.permissions.clone(),
                 status: service.status,

@@ -6,7 +6,6 @@ use wasmtime::{
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs::apis::trigger::{TriggerConfig, TriggerData};
 
 use crate::util::{read_component, ComponentInput};
 
@@ -73,15 +72,17 @@ async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> Result<Exe
     let mut store = wasmtime::Store::new(&engine, host);
     store.set_fuel(u64::MAX)?;
 
-    let instance = wavs::bindings::world::LayerTriggerWorld::instantiate_async(
-        &mut store, &component, &linker,
-    )
-    .await
-    .expect("Wasm instantiate failed");
+    let instance = LayerTriggerWorld::instantiate_async(&mut store, &component, &linker)
+        .await
+        .expect("Wasm instantiate failed");
 
-    let input = wavs::apis::trigger::TriggerAction {
-        config: TriggerConfig::manual("service-1", "default")?,
-        data: TriggerData::new_raw(input_bytes),
+    let input = TriggerAction {
+        config: lay3r::avs::layer_types::TriggerConfig {
+            service_id: "service-1".to_string(),
+            workflow_id: "default".to_string(),
+            trigger_source: lay3r::avs::layer_types::TriggerSource::Manual,
+        },
+        data: lay3r::avs::layer_types::TriggerData::Raw(input_bytes),
     };
 
     let response = instance
@@ -122,3 +123,14 @@ impl WasiHttpView for Host {
         &mut self.http
     }
 }
+// https://docs.rs/wasmtime/latest/wasmtime/component/macro.bindgen.html#options-reference
+
+use wasmtime::component::bindgen;
+
+bindgen!({
+    world: "layer-trigger-world",
+    path: "../../sdk/wit",
+    async: {
+        only_imports: []
+    }
+});

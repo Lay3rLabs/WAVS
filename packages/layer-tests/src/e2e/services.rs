@@ -7,12 +7,16 @@ use super::{
     matrix::{AnyService, CrossChainService, EthService},
 };
 use alloy::sol_types::SolEvent;
-use utils::{context::AppContext, eigen_client::CoreAVSAddresses, types::ChainName};
+use utils::{
+    context::AppContext,
+    eigen_client::CoreAVSAddresses,
+    types::{ChainName, ComponentSource},
+};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
     command::{
         deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
-        deploy_service::{ComponentSource, DeployService, DeployServiceArgs},
+        deploy_service::{DeployService, DeployServiceArgs},
     },
 };
 

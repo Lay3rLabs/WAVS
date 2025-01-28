@@ -3,8 +3,7 @@ pub mod config;
 pub mod http;
 pub mod test_utils;
 
-pub use utils::context::AppContext;
-use wavs::storage::fs::FileStorage;
+use utils::{context::AppContext, storage::fs::FileStorage};
 
 /// Entry point to start up the server
 /// Called from main

@@ -22,7 +22,7 @@ impl std::fmt::Display for DeployEigenServiceManager {
 }
 
 impl CommandDeployResult for DeployEigenServiceManager {
-    fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {}
+    fn update_deployment(&self, _deployment: &mut crate::deploy::Deployment) {}
 }
 
 impl DeployEigenServiceManager {

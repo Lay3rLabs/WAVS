@@ -3,6 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use utils::{
     avs_client::{ServiceManagerClient, SignedData},
+    types::{Submit, Trigger},
     ServiceID, WorkflowID,
 };
 
@@ -12,7 +13,6 @@ use crate::{
         example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient, TriggerId},
     },
     context::CliContext,
-    deploy::{ServiceSubmitInfo, ServiceTriggerInfo},
     util::ComponentInput,
 };
 
@@ -76,7 +76,7 @@ impl AddTask {
         };
 
         let trigger_id = match service.trigger {
-            ServiceTriggerInfo::EthSimpleContract {
+            Trigger::EthContractEvent {
                 chain_name,
                 address,
                 event_hash: _,
@@ -87,7 +87,7 @@ impl AddTask {
                 );
                 client.add_trigger(input).await?
             }
-            ServiceTriggerInfo::CosmosSimpleContract {
+            Trigger::CosmosContractEvent {
                 chain_name,
                 address,
                 event_type: _,
@@ -97,12 +97,14 @@ impl AddTask {
                 let trigger_id = client.add_trigger(input).await?;
                 TriggerId::new(trigger_id.u64())
             }
+            Trigger::Manual => unimplemented!(),
         };
 
         match service.submit {
-            ServiceSubmitInfo::EigenLayer {
+            Submit::EigenContract {
                 chain_name,
-                service_manager_address,
+                service_manager: service_manager_address,
+                max_gas: _,
             } => {
                 let result_timeout = match result_timeout {
                     Some(timeout) => timeout,
@@ -118,12 +120,12 @@ impl AddTask {
 
                 let eigen_client = ctx.get_eth_client(&chain_name)?;
 
-                let service_handler =
+                let service_manager =
                     ServiceManagerClient::new(eigen_client.eth.clone(), service_manager_address);
 
                 let submit_client = SimpleEthSubmitClient::new(
                     ctx.get_eth_client(&chain_name)?.eth,
-                    service_handler.handler_address().await?,
+                    service_manager.handler_address().await?,
                 );
 
                 tracing::info!("service manager address: {}", service_manager_address);
@@ -160,6 +162,7 @@ impl AddTask {
                     signed_data: Some(signed_data?),
                 }))
             }
+            Submit::None => unimplemented!(),
         }
     }
 }
