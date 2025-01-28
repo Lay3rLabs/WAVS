@@ -38,7 +38,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 let runner = runner.clone();
                 let service_id = service_id.clone();
                 let workflow_id = workflow_id.clone();
-                let task_queue_address = task_queue_address.clone();
+                let task_queue_address = task_queue_address;
                 async move {
                     for i in 1..=N_TRIGGERS {
                         runner

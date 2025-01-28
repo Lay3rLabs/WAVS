@@ -60,6 +60,6 @@ mod tests {
             permissions_default.allowed_http_hosts,
             AllowedHostPermission::None
         );
-        assert_eq!(permissions_default.file_system, false);
+        assert!(!permissions_default.file_system);
     }
 }

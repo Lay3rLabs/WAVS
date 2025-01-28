@@ -7,10 +7,11 @@ use serde::{
 
 use crate::digest::Digest;
 
-use super::{Permissions, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, TriggerData};
+use super::{
+    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, TriggerData,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
 pub struct AddServiceRequest {
     pub id: ServiceID,
     pub digest: ShaDigest,
@@ -24,26 +25,22 @@ pub struct AddServiceRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct AddServiceResponse {
-    pub id: ServiceID,
+    pub service: Service,
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DeleteServicesRequest {
     pub service_ids: Vec<ServiceID>,
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ListServicesResponse {
     pub services: Vec<ListServiceResponse>,
     pub digests: Vec<ShaDigest>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct ListServiceResponse {
     pub id: ServiceID,
     pub status: ServiceStatus,
@@ -54,20 +51,17 @@ pub struct ListServiceResponse {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UploadServiceResponse {
     pub digest: ShaDigest,
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TestAppRequest {
     pub name: String,
     pub input: TriggerData,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct TestAppResponse {
     pub output: serde_json::Value,
 }
@@ -75,7 +69,6 @@ pub struct TestAppResponse {
 // Not actually _used_ in http right now, just in CLI and in WAVS itself
 // likely to be refactored as we finalize the "upload component" story
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
 pub enum ComponentSource {
     /// The wasm bytecode is provided directly.
     Bytecode(Vec<u8>),

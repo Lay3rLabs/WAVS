@@ -16,7 +16,19 @@ pub struct ExecComponent {
 
 impl std::fmt::Display for ExecComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ExecComponent")
+        write!(f, "Gas used: \n{}", self.gas_used)?;
+
+        write!(
+            f,
+            "\n\nResult (hex encoded): \n{}",
+            hex::encode(&self.output_bytes)
+        )?;
+
+        if let Ok(s) = std::str::from_utf8(&self.output_bytes) {
+            write!(f, "\n\nResult (utf8): \n{}", s)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -86,7 +98,7 @@ async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> Result<Exe
     };
 
     let response = instance
-        .call_run(&mut store, &input.try_into()?)
+        .call_run(&mut store, &input)
         .await?
         .map_err(|e| anyhow::anyhow!("Wasm call failed: {:?}", e))?;
 
