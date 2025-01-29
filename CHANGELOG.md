@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning].
 - CLI displays output on a per-command basis 
 - Moved more "public" types out of `wavs` package and into `utils`
 - More breaking changes to clean up API and deprecate cruft from `0.2.0`
+- CLI no longer imports `wavs` or `aggregator` packages
 
 <!-- Links -->
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
