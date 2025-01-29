@@ -135,6 +135,7 @@ async fn deploy_service(
             CliTriggerKind::EthContractEvent => trigger_chain.clone(), // not strictly necessary, just easier to reason about same-chain
             CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()), // always eth for now
         },
+        CliSubmitKind::None => None,
     };
 
     tracing::info!(

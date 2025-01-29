@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    args::CliArgs,
+    args::{CliArgs, CliSubmitKind},
     clients::{get_cosmos_client, get_eigen_client},
     config::Config,
     deploy::CommandDeployResult,
@@ -58,14 +58,19 @@ impl CliContext {
             Command::DeployService {
                 trigger_chain,
                 submit_chain,
+                submit,
                 ..
             } => {
                 if let Some(chain) = trigger_chain {
                     chains.insert(chain.clone());
                 }
 
-                if let Some(chain) = submit_chain {
-                    chains.insert(chain.clone());
+                // only add the submit chain if we'll actually use it
+                match (submit_chain, submit) {
+                    (_, CliSubmitKind::None) | (None, _) => {}
+                    (Some(chain), _) => {
+                        chains.insert(chain.clone());
+                    }
                 }
             }
             Command::AddTask {

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [unreleased]
+
+### Added
+
+- CLI supports "none" for submit kind
+
 ## [v0.3.0-alpha3]
 
 ### Added
@@ -25,4 +31,5 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha3...HEAD
 [v0.3.0-alpha3]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha2...v0.3.0-alpha3

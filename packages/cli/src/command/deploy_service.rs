@@ -236,6 +236,8 @@ impl DeployService {
                     max_gas: None,
                 }
             }
+
+            CliSubmitKind::None => Submit::None,
         };
 
         let http_client = HttpClient::new(&ctx.config);
