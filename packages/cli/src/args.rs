@@ -264,10 +264,10 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_mnemonic: Option<String>,
 
-    /// Do not save the deployment
+    /// Save the deployment (default is true)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub dry_run: Option<bool>,
+    pub save_deployment: Option<bool>,
 
     /// Do not display the results
     #[arg(long)]

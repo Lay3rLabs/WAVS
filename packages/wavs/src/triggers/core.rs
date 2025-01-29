@@ -346,7 +346,7 @@ impl TriggerManager for CoreTriggerManager {
                     return Err(TriggerError::EthContractEventAlreadyRegistered(
                         chain_name,
                         address,
-                        hex::encode(event_hash),
+                        const_hex::encode(event_hash),
                     ));
                 }
 
@@ -523,7 +523,7 @@ fn remove_trigger_data(
                 .ok_or(TriggerError::NoSuchEthContractEvent(
                     chain_name,
                     address,
-                    hex::encode(event_hash),
+                    const_hex::encode(event_hash),
                 ))?;
         }
         Trigger::CosmosContractEvent {

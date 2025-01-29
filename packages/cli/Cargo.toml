@@ -19,7 +19,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 rand = { workspace = true }
-hex = { workspace = true }
+const-hex = { workspace = true }
 reqwest = { workspace = true }
 layer-climb = { workspace = true }
 toml = { workspace = true }

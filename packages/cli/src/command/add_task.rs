@@ -30,12 +30,12 @@ impl std::fmt::Display for AddTask {
                 write!(
                     f,
                     "\n\nSignature (hex encoded): \n{}",
-                    hex::encode(&signed_data.signature)
+                    const_hex::encode(&signed_data.signature)
                 )?;
                 write!(
                     f,
                     "\n\nResult (hex encoded): \n{}",
-                    hex::encode(&signed_data.data)
+                    const_hex::encode(&signed_data.data)
                 )?;
                 if let Ok(s) = std::str::from_utf8(&signed_data.data) {
                     write!(f, "\n\nResult (utf8): \n{}", s)?;

@@ -46,7 +46,7 @@ cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
 cosmwasm-schema = "2.2.0"
 cw-storage-plus = "2.0.0"
 cw2 = "2.0.0"
-hex = "0.4.3"
+const-hex = "1.14.0"
 
 [profile.release]
 codegen-units = 1

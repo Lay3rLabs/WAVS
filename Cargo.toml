@@ -31,7 +31,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 dotenvy = { version = "0.15.7", features = ["cli"] }
 figment = { version = "0.10.19", features = ["toml", "env"] }
 sha2 = "0.10.8"
-hex = "0.4.3"
+const-hex = "1.14.0"
 thiserror = "1.0.42"
 redb = { version = "2.1" }
 axum = { version = "0.7.7", features = ["macros"] }

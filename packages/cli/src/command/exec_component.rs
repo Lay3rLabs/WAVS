@@ -21,7 +21,7 @@ impl std::fmt::Display for ExecComponent {
         write!(
             f,
             "\n\nResult (hex encoded): \n{}",
-            hex::encode(&self.output_bytes)
+            const_hex::encode(&self.output_bytes)
         )?;
 
         if let Ok(s) = std::str::from_utf8(&self.output_bytes) {
