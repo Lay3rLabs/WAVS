@@ -177,12 +177,14 @@ impl From<CliTriggerKind> for clap::builder::OsStr {
 #[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum CliSubmitKind {
     SimpleEthContract,
+    None,
 }
 
 impl std::fmt::Display for CliSubmitKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SimpleEthContract => write!(f, "simple-eth-contract"),
+            Self::None => write!(f, "none"),
         }
     }
 }
@@ -193,6 +195,7 @@ impl std::str::FromStr for CliSubmitKind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "simple-eth-contract" => Ok(Self::SimpleEthContract),
+            "none" => Ok(Self::None),
             _ => Err(format!("unknown submit kind: {}", s)),
         }
     }
