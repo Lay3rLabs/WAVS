@@ -13,4 +13,4 @@ anyhow = {workspace = true}
 cw-storage-plus = {workspace = true} 
 cw2 = {workspace = true} 
 cosmwasm-schema = {workspace = true}
-hex = {workspace = true}
+const-hex = {workspace = true}

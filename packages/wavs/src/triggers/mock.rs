@@ -65,7 +65,7 @@ pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -
         // matches example_cosmos_client::NewMessageEvent
         event: cosmwasm_std::Event::new("new-message")
             .add_attribute("id", trigger_id.to_string())
-            .add_attribute("data", hex::encode(data.as_ref())),
+            .add_attribute("data", const_hex::encode(data.as_ref())),
         block_height: 0,
     }
 }
@@ -248,7 +248,7 @@ impl MockTriggerManagerChannel {
                         workflow_id,
                         contract_address.clone(),
                         ChainName::new(chain_id.to_string()).unwrap(),
-                        hex::encode(rand_event_eth()),
+                        const_hex::encode(rand_event_eth()),
                     )
                     .unwrap(),
                 },

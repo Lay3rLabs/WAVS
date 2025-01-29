@@ -3825,11 +3825,11 @@ name = "simple-example"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "const-hex",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus",
  "cw2",
- "hex",
 ]
 
 [[package]]

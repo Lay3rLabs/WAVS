@@ -10,7 +10,7 @@ pub struct Digest([u8; 32]);
 
 impl Digest {
     pub fn hex_encoded(&self) -> String {
-        hex::encode(self.0.as_slice())
+        const_hex::encode(self.0.as_slice())
     }
 
     pub fn new(bytes: &[u8]) -> Self {
@@ -39,7 +39,7 @@ impl FromStr for Digest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut bytes = [0u8; 32];
-        hex::decode_to_slice(s, &mut bytes)?;
+        const_hex::decode_to_slice(s, &mut bytes)?;
         Ok(Digest(bytes))
     }
 }
@@ -83,5 +83,5 @@ impl<'de> Deserialize<'de> for Digest {
 #[derive(Error, Debug)]
 pub enum DigestError {
     #[error("hexadecimal decode failed: {0}")]
-    InvalidHex(#[from] hex::FromHexError),
+    InvalidHex(#[from] const_hex::FromHexError),
 }

@@ -107,7 +107,7 @@ async fn deploy_service(
     };
 
     let trigger_event_name = match trigger {
-        CliTriggerKind::EthContractEvent => Some(hex::encode(
+        CliTriggerKind::EthContractEvent => Some(const_hex::encode(
             wavs_cli::clients::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH,
         )),
         CliTriggerKind::CosmosContractEvent => {

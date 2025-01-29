@@ -15,7 +15,7 @@ impl From<NewMessageEvent> for Event {
     fn from(src: NewMessageEvent) -> Self {
         Event::new(NewMessageEvent::KEY).add_attributes(vec![
             ("id", src.id.to_string()),
-            ("data", hex::encode(src.data)),
+            ("data", const_hex::encode(src.data)),
         ])
     }
 }
@@ -40,7 +40,7 @@ impl TryFrom<Event> for NewMessageEvent {
         for attr in evt.attributes.iter() {
             match attr.key.as_str() {
                 "id" => id = Some(Uint64::new(attr.value.parse()?)),
-                "data" => data = Some(hex::decode(&attr.value)?),
+                "data" => data = Some(const_hex::decode(&attr.value)?),
                 _ => {}
             }
         }

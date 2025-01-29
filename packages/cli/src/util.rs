@@ -23,14 +23,14 @@ impl ComponentInput {
                         );
                     }
 
-                    if let Ok(bytes) = hex::decode(input) {
+                    if let Ok(bytes) = const_hex::decode(input) {
                         Ok(bytes)
                     } else {
                         let hex = input.as_bytes().iter().fold(String::new(), |mut acc, b| {
                             acc.push_str(&format!("{:02x}", b));
                             acc
                         });
-                        hex::decode(hex).context("Failed to decode input")
+                        const_hex::decode(hex).context("Failed to decode input")
                     }
                 }
             },

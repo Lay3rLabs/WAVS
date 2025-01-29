@@ -25,7 +25,7 @@ use crate::{args::Command, deploy::Deployment};
 pub struct CliContext {
     pub deployment: Mutex<Deployment>,
     pub config: Config,
-    pub dry_run: bool,
+    pub save_deployment: bool,
     pub quiet_results: bool,
     _clients: HashMap<ChainName, AnyClient>,
 }
@@ -147,7 +147,7 @@ impl CliContext {
         Ok(Self {
             config,
             deployment: Mutex::new(deployment),
-            dry_run: args.dry_run.unwrap_or_default(),
+            save_deployment: args.save_deployment.unwrap_or(true),
             quiet_results: args.quiet_results.unwrap_or_default(),
             _clients: clients,
         })
@@ -203,7 +203,7 @@ impl CliContext {
         let deployment = self.deployment.lock().unwrap();
 
         // save the updated deployment
-        if !self.dry_run {
+        if self.save_deployment {
             if !self.config.data.exists() {
                 std::fs::create_dir_all(&self.config.data)?;
             }

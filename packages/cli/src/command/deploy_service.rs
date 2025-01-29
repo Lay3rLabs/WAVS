@@ -110,7 +110,7 @@ impl DeployService {
                 };
 
                 let mut event_hash: [u8; 32] = [0; 32];
-                event_hash.copy_from_slice(&hex::decode(trigger_event_name)?);
+                event_hash.copy_from_slice(&const_hex::decode(trigger_event_name)?);
 
                 Trigger::EthContractEvent {
                     chain_name,

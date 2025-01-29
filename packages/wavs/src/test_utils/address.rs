@@ -22,7 +22,7 @@ pub fn rand_event_eth() -> [u8; 32] {
 }
 
 pub fn rand_event_cosmos() -> String {
-    hex::encode(rand_event_eth())
+    const_hex::encode(rand_event_eth())
 }
 
 pub fn rand_address_layer() -> Address {
