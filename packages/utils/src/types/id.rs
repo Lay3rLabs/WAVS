@@ -88,6 +88,8 @@ macro_rules! new_id_type {
 }
 
 new_id_type!(ServiceID);
+// ComponentID is an identifier *within* a service. It is not unique across services
+// For identifying a component system-wide, the Digest is used instead
 new_id_type!(ComponentID);
 new_id_type!(WorkflowID);
 // Distinct from a ChainConfig's ChainID - this is the *name* used within WAVS

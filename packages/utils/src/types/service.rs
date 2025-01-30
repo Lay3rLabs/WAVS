@@ -26,9 +26,48 @@ pub struct Service {
 
     pub status: ServiceStatus,
 
-    pub config: Option<ServiceConfig>,
+    pub config: ServiceConfig,
 
     pub testable: bool,
+}
+
+impl Service {
+    pub fn new_simple(
+        id: ServiceID,
+        name: impl Into<String>,
+        trigger: Trigger,
+        component_digest: Digest,
+        submit: Submit,
+        config: Option<ServiceConfig>,
+    ) -> Self {
+        let component_id = ComponentID::default();
+        let workflow_id = WorkflowID::default();
+
+        let workflow = Workflow {
+            trigger,
+            component: component_id,
+            submit,
+        };
+
+        let component = Component {
+            wasm: component_digest,
+            permissions: Permissions::default(),
+        };
+
+        let components = BTreeMap::from([(workflow.component.clone(), component)]);
+
+        let workflows = BTreeMap::from([(workflow_id, workflow)]);
+
+        Self {
+            id,
+            name: name.into(),
+            components,
+            workflows,
+            status: ServiceStatus::Active,
+            config: config.unwrap_or_default(),
+            testable: false,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

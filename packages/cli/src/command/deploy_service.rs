@@ -255,7 +255,7 @@ impl DeployService {
         let service_config = service_config.unwrap_or_default();
 
         let service = http_client
-            .create_service(
+            .create_service_simple(
                 trigger.clone(),
                 submit.clone(),
                 digest,
