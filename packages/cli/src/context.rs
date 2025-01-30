@@ -73,6 +73,26 @@ impl CliContext {
                     }
                 }
             }
+            Command::DeployServiceRaw { service, .. } => {
+                for workflow in service.workflows.values() {
+                    match &workflow.trigger {
+                        Trigger::EthContractEvent { chain_name, .. } => {
+                            chains.insert(chain_name.clone());
+                        }
+                        Trigger::CosmosContractEvent { chain_name, .. } => {
+                            chains.insert(chain_name.clone());
+                        }
+                        Trigger::Manual => {}
+                    }
+
+                    match &workflow.submit {
+                        Submit::EigenContract { chain_name, .. } => {
+                            chains.insert(chain_name.clone());
+                        }
+                        Submit::None => {}
+                    }
+                }
+            }
             Command::AddTask {
                 service_id,
                 workflow_id,
@@ -102,6 +122,7 @@ impl CliContext {
                     }
                 }
             }
+            Command::UploadComponent { .. } => {}
             Command::Exec { .. } => {}
         }
 

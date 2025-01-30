@@ -51,10 +51,10 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(endpoint: String) -> Self {
         Self {
             inner: reqwest::Client::new(),
-            endpoint: config.wavs_endpoint.clone(),
+            endpoint,
         }
     }
 
@@ -104,9 +104,13 @@ impl HttpClient {
             }
         }
 
-        let body = serde_json::to_string(&AddServiceRequest {
-            service: service.clone(),
-        })?;
+        self.create_service_raw(service.clone()).await?;
+
+        Ok(service)
+    }
+
+    pub async fn create_service_raw(&self, service: Service) -> Result<()> {
+        let body = serde_json::to_string(&AddServiceRequest { service })?;
 
         self.inner
             .post(format!("{}/app", self.endpoint))
@@ -116,6 +120,6 @@ impl HttpClient {
             .await?
             .error_for_status()?;
 
-        Ok(service)
+        Ok(())
     }
 }

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
-    types::{ChainName, ServiceConfig},
+    types::{ChainName, Service, ServiceConfig},
 };
 
 use crate::config::Config;
@@ -99,6 +99,28 @@ pub enum Command {
         service_config: Option<ServiceConfig>,
     },
 
+    /// Uploads a WASI component
+    UploadComponent {
+        /// Path to the WASI component
+        #[clap(long)]
+        component: PathBuf,
+
+        #[clap(flatten)]
+        args: CliArgs,
+    },
+
+    /// Deploy a full service
+    /// Uses core contracts that were previously deployed via the CLI
+    /// Assumes that the components have already been uploaded, operators have already registered on contracts
+    /// Uses a raw JSON input to define the service, rather than individual arguments
+    DeployServiceRaw {
+        #[clap(long, value_parser = parse_service_input)]
+        service: Service,
+
+        #[clap(flatten)]
+        args: CliArgs,
+    },
+
     /// Adds a task to a service that was previously deployed via CLI (uses stored deploy info)
     AddTask {
         #[clap(long)]
@@ -135,6 +157,15 @@ pub enum Command {
         #[clap(long)]
         input: String,
     },
+}
+
+fn parse_service_input(s: &str) -> Result<Service, String> {
+    if let Some(path) = s.strip_prefix('@').map(PathBuf::from) {
+        let json = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        Ok(serde_json::from_str(&json).map_err(|e| e.to_string())?)
+    } else {
+        Ok(serde_json::from_str(s).map_err(|e| e.to_string())?)
+    }
 }
 
 fn parse_chain_name(s: &str) -> Result<ChainName, String> {
@@ -207,6 +238,8 @@ impl Command {
             Self::DeployEigenCore { args, .. } => args,
             Self::DeployEigenServiceManager { args, .. } => args,
             Self::DeployService { args, .. } => args,
+            Self::DeployServiceRaw { args, .. } => args,
+            Self::UploadComponent { args, .. } => args,
             Self::AddTask { args, .. } => args,
             Self::Exec { args, .. } => args,
         };
