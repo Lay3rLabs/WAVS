@@ -14,7 +14,7 @@ pub struct Clients {
 impl Clients {
     pub fn new(ctx: AppContext, configs: &Configs) -> Self {
         ctx.rt.block_on(async {
-            let http_client = HttpClient::new(&configs.cli);
+            let http_client = HttpClient::new(configs.cli.wavs_endpoint.clone());
 
             // give the server a bit of time to start
             tokio::time::timeout(Duration::from_secs(2), async {

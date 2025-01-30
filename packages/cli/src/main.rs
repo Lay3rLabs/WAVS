@@ -8,7 +8,9 @@ use wavs_cli::{
         deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
         deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
         deploy_service::{DeployService, DeployServiceArgs},
+        deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
+        upload_component::{UploadComponent, UploadComponentArgs},
     },
     context::CliContext,
     util::{read_component, ComponentInput},
@@ -89,6 +91,13 @@ async fn main() {
                 ctx.handle_deploy_result(res).unwrap();
             }
         }
+        Command::DeployServiceRaw { service, args: _ } => {
+            let res = DeployServiceRaw::run(&ctx, DeployServiceRawArgs { service })
+                .await
+                .unwrap();
+
+            ctx.handle_deploy_result(res).unwrap();
+        }
         Command::DeployEigenServiceManager {
             chain,
             service_handler,
@@ -134,6 +143,13 @@ async fn main() {
             if let Some(res) = res {
                 ctx.handle_display_result(res);
             }
+        }
+        Command::UploadComponent { component, args: _ } => {
+            let res = UploadComponent::run(&ctx.config, UploadComponentArgs { component })
+                .await
+                .unwrap();
+
+            ctx.handle_display_result(res);
         }
         Command::Exec {
             component,
