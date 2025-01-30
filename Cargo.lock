@@ -3941,6 +3941,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "utils",
+ "uuid",
  "walkdir",
  "wasmtime",
  "wasmtime-wasi",

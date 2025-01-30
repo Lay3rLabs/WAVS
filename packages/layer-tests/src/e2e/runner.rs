@@ -50,31 +50,32 @@ async fn test_service(
     clients: &Clients,
 ) -> Result<()> {
     let service_id = service.id.to_string();
-    let (workflow_id, workflow) = service.workflows.iter().next().unwrap();
 
     tracing::info!("Testing service: {:?}", name);
 
-    let n_tasks = match &workflow.submit {
-        Submit::EigenContract { chain_name, .. } => {
-            let chain = configs
-                .chains
-                .eth
-                .get(chain_name)
-                .context("couldn't get submission chain to detect aggregation")?;
-            match chain.aggregator_endpoint.is_some() {
-                true => configs.aggregator.as_ref().unwrap().tasks_quorum,
-                false => 1,
-            }
-        }
-        Submit::None => 1,
-    };
-
     let n_workflows = service.workflows.len();
 
-    for task_number in 1..=n_tasks {
-        let is_final = task_number == n_tasks;
+    for workflow_index in 0..n_workflows {
+        let (workflow_id, workflow) = service.workflows.iter().nth(workflow_index).unwrap();
 
-        for workflow_index in 0..n_workflows {
+        let n_tasks = match &workflow.submit {
+            Submit::EigenContract { chain_name, .. } => {
+                let chain = configs
+                    .chains
+                    .eth
+                    .get(chain_name)
+                    .context("couldn't get submission chain to detect aggregation")?;
+                match chain.aggregator_endpoint.is_some() {
+                    true => configs.aggregator.as_ref().unwrap().tasks_quorum,
+                    false => 1,
+                }
+            }
+            Submit::None => 1,
+        };
+
+        for task_number in 1..=n_tasks {
+            let is_final = task_number == n_tasks;
+
             let signed_data = AddTask::run(
                 &clients.cli_ctx,
                 AddTaskArgs {
@@ -96,7 +97,6 @@ async fn test_service(
                 let signed_data = signed_data.context("no signed data returned")?;
                 verify_signed_data(name, signed_data, &service, configs, workflow_index)?;
             }
-            
         }
     }
 
@@ -131,13 +131,11 @@ fn get_input_for_service(
             EthService::EchoDataSecondaryChain => b"collapse".to_vec(),
             EthService::Permissions => permissions_req(),
             EthService::Square => SquareRequest { x: 3 }.to_vec(),
-            EthService::MultiWorkflow => {
-                match workflow_index {
-                    0 => SquareRequest { x: 3 }.to_vec(),
-                    1 => b"the first one was nine".to_vec(),
-                    _ => unimplemented!() 
-                }
-            }
+            EthService::MultiWorkflow => match workflow_index {
+                0 => SquareRequest { x: 3 }.to_vec(),
+                1 => b"the first one was nine".to_vec(),
+                _ => unimplemented!(),
+            },
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
@@ -162,7 +160,7 @@ fn verify_signed_data(
     signed_data: SignedData,
     service: &Service,
     configs: &Configs,
-    workflow_index: usize
+    workflow_index: usize,
 ) -> Result<()> {
     let data = signed_data.data;
 
@@ -182,12 +180,10 @@ fn verify_signed_data(
 
             EthService::Square => Some(SquareResponse { y: 9 }.to_vec()),
 
-            EthService::MultiWorkflow => {
-                match workflow_index {
-                    0 => Some(SquareRequest { x: 9 }.to_vec()),
-                    1 => Some(input_req()),
-                    _ => unimplemented!() 
-                }
+            EthService::MultiWorkflow => match workflow_index {
+                0 => Some(SquareResponse { y: 9 }.to_vec()),
+                1 => Some(input_req()),
+                _ => unimplemented!(),
             },
 
             EthService::CosmosQuery => {

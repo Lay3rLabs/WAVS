@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning].
 ### Added
 
 - CLI supports "none" for submit kind
+- WAVS and CLI support raw service deployment
+- Overall support for multi-workflow services (including e2e tests)
 
 ## [v0.3.0-alpha3]
 

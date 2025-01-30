@@ -29,5 +29,4 @@ wasmtime-wasi = { workspace = true }
 tempfile = { workspace = true }
 shellexpand = { workspace = true }
 cosmwasm-std = { workspace = true }
-
-uuid = { version = "1.11.0", features = ["v7", "serde"] }
+uuid = { workspace = true }
