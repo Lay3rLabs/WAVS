@@ -27,9 +27,22 @@ impl Digests {
                 .matrix
                 .eth
                 .iter()
-                .map(|s| (*s).into())
-                .chain(configs.matrix.cosmos.iter().map(|s| (*s).into()))
-                .chain(configs.matrix.cross_chain.iter().map(|s| (*s).into()))
+                .map(|s| Vec::<DigestName>::from(*s))
+                .chain(
+                    configs
+                        .matrix
+                        .cosmos
+                        .iter()
+                        .map(|s| Vec::<DigestName>::from(*s)),
+                )
+                .chain(
+                    configs
+                        .matrix
+                        .cross_chain
+                        .iter()
+                        .map(|s| Vec::<DigestName>::from(*s)),
+                )
+                .flatten()
                 .collect();
 
             let mut futures = FuturesUnordered::new();

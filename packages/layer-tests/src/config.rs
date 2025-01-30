@@ -67,6 +67,7 @@ pub struct TestMatrixEthConfig {
     pub echo_data_aggregator: bool,
     pub permissions: bool,
     pub square: bool,
+    pub multi_workflow: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -152,6 +153,10 @@ impl TestMatrixConfig {
             matrix.eth.insert(EthService::Square);
         }
 
+        if self.eth.multi_workflow {
+            matrix.eth.insert(EthService::MultiWorkflow);
+        }
+
         if self.cosmos.chain_trigger_lookup {
             matrix.cosmos.insert(CosmosService::ChainTriggerLookup);
         }
@@ -192,6 +197,7 @@ impl From<&str> for AnyService {
             "eth-echo-data-aggregator" => AnyService::Eth(EthService::EchoDataAggregator),
             "eth-permissions" => AnyService::Eth(EthService::Permissions),
             "eth-square" => AnyService::Eth(EthService::Square),
+            "eth-multi-workflow" => AnyService::Eth(EthService::MultiWorkflow),
             "cosmos-chain-trigger-lookup" => AnyService::Cosmos(CosmosService::ChainTriggerLookup),
             "cosmos-cosmos-query" => AnyService::Cosmos(CosmosService::CosmosQuery),
             "cosmos-echo-data" => AnyService::Cosmos(CosmosService::EchoData),
