@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning].
 ### Added
 
 - CLI supports "none" for submit kind
+- WAVS namespaces storage only by ServiceID, not ServiceID + WorkflowID
 
 ## [v0.3.0-alpha3]
 
