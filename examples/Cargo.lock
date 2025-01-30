@@ -1073,7 +1073,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wit-bindgen-rt 0.37.0",
- "wstd",
+ "wstd 0.4.0",
 ]
 
 [[package]]
@@ -1134,7 +1134,7 @@ dependencies = [
  "tendermint 0.40.1",
  "tendermint-rpc 0.40.1",
  "wit-bindgen-rt 0.37.0",
- "wstd",
+ "wstd 0.4.0",
 ]
 
 [[package]]
@@ -1513,7 +1513,7 @@ dependencies = [
  "example-helpers",
  "layer-wasi",
  "wit-bindgen-rt 0.37.0",
- "wstd",
+ "wstd 0.4.0",
 ]
 
 [[package]]
@@ -1524,7 +1524,7 @@ dependencies = [
  "example-helpers",
  "layer-wasi",
  "wit-bindgen-rt 0.37.0",
- "wstd",
+ "wstd 0.4.0",
 ]
 
 [[package]]
@@ -2581,7 +2581,7 @@ dependencies = [
  "wasi 0.13.3+wasi-0.2.2",
  "wit-bindgen",
  "wit-bindgen-rt 0.37.0",
- "wstd",
+ "wstd 0.4.0",
 ]
 
 [[package]]
@@ -2963,7 +2963,7 @@ dependencies = [
  "url",
  "wasi 0.13.3+wasi-0.2.2",
  "wit-bindgen-rt 0.37.0",
- "wstd",
+ "wstd 0.5.1",
 ]
 
 [[package]]
@@ -3907,7 +3907,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wit-bindgen-rt 0.37.0",
- "wstd",
+ "wstd 0.4.0",
 ]
 
 [[package]]
@@ -4745,6 +4745,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasi"
+version = "0.14.0+wasi-0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3d67b0bdfec72b9fbaba698033291c327ef19ce3b34efbdcd7dc402a53850d9"
+dependencies = [
+ "wit-bindgen-rt 0.37.0",
+]
+
+[[package]]
 name = "wasm-bindgen"
 version = "0.2.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5160,6 +5169,31 @@ dependencies = [
  "slab",
  "url",
  "wasi 0.13.3+wasi-0.2.2",
+]
+
+[[package]]
+name = "wstd"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26293c0587d2203a141282311221f9ba0048425a04b21d9fcff8fc62fc8ecd75"
+dependencies = [
+ "futures-core",
+ "http",
+ "itoa",
+ "pin-project-lite",
+ "slab",
+ "wasi 0.14.0+wasi-0.2.3",
+ "wstd-macro",
+]
+
+[[package]]
+name = "wstd-macro"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75a8316f91fc3e508b03fdc979dec4ceeddb29744fc1c2c2ed825e00159f96f9"
+dependencies = [
+ "quote",
+ "syn 2.0.96",
 ]
 
 [[package]]

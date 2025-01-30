@@ -1,6 +1,10 @@
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use layer_wasi::{
-    bindings::world::{Guest, TriggerAction},
+    bindings::world::{Guest, TriggerAction, 
+        // wasi::http::types::InputStream, 
+        wasi::io::streams::StreamError,
+        wasi::http::types::InputStream
+    },
     export_layer_trigger_world,
 };
 use std::{
@@ -8,32 +12,28 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use wstd::{runtime::block_on, http::{Client, Request}, io::{empty, AsyncRead}};
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use url::Url;
-use wasi::{
-    http::{
-        outgoing_handler,
-        types::{Headers, InputStream, OutgoingRequest, Scheme},
-    },
-    io::streams::StreamError,
-};
 
 struct Component;
 
 impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
-        let (trigger_id, req) =
-            decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
-        let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
-        let resp = inner_run_task(req).map_err(|e| e.to_string())?;
-        let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
-        Ok(encode_trigger_output(trigger_id, resp))
+        block_on(async move {
+            let (trigger_id, req) =
+                decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
+            let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
+            let resp = inner_run_task(req).await.map_err(|e| e.to_string())?;
+            let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
+            Ok(encode_trigger_output(trigger_id, resp))
+        })
     }
 }
 
-fn inner_run_task(input: PermissionsInput) -> Result<Response> {
+async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
     const DIRECTORY_NAME: &'static str = "./responses";
 
     let responses_path = Path::new(DIRECTORY_NAME);
@@ -44,7 +44,7 @@ fn inner_run_task(input: PermissionsInput) -> Result<Response> {
     let response_path = responses_path.join(format!("{}.txt", input.timestamp));
     let mut response_file = fs::File::create(&response_path)?;
 
-    let contents = get_url(Url::parse(&input.url)?)?;
+    let contents = get_url(Url::parse(&input.url)?).await?;
 
     response_file.write_all(contents.as_bytes())?;
 
@@ -57,36 +57,14 @@ fn inner_run_task(input: PermissionsInput) -> Result<Response> {
     })
 }
 
-fn get_url(url: Url) -> Result<String> {
-    let req = OutgoingRequest::new(Headers::new());
-    req.set_scheme(Some(&Scheme::Https))
-        .map_err(|e| anyhow!("{e:?}"))?;
-
-    req.set_authority(Some(url.authority()))
-        .map_err(|e| anyhow!("{e:?}"))?;
-    req.set_path_with_query(Some(url.path()))
-        .map_err(|e| anyhow!("{e:?}"))?;
-
-    let fut = outgoing_handler::handle(req, None)?;
-    let subscription = fut.subscribe();
-
-    subscription.block();
-
-    let res = fut
-        .get()
-        .context("None in response")?
-        .map_err(|e| anyhow!("{e:?}"))??;
-
-    if !(200..=299).contains(&res.status()) {
-        return Err(anyhow::anyhow!("unexpected status code: {}", res.status()));
-    }
-
-    let body = res.consume().map_err(|e| anyhow!("{e:?}"))?;
-    let stream = body.stream().map_err(|e| anyhow!("{e:?}"))?;
-
-    let contents = read_stream_to_string(&stream)?;
-
-    Ok(contents)
+async fn get_url(url: Url) -> Result<String> {
+    let mut client = Client::new();
+    let mut request = Request::get(url.to_string()).body(empty()).unwrap();
+    let mut response = Client::new().send(request).await.unwrap();
+    let body = response.body_mut();
+    let mut body_buf = Vec::new();
+    body.read_to_end(&mut body_buf).await.unwrap();
+    Ok(serde_json::to_string(&body_buf).unwrap())
 }
 
 fn read_stream_to_string(stream: &InputStream) -> Result<String> {
