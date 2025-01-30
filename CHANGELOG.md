@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-alpha4]
+
 ### Added
 
 - CLI supports "none" for submit kind
@@ -34,5 +36,6 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha3...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha4...HEAD
+[v0.3.0-alpha4]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha3...v0.3.0-alpha4
 [v0.3.0-alpha3]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha2...v0.3.0-alpha3
