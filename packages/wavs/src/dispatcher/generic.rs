@@ -335,7 +335,9 @@ mod tests {
         },
     };
     use utils::{
-        types::{ChainName, Component, ServiceStatus, Submit, TriggerData, Workflow},
+        types::{
+            ChainName, Component, ServiceConfig, ServiceStatus, Submit, TriggerData, Workflow,
+        },
         ComponentID, ServiceID, WorkflowID,
     };
 
@@ -370,7 +372,7 @@ mod tests {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
             components: [(component_id.clone(), Component::new(digest))].into(),
-            config: None,
+            config: ServiceConfig::default(),
             workflows: [(
                 action.config.workflow_id.clone(),
                 Workflow {
@@ -465,7 +467,7 @@ mod tests {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
             components: [(component_id.clone(), Component::new(digest))].into(),
-            config: None,
+            config: ServiceConfig::default(),
             workflows: [(
                 workflow_id.clone(),
                 Workflow {
@@ -554,7 +556,7 @@ mod tests {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
             components: [(component_id.clone(), Component::new(digest))].into(),
-            config: None,
+            config: ServiceConfig::default(),
             workflows: [(
                 workflow_id.clone(),
                 Workflow {

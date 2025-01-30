@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use utils::{
     digest::Digest,
     storage::db::{RedbStorage, Table, JSON},
-    types::{Component, Service, ServiceStatus, Submit, Workflow},
+    types::{Component, Service, ServiceConfig, ServiceStatus, Submit, Workflow},
     ComponentID, ServiceID, WorkflowID,
 };
 use wavs::triggers::mock::mock_eth_event_trigger;
@@ -104,7 +104,7 @@ fn db_service_store() {
         workflows,
         status: ServiceStatus::Active,
         testable: true,
-        config: None,
+        config: ServiceConfig::default(),
     };
 
     storage.set(SERVICE_TABLE, &service_id, &service).unwrap();
