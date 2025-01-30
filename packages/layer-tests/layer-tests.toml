@@ -1,26 +1,22 @@
+# Run all the tests
 all = true
 
-# See matrix.rs for all the available options
-
+# Run just one test (cannot be enabled at the same time as all)
 # isolated = "eth-chain-trigger-lookup" 
+
+# See matrix.rs for all the available options
+# You can run groups of tests like:
 
 # [matrix.eth]
 # chain-trigger-lookup = true
 # cosmos-query = true
-# echo-data = true
-# echo-data-secondary-chain= true
-# echo-data-aggregator = true
-# permissions = true
-# square = true
+# etc.
 
 # [matrix.cosmos]
 # chain-trigger-lookup = true
 # cosmos-query = true
-# echo-data = true
-# echo-data-secondary-chain= true
-# echo-data-aggregator = true
-# permissions = true
-# square = true
+# etc.
 
 # [matrix.crosschain]
 # cosmos-to-eth-echo-data = true
+# etc.

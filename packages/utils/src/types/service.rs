@@ -26,9 +26,48 @@ pub struct Service {
 
     pub status: ServiceStatus,
 
-    pub config: Option<ServiceConfig>,
+    pub config: ServiceConfig,
 
     pub testable: bool,
+}
+
+impl Service {
+    pub fn new_simple(
+        id: ServiceID,
+        name: Option<String>,
+        trigger: Trigger,
+        component_digest: Digest,
+        submit: Submit,
+        config: Option<ServiceConfig>,
+    ) -> Self {
+        let component_id = ComponentID::default();
+        let workflow_id = WorkflowID::default();
+
+        let workflow = Workflow {
+            trigger,
+            component: component_id,
+            submit,
+        };
+
+        let component = Component {
+            wasm: component_digest,
+            permissions: Permissions::default(),
+        };
+
+        let components = BTreeMap::from([(workflow.component.clone(), component)]);
+
+        let workflows = BTreeMap::from([(workflow_id, workflow)]);
+
+        Self {
+            name: name.unwrap_or_else(|| id.to_string()),
+            id,
+            components,
+            workflows,
+            status: ServiceStatus::Active,
+            config: config.unwrap_or_default(),
+            testable: false,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -131,9 +170,6 @@ pub struct ServiceConfig {
     pub kv: Vec<(String, String)>,
     /// The maximum on chain gas to use for a submission
     pub max_gas: Option<u64>,
-
-    pub workflow_id: WorkflowID,
-    pub component_id: ComponentID,
 }
 
 impl Default for ServiceConfig {
@@ -143,8 +179,6 @@ impl Default for ServiceConfig {
             max_gas: None,
             host_envs: vec![],
             kv: vec![],
-            workflow_id: WorkflowID::default(),
-            component_id: ComponentID::default(),
         }
     }
 }

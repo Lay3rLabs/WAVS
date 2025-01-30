@@ -36,7 +36,8 @@ impl std::fmt::Display for DeployService {
         }
 
         write!(f, "New Service deployed to wavs")?;
-        // we only register as an operator if we did not deploy a new eigenlayer service manager
+        // we only *explicitly* register as an operator if we did not deploy a new eigenlayer service manager
+        // otherwise, this happens implicitly via DeployEigenServiceManager
         if self.args.register_operator && self.new_eigenlayer_service_manager.is_none() {
             write!(
                 f,
@@ -240,7 +241,7 @@ impl DeployService {
             CliSubmitKind::None => Submit::None,
         };
 
-        let http_client = HttpClient::new(&ctx.config);
+        let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
         let digest = match component {
             ComponentSource::Bytecode(bytes) => http_client.upload_component(bytes).await?,
@@ -255,7 +256,7 @@ impl DeployService {
         let service_config = service_config.unwrap_or_default();
 
         let service = http_client
-            .create_service(
+            .create_service_simple(
                 trigger.clone(),
                 submit.clone(),
                 digest,

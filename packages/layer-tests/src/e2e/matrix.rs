@@ -20,6 +20,7 @@ pub enum EthService {
     EchoDataAggregator,
     Permissions,
     Square,
+    MultiWorkflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -88,41 +89,42 @@ impl TestMatrix {
     }
 }
 
-impl From<EthService> for DigestName {
+impl From<EthService> for Vec<DigestName> {
     fn from(service: EthService) -> Self {
         match service {
-            EthService::ChainTriggerLookup => DigestName::ChainTriggerLookup,
-            EthService::CosmosQuery => DigestName::CosmosQuery,
-            EthService::EchoData => DigestName::EchoData,
-            EthService::Permissions => DigestName::Permissions,
-            EthService::Square => DigestName::Square,
-            EthService::EchoDataSecondaryChain => DigestName::EchoData,
-            EthService::EchoDataAggregator => DigestName::EchoData,
+            EthService::ChainTriggerLookup => vec![DigestName::ChainTriggerLookup],
+            EthService::CosmosQuery => vec![DigestName::CosmosQuery],
+            EthService::EchoData => vec![DigestName::EchoData],
+            EthService::Permissions => vec![DigestName::Permissions],
+            EthService::Square => vec![DigestName::Square],
+            EthService::EchoDataSecondaryChain => vec![DigestName::EchoData],
+            EthService::EchoDataAggregator => vec![DigestName::EchoData],
+            EthService::MultiWorkflow => vec![DigestName::Square, DigestName::EchoData],
         }
     }
 }
 
-impl From<CosmosService> for DigestName {
+impl From<CosmosService> for Vec<DigestName> {
     fn from(service: CosmosService) -> Self {
-        match service {
+        vec![match service {
             CosmosService::ChainTriggerLookup => DigestName::ChainTriggerLookup,
             CosmosService::CosmosQuery => DigestName::CosmosQuery,
             CosmosService::EchoData => DigestName::EchoData,
             CosmosService::Permissions => DigestName::Permissions,
             CosmosService::Square => DigestName::Square,
-        }
+        }]
     }
 }
 
-impl From<CrossChainService> for DigestName {
+impl From<CrossChainService> for Vec<DigestName> {
     fn from(service: CrossChainService) -> Self {
         match service {
-            CrossChainService::CosmosToEthEchoData => DigestName::EchoData,
+            CrossChainService::CosmosToEthEchoData => vec![DigestName::EchoData],
         }
     }
 }
 
-impl From<AnyService> for DigestName {
+impl From<AnyService> for Vec<DigestName> {
     fn from(service: AnyService) -> Self {
         match service {
             AnyService::Eth(service) => service.into(),

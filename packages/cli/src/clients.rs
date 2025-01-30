@@ -3,7 +3,6 @@ pub mod example_eth_client;
 
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
-use utils::types::AddServiceResponse;
 use utils::ServiceID;
 use utils::{
     config::{CosmosChainConfig, EthereumChainConfig},
@@ -52,10 +51,10 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(endpoint: String) -> Self {
         Self {
             inner: reqwest::Client::new(),
-            endpoint: config.wavs_endpoint.clone(),
+            endpoint,
         }
     }
 
@@ -82,41 +81,45 @@ impl HttpClient {
         Ok(response.digest.into())
     }
 
-    pub async fn create_service(
+    pub async fn create_service_simple(
         &self,
         trigger: Trigger,
         submit: Submit,
         digest: Digest,
         config: ServiceConfig,
     ) -> Result<Service> {
-        let service_id = ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?;
-
-        let service = AddServiceRequest {
+        let mut service = Service::new_simple(
+            ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?,
+            None,
             trigger,
-            id: service_id.clone(),
-            digest: digest.into(),
-            permissions: Permissions {
+            digest,
+            submit,
+            Some(config),
+        );
+
+        for component in service.components.values_mut() {
+            component.permissions = Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,
                 file_system: true,
-            },
-            testable: Some(true),
-            submit,
-            config,
-            wasm_url: None,
-        };
+            }
+        }
 
-        let body = serde_json::to_string(&service)?;
+        self.create_service_raw(service.clone()).await?;
 
-        let resp: AddServiceResponse = self
-            .inner
+        Ok(service)
+    }
+
+    pub async fn create_service_raw(&self, service: Service) -> Result<()> {
+        let body = serde_json::to_string(&AddServiceRequest { service })?;
+
+        self.inner
             .post(format!("{}/app", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
             .send()
             .await?
-            .json()
-            .await?;
+            .error_for_status()?;
 
-        Ok(resp.service)
+        Ok(())
     }
 }

@@ -18,12 +18,12 @@ use axum::{
     http::{Method, Request},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tower::Service;
+use tower::Service as _;
 use utils::{
     digest::Digest,
     types::{
-        AddServiceRequest, DeleteServicesRequest, ListServicesResponse, Permissions, ServiceConfig,
-        Submit, TestAppRequest, TestAppResponse, TriggerData,
+        AddServiceRequest, DeleteServicesRequest, ListServicesResponse, Service, Submit,
+        TestAppRequest, TestAppResponse, TriggerData,
     },
     ServiceID,
 };
@@ -92,14 +92,7 @@ impl MockE2ETestRunner {
         digest: Digest,
         function: impl Function,
     ) {
-        self.create_service(
-            service_id,
-            digest,
-            Permissions::default(),
-            ServiceConfig::default(),
-            function,
-        )
-        .await
+        self.create_service(service_id, digest, function).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -107,8 +100,6 @@ impl MockE2ETestRunner {
         &self,
         service_id: ServiceID,
         digest: Digest,
-        permissions: Permissions,
-        config: ServiceConfig,
         function: impl Function,
     ) {
         // "upload" the component
@@ -116,21 +107,20 @@ impl MockE2ETestRunner {
         self.dispatcher.engine.engine().register(&digest, function);
 
         // but we can create a service via http router
-        let body = serde_json::to_string(&AddServiceRequest {
-            trigger: mock_eth_event_trigger(),
-            id: service_id,
-            digest: digest.into(),
-            permissions,
-            config: config.clone(),
-            testable: None,
-            submit: Submit::eigen_contract(
-                "eth".try_into().unwrap(),
-                rand_address_eth(),
-                config.max_gas,
-            ),
-            wasm_url: None,
-        })
-        .unwrap();
+        let trigger = mock_eth_event_trigger();
+
+        let submit = Submit::eigen_contract("eth".try_into().unwrap(), rand_address_eth(), None);
+
+        let service = Service::new_simple(
+            service_id,
+            Some("mock-service".to_string()),
+            trigger,
+            digest,
+            submit,
+            None,
+        );
+
+        let body = serde_json::to_string(&AddServiceRequest { service }).unwrap();
 
         let req = Request::builder()
             .method(Method::POST)

@@ -7,25 +7,10 @@ use serde::{
 
 use crate::digest::Digest;
 
-use super::{
-    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, TriggerData,
-};
+use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger, TriggerData};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
-    pub id: ServiceID,
-    pub digest: ShaDigest,
-    pub trigger: Trigger,
-    pub permissions: Permissions,
-    pub config: ServiceConfig,
-    pub testable: Option<bool>,
-    pub submit: Submit,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wasm_url: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AddServiceResponse {
     pub service: Service,
 }
 

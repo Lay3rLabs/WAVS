@@ -2,12 +2,7 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use utils::{
-    context::AppContext,
-    digest::Digest,
-    types::{AllowedHostPermission, Permissions, ServiceConfig},
-    ServiceID, WorkflowID,
-};
+use utils::{context::AppContext, digest::Digest, ServiceID, WorkflowID};
 use wavs::{
     engine::runner::EngineRunner,
     test_utils::{
@@ -21,12 +16,7 @@ fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
     let service_id = ServiceID::new("service1").unwrap();
-    let workflow_id = WorkflowID::new("test-workflow").unwrap();
     let task_queue_address = rand_address_eth();
-    let config = ServiceConfig {
-        workflow_id: workflow_id.clone(),
-        ..Default::default()
-    };
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
@@ -37,13 +27,7 @@ fn mock_e2e_trigger_flow() {
             let digest = Digest::new(b"wasm");
 
             runner
-                .create_service(
-                    service_id.clone(),
-                    digest,
-                    Permissions::default(),
-                    config,
-                    BigSquare,
-                )
+                .create_service(service_id.clone(), digest, BigSquare)
                 .await;
         }
     });
@@ -59,7 +43,7 @@ fn mock_e2e_trigger_flow() {
                 .triggers
                 .send_trigger(
                     &service_id,
-                    &workflow_id,
+                    &WorkflowID::default(),
                     &task_queue_address.into(),
                     &SquareIn { x: 3 },
                     "eth",
@@ -70,7 +54,7 @@ fn mock_e2e_trigger_flow() {
                 .triggers
                 .send_trigger(
                     &service_id,
-                    &workflow_id,
+                    &WorkflowID::default(),
                     &task_queue_address.into(),
                     &SquareIn { x: 21 },
                     "eth",
@@ -195,42 +179,6 @@ fn mock_e2e_service_test() {
             let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3 }).await;
 
             assert_eq!(y, 9);
-        }
-    })
-}
-
-#[test]
-fn mock_e2e_service_settings() {
-    let runner = MockE2ETestRunner::new(AppContext::new());
-    // block and wait for creating the service
-
-    runner.ctx.rt.block_on({
-        let runner = runner.clone();
-
-        async move {
-            let service_id = ServiceID::new("service").unwrap();
-            let digest = Digest::new(b"wasm");
-
-            let permissions = Permissions {
-                allowed_http_hosts: AllowedHostPermission::Only(vec!["example.com".to_string()]),
-                ..Default::default()
-            };
-
-            let config = ServiceConfig::default();
-
-            runner
-                .create_service(
-                    service_id.clone(),
-                    digest.clone(),
-                    permissions.clone(),
-                    config.clone(),
-                    BigSquare,
-                )
-                .await;
-
-            let services = runner.list_services().await;
-
-            assert_eq!(services.services[0].permissions, permissions);
         }
     })
 }
