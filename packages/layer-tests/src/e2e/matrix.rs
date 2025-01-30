@@ -20,6 +20,7 @@ pub enum EthService {
     EchoDataAggregator,
     Permissions,
     Square,
+    MultiWorkflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -98,6 +99,7 @@ impl From<EthService> for DigestName {
             EthService::Square => DigestName::Square,
             EthService::EchoDataSecondaryChain => DigestName::EchoData,
             EthService::EchoDataAggregator => DigestName::EchoData,
+            EthService::MultiWorkflow => DigestName::Square,
         }
     }
 }

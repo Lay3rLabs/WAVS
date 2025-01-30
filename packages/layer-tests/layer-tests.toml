@@ -1,5 +1,6 @@
-all = true
+# all = true
 
+isolated = "eth-multi-workflow" 
 # See matrix.rs for all the available options
 
 # isolated = "eth-chain-trigger-lookup" 

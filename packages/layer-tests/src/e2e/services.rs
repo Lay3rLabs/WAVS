@@ -10,7 +10,7 @@ use alloy::sol_types::SolEvent;
 use utils::{
     context::AppContext,
     eigen_client::CoreAVSAddresses,
-    types::{ChainName, ComponentSource},
+    types::{ChainName, Component, ComponentSource, Permissions, Service, Workflow}, ComponentID, WorkflowID,
 };
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -24,7 +24,7 @@ use wavs_cli::{
 pub struct Services {
     #[allow(dead_code)]
     pub eth_eigen_core: BTreeMap<ChainName, CoreAVSAddresses>,
-    pub lookup: BTreeMap<AnyService, DeployService>,
+    pub lookup: BTreeMap<AnyService, Service>,
 }
 
 impl Services {
@@ -77,9 +77,16 @@ impl Services {
             let mut lookup = BTreeMap::default();
 
             // nonce errors here too, gotta go sequentially :/
-            for service in all_services {
-                let res = deploy_service(service, clients, digests, &chain_names).await;
-                lookup.insert(service, res);
+            for service_kind in all_services {
+
+                let service = match service_kind {
+                    AnyService::Eth(EthService::MultiWorkflow) => {
+                        deploy_service_raw(service_kind, clients, digests, &chain_names).await
+                    },
+                    _ => deploy_service_simple(service_kind, clients, digests, &chain_names).await
+                };
+
+                lookup.insert(service_kind, service);
             }
 
             Self {
@@ -90,12 +97,12 @@ impl Services {
     }
 }
 
-async fn deploy_service(
+async fn deploy_service_simple(
     service: AnyService,
     clients: &Clients,
     digests: &Digests,
     chain_names: &ChainNames,
-) -> DeployService {
+) -> Service {
     let digest = digests.lookup.get(&service.into()).unwrap().clone();
 
     let trigger = match service {
@@ -168,6 +175,63 @@ async fn deploy_service(
     .await
     .unwrap()
     .unwrap()
+    .service
+}
+
+async fn deploy_service_raw(
+    service_kind: AnyService,
+    clients: &Clients,
+    digests: &Digests,
+    chain_names: &ChainNames,
+) -> Service {
+
+    if !matches!(service_kind, AnyService::Eth(EthService::MultiWorkflow)) {
+        panic!("unexpected service kind: {:?}", service_kind);
+    }
+
+    let mut service = Service::new_simple(
+        "",
+        trigger,
+        digest,
+        submit,
+        Some(config),
+    );
+
+
+    let component_id1 = ComponentID::new("component1").unwrap();
+    let component_id2 = ComponentID::new("component2").unwrap();
+    let workflow_id1 = WorkflowID::new("workflow1").unwrap();
+    let workflow_id2 = WorkflowID::new("workflow2").unwrap();
+
+    let workflow = Workflow {
+        trigger,
+        component: component_id,
+        submit,
+    };
+
+    let component = Component {
+        wasm: component_digest,
+        permissions: Permissions::default(),
+    };
+
+    let components = BTreeMap::from([(workflow.component.clone(), component)]);
+
+    let workflows = BTreeMap::from([(workflow_id, workflow)]);
+
+    for component in service.components.values_mut() {
+        component.permissions = Permissions {
+            allowed_http_hosts: AllowedHostPermission::All,
+            file_system: true,
+        }
+    }
+
+    let service = Service {
+        id: ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap(),
+        name: "".to_string(),
+
+    }
+
+    todo!()
 }
 
 #[derive(Default)]
