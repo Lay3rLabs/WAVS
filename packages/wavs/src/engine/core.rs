@@ -253,7 +253,7 @@ mod tests {
     use utils::{
         storage::memory::MemoryStorage,
         types::{Trigger, TriggerData},
-        ComponentID, ServiceID, WorkflowID,
+        ServiceID, WorkflowID,
     };
 
     use crate::{apis::trigger::TriggerConfig, engine::mock::mock_chain_configs};
@@ -343,8 +343,6 @@ mod tests {
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
             max_gas: None,
-            component_id: ComponentID::default(),
-            workflow_id: WorkflowID::default(),
         };
 
         // verify service config kv is accessible
