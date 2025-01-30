@@ -90,7 +90,7 @@ impl HttpClient {
     ) -> Result<Service> {
         let mut service = Service::new_simple(
             ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?,
-            "",
+            None,
             trigger,
             digest,
             submit,

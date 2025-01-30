@@ -111,8 +111,14 @@ impl MockE2ETestRunner {
 
         let submit = Submit::eigen_contract("eth".try_into().unwrap(), rand_address_eth(), None);
 
-        let service =
-            Service::new_simple(service_id, "mock-service", trigger, digest, submit, None);
+        let service = Service::new_simple(
+            service_id,
+            Some("mock-service".to_string()),
+            trigger,
+            digest,
+            submit,
+            None,
+        );
 
         let body = serde_json::to_string(&AddServiceRequest { service }).unwrap();
 
