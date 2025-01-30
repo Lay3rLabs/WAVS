@@ -51,4 +51,5 @@ alloy = { workspace = true }
 shellexpand = { workspace = true }
 alloy-rlp = { workspace = true }
 fs_extra = {workspace = true}
+uuid = {workspace = true}
 derive-enum-all-values = "=0.1.0"
