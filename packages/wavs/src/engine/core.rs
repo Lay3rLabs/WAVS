@@ -174,10 +174,9 @@ impl<S: CAStorage> WasmEngine<S> {
 
         // conditionally allow fs access
         if wasi.permissions.file_system {
-            let app_cache_path = self
-                .app_data_dir
-                .join(trigger.config.service_id.as_ref())
-                .join(trigger.config.workflow_id.as_ref());
+            // we namespace by service id so that all components within a service have access to the same data
+            // and services are each isolated from each other
+            let app_cache_path = self.app_data_dir.join(trigger.config.service_id.as_ref());
             if !app_cache_path.is_dir() {
                 std::fs::create_dir_all(&app_cache_path)?;
             }
