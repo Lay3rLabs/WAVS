@@ -34,7 +34,7 @@ pub struct Service {
 impl Service {
     pub fn new_simple(
         id: ServiceID,
-        name: impl Into<String>,
+        name: Option<String>,
         trigger: Trigger,
         component_digest: Digest,
         submit: Submit,
@@ -59,8 +59,8 @@ impl Service {
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
 
         Self {
+            name: name.unwrap_or_else(|| id.to_string()),
             id,
-            name: name.into(),
             components,
             workflows,
             status: ServiceStatus::Active,
