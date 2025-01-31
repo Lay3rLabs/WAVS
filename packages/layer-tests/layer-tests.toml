@@ -1,8 +1,8 @@
 # Run all the tests
-#all = true
+all = true
 
 # Run just one test (cannot be enabled at the same time as all)
- isolated = "eth-permissions" 
+#isolated = "eth-permissions" 
 
 # See matrix.rs for all the available options
 # You can run groups of tests like:

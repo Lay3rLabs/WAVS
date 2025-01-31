@@ -1,10 +1,6 @@
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use layer_wasi::{
-    bindings::world::{Guest, TriggerAction, 
-        // wasi::http::types::InputStream, 
-        wasi::io::streams::StreamError,
-        wasi::http::types::InputStream
-    },
+    bindings::world::{Guest, TriggerAction},
     export_layer_trigger_world,
 };
 use std::{
@@ -12,7 +8,12 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use wstd::{runtime::block_on, http::{Client, Request}, io::{empty, AsyncRead}};
+use wasi::{http::types::InputStream, io::streams::StreamError};
+use wstd::{
+    http::{Client, Request},
+    io::{empty, AsyncRead},
+    runtime::block_on,
+};
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};

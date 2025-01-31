@@ -1,11 +1,11 @@
 package lay3r:avs@0.3.0;
 
-use wasi:io/poll@0.2.2;
-use wasi:clocks/monotonic-clock@0.2.2;
-use wasi:io/error@0.2.2;
-use wasi:io/streams@0.2.2;
-use wasi:http/types@0.2.2 as http-types;
-use wasi:http/outgoing-handler@0.2.2 as http-outgoing-handler;
+use wasi:io/poll@0.2.0;
+use wasi:clocks/monotonic-clock@0.2.0;
+use wasi:io/error@0.2.0;
+use wasi:io/streams@0.2.0;
+use wasi:http/types@0.2.0 as http-types;
+use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
 
 interface layer-types {
   record cosmos-address {
@@ -97,9 +97,6 @@ interface layer-types {
 }
 
 world layer-trigger-world {
-  import wasi:io/poll@0.2.2;
-  import wasi:io/streams@0.2.2;
-  import wasi:http/types@0.2.2;
   import host: interface {
     use layer-types.{eth-chain-config, cosmos-chain-config};
 

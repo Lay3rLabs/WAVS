@@ -14,9 +14,7 @@ wasi = { workspace = true }
 wit-bindgen-rt = { workspace = true }
 url = { workspace = true }
 example-helpers = { workspace = true }
-#wstd = { workspace = true }
-wstd = "0.5.0"
-
+wstd = { workspace = true }
 layer-wasi = { workspace = true }
 
 [lib]
