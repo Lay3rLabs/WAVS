@@ -8,14 +8,13 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use wasi::{http::types::InputStream, io::streams::StreamError};
 use wstd::{
     http::{Client, Request},
     io::{empty, AsyncRead},
     runtime::block_on,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use url::Url;
 

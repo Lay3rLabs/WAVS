@@ -3,5 +3,5 @@ d9fc219a2120e26eae15dcd2a9feddf301b263a14cf5fbe658a9db62d1932991  ./examples/bui
 12ffce4523782f171567b3226ae40ce42da5ec13cfc3bcad0c6b5f75ac4e1315  ./examples/build/components/echo_data.wasm
 ae83d4fe85517161da1cbce7d8bfaa849ecf820003453df8ef3356ca724bd5d2  ./examples/build/components/echo_raw.wasm
 d094f38544f639605f83a2ed8984b04451b00ad7243ad0c4a2602646c5fa6860  ./examples/build/components/example_helpers.wasm
-fb8aa606fc7236d411fad84fea2ad7b2d6f2c47747e1a0fc1790503e72d70b65  ./examples/build/components/permissions.wasm
+0a93d3714bfec5476824e4c996ac0ef963481466bab9d8bda09870ae42188d85  ./examples/build/components/permissions.wasm
 cdfdec9d95b5805ce0df68727986f06ede60f7e3aa00be3f0e6641950c1b3ac7  ./examples/build/components/square.wasm
