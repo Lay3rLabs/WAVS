@@ -15,7 +15,7 @@ use wstd::{
     runtime::block_on,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -59,40 +59,12 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
 }
 
 async fn get_url(url: Url) -> Result<String> {
-    let mut client = Client::new();
-    let mut request = Request::get(url.to_string()).body(empty()).unwrap();
+    let request = Request::get(url.to_string()).body(empty()).unwrap();
     let mut response = Client::new().send(request).await.unwrap();
     let body = response.body_mut();
     let mut body_buf = Vec::new();
     body.read_to_end(&mut body_buf).await.unwrap();
     Ok(serde_json::to_string(&body_buf).unwrap())
-}
-
-fn read_stream_to_string(stream: &InputStream) -> Result<String> {
-    let mut buffer = Vec::new();
-    let read_len = 1024;
-
-    loop {
-        match stream.blocking_read(read_len) {
-            Ok(chunk) => {
-                if chunk.is_empty() {
-                    break;
-                }
-                buffer.extend_from_slice(&chunk);
-            }
-            Err(e) => match e {
-                StreamError::LastOperationFailed(error) => {
-                    return Err(anyhow!("{error:?}"));
-                }
-                StreamError::Closed => {
-                    break;
-                }
-            },
-        }
-    }
-
-    let result_string = String::from_utf8(buffer)?;
-    Ok(result_string)
 }
 
 #[derive(Deserialize, Serialize)]
