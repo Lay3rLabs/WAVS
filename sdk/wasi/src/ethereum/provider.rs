@@ -21,7 +21,6 @@ use wasi::http::types::Method;
 use wit_bindgen_rt::async_support::futures::pin_mut;
 use wstd::{http::{Client, Request, StatusCode, IntoBody}, io::{empty, AsyncRead}, runtime::block_on};
 
-use crate::wasi::Response;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
