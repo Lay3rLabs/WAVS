@@ -1,5 +1,5 @@
 use crate::apis::trigger as api;
-use crate::bindings::world::lay3r::avs::layer_types as component;
+use crate::bindings::world::wavs::worker::layer_types as component;
 
 impl TryFrom<api::TriggerAction> for component::TriggerAction {
     type Error = api::TriggerError;
@@ -30,8 +30,8 @@ impl TryFrom<utils::types::Trigger> for component::TriggerSource {
     fn try_from(src: utils::types::Trigger) -> Result<Self, Self::Error> {
         Ok(match src {
             utils::types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
-                crate::bindings::world::lay3r::avs::layer_types::TriggerSource::CosmosContractEvent(
-                    crate::bindings::world::lay3r::avs::layer_types::TriggerSourceCosmosContractEvent {
+                crate::bindings::world::wavs::worker::layer_types::TriggerSource::CosmosContractEvent(
+                    crate::bindings::world::wavs::worker::layer_types::TriggerSourceCosmosContractEvent {
                         address: address.try_into()?,
                         chain_name: chain_name.to_string(),
                         event_type,
@@ -39,8 +39,8 @@ impl TryFrom<utils::types::Trigger> for component::TriggerSource {
                 )
             },
             utils::types::Trigger::EthContractEvent { address, chain_name, event_hash } => {
-                crate::bindings::world::lay3r::avs::layer_types::TriggerSource::EthContractEvent(
-                    crate::bindings::world::lay3r::avs::layer_types::TriggerSourceEthContractEvent {
+                crate::bindings::world::wavs::worker::layer_types::TriggerSource::EthContractEvent(
+                    crate::bindings::world::wavs::worker::layer_types::TriggerSourceEthContractEvent {
                         address: address.into(),
                         chain_name: chain_name.to_string(),
                         event_hash: event_hash.to_vec(),
@@ -48,7 +48,7 @@ impl TryFrom<utils::types::Trigger> for component::TriggerSource {
                 )
             },
             utils::types::Trigger::Manual => {
-                crate::bindings::world::lay3r::avs::layer_types::TriggerSource::Manual
+                crate::bindings::world::wavs::worker::layer_types::TriggerSource::Manual
             },
         })
     }
@@ -65,13 +65,13 @@ impl TryFrom<utils::types::TriggerData> for component::TriggerData {
                 log,
                 block_height,
             } => {
-                Ok(crate::bindings::world::lay3r::avs::layer_types::TriggerData::EthContractEvent(
-                    crate::bindings::world::lay3r::avs::layer_types::TriggerDataEthContractEvent {
-                        contract_address: crate::bindings::world::lay3r::avs::layer_types::EthAddress {
+                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::EthContractEvent(
+                    crate::bindings::world::wavs::worker::layer_types::TriggerDataEthContractEvent {
+                        contract_address: crate::bindings::world::wavs::worker::layer_types::EthAddress {
                             raw_bytes: contract_address.to_vec()
                         },
                         chain_name: chain_name.to_string(),
-                        log: crate::bindings::world::lay3r::avs::layer_types::EthEventLogData {
+                        log: crate::bindings::world::wavs::worker::layer_types::EthEventLogData {
                             topics: log
                                 .topics()
                                 .iter()
@@ -84,11 +84,11 @@ impl TryFrom<utils::types::TriggerData> for component::TriggerData {
                 ))
             },
             utils::types::TriggerData::CosmosContractEvent { contract_address, chain_name, event, block_height } => {
-                Ok(crate::bindings::world::lay3r::avs::layer_types::TriggerData::CosmosContractEvent(
-                    crate::bindings::world::lay3r::avs::layer_types::TriggerDataCosmosContractEvent {
+                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::CosmosContractEvent(
+                    crate::bindings::world::wavs::worker::layer_types::TriggerDataCosmosContractEvent {
                         contract_address: contract_address.try_into()?,
                         chain_name: chain_name.to_string(),
-                        event: crate::bindings::world::lay3r::avs::layer_types::CosmosEvent {
+                        event: crate::bindings::world::wavs::worker::layer_types::CosmosEvent {
                             ty: event.ty,
                             attributes: event
                                 .attributes
@@ -101,7 +101,7 @@ impl TryFrom<utils::types::TriggerData> for component::TriggerData {
                 ))
             },
             utils::types::TriggerData::Raw(data) => {
-                Ok(crate::bindings::world::lay3r::avs::layer_types::TriggerData::Raw(data))
+                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Raw(data))
             },
         }
     }

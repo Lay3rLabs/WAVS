@@ -103,7 +103,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             let service_id = trigger.config.service_id.clone();
             let workflow_id = trigger.config.workflow_id.clone();
 
-            let input: crate::bindings::world::lay3r::avs::layer_types::TriggerAction = trigger
+            let input: crate::bindings::world::wavs::worker::layer_types::TriggerAction = trigger
                 .try_into()
                 .map_err(|e: TriggerError| EngineError::TriggerData(e.into()))?;
 

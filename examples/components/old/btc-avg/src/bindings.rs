@@ -1,4 +1,4 @@
-pub type Output = lay3r::avs::types::Output;
+pub type Output = wavs::worker::types::Output;
 #[doc(hidden)]
 #[allow(non_snake_case)]
 pub unsafe fn _export_run_cron_cabi<T: Guest>() -> *mut u8 {

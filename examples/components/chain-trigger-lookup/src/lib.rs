@@ -15,7 +15,7 @@ struct Component;
 
 impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
-        wstd::runtime::block_on(move |reactor| async move {
+        wstd::runtime::block_on(async move {
             let (trigger_id, _) = decode_trigger_event(trigger_action.data.clone())?;
 
             let resp = match trigger_action.data {
@@ -28,7 +28,7 @@ impl Guest for Component {
                         anyhow::anyhow!("cosmos chain config for {chain_name} not found"),
                     )?;
 
-                    new_cosmos_query_client(chain_config, reactor)
+                    new_cosmos_query_client(chain_config)
                         .await?
                         .trigger_data(contract_address.into(), trigger_id)
                         .await?
@@ -43,7 +43,6 @@ impl Guest for Component {
                     )?;
 
                     new_eth_provider(
-                        reactor,
                         chain_config
                             .http_endpoint
                             .context("http_endpoint is missing")?,

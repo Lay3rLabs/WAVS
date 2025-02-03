@@ -7,12 +7,13 @@ use layer_wasi::{
     export_layer_trigger_world,
 };
 use serde::{Deserialize, Serialize};
+use wstd::runtime::block_on;
 
 struct Component;
 
 impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
-        wstd::runtime::block_on(move |reactor| async move {
+        block_on(async move {
             let (trigger_id, req) = decode_trigger_event(trigger_action.data)?;
 
             let req: CosmosQueryRequest =
@@ -22,7 +23,7 @@ impl Guest for Component {
                 CosmosQueryRequest::BlockHeight { chain_name } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = new_cosmos_query_client(chain_config, reactor).await?;
+                    let querier = new_cosmos_query_client(chain_config).await?;
 
                     querier
                         .block_height()
@@ -36,7 +37,7 @@ impl Guest for Component {
                 } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = new_cosmos_query_client(chain_config, reactor).await?;
+                    let querier = new_cosmos_query_client(chain_config).await?;
 
                     querier
                         .balance(address, None)

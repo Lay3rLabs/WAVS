@@ -79,8 +79,8 @@ alloy-transport = "0.9.2"
 alloy-rpc-client = "0.9.2"
 tendermint-rpc = "0.40.1"
 tendermint = { version = "0.40.1", default-features = false}
-wstd = "0.4.0"
-wasi = "0.13.3"
+wstd = "0.5.0"
+wasi = "0.14.0"
 cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
 cosmwasm-schema = "2.2.0"
 cw-storage-plus = "2.0.0"

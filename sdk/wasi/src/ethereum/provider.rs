@@ -19,30 +19,31 @@ use alloy_transport_http::{Http, HttpConnect};
 use tower_service::Service;
 use wasi::http::types::Method;
 use wit_bindgen_rt::async_support::futures::pin_mut;
-use wstd::runtime::Reactor;
-
-use crate::wasi::{Request, Response, WasiPollable};
+use wstd::{
+    http::{Client, IntoBody, Request, StatusCode},
+    io::{empty, AsyncRead},
+    runtime::block_on,
+};
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         pub type WasiProvider<N = Ethereum> =
             RootProvider<WasiEthClient, N>;
 
-        pub fn new_eth_provider<N: Network>(reactor: Reactor, endpoint: String) -> WasiProvider<N> {
-            let client = WasiEthClient::new(reactor, endpoint);
+        pub fn new_eth_provider<N: Network>(endpoint: String) -> WasiProvider<N> {
+            let client = WasiEthClient::new(endpoint);
             let is_local = client.is_local();
             RootProvider::new(RpcClient::new(client, is_local))
         }
 
         #[derive(Clone)]
         pub struct WasiEthClient {
-            pub reactor: Reactor,
             pub endpoint: String,
         }
 
         impl WasiEthClient {
-            pub fn new(reactor: Reactor, endpoint: String) -> Self {
-                Self { reactor, endpoint }
+            pub fn new(endpoint: String) -> Self {
+                Self { endpoint }
             }
         }
 
@@ -75,27 +76,22 @@ cfg_if::cfg_if! {
 
             #[inline]
             fn call(&mut self, packet: RequestPacket) -> Self::Future {
-                let reactor = self.reactor.clone();
                 let endpoint = self.endpoint.clone();
                 let fut = async move {
                     fn transport_err(e: impl ToString) -> TransportError {
                         TransportError::Transport(TransportErrorKind::Custom(e.to_string().into()))
                     }
 
-                    let mut req = Request::new(Method::Post, &endpoint).map_err(transport_err)?;
+                    let request = Request::post(endpoint).header("content-type", "application/json").body(serde_json::to_vec(&packet.serialize().map_err(transport_err)?).map_err(transport_err)?.into_body()).map_err(transport_err)?;
 
-                    let body = packet.serialize().map_err(transport_err)?;
+                    let mut res = Client::new().send(request).await.map_err(transport_err)?;
 
-                    req.body = serde_json::to_vec(&body).map_err(transport_err)?;
-                    req.headers
-                        .push(("content-type".to_string(), "application/json".to_string()));
-
-                    let res = reactor.send(req).await.map_err(transport_err)?;
-
-                    match res.status {
-                        200 => {
-                            let res = res.json::<ResponsePacket>().map_err(transport_err)?;
-                            Ok(res)
+                    match res.status() {
+                        StatusCode::OK => {
+                            let body = res.body_mut();
+                            let mut body_buf = Vec::new();
+                            body.read_to_end(&mut body_buf).await.map_err(transport_err)?;
+                            Ok(serde_json::from_slice::<ResponsePacket>(&body_buf).map_err(transport_err)?)
                         }
                         status => return Err(transport_err(format!("unexpected status code: {status}"))),
                     }
@@ -106,7 +102,7 @@ cfg_if::cfg_if! {
         }
     } else {
         // not used, just for making the compiler happy
-        pub fn new_eth_provider<N: Network>(_reactor: Reactor, _endpoint: String) -> RootProvider<BoxTransport, N> {
+        pub fn new_eth_provider<N: Network>(_endpoint: String) -> RootProvider<BoxTransport, N> {
             unimplemented!()
         }
     }
