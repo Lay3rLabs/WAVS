@@ -7,7 +7,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-layer-wasi = { workspace = true}
+wavs-wasi-chain = { workspace = true}
 serde = { workspace = true}
 serde_json = { workspace = true}
 layer-climb = { workspace = true}

@@ -1,7 +1,7 @@
 [workspace]
 members = [
   "packages/*",
-  "sdk/wasi",
+  "sdk/wasi-chain",
 ]
 resolver = "2"
 
@@ -18,7 +18,7 @@ utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
-layer-wasi = { path = "sdk/wasi" }
+wavs-wasi-chain = { path = "sdk/wasi-chain" }
 clap = { version = "4.5.20", features = ["derive", "env", "string"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }

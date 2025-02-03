@@ -1,12 +1,12 @@
 use anyhow::anyhow;
-use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
-use layer_climb::prelude::Address;
-use layer_wasi::{
-    bindings::world::{host, Guest, TriggerAction},
-    cosmos::new_cosmos_query_client,
+use example_helpers::bindings::world::{host, Guest, TriggerAction};
+use example_helpers::{
     export_layer_trigger_world,
+    trigger::{decode_trigger_event, encode_trigger_output},
 };
+use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
+use wavs_wasi_chain::cosmos::new_cosmos_query_client;
 use wstd::runtime::block_on;
 
 struct Component;
@@ -23,7 +23,7 @@ impl Guest for Component {
                 CosmosQueryRequest::BlockHeight { chain_name } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = new_cosmos_query_client(chain_config).await?;
+                    let querier = new_cosmos_query_client(chain_config.into()).await?;
 
                     querier
                         .block_height()
@@ -37,7 +37,7 @@ impl Guest for Component {
                 } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = new_cosmos_query_client(chain_config).await?;
+                    let querier = new_cosmos_query_client(chain_config.into()).await?;
 
                     querier
                         .balance(address, None)

@@ -8,7 +8,7 @@ rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [dependencies]
-layer-wasi = { workspace = true }
+wavs-wasi-chain = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }

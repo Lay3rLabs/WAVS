@@ -24,7 +24,7 @@ rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [workspace.dependencies]
-layer-wasi = { path = "../sdk/wasi" }
+wavs-wasi-chain = { path = "../sdk/wasi-chain" }
 example-helpers = { path = "./components/_helpers" }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"

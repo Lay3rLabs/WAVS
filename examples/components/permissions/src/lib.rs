@@ -1,5 +1,5 @@
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
-use layer_wasi::{
+use example_helpers::{
     bindings::world::{Guest, TriggerAction},
     export_layer_trigger_world,
 };
