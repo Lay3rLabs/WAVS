@@ -1,13 +1,17 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
+use crate::bindings::compat::CosmosChainConfig;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use layer_climb::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 use wasi::http::types::Method;
-use wstd::{http::{Client, Request, StatusCode, IntoBody}, io::{empty, AsyncRead}, runtime::block_on};
-use crate::bindings::compat::CosmosChainConfig;
+use wstd::{
+    http::{Client, IntoBody, Request, StatusCode},
+    io::{empty, AsyncRead},
+    runtime::block_on,
+};
 
 struct WasiCosmosRpcTransport {}
 

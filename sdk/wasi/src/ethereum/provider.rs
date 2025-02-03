@@ -19,8 +19,11 @@ use alloy_transport_http::{Http, HttpConnect};
 use tower_service::Service;
 use wasi::http::types::Method;
 use wit_bindgen_rt::async_support::futures::pin_mut;
-use wstd::{http::{Client, Request, StatusCode, IntoBody}, io::{empty, AsyncRead}, runtime::block_on};
-
+use wstd::{
+    http::{Client, IntoBody, Request, StatusCode},
+    io::{empty, AsyncRead},
+    runtime::block_on,
+};
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
