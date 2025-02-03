@@ -1,12 +1,12 @@
-pub type TaskQueueInput = lay3r::avs::types::TaskQueueInput;
-pub type Output = lay3r::avs::types::Output;
+pub type TaskQueueInput = wavs::worker::types::TaskQueueInput;
+pub type Output = wavs::worker::types::Output;
 #[doc(hidden)]
 #[allow(non_snake_case)]
 pub unsafe fn _export_run_task_cabi<T: Guest>(arg0: i64, arg1: *mut u8, arg2: usize) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
     let len0 = arg2;
-    let result1 = T::run_task(lay3r::avs::types::TaskQueueInput {
+    let result1 = T::run_task(wavs::worker::types::TaskQueueInput {
         timestamp: arg0 as u64,
         request: _rt::Vec::from_raw_parts(arg1.cast(), len0, len0),
     });

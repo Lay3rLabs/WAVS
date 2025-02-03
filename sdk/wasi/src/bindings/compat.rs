@@ -1,4 +1,4 @@
-pub use super::world::lay3r::avs::layer_types::*;
+pub use super::world::wavs::worker::layer_types::*;
 
 impl From<CosmosEvent> for cosmwasm_std::Event {
     fn from(event: CosmosEvent) -> Self {

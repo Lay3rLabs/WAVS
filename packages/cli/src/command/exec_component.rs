@@ -89,12 +89,12 @@ async fn exec_component(wasm_bytes: Vec<u8>, input_bytes: Vec<u8>) -> Result<Exe
         .expect("Wasm instantiate failed");
 
     let input = TriggerAction {
-        config: lay3r::avs::layer_types::TriggerConfig {
+        config: wavs::worker::layer_types::TriggerConfig {
             service_id: "service-1".to_string(),
             workflow_id: "default".to_string(),
-            trigger_source: lay3r::avs::layer_types::TriggerSource::Manual,
+            trigger_source: wavs::worker::layer_types::TriggerSource::Manual,
         },
-        data: lay3r::avs::layer_types::TriggerData::Raw(input_bytes),
+        data: wavs::worker::layer_types::TriggerData::Raw(input_bytes),
     };
 
     let response = instance
