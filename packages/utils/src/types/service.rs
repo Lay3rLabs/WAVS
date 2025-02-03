@@ -148,9 +148,10 @@ impl TriggerData {
 pub enum Submit {
     // useful for when the component just does something with its own state
     None,
-    EigenContract {
+    // Ethereum Contract which implements the ILayerService interface
+    EthereumContract {
         chain_name: ChainName,
-        service_manager: alloy::primitives::Address,
+        address: alloy::primitives::Address,
         max_gas: Option<u64>,
     },
 }
@@ -219,14 +220,14 @@ mod test_ext {
     use super::{Component, Submit, Trigger};
 
     impl Submit {
-        pub fn eigen_contract(
+        pub fn eth_contract(
             chain_name: ChainName,
-            service_manager: alloy::primitives::Address,
+            address: alloy::primitives::Address,
             max_gas: Option<u64>,
         ) -> Submit {
-            Submit::EigenContract {
+            Submit::EthereumContract {
                 chain_name,
-                service_manager,
+                address,
                 max_gas,
             }
         }

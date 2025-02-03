@@ -122,9 +122,9 @@ impl AddTask {
         };
 
         match workflow.submit {
-            Submit::EigenContract {
+            Submit::EthereumContract {
                 chain_name,
-                service_manager: service_manager_address,
+                address,
                 max_gas: _,
             } => {
                 let result_timeout = match result_timeout {
@@ -141,17 +141,16 @@ impl AddTask {
 
                 let eigen_client = ctx.get_eth_client(&chain_name)?;
 
-                let service_manager =
-                    ServiceManagerClient::new(eigen_client.eth.clone(), service_manager_address);
+                let service_manager = ServiceManagerClient::new(eigen_client.eth.clone(), address);
 
                 let submit_client = SimpleEthSubmitClient::new(
                     ctx.get_eth_client(&chain_name)?.eth,
                     service_manager.handler_address().await?,
                 );
 
-                tracing::info!("service manager address: {}", service_manager_address);
+                tracing::info!("service manager address: {}", address);
 
-                if submit_client.get_service_manager_address().await? != service_manager_address {
+                if submit_client.get_service_manager_address().await? != address {
                     return Err(anyhow::anyhow!("service manager address mismatch"));
                 }
 

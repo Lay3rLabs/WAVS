@@ -22,9 +22,9 @@ async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResu
     for workflow in service.workflows.values() {
         match &workflow.submit {
             Submit::None => {}
-            Submit::EigenContract {
+            Submit::EthereumContract {
                 chain_name,
-                service_manager,
+                address,
                 max_gas: _,
             } => {
                 let chain_config = state
@@ -40,7 +40,7 @@ async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResu
                         .header("Content-Type", "application/json")
                         .json(
                             &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
-                                service_manager_address: *service_manager,
+                                address: *address,
                             },
                         )
                         .send()

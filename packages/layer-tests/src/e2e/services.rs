@@ -315,9 +315,9 @@ async fn deploy_submit_raw(clients: &Clients, chain_names: &ChainNames) -> Submi
         .await
         .unwrap();
 
-    Submit::EigenContract {
+    Submit::EthereumContract {
         chain_name,
-        service_manager: address,
+        address,
         max_gas: None,
     }
 }

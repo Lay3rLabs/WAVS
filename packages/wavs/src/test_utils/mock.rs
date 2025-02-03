@@ -109,7 +109,7 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let trigger = mock_eth_event_trigger();
 
-        let submit = Submit::eigen_contract("eth".try_into().unwrap(), rand_address_eth(), None);
+        let submit = Submit::eth_contract("eth".try_into().unwrap(), rand_address_eth(), None);
 
         let service = Service::new_simple(
             service_id,

@@ -1,8 +1,8 @@
 use super::layer_service_manager::LayerServiceManager;
-use super::{solidity_types, AvsClient, LayerServiceManagerT};
+use super::{AvsClient, LayerServiceManagerT};
 use crate::eth_client::EthSigningClient;
 use alloy::contract::Error;
-use alloy::primitives::FixedBytes;
+use alloy::primitives::{Bytes, FixedBytes};
 use alloy::{
     dyn_abi::DynSolValue,
     primitives::{eip191_hash_message, keccak256, Address, U256},
@@ -57,9 +57,10 @@ impl ServiceManagerClient {
         let gas = gas.unwrap_or(1_000_000).min(30_000_000);
         tracing::debug!("Adding signed payload with gas {}", gas);
 
+        let (data, signature) = signed_payload.into_submission_abi();
         let result = self
             .service_manager_contract
-            .addPayload(signed_payload.into_submission_abi())
+            .handleSignedData(data, signature)
             .gas(gas)
             .send()
             .await;
@@ -112,9 +113,7 @@ pub struct SignedPayload {
 }
 
 impl SignedPayload {
-    pub fn into_submission_abi(
-        self,
-    ) -> solidity_types::layer_service_manager::ILayerServiceManager::SignedPayload {
+    pub fn into_submission_abi(self) -> (Bytes, Bytes) {
         let operators: Vec<DynSolValue> = vec![self.operator.into()];
         let signature: Vec<DynSolValue> = vec![DynSolValue::Bytes(self.signature)];
         let signed_block_height = U256::from(self.signed_block_height);
@@ -126,10 +125,7 @@ impl SignedPayload {
         ])
         .abi_encode_params();
 
-        solidity_types::layer_service_manager::ILayerServiceManager::SignedPayload {
-            data: self.data.into(),
-            signature: signature.into(),
-        }
+        (self.data.into(), signature.into())
     }
 }
 

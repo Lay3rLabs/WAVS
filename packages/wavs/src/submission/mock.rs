@@ -11,7 +11,7 @@ use crate::test_utils::address::rand_address_eth;
 use crate::AppContext;
 
 pub fn mock_eigen_submit() -> Submit {
-    Submit::eigen_contract("eth".try_into().unwrap(), rand_address_eth(), None)
+    Submit::eth_contract("eth".try_into().unwrap(), rand_address_eth(), None)
 }
 
 #[derive(Clone)]
@@ -112,11 +112,7 @@ mod test {
             )
             .unwrap(),
             wasi_result: payload.as_bytes().to_vec(),
-            submit: Submit::eigen_contract(
-                ChainName::new("eth").unwrap(),
-                rand_address_eth(),
-                None,
-            ),
+            submit: Submit::eth_contract(ChainName::new("eth").unwrap(), rand_address_eth(), None),
         }
     }
 

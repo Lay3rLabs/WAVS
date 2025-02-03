@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IServiceHandler} from "@layer-sdk/interfaces/IServiceHandler.sol";
+import {ILayerService} from "@layer-sdk/interfaces/ILayerService.sol";
 import {ISimpleTrigger} from "./interfaces/ISimpleTrigger.sol";
 import {ISimpleSubmit} from "./interfaces/ISimpleSubmit.sol";
 
-contract SimpleSubmit is IServiceHandler {
+contract SimpleSubmit is ILayerService {
     address private owner;
     address private serviceManager;
 
@@ -35,7 +35,7 @@ contract SimpleSubmit is IServiceHandler {
         return serviceManager;
     }
 
-    function handleAddPayload(bytes calldata data, bytes calldata signature) external onlyServiceManager {
+    function handleSignedData(bytes calldata data, bytes calldata signature) external onlyServiceManager {
         ISimpleSubmit.DataWithId memory dataWithId = abi.decode(data, (ISimpleSubmit.DataWithId));
 
         signatures[dataWithId.triggerId] = signature;

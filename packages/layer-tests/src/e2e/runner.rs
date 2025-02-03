@@ -59,7 +59,7 @@ async fn test_service(
         let (workflow_id, workflow) = service.workflows.iter().nth(workflow_index).unwrap();
 
         let n_tasks = match &workflow.submit {
-            Submit::EigenContract { chain_name, .. } => {
+            Submit::EthereumContract { chain_name, .. } => {
                 let chain = configs
                     .chains
                     .eth

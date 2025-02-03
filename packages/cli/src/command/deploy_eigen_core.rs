@@ -45,7 +45,7 @@ impl CommandDeployResult for DeployEigenCore {
                         }
                     }
                     if let Some(chain_name) = match &workflow.submit {
-                        Submit::EigenContract { chain_name, .. } => Some(chain_name),
+                        Submit::EthereumContract { chain_name, .. } => Some(chain_name),
                         Submit::None => None,
                     } {
                         if chain_name != chain {
