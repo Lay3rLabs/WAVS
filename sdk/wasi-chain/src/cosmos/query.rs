@@ -1,6 +1,5 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
-use crate::bindings::compat::CosmosChainConfig;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use layer_climb::prelude::*;
@@ -39,8 +38,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        pub async fn new_cosmos_query_client(chain_config: CosmosChainConfig) -> Result<QueryClient> {
-            let chain_config:layer_climb::prelude::ChainConfig = chain_config.into();
+        pub async fn new_cosmos_query_client(chain_config: layer_climb::prelude::ChainConfig) -> Result<QueryClient> {
             QueryClient::new(chain_config.clone(), Some(Connection {
                 rpc: Arc::new(WasiCosmosRpcTransport {}),
                 preferred_mode: Some(ConnectionMode::Rpc),
@@ -48,8 +46,7 @@ cfg_if::cfg_if! {
         }
     } else {
         // not used, just for making the IDE happy
-        pub async fn new_cosmos_query_client(chain_config: CosmosChainConfig) -> Result<QueryClient> {
-            let chain_config:layer_climb::prelude::ChainConfig = chain_config.into();
+        pub async fn new_cosmos_query_client(chain_config: layer_climb::prelude::ChainConfig) -> Result<QueryClient> {
             QueryClient::new(chain_config.clone(), Some(Connection {
                 preferred_mode: Some(ConnectionMode::Rpc),
                 ..Default::default()

@@ -1,4 +1,3 @@
-mod event;
 mod provider;
-pub use event::*;
 pub use provider::*;
+pub mod event;

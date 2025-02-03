@@ -1,4 +1,4 @@
-use layer_wasi::{
+use example_helpers::{
     bindings::{
         compat::TriggerData,
         world::{Guest, TriggerAction},

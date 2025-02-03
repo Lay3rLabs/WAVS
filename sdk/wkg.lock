@@ -4,7 +4,7 @@ version = 1
 
 [[packages]]
 name = "wasi:clocks"
-registry = "wasi.dev"
+registry = "wa.dev"
 
 [[packages.versions]]
 requirement = "=0.2.0"
@@ -13,7 +13,7 @@ digest = "sha256:51911098e929732f65d1d84f8dc393299f18a9e8de632d854714f37142efe97
 
 [[packages]]
 name = "wasi:http"
-registry = "wasi.dev"
+registry = "wa.dev"
 
 [[packages.versions]]
 requirement = "=0.2.0"
@@ -22,7 +22,7 @@ digest = "sha256:5a568e6e2d60c1ce51220e1833cdd5b88db9f615720edc762a9b4a6f36b383b
 
 [[packages]]
 name = "wasi:io"
-registry = "wasi.dev"
+registry = "wa.dev"
 
 [[packages.versions]]
 requirement = "=0.2.0"

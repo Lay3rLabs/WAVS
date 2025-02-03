@@ -1,15 +1,14 @@
 use anyhow::Context;
-use example_helpers::trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt};
-use layer_wasi::{
-    bindings::{
-        compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
-        world::{host, Guest, TriggerAction},
-    },
-    cosmos::new_cosmos_query_client,
-    ethereum::new_eth_provider,
+use example_helpers::bindings::{
+    compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
+    world::{host, Guest, TriggerAction},
+};
+use example_helpers::{
     export_layer_trigger_world,
+    trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt},
 };
 use serde::{Deserialize, Serialize};
+use wavs_wasi_chain::{cosmos::new_cosmos_query_client, ethereum::new_eth_provider};
 
 struct Component;
 
@@ -28,7 +27,7 @@ impl Guest for Component {
                         anyhow::anyhow!("cosmos chain config for {chain_name} not found"),
                     )?;
 
-                    new_cosmos_query_client(chain_config)
+                    new_cosmos_query_client(chain_config.into())
                         .await?
                         .trigger_data(contract_address.into(), trigger_id)
                         .await?

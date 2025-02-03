@@ -15,7 +15,7 @@ wit-bindgen-rt = { workspace = true }
 url = { workspace = true }
 example-helpers = { workspace = true }
 wstd = { workspace = true }
-layer-wasi = { workspace = true }
+wavs-wasi-chain = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

@@ -1069,9 +1069,9 @@ dependencies = [
  "anyhow",
  "example-helpers",
  "layer-climb",
- "layer-wasi",
  "serde",
  "serde_json",
+ "wavs-wasi-chain",
  "wit-bindgen-rt",
  "wstd",
 ]
@@ -1128,11 +1128,11 @@ dependencies = [
  "anyhow",
  "example-helpers",
  "layer-climb",
- "layer-wasi",
  "serde",
  "serde_json",
  "tendermint 0.40.1",
  "tendermint-rpc 0.40.1",
+ "wavs-wasi-chain",
  "wit-bindgen-rt",
  "wstd",
 ]
@@ -1511,7 +1511,7 @@ version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "example-helpers",
- "layer-wasi",
+ "wavs-wasi-chain",
  "wit-bindgen-rt",
  "wstd",
 ]
@@ -1522,7 +1522,7 @@ version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "example-helpers",
- "layer-wasi",
+ "wavs-wasi-chain",
  "wit-bindgen-rt",
  "wstd",
 ]
@@ -1627,10 +1627,11 @@ dependencies = [
  "anyhow",
  "cosmwasm-std",
  "layer-climb",
- "layer-wasi",
  "serde",
  "serde_json",
  "simple-example",
+ "wavs-wasi-chain",
+ "wit-bindgen",
 ]
 
 [[package]]
@@ -2556,35 +2557,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "layer-wasi"
-version = "0.2.0"
-dependencies = [
- "alloy-json-rpc",
- "alloy-primitives",
- "alloy-provider",
- "alloy-rpc-client",
- "alloy-rpc-types",
- "alloy-sol-types",
- "alloy-transport",
- "alloy-transport-http",
- "anyhow",
- "async-trait",
- "cfg-if",
- "cosmwasm-std",
- "layer-climb",
- "serde",
- "serde_json",
- "tendermint 0.40.1",
- "tendermint-rpc 0.40.1",
- "tower-service",
- "url",
- "wasi 0.14.0+wasi-0.2.3",
- "wit-bindgen",
- "wit-bindgen-rt",
- "wstd",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2957,11 +2929,11 @@ version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "example-helpers",
- "layer-wasi",
  "serde",
  "serde_json",
  "url",
  "wasi 0.14.0+wasi-0.2.3",
+ "wavs-wasi-chain",
  "wit-bindgen-rt",
  "wstd",
 ]
@@ -3903,9 +3875,9 @@ version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "example-helpers",
- "layer-wasi",
  "serde",
  "serde_json",
+ "wavs-wasi-chain",
  "wit-bindgen-rt",
  "wstd",
 ]
@@ -4879,6 +4851,35 @@ dependencies = [
  "pin-utils",
  "slab",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "wavs-wasi-chain"
+version = "0.3.0-alpha1"
+dependencies = [
+ "alloy-json-rpc",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-client",
+ "alloy-rpc-types",
+ "alloy-sol-types",
+ "alloy-transport",
+ "alloy-transport-http",
+ "anyhow",
+ "async-trait",
+ "cfg-if",
+ "cosmwasm-std",
+ "layer-climb",
+ "serde",
+ "serde_json",
+ "tendermint 0.40.1",
+ "tendermint-rpc 0.40.1",
+ "tower-service",
+ "url",
+ "wasi 0.14.0+wasi-0.2.3",
+ "wit-bindgen",
+ "wit-bindgen-rt",
+ "wstd",
 ]
 
 [[package]]
