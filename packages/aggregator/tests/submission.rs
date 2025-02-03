@@ -66,7 +66,7 @@ async fn submit_to_chain_one() {
     wavs_aggregator::http::handlers::service::add_service::add_service(
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
-            service_manager_address: avs_client.service_manager_contract_address,
+            address: avs_client.service_manager_contract_address,
         },
     )
     .await
@@ -162,7 +162,7 @@ async fn submit_to_chain_three() {
     wavs_aggregator::http::handlers::service::add_service::add_service(
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
-            service_manager_address: avs_client.service_manager_contract_address,
+            address: avs_client.service_manager_contract_address,
         },
     )
     .await
@@ -323,7 +323,7 @@ async fn invalid_operator_signature() {
     wavs_aggregator::http::handlers::service::add_service::add_service(
         state.clone(),
         AddAggregatorServiceRequest::EthTrigger {
-            service_manager_address: avs_client.service_manager_contract_address,
+            address: avs_client.service_manager_contract_address,
         },
     )
     .await

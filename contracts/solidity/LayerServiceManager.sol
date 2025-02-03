@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IServiceHandler} from "@layer-sdk/interfaces/IServiceHandler.sol";
+import {ILayerServiceMulti} from "@layer-sdk/interfaces/ILayerServiceMulti.sol";
+import {ILayerService} from "@layer-sdk/interfaces/ILayerService.sol";
 import {ECDSAServiceManagerBase} from "@eigenlayer/middleware/src/unaudited/ECDSAServiceManagerBase.sol";
 import {ECDSAStakeRegistry} from "@eigenlayer/middleware/src/unaudited/ECDSAStakeRegistry.sol";
 import {IERC1271Upgradeable} from "@openzeppelin-upgrades/contracts/interfaces/IERC1271Upgradeable.sol";
 import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptography/ECDSAUpgradeable.sol";
-import {ILayerServiceManager} from "./interfaces/ILayerServiceManager.sol";
 
 /**
  * @title LayerServiceManager
@@ -14,7 +14,7 @@ import {ILayerServiceManager} from "./interfaces/ILayerServiceManager.sol";
  *  1) Validates signatures using the ECDSAStakeRegistry.
  *  2) Delegates the business logic (how payloads are actually handled) to a separate handler contract.
  */
-contract LayerServiceManager is ECDSAServiceManagerBase {
+contract LayerServiceManager is ECDSAServiceManagerBase,ILayerServiceMulti {
     // ------------------------------------------------------------------------
     // State
     // ------------------------------------------------------------------------
@@ -53,45 +53,31 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
 
     /**
      * @notice Single-payload version of addPayload
-     * @param signedPayload Struct containing the data and signature
      */
-    function addPayload(
-        ILayerServiceManager.SignedPayload calldata signedPayload
-    )
-        external
+    function handleSignedData(bytes calldata data, bytes calldata signature) external
     {
-        require(validatePayload(signedPayload), "Invalid signature");
-        _delegateHandleAddPayload(signedPayload.data, signedPayload.signature);
+        require(_validate(data, signature), "Invalid signature");
+        _delegateHandleAddPayload(data, signature);
     }
 
     /**
      * @notice Multi-payload version of addPayload
-     * @param signedPayloads Array of SignedPayload structs
      */
-    function addPayloadMulti(
-        ILayerServiceManager.SignedPayload[] calldata signedPayloads
-    )
-        external
+    function handleSignedDataMulti(bytes[] calldata datas, bytes[] calldata signatures) external
     {
-        require(validatePayloadMulti(signedPayloads), "Invalid signature");
+        require(_validateMulti(datas, signatures), "Invalid signature");
 
-        for (uint256 i = 0; i < signedPayloads.length; i++) {
-            _delegateHandleAddPayload(signedPayloads[i].data, signedPayloads[i].signature);
+        for (uint256 i = 0; i < datas.length; i++) {
+            _delegateHandleAddPayload(datas[i], signatures[i]);
         }
     }
 
     /**
      * @notice Validate a single payload's signature via ECDSAStakeRegistry.
-     * @param signedPayload Struct containing the data and signature
      */
-    function validatePayload(
-        ILayerServiceManager.SignedPayload calldata signedPayload
-    )
-        public
-        view
-        returns (bool)
+    function _validate(bytes calldata data, bytes calldata signature) internal view returns (bool)
     {
-        bytes32 message = keccak256(signedPayload.data);
+        bytes32 message = keccak256(data);
         bytes32 ethSignedMessageHash = ECDSAUpgradeable.toEthSignedMessageHash(message);
         bytes4 magicValue = IERC1271Upgradeable.isValidSignature.selector;
 
@@ -100,24 +86,18 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
             magicValue ==
             ECDSAStakeRegistry(stakeRegistry).isValidSignature(
                 ethSignedMessageHash,
-                signedPayload.signature
+                signature
             )
         );
     }
 
-    /**
-     * @notice Validate multiple payloads' signatures via ECDSAStakeRegistry.
-     * @param signedPayloads Array of SignedPayload structs containing the data and signature
-     */
-    function validatePayloadMulti(
-        ILayerServiceManager.SignedPayload[] calldata signedPayloads
-    )
-        public
-        view
-        returns (bool)
+    function _validateMulti(bytes[] calldata datas, bytes[] calldata signatures) internal view returns (bool)
     {
-        for (uint256 i = 0; i < signedPayloads.length; i++) {
-            if (!validatePayload(signedPayloads[i])) {
+        if (datas.length != signatures.length) {
+            return false;
+        }
+        for (uint256 i = 0; i < datas.length; i++) {
+            if (!_validate(datas[i], signatures[i])) {
                 return false;
             }
         }
@@ -133,6 +113,6 @@ contract LayerServiceManager is ECDSAServiceManagerBase {
         internal
     {
         // If you want to impose additional checks, you can do them here
-        IServiceHandler(serviceHandler).handleAddPayload(data, signature);
+        ILayerService(serviceHandler).handleSignedData(data, signature);
     }
 }

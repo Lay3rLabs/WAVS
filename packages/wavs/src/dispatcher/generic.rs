@@ -378,7 +378,7 @@ mod tests {
                 Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract(
+                    submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
                         service_manager_addr,
                         None,
@@ -402,7 +402,7 @@ mod tests {
         let expected = ChainMessage {
             trigger_config: action.config,
             wasi_result: payload.into(),
-            submit: Submit::eigen_contract(
+            submit: Submit::eth_contract(
                 ChainName::new("eth").unwrap(),
                 service_manager_addr,
                 None,
@@ -473,7 +473,7 @@ mod tests {
                 Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract(
+                    submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
                         rand_address_eth(),
                         None,
@@ -562,7 +562,7 @@ mod tests {
                 Workflow {
                     component: component_id.clone(),
                     trigger: mock_eth_event_trigger(),
-                    submit: Submit::eigen_contract(
+                    submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
                         rand_address_eth(),
                         None,

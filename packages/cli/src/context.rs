@@ -86,7 +86,7 @@ impl CliContext {
                     }
 
                     match &workflow.submit {
-                        Submit::EigenContract { chain_name, .. } => {
+                        Submit::EthereumContract { chain_name, .. } => {
                             chains.insert(chain_name.clone());
                         }
                         Submit::None => {}
@@ -115,7 +115,7 @@ impl CliContext {
 
                 if let Some(submit) = deployment.get_submit(&service_id, workflow_id.as_ref()) {
                     match submit {
-                        Submit::EigenContract { chain_name, .. } => {
+                        Submit::EthereumContract { chain_name, .. } => {
                             chains.insert(chain_name.clone());
                         }
                         Submit::None => {}

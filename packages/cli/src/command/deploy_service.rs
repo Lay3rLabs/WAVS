@@ -231,9 +231,9 @@ impl DeployService {
                     }
                 };
 
-                Submit::EigenContract {
+                Submit::EthereumContract {
                     chain_name,
-                    service_manager: service_manager_address,
+                    address: service_manager_address,
                     max_gas: None,
                 }
             }

@@ -123,7 +123,7 @@ impl CoreSubmission {
     async fn submit_to_ethereum(
         &self,
         chain_name: ChainName,
-        service_manager_address: alloy::primitives::Address,
+        address: alloy::primitives::Address,
         data: Vec<u8>,
         max_gas: Option<u64>,
     ) -> Result<(), SubmissionError> {
@@ -162,9 +162,9 @@ impl CoreSubmission {
                 .http_client
                 .post(format!("{aggregator_url}/add-payload"))
                 .header("Content-Type", "application/json")
-                .json(&AggregateAvsRequest::EigenContract {
+                .json(&AggregateAvsRequest::EthereumContract {
                     signed_payload,
-                    service_manager_address,
+                    address,
                 })
                 .send()
                 .await
@@ -201,7 +201,7 @@ impl CoreSubmission {
                 );
             }
 
-            ServiceManagerClient::new(eth_client.clone(), service_manager_address)
+            ServiceManagerClient::new(eth_client.clone(), address)
                 .add_signed_payload(signed_payload, max_gas)
                 .await
                 .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?;
@@ -231,8 +231,8 @@ impl Submission for CoreSubmission {
                     } => {
                         while let Some(msg) = rx.recv().await {
                             match msg.submit {
-                                Submit::EigenContract {chain_name, service_manager, max_gas } => {
-                                    if let Err(e) = _self.submit_to_ethereum(chain_name, service_manager, msg.wasi_result, max_gas).await {
+                                Submit::EthereumContract {chain_name, address, max_gas } => {
+                                    if let Err(e) = _self.submit_to_ethereum(chain_name, address, msg.wasi_result, max_gas).await {
                                         tracing::error!("{:?}", e);
                                     }
                                 },

@@ -98,10 +98,11 @@ solidity-build CLEAN="":
     forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/out;
     @for contract in \
         DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
-        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager ILayerServiceManager EmptyContract; do \
+        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager EmptyContract; do \
         cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/contracts/solidity/abi; \
     done
-    cp -r {{REPO_ROOT}}/out/IServiceHandler.sol {{REPO_ROOT}}/sdk/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/ILayerService.sol {{REPO_ROOT}}/sdk/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/ILayerServiceMulti.sol {{REPO_ROOT}}/sdk/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/

@@ -21,10 +21,10 @@ pub async fn handle_add_payload(
     Json(req): Json<AggregateAvsRequest>,
 ) -> impl IntoResponse {
     let resp = match req {
-        AggregateAvsRequest::EigenContract {
+        AggregateAvsRequest::EthereumContract {
             signed_payload,
-            service_manager_address,
-        } => add_payload(state, signed_payload, service_manager_address).await,
+            address,
+        } => add_payload(state, signed_payload, address).await,
     };
 
     match resp {
@@ -70,13 +70,15 @@ pub async fn add_payload(
         // let hello_world_service =
         //     hello_world::HelloWorldServiceManager::new(req.service, &eth_client.provider);
 
-        let payloads = queue
-            .drain(..)
-            .map(|x| x.into_submission_abi())
-            .collect::<Vec<_>>();
+        let mut datas = Vec::new();
+        let mut signatures = Vec::new();
+        for (abi_datas, abi_signatures) in queue.drain(..).map(|x| x.into_submission_abi()) {
+            datas.push(abi_datas);
+            signatures.push(abi_signatures);
+        }
 
         let pending_tx = LayerServiceManager::new(service_manager_address, &eth_client.provider)
-            .addPayloadMulti(payloads)
+            .handleSignedDataMulti(datas, signatures)
             .send()
             .await?;
         let tx_hash = pending_tx.tx_hash();
