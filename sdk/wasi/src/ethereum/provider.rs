@@ -82,16 +82,16 @@ cfg_if::cfg_if! {
                         TransportError::Transport(TransportErrorKind::Custom(e.to_string().into()))
                     }
 
-                    let request = Request::post(endpoint).header("content-type", "application/json").body(serde_json::to_vec(&packet.serialize().map_err(transport_err)?).unwrap().into_body()).unwrap();
+                    let request = Request::post(endpoint).header("content-type", "application/json").body(serde_json::to_vec(&packet.serialize().map_err(transport_err)?).map_err(transport_err)?.into_body()).map_err(transport_err)?;
 
-                    let mut res = Client::new().send(request).await.unwrap();
+                    let mut res = Client::new().send(request).await.map_err(transport_err)?;
 
                     match res.status() {
                         StatusCode::OK => {
                             let body = res.body_mut();
                             let mut body_buf = Vec::new();
-                            body.read_to_end(&mut body_buf).await.unwrap();
-                            Ok(serde_json::from_slice(&body_buf).unwrap())
+                            body.read_to_end(&mut body_buf).await.map_err(transport_err)?;
+                            Ok(serde_json::from_slice::<ResponsePacket>(&body_buf).map_err(transport_err)?)
                         }
                         status => return Err(transport_err(format!("unexpected status code: {status}"))),
                     }

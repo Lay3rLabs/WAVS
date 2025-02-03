@@ -14,7 +14,7 @@ use wstd::{
     runtime::block_on,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -58,12 +58,19 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
 }
 
 async fn get_url(url: Url) -> Result<String> {
-    let request = Request::get(url.to_string()).body(empty()).unwrap();
-    let mut response = Client::new().send(request).await.unwrap();
+    let request = Request::get(url.to_string())
+        .body(empty())
+        .map_err(|e| anyhow!("{e:?}"))?;
+    let mut response = Client::new()
+        .send(request)
+        .await
+        .map_err(|e| anyhow!("{e:?}"))?;
     let body = response.body_mut();
     let mut body_buf = Vec::new();
-    body.read_to_end(&mut body_buf).await.unwrap();
-    Ok(serde_json::to_string(&body_buf).unwrap())
+    body.read_to_end(&mut body_buf)
+        .await
+        .map_err(|e| anyhow!("{e:?}"))?;
+    Ok(serde_json::to_string(&body_buf).map_err(|e| anyhow!("{e:?}"))?)
 }
 
 #[derive(Deserialize, Serialize)]
