@@ -6,15 +6,13 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::digest::Digest;
-use utils::types::{ComponentSource, Service};
+use wavs_types::{ComponentSource, Digest, IDError, Service, ServiceID};
 
 use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{Submission, SubmissionError};
-use crate::apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager};
-use utils::{IDError, ServiceID};
 
+use crate::apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager};
 use crate::engine::runner::EngineRunner;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
@@ -334,11 +332,9 @@ mod tests {
             mock_eth_event_trigger, mock_eth_event_trigger_config, MockTriggerManagerVec,
         },
     };
-    use utils::{
-        types::{
-            ChainName, Component, ServiceConfig, ServiceStatus, Submit, TriggerData, Workflow,
-        },
-        ComponentID, ServiceID, WorkflowID,
+    use wavs_types::{
+        ChainName, Component, ComponentID, ServiceConfig, ServiceID, ServiceStatus, Submit,
+        TriggerData, Workflow, WorkflowID,
     };
 
     use super::*;

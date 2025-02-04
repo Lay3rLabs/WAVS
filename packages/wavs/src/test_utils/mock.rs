@@ -19,13 +19,9 @@ use axum::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tower::Service as _;
-use utils::{
-    digest::Digest,
-    types::{
-        AddServiceRequest, DeleteServicesRequest, ListServicesResponse, Service, Submit,
-        TestAppRequest, TestAppResponse, TriggerData,
-    },
-    ServiceID,
+use wavs_types::{
+    AddServiceRequest, DeleteServicesRequest, Digest, ListServicesResponse, Service, ServiceID,
+    Submit, TestAppRequest, TestAppResponse, TriggerData,
 };
 
 pub struct MockE2ETestRunner {

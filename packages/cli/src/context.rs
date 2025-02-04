@@ -13,12 +13,8 @@ use crate::{
 use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
-use utils::{
-    config::AnyChainConfig,
-    eigen_client::EigenClient,
-    types::{ChainName, Submit, Trigger},
-    ServiceID, WorkflowID,
-};
+use utils::{config::AnyChainConfig, eigen_client::EigenClient};
+use wavs_types::{ChainName, ServiceID, Submit, Trigger, WorkflowID};
 
 use crate::{args::Command, deploy::Deployment};
 

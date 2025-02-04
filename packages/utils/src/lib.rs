@@ -3,15 +3,12 @@ pub mod alloy_helpers;
 pub mod avs_client;
 pub mod config;
 pub mod context;
-pub mod digest;
 pub mod eigen_client;
 pub mod error;
 pub mod eth_client;
 pub mod filesystem;
 pub mod serde;
 pub mod storage;
-pub mod types;
-pub use types::{ComponentID, IDError, ServiceID, WorkflowID};
 
 // the test version of init_tracing does not take a config
 // since config itself is tested and modified from different parallel tests

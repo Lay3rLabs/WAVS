@@ -1,7 +1,7 @@
 use alloy::primitives::Address;
 use thiserror::Error;
 
-use crate::types::ChainName;
+use wavs_types::ChainName;
 
 #[derive(Debug, Error)]
 pub enum EthClientError {

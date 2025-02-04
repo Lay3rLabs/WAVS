@@ -1,7 +1,7 @@
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
 use std::ops::Bound;
-use utils::types::{ListServiceResponse, ListServicesResponse};
+use wavs_types::{ListServiceResponse, ListServicesResponse};
 
 #[axum::debug_handler]
 pub async fn handle_list_services(State(state): State<HttpState>) -> impl IntoResponse {

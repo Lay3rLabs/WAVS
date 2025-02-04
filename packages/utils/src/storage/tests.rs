@@ -1,7 +1,7 @@
 /// common tests for any castorage implementation
 pub mod castorage {
-    use crate::digest::Digest;
     use crate::storage::{CAStorage, CAStorageError};
+    use wavs_types::Digest;
 
     pub fn test_set_and_get<S: CAStorage>(store: S) {
         let data = b"hello world";

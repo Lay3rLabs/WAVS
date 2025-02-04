@@ -1,11 +1,8 @@
 use anyhow::{Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
 use rand::rngs::OsRng;
-use utils::{
-    avs_client::AvsClientDeployer,
-    filesystem::workspace_path,
-    types::{ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger},
-};
+use utils::{avs_client::AvsClientDeployer, filesystem::workspace_path};
+use wavs_types::{ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},

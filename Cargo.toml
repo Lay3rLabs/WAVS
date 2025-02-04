@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "packages/*",
-  "sdk/wasi-chain",
 ]
 resolver = "2"
 
@@ -16,9 +15,10 @@ rust-version = "1.84.0"
 [workspace.dependencies]
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
+wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
-wavs-wasi-chain = { path = "sdk/wasi-chain" }
+wavs-wasi-chain = { path = "packages/wasi-chain" }
 clap = { version = "4.5.20", features = ["derive", "env", "string"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }
@@ -39,8 +39,9 @@ tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
-layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.4" }
-layer-climb-cli = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.4" }
+layer-climb = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.6" }
+layer-climb-cli = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.6" }
+layer-climb-address = { git = "https://github.com/Lay3rLabs/climb", tag = "v0.3.6" }
 ctrlc = "3.4.5"
 tempfile = "3.13.0"
 futures = "0.3.31"

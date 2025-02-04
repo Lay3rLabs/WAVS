@@ -1,6 +1,6 @@
 use thiserror::Error;
 use tokio::sync::mpsc;
-use utils::types::Submit;
+use wavs_types::Submit;
 
 use crate::AppContext;
 

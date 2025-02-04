@@ -3,7 +3,7 @@ use axum::{extract::State, response::IntoResponse, Json};
 use reqwest::StatusCode;
 
 use crate::http::{error::HttpResult, state::HttpState};
-use utils::types::{AddServiceRequest, Submit};
+use wavs_types::{AddServiceRequest, Submit};
 
 #[axum::debug_handler]
 pub async fn handle_add_service(

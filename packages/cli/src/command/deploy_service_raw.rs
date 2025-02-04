@@ -1,6 +1,6 @@
 use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResult};
 use anyhow::Result;
-use utils::types::Service;
+use wavs_types::Service;
 
 pub struct DeployServiceRaw {
     pub args: DeployServiceRawArgs,

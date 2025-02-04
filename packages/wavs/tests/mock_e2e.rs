@@ -2,7 +2,7 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use utils::{context::AppContext, digest::Digest, ServiceID, WorkflowID};
+use utils::context::AppContext;
 use wavs::{
     engine::runner::EngineRunner,
     test_utils::{
@@ -10,6 +10,7 @@ use wavs::{
         mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
     },
 };
+use wavs_types::{Digest, ServiceID, WorkflowID};
 
 #[test]
 fn mock_e2e_trigger_flow() {

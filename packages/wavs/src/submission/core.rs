@@ -21,8 +21,8 @@ use utils::{
     avs_client::{ServiceManagerClient, SignedPayload},
     config::{AnyChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
-    types::{ChainName, Submit},
 };
+use wavs_types::{ChainName, Submit};
 
 #[derive(Clone)]
 pub struct CoreSubmission {

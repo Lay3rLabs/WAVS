@@ -1,7 +1,8 @@
 use alloy::primitives::Address;
 use anyhow::Result;
 use rand::rngs::OsRng;
-use utils::{avs_client::AvsClientDeployer, types::ChainName};
+use utils::avs_client::AvsClientDeployer;
+use wavs_types::ChainName;
 
 use crate::{
     context::CliContext,

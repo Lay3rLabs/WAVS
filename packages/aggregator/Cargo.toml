@@ -1,13 +1,15 @@
 [package]
 name = "wavs-aggregator"
-description = "Lay3r Labs WAVS Aggregator Server"
+version = "0.3.0-alpha1"
+description = "WAVS Aggregator Server"
 edition.workspace = true
-version = "0.1.0-rc1"
 authors.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+publish = false
 
 [dependencies]
+wavs-types = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 tracing-subscriber = { workspace = true }

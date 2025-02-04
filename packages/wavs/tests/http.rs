@@ -3,11 +3,11 @@ use axum::{
     http::{Method, Request},
 };
 use tower::Service;
-use utils::{digest::Digest, types::UploadServiceResponse};
 use wavs::{
     config::Config,
     test_utils::http::{map_response, TestHttpApp},
 };
+use wavs_types::{Digest, UploadServiceResponse};
 
 #[tokio::test]
 async fn http_not_found() {

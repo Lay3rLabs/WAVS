@@ -3,15 +3,12 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
-use utils::{
-    avs_client::SignedData,
-    context::AppContext,
-    types::{ChainName, Service, Submit},
-};
+use utils::{avs_client::SignedData, context::AppContext};
 use wavs_cli::{
     command::add_task::{AddTask, AddTaskArgs},
     util::ComponentInput,
 };
+use wavs_types::{ChainName, Service, Submit};
 
 use super::{
     clients::Clients,

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use thiserror::Error;
 
-use crate::digest::{Digest, DigestError};
+use wavs_types::{Digest, DigestError};
 
 /*
   Documenting a design decisions here:

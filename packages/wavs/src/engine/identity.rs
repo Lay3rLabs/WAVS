@@ -1,6 +1,5 @@
 use tracing::instrument;
-use utils::digest::Digest;
-use utils::types::{Component, ServiceConfig};
+use wavs_types::{Component, Digest, ServiceConfig};
 
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::trigger::TriggerAction;
@@ -41,7 +40,7 @@ impl Engine for IdentityEngine {
 
 #[cfg(test)]
 mod test {
-    use utils::types::TriggerData;
+    use wavs_types::TriggerData;
 
     use crate::triggers::mock::mock_eth_event_trigger_config;
 

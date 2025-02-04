@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 
-use utils::{
-    digest::Digest,
-    storage::db::{RedbStorage, Table, JSON},
-    types::{Component, Service, ServiceConfig, ServiceStatus, Submit, Workflow},
-    ComponentID, ServiceID, WorkflowID,
-};
+use utils::storage::db::{RedbStorage, Table, JSON};
 use wavs::triggers::mock::mock_eth_event_trigger;
+use wavs_types::{
+    Component, ComponentID, Digest, Service, ServiceConfig, ServiceID, ServiceStatus, Submit,
+    Workflow, WorkflowID,
+};
 
 use redb::ReadableTable;
 use serde::{Deserialize, Serialize};

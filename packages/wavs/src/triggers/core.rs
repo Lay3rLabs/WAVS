@@ -17,12 +17,8 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::{
-    config::AnyChainConfig,
-    eth_client::EthClientBuilder,
-    types::{ChainName, Trigger, TriggerData},
-    ServiceID, WorkflowID,
-};
+use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
+use wavs_types::{ChainName, ServiceID, Trigger, TriggerData, WorkflowID};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -431,7 +427,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: utils::ServiceID) -> Result<(), TriggerError> {
+    fn remove_service(&self, service_id: wavs_types::ServiceID) -> Result<(), TriggerError> {
         let mut trigger_configs = self.lookup_maps.trigger_configs.write().unwrap();
         let mut triggers_by_eth_contract_event = self
             .lookup_maps
@@ -550,10 +546,7 @@ mod tests {
         config::Config,
         test_utils::address::{rand_address_eth, rand_event_eth},
     };
-    use utils::{
-        types::{ChainName, Trigger},
-        ServiceID, WorkflowID,
-    };
+    use wavs_types::{ChainName, ServiceID, Trigger, WorkflowID};
 
     use layer_climb::prelude::*;
     use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};

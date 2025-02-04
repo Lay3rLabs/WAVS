@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use utils::{context::AppContext, digest::Digest, filesystem::workspace_path};
+use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::clients::HttpClient;
+use wavs_types::Digest;
 
 use super::config::Configs;
 

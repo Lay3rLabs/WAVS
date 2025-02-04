@@ -6,7 +6,7 @@ use std::str::FromStr;
 use tracing::instrument;
 
 use super::prelude::*;
-use crate::digest::Digest;
+use wavs_types::Digest;
 
 pub struct FileStorage {
     data_dir: PathBuf,

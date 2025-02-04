@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use alloy::primitives::LogData;
+use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
 
 use crate::digest::Digest;
@@ -97,12 +97,12 @@ pub struct Workflow {
 pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
-        address: layer_climb::prelude::Address,
+        address: layer_climb_address::Address,
         chain_name: ChainName,
         event_type: String,
     },
     EthContractEvent {
-        address: alloy::primitives::Address,
+        address: alloy_primitives::Address,
         chain_name: ChainName,
         event_hash: [u8; 32],
     },
@@ -110,12 +110,12 @@ pub enum Trigger {
     Manual,
 }
 
-/// The data that came from the trigger
+/// The data that came from the trigger and is passed to the component after being converted into the WIT-friendly type
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
-        contract_address: layer_climb::prelude::Address,
+        contract_address: layer_climb_address::Address,
         /// The chain name of the chain where the event was emitted
         chain_name: ChainName,
         /// The data that was emitted by the contract
@@ -125,7 +125,7 @@ pub enum TriggerData {
     },
     EthContractEvent {
         /// The address of the contract that emitted the event
-        contract_address: alloy::primitives::Address,
+        contract_address: alloy_primitives::Address,
         /// The chain name of the chain where the event was emitted
         chain_name: ChainName,
         /// The raw event log
@@ -151,7 +151,7 @@ pub enum Submit {
     // Ethereum Contract which implements the ILayerService interface
     EthereumContract {
         chain_name: ChainName,
-        address: alloy::primitives::Address,
+        address: alloy_primitives::Address,
         max_gas: Option<u64>,
     },
 }
@@ -215,14 +215,14 @@ pub enum AllowedHostPermission {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
-    use crate::{digest::Digest, types::ChainName};
+    use crate::{digest::Digest, id::ChainName};
 
     use super::{Component, Submit, Trigger};
 
     impl Submit {
         pub fn eth_contract(
             chain_name: ChainName,
-            address: alloy::primitives::Address,
+            address: alloy_primitives::Address,
             max_gas: Option<u64>,
         ) -> Submit {
             Submit::EthereumContract {
@@ -244,7 +244,7 @@ mod test_ext {
 
     impl Trigger {
         pub fn cosmos_contract_event(
-            address: layer_climb::prelude::Address,
+            address: layer_climb_address::Address,
             chain_name: impl Into<ChainName>,
             event_type: impl ToString,
         ) -> Self {
@@ -255,7 +255,7 @@ mod test_ext {
             }
         }
         pub fn eth_contract_event(
-            address: alloy::primitives::Address,
+            address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: [u8; 32],
         ) -> Self {
