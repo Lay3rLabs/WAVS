@@ -69,9 +69,9 @@ wit-bindgen-rt = {version = "0.37.0", features = ["bitflags"]}
 wit-bindgen = "0.37.0"
 alloy = { version = "0.6.4", features = ["full", "signer-mnemonic", "node-bindings"] }
 alloy-rlp = {version = "0.3.10", features = ["derive"]}
-alloy-primitives = "0.8.15"
-alloy-sol-macro = "0.8.15"
-alloy-sol-types = "0.8.15"
+alloy-primitives = {version = "0.8.20", features = ["serde"]}
+alloy-sol-macro = "0.8.20"
+alloy-sol-types = "0.8.20"
 alloy-rpc-types = "0.9.2"
 alloy-json-rpc = "0.9.2"
 alloy-provider = "0.9.2"
