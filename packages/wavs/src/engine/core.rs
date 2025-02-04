@@ -106,19 +106,23 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 .try_into()
                 .map_err(|e: TriggerError| EngineError::TriggerData(e.into()))?;
 
-            crate::bindings::world::LayerTriggerWorld::instantiate_async(
+            let instance = crate::bindings::world::LayerTriggerWorld::instantiate_async(
                 &mut store, &component, &linker,
             )
             .await
-            .context("Wasm instantiate failed")?
-            .call_run(store, &input)
-            .await
-            .context("Failed to run task")
-            .map_err(|e| match e.downcast_ref::<Trap>() {
-                Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
-                _ => EngineError::ComponentError(e.to_string()),
-            })?
-            .map_err(EngineError::ComponentError)
+            .context("Wasm instantiate failed")?;
+
+            // Handle errors, with special case for OutOfFuel trap
+            match instance.call_run(store, &input).await {
+                Ok(Ok(value)) => Ok(value),
+                Ok(Err(e)) => Err(EngineError::ComponentError(e.to_string())),
+                Err(e) => match e.downcast_ref::<Trap>() {
+                    Some(trap) if *trap == Trap::OutOfFuel => {
+                        Err(EngineError::OutOfFuel(service_id, workflow_id))
+                    }
+                    _ => Err(EngineError::ComponentError(e.to_string())),
+                },
+            }
         })
     }
 }
