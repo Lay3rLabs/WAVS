@@ -1,11 +1,8 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
-use utils::{
-    eigen_client::CoreAVSAddresses,
-    types::{ChainName, Service, Submit, Trigger},
-    ServiceID, WorkflowID,
-};
+use utils::eigen_client::CoreAVSAddresses;
+use wavs_types::{ChainName, Service, ServiceID, Submit, Trigger, WorkflowID};
 
 use crate::config::Config;
 

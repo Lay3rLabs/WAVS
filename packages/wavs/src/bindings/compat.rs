@@ -24,12 +24,12 @@ impl TryFrom<api::TriggerConfig> for component::TriggerConfig {
     }
 }
 
-impl TryFrom<utils::types::Trigger> for component::TriggerSource {
+impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
     type Error = api::TriggerError;
 
-    fn try_from(src: utils::types::Trigger) -> Result<Self, Self::Error> {
+    fn try_from(src: wavs_types::Trigger) -> Result<Self, Self::Error> {
         Ok(match src {
-            utils::types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
+            wavs_types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
                 crate::bindings::world::wavs::worker::layer_types::TriggerSource::CosmosContractEvent(
                     crate::bindings::world::wavs::worker::layer_types::TriggerSourceCosmosContractEvent {
                         address: address.try_into()?,
@@ -38,7 +38,7 @@ impl TryFrom<utils::types::Trigger> for component::TriggerSource {
                     }
                 )
             },
-            utils::types::Trigger::EthContractEvent { address, chain_name, event_hash } => {
+            wavs_types::Trigger::EthContractEvent { address, chain_name, event_hash } => {
                 crate::bindings::world::wavs::worker::layer_types::TriggerSource::EthContractEvent(
                     crate::bindings::world::wavs::worker::layer_types::TriggerSourceEthContractEvent {
                         address: address.into(),
@@ -47,19 +47,19 @@ impl TryFrom<utils::types::Trigger> for component::TriggerSource {
                     }
                 )
             },
-            utils::types::Trigger::Manual => {
+            wavs_types::Trigger::Manual => {
                 crate::bindings::world::wavs::worker::layer_types::TriggerSource::Manual
             },
         })
     }
 }
 
-impl TryFrom<utils::types::TriggerData> for component::TriggerData {
+impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
     type Error = api::TriggerError;
 
-    fn try_from(src: utils::types::TriggerData) -> Result<Self, Self::Error> {
+    fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
         match src {
-            utils::types::TriggerData::EthContractEvent {
+            wavs_types::TriggerData::EthContractEvent {
                 contract_address,
                 chain_name,
                 log,
@@ -83,7 +83,7 @@ impl TryFrom<utils::types::TriggerData> for component::TriggerData {
                     }
                 ))
             },
-            utils::types::TriggerData::CosmosContractEvent { contract_address, chain_name, event, block_height } => {
+            wavs_types::TriggerData::CosmosContractEvent { contract_address, chain_name, event, block_height } => {
                 Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::CosmosContractEvent(
                     crate::bindings::world::wavs::worker::layer_types::TriggerDataCosmosContractEvent {
                         contract_address: contract_address.try_into()?,
@@ -100,7 +100,7 @@ impl TryFrom<utils::types::TriggerData> for component::TriggerData {
                     }
                 ))
             },
-            utils::types::TriggerData::Raw(data) => {
+            wavs_types::TriggerData::Raw(data) => {
                 Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Raw(data))
             },
         }

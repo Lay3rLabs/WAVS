@@ -1,5 +1,5 @@
 use tokio::sync::mpsc;
-use utils::types::Service;
+use wavs_types::Service;
 
 use crate::apis::submission::ChainMessage;
 use crate::apis::trigger::TriggerAction;

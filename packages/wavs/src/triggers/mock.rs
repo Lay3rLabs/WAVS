@@ -11,8 +11,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
-use utils::types::{ChainName, Trigger, TriggerData};
-use utils::{IDError, ServiceID, WorkflowID};
+use wavs_types::{ChainName, IDError, ServiceID, Trigger, TriggerData, WorkflowID};
 
 pub fn mock_eth_event_trigger_config(
     service_id: impl TryInto<ServiceID, Error = IDError>,

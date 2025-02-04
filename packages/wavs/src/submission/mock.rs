@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::types::Submit;
+use wavs_types::Submit;
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 use crate::test_utils::address::rand_address_eth;
@@ -92,7 +92,7 @@ impl Submission for MockSubmission {
 mod test {
     use std::{thread::sleep, time::Duration};
 
-    use utils::types::ChainName;
+    use wavs_types::ChainName;
 
     use crate::{
         apis::trigger::TriggerConfig,

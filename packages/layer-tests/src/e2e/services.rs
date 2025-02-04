@@ -9,15 +9,7 @@ use super::{
     matrix::{AnyService, CrossChainService, EthService},
 };
 use alloy::sol_types::SolEvent;
-use utils::{
-    context::AppContext,
-    eigen_client::CoreAVSAddresses,
-    types::{
-        AllowedHostPermission, ChainName, Component, ComponentSource, Permissions, Service,
-        ServiceConfig, ServiceStatus, Submit, Trigger, Workflow,
-    },
-    ComponentID, ServiceID, WorkflowID,
-};
+use utils::{context::AppContext, eigen_client::CoreAVSAddresses};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
     clients::example_eth_client::{
@@ -29,6 +21,10 @@ use wavs_cli::{
         deploy_service::{DeployService, DeployServiceArgs},
         deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
     },
+};
+use wavs_types::{
+    AllowedHostPermission, ChainName, Component, ComponentID, ComponentSource, Permissions,
+    Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 #[derive(Default)]

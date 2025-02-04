@@ -7,8 +7,8 @@ use utils::{
     config::{ChainConfigs, ConfigExt, EthereumChainConfig},
     error::EthClientError,
     eth_client::{EthClientBuilder, EthSigningClient},
-    types::ChainName,
 };
+use wavs_types::ChainName;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):

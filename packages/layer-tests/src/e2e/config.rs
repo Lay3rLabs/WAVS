@@ -1,8 +1,8 @@
 use utils::{
     config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
     filesystem::workspace_path,
-    types::ChainName,
 };
+use wavs_types::ChainName;
 
 use crate::config::TestConfig;
 

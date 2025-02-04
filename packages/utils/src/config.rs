@@ -7,8 +7,8 @@ use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 use crate::{
     error::ChainConfigError,
     eth_client::{EthClientConfig, EthClientTransport},
-    types::ChainName,
 };
+use wavs_types::ChainName;
 
 /// The builder we use to build Config
 #[derive(Debug)]

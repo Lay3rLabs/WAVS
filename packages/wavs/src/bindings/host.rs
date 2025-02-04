@@ -1,4 +1,4 @@
-use utils::types::ChainName;
+use wavs_types::ChainName;
 
 use crate::engine::HostComponent;
 

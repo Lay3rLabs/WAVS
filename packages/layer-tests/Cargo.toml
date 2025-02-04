@@ -1,13 +1,16 @@
 [package]
 name = "layer-tests"
-description = "Layer tests"
-edition = "2021"
-version = "0.2.0-rc1"
-authors = ["Lay3r Labs Team"]
-rust-version = "1.80.0"
+version = "0.3.0-alpha1"
+description = "Layer end-to-end tests"
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
 
 [dependencies]
 wavs = { workspace = true }
+wavs-types = { workspace = true }
 utils = { workspace = true }
 wavs-cli = { workspace = true }
 wavs-aggregator = { workspace = true }

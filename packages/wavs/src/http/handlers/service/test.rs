@@ -2,7 +2,7 @@ use std::ops::Bound;
 
 use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
-use utils::types::{TestAppRequest, TestAppResponse};
+use wavs_types::{TestAppRequest, TestAppResponse};
 
 use crate::{
     apis::trigger::{TriggerAction, TriggerConfig},

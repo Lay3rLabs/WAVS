@@ -1,6 +1,6 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::{config::ConfigExt, types::ComponentSource};
+use utils::config::ConfigExt;
 use wavs_cli::{
     args::Command,
     command::{
@@ -15,6 +15,7 @@ use wavs_cli::{
     context::CliContext,
     util::{read_component, ComponentInput},
 };
+use wavs_types::ComponentSource;
 
 #[tokio::main]
 async fn main() {

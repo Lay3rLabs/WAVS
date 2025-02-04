@@ -1,6 +1,6 @@
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{body::Bytes, extract::State, response::IntoResponse, Json};
-use utils::types::{ComponentSource, UploadServiceResponse};
+use wavs_types::{ComponentSource, UploadServiceResponse};
 
 #[axum::debug_handler]
 pub async fn handle_upload_service(

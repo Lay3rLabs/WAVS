@@ -2,11 +2,7 @@ use std::ops::Bound;
 
 use super::{submission::ChainMessage, trigger::TriggerAction};
 use crate::AppContext;
-use utils::{
-    digest::Digest,
-    types::{ComponentSource, Service},
-    ServiceID,
-};
+use wavs_types::{ComponentSource, Digest, Service, ServiceID};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -48,7 +44,7 @@ pub trait DispatchManager: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use utils::types::{AllowedHostPermission, Permissions};
+    use wavs_types::{AllowedHostPermission, Permissions};
 
     #[test]
     fn permission_defaults() {

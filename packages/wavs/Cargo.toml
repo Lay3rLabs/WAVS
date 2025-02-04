@@ -1,14 +1,16 @@
 [package]
 name = "wavs"
-description = "Lay3r Labs WAVS Node Server"
-edition = "2021"
-version = "0.2.0-rc1"
-authors = ["Lay3r Labs Team"]
-rust-version = "1.80.0"
-repository = "https://github.com/Lay3rLabs/wasmatic"
+version = "0.3.0-alpha1"
+description = "WAVS Node Server"
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
 
 [dependencies]
 wavs-wasi-chain = { workspace = true }
+wavs-types = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }

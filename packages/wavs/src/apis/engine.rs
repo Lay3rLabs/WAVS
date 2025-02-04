@@ -1,13 +1,10 @@
 use layer_climb::prelude::Address;
 use thiserror::Error;
 
-use utils::{digest::Digest, storage::CAStorageError};
+use utils::storage::CAStorageError;
 
 use super::trigger::TriggerAction;
-use utils::{
-    types::{Component, ServiceConfig},
-    ComponentID, ServiceID, WorkflowID,
-};
+use wavs_types::{Component, ComponentID, Digest, ServiceConfig, ServiceID, WorkflowID};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;

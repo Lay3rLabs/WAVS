@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::path::PathBuf;
-use utils::digest::Digest;
+use wavs_types::Digest;
 
 use crate::{clients::HttpClient, config::Config, util::read_component};
 

@@ -4,7 +4,7 @@ use std::sync::RwLock;
 use tracing::instrument;
 
 use super::prelude::*;
-use crate::digest::Digest;
+use wavs_types::Digest;
 
 pub struct MemoryStorage {
     data: RwLock<BTreeMap<Digest, Vec<u8>>>,

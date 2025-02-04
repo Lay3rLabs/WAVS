@@ -5,10 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::AppContext;
 
-use utils::{
-    types::{ChainName, Trigger, TriggerData},
-    IDError, ServiceID, WorkflowID,
-};
+use wavs_types::{ChainName, IDError, ServiceID, Trigger, TriggerData, WorkflowID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.

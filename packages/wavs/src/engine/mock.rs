@@ -5,8 +5,7 @@ use crate::apis::trigger::TriggerAction;
 use crate::triggers::mock::get_mock_trigger_data;
 use tracing::instrument;
 use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
-use utils::digest::Digest;
-use utils::types::ServiceConfig;
+use wavs_types::{Digest, ServiceConfig};
 
 use super::{Engine, EngineError};
 
@@ -84,7 +83,7 @@ impl Engine for MockEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        component: &utils::types::Component,
+        component: &wavs_types::Component,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
@@ -104,7 +103,7 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use utils::types::{ChainName, Component, TriggerData};
+    use wavs_types::{ChainName, Component, TriggerData};
 
     use crate::test_utils::address::rand_event_eth;
 
@@ -150,7 +149,7 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let c1 = utils::types::Component::new(d1);
+        let c1 = wavs_types::Component::new(d1);
         let res = engine
             .execute(
                 &c1,

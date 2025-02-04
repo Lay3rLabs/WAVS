@@ -3,16 +3,14 @@ pub mod example_eth_client;
 
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
-use utils::ServiceID;
 use utils::{
     config::{CosmosChainConfig, EthereumChainConfig},
-    digest::Digest,
     eigen_client::EigenClient,
     eth_client::EthClientBuilder,
-    types::{
-        AddServiceRequest, AllowedHostPermission, Permissions, Service, ServiceConfig, Submit,
-        Trigger, UploadServiceResponse,
-    },
+};
+use wavs_types::{
+    AddServiceRequest, AllowedHostPermission, Digest, Permissions, Service, ServiceConfig,
+    ServiceID, Submit, Trigger, UploadServiceResponse,
 };
 
 use crate::config::Config;

@@ -1,8 +1,7 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 
 use crate::http::{error::HttpResult, state::HttpState};
-use utils::types::DeleteServicesRequest;
-use utils::ServiceID;
+use wavs_types::{DeleteServicesRequest, ServiceID};
 
 #[axum::debug_handler]
 pub async fn handle_delete_service(

@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
-    types::{ChainName, Service, ServiceConfig},
 };
+use wavs_types::{ChainName, Service, ServiceConfig};
 
 use crate::config::Config;
 

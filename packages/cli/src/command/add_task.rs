@@ -1,11 +1,8 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use utils::{
-    avs_client::{ServiceManagerClient, SignedData},
-    types::{Submit, Trigger},
-    ServiceID, WorkflowID,
-};
+use utils::avs_client::{ServiceManagerClient, SignedData};
+use wavs_types::{ServiceID, Submit, Trigger, WorkflowID};
 
 use crate::{
     clients::{

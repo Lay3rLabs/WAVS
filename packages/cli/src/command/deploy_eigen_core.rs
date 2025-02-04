@@ -1,8 +1,6 @@
 use anyhow::Result;
-use utils::{
-    eigen_client::CoreAVSAddresses,
-    types::{ChainName, Submit, Trigger},
-};
+use utils::eigen_client::CoreAVSAddresses;
+use wavs_types::{ChainName, Submit, Trigger};
 
 use crate::{
     context::CliContext,

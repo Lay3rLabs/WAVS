@@ -3,10 +3,8 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
 };
-use utils::{
-    config::{AnyChainConfig, ChainConfigs, ConfigExt},
-    types::ChainName,
-};
+use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
+use wavs_types::ChainName;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):

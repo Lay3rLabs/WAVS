@@ -1,11 +1,12 @@
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use utils::{context::AppContext, digest::Digest, ServiceID, WorkflowID};
+use utils::context::AppContext;
 use wavs::test_utils::{
     address::rand_address_eth,
     mock::{BigSquare, MockE2ETestRunner, SquareIn},
 };
+use wavs_types::{Digest, ServiceID, WorkflowID};
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let runner = MockE2ETestRunner::new(AppContext::new());
