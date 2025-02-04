@@ -23,6 +23,9 @@ RUN cargo build --release
 
 ### PRODUCTION
 
+# Pinned foundry version
+FROM ghcr.io/lay3rlabs/foundry:feb-04-2025 AS foundry
+
 # Now, pack up that binary in a nice small image
 FROM debian:bookworm-slim
 WORKDIR /wavs
@@ -38,6 +41,12 @@ COPY --from=builder /myapp/packages/cli/cli.toml /var/wavs-cli/cli.toml
 
 COPY --from=builder /myapp/target/release/wavs-aggregator /usr/local/bin/wavs-aggregator
 COPY --from=builder /myapp/packages/aggregator/aggregator.toml /var/wavs-aggregator/aggregator.toml
+
+# copy /usr/local/bin/forge, cast, anvil, and chisel from foundry
+COPY --from=foundry /usr/local/bin/forge /usr/local/bin/forge
+COPY --from=foundry /usr/local/bin/cast /usr/local/bin/cast
+COPY --from=foundry /usr/local/bin/anvil /usr/local/bin/anvil
+COPY --from=foundry /usr/local/bin/chisel /usr/local/bin/chisel
 
 EXPOSE 8000 8001
 CMD ["/usr/local/bin/wavs"]
