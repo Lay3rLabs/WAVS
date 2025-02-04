@@ -3793,7 +3793,8 @@ dependencies = [
 [[package]]
 name = "layer-climb"
 version = "0.3.6"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.6#c6c71fdc92be5b2fb900a07000d945656a8ea162"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bfabb6d0b41686b55756dbe5229e070924af356b2da2b93a05a7329538534c1"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -3804,7 +3805,8 @@ dependencies = [
 [[package]]
 name = "layer-climb-address"
 version = "0.3.6"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.6#c6c71fdc92be5b2fb900a07000d945656a8ea162"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38472eec7081137b22f85777270ae429a4629e0c7b662f10d1cd1008a57ad160"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -3828,7 +3830,8 @@ dependencies = [
 [[package]]
 name = "layer-climb-cli"
 version = "0.3.6"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.6#c6c71fdc92be5b2fb900a07000d945656a8ea162"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acf9425fc04e20bd97fed1aa24c00e4c08e0ff5d4ac498d242637add6e9249ec"
 dependencies = [
  "anyhow",
  "bip39",
@@ -3848,7 +3851,8 @@ dependencies = [
 [[package]]
 name = "layer-climb-config"
 version = "0.3.6"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.6#c6c71fdc92be5b2fb900a07000d945656a8ea162"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c477e76c5959f099f7470fa9258cd3839dc0ed76515d8b5b38ee83812070af22"
 dependencies = [
  "anyhow",
  "serde",
@@ -3858,7 +3862,8 @@ dependencies = [
 [[package]]
 name = "layer-climb-core"
 version = "0.3.6"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.6#c6c71fdc92be5b2fb900a07000d945656a8ea162"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c93085e32113d2c433c781c730e2482a02b823f4a9aa3e5236e98cf88871eca7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3892,7 +3897,8 @@ dependencies = [
 [[package]]
 name = "layer-climb-proto"
 version = "0.3.6"
-source = "git+https://github.com/Lay3rLabs/climb?tag=v0.3.6#c6c71fdc92be5b2fb900a07000d945656a8ea162"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9dd24323db3e633d88b063b81155e49d0a5497c544f8afc74c207a2bfabe078"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto",
