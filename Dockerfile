@@ -24,7 +24,7 @@ RUN cargo build --release
 ### PRODUCTION
 
 # Pinned foundry version
-FROM ghcr.io/foundry-rs/foundry:v0.3.0 AS foundry
+FROM --platform=linux/amd64 ghcr.io/foundry-rs/foundry:v0.3.0 AS foundry
 
 # Now, pack up that binary in a nice small image
 FROM debian:bookworm-slim
