@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use utils::filesystem::workspace_path;
 
 pub enum ComponentInput {
     Stdin(String),
@@ -46,13 +47,21 @@ impl ComponentInput {
     }
 }
 
-pub fn read_component(path: impl AsRef<Path>) -> Result<Vec<u8>> {
-    let path = if path.as_ref().is_absolute() {
-        path.as_ref().to_path_buf()
-    } else {
-        // if relative path, parent (root of the repo) is relative 2 back from this file
-        Path::new("../../").join(path.as_ref())
-    };
+cfg_if::cfg_if! {
+    if #[cfg(debug_assertions)] {
+        pub fn read_component(path: &str) -> Result<Vec<u8>> {
+            let mut path = PathBuf::from(shellexpand::tilde(&path).to_string());
 
-    Ok(std::fs::read(path)?)
+            if !path.is_absolute() {
+                path = workspace_path().join(path)
+            };
+
+            Ok(std::fs::read(path)?)
+        }
+    } else {
+        pub fn read_component(path: &str) -> Result<Vec<u8>> {
+            let path = PathBuf::from(shellexpand::tilde(&path).to_string());
+            Ok(std::fs::read(path)?)
+        }
+    }
 }

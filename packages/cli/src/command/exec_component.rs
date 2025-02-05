@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::path::PathBuf;
 use wasmtime::{
     component::{Component, Linker},
     Config as WTConfig, Engine as WTEngine,
@@ -33,13 +32,18 @@ impl std::fmt::Display for ExecComponent {
 }
 
 pub struct ExecComponentArgs {
-    pub component: PathBuf,
+    pub component_path: String,
     pub input: ComponentInput,
 }
 
 impl ExecComponent {
-    pub async fn run(ExecComponentArgs { component, input }: ExecComponentArgs) -> Result<Self> {
-        let wasm_bytes = read_component(component)?;
+    pub async fn run(
+        ExecComponentArgs {
+            component_path,
+            input,
+        }: ExecComponentArgs,
+    ) -> Result<Self> {
+        let wasm_bytes = read_component(&component_path)?;
         exec_component(wasm_bytes, input.decode()?).await
     }
 }

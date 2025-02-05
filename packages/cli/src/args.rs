@@ -55,7 +55,7 @@ pub enum Command {
 
         /// Path to the WASI component
         #[clap(long)]
-        component: PathBuf,
+        component: String,
 
         /// The kind of trigger to deploy
         #[clap(long)]
@@ -103,7 +103,7 @@ pub enum Command {
     UploadComponent {
         /// Path to the WASI component
         #[clap(long)]
-        component: PathBuf,
+        component: String,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -147,7 +147,7 @@ pub enum Command {
         /// Path to the WASI component
         /// The component must implement the eth-trigger-world WIT
         #[clap(long)]
-        component: PathBuf,
+        component: String,
 
         #[clap(flatten)]
         args: CliArgs,

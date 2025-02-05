@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::path::PathBuf;
 use wavs_types::Digest;
 
 use crate::{clients::HttpClient, config::Config, util::read_component};
@@ -15,15 +14,15 @@ impl std::fmt::Display for UploadComponent {
 }
 
 pub struct UploadComponentArgs {
-    pub component: PathBuf,
+    pub component_path: String,
 }
 
 impl UploadComponent {
     pub async fn run(
         config: &Config,
-        UploadComponentArgs { component }: UploadComponentArgs,
+        UploadComponentArgs { component_path }: UploadComponentArgs,
     ) -> Result<Self> {
-        let wasm_bytes = read_component(component)?;
+        let wasm_bytes = read_component(&component_path)?;
         let http_client = HttpClient::new(config.wavs_endpoint.clone());
         let digest = http_client.upload_component(wasm_bytes).await?;
 

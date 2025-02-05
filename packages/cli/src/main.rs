@@ -67,7 +67,7 @@ async fn main() {
             trigger_event_name,
             args: _,
         } => {
-            let component = ComponentSource::Bytecode(read_component(component).unwrap());
+            let component = ComponentSource::Bytecode(read_component(&component).unwrap());
 
             let res = DeployService::run(
                 &ctx,
@@ -146,9 +146,14 @@ async fn main() {
             }
         }
         Command::UploadComponent { component, args: _ } => {
-            let res = UploadComponent::run(&ctx.config, UploadComponentArgs { component })
-                .await
-                .unwrap();
+            let res = UploadComponent::run(
+                &ctx.config,
+                UploadComponentArgs {
+                    component_path: component,
+                },
+            )
+            .await
+            .unwrap();
 
             ctx.handle_display_result(res);
         }
@@ -158,7 +163,7 @@ async fn main() {
             args: _,
         } => {
             let res = ExecComponent::run(ExecComponentArgs {
-                component,
+                component_path: component,
                 input: ComponentInput::Stdin(input),
             })
             .await
