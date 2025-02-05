@@ -144,7 +144,7 @@ impl TriggerData {
 
 // TODO - rename this? Trigger is a noun, Submit is a verb.. feels a bit weird
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum Submit {
     // useful for when the component just does something with its own state
     None,
@@ -157,7 +157,7 @@ pub enum Submit {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct ServiceConfig {
     /// The maximum amount of compute metering to allow for a single execution
     pub fuel_limit: u64,

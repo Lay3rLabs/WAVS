@@ -1,6 +1,6 @@
 [package]
 name = "wavs-types"
-version = "0.3.0-alpha1"
+version = "0.3.0-alpha2"
 description = "WAVS Types"
 edition.workspace = true
 authors.workspace = true
