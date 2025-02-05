@@ -26,20 +26,6 @@ impl SimpleEthSubmitClient {
         }
     }
 
-    pub async fn set_service_manager_address(&self, address: Address) -> Result<()> {
-        self.contract
-            .setServiceManager(address)
-            .send()
-            .await?
-            .watch()
-            .await?;
-        Ok(())
-    }
-
-    pub async fn get_service_manager_address(&self) -> Result<Address> {
-        Ok(self.contract.getServiceManager().call().await?._0)
-    }
-
     // just a static helper to simulate the data that would be sent to the contract
     pub fn data_with_id_bytes(trigger_id: u64, data: impl AsRef<[u8]>) -> Vec<u8> {
         DataWithId {

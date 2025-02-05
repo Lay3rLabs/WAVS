@@ -3,15 +3,16 @@ pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {LayerServiceManager} from "../LayerServiceManager.sol";
-import {ILayerService} from "@layer-sdk/interfaces/ILayerService.sol";
+import {ILayerServiceHandler} from "@layer/interfaces/ILayerServiceHandler.sol";
+import {LayerServiceManager} from "@layer/LayerServiceManager.sol";
 
 contract LayerServiceManagerTest is Test {
     LayerServiceManager serviceManager;
     LayerServiceHandler serviceHandler;
 
     function setUp() public {
-        serviceHandler = new LayerServiceHandler();
         // TODO - ServiceManager....
+        serviceHandler = new LayerServiceHandler();
     }
 
     function test_handlesPayload() public {
@@ -24,16 +25,15 @@ contract LayerServiceManagerTest is Test {
 
 /**
  * @title LayerServiceHandler
- * @notice Example of a contract that knows how to handle validated payloads.
+ * @notice Example contract 
  */
-contract LayerServiceHandler is ILayerService {
-    /**
-     * @notice Called by LayerServiceManager after successful payload signature validation.
-     * @dev In a real-world scenario, you could parse `data` or do some state updates here.
-     */
+contract LayerServiceHandler is ILayerServiceHandler {
     function handleSignedData(bytes calldata data, bytes calldata signature)
         external
     {
-        // Additional logic to process `data` would go here
+    }
+    function handleSignedDataMulti(bytes[] calldata datas, bytes[] calldata signatures)
+        external
+    {
     }
 }

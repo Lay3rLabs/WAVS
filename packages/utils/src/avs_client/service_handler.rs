@@ -1,5 +1,5 @@
-use super::layer_service_manager::LayerServiceManager;
-use super::{AvsClient, LayerServiceManagerT};
+use super::layer_service_handler::ILayerServiceHandler;
+use super::ILayerServiceHandlerT;
 use crate::eth_client::EthSigningClient;
 use alloy::contract::Error;
 use alloy::primitives::{Bytes, FixedBytes};
@@ -13,37 +13,21 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
-pub struct ServiceManagerClient {
+pub struct ServiceHandlerClient {
     pub eth: EthSigningClient,
-    pub service_manager_contract_address: Address,
-    pub service_manager_contract: LayerServiceManagerT,
+    pub address: Address,
+    pub contract: ILayerServiceHandlerT,
 }
 
-impl From<AvsClient> for ServiceManagerClient {
-    fn from(full: AvsClient) -> Self {
-        Self::new(full.eth, full.service_manager)
-    }
-}
-
-impl ServiceManagerClient {
-    pub fn new(eth: EthSigningClient, service_manager_contract_address: Address) -> Self {
-        let service_manager_contract =
-            LayerServiceManager::new(service_manager_contract_address, eth.provider.clone());
+impl ServiceHandlerClient {
+    pub fn new(eth: EthSigningClient, address: Address) -> Self {
+        let contract = ILayerServiceHandler::new(address, eth.provider.clone());
 
         Self {
             eth,
-            service_manager_contract_address,
-            service_manager_contract,
+            address,
+            contract,
         }
-    }
-
-    pub async fn handler_address(&self) -> Result<Address> {
-        Ok(self
-            .service_manager_contract
-            .serviceHandler()
-            .call()
-            .await?
-            ._0)
     }
 
     // helper to add a single signed payload to the contract
@@ -59,7 +43,7 @@ impl ServiceManagerClient {
 
         let (data, signature) = signed_payload.into_submission_abi();
         let result = self
-            .service_manager_contract
+            .contract
             .handleSignedData(data, signature)
             .gas(gas)
             .send()

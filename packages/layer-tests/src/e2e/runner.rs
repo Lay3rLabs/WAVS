@@ -4,11 +4,9 @@ use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use utils::{avs_client::SignedData, context::AppContext};
-use wavs_cli::{
-    command::add_task::{AddTask, AddTaskArgs},
-    util::ComponentInput,
-};
 use wavs_types::{ChainName, Service, Submit};
+
+use crate::e2e::add_task::add_task;
 
 use super::{
     clients::Clients,
@@ -73,22 +71,19 @@ async fn test_service(
         for task_number in 1..=n_tasks {
             let is_final = task_number == n_tasks;
 
-            let signed_data = AddTask::run(
+            let signed_data = add_task(
                 &clients.cli_ctx,
-                AddTaskArgs {
-                    service_id: service_id.clone(),
-                    workflow_id: Some(workflow_id.to_string()),
-                    input: get_input_for_service(name, &service, configs, workflow_index),
-                    result_timeout: if is_final {
-                        Some(std::time::Duration::from_secs(10))
-                    } else {
-                        None
-                    },
+                service_id.clone(),
+                Some(workflow_id.to_string()),
+                get_input_for_service(name, &service, configs, workflow_index),
+                if is_final {
+                    Some(std::time::Duration::from_secs(10))
+                } else {
+                    None
                 },
+                n_tasks > 1,
             )
-            .await?
-            .context("failed to add task")?
-            .signed_data;
+            .await?;
 
             if is_final {
                 let signed_data = signed_data.context("no signed data returned")?;
@@ -105,7 +100,7 @@ fn get_input_for_service(
     _service: &Service,
     configs: &Configs,
     workflow_index: usize,
-) -> ComponentInput {
+) -> Vec<u8> {
     let permissions_req = || {
         PermissionsRequest {
             url: "https://httpbin.org/get".to_string(),
@@ -149,7 +144,7 @@ fn get_input_for_service(
         },
     };
 
-    ComponentInput::Raw(input_data)
+    input_data
 }
 
 fn verify_signed_data(
@@ -161,11 +156,7 @@ fn verify_signed_data(
 ) -> Result<()> {
     let data = signed_data.data;
 
-    let input_req = || {
-        get_input_for_service(name, service, configs, workflow_index)
-            .decode()
-            .unwrap()
-    };
+    let input_req = || get_input_for_service(name, service, configs, workflow_index);
 
     let expected_data = match name {
         AnyService::Eth(eth_name) => match eth_name {
@@ -197,9 +188,7 @@ fn verify_signed_data(
         },
         AnyService::Cosmos(cosmos_name) => match cosmos_name {
             CosmosService::EchoData | CosmosService::ChainTriggerLookup => Some(
-                get_input_for_service(name, service, configs, workflow_index)
-                    .decode()
-                    .unwrap(),
+                get_input_for_service(name, service, configs, workflow_index),
             ),
 
             CosmosService::Square => Some(SquareResponse { y: 9 }.to_vec()),
@@ -217,11 +206,12 @@ fn verify_signed_data(
             }
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
-            CrossChainService::CosmosToEthEchoData => Some(
-                get_input_for_service(name, service, configs, workflow_index)
-                    .decode()
-                    .unwrap(),
-            ),
+            CrossChainService::CosmosToEthEchoData => Some(get_input_for_service(
+                name,
+                service,
+                configs,
+                workflow_index,
+            )),
         },
     };
 

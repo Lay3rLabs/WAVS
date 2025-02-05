@@ -16,6 +16,7 @@ pub trait CommandDeployResult: Display {
 pub struct Deployment {
     pub eigen_core: BTreeMap<ChainName, CoreAVSAddresses>,
     pub eigen_service_managers: BTreeMap<ChainName, Vec<alloy::primitives::Address>>,
+    pub eigen_service_aggregators: BTreeMap<ChainName, Vec<alloy::primitives::Address>>,
     pub services: BTreeMap<ServiceID, Service>,
 }
 

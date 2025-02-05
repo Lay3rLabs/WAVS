@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ILayerService} from "@layer-sdk/interfaces/ILayerService.sol";
-
-interface ILayerServiceMulti is ILayerService {
+interface ILayerServiceAggregator {
     /**
      * @notice Multi-payload version of handleSignedData
      * @param datas The arbitrary datas that were signed.

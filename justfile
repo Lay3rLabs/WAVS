@@ -83,26 +83,23 @@ wasi-build COMPONENT="*":
 solidity-build CLEAN="":
     @if [ "{{CLEAN}}" = "clean" ]; then \
         rm -rf {{REPO_ROOT}}/out; \
-        rm -rf {{REPO_ROOT}}/sdk/contracts/solidity/abi; \
         rm -rf {{REPO_ROOT}}/contracts/solidity/abi; \
         rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi; \
     fi
     mkdir -p {{REPO_ROOT}}/out
-    mkdir -p {{REPO_ROOT}}/sdk/contracts/solidity/abi
     mkdir -p {{REPO_ROOT}}/contracts/solidity/abi
     mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
-    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/sdk/contracts/solidity;
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/contracts/solidity;
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
     forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware --out {{REPO_ROOT}}/out;
     forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/out;
     @for contract in \
-        DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
-        ECDSAStakeRegistry LayerToken IStrategy LayerServiceManager EmptyContract; do \
+        DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory \
+        StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
+        ECDSAStakeRegistry LayerToken IStrategy EmptyContract \
+        LayerServiceManager LayerServiceAggregator ILayerServiceHandler ILayerServiceManager ILayerServiceAggregator; do \
         cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/contracts/solidity/abi; \
     done
-    cp -r {{REPO_ROOT}}/out/ILayerService.sol {{REPO_ROOT}}/sdk/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/ILayerServiceMulti.sol {{REPO_ROOT}}/sdk/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/

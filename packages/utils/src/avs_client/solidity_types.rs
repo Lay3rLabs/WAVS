@@ -41,4 +41,29 @@ pub mod layer_service_manager {
     );
 }
 
+pub mod layer_service_aggregator {
+    use super::*;
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        LayerServiceAggregator,
+        "../../contracts/solidity/abi/LayerServiceAggregator.sol/LayerServiceAggregator.json"
+    );
+}
+
+pub mod layer_service_handler {
+    use super::*;
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        ILayerServiceHandler,
+        "../../contracts/solidity/abi/ILayerServiceHandler.sol/ILayerServiceHandler.json"
+    );
+}
+
 pub type LayerServiceManagerT = LayerServiceManagerInstance<BoxTransport, BoxSigningProvider>;
+pub type ILayerServiceHandlerT =
+    layer_service_handler::ILayerServiceHandler::ILayerServiceHandlerInstance<
+        BoxTransport,
+        BoxSigningProvider,
+    >;

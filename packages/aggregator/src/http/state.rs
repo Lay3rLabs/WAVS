@@ -58,6 +58,8 @@ impl HttpState {
     pub fn register_service(&self, service_manager: Address) -> anyhow::Result<()> {
         let service_manager = service_manager.to_string();
 
+        tracing::info!("Registering aggregator for {}", service_manager);
+
         if self
             .storage
             .get(PAYLOADS_BY_CONTRACT_ADDRESS, &service_manager)?

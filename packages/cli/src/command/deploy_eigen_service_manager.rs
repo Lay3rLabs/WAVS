@@ -17,7 +17,6 @@ pub struct DeployEigenServiceManager {
 #[derive(Clone)]
 pub struct DeployEigenServiceManagerArgs {
     pub chain: ChainName,
-    pub service_handler: Address,
     pub register_operator: bool,
 }
 
@@ -45,7 +44,6 @@ impl DeployEigenServiceManager {
     pub async fn run(ctx: &CliContext, args: DeployEigenServiceManagerArgs) -> Result<Self> {
         let DeployEigenServiceManagerArgs {
             chain,
-            service_handler,
             register_operator,
         } = args.clone();
 
@@ -66,9 +64,7 @@ impl DeployEigenServiceManager {
 
         let deployer = AvsClientDeployer::new(eigen_client.eth).core_addresses(core_contracts);
 
-        let avs_client = deployer
-            .deploy_service_manager(service_handler, None)
-            .await?;
+        let avs_client = deployer.deploy_service_manager(None).await?;
 
         if register_operator {
             avs_client.register_operator(&mut OsRng).await?;

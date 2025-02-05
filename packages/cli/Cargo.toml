@@ -10,7 +10,6 @@ license.workspace = true
 publish = false
 
 [dependencies]
-simple-example-cosmos = {path = "../../examples/contracts/cosmwasm/simple", package = "simple-example"}
 wavs-types = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
