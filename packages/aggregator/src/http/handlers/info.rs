@@ -4,7 +4,7 @@ use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct InfoResponse {
     pub signer_address: alloy::primitives::Address,
     pub signer_balance: String,
