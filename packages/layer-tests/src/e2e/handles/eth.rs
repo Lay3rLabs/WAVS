@@ -64,9 +64,9 @@ impl EthereumInstance {
 }
 
 // TODO: keep an eye on this
-/// Latest Alloy breaks things... not sure why.
-/// but their code doesn't really do anything more than what we have here, is just a bit more opinionated and parses the output
-/// and this way we have more control, so probably leave it as it is, at least until it breaks again :P
+// Latest Alloy breaks things... not sure why.
+// but their code doesn't really do anything more than what we have here, is just a bit more opinionated and parses the output
+// and this way we have more control, so probably leave it as it is, at least until it breaks again :P
 
 struct LameAnvilInstanceBuilder {
     pub port: u16,
