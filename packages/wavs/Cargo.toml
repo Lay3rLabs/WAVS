@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 wavs-types = { workspace = true }
+wavs-engine = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }

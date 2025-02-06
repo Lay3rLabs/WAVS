@@ -1,0 +1,21 @@
+[package]
+name = "wavs-engine"
+version = "0.3.0-alpha1"
+description = "WAVS Engine"
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+wavs-types = { workspace = true }
+utils = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-http = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+layer-climb = { workspace = true }
+alloy = { workspace = true }

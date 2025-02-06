@@ -1,10 +1,9 @@
-use crate::apis::trigger as api;
-use crate::bindings::world::wavs::worker::layer_types as component;
+use crate::{bindings::world::wavs::worker::layer_types as component, EngineError};
 
-impl TryFrom<api::TriggerAction> for component::TriggerAction {
-    type Error = api::TriggerError;
+impl TryFrom<wavs_types::TriggerAction> for component::TriggerAction {
+    type Error = EngineError;
 
-    fn try_from(src: api::TriggerAction) -> Result<Self, Self::Error> {
+    fn try_from(src: wavs_types::TriggerAction) -> Result<Self, Self::Error> {
         Ok(Self {
             config: src.config.try_into()?,
             data: src.data.try_into()?,
@@ -12,10 +11,10 @@ impl TryFrom<api::TriggerAction> for component::TriggerAction {
     }
 }
 
-impl TryFrom<api::TriggerConfig> for component::TriggerConfig {
-    type Error = api::TriggerError;
+impl TryFrom<wavs_types::TriggerConfig> for component::TriggerConfig {
+    type Error = EngineError;
 
-    fn try_from(src: api::TriggerConfig) -> Result<Self, Self::Error> {
+    fn try_from(src: wavs_types::TriggerConfig) -> Result<Self, Self::Error> {
         Ok(Self {
             service_id: src.service_id.to_string(),
             workflow_id: src.workflow_id.to_string(),
@@ -25,7 +24,7 @@ impl TryFrom<api::TriggerConfig> for component::TriggerConfig {
 }
 
 impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
-    type Error = api::TriggerError;
+    type Error = EngineError;
 
     fn try_from(src: wavs_types::Trigger) -> Result<Self, Self::Error> {
         Ok(match src {
@@ -55,7 +54,7 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
 }
 
 impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
-    type Error = api::TriggerError;
+    type Error = EngineError;
 
     fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
         match src {
@@ -108,7 +107,7 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
 }
 
 impl TryFrom<layer_climb::prelude::Address> for component::CosmosAddress {
-    type Error = api::TriggerError;
+    type Error = EngineError;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         let (bech32_addr, prefix_len) = match address {
@@ -117,9 +116,9 @@ impl TryFrom<layer_climb::prelude::Address> for component::CosmosAddress {
                 prefix_len,
             } => (bech32_addr, prefix_len),
             _ => {
-                return Err(api::TriggerError::TriggerDataParse(
-                    "Not a cosmos address".to_string(),
-                ))
+                return Err(EngineError::TriggerData(anyhow::anyhow!(
+                    "Not a cosmos address"
+                )))
             }
         };
 
@@ -131,16 +130,16 @@ impl TryFrom<layer_climb::prelude::Address> for component::CosmosAddress {
 }
 
 impl TryFrom<layer_climb::prelude::Address> for component::EthAddress {
-    type Error = api::TriggerError;
+    type Error = EngineError;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         match address {
             layer_climb::prelude::Address::Eth(addr) => Ok(Self {
                 raw_bytes: addr.as_bytes().to_vec(),
             }),
-            _ => Err(api::TriggerError::TriggerDataParse(
-                "Not an ethereum address".to_string(),
-            )),
+            _ => Err(EngineError::TriggerData(anyhow::anyhow!(
+                "Not an ethereum address"
+            ))),
         }
     }
 }

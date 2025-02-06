@@ -1,20 +1,15 @@
-use anyhow::Context;
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::instrument;
 use utils::config::ChainConfigs;
-use wasmtime::{
-    component::{Component, Linker},
-    Config as WTConfig, Engine as WTEngine,
-};
-use wasmtime::{Store, Trap};
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
+use wasmtime_wasi::{WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs_types::{AllowedHostPermission, Digest, ServiceConfig};
+use wavs_engine::InstanceDepsBuilder;
+use wavs_types::{Digest, ServiceConfig, TriggerAction};
 
-use crate::apis::trigger::{TriggerAction, TriggerError};
 use utils::storage::{CAStorage, CAStorageError};
 
 use super::{Engine, EngineError};
@@ -63,7 +58,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
-        let cm = Component::new(&self.wasm_engine, bytecode)?;
+        let cm = Component::new(&self.wasm_engine, bytecode).map_err(EngineError::Compile)?;
 
         // store original wasm
         let digest = self.wasm_storage.set_data(bytecode)?;
@@ -91,34 +86,28 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
-        let (mut store, component, linker) =
-            self.get_instance_deps(wasi, &trigger, service_config)?;
+        let digest = wasi.wasm.clone();
 
-        store
-            .set_fuel(service_config.fuel_limit)
-            .map_err(EngineError::Other)?;
+        let mut instance_deps = InstanceDepsBuilder {
+            component: match self.memory_cache.write().unwrap().get(&digest) {
+                Some(cm) => cm.clone(),
+                None => {
+                    let bytes = self.wasm_storage.get_data(&digest)?;
+                    Component::new(&self.wasm_engine, &bytes).map_err(EngineError::Compile)?
+                }
+            },
+            engine: &self.wasm_engine,
+            permissions: &wasi.permissions,
+            data_dir: self.app_data_dir.join(trigger.config.service_id.as_ref()),
+            service_config,
+            chain_configs: &self.chain_configs,
+        }
+        .build()?;
 
         self.block_on_run(async move {
-            let service_id = trigger.config.service_id.clone();
-            let workflow_id = trigger.config.workflow_id.clone();
-
-            let input: crate::bindings::world::wavs::worker::layer_types::TriggerAction = trigger
-                .try_into()
-                .map_err(|e: TriggerError| EngineError::TriggerData(e.into()))?;
-
-            crate::bindings::world::LayerTriggerWorld::instantiate_async(
-                &mut store, &component, &linker,
-            )
-            .await
-            .context("Wasm instantiate failed")?
-            .call_run(store, &input)
-            .await
-            .context("Failed to run task")
-            .map_err(|e| match e.downcast_ref::<Trap>() {
-                Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
-                _ => EngineError::ComponentError(e.to_string()),
-            })?
-            .map_err(EngineError::ComponentError)
+            wavs_engine::execute(&mut instance_deps, trigger)
+                .await
+                .map_err(|e| e.into())
         })
     }
 }
@@ -137,83 +126,6 @@ impl<S: CAStorage> WasmEngine<S> {
             .unwrap();
 
         rt.block_on(fut)
-    }
-
-    fn get_instance_deps(
-        &self,
-        wasi: &wavs_types::Component,
-        trigger: &TriggerAction,
-        service_config: &ServiceConfig,
-    ) -> Result<(Store<HostComponent>, Component, Linker<HostComponent>), EngineError> {
-        // load component from memory cache or compile from wasm
-        // TODO: use serialized precompile as well, pull this into a method
-        let digest = wasi.wasm.clone();
-        let component = match self.memory_cache.write().unwrap().get(&digest) {
-            Some(cm) => cm.clone(),
-            None => {
-                let bytes = self.wasm_storage.get_data(&digest)?;
-                Component::new(&self.wasm_engine, &bytes)?
-            }
-        };
-
-        // create linker
-        let mut linker = Linker::new(&self.wasm_engine);
-        crate::bindings::world::host::add_to_linker(&mut linker, |state| state).unwrap();
-        // wasmtime_wasi::add_to_linker_sync(&mut linker).unwrap();
-        // wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker).unwrap();
-        wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
-        // don't add http support if we don't allow it
-        // FIXME: we need to apply Only(host) checks as well, but that involves some wat magic
-        if wasi.permissions.allowed_http_hosts != AllowedHostPermission::None {
-            wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
-        }
-
-        // create wasi context
-        let mut builder = WasiCtxBuilder::new();
-
-        // conditionally allow fs access
-        if wasi.permissions.file_system {
-            // we namespace by service id so that all components within a service have access to the same data
-            // and services are each isolated from each other
-            let app_cache_path = self.app_data_dir.join(trigger.config.service_id.as_ref());
-            if !app_cache_path.is_dir() {
-                std::fs::create_dir_all(&app_cache_path)?;
-            }
-            builder
-                .preopened_dir(&app_cache_path, ".", DirPerms::all(), FilePerms::all())
-                .context("preopen failed")?;
-        }
-
-        // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
-        let env: Vec<_> = std::env::vars()
-            .filter(|(key, _)| {
-                key.starts_with("WAVS_ENV") && service_config.host_envs.contains(&key.to_string())
-            })
-            .chain(
-                service_config
-                    .kv
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.clone())),
-            )
-            .collect();
-
-        if !env.is_empty() {
-            builder.envs(&env);
-        }
-
-        let ctx = builder.build();
-
-        // create host (what is this actually? some state needed for the linker?)
-        let host = HostComponent {
-            chain_configs: self.chain_configs.clone(),
-            table: wasmtime::component::ResourceTable::new(),
-            ctx,
-            http: WasiHttpCtx::new(),
-        };
-
-        let store = wasmtime::Store::new(&self.wasm_engine, host);
-
-        Ok((store, component, linker))
     }
 }
 
@@ -249,9 +161,9 @@ impl WasiHttpView for HostComponent {
 #[cfg(test)]
 mod tests {
     use utils::storage::memory::MemoryStorage;
-    use wavs_types::{ServiceID, Trigger, TriggerData, WorkflowID};
+    use wavs_types::{ServiceID, Trigger, TriggerConfig, TriggerData, WorkflowID};
 
-    use crate::{apis::trigger::TriggerConfig, engine::mock::mock_chain_configs};
+    use crate::engine::mock::mock_chain_configs;
 
     use super::*;
 
@@ -391,7 +303,11 @@ mod tests {
                 &service_config,
             )
             .unwrap_err();
-        assert!(matches!(result, EngineError::ComponentError(_)));
+
+        assert!(matches!(
+            result,
+            EngineError::Engine(wavs_engine::EngineError::ExecResult(_))
+        ));
     }
 
     #[test]
@@ -426,6 +342,9 @@ mod tests {
             )
             .unwrap_err();
 
-        assert!(matches!(err, EngineError::OutOfFuel(_, _)));
+        assert!(matches!(
+            err,
+            EngineError::Engine(wavs_engine::EngineError::OutOfFuel(_, _))
+        ));
     }
 }

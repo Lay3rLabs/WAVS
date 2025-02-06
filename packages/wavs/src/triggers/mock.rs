@@ -1,7 +1,7 @@
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
-use crate::apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager};
+use crate::apis::trigger::{TriggerError, TriggerManager};
 use crate::test_utils::address::{
     rand_address_eth, rand_address_layer, rand_event_cosmos, rand_event_eth,
 };
@@ -11,7 +11,9 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::context::AppContext;
-use wavs_types::{ChainName, IDError, ServiceID, Trigger, TriggerData, WorkflowID};
+use wavs_types::{
+    ChainName, IDError, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+};
 
 pub fn mock_eth_event_trigger_config(
     service_id: impl TryInto<ServiceID, Error = IDError>,
