@@ -20,16 +20,13 @@ alloy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-rand = { workspace = true }
 const-hex = { workspace = true }
 reqwest = { workspace = true }
 layer-climb = { workspace = true }
-toml = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
 wasmtime-wasi = { workspace = true }
 tempfile = { workspace = true }
 shellexpand = { workspace = true }
-cosmwasm-std = { workspace = true }
 uuid = { workspace = true }
 cfg-if = { workspace = true }

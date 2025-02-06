@@ -18,14 +18,12 @@ wavs = { path = "packages/wavs" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
-wavs-wasi-chain = { path = "packages/wasi-chain" }
 clap = { version = "4.5.20", features = ["derive", "env", "string"] }
 anyhow = "1.0.90"
 tokio = { version = "1.41.0", features = ["full"] }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 dirs = "6.0.0"
-toml = "0.8.19"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 dotenvy = { version = "0.15.7", features = ["cli"] }
@@ -60,28 +58,21 @@ temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
 chrono = "0.4.38"
 shellexpand = "3.1.0"
-wit-bindgen-rt = {version = "0.39.0", features = ["bitflags"]}
-wit-bindgen = "0.39.0"
+wit-bindgen-rt = {version = "0.39.0", features = ["bitflags", "async"]}
 alloy = { version = "0.11.0", features = ["full", "signer-mnemonic", "node-bindings"] }
-alloy-rlp = {version = "0.3.10", features = ["derive"]}
 alloy-primitives = {version = "0.8.20", features = ["serde"]}
-alloy-sol-macro = "0.8.20"
 alloy-sol-types = "0.8.20"
-alloy-rpc-types = "0.11.0"
 alloy-json-rpc = "0.11.0"
 alloy-provider = "0.11.0"
 alloy-transport-http = "0.11.0"
 alloy-transport = "0.11.0"
 alloy-rpc-client = "0.11.0"
-tendermint-rpc = "0.40.1"
-tendermint = { version = "0.40.1", default-features = false}
 wstd = "0.5.0"
 wasi = "0.14.0"
 cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
 cosmwasm-schema = "2.2.0"
 cw-storage-plus = "2.0.0"
 cw2 = "2.0.0"
-fs_extra = "1.3.0"
 async-trait = "0.1.85"
 tower-service = "0.3.3"
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
