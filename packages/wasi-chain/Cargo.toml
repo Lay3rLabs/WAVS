@@ -15,16 +15,10 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 layer-climb = { workspace = true }
 wstd = { workspace = true }
-tendermint-rpc = { workspace = true }
-tendermint = { workspace = true }
-url = { workspace = true }
 wasi = { workspace = true }
 wit-bindgen-rt = {workspace = true}
-wit-bindgen = {workspace = true}
-cosmwasm-std = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = {workspace = true }
-alloy-rpc-types = {workspace = true }
 alloy-json-rpc = {workspace = true} 
 alloy-provider = {workspace = true} 
 alloy-transport-http = {workspace = true} 

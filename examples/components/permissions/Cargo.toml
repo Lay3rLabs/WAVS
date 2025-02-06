@@ -10,12 +10,9 @@ repository.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-wasi = { workspace = true }
-wit-bindgen-rt = { workspace = true }
 url = { workspace = true }
 example-helpers = { workspace = true }
 wstd = { workspace = true }
-wavs-wasi-chain = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

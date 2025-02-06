@@ -342,19 +342,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "alloy-rpc-types"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1428d64569961b00373c503a3de306656e94ef1f2a474e93fd41a6daae0d6ac7"
-dependencies = [
- "alloy-primitives",
- "alloy-rpc-types-engine",
- "alloy-rpc-types-eth",
- "alloy-serde",
- "serde",
-]
-
-[[package]]
 name = "alloy-rpc-types-any"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,24 +350,6 @@ dependencies = [
  "alloy-consensus-any",
  "alloy-rpc-types-eth",
  "alloy-serde",
-]
-
-[[package]]
-name = "alloy-rpc-types-engine"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b582c59b6f493d9b15bea32f44f662fa6749e5464ef5305d8429a864ace60684"
-dependencies = [
- "alloy-consensus",
- "alloy-eips",
- "alloy-primitives",
- "alloy-rlp",
- "alloy-serde",
- "derive_more",
- "jsonwebtoken",
- "rand 0.8.5",
- "serde",
- "strum",
 ]
 
 [[package]]
@@ -1080,11 +1049,8 @@ version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "example-helpers",
- "layer-climb",
  "serde",
- "serde_json",
  "wavs-wasi-chain",
- "wit-bindgen-rt 0.39.0",
  "wstd",
 ]
 
@@ -1142,10 +1108,7 @@ dependencies = [
  "layer-climb",
  "serde",
  "serde_json",
- "tendermint",
- "tendermint-rpc",
  "wavs-wasi-chain",
- "wit-bindgen-rt 0.39.0",
  "wstd",
 ]
 
@@ -1536,22 +1499,14 @@ dependencies = [
 name = "echo-data"
 version = "0.2.0-rc1"
 dependencies = [
- "anyhow",
  "example-helpers",
- "wavs-wasi-chain",
- "wit-bindgen-rt 0.39.0",
- "wstd",
 ]
 
 [[package]]
 name = "echo-raw"
 version = "0.2.0-rc1"
 dependencies = [
- "anyhow",
  "example-helpers",
- "wavs-wasi-chain",
- "wit-bindgen-rt 0.39.0",
- "wstd",
 ]
 
 [[package]]
@@ -1649,27 +1604,15 @@ dependencies = [
  "alloy-contract",
  "alloy-primitives",
  "alloy-provider",
- "alloy-rlp",
  "alloy-sol-macro",
  "alloy-sol-types",
  "anyhow",
  "cosmwasm-std",
  "layer-climb",
  "serde",
- "serde_json",
  "simple-example",
  "wavs-wasi-chain",
  "wit-bindgen",
-]
-
-[[package]]
-name = "eyre"
-version = "0.6.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cd915d99f24784cdc19fd37ef22b97e3ff0ae756c7e492e9fbfe897d61e2aec"
-dependencies = [
- "indenter",
- "once_cell",
 ]
 
 [[package]]
@@ -1734,7 +1677,6 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c606d892c9de11507fa0dcffc116434f94e105d0bbdc4e405b61519464c49d7b"
 dependencies = [
- "eyre",
  "paste",
 ]
 
@@ -2380,12 +2322,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indenter"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
-
-[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2463,21 +2399,6 @@ checksum = "1cfaf33c695fc6e08064efbc1f72ec937429614f25eef83af942d0e227c3a28f"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "jsonwebtoken"
-version = "9.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ae10193d25051e74945f1ea2d0b42e03cc3b890f7e4cc5faa44997d808193f"
-dependencies = [
- "base64 0.21.7",
- "js-sys",
- "pem",
- "ring",
- "serde",
- "serde_json",
- "simple_asn1",
 ]
 
 [[package]]
@@ -2961,16 +2882,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3aeb8f54c078314c2065ee649a7241f46b9d8e418e1a9581ba0546657d7aa3a"
 
 [[package]]
-name = "pem"
-version = "3.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e459365e590736a54c3fa561947c84837534b8e9af6fc5bf781307e82658fae"
-dependencies = [
- "base64 0.22.1",
- "serde",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2985,9 +2896,6 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
- "wasi 0.14.0+wasi-0.2.3",
- "wavs-wasi-chain",
- "wit-bindgen-rt 0.39.0",
  "wstd",
 ]
 
@@ -3885,18 +3793,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simple_asn1"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "297f631f50729c8c99b84667867963997ec0b50f32b2a7dbcab828ef0541e8bb"
-dependencies = [
- "num-bigint",
- "num-traits",
- "thiserror 2.0.11",
- "time",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3953,13 +3849,9 @@ dependencies = [
 name = "square"
 version = "0.2.0-rc1"
 dependencies = [
- "anyhow",
  "example-helpers",
  "serde",
  "serde_json",
- "wavs-wasi-chain",
- "wit-bindgen-rt 0.39.0",
- "wstd",
 ]
 
 [[package]]
@@ -4256,7 +4148,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35e7868883861bd0e56d9ac6efcaaca0d6d5d82a2a7ec8209ff492c07cf37b21"
 dependencies = [
  "deranged",
- "itoa",
  "num-conv",
  "powerfmt",
  "serde",
@@ -4864,24 +4755,18 @@ dependencies = [
  "alloy-primitives",
  "alloy-provider",
  "alloy-rpc-client",
- "alloy-rpc-types",
  "alloy-sol-types",
  "alloy-transport",
  "alloy-transport-http",
  "anyhow",
  "async-trait",
  "cfg-if",
- "cosmwasm-std",
  "futures-utils-wasm",
  "layer-climb",
  "serde",
  "serde_json",
- "tendermint",
- "tendermint-rpc",
  "tower-service",
- "url",
  "wasi 0.14.0+wasi-0.2.3",
- "wit-bindgen",
  "wit-bindgen-rt 0.39.0",
  "wstd",
 ]
