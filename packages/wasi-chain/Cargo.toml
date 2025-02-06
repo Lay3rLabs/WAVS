@@ -33,6 +33,7 @@ alloy-rpc-client = {workspace = true}
 async-trait = {workspace = true} 
 cfg-if = {workspace = true} 
 tower-service = {workspace = true} 
+futures-utils-wasm = {workspace = true}
 
 [lib]
 crate-type = ["rlib", "cdylib"]

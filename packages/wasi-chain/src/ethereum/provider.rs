@@ -16,6 +16,7 @@ use alloy_transport::{
     TransportErrorKind, TransportFut,
 };
 use alloy_transport_http::{Http, HttpConnect};
+use futures_utils_wasm::impl_future;
 use tower_service::Service;
 use wasi::http::types::Method;
 use wit_bindgen_rt::async_support::futures::pin_mut;
@@ -27,10 +28,7 @@ use wstd::{
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
-        pub type WasiProvider<N = Ethereum> =
-            RootProvider<WasiEthClient, N>;
-
-        pub fn new_eth_provider<N: Network>(endpoint: String) -> WasiProvider<N> {
+        pub fn new_eth_provider<N: Network>(endpoint: String) -> RootProvider<N> {
             let client = WasiEthClient::new(endpoint);
             let is_local = client.is_local();
             RootProvider::new(RpcClient::new(client, is_local))
@@ -52,14 +50,12 @@ cfg_if::cfg_if! {
         unsafe impl Send for WasiEthClient {}
 
         impl TransportConnect for WasiEthClient {
-            type Transport = WasiEthClient;
-
             fn is_local(&self) -> bool {
                 guess_local_url(self.endpoint.as_str())
             }
 
-            fn get_transport<'a: 'b, 'b>(&'a self) -> Pbf<'b, Self::Transport, TransportError> {
-                Box::pin(async { Ok(self.clone()) })
+            fn get_transport(&self) -> impl_future!(<Output = Result<BoxTransport, TransportError>>) {
+                async { Ok(BoxTransport::new(self.clone())) }
             }
         }
 
@@ -102,7 +98,7 @@ cfg_if::cfg_if! {
         }
     } else {
         // not used, just for making the compiler happy
-        pub fn new_eth_provider<N: Network>(_endpoint: String) -> RootProvider<BoxTransport, N> {
+        pub fn new_eth_provider<N: Network>(_endpoint: String) -> RootProvider {
             unimplemented!()
         }
     }

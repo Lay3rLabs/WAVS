@@ -23,7 +23,7 @@ impl AppHandles {
         let mut cosmos_chains = Vec::new();
 
         for chain_config in configs.chains.eth.values() {
-            let handle = EthereumInstance::spawn(configs, chain_config.clone());
+            let handle = EthereumInstance::spawn(ctx.clone(), configs, chain_config.clone());
             eth_chains.push(handle);
         }
 

@@ -10,6 +10,7 @@ repository.workspace = true
 wavs-wasi-chain = {workspace = true}
 alloy-rlp = {workspace = true}
 alloy-primitives = {workspace = true}
+alloy-provider = {workspace = true}
 alloy-sol-macro = {workspace = true}
 alloy-sol-types = {workspace = true}
 alloy-contract = {workspace = true } 

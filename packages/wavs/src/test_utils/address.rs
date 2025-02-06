@@ -4,9 +4,9 @@ use layer_climb::prelude::*;
 use rand::prelude::*;
 
 pub fn rand_address_eth() -> alloy::primitives::Address {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
-    let entropy: [u8; 32] = rng.gen();
+    let entropy: [u8; 32] = rng.random();
     let mnemonic = Mnemonic::from_entropy(&entropy).unwrap();
 
     let signer = MnemonicBuilder::<English>::default()
@@ -18,7 +18,7 @@ pub fn rand_address_eth() -> alloy::primitives::Address {
 }
 
 pub fn rand_event_eth() -> [u8; 32] {
-    rand::thread_rng().gen()
+    rand::rng().random()
 }
 
 pub fn rand_event_cosmos() -> String {
@@ -26,9 +26,9 @@ pub fn rand_event_cosmos() -> String {
 }
 
 pub fn rand_address_layer() -> Address {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
-    let entropy: [u8; 32] = rng.gen();
+    let entropy: [u8; 32] = rng.random();
     let mnemonic = Mnemonic::from_entropy(&entropy).unwrap();
 
     let signer = KeySigner::new_mnemonic_iter(mnemonic.words(), None).unwrap();

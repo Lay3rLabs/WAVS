@@ -1,22 +1,9 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(missing_docs, non_snake_case)]
 
-use alloy::{
-    network::{Ethereum, EthereumWallet},
-    providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-            WalletFiller,
-        },
-        Identity, RootProvider,
-    },
-    pubsub::PubSubFrontend,
-    sol,
-    transports::{
-        http::{Client, Http},
-        BoxTransport,
-    },
-};
+use alloy::sol;
+
+use crate::eth_client::SigningProvider;
 
 pub mod delegation_manager {
     use super::*;
@@ -119,52 +106,9 @@ pub mod misc {
     }
 }
 
-pub type EmptyContractT =
-    proxy::EmptyContract::EmptyContractInstance<BoxTransport, BoxSigningProvider>;
+pub type EmptyContractT = proxy::EmptyContract::EmptyContractInstance<(), SigningProvider>;
 
 pub type TransparentProxyContractT =
-    proxy::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance<
-        BoxTransport,
-        BoxSigningProvider,
-    >;
+    proxy::TransparentUpgradeableProxy::TransparentUpgradeableProxyInstance<(), SigningProvider>;
 
-pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<BoxTransport, BoxSigningProvider>;
-
-pub type WsSigningProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider<PubSubFrontend>,
-    PubSubFrontend,
-    Ethereum,
->;
-
-pub type HttpSigningProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider<Http<Client>>,
-    Http<Client>,
-    Ethereum,
->;
-
-pub type BoxSigningProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider<BoxTransport>,
-    BoxTransport,
-    Ethereum,
->;
+pub type ProxyAdminT = proxy::ProxyAdmin::ProxyAdminInstance<(), SigningProvider>;

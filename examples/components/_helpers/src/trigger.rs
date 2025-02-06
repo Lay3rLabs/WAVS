@@ -2,12 +2,13 @@
 use crate::bindings::compat::{
     TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent,
 };
+use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
 use anyhow::Result;
 use example_submit::DataWithId;
 use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
 use serde::{Deserialize, Serialize};
-use wavs_wasi_chain::{decode_event_log_data, ethereum::WasiProvider};
+use wavs_wasi_chain::decode_event_log_data;
 
 pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)> {
     match trigger_data {
@@ -78,7 +79,7 @@ impl ChainQuerierExt for layer_climb::prelude::QueryClient {
     }
 }
 
-impl ChainQuerierExt for WasiProvider {
+impl ChainQuerierExt for RootProvider {
     // convenience helper for typical use-case of querying an ethereum event trigger
     async fn trigger_data(
         &self,

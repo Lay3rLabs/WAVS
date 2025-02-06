@@ -1,25 +1,30 @@
 use std::sync::Arc;
 
 use alloy::{
-    network::EthereumWallet,
+    network::{Ethereum, EthereumWallet},
     primitives::Address,
-    providers::{ProviderBuilder, RootProvider, WsConnect},
+    providers::{
+        fillers::{
+            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+            WalletFiller,
+        },
+        Identity, ProviderBuilder, RootProvider,
+    },
     signers::{
         k256::ecdsa::SigningKey,
         local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
     },
-    transports::BoxTransport,
 };
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::{eigen_client::solidity_types::BoxSigningProvider, error::EthClientError};
+use crate::error::EthClientError;
 
 #[derive(Clone)]
 pub struct EthQueryClient {
     pub config: EthClientConfig,
-    pub provider: RootProvider<BoxTransport>,
+    pub provider: QueryProvider,
 }
 
 impl std::fmt::Debug for EthQueryClient {
@@ -34,7 +39,7 @@ impl std::fmt::Debug for EthQueryClient {
 #[derive(Clone)]
 pub struct EthSigningClient {
     pub config: EthClientConfig,
-    pub provider: BoxSigningProvider,
+    pub provider: SigningProvider,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
     pub wallet: Arc<EthereumWallet>,
@@ -95,30 +100,29 @@ impl EthClientBuilder {
         }
     }
 
-    pub async fn build_query(self) -> Result<EthQueryClient> {
-        let provider: RootProvider<BoxTransport> = match self.preferred_transport() {
+    pub fn endpoint(&self) -> Result<String> {
+        match self.preferred_transport() {
             // Http preferred or no preference and no websocket
-            EthClientTransport::Http => {
-                let endpoint_url = self
-                    .config
-                    .http_endpoint
-                    .as_ref()
-                    .context("no http endpoint")?
-                    .parse()?;
-                ProviderBuilder::new().on_http(endpoint_url).boxed()
-            }
-            EthClientTransport::WebSocket => {
-                let ws =
-                    WsConnect::new(self.config.ws_endpoint.as_ref().context(
-                        "Websocket is preferred transport, but endpoint was not provided",
-                    )?);
-                ProviderBuilder::new().on_ws(ws).await?.boxed()
-            }
-        };
+            EthClientTransport::Http => Ok(self
+                .config
+                .http_endpoint
+                .as_ref()
+                .context("no http endpoint")?
+                .to_string()),
+            EthClientTransport::WebSocket => Ok(self
+                .config
+                .ws_endpoint
+                .as_ref()
+                .context("Websocket is preferred transport, but endpoint was not provided")?
+                .to_string()),
+        }
+    }
+    pub async fn build_query(self) -> Result<EthQueryClient> {
+        let endpoint = self.endpoint()?;
 
         Ok(EthQueryClient {
             config: self.config,
-            provider,
+            provider: ProviderBuilder::new().on_builtin(&endpoint).await?,
         })
     }
 
@@ -135,20 +139,42 @@ impl EthClientBuilder {
             .build()?;
 
         let wallet: EthereumWallet = signer.clone().into();
-        let query_client = self.build_query().await?;
+
+        let endpoint = self.endpoint()?;
+
         let provider = ProviderBuilder::new()
-            .with_recommended_fillers()
             .wallet(wallet.clone())
-            .on_provider(query_client.provider);
+            .on_builtin(&endpoint)
+            .await?;
 
         Ok(EthSigningClient {
-            config: query_client.config,
+            config: self.config,
             provider,
             wallet: Arc::new(wallet),
             signer: Arc::new(signer),
         })
     }
 }
+
+pub type QueryProvider = FillProvider<
+    JoinFill<
+        Identity,
+        JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+    >,
+    RootProvider,
+    Ethereum,
+>;
+pub type SigningProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider,
+    Ethereum,
+>;
 
 #[cfg(test)]
 mod test {
