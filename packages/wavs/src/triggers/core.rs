@@ -1,5 +1,5 @@
 use crate::{
-    apis::trigger::{TriggerAction, TriggerConfig, TriggerError, TriggerManager},
+    apis::trigger::{TriggerError, TriggerManager},
     config::Config,
     AppContext,
 };
@@ -18,7 +18,9 @@ use std::{
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
-use wavs_types::{ChainName, ServiceID, Trigger, TriggerData, WorkflowID};
+use wavs_types::{
+    ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -542,11 +544,11 @@ fn remove_trigger_data(
 #[cfg(test)]
 mod tests {
     use crate::{
-        apis::trigger::{TriggerConfig, TriggerManager},
+        apis::trigger::TriggerManager,
         config::Config,
         test_utils::address::{rand_address_eth, rand_event_eth},
     };
-    use wavs_types::{ChainName, ServiceID, Trigger, WorkflowID};
+    use wavs_types::{ChainName, ServiceID, Trigger, TriggerConfig, WorkflowID};
 
     use layer_climb::prelude::*;
     use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};

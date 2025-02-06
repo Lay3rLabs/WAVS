@@ -154,6 +154,6 @@ start-aggregator:
 start-anvil:
     anvil
 
-# e.g. `just cli-exec ./components/eth_trigger_square.wasm {\"x\":2}`
+# e.g. `just cli-exec ./examples/build/components/echo_raw.wasm "hello world"`
 cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'

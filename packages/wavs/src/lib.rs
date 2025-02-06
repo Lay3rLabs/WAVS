@@ -1,6 +1,5 @@
 pub mod apis;
 pub mod args;
-pub mod bindings;
 pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
 pub mod engine; // where we manage and execute wasm

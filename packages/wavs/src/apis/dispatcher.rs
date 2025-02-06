@@ -1,8 +1,8 @@
 use std::ops::Bound;
 
-use super::{submission::ChainMessage, trigger::TriggerAction};
+use super::submission::ChainMessage;
 use crate::AppContext;
-use wavs_types::{ComponentSource, Digest, Service, ServiceID};
+use wavs_types::{ComponentSource, Digest, Service, ServiceID, TriggerAction};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".

@@ -6925,6 +6925,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
+ "wavs-engine",
  "wavs-types",
  "wildmatch",
 ]
@@ -6970,6 +6971,20 @@ dependencies = [
  "tracing-subscriber",
  "utils",
  "uuid",
+ "wasmtime",
+ "wavs-engine",
+ "wavs-types",
+]
+
+[[package]]
+name = "wavs-engine"
+version = "0.3.0-alpha1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "layer-climb",
+ "thiserror 2.0.11",
+ "utils",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",

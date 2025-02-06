@@ -1,10 +1,8 @@
 use thiserror::Error;
 use tokio::sync::mpsc;
-use wavs_types::Submit;
+use wavs_types::{Submit, TriggerConfig};
 
 use crate::AppContext;
-
-use super::trigger::TriggerConfig;
 
 pub trait Submission: Send + Sync {
     /// Start running the submission manager

@@ -1,11 +1,10 @@
 use layer_climb::prelude::*;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 
 use crate::AppContext;
 
-use wavs_types::{ChainName, IDError, ServiceID, Trigger, TriggerData, WorkflowID};
+use wavs_types::{ChainName, ServiceID, TriggerAction, TriggerConfig, WorkflowID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -26,65 +25,6 @@ pub trait TriggerManager: Send + Sync {
 
     /// List all registered triggers, by service ID
     fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError>;
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-// Trigger with metadata so it can be identified in relation to services and workflows
-pub struct TriggerConfig {
-    pub service_id: ServiceID,
-    pub workflow_id: WorkflowID,
-    pub trigger: Trigger,
-}
-
-impl TriggerConfig {
-    pub fn cosmos_contract_event(
-        service_id: impl TryInto<ServiceID, Error = IDError>,
-        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-        contract_address: layer_climb::prelude::Address,
-        chain_name: impl Into<ChainName>,
-        event_type: impl ToString,
-    ) -> Result<Self, IDError> {
-        Ok(Self {
-            service_id: service_id.try_into()?,
-            workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::cosmos_contract_event(contract_address, chain_name, event_type),
-        })
-    }
-
-    pub fn eth_contract_event(
-        service_id: impl TryInto<ServiceID, Error = IDError>,
-        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-        contract_address: alloy::primitives::Address,
-        chain_name: impl Into<ChainName>,
-        event_hash: [u8; 32],
-    ) -> Result<Self, IDError> {
-        Ok(Self {
-            service_id: service_id.try_into()?,
-            workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::eth_contract_event(contract_address, chain_name, event_hash),
-        })
-    }
-
-    pub fn manual(
-        service_id: impl TryInto<ServiceID, Error = IDError>,
-        workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-    ) -> Result<Self, IDError> {
-        Ok(Self {
-            service_id: service_id.try_into()?,
-            workflow_id: workflow_id.try_into()?,
-            trigger: Trigger::Manual,
-        })
-    }
-}
-
-/// A bundle of the trigger and the associated data needed to take action on it
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct TriggerAction {
-    /// Identify which trigger this came from
-    pub config: TriggerConfig,
-
-    /// The data that came from the trigger
-    pub data: TriggerData,
 }
 
 #[derive(Error, Debug)]

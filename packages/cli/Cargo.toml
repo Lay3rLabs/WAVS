@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 wavs-types = { workspace = true }
+wavs-engine = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -24,8 +25,6 @@ const-hex = { workspace = true }
 reqwest = { workspace = true }
 layer-climb = { workspace = true }
 wasmtime = { workspace = true }
-wasmtime-wasi-http = { workspace = true }
-wasmtime-wasi = { workspace = true }
 tempfile = { workspace = true }
 shellexpand = { workspace = true }
 uuid = { workspace = true }
