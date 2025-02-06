@@ -1,6 +1,7 @@
-use crate::eigen_client::solidity_types::BoxSigningProvider;
-use alloy::{sol, transports::BoxTransport};
+use alloy::sol;
 use layer_service_manager::LayerServiceManager::LayerServiceManagerInstance;
+
+use crate::eth_client::SigningProvider;
 
 pub mod stake_registry {
     use super::*;
@@ -61,9 +62,6 @@ pub mod layer_service_handler {
     );
 }
 
-pub type LayerServiceManagerT = LayerServiceManagerInstance<BoxTransport, BoxSigningProvider>;
+pub type LayerServiceManagerT = LayerServiceManagerInstance<(), SigningProvider>;
 pub type ILayerServiceHandlerT =
-    layer_service_handler::ILayerServiceHandler::ILayerServiceHandlerInstance<
-        BoxTransport,
-        BoxSigningProvider,
-    >;
+    layer_service_handler::ILayerServiceHandler::ILayerServiceHandlerInstance<(), SigningProvider>;

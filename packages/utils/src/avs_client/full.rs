@@ -13,11 +13,11 @@ use crate::{
         solidity_types::{
             misc::{StrategyFactory, StrategyManager::StrategyAddedToDepositWhitelist},
             proxy::ProxyAdmin,
-            BoxSigningProvider, ProxyAdminT,
+            ProxyAdminT,
         },
         CoreAVSAddresses,
     },
-    eth_client::EthSigningClient,
+    eth_client::{EthSigningClient, SigningProvider},
 };
 use alloy::{
     primitives::{aliases::U96, Address, FixedBytes, TxHash, U256},
@@ -26,7 +26,7 @@ use alloy::{
 };
 use anyhow::{Context, Result};
 use chrono::Utc;
-use rand::prelude::*;
+use rand::{rngs::OsRng, TryRngCore};
 
 pub struct AvsClient {
     pub eth: EthSigningClient,
@@ -35,9 +35,9 @@ pub struct AvsClient {
 }
 
 impl AvsClient {
-    pub async fn register_operator(&self, rng: &mut impl Rng) -> Result<TxHash> {
+    pub async fn register_operator(&self) -> Result<TxHash> {
         let mut salt = [0u8; 32];
-        rng.fill_bytes(&mut salt);
+        OsRng.try_fill_bytes(&mut salt)?;
 
         let salt = FixedBytes::from_slice(&salt);
         let now = Utc::now().timestamp();
@@ -115,7 +115,7 @@ pub struct StrategyAndToken {
 }
 
 pub struct ServiceManagerDeps {
-    pub provider: BoxSigningProvider,
+    pub provider: SigningProvider,
     pub avs_directory: Address,
     pub stake_registry: Address,
     pub rewards_coordinator: Address,
@@ -245,7 +245,9 @@ struct Proxies {
 
 impl Proxies {
     pub async fn new(eth: &EthSigningClient) -> Result<Self> {
+        tracing::info!("deploying proxy admin");
         let admin = ProxyAdmin::deploy(eth.provider.clone()).await?;
+        tracing::info!("deployed proxy admin");
 
         tracing::debug!("Eigen core proxy admin: {}", admin.address());
 

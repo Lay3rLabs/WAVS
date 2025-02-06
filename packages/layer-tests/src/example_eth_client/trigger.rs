@@ -4,8 +4,8 @@ use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use utils::{
-    alloy_helpers::SolidityEventFinder, eigen_client::solidity_types::BoxSigningProvider,
-    eth_client::EthSigningClient,
+    alloy_helpers::SolidityEventFinder,
+    eth_client::{EthSigningClient, SigningProvider},
 };
 
 use super::{
@@ -39,7 +39,7 @@ impl SimpleEthTriggerClient {
         Ok(Self::new(eth, contract_address))
     }
 
-    pub async fn deploy(provider: BoxSigningProvider) -> Result<Address> {
+    pub async fn deploy(provider: SigningProvider) -> Result<Address> {
         let contract = SimpleTrigger::deploy(provider).await?;
         Ok(*contract.address())
     }

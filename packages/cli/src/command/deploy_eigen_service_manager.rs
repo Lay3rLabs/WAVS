@@ -1,6 +1,5 @@
 use alloy::primitives::Address;
 use anyhow::Result;
-use rand::rngs::OsRng;
 use utils::avs_client::AvsClientDeployer;
 use wavs_types::ChainName;
 
@@ -67,7 +66,8 @@ impl DeployEigenServiceManager {
         let avs_client = deployer.deploy_service_manager(None).await?;
 
         if register_operator {
-            avs_client.register_operator(&mut OsRng).await?;
+            tracing::info!("Registering operator on {chain}");
+            avs_client.register_operator().await?;
         }
 
         let _self = Self {
