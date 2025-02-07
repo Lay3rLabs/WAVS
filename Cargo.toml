@@ -38,9 +38,9 @@ tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
-layer-climb = "0.3.6" 
-layer-climb-cli = "0.3.6" 
-layer-climb-address = "0.3.6" 
+layer-climb = "0.3.7" 
+layer-climb-cli = "0.3.7" 
+layer-climb-address = "0.3.7" 
 ctrlc = "3.4.5"
 tempfile = "3.13.0"
 futures = "0.3.31"

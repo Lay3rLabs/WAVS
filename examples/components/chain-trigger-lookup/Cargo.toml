@@ -12,6 +12,7 @@ serde = { workspace = true}
 wstd = { workspace = true }
 example-helpers = { workspace = true }
 anyhow = { workspace = true }
+layer-climb = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

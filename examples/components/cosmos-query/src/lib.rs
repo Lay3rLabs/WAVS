@@ -6,7 +6,6 @@ use example_helpers::{
 };
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
-use wavs_wasi_chain::cosmos::new_cosmos_query_client;
 use wstd::runtime::block_on;
 
 struct Component;
@@ -23,7 +22,9 @@ impl Guest for Component {
                 CosmosQueryRequest::BlockHeight { chain_name } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = new_cosmos_query_client(chain_config.into()).await?;
+
+                    let querier =
+                        layer_climb::querier::QueryClient::new(chain_config.into(), None).await?;
 
                     querier
                         .block_height()
@@ -37,7 +38,9 @@ impl Guest for Component {
                 } => {
                     let chain_config = host::get_cosmos_chain_config(&chain_name)
                         .ok_or(anyhow!("chain config for {chain_name} not found"))?;
-                    let querier = new_cosmos_query_client(chain_config.into()).await?;
+
+                    let querier =
+                        layer_climb::querier::QueryClient::new(chain_config.into(), None).await?;
 
                     querier
                         .balance(address, None)

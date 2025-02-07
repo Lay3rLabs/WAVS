@@ -1049,6 +1049,7 @@ version = "0.2.0-rc1"
 dependencies = [
  "anyhow",
  "example-helpers",
+ "layer-climb",
  "serde",
  "wavs-wasi-chain",
  "wstd",
@@ -2436,9 +2437,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bfabb6d0b41686b55756dbe5229e070924af356b2da2b93a05a7329538534c1"
+checksum = "2ca54182f5d19ff84eca02303615e40e2ff63a5938ff9997b96f2d6d59e03923"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -2448,9 +2449,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38472eec7081137b22f85777270ae429a4629e0c7b662f10d1cd1008a57ad160"
+checksum = "cff156dbee7aa712a81c1d9c7cf6aa30eadc11db5b726a06e3a144f1ea75dafb"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -2473,9 +2474,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c477e76c5959f099f7470fa9258cd3839dc0ed76515d8b5b38ee83812070af22"
+checksum = "acb7a23d050ebf199092d1d60de77d19e72fd874725f40d39729c00dfa69f8e9"
 dependencies = [
  "anyhow",
  "serde",
@@ -2484,9 +2485,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c93085e32113d2c433c781c730e2482a02b823f4a9aa3e5236e98cf88871eca7"
+checksum = "8a26632d133a575a01ca6aaf06944c6fad3b77db29008f14bf6c5253911b5550"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2499,6 +2500,10 @@ dependencies = [
  "futures-timer",
  "getrandom 0.3.1",
  "hex",
+ "http",
+ "http-body",
+ "http-body-util",
+ "httparse",
  "layer-climb-address",
  "layer-climb-config",
  "layer-climb-proto",
@@ -2514,14 +2519,16 @@ dependencies = [
  "toml",
  "tonic",
  "tonic-web-wasm-client",
+ "tower-service",
  "tracing",
+ "wstd",
 ]
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9dd24323db3e633d88b063b81155e49d0a5497c544f8afc74c207a2bfabe078"
+checksum = "8ca3c6288380d3ac8db3d4392f51092ed218904dff929c4b0dd988b8bdffd665"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto",
@@ -4749,7 +4756,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-wasi-chain"
-version = "0.3.0-alpha1"
+version = "0.3.0-alpha3"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -4762,7 +4769,6 @@ dependencies = [
  "async-trait",
  "cfg-if",
  "futures-utils-wasm",
- "layer-climb",
  "serde",
  "serde_json",
  "tower-service",
