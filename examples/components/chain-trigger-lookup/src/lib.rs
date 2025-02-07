@@ -8,7 +8,7 @@ use example_helpers::{
     trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt},
 };
 use serde::{Deserialize, Serialize};
-use wavs_wasi_chain::{cosmos::new_cosmos_query_client, ethereum::new_eth_provider};
+use wavs_wasi_chain::ethereum::new_eth_provider;
 
 struct Component;
 
@@ -27,7 +27,7 @@ impl Guest for Component {
                         anyhow::anyhow!("cosmos chain config for {chain_name} not found"),
                     )?;
 
-                    new_cosmos_query_client(chain_config.into())
+                    layer_climb::querier::QueryClient::new(chain_config.into(), None)
                         .await?
                         .trigger_data(contract_address.into(), trigger_id)
                         .await?
