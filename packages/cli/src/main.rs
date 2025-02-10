@@ -126,12 +126,17 @@ async fn main() {
         Command::Exec {
             component,
             input,
+            service_config,
             args: _,
         } => {
-            let res = ExecComponent::run(ExecComponentArgs {
-                component_path: component,
-                input: ComponentInput::Stdin(input),
-            })
+            let res = ExecComponent::run(
+                &ctx.config,
+                ExecComponentArgs {
+                    component_path: component,
+                    service_config,
+                    input: ComponentInput::new(input),
+                },
+            )
             .await
             .unwrap();
 

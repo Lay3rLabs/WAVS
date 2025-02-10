@@ -1,8 +1,7 @@
 use tracing::instrument;
-use wavs_types::{Component, Digest, ServiceConfig};
+use wavs_types::{Component, Digest, ServiceConfig, TriggerAction};
 
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::trigger::TriggerAction;
 use crate::triggers::mock::get_mock_trigger_data;
 
 /// Simply returns the request as the result.

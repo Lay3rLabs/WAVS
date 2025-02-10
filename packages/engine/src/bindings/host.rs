@@ -1,6 +1,6 @@
 use wavs_types::ChainName;
 
-use crate::engine::HostComponent;
+use crate::HostComponent;
 
 impl super::world::host::Host for HostComponent {
     fn get_cosmos_chain_config(

@@ -15,6 +15,7 @@ rust-version = "1.84.0"
 [workspace.dependencies]
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
+wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
@@ -37,9 +38,9 @@ tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tower = { version = "0.5.1", features = ["util"] }
 http-body-util = "0.1.2"
 wildmatch = "2.4.0"
-layer-climb = "0.3.6" 
-layer-climb-cli = "0.3.6" 
-layer-climb-address = "0.3.6" 
+layer-climb = "0.3.7" 
+layer-climb-cli = "0.3.7" 
+layer-climb-address = "0.3.7" 
 ctrlc = "3.4.5"
 tempfile = "3.13.0"
 futures = "0.3.31"
@@ -73,7 +74,6 @@ cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
 cosmwasm-schema = "2.2.0"
 cw-storage-plus = "2.0.0"
 cw2 = "2.0.0"
-async-trait = "0.1.85"
 tower-service = "0.3.3"
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
 futures-utils-wasm = "0.1.0"

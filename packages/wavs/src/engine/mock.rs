@@ -1,11 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::trigger::TriggerAction;
 use crate::triggers::mock::get_mock_trigger_data;
 use tracing::instrument;
 use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
-use wavs_types::{Digest, ServiceConfig};
+use wavs_types::{Digest, ServiceConfig, TriggerAction};
 
 use super::{Engine, EngineError};
 
@@ -103,7 +102,7 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use wavs_types::{ChainName, Component, TriggerData};
+    use wavs_types::{ChainName, Component, TriggerConfig, TriggerData};
 
     use crate::test_utils::address::rand_event_eth;
 
@@ -154,7 +153,7 @@ mod test {
             .execute(
                 &c1,
                 TriggerAction {
-                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
+                    config: TriggerConfig::eth_contract_event(
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
@@ -175,7 +174,7 @@ mod test {
             .execute(
                 &c2,
                 TriggerAction {
-                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
+                    config: TriggerConfig::eth_contract_event(
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),
@@ -196,7 +195,7 @@ mod test {
             .execute(
                 &c3,
                 TriggerAction {
-                    config: crate::apis::trigger::TriggerConfig::eth_contract_event(
+                    config: TriggerConfig::eth_contract_event(
                         "321",
                         "default",
                         crate::test_utils::address::rand_address_eth(),

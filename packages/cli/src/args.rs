@@ -103,10 +103,10 @@ pub enum Command {
         args: CliArgs,
     },
 
-    /// Deploy a full service
+    /// Deploy a service from a full JSON-encoded `Service`
+    /// If the input is prefixed with `@`, it will be read from the file path
     /// Uses core contracts that were previously deployed via the CLI
     /// Assumes that the components have already been uploaded, operators have already registered on contracts
-    /// Uses a raw JSON input to define the service, rather than individual arguments
     DeployServiceRaw {
         #[clap(long, value_parser = parse_service_input)]
         service: Service,
@@ -125,10 +125,16 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
 
-        /// The payload data, hex-encoded.
+        /// The payload data.
         /// If preceded by a `@`, will be treated as a file path
+        /// If preceded by a `0x`, will be treated as hex-encoded
+        /// Otherwise will be treated as raw string bytes
         #[clap(long)]
         input: String,
+
+        /// Optional service config
+        #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
+        service_config: Option<ServiceConfig>,
     },
 }
 

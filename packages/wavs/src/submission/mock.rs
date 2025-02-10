@@ -92,12 +92,9 @@ impl Submission for MockSubmission {
 mod test {
     use std::{thread::sleep, time::Duration};
 
-    use wavs_types::ChainName;
+    use wavs_types::{ChainName, TriggerConfig};
 
-    use crate::{
-        apis::trigger::TriggerConfig,
-        test_utils::address::{rand_address_eth, rand_event_eth},
-    };
+    use crate::test_utils::address::{rand_address_eth, rand_event_eth};
 
     use super::*;
 

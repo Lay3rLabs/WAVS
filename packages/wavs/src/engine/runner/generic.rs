@@ -1,8 +1,7 @@
 use tokio::sync::mpsc;
-use wavs_types::Service;
+use wavs_types::{Service, TriggerAction};
 
 use crate::apis::submission::ChainMessage;
-use crate::apis::trigger::TriggerAction;
 use crate::engine::{Engine, EngineError};
 use crate::AppContext;
 

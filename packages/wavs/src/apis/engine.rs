@@ -1,10 +1,10 @@
-use layer_climb::prelude::Address;
 use thiserror::Error;
 
 use utils::storage::CAStorageError;
 
-use super::trigger::TriggerAction;
-use wavs_types::{Component, ComponentID, Digest, ServiceConfig, ServiceID, WorkflowID};
+use wavs_types::{
+    Component, ComponentID, Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID,
+};
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
@@ -48,8 +48,8 @@ pub enum EngineError {
     #[error("Storage: {0}")]
     Storage(#[from] CAStorageError),
 
-    #[error{"IO: {0}"}]
-    IO(#[from] std::io::Error),
+    #[error{"Compile: {0}"}]
+    Compile(anyhow::Error),
 
     #[error("Unknown Workflow {0} / {1}")]
     UnknownWorkflow(ServiceID, WorkflowID),
@@ -57,27 +57,9 @@ pub enum EngineError {
     #[error("Unknown Component {0}")]
     UnknownComponent(ComponentID),
 
-    #[error("Invalid Wasm bytecode")]
-    InvalidWasmCode,
-
-    #[error("Wasm doesn't match expected wit interface")]
-    WasmInterfaceMismatch,
-
     #[error("No wasm found for digest {0}")]
     UnknownDigest(Digest),
 
-    #[error("Component returned an error: {0}")]
-    ComponentError(String),
-
-    #[error{"invalid address: {0}"}]
-    InvalidAddress(Address),
-
-    #[error{"unable to get trigger data as component input: {0}"}]
-    TriggerData(anyhow::Error),
-
     #[error{"{0}"}]
-    Other(#[from] anyhow::Error),
-
-    #[error("Max fuel consumed by WasmEngine for service: {0}, workflow: {1}")]
-    OutOfFuel(ServiceID, WorkflowID),
+    Engine(#[from] wavs_engine::EngineError),
 }
