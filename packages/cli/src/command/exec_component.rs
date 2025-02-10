@@ -58,9 +58,7 @@ impl ExecComponent {
 
         let engine = WTEngine::new(&config)?;
 
-        let mut service_config = service_config.unwrap_or_default();
-
-        service_config.fuel_limit = u64::MAX;
+        let service_config = service_config.unwrap_or_default();
 
         let mut instance_deps = InstanceDepsBuilder {
             component: Component::new(&engine, &wasm_bytes)?,
@@ -86,7 +84,7 @@ impl ExecComponent {
 
         let response = wavs_engine::execute(&mut instance_deps, trigger).await?;
 
-        let gas_used = u64::MAX - instance_deps.store.get_fuel()?;
+        let gas_used = service_config.fuel_limit - instance_deps.store.get_fuel()?;
 
         Ok(ExecComponent {
             output_bytes: response,

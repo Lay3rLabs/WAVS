@@ -131,7 +131,6 @@ pub enum Command {
         input: String,
 
         /// Optional service config
-        /// max_gas will be overriden to u64::MAX if set
         #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
         service_config: Option<ServiceConfig>,
     },
