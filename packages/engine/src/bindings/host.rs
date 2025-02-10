@@ -2,6 +2,8 @@ use wavs_types::ChainName;
 
 use crate::HostComponent;
 
+use super::world::host::LogLevel;
+
 impl super::world::host::Host for HostComponent {
     fn get_cosmos_chain_config(
         &mut self,
@@ -27,5 +29,15 @@ impl super::world::host::Host for HostComponent {
             .get(&chain_name)
             .cloned()
             .map(|config| config.into())
+    }
+
+    fn log(&mut self, level: LogLevel, message: String) {
+        (self.inner_log)(
+            &self.service_id,
+            &self.workflow_id,
+            &self.digest,
+            level,
+            message,
+        );
     }
 }
