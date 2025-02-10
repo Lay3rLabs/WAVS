@@ -1,8 +1,8 @@
 use anyhow::Result;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::InstanceDepsBuilder;
+use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, Permissions, ServiceConfig, ServiceID, Trigger, TriggerAction,
+    AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, Trigger, TriggerAction,
     TriggerConfig, TriggerData, WorkflowID,
 };
 
@@ -60,19 +60,6 @@ impl ExecComponent {
 
         let service_config = service_config.unwrap_or_default();
 
-        let mut instance_deps = InstanceDepsBuilder {
-            component: Component::new(&engine, &wasm_bytes)?,
-            engine: &engine,
-            permissions: &Permissions {
-                allowed_http_hosts: AllowedHostPermission::All,
-                file_system: true,
-            },
-            data_dir: tempfile::tempdir()?.into_path(),
-            service_config: &service_config,
-            chain_configs: &cli_config.chains,
-        }
-        .build()?;
-
         let trigger = TriggerAction {
             config: TriggerConfig {
                 service_id: ServiceID::new("service-1")?,
@@ -82,6 +69,23 @@ impl ExecComponent {
             data: TriggerData::Raw(input.decode()?),
         };
 
+        let mut instance_deps = InstanceDepsBuilder {
+            service_id: trigger.config.service_id.clone(),
+            workflow_id: trigger.config.workflow_id.clone(),
+            digest: Digest::new(&wasm_bytes),
+            component: Component::new(&engine, &wasm_bytes)?,
+            engine: &engine,
+            permissions: &Permissions {
+                allowed_http_hosts: AllowedHostPermission::All,
+                file_system: true,
+            },
+            data_dir: tempfile::tempdir()?.into_path(),
+            service_config: &service_config,
+            chain_configs: &cli_config.chains,
+            log: log_wasi,
+        }
+        .build()?;
+
         let response = wavs_engine::execute(&mut instance_deps, trigger).await?;
 
         let gas_used = service_config.fuel_limit - instance_deps.store.get_fuel()?;
@@ -90,6 +94,24 @@ impl ExecComponent {
             output_bytes: response,
             gas_used,
         })
+    }
+}
+
+fn log_wasi(
+    service_id: &ServiceID,
+    workflow_id: &WorkflowID,
+    digest: &Digest,
+    level: LogLevel,
+    message: String,
+) {
+    let message = format!("[{}:{}:{}] {}", service_id, workflow_id, digest, message);
+
+    match level {
+        LogLevel::Error => tracing::error!("{}", message),
+        LogLevel::Warn => tracing::warn!("{}", message),
+        LogLevel::Info => tracing::info!("{}", message),
+        LogLevel::Debug => tracing::debug!("{}", message),
+        LogLevel::Trace => tracing::trace!("{}", message),
     }
 }
 

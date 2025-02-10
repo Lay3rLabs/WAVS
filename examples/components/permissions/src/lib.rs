@@ -1,6 +1,7 @@
+use example_helpers::bindings::compat::LogLevel;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use example_helpers::{
-    bindings::world::{Guest, TriggerAction},
+    bindings::world::{host, Guest, TriggerAction},
     export_layer_trigger_world,
 };
 use std::{
@@ -25,6 +26,14 @@ impl Guest for Component {
         block_on(async move {
             let (trigger_id, req) =
                 decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
+
+            println!("(permissions println!) trigger id: {}", trigger_id);
+            eprintln!("(permissions eprintln!) trigger id: {}", trigger_id);
+            host::log(
+                LogLevel::Info,
+                &format!("(permissions host log) trigger id: {}", trigger_id),
+            );
+
             let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
             let resp = inner_run_task(req).await.map_err(|e| e.to_string())?;
             let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
