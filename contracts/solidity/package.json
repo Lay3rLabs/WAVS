@@ -1,0 +1,21 @@
+{
+  "name": "@wavs/solidity",
+  "version": "0.3.0-alpha2",
+  "description": "WAVS Solidity contracts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "interfaces/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lay3rLabs/WAVS.git"
+  },
+  "author": "Lay3r Labs Team",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Lay3rLabs/WAVS/issues"
+  },
+  "homepage": "https://github.com/Lay3rLabs/WAVS#readme"
+}
