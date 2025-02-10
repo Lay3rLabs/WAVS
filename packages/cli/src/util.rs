@@ -28,7 +28,7 @@ impl ComponentInput {
                 }
 
                 match input.starts_with("0x") {
-                    true => Ok(const_hex::decode(&input[2..])?),
+                    true => Ok(const_hex::decode(input)?),
                     false => Ok(input.as_bytes().to_vec()),
                 }
             }
