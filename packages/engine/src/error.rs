@@ -12,13 +12,13 @@ pub enum EngineError {
     #[error("Component returned an error: {0}")]
     ComponentError(anyhow::Error),
 
-    #[error{"unable to get trigger data as component input: {0}"}]
+    #[error{"Unable to get trigger data as component input: {0}"}]
     TriggerData(anyhow::Error),
 
-    #[error{"filesystem: {0}"}]
+    #[error{"Filesystem: {0}"}]
     Filesystem(anyhow::Error),
 
-    #[error{"unable to set store: {0}"}]
+    #[error{"Unable to set store: {0}"}]
     Store(anyhow::Error),
 
     #[error("Max fuel consumed by WasmEngine for service: {0}, workflow: {1}")]
