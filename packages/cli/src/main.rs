@@ -134,7 +134,7 @@ async fn main() {
                 ExecComponentArgs {
                     component_path: component,
                     service_config,
-                    input: ComponentInput::Stdin(input),
+                    input: ComponentInput::new(input),
                 },
             )
             .await
