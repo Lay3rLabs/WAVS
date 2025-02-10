@@ -76,7 +76,7 @@ impl ExecComponent {
         let trigger = TriggerAction {
             config: TriggerConfig {
                 service_id: ServiceID::new("service-1")?,
-                workflow_id: WorkflowID::new("default")?,
+                workflow_id: WorkflowID::default(),
                 trigger: Trigger::Manual,
             },
             data: TriggerData::Raw(input.decode()?),
