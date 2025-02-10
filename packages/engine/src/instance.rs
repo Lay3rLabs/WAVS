@@ -8,17 +8,23 @@ use wasmtime::{
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_http::WasiHttpCtx;
-use wavs_types::{AllowedHostPermission, Permissions, ServiceConfig};
+use wavs_types::{
+    AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, WorkflowID,
+};
 
-use crate::{EngineError, HostComponent};
+use crate::{EngineError, HostComponent, HostComponentLogger};
 
 pub struct InstanceDepsBuilder<'a, P> {
+    pub service_id: ServiceID,
+    pub workflow_id: WorkflowID,
+    pub digest: Digest,
     pub component: Component,
     pub engine: &'a WTEngine,
     pub permissions: &'a Permissions,
     pub data_dir: P,
     pub service_config: &'a ServiceConfig,
     pub chain_configs: &'a ChainConfigs,
+    pub log: HostComponentLogger,
 }
 
 pub struct InstanceDeps {
@@ -30,12 +36,16 @@ pub struct InstanceDeps {
 impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
     pub fn build(self) -> Result<InstanceDeps, EngineError> {
         let Self {
+            service_id,
+            workflow_id,
+            digest,
             component,
             engine,
             permissions,
             data_dir,
             service_config,
             chain_configs,
+            log,
         } = self;
 
         // create linker
@@ -89,10 +99,14 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // create host (what is this actually? some state needed for the linker?)
         let host = HostComponent {
+            service_id,
+            workflow_id,
+            digest,
             chain_configs: chain_configs.clone(),
             table: wasmtime::component::ResourceTable::new(),
             ctx,
             http: WasiHttpCtx::new(),
+            inner_log: log,
         };
 
         let mut store = wasmtime::Store::new(engine, host);

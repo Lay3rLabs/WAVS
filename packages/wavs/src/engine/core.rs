@@ -2,13 +2,13 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use tracing::instrument;
+use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wasmtime_wasi::{WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_engine::InstanceDepsBuilder;
-use wavs_types::{Digest, ServiceConfig, TriggerAction};
+use wavs_types::{Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID};
 
 use utils::storage::{CAStorage, CAStorageError};
 
@@ -88,7 +88,43 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     ) -> Result<Vec<u8>, EngineError> {
         let digest = wasi.wasm.clone();
 
+        fn log(
+            service_id: &ServiceID,
+            workflow_id: &WorkflowID,
+            digest: &Digest,
+            level: wavs_engine::bindings::world::host::LogLevel,
+            message: String,
+        ) {
+            let span = span!(
+                tracing::Level::INFO,
+                "component_log",
+                service_id = %service_id,
+                workflow_id = %workflow_id,
+                digest = %digest
+            );
+
+            match level {
+                wavs_engine::bindings::world::host::LogLevel::Error => {
+                    event!(parent: &span, tracing::Level::ERROR, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Warn => {
+                    event!(parent: &span, tracing::Level::WARN, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Info => {
+                    event!(parent: &span, tracing::Level::INFO, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Debug => {
+                    event!(parent: &span, tracing::Level::DEBUG, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Trace => {
+                    event!(parent: &span, tracing::Level::TRACE, "{}", message)
+                }
+            }
+        }
         let mut instance_deps = InstanceDepsBuilder {
+            service_id: trigger.config.service_id.clone(),
+            workflow_id: trigger.config.workflow_id.clone(),
+            digest: digest.clone(),
             component: match self.memory_cache.write().unwrap().get(&digest) {
                 Some(cm) => cm.clone(),
                 None => {
@@ -101,6 +137,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             data_dir: self.app_data_dir.join(trigger.config.service_id.as_ref()),
             service_config,
             chain_configs: &self.chain_configs,
+            log,
         }
         .build()?;
 
