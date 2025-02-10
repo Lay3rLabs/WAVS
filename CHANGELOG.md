@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-alpha5]
+
+### Added
+
+- Published `wavs-wasi-chain` crate to https://crates.io/crates/wavs-wasi-chain
+- Publish `wavs-types` crate to https://crates.io/crates/wavs-types
+- Publish `wavs:worker` WIT to https://wa.dev/wavs:worker
+
+### Fixed
+
+- CLI handles relative paths properly
+- Engine execution is now consistent between WAVS and CLI
+
+### Changed
+
+- Bumped all dependencies
+- Refactor Solidity contracts into desirable manager/handler relationship ("the inversion")
+- Consistent snake_case in API
+- Stronger separation between local utils and public types (now in its own crate)
+- Pinning foundry binaries in Docker
+- Update wstd to 0.5.0 (gets rid of Reactor etc.)
+- Solidity interface uses only primitive types (allows contracts to easily satisfy without imports) 
+
+### Removed
+
+- `layer-wasi` no longer has WIT bindings locally
+- `layer-wasi` no longer has cosmwasm code (now in climb itself)
+- CLI removes proprietary example service support (e.g. no longer has an `add-task` command)
+- Removed unused cargo dependencies across the workspace
+
+
 ## [v0.3.0-alpha4]
 
 ### Added
@@ -37,5 +68,6 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 [unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha4...HEAD
+[v0.3.0-alpha5]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha4...v0.3.0-alpha5
 [v0.3.0-alpha4]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha3...v0.3.0-alpha4
 [v0.3.0-alpha3]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha2...v0.3.0-alpha3
