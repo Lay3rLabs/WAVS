@@ -28,15 +28,11 @@ pub enum Command {
 
     /// Deploy a service manager contract for eigenlayer
     /// Uses core contracts that were previously deployed via the CLI
-    /// Typically used for getting an address to pass to DeployService
+    /// Typically used for getting an address to pass to DeployEigenServiceHandler
     DeployEigenServiceManager {
         /// The chain to deploy the submit on, if applicable
         #[clap(long, default_value = "local", value_parser = parse_chain_name)]
         chain: ChainName,
-
-        /// The handler contract address, implements IServiceHandler and receives a signed payload
-        #[clap(long)]
-        service_handler: String,
 
         /// If set, will register as an operator for the service too
         #[clap(long, default_value_t = true)]
@@ -49,10 +45,6 @@ pub enum Command {
     /// Deploy a full service and (optionally) register as an Operator on the Submit target
     /// Uses core contracts that were previously deployed via the CLI
     DeployService {
-        /// If set, will register as an operator for the service too
-        #[clap(long, default_value_t = true)]
-        register_operator: bool,
-
         /// Path to the WASI component
         #[clap(long)]
         component: String,
@@ -68,25 +60,27 @@ pub enum Command {
         ]))]
         trigger_event_name: Option<String>,
 
-        /// The address used for trigger contracts. If not supplied, will deploy fresh "example trigger" contract
-        #[clap(long)]
+        /// The address used for trigger contracts, if applicable
+        #[clap(long, required_if_eq_any([
+            ("trigger", CliTriggerKind::EthContractEvent),
+            ("trigger", CliTriggerKind::CosmosContractEvent)
+        ]))]
         trigger_address: Option<String>,
 
-        /// The address used for the submit manager. If not supplied, will deploy fresh "example submit" contract
+        /// The kind of submit to deploy
+        #[clap(long, default_value_t = CliSubmitKind::EthServiceHandler)]
+        submit: CliSubmitKind,
+
+        /// The address used for submit contracts, if applicable
+        #[clap(long, required_if_eq_any([
+            ("submit", CliSubmitKind::EthServiceHandler),
+        ]))]
         #[clap(long)]
         submit_address: Option<String>,
 
         /// The chain to deploy the trigger on, if applicable
         #[clap(long, default_value = "local", value_parser = parse_chain_name)]
         trigger_chain: Option<ChainName>,
-
-        /// if the trigger is a cosmos trigger, the optional code id to use to avoid a re-upload
-        #[clap(long, default_value = None)]
-        cosmos_trigger_code_id: Option<u64>,
-
-        /// The kind of submit to deploy
-        #[clap(long, default_value_t = CliSubmitKind::SimpleEthContract)]
-        submit: CliSubmitKind,
 
         /// The chain to deploy the submit on, if applicable
         #[clap(long, default_value = "local", value_parser = parse_chain_name)]
@@ -116,27 +110,6 @@ pub enum Command {
     DeployServiceRaw {
         #[clap(long, value_parser = parse_service_input)]
         service: Service,
-
-        #[clap(flatten)]
-        args: CliArgs,
-    },
-
-    /// Adds a task to a service that was previously deployed via CLI (uses stored deploy info)
-    AddTask {
-        #[clap(long)]
-        service_id: String,
-
-        #[clap(long)]
-        workflow_id: Option<String>,
-
-        /// The payload data, hex-encoded
-        #[clap(long)]
-        input: String,
-
-        /// Optional time to wait for a result, in milliseconds
-        /// if none, will return immediately without showing the result
-        #[clap(long, default_value = "10000")]
-        result_timeout_ms: u64,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -205,16 +178,16 @@ impl From<CliTriggerKind> for clap::builder::OsStr {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum CliSubmitKind {
-    SimpleEthContract,
+    EthServiceHandler,
     None,
 }
 
 impl std::fmt::Display for CliSubmitKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::SimpleEthContract => write!(f, "simple-eth-contract"),
+            Self::EthServiceHandler => write!(f, "eth-service-handler"),
             Self::None => write!(f, "none"),
         }
     }
@@ -225,10 +198,16 @@ impl std::str::FromStr for CliSubmitKind {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "simple-eth-contract" => Ok(Self::SimpleEthContract),
+            "eth-service-handler" => Ok(Self::EthServiceHandler),
             "none" => Ok(Self::None),
             _ => Err(format!("unknown submit kind: {}", s)),
         }
+    }
+}
+
+impl From<CliSubmitKind> for clap::builder::OsStr {
+    fn from(submit: CliSubmitKind) -> clap::builder::OsStr {
+        submit.to_string().into()
     }
 }
 
@@ -240,7 +219,6 @@ impl Command {
             Self::DeployService { args, .. } => args,
             Self::DeployServiceRaw { args, .. } => args,
             Self::UploadComponent { args, .. } => args,
-            Self::AddTask { args, .. } => args,
             Self::Exec { args, .. } => args,
         };
 

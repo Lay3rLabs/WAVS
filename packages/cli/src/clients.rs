@@ -1,6 +1,3 @@
-pub mod example_cosmos_client;
-pub mod example_eth_client;
-
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{

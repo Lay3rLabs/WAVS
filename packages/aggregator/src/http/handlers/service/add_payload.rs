@@ -1,16 +1,8 @@
-use alloy::primitives::{Address, PrimitiveSignature, U256};
-use anyhow::anyhow;
+use alloy::primitives::Address;
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
-    avs_client::{
-        layer_service_manager::LayerServiceManager, stake_registry::ECDSAStakeRegistry,
-        SignedPayload,
-    },
-    eigen_client::solidity_types::{
-        misc::{AVSDirectory, IAVSDirectory::OperatorAVSRegistrationStatus},
-        BoxSigningProvider,
-    },
+    avs_client::{layer_service_aggregator::LayerServiceAggregator, SignedPayload},
 };
 
 use crate::http::{error::HttpResult, state::HttpState};
@@ -39,22 +31,16 @@ pub async fn handle_add_payload(
 pub async fn add_payload(
     state: HttpState,
     signed_payload: SignedPayload,
-    service_manager_address: Address,
+    service_aggregator_address: Address,
 ) -> HttpResult<AggregateAvsResponse> {
     let eth_client = state.config.signing_client().await?;
 
-    check_operator(
-        service_manager_address,
-        signed_payload.clone(),
-        &eth_client.provider,
-    )
-    .await?;
-
-    let mut queue = state.load_all_payloads(service_manager_address)?;
+    let mut queue = state.load_all_payloads(service_aggregator_address)?;
 
     queue.push(signed_payload);
 
     let count = queue.len();
+    tracing::debug!("Aggregator count: {}", count);
 
     let resp = if count >= state.config.tasks_quorum as usize {
         // TODO: decide how to batch it. It seems like a complex topic with many options
@@ -77,10 +63,11 @@ pub async fn add_payload(
             signatures.push(abi_signatures);
         }
 
-        let pending_tx = LayerServiceManager::new(service_manager_address, &eth_client.provider)
-            .handleSignedDataMulti(datas, signatures)
-            .send()
-            .await?;
+        let pending_tx =
+            LayerServiceAggregator::new(service_aggregator_address, &eth_client.provider)
+                .handleSignedDataMulti(datas, signatures)
+                .send()
+                .await?;
         let tx_hash = pending_tx.tx_hash();
         tracing::debug!("Sent transaction: {}", tx_hash);
 
@@ -92,56 +79,56 @@ pub async fn add_payload(
         AggregateAvsResponse::Aggregated { count }
     };
 
-    state.save_all_payloads(service_manager_address, queue)?;
+    state.save_all_payloads(service_aggregator_address, queue)?;
 
     Ok(resp)
 }
 
-pub async fn check_operator(
-    service_manager_address: Address,
-    signed_payload: SignedPayload,
-    provider: &BoxSigningProvider,
-) -> HttpResult<()> {
-    let service_manager_contract = LayerServiceManager::new(service_manager_address, provider);
-    let operator = signed_payload.operator;
+// pub async fn check_operator(
+//     service_manager_address: Address,
+//     signed_payload: SignedPayload,
+//     provider: &BoxSigningProvider,
+// ) -> HttpResult<()> {
+//     let service_manager_contract = LayerServiceManager::new(service_manager_address, provider);
+//     let operator = signed_payload.operator;
 
-    // Check Operator is registered
-    let avs_directory_address = service_manager_contract.avsDirectory().call().await?._0;
-    let avs_directory = AVSDirectory::new(avs_directory_address, provider);
-    let operator_status = avs_directory
-        .avsOperatorStatus(service_manager_address, operator)
-        .call()
-        .await?
-        ._0;
-    if operator_status != OperatorAVSRegistrationStatus::REGISTERED().into() {
-        return Err(
-            anyhow!("Operator is not registered {operator} in {service_manager_address}").into(),
-        );
-    }
+//     // Check Operator is registered
+//     let avs_directory_address = service_manager_contract.avsDirectory().call().await?._0;
+//     let avs_directory = AVSDirectory::new(avs_directory_address, provider);
+//     let operator_status = avs_directory
+//         .avsOperatorStatus(service_manager_address, operator)
+//         .call()
+//         .await?
+//         ._0;
+//     if operator_status != OperatorAVSRegistrationStatus::REGISTERED().into() {
+//         return Err(
+//             anyhow!("Operator is not registered {operator} in {service_manager_address}").into(),
+//         );
+//     }
 
-    // Check operator signature matches
-    let stake_registry = service_manager_contract.stakeRegistry().call().await?._0;
-    let ecdsa_signature = ECDSAStakeRegistry::new(stake_registry, provider);
-    let expected_address = ecdsa_signature
-        .getOperatorSigningKeyAtBlock(operator, U256::from(signed_payload.signed_block_height))
-        .call()
-        .await?
-        ._0;
+//     // Check operator signature matches
+//     let stake_registry = service_manager_contract.stakeRegistry().call().await?._0;
+//     let ecdsa_signature = ECDSAStakeRegistry::new(stake_registry, provider);
+//     let expected_address = ecdsa_signature
+//         .getOperatorSigningKeyAtBlock(operator, U256::from(signed_payload.signed_block_height))
+//         .call()
+//         .await?
+//         ._0;
 
-    let signed_payload_signature: PrimitiveSignature =
-        signed_payload.signature.as_slice().try_into()?;
+//     let signed_payload_signature: PrimitiveSignature =
+//         signed_payload.signature.as_slice().try_into()?;
 
-    let signature_address =
-        signed_payload_signature.recover_address_from_prehash(&signed_payload.data_hash)?;
+//     let signature_address =
+//         signed_payload_signature.recover_address_from_prehash(&signed_payload.data_hash)?;
 
-    if expected_address != signature_address {
-        return Err(anyhow!(
-            "Operator signature does not match (expected address {}, got {})",
-            expected_address,
-            signature_address
-        )
-        .into());
-    }
+//     if expected_address != signature_address {
+//         return Err(anyhow!(
+//             "Operator signature does not match (expected address {}, got {})",
+//             expected_address,
+//             signature_address
+//         )
+//         .into());
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }

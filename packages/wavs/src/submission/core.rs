@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
-    avs_client::{ServiceManagerClient, SignedPayload},
+    avs_client::{ServiceHandlerClient, SignedPayload},
     config::{AnyChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
 };
@@ -201,7 +201,7 @@ impl CoreSubmission {
                 );
             }
 
-            ServiceManagerClient::new(eth_client.clone(), address)
+            ServiceHandlerClient::new(eth_client.clone(), address)
                 .add_signed_payload(signed_payload, max_gas)
                 .await
                 .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?;

@@ -4,7 +4,6 @@ use utils::config::ConfigExt;
 use wavs_cli::{
     args::Command,
     command::{
-        add_task::{AddTask, AddTaskArgs},
         deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
         deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
         deploy_service::{DeployService, DeployServiceArgs},
@@ -54,13 +53,11 @@ async fn main() {
             ctx.handle_deploy_result(res).unwrap();
         }
         Command::DeployService {
-            register_operator,
             component,
             trigger,
             trigger_chain,
             trigger_address,
             submit_address,
-            cosmos_trigger_code_id,
             submit,
             submit_chain,
             service_config,
@@ -72,14 +69,12 @@ async fn main() {
             let res = DeployService::run(
                 &ctx,
                 DeployServiceArgs {
-                    register_operator,
                     component,
                     trigger,
                     trigger_event_name,
                     trigger_chain,
                     trigger_address,
                     submit_address,
-                    cosmos_trigger_code_id,
                     submit,
                     submit_chain,
                     service_config,
@@ -101,7 +96,6 @@ async fn main() {
         }
         Command::DeployEigenServiceManager {
             chain,
-            service_handler,
             register_operator,
             args: _,
         } => {
@@ -109,7 +103,6 @@ async fn main() {
                 &ctx,
                 DeployEigenServiceManagerArgs {
                     chain: chain.clone(),
-                    service_handler: service_handler.parse().unwrap(),
                     register_operator,
                 },
             )
@@ -117,33 +110,6 @@ async fn main() {
             .unwrap();
 
             ctx.handle_deploy_result(res).unwrap();
-        }
-        Command::AddTask {
-            service_id,
-            workflow_id,
-            input,
-            result_timeout_ms,
-            args: _,
-        } => {
-            let res = AddTask::run(
-                &ctx,
-                AddTaskArgs {
-                    service_id,
-                    workflow_id,
-                    input: ComponentInput::Stdin(input),
-                    result_timeout: if result_timeout_ms > 0 {
-                        Some(std::time::Duration::from_millis(result_timeout_ms))
-                    } else {
-                        None
-                    },
-                },
-            )
-            .await
-            .unwrap();
-
-            if let Some(res) = res {
-                ctx.handle_display_result(res);
-            }
         }
         Command::UploadComponent { component, args: _ } => {
             let res = UploadComponent::run(

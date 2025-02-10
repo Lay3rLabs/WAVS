@@ -1,41 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ILayerService} from "@layer-sdk/interfaces/ILayerService.sol";
+import {ILayerServiceHandler} from "@layer/interfaces/ILayerServiceHandler.sol";
+import {ILayerServiceManager} from "@layer/interfaces/ILayerServiceManager.sol";
 import {ISimpleTrigger} from "./interfaces/ISimpleTrigger.sol";
 import {ISimpleSubmit} from "./interfaces/ISimpleSubmit.sol";
 
-contract SimpleSubmit is ILayerService {
-    address private owner;
-    address private serviceManager;
+contract SimpleSubmit is ILayerServiceHandler {
+    ILayerServiceManager private _serviceManager;
 
     mapping(ISimpleTrigger.TriggerId => bool) validTriggers;
     mapping(ISimpleTrigger.TriggerId => bytes) datas;
     mapping(ISimpleTrigger.TriggerId => bytes) signatures;
 
-    constructor() {
-        owner = msg.sender;
+    constructor(ILayerServiceManager serviceManager) {
+        _serviceManager = serviceManager;
     }
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only the owner can call this function.");
-        _;
-    }
+    function handleSignedData(bytes calldata data, bytes calldata signature) external {
+        _serviceManager.validate(data, signature);
 
-    modifier onlyServiceManager() {
-        require(msg.sender == serviceManager, "Only the service manager can call this function.");
-        _;
-    }
-
-    function setServiceManager(address newServiceManager) external onlyOwner {
-        serviceManager = newServiceManager;
-    }
-
-    function getServiceManager() public view returns (address) {
-        return serviceManager;
-    }
-
-    function handleSignedData(bytes calldata data, bytes calldata signature) external onlyServiceManager {
         ISimpleSubmit.DataWithId memory dataWithId = abi.decode(data, (ISimpleSubmit.DataWithId));
 
         signatures[dataWithId.triggerId] = signature;

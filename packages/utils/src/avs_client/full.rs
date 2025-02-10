@@ -155,7 +155,6 @@ impl AvsClientDeployer {
 
     pub async fn deploy_service_manager(
         mut self,
-        payload_handler: Address,
         setup: Option<StrategyAndToken>,
     ) -> Result<AvsClient> {
         let core = self.core_avs_addrs.take().context("AVS Core must be set")?;
@@ -205,7 +204,6 @@ impl AvsClientDeployer {
             proxies.ecdsa_stake_registry,
             core.rewards_coordinator,
             core.delegation_manager,
-            payload_handler,
         )
         .await?;
 

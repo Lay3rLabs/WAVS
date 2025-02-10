@@ -14,7 +14,7 @@ use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
 use utils::{config::AnyChainConfig, eigen_client::EigenClient};
-use wavs_types::{ChainName, ServiceID, Submit, Trigger, WorkflowID};
+use wavs_types::{ChainName, Submit, Trigger};
 
 use crate::{args::Command, deploy::Deployment};
 
@@ -82,35 +82,6 @@ impl CliContext {
                     }
 
                     match &workflow.submit {
-                        Submit::EthereumContract { chain_name, .. } => {
-                            chains.insert(chain_name.clone());
-                        }
-                        Submit::None => {}
-                    }
-                }
-            }
-            Command::AddTask {
-                service_id,
-                workflow_id,
-                ..
-            } => {
-                let service_id = ServiceID::new(service_id)?;
-                let workflow_id = workflow_id.as_ref().map(WorkflowID::new).transpose()?;
-
-                if let Some(trigger) = deployment.get_trigger(&service_id, workflow_id.as_ref()) {
-                    match trigger {
-                        Trigger::EthContractEvent { chain_name, .. } => {
-                            chains.insert(chain_name.clone());
-                        }
-                        Trigger::CosmosContractEvent { chain_name, .. } => {
-                            chains.insert(chain_name.clone());
-                        }
-                        Trigger::Manual => {}
-                    }
-                }
-
-                if let Some(submit) = deployment.get_submit(&service_id, workflow_id.as_ref()) {
-                    match submit {
                         Submit::EthereumContract { chain_name, .. } => {
                             chains.insert(chain_name.clone());
                         }

@@ -1,3 +1,4 @@
+mod add_task;
 mod clients;
 mod config;
 mod digests;
