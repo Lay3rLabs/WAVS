@@ -123,7 +123,7 @@ mod test {
         assert_eq!(result.output_bytes, b"hello world");
         assert!(result.gas_used > 0);
 
-        // Same idea but hex-encoded
+        // Same idea but hex-encoded with prefix
         let args = ExecComponentArgs {
             component_path: component_path.clone(),
             input: ComponentInput::new("0x68656C6C6F20776F726C64".to_string()),
@@ -133,6 +133,18 @@ mod test {
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
         assert_eq!(result.output_bytes, b"hello world");
+        assert!(result.gas_used > 0);
+
+        // Do not hex-decode without the prefix
+        let args = ExecComponentArgs {
+            component_path: component_path.clone(),
+            input: ComponentInput::new("68656C6C6F20776F726C64".to_string()),
+            service_config: None,
+        };
+
+        let result = ExecComponent::run(&Config::default(), args).await.unwrap();
+
+        assert_eq!(result.output_bytes, b"68656C6C6F20776F726C64");
         assert!(result.gas_used > 0);
 
         // And filepath

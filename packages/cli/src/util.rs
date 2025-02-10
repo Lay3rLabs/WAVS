@@ -4,7 +4,7 @@ use utils::filesystem::workspace_path;
 
 //A wrapper type that will:
 // 1. treat strings prefixed with @ as filepaths
-// 2. treat hex strings as bytes
+// 2. treat strings prefixed with 0x as hex-encoded bytes
 // 3. treat anything else as a string into raw bytes
 pub struct ComponentInput(String);
 
@@ -27,10 +27,9 @@ impl ComponentInput {
                     tracing::warn!("Are you sure you didn't mean to use @ to specify file input?");
                 }
 
-                if let Ok(bytes) = const_hex::decode(input) {
-                    Ok(bytes)
-                } else {
-                    Ok(input.as_bytes().to_vec())
+                match input.starts_with("0x") {
+                    true => Ok(const_hex::decode(&input[2..])?),
+                    false => Ok(input.as_bytes().to_vec()),
                 }
             }
         }
