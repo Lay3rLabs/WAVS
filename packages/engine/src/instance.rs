@@ -53,6 +53,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         // create wasi context
         let mut builder = WasiCtxBuilder::new();
 
+        builder.inherit_stdout().inherit_stderr();
+
         // conditionally allow fs access
         if permissions.file_system {
             // we namespace by service id so that all components within a service have access to the same data
