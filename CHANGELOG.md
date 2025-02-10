@@ -14,11 +14,13 @@ and this project adheres to [Semantic Versioning].
 - Published `wavs-wasi-chain` crate to https://crates.io/crates/wavs-wasi-chain
 - Published `wavs-types` crate to https://crates.io/crates/wavs-types
 - Published `wavs:worker` WIT to https://wa.dev/wavs:worker
+- Published `@wavs/solidity` to https://www.npmjs.com/package/@wavs/solidity
 
 ### Fixed
 
 - CLI handles relative paths properly
 - Engine execution is now consistent between WAVS and CLI
+- Engine now logs `stdout` / `stderr` on the host
 
 ### Changed
 
