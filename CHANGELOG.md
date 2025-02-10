@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning].
 ### Added
 
 - Published `wavs-wasi-chain` crate to https://crates.io/crates/wavs-wasi-chain
-- Publish `wavs-types` crate to https://crates.io/crates/wavs-types
-- Publish `wavs:worker` WIT to https://wa.dev/wavs:worker
+- Published `wavs-types` crate to https://crates.io/crates/wavs-types
+- Published `wavs:worker` WIT to https://wa.dev/wavs:worker
 
 ### Fixed
 
@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning].
 
 ### Changed
 
+- Pointed various crates to registries (local crates mentioned above and `layer-climb-*`)
 - Bumped all dependencies
 - Refactor Solidity contracts into desirable manager/handler relationship ("the inversion")
 - Consistent snake_case in API
@@ -29,6 +30,7 @@ and this project adheres to [Semantic Versioning].
 - Pinning foundry binaries in Docker
 - Update wstd to 0.5.0 (gets rid of Reactor etc.)
 - Solidity interface uses only primitive types (allows contracts to easily satisfy without imports) 
+- Some refactoring of directories etc. (`sdk` is now only the `wit`, all Rust packages are in `packages`, all public contracts in `contracts`)
 
 ### Removed
 
