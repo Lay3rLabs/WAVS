@@ -92,3 +92,63 @@ impl ExecComponent {
         })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::io::Write;
+
+    use utils::filesystem::workspace_path;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_exec_component() {
+        let component_path = workspace_path()
+            .join("examples")
+            .join("build")
+            .join("components")
+            .join("echo_raw.wasm")
+            .to_string_lossy()
+            .to_string();
+
+        // First try regular utf8 string
+        let args = ExecComponentArgs {
+            component_path: component_path.clone(),
+            input: ComponentInput::new("hello world".to_string()),
+            service_config: None,
+        };
+
+        let result = ExecComponent::run(&Config::default(), args).await.unwrap();
+
+        assert_eq!(result.output_bytes, b"hello world");
+        assert!(result.gas_used > 0);
+
+        // Same idea but hex-encoded
+        let args = ExecComponentArgs {
+            component_path: component_path.clone(),
+            input: ComponentInput::new("0x68656C6C6F20776F726C64".to_string()),
+            service_config: None,
+        };
+
+        let result = ExecComponent::run(&Config::default(), args).await.unwrap();
+
+        assert_eq!(result.output_bytes, b"hello world");
+        assert!(result.gas_used > 0);
+
+        // And filepath
+
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(b"hello world").unwrap();
+
+        let args = ExecComponentArgs {
+            component_path: component_path.clone(),
+            input: ComponentInput::new(format!("@{}", file.path().to_string_lossy())),
+            service_config: None,
+        };
+
+        let result = ExecComponent::run(&Config::default(), args).await.unwrap();
+
+        assert_eq!(result.output_bytes, b"hello world");
+        assert!(result.gas_used > 0);
+    }
+}
