@@ -79,6 +79,7 @@ impl Services {
 
                 eth_eigen_core.insert(chain.clone(), core_addresses);
 
+                tracing::info!("Deploying Eigen Service manager on {chain}");
                 let DeployEigenServiceManager {
                     address: service_manager_address,
                     ..
@@ -189,6 +190,7 @@ async fn deploy_service_simple(
                 .get_eth_client(trigger_chain.as_ref().unwrap())
                 .unwrap();
 
+            tracing::info!("Deploying new eth trigger contract");
             Some(
                 SimpleTrigger::deploy(client.eth.provider)
                     .await
@@ -248,6 +250,7 @@ async fn deploy_service_simple(
             let client = clients.cli_ctx.get_eth_client(submit_chain).unwrap();
             let service_manager_address = *eth_service_managers.get(submit_chain).unwrap();
 
+            tracing::info!("Deploying new eth submit contract");
             let handler_address =
                 *SimpleSubmit::deploy(client.eth.provider.clone(), service_manager_address)
                     .await

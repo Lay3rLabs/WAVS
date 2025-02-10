@@ -7,11 +7,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-wavs-wasi-chain = { workspace = true }
-wit-bindgen-rt = { workspace = true }
 example-helpers = { workspace = true }
-wstd = { workspace = true }
-anyhow = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

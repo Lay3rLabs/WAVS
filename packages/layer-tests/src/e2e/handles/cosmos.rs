@@ -42,3 +42,12 @@ impl CosmosInstance {
         Self { _inner: instance }
     }
 }
+
+impl Drop for CosmosInstance {
+    fn drop(&mut self) {
+        tracing::info!(
+            "Stopping Cosmos chain: {}",
+            self._inner.chain_config.chain_id
+        );
+    }
+}

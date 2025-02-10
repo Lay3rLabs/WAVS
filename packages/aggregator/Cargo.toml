@@ -19,17 +19,11 @@ clap = { workspace = true }
 ctrlc = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
-figment = { workspace = true }
-dirs = { workspace = true }
 thiserror = { workspace = true }
 tower-http = { workspace = true }
 wildmatch = { workspace = true }
 alloy = { workspace = true }
-wavs = { workspace = true }
 utils = { workspace = true }
 tempfile = { workspace = true }
 
 [dev-dependencies]
-wavs-cli = { workspace = true }
-temp-env = { workspace = true }
-serde_json = { workspace = true }

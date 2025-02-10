@@ -1,8 +1,6 @@
-use alloy::transports::BoxTransport;
 use example_submit::SimpleSubmit::SimpleSubmitInstance;
 use example_trigger::SimpleTrigger::SimpleTriggerInstance;
-
-use utils::eigen_client::solidity_types::BoxSigningProvider;
+use utils::eth_client::SigningProvider;
 
 pub mod example_trigger {
     use alloy::sol;
@@ -39,5 +37,5 @@ pub mod example_submit {
     }
 }
 
-pub type SimpleTriggerT = SimpleTriggerInstance<BoxTransport, BoxSigningProvider>;
-pub type SimpleSubmitT = SimpleSubmitInstance<BoxTransport, BoxSigningProvider>;
+pub type SimpleTriggerT = SimpleTriggerInstance<(), SigningProvider>;
+pub type SimpleSubmitT = SimpleSubmitInstance<(), SigningProvider>;
