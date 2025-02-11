@@ -54,6 +54,7 @@ async fn main() {
         }
         Command::DeployService {
             component,
+            trigger,
             trigger_chain,
             trigger_address,
             submit_address,
@@ -65,15 +66,18 @@ async fn main() {
         } => {
             let component = ComponentSource::Bytecode(read_component(&component).unwrap());
 
-            let trigger = match &trigger_address {
-                Some(trigger_address) => {
+            let trigger = match (trigger, &trigger_address) {
+                (Some(trigger), _) => trigger,
+                (None, Some(trigger_address)) => {
                     if trigger_address.starts_with("0x") {
                         CliTriggerKind::EthContractEvent
                     } else {
                         CliTriggerKind::CosmosContractEvent
                     }
                 }
-                None => CliTriggerKind::CosmosContractEvent,
+                (None, None) => {
+                    panic!("trigger is required to be set if trigger_address is not set");
+                }
             };
 
             let res = DeployService::run(
