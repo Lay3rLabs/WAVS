@@ -1,4 +1,7 @@
+use async_trait::async_trait;
+use futures::TryStreamExt;
 use redb::ReadableTable;
+use wasm_pkg_client::caching::FileCache;
 use std::ops::Bound;
 use std::path::Path;
 use std::sync::Arc;
@@ -19,7 +22,9 @@ use crate::engine::runner::EngineRunner;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
-
+use wasm_pkg_client::{Client, caching::CachingClient};
+use wasm_pkg_client::Config;
+use semver::Version;
 /// This should auto-derive clone if T, E, S: Clone
 #[derive(Clone)]
 pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
@@ -27,21 +32,29 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
+    pub registry: CachingClient<FileCache>
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
-    pub fn new(
+    pub async fn new(
         triggers: T,
         engine: E,
         submission: S,
         db_storage_path: impl AsRef<Path>,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
+        let config = Config::global_defaults().await.unwrap();
+        let client = Client::new(config);
+        let cache_path = FileCache::global_cache_path().unwrap();
+        let cache = FileCache::new(cache_path).await.unwrap();
+        let registry = CachingClient::new(Some(client), cache);
+
         Ok(Dispatcher {
             triggers,
             engine,
             submission,
             storage,
+            registry
         })
     }
 }
@@ -50,6 +63,7 @@ const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
 const TRIGGER_PIPELINE_SIZE: usize = 20;
 
+#[async_trait]
 impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;
 
@@ -131,9 +145,19 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error> {
+    async fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error> {
         let bytecode = match source {
             ComponentSource::Bytecode(code) => code,
+            ComponentSource::Registry { registry } => {
+                let release = self.registry.get_release(&registry.package, &Version::parse("*").unwrap()).await.unwrap();
+                let mut content_stream = self.registry.get_content(&registry.package, &release).await.unwrap();
+                let mut content = Vec::new();
+                while let Some(chunk) = content_stream.try_next().await.unwrap() {
+                    // file.write_all(&chunk).await?;
+                    content.append(&mut chunk.to_vec());
+                }
+                content
+            }
             _ => todo!(),
         };
         let digest = self.engine.engine().store_wasm(&bytecode)?;
@@ -353,14 +377,19 @@ mod tests {
             config: mock_eth_event_trigger_config("service1", "workflow1"),
             data: TriggerData::new_raw(payload),
         };
+        let ctx = AppContext::new();
 
-        let dispatcher = Dispatcher::new(
-            MockTriggerManagerVec::new().with_actions(vec![action.clone()]),
-            SingleEngineRunner::new(IdentityEngine),
-            MockSubmission::new(),
-            db_file.as_ref(),
-        )
-        .unwrap();
+        let action_clone = action.clone();
+        let dispatcher = ctx.rt.block_on(
+            async move {
+                Dispatcher::new(
+                    MockTriggerManagerVec::new().with_actions(vec![action_clone]),
+                    SingleEngineRunner::new(IdentityEngine),
+                    MockSubmission::new(),
+                    db_file.as_ref(),
+                ).await.unwrap()
+            }
+        );
 
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
@@ -390,7 +419,6 @@ mod tests {
         dispatcher.add_service(service).unwrap();
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-        let ctx = AppContext::new();
         dispatcher.start(ctx).unwrap();
 
         // check that this event was properly handled and arrived at submission
@@ -446,14 +474,17 @@ mod tests {
             },
         ];
 
+        let ctx = AppContext::new();
         // Set up the dispatcher
-        let dispatcher = Dispatcher::new(
+        let dispatcher = ctx.rt.block_on(async move {
+            Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(actions),
             SingleEngineRunner::new(MockEngine::new()),
             MockSubmission::new(),
             db_file.as_ref(),
-        )
-        .unwrap();
+        ).await
+        .unwrap()
+        });
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");
@@ -485,7 +516,6 @@ mod tests {
         dispatcher.add_service(service).unwrap();
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-        let ctx = AppContext::new();
         dispatcher.start(ctx).unwrap();
 
         // check that the events were properly handled and arrived at submission
@@ -535,14 +565,16 @@ mod tests {
             },
         ];
 
+        let ctx = AppContext::new();
         // Set up the dispatcher
-        let dispatcher = Dispatcher::new(
+        let dispatcher = ctx.rt.block_on(async move {
+            Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(actions),
             MultiEngineRunner::new(MockEngine::new(), 4),
             MockSubmission::new(),
             db_file.as_ref(),
-        )
-        .unwrap();
+        ).await
+        .unwrap()});
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");

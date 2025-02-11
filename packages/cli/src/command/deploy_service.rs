@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
-use wavs_types::{ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
+use wavs_types::{ChainName, ComponentSource, Digest, Service, ServiceConfig, Submit, Trigger};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -119,8 +119,10 @@ impl DeployService {
             ComponentSource::Download { url: _, digest } => digest,
             ComponentSource::Registry {
                 registry: _,
-                digest,
-            } => digest,
+                // digest,
+            } => {
+                Digest::new(&[])
+            },
             ComponentSource::Digest(digest) => digest,
         };
 

@@ -19,7 +19,7 @@ use utils::{
 
 use crate::{args::TestArgs, config::TestConfig};
 
-pub fn run(args: TestArgs) {
+pub fn run(args: TestArgs, ctx: AppContext) {
     let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
 
     tracing_subscriber::registry()
@@ -33,8 +33,6 @@ pub fn run(args: TestArgs) {
         .unwrap();
 
     let configs: Configs = config.into();
-
-    let ctx = AppContext::new();
 
     let handles = AppHandles::start(&ctx, &configs);
 

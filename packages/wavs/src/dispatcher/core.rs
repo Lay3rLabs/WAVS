@@ -13,7 +13,7 @@ pub type CoreDispatcher =
     Dispatcher<CoreTriggerManager, MultiEngineRunner<Arc<WasmEngine<FileStorage>>>, CoreSubmission>;
 
 impl CoreDispatcher {
-    pub fn new_core(config: &Config) -> Result<CoreDispatcher, DispatcherError> {
+    pub async fn new_core(config: &Config) -> Result<CoreDispatcher, DispatcherError> {
         let file_storage = FileStorage::new(config.data.join("ca"))?;
 
         let triggers = CoreTriggerManager::new(config)?;
@@ -29,6 +29,6 @@ impl CoreDispatcher {
 
         let submission = CoreSubmission::new(config)?;
 
-        Self::new(triggers, engine, submission, config.data.join("db"))
+        Self::new(triggers, engine, submission, config.data.join("db")).await
     }
 }

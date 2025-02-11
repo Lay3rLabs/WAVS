@@ -8,6 +8,7 @@ use serde::{
 use crate::digest::Digest;
 
 use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger, TriggerData};
+use wasm_pkg_common::package::PackageRef;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
@@ -51,6 +52,13 @@ pub struct TestAppResponse {
     pub output: serde_json::Value,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Registry {
+    pub registry: String,
+    pub name: String,
+    pub package: PackageRef
+}
+
 // Not actually _used_ in http right now, just in CLI and in WAVS itself
 // likely to be refactored as we finalize the "upload component" story
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -63,8 +71,9 @@ pub enum ComponentSource {
     Registry {
         // TODO: what info do we need here?
         // TODO: can we support some login info for private registries, as env vars in config or something?
-        registry: String,
-        digest: Digest,
+        // registry: String,
+        // digest: Digest,
+        registry: Registry
     },
     /// An already deployed component
     Digest(Digest),

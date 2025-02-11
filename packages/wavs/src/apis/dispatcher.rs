@@ -3,6 +3,7 @@ use std::ops::Bound;
 use super::submission::ChainMessage;
 use crate::AppContext;
 use wavs_types::{ComponentSource, Digest, Service, ServiceID, TriggerAction};
+use async_trait::async_trait;
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -13,6 +14,7 @@ use wavs_types::{ComponentSource, Digest, Service, ServiceID, TriggerAction};
 ///
 /// These types should not be raw from the user, but parsed from the JSON structs, validated,
 /// and converted into our internal structs
+#[async_trait]
 pub trait DispatchManager: Send + Sync {
     type Error;
 
@@ -22,7 +24,7 @@ pub trait DispatchManager: Send + Sync {
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
-    fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error>;
+    async fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error>;
 
     fn add_service(&self, service: Service) -> Result<(), Self::Error>;
 
