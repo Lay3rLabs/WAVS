@@ -1,6 +1,6 @@
 [package]
 name = "wavs-wasi-chain"
-version = "0.3.0-alpha3"
+version = "0.3.0-alpha4"
 description = "WAVS WASI Chain helpers"
 authors.workspace = true
 edition.workspace = true

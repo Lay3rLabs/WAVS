@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Fixed
+
+- `wavs-wasi-chain` uses re-exported `alloy_primitives`
+
 ## [v0.3.0-alpha5]
 
 ### Added
