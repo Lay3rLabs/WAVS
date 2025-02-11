@@ -29,3 +29,4 @@ tempfile = { workspace = true }
 shellexpand = { workspace = true }
 uuid = { workspace = true }
 cfg-if = { workspace = true }
+alloy-json-abi ={ workspace = true }
