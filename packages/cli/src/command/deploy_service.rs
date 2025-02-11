@@ -69,8 +69,7 @@ impl DeployService {
                 // 2. raw hex string (no 0x)
                 // 3. event name to be parsed into signature
                 let trigger_event_name = match trigger_event_name {
-                    Some(name) if name.starts_with("0x") => name,
-                    Some(name) if name.chars().all(|c| c.is_ascii_hexdigit()) => {
+                    Some(name) if const_hex::const_check(name.as_bytes()).is_ok() => {
                         format!("0x{}", name)
                     }
                     Some(name) => Event::parse(&name)
