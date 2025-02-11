@@ -49,10 +49,6 @@ pub enum Command {
         #[clap(long)]
         component: String,
 
-        /// The kind of trigger to deploy
-        #[clap(long)]
-        trigger: CliTriggerKind,
-
         /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
         #[clap(long, required_if_eq_any([
             ("trigger", CliTriggerKind::EthContractEvent),
