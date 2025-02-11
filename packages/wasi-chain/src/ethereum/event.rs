@@ -19,7 +19,7 @@ macro_rules! decode_event_log_data {
         let topics = $log_data
             .topics
             .iter()
-            .map(|t| alloy_primitives::FixedBytes::<32>::from_slice(t))
+            .map(|t| $crate::ethereum::alloy_primitives::FixedBytes::<32>::from_slice(t))
             .collect();
 
         $crate::ethereum::event::decode_event_log_data_raw(topics, $log_data.data.into())
