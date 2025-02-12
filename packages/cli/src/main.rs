@@ -2,7 +2,7 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::config::ConfigExt;
 use wavs_cli::{
-    args::Command,
+    args::{CliTriggerKind, Command},
     command::{
         deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
         deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
@@ -65,6 +65,20 @@ async fn main() {
             args: _,
         } => {
             let component = ComponentSource::Bytecode(read_component(&component).unwrap());
+
+            let trigger = match (trigger, &trigger_address) {
+                (Some(trigger), _) => trigger,
+                (None, Some(trigger_address)) => {
+                    if trigger_address.starts_with("0x") {
+                        CliTriggerKind::EthContractEvent
+                    } else {
+                        CliTriggerKind::CosmosContractEvent
+                    }
+                }
+                (None, None) => {
+                    panic!("trigger is required to be set if trigger_address is not set");
+                }
+            };
 
             let res = DeployService::run(
                 &ctx,

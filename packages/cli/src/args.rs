@@ -50,8 +50,9 @@ pub enum Command {
         component: String,
 
         /// The kind of trigger to deploy
+        /// If not set, will assume the trigger from the trigger_address
         #[clap(long)]
-        trigger: CliTriggerKind,
+        trigger: Option<CliTriggerKind>,
 
         /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
         #[clap(long, required_if_eq_any([
