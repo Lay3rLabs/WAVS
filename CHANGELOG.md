@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-alpha6]
+
 ### Fixed
 
 - `wavs-wasi-chain` uses re-exported `alloy_primitives`
+
+### Added
+
+- CLI `deploy-service` now supports plaintext solidity event types (no need to precompute the signature hash)
+
+### Changed
+
+- CLI `deploy-service` makes `--trigger` optional, inferrable from the supplied address
 
 ## [v0.3.0-alpha5]
 
@@ -75,7 +85,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha4...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha6...HEAD
+[v0.3.0-alpha6]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha5...v0.3.0-alpha6
 [v0.3.0-alpha5]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha4...v0.3.0-alpha5
 [v0.3.0-alpha4]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha3...v0.3.0-alpha4
 [v0.3.0-alpha3]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha2...v0.3.0-alpha3
