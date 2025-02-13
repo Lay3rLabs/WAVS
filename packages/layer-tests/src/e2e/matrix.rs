@@ -21,6 +21,7 @@ pub enum EthService {
     Permissions,
     Square,
     MultiWorkflow,
+    MultiTrigger,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -100,6 +101,7 @@ impl From<EthService> for Vec<DigestName> {
             EthService::EchoDataSecondaryChain => vec![DigestName::EchoData],
             EthService::EchoDataAggregator => vec![DigestName::EchoData],
             EthService::MultiWorkflow => vec![DigestName::Square, DigestName::EchoData],
+            EthService::MultiTrigger => vec![DigestName::EchoData],
         }
     }
 }

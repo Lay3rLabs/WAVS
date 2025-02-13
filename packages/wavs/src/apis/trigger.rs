@@ -51,8 +51,4 @@ pub enum TriggerError {
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
-    #[error("Cosmos Contract Event already registered: {0} / {1} / {2}")]
-    CosmosContractEventAlreadyRegistered(ChainName, Address, String),
-    #[error("Eth Contract Event already registered: {0} / {1} / {2}")]
-    EthContractEventAlreadyRegistered(ChainName, alloy::primitives::Address, String),
 }
