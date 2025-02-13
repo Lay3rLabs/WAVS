@@ -35,7 +35,7 @@ use wavs_types::{
 pub struct Services {
     #[allow(dead_code)]
     pub eth_eigen_core: BTreeMap<ChainName, CoreAVSAddresses>,
-    pub lookup: BTreeMap<AnyService, Service>,
+    pub lookup: BTreeMap<AnyService, Vec<Service>>,
 }
 
 impl Services {
@@ -128,7 +128,25 @@ impl Services {
                     }
                 };
 
-                lookup.insert(service_kind, service);
+                if service_kind == AnyService::Eth(EthService::MultiTrigger) {
+                    let mut additional_service = service.clone();
+
+                    additional_service.id =
+                        ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
+
+                    DeployServiceRaw::run(
+                        &clients.cli_ctx,
+                        DeployServiceRawArgs {
+                            service: additional_service.clone(),
+                        },
+                    )
+                    .await
+                    .unwrap();
+
+                    lookup.insert(service_kind, vec![service, additional_service]);
+                } else {
+                    lookup.insert(service_kind, vec![service]);
+                }
             }
 
             Self {
