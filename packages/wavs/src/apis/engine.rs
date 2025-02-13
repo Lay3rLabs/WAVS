@@ -62,4 +62,7 @@ pub enum EngineError {
 
     #[error{"{0}"}]
     Engine(#[from] wavs_engine::EngineError),
+
+    #[error{"Unable to send result after executing Service {0} / Workflow {1}"}]
+    WasiResultSend(ServiceID, WorkflowID),
 }

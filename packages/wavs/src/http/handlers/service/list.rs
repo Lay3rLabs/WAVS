@@ -32,7 +32,6 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                     None => return Err(anyhow::anyhow!("No workflows found").into()),
                     Some(w) => w.trigger.clone(),
                 },
-                testable: Some(service.testable),
             });
         }
     }

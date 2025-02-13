@@ -4,19 +4,15 @@ use tracing::instrument;
 use wavs_types::{Service, TriggerAction};
 
 use crate::apis::submission::ChainMessage;
-use crate::engine::{Engine, EngineError};
+use crate::engine::Engine;
 use crate::AppContext;
 
-use super::{submit_result, EngineRunner};
-
-// TODO: get from config
-const DEFAULT_CHANNEL_SIZE: usize = 100;
+use super::EngineRunner;
 
 #[derive(Clone)]
 pub struct MultiEngineRunner<E: Engine + Clone + 'static> {
     engine: E,
     thread_count: usize,
-    output_channel_size: usize,
 }
 
 impl<E: Engine + Clone + 'static> MultiEngineRunner<E> {
@@ -24,7 +20,6 @@ impl<E: Engine + Clone + 'static> MultiEngineRunner<E> {
         MultiEngineRunner {
             engine,
             thread_count,
-            output_channel_size: DEFAULT_CHANNEL_SIZE,
         }
     }
 }
@@ -37,8 +32,8 @@ impl<E: Engine + Clone + 'static> EngineRunner for MultiEngineRunner<E> {
         &self,
         _ctx: AppContext,
         mut input: mpsc::Receiver<(TriggerAction, Service)>,
-    ) -> Result<mpsc::Receiver<ChainMessage>, EngineError> {
-        let (output, rx) = mpsc::channel::<ChainMessage>(self.output_channel_size);
+        result_sender: mpsc::Sender<ChainMessage>,
+    ) {
         let _self = self.clone();
 
         std::thread::spawn(move || {
@@ -48,14 +43,14 @@ impl<E: Engine + Clone + 'static> EngineRunner for MultiEngineRunner<E> {
                 .unwrap();
             while let Some((action, service)) = input.blocking_recv() {
                 let runner = _self.clone();
-                let out = output.clone();
+                let result_sender = result_sender.clone();
                 pool.install(move || {
-                    let msg = runner.run_trigger(action, service);
-                    submit_result(&out, msg);
+                    if let Err(e) = runner.run_trigger(action, service, result_sender) {
+                        tracing::error!("{:?}", e);
+                    }
                 })
             }
         });
-        Ok(rx)
     }
 
     fn engine(&self) -> &Self::Engine {

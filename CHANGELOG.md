@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+- Gets rid of HTTP test service
+- Better surfacing of component execution errors
+
 ## [v0.3.0-alpha6]
 
 ### Fixed

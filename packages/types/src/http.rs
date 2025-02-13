@@ -7,7 +7,7 @@ use serde::{
 
 use crate::digest::Digest;
 
-use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger, TriggerData};
+use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
@@ -32,23 +32,11 @@ pub struct ListServiceResponse {
     pub digest: ShaDigest,
     pub trigger: Trigger,
     pub permissions: Permissions,
-    pub testable: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct UploadServiceResponse {
     pub digest: ShaDigest,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TestAppRequest {
-    pub name: String,
-    pub input: TriggerData,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TestAppResponse {
-    pub output: serde_json::Value,
 }
 
 // Not actually _used_ in http right now, just in CLI and in WAVS itself
