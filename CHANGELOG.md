@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Added
+- wavs-types bump, includes new `ByteArray` type 
+
+### Changed
+- Eth event hash in trigger is now serialized as hex-encoded string (via `ByteArray` type)
+
 ## [v0.3.0-alpha7]
 
 ### Added

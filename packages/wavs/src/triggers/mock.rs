@@ -249,7 +249,7 @@ impl MockTriggerManagerChannel {
                         workflow_id,
                         contract_address.clone(),
                         ChainName::new(chain_id.to_string()).unwrap(),
-                        const_hex::encode(rand_event_eth()),
+                        rand_event_eth(),
                     )
                     .unwrap(),
                 },
