@@ -42,7 +42,7 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
                     crate::bindings::world::wavs::worker::layer_types::TriggerSourceEthContractEvent {
                         address: address.into(),
                         chain_name: chain_name.to_string(),
-                        event_hash: event_hash.to_vec(),
+                        event_hash: event_hash.as_slice().to_vec(),
                     }
                 )
             },

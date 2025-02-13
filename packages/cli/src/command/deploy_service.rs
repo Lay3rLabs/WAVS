@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
-use wavs_types::{ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
+use wavs_types::{ByteArray, ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -84,7 +84,7 @@ impl DeployService {
                 Trigger::EthContractEvent {
                     chain_name,
                     address,
-                    event_hash,
+                    event_hash: ByteArray::new(event_hash),
                 }
             }
             CliTriggerKind::CosmosContractEvent => {

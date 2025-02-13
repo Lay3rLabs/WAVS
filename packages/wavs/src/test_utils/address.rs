@@ -2,6 +2,7 @@ use alloy::signers::local::{coins_bip39::English, MnemonicBuilder};
 use bip39::Mnemonic;
 use layer_climb::prelude::*;
 use rand::prelude::*;
+use wavs_types::ByteArray;
 
 pub fn rand_address_eth() -> alloy::primitives::Address {
     let mut rng = rand::rng();
@@ -17,12 +18,12 @@ pub fn rand_address_eth() -> alloy::primitives::Address {
     signer.address()
 }
 
-pub fn rand_event_eth() -> [u8; 32] {
-    rand::rng().random()
+pub fn rand_event_eth() -> ByteArray<32> {
+    ByteArray::new(rand::rng().random())
 }
 
 pub fn rand_event_cosmos() -> String {
-    const_hex::encode(rand_event_eth())
+    const_hex::encode(rand_event_eth().as_slice())
 }
 
 pub fn rand_address_layer() -> Address {

@@ -27,8 +27,9 @@ use wavs_cli::{
     },
 };
 use wavs_types::{
-    AllowedHostPermission, ChainName, Component, ComponentID, ComponentSource, Permissions,
-    Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource,
+    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
+    WorkflowID,
 };
 
 #[derive(Default)]
@@ -414,7 +415,7 @@ async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trig
     Trigger::EthContractEvent {
         chain_name,
         address,
-        event_hash,
+        event_hash: ByteArray::new(event_hash),
     }
 }
 

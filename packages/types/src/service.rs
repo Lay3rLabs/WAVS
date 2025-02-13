@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
 
-use crate::digest::Digest;
+use crate::{digest::Digest, ByteArray};
 
 use super::{ChainName, ComponentID, ServiceID, WorkflowID};
 
@@ -101,7 +101,7 @@ pub enum Trigger {
     EthContractEvent {
         address: alloy_primitives::Address,
         chain_name: ChainName,
-        event_hash: [u8; 32],
+        event_hash: ByteArray<32>,
     },
     // not a real trigger, just for testing
     Manual,
@@ -230,7 +230,7 @@ pub enum AllowedHostPermission {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
-    use crate::{digest::Digest, id::ChainName, IDError, ServiceID, WorkflowID};
+    use crate::{digest::Digest, id::ChainName, ByteArray, IDError, ServiceID, WorkflowID};
 
     use super::{Component, Submit, Trigger, TriggerConfig};
 
@@ -272,7 +272,7 @@ mod test_ext {
         pub fn eth_contract_event(
             address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
-            event_hash: [u8; 32],
+            event_hash: ByteArray<32>,
         ) -> Self {
             Trigger::EthContractEvent {
                 address,
@@ -302,7 +302,7 @@ mod test_ext {
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             contract_address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
-            event_hash: [u8; 32],
+            event_hash: ByteArray<32>,
         ) -> Result<Self, IDError> {
             Ok(Self {
                 service_id: service_id.try_into()?,

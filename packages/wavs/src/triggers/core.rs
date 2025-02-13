@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
 use wavs_types::{
-    ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
 
 #[derive(Clone)]
@@ -37,8 +37,9 @@ struct LookupMaps {
     pub triggers_by_cosmos_contract_event:
         Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
     /// lookup id by (chain id, contract event address, event hash)
-    pub triggers_by_eth_contract_event:
-        Arc<RwLock<HashMap<(ChainName, alloy::primitives::Address, [u8; 32]), HashSet<LookupId>>>>,
+    pub triggers_by_eth_contract_event: Arc<
+        RwLock<HashMap<(ChainName, alloy::primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
+    >,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -232,7 +233,7 @@ impl CoreTriggerManager {
                         if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
                             chain_name.clone(),
                             contract_address,
-                            **event_hash,
+                            ByteArray::new(**event_hash),
                         )) {
                             let trigger_configs_lock =
                                 self.lookup_maps.trigger_configs.read().unwrap();
@@ -505,7 +506,7 @@ impl TriggerManager for CoreTriggerManager {
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
     triggers_by_eth_contract_address: &mut HashMap<
-        (ChainName, alloy::primitives::Address, [u8; 32]),
+        (ChainName, alloy::primitives::Address, ByteArray<32>),
         HashSet<LookupId>,
     >,
     triggers_by_cosmos_contract_address: &mut HashMap<
@@ -529,9 +530,7 @@ fn remove_trigger_data(
             triggers_by_eth_contract_address
                 .remove(&(chain_name.clone(), address, event_hash))
                 .ok_or(TriggerError::NoSuchEthContractEvent(
-                    chain_name,
-                    address,
-                    const_hex::encode(event_hash),
+                    chain_name, address, event_hash,
                 ))?;
         }
         Trigger::CosmosContractEvent {
