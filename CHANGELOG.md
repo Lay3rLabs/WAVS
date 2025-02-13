@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-alpha8]
+
 ### Added
 - wavs-types bump, includes new `ByteArray` type 
 
@@ -103,7 +105,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha7...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha8...HEAD
+[v0.3.0-alpha8]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha7...v0.3.0-alpha8
 [v0.3.0-alpha7]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha6...v0.3.0-alpha7
 [v0.3.0-alpha6]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha5...v0.3.0-alpha6
 [v0.3.0-alpha5]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha4...v0.3.0-alpha5
