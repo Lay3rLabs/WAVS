@@ -159,27 +159,3 @@ fn mock_e2e_service_lifecycle() {
         }
     });
 }
-
-#[test]
-fn mock_e2e_service_test() {
-    let runner = MockE2ETestRunner::new(AppContext::new());
-    // block and wait for creating the service
-
-    runner.ctx.rt.block_on({
-        let runner = runner.clone();
-
-        async move {
-            // add services in order
-            let service_id = ServiceID::new("service").unwrap();
-            let digest = Digest::new(b"wasm");
-
-            runner
-                .create_service_simple(service_id.clone(), digest.clone(), BigSquare)
-                .await;
-
-            let SquareOut { y } = runner.test_service(service_id, SquareIn { x: 3 }).await;
-
-            assert_eq!(y, 9);
-        }
-    })
-}

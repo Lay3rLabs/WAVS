@@ -102,7 +102,6 @@ fn db_service_store() {
         components,
         workflows,
         status: ServiceStatus::Active,
-        testable: true,
         config: ServiceConfig::default(),
     };
 

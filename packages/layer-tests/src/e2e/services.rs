@@ -370,7 +370,6 @@ async fn deploy_service_raw(
         workflows,
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
-        testable: true,
     };
 
     DeployServiceRaw::run(

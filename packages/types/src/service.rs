@@ -27,8 +27,6 @@ pub struct Service {
     pub status: ServiceStatus,
 
     pub config: ServiceConfig,
-
-    pub testable: bool,
 }
 
 impl Service {
@@ -65,7 +63,6 @@ impl Service {
             workflows,
             status: ServiceStatus::Active,
             config: config.unwrap_or_default(),
-            testable: false,
         }
     }
 }
