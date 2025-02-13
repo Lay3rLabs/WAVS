@@ -1,9 +1,9 @@
-use core::fmt::{self, Display, Formatter};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{self, Debug, Display, Formatter};
 
 /// A newtype that wraps a `[u8; N]` using const generics.
 /// and is serialized as a `0x` prefixed hex string.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy)]
 pub struct ByteArray<const N: usize>([u8; N]);
 
 impl<const N: usize> ByteArray<N> {
@@ -37,6 +37,12 @@ impl<const N: usize> Display for ByteArray<N> {
         // Encode the byte array as hex using `const_hex::encode`.
         let hex_string = const_hex::encode(self.0);
         write!(f, "0x{}", hex_string)
+    }
+}
+
+impl<const N: usize> Debug for ByteArray<N> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(self, f)
     }
 }
 
@@ -91,5 +97,12 @@ mod tests {
         // Test deserialization
         let deserialized: ByteArray<4> = serde_json::from_str("\"0xdeadbeef\"").unwrap();
         assert_eq!(deserialized.0, [0xDE, 0xAD, 0xBE, 0xEF]);
+    }
+
+    #[test]
+    fn test_debug() {
+        let data = ByteArray::<4>([0xDE, 0xAD, 0xBE, 0xEF]);
+        assert_eq!(format!("{:?}", data), "0xdeadbeef");
+        assert_eq!(format!("{:#?}", data), "0xdeadbeef");
     }
 }
