@@ -28,7 +28,7 @@ You'll see a bunch of addresses, but you don't need to do anything with them, th
 
 2. Deploy your custom Service Handler contract.
 
-This is any contract you want, deployed however you want. The only thing that matters is that it satisfies the [IServiceHandler interface in the sdk](../sdk/contracts/solidity/interfaces/IServiceHandler.sol)
+This is any contract you want, deployed however you want. The only thing that matters is that it satisfies the [IWavsServiceHandler interface in the sdk](../contracts/solidity/interfaces/IWavsServiceHandler.sol)
 
 Let's take a look at it:
 
