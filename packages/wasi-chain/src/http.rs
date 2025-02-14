@@ -51,7 +51,6 @@ pub async fn fetch_bytes(request: Request<impl Body>) -> anyhow::Result<Vec<u8>>
     body.read_to_end(&mut body_buf).await?;
 
     Ok(body_buf)
-    //Ok(serde_json::to_string(&body_buf).map_err(|e| anyhow!("{e:?}"))?)
 }
 
 /// Fetch a request (typically constructed from one of the http_request_* helpers)
