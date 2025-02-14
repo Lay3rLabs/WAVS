@@ -14,7 +14,7 @@ use super::{
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
 use alloy::sol_types::SolEvent;
 use utils::{
-    avs_client::layer_service_aggregator::LayerServiceAggregator, context::AppContext,
+    avs_client::layer_service_aggregator::WavsServiceAggregator, context::AppContext,
     eigen_client::CoreAVSAddresses, filesystem::workspace_path,
 };
 use wavs_cli::{
@@ -280,7 +280,7 @@ async fn deploy_service_simple(
 
             match chain.aggregator_endpoint.is_some() {
                 true => Some(
-                    LayerServiceAggregator::deploy(client.eth.provider.clone(), handler_address)
+                    WavsServiceAggregator::deploy(client.eth.provider.clone(), handler_address)
                         .await
                         .unwrap()
                         .address()
