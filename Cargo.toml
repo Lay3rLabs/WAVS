@@ -69,7 +69,7 @@ alloy-transport-http = "0.11.0"
 alloy-transport = "0.11.0"
 alloy-rpc-client = "0.11.0"
 alloy-json-abi = "0.8.21"
-wstd = "0.5.0"
+wstd = "0.5.1"
 wasi = "0.14.0"
 cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
 cosmwasm-schema = "2.2.0"
@@ -78,3 +78,4 @@ cw2 = "2.0.0"
 tower-service = "0.3.3"
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
 futures-utils-wasm = "0.1.0"
+http = "1.2.0"

@@ -164,7 +164,9 @@ fn get_input_for_service(
 ) -> Vec<u8> {
     let permissions_req = || {
         PermissionsRequest {
-            url: "https://httpbin.org/get".to_string(),
+            get_url: "https://httpbin.org/get".to_string(),
+            post_url: "https://httpbin.org/post".to_string(),
+            post_data: ("hello".to_string(), "world".to_string()),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -341,7 +343,9 @@ pub enum CosmosQueryResponse {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct PermissionsRequest {
-    pub url: String,
+    pub get_url: String,
+    pub post_url: String,
+    pub post_data: (String, String),
     pub timestamp: u64,
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "wavs-wasi-chain"
-version = "0.3.0-alpha4"
+version = "0.3.0-alpha5"
 description = "WAVS WASI Chain helpers"
 authors.workspace = true
 edition.workspace = true
@@ -10,6 +10,7 @@ license.workspace = true
 publish = true 
 
 [dependencies]
+serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 wstd = { workspace = true }
@@ -25,6 +26,7 @@ alloy-rpc-client = {workspace = true}
 cfg-if = {workspace = true} 
 tower-service = {workspace = true} 
 futures-utils-wasm = {workspace = true}
+http = {workspace = true}
 
 [lib]
 crate-type = ["rlib", "cdylib"]
