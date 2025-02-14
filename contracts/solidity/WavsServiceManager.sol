@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ILayerServiceManager} from "@layer/interfaces/ILayerServiceManager.sol";
+import {IWavsServiceManager} from "@layer/interfaces/IWavsServiceManager.sol";
 import {ECDSAServiceManagerBase} from "@eigenlayer/middleware/src/unaudited/ECDSAServiceManagerBase.sol";
 import {ECDSAStakeRegistry} from "@eigenlayer/middleware/src/unaudited/ECDSAStakeRegistry.sol";
 import {IERC1271Upgradeable} from "@openzeppelin-upgrades/contracts/interfaces/IERC1271Upgradeable.sol";
 import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptography/ECDSAUpgradeable.sol";
 
 /**
- * @title LayerServiceManager
+ * @title WavsServiceManager
  * @notice contract that validates signatures using the ECDSAStakeRegistry.
- * typically this contract is called from some "ILayerServiceHandler" (a vanilla implementation of ILayerService/ILayerServiceMulti)
+ * typically this contract is called from some "IWavsServiceHandler" (a vanilla implementation of ILayerService/ILayerServiceMulti)
  */
-contract LayerServiceManager is ECDSAServiceManagerBase,ILayerServiceManager {
+contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
 
     // ------------------------------------------------------------------------
     // Constructor
@@ -52,7 +52,7 @@ contract LayerServiceManager is ECDSAServiceManagerBase,ILayerServiceManager {
                 signature
             )
         ) {
-            revert ILayerServiceManager.InvalidSignature();
+            revert IWavsServiceManager.InvalidSignature();
         }
     }
 }

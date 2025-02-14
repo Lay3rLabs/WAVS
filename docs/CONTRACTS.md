@@ -35,7 +35,7 @@ Let's take a look at it:
 ```Solidity
 interface IServiceHandler {
     /**
-     * @notice Called by LayerServiceManager after successful payload signature validation.
+     * @notice Called by WavsServiceManager after successful payload signature validation.
      * @param data The arbitrary data that was signed.
      * @param signature The signature of the data.
      */
