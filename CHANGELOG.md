@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Fixed
+
+- reports fuel consumption with correct "fuel" instead of "gas"
+
+### Changed
+
+- `fuel_limit` moved into per-workflow configuration instead of per-service
+- unused `max_gas` field removed from `ServiceConfig` (this is a per-submission configuration)
+
 ## [v0.3.0-alpha9]
 
 ### Fixed

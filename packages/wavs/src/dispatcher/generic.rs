@@ -369,6 +369,7 @@ mod tests {
                         service_manager_addr,
                         None,
                     ),
+                    fuel_limit: None,
                 },
             )]
             .into(),
@@ -463,6 +464,7 @@ mod tests {
                         rand_address_eth(),
                         None,
                     ),
+                    fuel_limit: None,
                 },
             )]
             .into(),
@@ -551,6 +553,7 @@ mod tests {
                         rand_address_eth(),
                         None,
                     ),
+                    fuel_limit: None,
                 },
             )]
             .into(),

@@ -78,11 +78,12 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         Ok(digests?)
     }
 
-    /// This will execute a contract that implements the layer_avs:task-queue wit interface
+    /// This will execute a contract that implements the wavs:worker wit interface
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
         wasi: &wavs_types::Component,
+        fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
@@ -135,6 +136,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             engine: &self.wasm_engine,
             permissions: &wasi.permissions,
             data_dir: self.app_data_dir.join(trigger.config.service_id.as_ref()),
+            fuel_limit,
             service_config,
             chain_configs: &self.chain_configs,
             log,
@@ -256,6 +258,7 @@ mod tests {
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -283,16 +286,15 @@ mod tests {
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
         let component = wavs_types::Component::new(digest);
         let service_config = ServiceConfig {
-            fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
-            max_gas: None,
         };
 
         // verify service config kv is accessible
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -311,6 +313,7 @@ mod tests {
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -329,6 +332,7 @@ mod tests {
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -358,15 +362,13 @@ mod tests {
         // store square digest
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
         let component = wavs_types::Component::new(digest);
-        let service_config = ServiceConfig {
-            fuel_limit: low_fuel_limit,
-            ..Default::default()
-        };
+        let service_config = ServiceConfig::default();
 
         // execute it and get the error
         let err = engine
             .execute(
                 &component,
+                Some(low_fuel_limit),
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),

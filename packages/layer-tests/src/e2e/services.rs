@@ -367,12 +367,14 @@ async fn deploy_service_raw(
         trigger: trigger1,
         component: component_id1,
         submit: submit1,
+        fuel_limit: None,
     };
 
     let workflow2 = Workflow {
         trigger: trigger2,
         component: component_id2,
         submit: submit2,
+        fuel_limit: None,
     };
 
     let components = BTreeMap::from([

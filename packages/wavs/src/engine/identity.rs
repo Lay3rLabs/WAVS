@@ -30,6 +30,7 @@ impl Engine for IdentityEngine {
     fn execute(
         &self,
         _component: &Component,
+        _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
@@ -63,6 +64,7 @@ mod test {
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: mock_eth_event_trigger_config("foobar", "baz"),
                     data: TriggerData::new_raw(request.clone()),

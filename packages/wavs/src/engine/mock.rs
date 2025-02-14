@@ -83,6 +83,7 @@ impl Engine for MockEngine {
     fn execute(
         &self,
         component: &wavs_types::Component,
+        _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
@@ -152,6 +153,7 @@ mod test {
         let res = engine
             .execute(
                 &c1,
+                None,
                 TriggerAction {
                     config: TriggerConfig::eth_contract_event(
                         "321",
@@ -173,6 +175,7 @@ mod test {
         let res = engine
             .execute(
                 &c2,
+                None,
                 TriggerAction {
                     config: TriggerConfig::eth_contract_event(
                         "321",
@@ -194,6 +197,7 @@ mod test {
         let err = engine
             .execute(
                 &c3,
+                None,
                 TriggerAction {
                     config: TriggerConfig::eth_contract_event(
                         "321",
