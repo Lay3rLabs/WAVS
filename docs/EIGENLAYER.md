@@ -23,15 +23,3 @@ Before using Eigenlayer, ensure you have the following tools installed:
    ```bash
    git submodule update --init --recursive
    ```
-
-## Generating ABI
-
-Eigenlayer ABI is needed for everything to work correctly. While it's already checked in to the repo, it can be regenerated via:
-
-```bash
-./scripts/build_solidity.sh
-```
-
-## Source
-
-Example AVS contracts were copied from hello-world avs: https://github.com/Layr-Labs/hello-world-avs/tree/001dc6e944280559dfb44f75faf5102349a61d8e/contracts
