@@ -10,7 +10,7 @@ import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptogra
 /**
  * @title WavsServiceManager
  * @notice contract that validates signatures using the ECDSAStakeRegistry.
- * typically this contract is called from some "IWavsServiceHandler" (a vanilla implementation of ILayerService/ILayerServiceMulti)
+ * typically this contract is called from some "IWavsServiceHandler"
  */
 contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
 
