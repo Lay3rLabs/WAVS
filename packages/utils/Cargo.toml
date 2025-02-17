@@ -1,6 +1,6 @@
 [package]
 name = "utils"
-version = "0.3.0-alpha1"
+version = "0.3.0-beta"
 description = "Internal utils for various packages"
 edition.workspace = true
 authors.workspace = true
