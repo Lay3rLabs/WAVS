@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-alpha10]
+
 ### Added
 
 - http helpers in `wavs-wasi-chain`
@@ -19,8 +21,10 @@ and this project adheres to [Semantic Versioning].
 
 - `fuel_limit` moved into per-workflow configuration instead of per-service
 - unused `max_gas` field removed from `ServiceConfig` (this is a per-submission configuration)
+- renamed solidity contracts from `Layer*` to `Wavs*`
 - bumped `wavs-types` to `0.3.0-alpha6`
 - bumped `wavs-wasi-chain` to `0.3.0-alpha5`
+- bumped `@wavs/solidity` to `0.3.0-alpha3`
 
 ### Changed
 
@@ -130,7 +134,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha9...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha10...HEAD
+[v0.3.0-alpha9]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha9...v0.3.0-alpha10
 [v0.3.0-alpha9]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha8...v0.3.0-alpha9
 [v0.3.0-alpha8]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha7...v0.3.0-alpha8
 [v0.3.0-alpha7]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha6...v0.3.0-alpha7
