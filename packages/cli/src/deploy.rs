@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
 use utils::eigen_client::CoreAVSAddresses;
@@ -29,9 +29,21 @@ impl Deployment {
             return Ok(Self::default());
         }
 
-        let file = std::fs::File::open(path)?;
+        let file = std::fs::File::open(&path).map_err(|e| {
+            anyhow!(
+                "unable to open CLI deployments file at {}: {}",
+                path.display(),
+                e
+            )
+        })?;
         let reader = std::io::BufReader::new(file);
-        let deployment = serde_json::from_reader(reader)?;
+        let deployment = serde_json::from_reader(reader).map_err(|e| {
+            anyhow!(
+                "unable to parse CLI deployments file at {}: {}",
+                path.display(),
+                e
+            )
+        })?;
 
         Ok(deployment)
     }

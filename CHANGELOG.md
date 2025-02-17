@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Changed
+
+- CLI gives better errors with corrupt deployment.json files
+
 ## [v0.3.0-alpha10]
 
 ### Added
