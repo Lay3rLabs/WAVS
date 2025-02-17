@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Added
+
+- http helpers in `wavs-wasi-chain`
+
 ### Fixed
 
 - reports fuel consumption with correct "fuel" instead of "gas"
@@ -16,6 +20,9 @@ and this project adheres to [Semantic Versioning].
 - `fuel_limit` moved into per-workflow configuration instead of per-service
 - unused `max_gas` field removed from `ServiceConfig` (this is a per-submission configuration)
 - bumped `wavs-types` to `0.3.0-alpha6`
+- bumped `wavs-wasi-chain` to `0.3.0-alpha5`
+
+### Changed
 
 ## [v0.3.0-alpha9]
 

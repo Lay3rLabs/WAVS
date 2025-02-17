@@ -7036,7 +7036,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-wasi-chain"
-version = "0.3.0-alpha4"
+version = "0.3.0-alpha5"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -7048,6 +7048,8 @@ dependencies = [
  "anyhow",
  "cfg-if",
  "futures-utils-wasm",
+ "http",
+ "serde",
  "serde_json",
  "tower-service",
  "wasi 0.14.1+wasi-0.2.3",
