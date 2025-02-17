@@ -1,5 +1,5 @@
-use super::layer_service_handler::ILayerServiceHandler;
-use super::ILayerServiceHandlerT;
+use super::layer_service_handler::IWavsServiceHandler;
+use super::IWavsServiceHandlerT;
 use crate::eth_client::EthSigningClient;
 use alloy::contract::Error;
 use alloy::primitives::{Bytes, FixedBytes};
@@ -16,12 +16,12 @@ use serde::{Deserialize, Serialize};
 pub struct ServiceHandlerClient {
     pub eth: EthSigningClient,
     pub address: Address,
-    pub contract: ILayerServiceHandlerT,
+    pub contract: IWavsServiceHandlerT,
 }
 
 impl ServiceHandlerClient {
     pub fn new(eth: EthSigningClient, address: Address) -> Self {
-        let contract = ILayerServiceHandler::new(address, eth.provider.clone());
+        let contract = IWavsServiceHandler::new(address, eth.provider.clone());
 
         Self {
             eth,

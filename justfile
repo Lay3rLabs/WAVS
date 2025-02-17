@@ -97,7 +97,7 @@ solidity-build CLEAN="":
         DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory \
         StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
         ECDSAStakeRegistry LayerToken IStrategy EmptyContract \
-        LayerServiceManager LayerServiceAggregator ILayerServiceHandler ILayerServiceManager ILayerServiceAggregator; do \
+        WavsServiceManager WavsServiceAggregator IWavsServiceHandler IWavsServiceManager IWavsServiceAggregator; do \
         cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/contracts/solidity/abi; \
     done
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/

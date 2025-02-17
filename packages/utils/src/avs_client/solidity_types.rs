@@ -1,5 +1,5 @@
 use alloy::sol;
-use layer_service_manager::LayerServiceManager::LayerServiceManagerInstance;
+use layer_service_manager::WavsServiceManager::WavsServiceManagerInstance;
 
 use crate::eth_client::SigningProvider;
 
@@ -37,8 +37,8 @@ pub mod layer_service_manager {
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        LayerServiceManager,
-        "../../contracts/solidity/abi/LayerServiceManager.sol/LayerServiceManager.json"
+        WavsServiceManager,
+        "../../contracts/solidity/abi/WavsServiceManager.sol/WavsServiceManager.json"
     );
 }
 
@@ -47,8 +47,8 @@ pub mod layer_service_aggregator {
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        LayerServiceAggregator,
-        "../../contracts/solidity/abi/LayerServiceAggregator.sol/LayerServiceAggregator.json"
+        WavsServiceAggregator,
+        "../../contracts/solidity/abi/WavsServiceAggregator.sol/WavsServiceAggregator.json"
     );
 }
 
@@ -57,11 +57,11 @@ pub mod layer_service_handler {
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        ILayerServiceHandler,
-        "../../contracts/solidity/abi/ILayerServiceHandler.sol/ILayerServiceHandler.json"
+        IWavsServiceHandler,
+        "../../contracts/solidity/abi/IWavsServiceHandler.sol/IWavsServiceHandler.json"
     );
 }
 
-pub type LayerServiceManagerT = LayerServiceManagerInstance<(), SigningProvider>;
-pub type ILayerServiceHandlerT =
-    layer_service_handler::ILayerServiceHandler::ILayerServiceHandlerInstance<(), SigningProvider>;
+pub type WavsServiceManagerT = WavsServiceManagerInstance<(), SigningProvider>;
+pub type IWavsServiceHandlerT =
+    layer_service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), SigningProvider>;

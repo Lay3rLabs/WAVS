@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ILayerServiceHandler} from "@layer/interfaces/ILayerServiceHandler.sol";
-import {ILayerServiceAggregator} from "@layer/interfaces/ILayerServiceAggregator.sol";
+import {IWavsServiceHandler} from "@layer/interfaces/IWavsServiceHandler.sol";
+import {IWavsServiceAggregator} from "@layer/interfaces/IWavsServiceAggregator.sol";
 
 /**
- * @title LayerServiceAggregator
- * @notice Contract that takes aggregates calls to a ILayerServiceHandler
+ * @title WavsServiceAggregator
+ * @notice Contract that takes aggregates calls to a IWavsServiceHandler
  */
-contract LayerServiceAggregator is ILayerServiceAggregator {
-    ILayerServiceHandler private _handler;
+contract WavsServiceAggregator is IWavsServiceAggregator {
+    IWavsServiceHandler private _handler;
 
-    constructor(ILayerServiceHandler handler) {
+    constructor(IWavsServiceHandler handler) {
         _handler = handler;
     }
     // ------------------------------------------------------------------------
@@ -19,7 +19,7 @@ contract LayerServiceAggregator is ILayerServiceAggregator {
     // ------------------------------------------------------------------------
     error InvalidLength();
 
-    function getHandler() external view returns (ILayerServiceHandler) {
+    function getHandler() external view returns (IWavsServiceHandler) {
         return _handler;
     }
     /**

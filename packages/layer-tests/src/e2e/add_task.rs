@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Result};
-use utils::avs_client::{layer_service_aggregator::LayerServiceAggregator, SignedData};
+use utils::avs_client::{layer_service_aggregator::WavsServiceAggregator, SignedData};
 use wavs_cli::context::CliContext;
 use wavs_types::{ChainName, ServiceID, Submit, Trigger, WorkflowID};
 
@@ -117,7 +117,7 @@ pub async fn wait_for_task_to_land(
     let address = match is_aggregator {
         false => address,
         true => {
-            let contract = LayerServiceAggregator::new(address, client.eth.provider.clone());
+            let contract = WavsServiceAggregator::new(address, client.eth.provider.clone());
             contract.getHandler().call().await?._0
         }
     };
