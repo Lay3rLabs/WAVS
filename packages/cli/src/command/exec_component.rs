@@ -13,12 +13,12 @@ use crate::{
 
 pub struct ExecComponent {
     pub output_bytes: Vec<u8>,
-    pub gas_used: u64,
+    pub fuel_used: u64,
 }
 
 impl std::fmt::Display for ExecComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Gas used: \n{}", self.gas_used)?;
+        write!(f, "Fuel used: \n{}", self.fuel_used)?;
 
         write!(
             f,
@@ -38,6 +38,7 @@ pub struct ExecComponentArgs {
     pub component_path: String,
     pub input: ComponentInput,
     pub service_config: Option<ServiceConfig>,
+    pub fuel_limit: Option<u64>,
 }
 
 impl ExecComponent {
@@ -47,6 +48,7 @@ impl ExecComponent {
             component_path,
             input,
             service_config,
+            fuel_limit,
         }: ExecComponentArgs,
     ) -> Result<Self> {
         let wasm_bytes = read_component(&component_path)?;
@@ -83,16 +85,18 @@ impl ExecComponent {
             service_config: &service_config,
             chain_configs: &cli_config.chains,
             log: log_wasi,
+            fuel_limit,
         }
         .build()?;
 
+        let initial_fuel = instance_deps.store.get_fuel()?;
         let response = wavs_engine::execute(&mut instance_deps, trigger).await?;
 
-        let gas_used = service_config.fuel_limit - instance_deps.store.get_fuel()?;
+        let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 
         Ok(ExecComponent {
             output_bytes: response,
-            gas_used,
+            fuel_used,
         })
     }
 }
@@ -138,36 +142,39 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("hello world".to_string()),
             service_config: None,
+            fuel_limit: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
         assert_eq!(result.output_bytes, b"hello world");
-        assert!(result.gas_used > 0);
+        assert!(result.fuel_used > 0);
 
         // Same idea but hex-encoded with prefix
         let args = ExecComponentArgs {
             component_path: component_path.clone(),
             input: ComponentInput::new("0x68656C6C6F20776F726C64".to_string()),
             service_config: None,
+            fuel_limit: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
         assert_eq!(result.output_bytes, b"hello world");
-        assert!(result.gas_used > 0);
+        assert!(result.fuel_used > 0);
 
         // Do not hex-decode without the prefix
         let args = ExecComponentArgs {
             component_path: component_path.clone(),
             input: ComponentInput::new("68656C6C6F20776F726C64".to_string()),
             service_config: None,
+            fuel_limit: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
         assert_eq!(result.output_bytes, b"68656C6C6F20776F726C64");
-        assert!(result.gas_used > 0);
+        assert!(result.fuel_used > 0);
 
         // And filepath
 
@@ -178,11 +185,12 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new(format!("@{}", file.path().to_string_lossy())),
             service_config: None,
+            fuel_limit: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
         assert_eq!(result.output_bytes, b"hello world");
-        assert!(result.gas_used > 0);
+        assert!(result.fuel_used > 0);
     }
 }

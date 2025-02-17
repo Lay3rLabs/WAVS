@@ -141,6 +141,7 @@ async fn main() {
             component,
             input,
             service_config,
+            fuel_limit,
             args: _,
         } => {
             let res = ExecComponent::run(
@@ -149,6 +150,7 @@ async fn main() {
                     component_path: component,
                     service_config,
                     input: ComponentInput::new(input),
+                    fuel_limit,
                 },
             )
             .await

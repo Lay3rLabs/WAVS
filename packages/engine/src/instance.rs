@@ -9,7 +9,7 @@ use wasmtime::{
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{
-    AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, WorkflowID,
+    AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, Workflow, WorkflowID,
 };
 
 use crate::{EngineError, HostComponent, HostComponentLogger};
@@ -23,6 +23,8 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub permissions: &'a Permissions,
     pub data_dir: P,
     pub service_config: &'a ServiceConfig,
+    // will use Workflow::DEFAULT_FUEL_LIMIT if None
+    pub fuel_limit: Option<u64>,
     pub chain_configs: &'a ChainConfigs,
     pub log: HostComponentLogger,
 }
@@ -44,6 +46,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             permissions,
             data_dir,
             service_config,
+            fuel_limit,
             chain_configs,
             log,
         } = self;
@@ -112,7 +115,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         let mut store = wasmtime::Store::new(engine, host);
 
         store
-            .set_fuel(service_config.fuel_limit)
+            .set_fuel(fuel_limit.unwrap_or(Workflow::DEFAULT_FUEL_LIMIT))
             .map_err(EngineError::Store)?;
 
         Ok(InstanceDeps {

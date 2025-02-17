@@ -136,6 +136,10 @@ pub enum Command {
         /// Optional service config
         #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
         service_config: Option<ServiceConfig>,
+
+        /// Optional fuel limit for component execution
+        #[clap(long)]
+        fuel_limit: Option<u64>,
     },
 }
 
