@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-beta]
+
+### Added
+
+- released WIT 0.3.0-beta: https://wa.dev/wavs:worker
+- released wavs-types 0.3.0-beta: https://crates.io/crates/wavs-types/0.3.0-beta
+- released wavs-wasi-chain 0.3.0-beta: https://crates.io/crates/wavs-wasi-chain/0.3.0-beta
+- released @wavs/solidity 0.3.0-beta: https://www.npmjs.com/package/@wavs/solidity/v/0.3.0-beta
+
 ### Changed
 
 - CLI gives better errors with corrupt deployment.json files
@@ -138,8 +147,9 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha10...HEAD
-[v0.3.0-alpha9]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha9...v0.3.0-alpha10
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-beta...HEAD
+[v0.3.0-beta]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha10...v0.3.0-beta
+[v0.3.0-alpha10]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha9...v0.3.0-alpha10
 [v0.3.0-alpha9]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha8...v0.3.0-alpha9
 [v0.3.0-alpha8]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha7...v0.3.0-alpha8
 [v0.3.0-alpha7]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha6...v0.3.0-alpha7
