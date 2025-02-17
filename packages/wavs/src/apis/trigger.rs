@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 
 use crate::AppContext;
 
-use wavs_types::{ChainName, ServiceID, TriggerAction, TriggerConfig, WorkflowID};
+use wavs_types::{ByteArray, ChainName, ServiceID, TriggerAction, TriggerConfig, WorkflowID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -46,13 +46,9 @@ pub enum TriggerError {
     #[error("Cannot find cosmos trigger contract: {0} / {1} / {2}")]
     NoSuchCosmosContractEvent(ChainName, Address, String),
     #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
-    NoSuchEthContractEvent(ChainName, alloy::primitives::Address, String),
+    NoSuchEthContractEvent(ChainName, alloy::primitives::Address, ByteArray<32>),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
-    #[error("Cosmos Contract Event already registered: {0} / {1} / {2}")]
-    CosmosContractEventAlreadyRegistered(ChainName, Address, String),
-    #[error("Eth Contract Event already registered: {0} / {1} / {2}")]
-    EthContractEventAlreadyRegistered(ChainName, alloy::primitives::Address, String),
 }

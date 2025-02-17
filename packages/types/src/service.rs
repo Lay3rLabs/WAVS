@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
 
-use crate::digest::Digest;
+use crate::{digest::Digest, ByteArray};
 
 use super::{ChainName, ComponentID, ServiceID, WorkflowID};
 
@@ -27,8 +27,6 @@ pub struct Service {
     pub status: ServiceStatus,
 
     pub config: ServiceConfig,
-
-    pub testable: bool,
 }
 
 impl Service {
@@ -47,6 +45,7 @@ impl Service {
             trigger,
             component: component_id,
             submit,
+            fuel_limit: None,
         };
 
         let component = Component {
@@ -65,7 +64,6 @@ impl Service {
             workflows,
             status: ServiceStatus::Active,
             config: config.unwrap_or_default(),
-            testable: false,
         }
     }
 }
@@ -89,6 +87,13 @@ pub struct Workflow {
     pub component: ComponentID,
     /// How to submit the result of the component.
     pub submit: Submit,
+    /// The maximum amount of compute metering to allow for a single component execution
+    /// If not supplied, will be `Workflow::DEFAULT_FUEL_LIMIT`
+    pub fuel_limit: Option<u64>,
+}
+
+impl Workflow {
+    pub const DEFAULT_FUEL_LIMIT: u64 = 100_000_000;
 }
 
 // The TriggerManager reacts to these triggers
@@ -104,7 +109,7 @@ pub enum Trigger {
     EthContractEvent {
         address: alloy_primitives::Address,
         chain_name: ChainName,
-        event_hash: [u8; 32],
+        event_hash: ByteArray<32>,
     },
     // not a real trigger, just for testing
     Manual,
@@ -174,11 +179,9 @@ pub enum Submit {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ServiceConfig {
-    /// The maximum amount of compute metering to allow for a single execution
-    pub fuel_limit: u64,
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
     pub host_envs: Vec<String>,
@@ -187,19 +190,6 @@ pub struct ServiceConfig {
     /// Components read the values with `std::env::var`, case sensitive & no prefix required.
     /// Values here are viewable by anyone. Use host_envs to set private values.
     pub kv: Vec<(String, String)>,
-    /// The maximum on chain gas to use for a submission
-    pub max_gas: Option<u64>,
-}
-
-impl Default for ServiceConfig {
-    fn default() -> Self {
-        Self {
-            fuel_limit: 100_000_000,
-            max_gas: None,
-            host_envs: vec![],
-            kv: vec![],
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
@@ -233,7 +223,7 @@ pub enum AllowedHostPermission {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
-    use crate::{digest::Digest, id::ChainName, IDError, ServiceID, WorkflowID};
+    use crate::{digest::Digest, id::ChainName, ByteArray, IDError, ServiceID, WorkflowID};
 
     use super::{Component, Submit, Trigger, TriggerConfig};
 
@@ -275,7 +265,7 @@ mod test_ext {
         pub fn eth_contract_event(
             address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
-            event_hash: [u8; 32],
+            event_hash: ByteArray<32>,
         ) -> Self {
             Trigger::EthContractEvent {
                 address,
@@ -305,7 +295,7 @@ mod test_ext {
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             contract_address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
-            event_hash: [u8; 32],
+            event_hash: ByteArray<32>,
         ) -> Result<Self, IDError> {
             Ok(Self {
                 service_id: service_id.try_into()?,

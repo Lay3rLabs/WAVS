@@ -14,7 +14,8 @@ pub trait EngineRunner: Send + Sync {
         &self,
         ctx: AppContext,
         input: mpsc::Receiver<(TriggerAction, Service)>,
-    ) -> Result<mpsc::Receiver<ChainMessage>, EngineError>;
+        result_sender: mpsc::Sender<ChainMessage>,
+    );
 
     // Return the engine if they want to use that directly.
     fn engine(&self) -> &Self::Engine;
@@ -25,7 +26,8 @@ pub trait EngineRunner: Send + Sync {
         &self,
         action: TriggerAction,
         service: Service,
-    ) -> Result<ChainMessage, EngineError> {
+        result_sender: mpsc::Sender<ChainMessage>,
+    ) -> Result<(), EngineError> {
         // look up the proper workflow
         let workflow = service
             .workflows
@@ -44,26 +46,21 @@ pub trait EngineRunner: Send + Sync {
 
         let trigger_config = action.config.clone();
 
-        let wasi_result = self.engine().execute(component, action, &service.config)?;
+        let wasi_result =
+            self.engine()
+                .execute(component, workflow.fuel_limit, action, &service.config)?;
 
-        Ok(ChainMessage {
+        let service_id = trigger_config.service_id.clone();
+        let workflow_id = trigger_config.workflow_id.clone();
+
+        let msg = ChainMessage {
             trigger_config,
             wasi_result,
             submit: workflow.submit.clone(),
-        })
-    }
-}
+        };
 
-pub fn submit_result(out: &mpsc::Sender<ChainMessage>, msg: Result<ChainMessage, EngineError>) {
-    match msg {
-        Ok(msg) => {
-            tracing::debug!("Ran action, got result to submit");
-            if let Err(err) = out.blocking_send(msg) {
-                tracing::error!("Error submitting msg: {:?}", err);
-            }
-        }
-        Err(e) => {
-            tracing::error!("Error running trigger: {:?}", e);
-        }
+        result_sender
+            .blocking_send(msg)
+            .map_err(|_| EngineError::WasiResultSend(service_id, workflow_id))
     }
 }

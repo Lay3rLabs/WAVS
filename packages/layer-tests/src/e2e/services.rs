@@ -14,7 +14,7 @@ use super::{
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
 use alloy::sol_types::SolEvent;
 use utils::{
-    avs_client::layer_service_aggregator::LayerServiceAggregator, context::AppContext,
+    avs_client::layer_service_aggregator::WavsServiceAggregator, context::AppContext,
     eigen_client::CoreAVSAddresses, filesystem::workspace_path,
 };
 use wavs_cli::{
@@ -27,15 +27,16 @@ use wavs_cli::{
     },
 };
 use wavs_types::{
-    AllowedHostPermission, ChainName, Component, ComponentID, ComponentSource, Permissions,
-    Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource,
+    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
+    WorkflowID,
 };
 
 #[derive(Default)]
 pub struct Services {
     #[allow(dead_code)]
     pub eth_eigen_core: BTreeMap<ChainName, CoreAVSAddresses>,
-    pub lookup: BTreeMap<AnyService, Service>,
+    pub lookup: BTreeMap<AnyService, Vec<Service>>,
 }
 
 impl Services {
@@ -128,7 +129,25 @@ impl Services {
                     }
                 };
 
-                lookup.insert(service_kind, service);
+                if service_kind == AnyService::Eth(EthService::MultiTrigger) {
+                    let mut additional_service = service.clone();
+
+                    additional_service.id =
+                        ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
+
+                    DeployServiceRaw::run(
+                        &clients.cli_ctx,
+                        DeployServiceRawArgs {
+                            service: additional_service.clone(),
+                        },
+                    )
+                    .await
+                    .unwrap();
+
+                    lookup.insert(service_kind, vec![service, additional_service]);
+                } else {
+                    lookup.insert(service_kind, vec![service]);
+                }
             }
 
             Self {
@@ -261,7 +280,7 @@ async fn deploy_service_simple(
 
             match chain.aggregator_endpoint.is_some() {
                 true => Some(
-                    LayerServiceAggregator::deploy(client.eth.provider.clone(), handler_address)
+                    WavsServiceAggregator::deploy(client.eth.provider.clone(), handler_address)
                         .await
                         .unwrap()
                         .address()
@@ -348,12 +367,14 @@ async fn deploy_service_raw(
         trigger: trigger1,
         component: component_id1,
         submit: submit1,
+        fuel_limit: None,
     };
 
     let workflow2 = Workflow {
         trigger: trigger2,
         component: component_id2,
         submit: submit2,
+        fuel_limit: None,
     };
 
     let components = BTreeMap::from([
@@ -370,7 +391,6 @@ async fn deploy_service_raw(
         workflows,
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
-        testable: true,
     };
 
     DeployServiceRaw::run(
@@ -397,7 +417,7 @@ async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trig
     Trigger::EthContractEvent {
         chain_name,
         address,
-        event_hash,
+        event_hash: ByteArray::new(event_hash),
     }
 }
 

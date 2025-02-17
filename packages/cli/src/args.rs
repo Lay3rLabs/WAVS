@@ -50,8 +50,9 @@ pub enum Command {
         component: String,
 
         /// The kind of trigger to deploy
+        /// If not set, will assume the trigger from the trigger_address
         #[clap(long)]
-        trigger: CliTriggerKind,
+        trigger: Option<CliTriggerKind>,
 
         /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
         #[clap(long, required_if_eq_any([
@@ -135,6 +136,10 @@ pub enum Command {
         /// Optional service config
         #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
         service_config: Option<ServiceConfig>,
+
+        /// Optional fuel limit for component execution
+        #[clap(long)]
+        fuel_limit: Option<u64>,
     },
 }
 

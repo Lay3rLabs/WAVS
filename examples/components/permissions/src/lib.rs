@@ -1,6 +1,7 @@
+use example_helpers::bindings::compat::LogLevel;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use example_helpers::{
-    bindings::world::{Guest, TriggerAction},
+    bindings::world::{host, Guest, TriggerAction},
     export_layer_trigger_world,
 };
 use std::{
@@ -8,15 +9,11 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use wstd::{
-    http::{Client, Request},
-    io::{empty, AsyncRead},
-    runtime::block_on,
-};
+use wavs_wasi_chain::http::{fetch_json, fetch_string, http_request_get, http_request_post_json};
+use wstd::runtime::block_on;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 struct Component;
 
@@ -25,6 +22,14 @@ impl Guest for Component {
         block_on(async move {
             let (trigger_id, req) =
                 decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
+
+            println!("(permissions println!) trigger id: {}", trigger_id);
+            eprintln!("(permissions eprintln!) trigger id: {}", trigger_id);
+            host::log(
+                LogLevel::Info,
+                &format!("(permissions host log) trigger id: {}", trigger_id),
+            );
+
             let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
             let resp = inner_run_task(req).await.map_err(|e| e.to_string())?;
             let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
@@ -44,7 +49,26 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
     let response_path = responses_path.join(format!("{}.txt", input.timestamp));
     let mut response_file = fs::File::create(&response_path)?;
 
-    let contents = get_url(Url::parse(&input.url)?).await?;
+    let get_response = fetch_string(http_request_get(&input.get_url)?).await?;
+
+    #[derive(Deserialize, Debug)]
+    struct PostResponse {
+        json: (String, String),
+    }
+
+    let post_response: PostResponse =
+        fetch_json(http_request_post_json(&input.post_url, &input.post_data)?).await?;
+
+    if post_response.json != input.post_data {
+        return Err(anyhow::anyhow!(
+            "The post data is not the same as the one sent (check https://httpbin.org/post ?)"
+        ));
+    }
+
+    let contents = format!(
+        "GET RESPONSE: {}\n\nPOST RESPONSE: {:?}",
+        get_response, post_response
+    );
 
     response_file.write_all(contents.as_bytes())?;
 
@@ -57,25 +81,11 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
     })
 }
 
-async fn get_url(url: Url) -> Result<String> {
-    let request = Request::get(url.to_string())
-        .body(empty())
-        .map_err(|e| anyhow!("{e:?}"))?;
-    let mut response = Client::new()
-        .send(request)
-        .await
-        .map_err(|e| anyhow!("{e:?}"))?;
-    let body = response.body_mut();
-    let mut body_buf = Vec::new();
-    body.read_to_end(&mut body_buf)
-        .await
-        .map_err(|e| anyhow!("{e:?}"))?;
-    Ok(serde_json::to_string(&body_buf).map_err(|e| anyhow!("{e:?}"))?)
-}
-
 #[derive(Deserialize, Serialize)]
 struct PermissionsInput {
-    pub url: String,
+    pub get_url: String,
+    pub post_url: String,
+    pub post_data: (String, String),
     pub timestamp: u64,
 }
 

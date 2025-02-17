@@ -83,6 +83,7 @@ fn db_service_store() {
                 trigger: mock_eth_event_trigger(),
                 component: ComponentID::new("component-id-1").unwrap(),
                 submit: Submit::None,
+                fuel_limit: None,
             },
         ),
         (
@@ -91,6 +92,7 @@ fn db_service_store() {
                 trigger: mock_eth_event_trigger(),
                 component: ComponentID::new("component-id-2").unwrap(),
                 submit: Submit::None,
+                fuel_limit: None,
             },
         ),
     ]
@@ -102,7 +104,6 @@ fn db_service_store() {
         components,
         workflows,
         status: ServiceStatus::Active,
-        testable: true,
         config: ServiceConfig::default(),
     };
 

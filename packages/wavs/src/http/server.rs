@@ -15,7 +15,7 @@ use wildmatch::WildMatch;
 use super::{
     handlers::{
         handle_add_service, handle_config, handle_delete_service, handle_info,
-        handle_list_services, handle_not_found, handle_test_service, handle_upload_service,
+        handle_list_services, handle_not_found, handle_upload_service,
     },
     state::HttpState,
 };
@@ -68,7 +68,6 @@ pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
         .route("/app", post(handle_add_service))
         .route("/app", delete(handle_delete_service))
         .route("/info", get(handle_info))
-        .route("/test", post(handle_test_service))
         .route(
             "/upload",
             post(handle_upload_service).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),

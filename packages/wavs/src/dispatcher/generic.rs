@@ -15,7 +15,7 @@ use wavs_types::{
 
 use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
-use crate::apis::submission::{Submission, SubmissionError};
+use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 
 use crate::apis::trigger::{TriggerError, TriggerManager};
 use crate::engine::runner::EngineRunner;
@@ -62,6 +62,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
 const TRIGGER_PIPELINE_SIZE: usize = 20;
+const SUBMISSION_PIPELINE_SIZE: usize = 20;
 
 #[async_trait]
 impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
@@ -75,10 +76,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         // Next is the local (blocking) processing
         let (work_sender, work_receiver) =
             mpsc::channel::<(TriggerAction, Service)>(TRIGGER_PIPELINE_SIZE);
+        let (wasi_result_sender, wasi_result_receiver) =
+            mpsc::channel::<ChainMessage>(SUBMISSION_PIPELINE_SIZE);
         // Then the engine processing
-        let msgs_out = self.engine.start(ctx.clone(), work_receiver)?;
+        self.engine
+            .start(ctx.clone(), work_receiver, wasi_result_sender);
         // And pipeline finishes with submission
-        self.submission.start(ctx.clone(), msgs_out)?;
+        self.submission.start(ctx.clone(), wasi_result_receiver)?;
 
         // populate the initial triggers
         let initial_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
@@ -126,22 +130,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         std::thread::sleep(Duration::from_millis(500));
 
         Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn run_trigger(
-        &self,
-        action: TriggerAction,
-    ) -> Result<crate::apis::submission::ChainMessage, Self::Error> {
-        let service = self
-            .storage
-            .get(SERVICE_TABLE, action.config.service_id.as_ref())?
-            .ok_or(DispatcherError::UnknownService(
-                action.config.service_id.clone(),
-            ))?
-            .value();
-
-        Ok(self.engine.run_trigger(action, service)?)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
@@ -410,11 +398,11 @@ mod tests {
                         service_manager_addr,
                         None,
                     ),
+                    fuel_limit: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
-            testable: false,
         };
         dispatcher.add_service(service).unwrap();
 
@@ -507,11 +495,11 @@ mod tests {
                         rand_address_eth(),
                         None,
                     ),
+                    fuel_limit: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
-            testable: false,
         };
         dispatcher.add_service(service).unwrap();
 
@@ -597,11 +585,11 @@ mod tests {
                         rand_address_eth(),
                         None,
                     ),
+                    fuel_limit: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
-            testable: false,
         };
         dispatcher.add_service(service).unwrap();
 

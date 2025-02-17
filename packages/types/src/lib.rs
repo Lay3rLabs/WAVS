@@ -1,7 +1,9 @@
+mod bytes;
 mod digest;
 mod http;
 mod id;
 mod service;
+pub use bytes::*;
 pub use digest::*;
 pub use http::*;
 pub use id::*;

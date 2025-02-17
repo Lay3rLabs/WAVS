@@ -7,9 +7,8 @@ use serde::{
 
 use crate::digest::Digest;
 
-use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger, TriggerData};
 use wasm_pkg_common::package::PackageRef;
-
+use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger, TriggerData};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
     pub service: Service,
@@ -33,7 +32,6 @@ pub struct ListServiceResponse {
     pub digest: ShaDigest,
     pub trigger: Trigger,
     pub permissions: Permissions,
-    pub testable: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]

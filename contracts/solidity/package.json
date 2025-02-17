@@ -1,6 +1,6 @@
 {
   "name": "@wavs/solidity",
-  "version": "0.3.0-alpha2",
+  "version": "0.3.0-beta",
   "description": "WAVS Solidity contracts",
   "publishConfig": {
     "access": "public"

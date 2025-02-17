@@ -3,26 +3,19 @@ use tracing::instrument;
 use wavs_types::{Service, TriggerAction};
 
 use crate::apis::submission::ChainMessage;
-use crate::engine::{Engine, EngineError};
+use crate::engine::Engine;
 use crate::AppContext;
 
-use super::{submit_result, EngineRunner};
-
-// TODO: get from config
-const DEFAULT_CHANNEL_SIZE: usize = 20;
+use super::EngineRunner;
 
 #[derive(Clone)]
 pub struct SingleEngineRunner<E: Engine + Clone + 'static> {
     engine: E,
-    output_channel_size: usize,
 }
 
 impl<E: Engine + Clone + 'static> SingleEngineRunner<E> {
     pub fn new(engine: E) -> Self {
-        SingleEngineRunner {
-            engine,
-            output_channel_size: DEFAULT_CHANNEL_SIZE,
-        }
+        SingleEngineRunner { engine }
     }
 }
 
@@ -34,17 +27,17 @@ impl<E: Engine + Clone + 'static> EngineRunner for SingleEngineRunner<E> {
         &self,
         _ctx: AppContext,
         mut input: mpsc::Receiver<(TriggerAction, Service)>,
-    ) -> Result<mpsc::Receiver<ChainMessage>, EngineError> {
-        let (output, rx) = mpsc::channel::<ChainMessage>(self.output_channel_size);
+        result_sender: mpsc::Sender<ChainMessage>,
+    ) {
         let _self = self.clone();
 
         std::thread::spawn(move || {
             while let Some((action, service)) = input.blocking_recv() {
-                let msg = _self.run_trigger(action, service);
-                submit_result(&output, msg);
+                if let Err(e) = _self.run_trigger(action, service, result_sender.clone()) {
+                    tracing::error!("{:?}", e);
+                }
             }
         });
-        Ok(rx)
     }
 
     fn engine(&self) -> &Self::Engine {

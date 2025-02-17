@@ -16,6 +16,7 @@ pub trait Engine: Send + Sync {
     fn execute(
         &self,
         component: &Component,
+        fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError>;
@@ -33,10 +34,12 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
     fn execute(
         &self,
         component: &Component,
+        fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
-        self.as_ref().execute(component, trigger, service_config)
+        self.as_ref()
+            .execute(component, fuel_limit, trigger, service_config)
     }
 }
 
@@ -62,4 +65,7 @@ pub enum EngineError {
 
     #[error{"{0}"}]
     Engine(#[from] wavs_engine::EngineError),
+
+    #[error{"Unable to send result after executing Service {0} / Workflow {1}"}]
+    WasiResultSend(ServiceID, WorkflowID),
 }

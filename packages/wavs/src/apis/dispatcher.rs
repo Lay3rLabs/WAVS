@@ -1,8 +1,7 @@
 use std::ops::Bound;
 
-use super::submission::ChainMessage;
 use crate::AppContext;
-use wavs_types::{ComponentSource, Digest, Service, ServiceID, TriggerAction};
+use wavs_types::{ComponentSource, Digest, Service, ServiceID};
 use async_trait::async_trait;
 
 /// This is the highest-level container for the system.
@@ -19,8 +18,6 @@ pub trait DispatchManager: Send + Sync {
     type Error;
 
     fn start(&self, ctx: AppContext) -> Result<(), Self::Error>;
-
-    fn run_trigger(&self, action: TriggerAction) -> Result<ChainMessage, Self::Error>;
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.

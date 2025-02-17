@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     pin::Pin,
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
 use wavs_types::{
-    ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
 
 #[derive(Clone)]
@@ -35,10 +35,11 @@ struct LookupMaps {
     pub trigger_configs: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
     /// lookup id by (chain name, contract event address, event type)
     pub triggers_by_cosmos_contract_event:
-        Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), LookupId>>>,
+        Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
     /// lookup id by (chain id, contract event address, event hash)
-    pub triggers_by_eth_contract_event:
-        Arc<RwLock<HashMap<(ChainName, alloy::primitives::Address, [u8; 32]), LookupId>>>,
+    pub triggers_by_eth_contract_event: Arc<
+        RwLock<HashMap<(ChainName, alloy::primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
+    >,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -223,30 +224,41 @@ impl CoreTriggerManager {
                     if let Some(event_hash) = log.topic0() {
                         let contract_address = log.address();
 
-                        if let Some(trigger_config) = self
+                        let triggers_by_contract_event_lock = self
                             .lookup_maps
                             .triggers_by_eth_contract_event
                             .read()
-                            .unwrap()
-                            .get(&(chain_name.clone(), contract_address, **event_hash))
-                            .and_then(|id| {
-                                self.lookup_maps
-                                    .trigger_configs
-                                    .read()
-                                    .unwrap()
-                                    .get(id)
-                                    .cloned()
-                            })
-                        {
-                            trigger_actions.push(TriggerAction {
-                                data: TriggerData::EthContractEvent {
-                                    contract_address,
-                                    chain_name,
-                                    log: log.inner.data,
-                                    block_height,
-                                },
-                                config: trigger_config,
-                            });
+                            .unwrap();
+
+                        if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
+                            chain_name.clone(),
+                            contract_address,
+                            ByteArray::new(**event_hash),
+                        )) {
+                            let trigger_configs_lock =
+                                self.lookup_maps.trigger_configs.read().unwrap();
+
+                            for id in lookup_ids {
+                                match trigger_configs_lock.get(id) {
+                                    Some(trigger_config) => {
+                                        trigger_actions.push(TriggerAction {
+                                            data: TriggerData::EthContractEvent {
+                                                contract_address,
+                                                chain_name: chain_name.clone(),
+                                                log: log.inner.data.clone(),
+                                                block_height,
+                                            },
+                                            config: trigger_config.clone(),
+                                        });
+                                    }
+                                    None => {
+                                        tracing::error!(
+                                            "Trigger config not found for lookup_id {}",
+                                            id
+                                        );
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -260,25 +272,36 @@ impl CoreTriggerManager {
                         .triggers_by_cosmos_contract_event
                         .read()
                         .unwrap();
+
                     let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+
                     for (contract_address, event) in contract_events {
-                        if let Some(trigger_config) = triggers_by_contract_event_lock
-                            .get(&(
-                                chain_name.clone(),
-                                contract_address.clone(),
-                                event.ty.clone(),
-                            ))
-                            .and_then(|id| trigger_configs_lock.get(id).cloned())
-                        {
-                            trigger_actions.push(TriggerAction {
-                                data: TriggerData::CosmosContractEvent {
-                                    contract_address: contract_address.clone(),
-                                    chain_name: chain_name.clone(),
-                                    event,
-                                    block_height,
-                                },
-                                config: trigger_config.clone(),
-                            });
+                        if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
+                            chain_name.clone(),
+                            contract_address.clone(),
+                            event.ty.clone(),
+                        )) {
+                            for id in lookup_ids {
+                                match trigger_configs_lock.get(id) {
+                                    Some(trigger_config) => {
+                                        trigger_actions.push(TriggerAction {
+                                            data: TriggerData::CosmosContractEvent {
+                                                contract_address: contract_address.clone(),
+                                                chain_name: chain_name.clone(),
+                                                event: event.clone(),
+                                                block_height,
+                                            },
+                                            config: trigger_config.clone(),
+                                        });
+                                    }
+                                    None => {
+                                        tracing::error!(
+                                            "Trigger config not found for lookup_id {}",
+                                            id
+                                        );
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -340,15 +363,8 @@ impl TriggerManager for CoreTriggerManager {
                     .write()
                     .unwrap();
                 let key = (chain_name.clone(), address, event_hash);
-                if lock.contains_key(&key) {
-                    return Err(TriggerError::EthContractEventAlreadyRegistered(
-                        chain_name,
-                        address,
-                        const_hex::encode(event_hash),
-                    ));
-                }
 
-                lock.insert(key, lookup_id);
+                lock.entry(key).or_default().insert(lookup_id);
             }
             Trigger::CosmosContractEvent {
                 address,
@@ -361,13 +377,8 @@ impl TriggerManager for CoreTriggerManager {
                     .write()
                     .unwrap();
                 let key = (chain_name.clone(), address.clone(), event_type.clone());
-                if lock.contains_key(&key) {
-                    return Err(TriggerError::CosmosContractEventAlreadyRegistered(
-                        chain_name, address, event_type,
-                    ));
-                }
 
-                lock.insert(key, lookup_id);
+                lock.entry(key).or_default().insert(lookup_id);
             }
             Trigger::Manual => {}
         }
@@ -495,12 +506,12 @@ impl TriggerManager for CoreTriggerManager {
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
     triggers_by_eth_contract_address: &mut HashMap<
-        (ChainName, alloy::primitives::Address, [u8; 32]),
-        LookupId,
+        (ChainName, alloy::primitives::Address, ByteArray<32>),
+        HashSet<LookupId>,
     >,
     triggers_by_cosmos_contract_address: &mut HashMap<
         (ChainName, layer_climb::prelude::Address, String),
-        LookupId,
+        HashSet<LookupId>,
     >,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
@@ -519,9 +530,7 @@ fn remove_trigger_data(
             triggers_by_eth_contract_address
                 .remove(&(chain_name.clone(), address, event_hash))
                 .ok_or(TriggerError::NoSuchEthContractEvent(
-                    chain_name,
-                    address,
-                    const_hex::encode(event_hash),
+                    chain_name, address, event_hash,
                 ))?;
         }
         Trigger::CosmosContractEvent {

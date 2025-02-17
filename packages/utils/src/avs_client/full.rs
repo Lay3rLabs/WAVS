@@ -5,7 +5,7 @@ use super::solidity_types::{
 use crate::{
     alloy_helpers::SolidityEventFinder,
     avs_client::{
-        layer_service_manager::LayerServiceManager,
+        layer_service_manager::WavsServiceManager,
         stake_registry::ISignatureUtils::SignatureWithSaltAndExpiry,
     },
     eigen_client::{
@@ -62,7 +62,7 @@ impl AvsClient {
         };
 
         let stake_registry_address =
-            LayerServiceManager::new(self.service_manager, &self.eth.provider)
+            WavsServiceManager::new(self.service_manager, &self.eth.provider)
                 .stakeRegistry()
                 .call()
                 .await?
@@ -198,7 +198,7 @@ impl AvsClientDeployer {
             .await?;
 
         // Get service manager
-        let service_manager_impl = LayerServiceManager::deploy(
+        let service_manager_impl = WavsServiceManager::deploy(
             self.eth.provider.clone(),
             core.avs_directory,
             proxies.ecdsa_stake_registry,

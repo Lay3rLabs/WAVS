@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use utils::{avs_client::SignedData, context::AppContext};
 use wavs_types::{ChainName, Service, Submit};
 
-use crate::e2e::add_task::add_task;
+use crate::e2e::add_task::{add_task, wait_for_task_to_land};
 
 use super::{
     clients::Clients,
@@ -18,7 +18,7 @@ use super::{
 pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: Services) {
     // nonce errors, gotta run sequentially :(
     ctx.rt.block_on(async move {
-        let mut all: Vec<(AnyService, Service)> = services.lookup.into_iter().collect();
+        let mut all: Vec<(AnyService, Vec<Service>)> = services.lookup.into_iter().collect();
         all.sort_by(|(a, _), (b, _)| match (a, b) {
             // Ethereum should come first, then cross-chain, then cosmos
             // to ensure that we move ethereum blocks forward
@@ -29,8 +29,8 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
             _ => std::cmp::Ordering::Equal,
         });
 
-        for (name, service) in all {
-            test_service(name, service, &configs, &clients)
+        for (name, services) in all {
+            test_service(name, services, &configs, &clients)
                 .await
                 .unwrap();
             tracing::info!("Service {:?} passed", name);
@@ -40,10 +40,11 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
 
 async fn test_service(
     name: AnyService,
-    service: Service,
+    services: Vec<Service>,
     configs: &Configs,
     clients: &Clients,
 ) -> Result<()> {
+    let service = services.first().unwrap();
     let service_id = service.id.to_string();
 
     tracing::info!("Testing service: {:?}", name);
@@ -70,24 +71,84 @@ async fn test_service(
 
         for task_number in 1..=n_tasks {
             let is_final = task_number == n_tasks;
+            let is_aggregator = n_tasks > 1;
 
-            let signed_data = add_task(
+            let (trigger_id, signed_data) = add_task(
                 &clients.cli_ctx,
                 service_id.clone(),
                 Some(workflow_id.to_string()),
-                get_input_for_service(name, &service, configs, workflow_index),
+                get_input_for_service(name, service, configs, workflow_index),
                 if is_final {
                     Some(std::time::Duration::from_secs(10))
                 } else {
                     None
                 },
-                n_tasks > 1,
+                is_aggregator,
             )
             .await?;
 
             if is_final {
                 let signed_data = signed_data.context("no signed data returned")?;
-                verify_signed_data(name, signed_data, &service, configs, workflow_index)?;
+                verify_signed_data(name, signed_data, service, configs, workflow_index)?;
+            }
+
+            if services.len() > 1 {
+                // sanity check that all our services are for the same trigger
+                for additional_service in &services[1..] {
+                    tracing::info!("Testing Additional service for same trigger...");
+                    assert_eq!(
+                        additional_service
+                            .workflows
+                            .values()
+                            .map(|w| w.trigger.clone())
+                            .collect::<Vec<_>>(),
+                        service
+                            .workflows
+                            .values()
+                            .map(|w| w.trigger.clone())
+                            .collect::<Vec<_>>(),
+                    );
+
+                    let workflow = clients
+                        .cli_ctx
+                        .deployment
+                        .lock()
+                        .unwrap()
+                        .services
+                        .get(&additional_service.id)
+                        .unwrap()
+                        .workflows
+                        .get(workflow_id)
+                        .unwrap()
+                        .clone();
+
+                    match workflow.submit {
+                        Submit::None => {}
+                        Submit::EthereumContract {
+                            chain_name,
+                            address,
+                            ..
+                        } => {
+                            let signed_data = wait_for_task_to_land(
+                                &clients.cli_ctx,
+                                &chain_name,
+                                address,
+                                trigger_id,
+                                is_aggregator,
+                                std::time::Duration::from_secs(10),
+                            )
+                            .await?;
+
+                            verify_signed_data(
+                                name,
+                                signed_data,
+                                service,
+                                configs,
+                                workflow_index,
+                            )?;
+                        }
+                    }
+                }
             }
         }
     }
@@ -103,7 +164,9 @@ fn get_input_for_service(
 ) -> Vec<u8> {
     let permissions_req = || {
         PermissionsRequest {
-            url: "https://httpbin.org/get".to_string(),
+            get_url: "https://httpbin.org/get".to_string(),
+            post_url: "https://httpbin.org/post".to_string(),
+            post_data: ("hello".to_string(), "world".to_string()),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -128,6 +191,7 @@ fn get_input_for_service(
                 1 => b"the first one was nine".to_vec(),
                 _ => unimplemented!(),
             },
+            EthService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
@@ -164,6 +228,7 @@ fn verify_signed_data(
             EthService::EchoData
             | EthService::EchoDataSecondaryChain
             | EthService::EchoDataAggregator
+            | EthService::MultiTrigger
             | EthService::ChainTriggerLookup => Some(input_req()),
 
             EthService::Square => Some(SquareResponse { y: 9 }.to_vec()),
@@ -278,7 +343,9 @@ pub enum CosmosQueryResponse {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct PermissionsRequest {
-    pub url: String,
+    pub get_url: String,
+    pub post_url: String,
+    pub post_data: (String, String),
     pub timestamp: u64,
 }
 

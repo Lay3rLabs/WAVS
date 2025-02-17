@@ -17,11 +17,11 @@ use axum::{
     body::Body,
     http::{Method, Request},
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use tower::Service as _;
 use wavs_types::{
     AddServiceRequest, DeleteServicesRequest, Digest, ListServicesResponse, Service, ServiceID,
-    Submit, TestAppRequest, TestAppResponse, TriggerData,
+    Submit,
 };
 
 pub struct MockE2ETestRunner {
@@ -161,38 +161,6 @@ impl MockE2ETestRunner {
             .unwrap();
 
         assert!(response.status().is_success());
-    }
-
-    pub async fn test_service<D: DeserializeOwned>(
-        &self,
-        service_id: ServiceID,
-        input: impl Serialize,
-    ) -> D {
-        let body = serde_json::to_string(&TestAppRequest {
-            name: service_id.to_string(),
-            input: TriggerData::Raw(serde_json::to_vec(&input).unwrap()),
-        })
-        .unwrap();
-
-        let req = Request::builder()
-            .method(Method::POST)
-            .header("Content-Type", "application/json")
-            .uri("/test")
-            .body(body)
-            .unwrap();
-
-        let response = self
-            .http_app
-            .clone()
-            .http_router()
-            .await
-            .call(req)
-            .await
-            .unwrap();
-
-        let res = map_response::<TestAppResponse>(response).await;
-
-        serde_json::from_value(res.output).unwrap()
     }
 
     pub fn teardown(&self) {

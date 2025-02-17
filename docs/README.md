@@ -2,14 +2,15 @@
 
 This source documentation provides discussion and overview of WAVS, details on its architecture, and guides on how to run and use WAVS.
 
+Most of the developer tasks are executed via justfiles. Run `just` to see a full list.
+
 ## Contents
 
 ### Guides
-- [Quickstart](QUICKSTART.md)
-- [Tests](TESTS.md)
 - [Publishing and Wasm & WIT Registry Usage](PUBLISHING_AND_REGISTRY_USAGE.md)
 - [Logging](LOGGING.md)
 - [EigenLayer](EIGENLAYER.md)
+- [Contracts](CONTRACTS.md)
 - [Develop Wasm components](AUTHORING_COMPONENTS.md)
 
 ### Documents

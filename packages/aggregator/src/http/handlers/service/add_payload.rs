@@ -2,7 +2,7 @@ use alloy::primitives::Address;
 use axum::{extract::State, response::IntoResponse, Json};
 use utils::{
     aggregator::{AggregateAvsRequest, AggregateAvsResponse},
-    avs_client::{layer_service_aggregator::LayerServiceAggregator, SignedPayload},
+    avs_client::{layer_service_aggregator::WavsServiceAggregator, SignedPayload},
 };
 
 use crate::http::{error::HttpResult, state::HttpState};
@@ -64,7 +64,7 @@ pub async fn add_payload(
         }
 
         let pending_tx =
-            LayerServiceAggregator::new(service_aggregator_address, &eth_client.provider)
+            WavsServiceAggregator::new(service_aggregator_address, &eth_client.provider)
                 .handleSignedDataMulti(datas, signatures)
                 .send()
                 .await?;
@@ -89,7 +89,7 @@ pub async fn add_payload(
 //     signed_payload: SignedPayload,
 //     provider: &BoxSigningProvider,
 // ) -> HttpResult<()> {
-//     let service_manager_contract = LayerServiceManager::new(service_manager_address, provider);
+//     let service_manager_contract = WavsServiceManager::new(service_manager_address, provider);
 //     let operator = signed_payload.operator;
 
 //     // Check Operator is registered

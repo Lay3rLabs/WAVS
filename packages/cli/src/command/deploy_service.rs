@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
-use wavs_types::{ChainName, ComponentSource, Digest, Service, ServiceConfig, Submit, Trigger};
+use wavs_types::{ByteArray, ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -8,6 +8,7 @@ use crate::{
     context::CliContext,
     deploy::CommandDeployResult,
 };
+use alloy_json_abi::Event;
 
 pub struct DeployService {
     pub args: DeployServiceArgs,
@@ -59,11 +60,23 @@ impl DeployService {
         let trigger: Trigger = match trigger {
             CliTriggerKind::EthContractEvent => {
                 let chain_name = trigger_chain.context("must have trigger chain for contract")?;
-                let trigger_event_name =
-                    trigger_event_name.context("must have trigger event name")?;
                 let address = trigger_address
                     .context("must have trigger address")?
                     .parse()?;
+
+                // Order the match cases from most explicit to event parsing:
+                // 1. 0x-prefixed hex string
+                // 2. raw hex string (no 0x)
+                // 3. event name to be parsed into signature
+                let trigger_event_name = match trigger_event_name {
+                    Some(name) if name.starts_with("0x") => name,
+                    Some(name) if const_hex::const_check(name.as_bytes()).is_ok() => name,
+                    Some(name) => Event::parse(&name)
+                        .context("Invalid event signature format")?
+                        .selector()
+                        .to_string(),
+                    None => bail!("Missing event trigger (requires hex signature or event name)"),
+                };
 
                 let mut event_hash: [u8; 32] = [0; 32];
                 event_hash.copy_from_slice(&const_hex::decode(trigger_event_name)?);
@@ -71,7 +84,7 @@ impl DeployService {
                 Trigger::EthContractEvent {
                     chain_name,
                     address,
-                    event_hash,
+                    event_hash: ByteArray::new(event_hash),
                 }
             }
             CliTriggerKind::CosmosContractEvent => {

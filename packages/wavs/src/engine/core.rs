@@ -2,13 +2,13 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use tracing::instrument;
+use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wasmtime_wasi::{WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_engine::InstanceDepsBuilder;
-use wavs_types::{Digest, ServiceConfig, TriggerAction};
+use wavs_types::{Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID};
 
 use utils::storage::{CAStorage, CAStorageError};
 
@@ -78,17 +78,54 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         Ok(digests?)
     }
 
-    /// This will execute a contract that implements the layer_avs:task-queue wit interface
+    /// This will execute a contract that implements the wavs:worker wit interface
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
         wasi: &wavs_types::Component,
+        fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Vec<u8>, EngineError> {
         let digest = wasi.wasm.clone();
 
+        fn log(
+            service_id: &ServiceID,
+            workflow_id: &WorkflowID,
+            digest: &Digest,
+            level: wavs_engine::bindings::world::host::LogLevel,
+            message: String,
+        ) {
+            let span = span!(
+                tracing::Level::INFO,
+                "component_log",
+                service_id = %service_id,
+                workflow_id = %workflow_id,
+                digest = %digest
+            );
+
+            match level {
+                wavs_engine::bindings::world::host::LogLevel::Error => {
+                    event!(parent: &span, tracing::Level::ERROR, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Warn => {
+                    event!(parent: &span, tracing::Level::WARN, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Info => {
+                    event!(parent: &span, tracing::Level::INFO, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Debug => {
+                    event!(parent: &span, tracing::Level::DEBUG, "{}", message)
+                }
+                wavs_engine::bindings::world::host::LogLevel::Trace => {
+                    event!(parent: &span, tracing::Level::TRACE, "{}", message)
+                }
+            }
+        }
         let mut instance_deps = InstanceDepsBuilder {
+            service_id: trigger.config.service_id.clone(),
+            workflow_id: trigger.config.workflow_id.clone(),
+            digest: digest.clone(),
             component: match self.memory_cache.write().unwrap().get(&digest) {
                 Some(cm) => cm.clone(),
                 None => {
@@ -99,8 +136,10 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             engine: &self.wasm_engine,
             permissions: &wasi.permissions,
             data_dir: self.app_data_dir.join(trigger.config.service_id.as_ref()),
+            fuel_limit,
             service_config,
             chain_configs: &self.chain_configs,
+            log,
         }
         .build()?;
 
@@ -219,6 +258,7 @@ mod tests {
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -246,16 +286,15 @@ mod tests {
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
         let component = wavs_types::Component::new(digest);
         let service_config = ServiceConfig {
-            fuel_limit: 100_000_000,
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
-            max_gas: None,
         };
 
         // verify service config kv is accessible
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -274,6 +313,7 @@ mod tests {
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -292,6 +332,7 @@ mod tests {
         let result = engine
             .execute(
                 &component,
+                None,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -321,15 +362,13 @@ mod tests {
         // store square digest
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
         let component = wavs_types::Component::new(digest);
-        let service_config = ServiceConfig {
-            fuel_limit: low_fuel_limit,
-            ..Default::default()
-        };
+        let service_config = ServiceConfig::default();
 
         // execute it and get the error
         let err = engine
             .execute(
                 &component,
+                Some(low_fuel_limit),
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),

@@ -2,12 +2,12 @@
 pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {LayerServiceManager} from "../LayerServiceManager.sol";
-import {ILayerServiceHandler} from "@layer/interfaces/ILayerServiceHandler.sol";
-import {LayerServiceManager} from "@layer/LayerServiceManager.sol";
+import {WavsServiceManager} from "../WavsServiceManager.sol";
+import {IWavsServiceHandler} from "@layer/interfaces/IWavsServiceHandler.sol";
+import {WavsServiceManager} from "@layer/WavsServiceManager.sol";
 
-contract LayerServiceManagerTest is Test {
-    LayerServiceManager serviceManager;
+contract WavsServiceManagerTest is Test {
+    WavsServiceManager serviceManager;
     LayerServiceHandler serviceHandler;
 
     function setUp() public {
@@ -25,9 +25,9 @@ contract LayerServiceManagerTest is Test {
 
 /**
  * @title LayerServiceHandler
- * @notice Example contract 
+ * @notice Example contract
  */
-contract LayerServiceHandler is ILayerServiceHandler {
+contract LayerServiceHandler is IWavsServiceHandler {
     function handleSignedData(bytes calldata data, bytes calldata signature)
         external
     {

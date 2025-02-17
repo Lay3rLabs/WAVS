@@ -45,7 +45,7 @@ the other imported package dependencies.
 
 ## Publishing to a Warg Registry
 
-Currently, the [`lay3r:avs`](https://wa.dev/lay3r:avs) WIT package is published on [wa.dev](https://wa.dev).
+Currently, the [`wavs:worker`](https://wa.dev/wavs:worker) WIT package is published on [wa.dev](https://wa.dev).
 In order to use the `wkg publish` command, we need to first authenticate and configure with the `warg` CLI.
 
 ```bash
@@ -60,7 +60,7 @@ If your `wkg` default registry is not yet configured:
 wkg config --default-registry wa.dev
 ```
 
-To publish new versions of the `lay3r` packages, you may need to [manage account permissions](https://wa.dev/config/lay3r).
+To publish new versions of the `wavs` packages, you may need to [manage account permissions](https://wa.dev/config/wavs).
 
 When you modify the WIT package, you will need to version bump by changing the version at the top of the `.wit` file.
 
