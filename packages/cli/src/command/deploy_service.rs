@@ -130,12 +130,11 @@ impl DeployService {
         let digest = match component {
             ComponentSource::Bytecode(bytes) => http_client.upload_component(bytes).await?,
             ComponentSource::Download { url: _, digest } => digest,
-            ComponentSource::Registry {
-                registry: _,
-                // digest,
-            } => {
-                Digest::new(&[])
-            },
+            ComponentSource::Registry { registry } => {
+                http_client
+                    .upload_component(serde_json::to_vec(&registry)?)
+                    .await?
+            }
             ComponentSource::Digest(digest) => digest,
         };
 

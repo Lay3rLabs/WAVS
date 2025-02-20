@@ -39,9 +39,12 @@ impl MockE2ETestRunner {
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
         let dispatcher = ctx.rt.block_on({
-
             async move {
-                Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).await.unwrap())
+                Arc::new(
+                    Dispatcher::new(trigger_manager, engine, submission, storage_path)
+                        .await
+                        .unwrap(),
+                )
             }
         });
 

@@ -126,14 +126,9 @@ async fn main() {
             ctx.handle_deploy_result(res).unwrap();
         }
         Command::UploadComponent { component, args: _ } => {
-            let res = UploadComponent::run(
-                &ctx.config,
-                UploadComponentArgs {
-                    component_path: component,
-                },
-            )
-            .await
-            .unwrap();
+            let res = UploadComponent::run(&ctx.config, UploadComponentArgs { component })
+                .await
+                .unwrap();
 
             ctx.handle_display_result(res);
         }

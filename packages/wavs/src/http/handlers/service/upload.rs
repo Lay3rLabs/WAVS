@@ -1,6 +1,6 @@
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{body::Bytes, extract::State, response::IntoResponse, Json};
-use wavs_types::{Registry, ComponentSource, UploadServiceResponse};
+use wavs_types::{ComponentSource, Registry, UploadServiceResponse};
 
 #[axum::debug_handler]
 pub async fn handle_upload_service(
@@ -24,16 +24,20 @@ async fn inner_handle_upload_service(
             Ok(registry) => {
                 state
                     .dispatcher
-                    .store_component(ComponentSource::Registry {registry}).await
+                    .store_component(ComponentSource::Registry { registry })
+                    .await
             }
             _ => {
                 state
                     .dispatcher
-                    .store_component(ComponentSource::Bytecode(bytes.to_vec())).await
-                }
-    }})
+                    .store_component(ComponentSource::Bytecode(bytes.to_vec()))
+                    .await
+            }
+        }
+    })
     .await
-    .unwrap().await?
+    .unwrap()
+    .await?
     .into();
 
     Ok(UploadServiceResponse { digest })

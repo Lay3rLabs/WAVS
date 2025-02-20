@@ -1,5 +1,5 @@
 use anyhow::Result;
-use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
+use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
     AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, Trigger, TriggerAction,
@@ -7,6 +7,7 @@ use wavs_types::{
 };
 
 use crate::{
+    args::Component,
     config::Config,
     util::{read_component, ComponentInput},
 };
@@ -51,7 +52,7 @@ impl ExecComponent {
             fuel_limit,
         }: ExecComponentArgs,
     ) -> Result<Self> {
-        let wasm_bytes = read_component(&component_path)?;
+        let wasm_bytes = read_component(&Component::Path(component_path))?;
 
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -75,7 +76,7 @@ impl ExecComponent {
             service_id: trigger.config.service_id.clone(),
             workflow_id: trigger.config.workflow_id.clone(),
             digest: Digest::new(&wasm_bytes),
-            component: Component::new(&engine, &wasm_bytes)?,
+            component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
             engine: &engine,
             permissions: &Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,

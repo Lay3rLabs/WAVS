@@ -26,7 +26,9 @@ fn main() {
     let ctx = AppContext::new();
 
     let config_clone = config.clone();
-    let dispatcher = ctx.rt.block_on(async move {Arc::new(CoreDispatcher::new_core(&config_clone).await.unwrap())});
+    let dispatcher = ctx
+        .rt
+        .block_on(async move { Arc::new(CoreDispatcher::new_core(&config_clone).await.unwrap()) });
 
     wavs::run_server(ctx, config, dispatcher);
 }

@@ -4416,6 +4416,7 @@ dependencies = [
  "tracing-subscriber",
  "utils",
  "uuid",
+ "wasm-pkg-common",
  "wavs",
  "wavs-aggregator",
  "wavs-cli",

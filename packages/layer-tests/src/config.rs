@@ -14,6 +14,7 @@ use crate::e2e::matrix::{AnyService, CosmosService, CrossChainService, EthServic
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TestConfig {
     pub matrix: TestMatrixConfig,
+    pub registry: Option<bool>,
     pub isolated: Option<String>,
     pub all: Option<bool>,
     _log_levels: Vec<String>,
@@ -38,6 +39,7 @@ impl Default for TestConfig {
     fn default() -> Self {
         Self {
             matrix: TestMatrixConfig::default(),
+            registry: None,
             _log_levels: EnvFilter::from_default_env()
                 .to_string()
                 .split(',')

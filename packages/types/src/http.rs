@@ -53,8 +53,7 @@ pub struct TestAppResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Registry {
     pub registry: String,
-    pub name: String,
-    pub package: PackageRef
+    pub package: PackageRef,
 }
 
 // Not actually _used_ in http right now, just in CLI and in WAVS itself
@@ -69,9 +68,7 @@ pub enum ComponentSource {
     Registry {
         // TODO: what info do we need here?
         // TODO: can we support some login info for private registries, as env vars in config or something?
-        // registry: String,
-        // digest: Digest,
-        registry: Registry
+        registry: Registry,
     },
     /// An already deployed component
     Digest(Digest),

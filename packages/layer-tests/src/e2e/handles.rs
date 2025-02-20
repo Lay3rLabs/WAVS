@@ -33,7 +33,9 @@ impl AppHandles {
             cosmos_chains.push(handle);
         }
 
-        let dispatcher = ctx.rt.block_on(async move {Arc::new(CoreDispatcher::new_core(&configs.wavs).await.unwrap())});
+        let dispatcher = ctx.rt.block_on(async move {
+            Arc::new(CoreDispatcher::new_core(&configs.wavs).await.unwrap())
+        });
 
         let wavs_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
