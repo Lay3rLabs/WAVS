@@ -1,0 +1,4 @@
+.nodes/operator*
+.env
+.nodes/avs_deploy.json
+.DS_Store
