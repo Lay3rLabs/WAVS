@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use cosmos::CosmosInstance;
 use eth::EthereumInstance;
-use utils::context::AppContext;
+use utils::{context::AppContext, filesystem::workspace_path};
 use wavs::dispatcher::CoreDispatcher;
 
 use super::config::Configs;
@@ -38,7 +38,14 @@ impl AppHandles {
         let wavs_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
             let ctx = ctx.clone();
-            let config = configs.wavs.clone();
+            let mut config = configs.wavs.clone();
+            let mnemonic_path = workspace_path().join("docker/dev-desktop/.nodes/operator_mnemonic1");
+            if let Ok(contents) = std::fs::read_to_string(mnemonic_path) {
+                if let Some(mnemonic) = contents.lines().find(|l| l.starts_with("MNEMONIC_1=")) {
+                    let mnemonic = mnemonic.trim_start_matches("MNEMONIC_1=").to_string();
+                    config.submission_mnemonic = Some(mnemonic);
+                }
+            }
             move || {
                 wavs::run_server(ctx, config, dispatcher);
             }
