@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use crate::{
     e2e::digests::DigestName, example_cosmos_client::SimpleCosmosTriggerClient,
@@ -31,6 +31,7 @@ use wavs_types::{
     Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
     WorkflowID,
 };
+use anyhow::Context;
 
 #[derive(Default)]
 pub struct Services {
@@ -55,7 +56,7 @@ impl Services {
             chain_names.cosmos = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
 
             let mut eth_eigen_core = BTreeMap::default();
-            let mut eth_service_managers = BTreeMap::default();
+            let mut eth_service_managers: BTreeMap<ChainName, alloy::primitives::Address> = BTreeMap::default();
             // hrmf, "nonce too low" errors, gotta go sequentially...
 
             for chain in chain_names
@@ -64,37 +65,62 @@ impl Services {
                 .chain(chain_names.eth_aggregator.iter())
             {
                 let chain = chain.clone();
-                tracing::info!("Deploying Eigen Core contracts on {chain}");
-                let DeployEigenCore {
-                    addresses: core_addresses,
-                    ..
-                } = DeployEigenCore::run(
-                    &clients.cli_ctx,
-                    DeployEigenCoreArgs {
-                        register_operator: true,
-                        chain: chain.clone(),
-                    },
-                )
-                .await
-                .unwrap();
+                // tracing::info!("Deploying Eigen Core contracts on {chain}");
+                // let DeployEigenCore {
+                //     addresses: core_addresses,
+                //     ..
+                // } = DeployEigenCore::run(
+                //     &clients.cli_ctx,
+                //     DeployEigenCoreArgs {
+                //         register_operator: true,
+                //         chain: chain.clone(),
+                //     },
+                // )
+                // .await
+                // .unwrap();
 
-                eth_eigen_core.insert(chain.clone(), core_addresses);
+                // eth_eigen_core.insert(chain.clone(), core_addresses);
 
-                tracing::info!("Deploying Eigen Service manager on {chain}");
-                let DeployEigenServiceManager {
-                    address: service_manager_address,
-                    ..
-                } = DeployEigenServiceManager::run(
-                    &clients.cli_ctx,
-                    DeployEigenServiceManagerArgs {
-                        chain: chain.clone(),
-                        register_operator: true,
-                    },
-                )
-                .await
-                .unwrap();
+                // tracing::info!("Deploying Eigen Service manager on {chain}");
+                // let DeployEigenServiceManager {
+                //     address: service_manager_address,
+                //     ..
+                // } = DeployEigenServiceManager::run(
+                //     &clients.cli_ctx,
+                //     DeployEigenServiceManagerArgs {
+                //         chain: chain.clone(),
+                //         register_operator: true,
+                //     },
+                // )
+                // .await
+                // .unwrap();
+                
+                // Read service manager address from avs_deploy.json
+                let service_manager_address = alloy::primitives::Address::ZERO;
+                let avs_deploy_path = std::path::Path::new("docker/dev-desktop/wavs-el-env/.nodes/avs_deploy.json");
+                let service_manager_address = if avs_deploy_path.exists() {
+                    let file = std::fs::File::open(avs_deploy_path)
+                        .expect("Failed to open avs_deploy.json");
+                    let json: serde_json::Value = serde_json::from_reader(file)
+                        .expect("Failed to parse avs_deploy.json");
+                    let address = match json["addresses"]["layerServiceManager"].as_str() {
+                        Some(addr) => match alloy::primitives::Address::from_str(addr) {
+                            Ok(parsed) => parsed,
+                            Err(e) => {
+                                tracing::error!("Failed to parse address: {}", e);
+                                service_manager_address
+                            }
+                        },
+                        None => {
+                            tracing::error!("Failed to get layerServiceManager address from JSON");
+                            service_manager_address
+                        }
+                    };
+                    eth_service_managers.insert(chain.clone(), service_manager_address);
+                } else {
+                    panic!("avs_deploy.json not found at {}", avs_deploy_path.display());
+                };
 
-                eth_service_managers.insert(chain.clone(), service_manager_address);
             }
 
             let all_services = configs
