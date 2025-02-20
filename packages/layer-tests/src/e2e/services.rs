@@ -55,7 +55,7 @@ impl Services {
 
             chain_names.cosmos = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
 
-            let mut eth_eigen_core = BTreeMap::default();
+            let eth_eigen_core = BTreeMap::default();
             let mut eth_service_managers: BTreeMap<ChainName, alloy::primitives::Address> = BTreeMap::default();
             // hrmf, "nonce too low" errors, gotta go sequentially...
 
@@ -98,7 +98,7 @@ impl Services {
                 // Read service manager address from avs_deploy.json
                 let service_manager_address = alloy::primitives::Address::ZERO;
                 let avs_deploy_path = std::path::Path::new("docker/dev-desktop/wavs-el-env/.nodes/avs_deploy.json");
-                let service_manager_address = if avs_deploy_path.exists() {
+                if avs_deploy_path.exists() {
                     let file = std::fs::File::open(avs_deploy_path)
                         .expect("Failed to open avs_deploy.json");
                     let json: serde_json::Value = serde_json::from_reader(file)
@@ -116,10 +116,10 @@ impl Services {
                             service_manager_address
                         }
                     };
-                    eth_service_managers.insert(chain.clone(), service_manager_address);
+                    eth_service_managers.insert(chain.clone(), address);
                 } else {
                     panic!("avs_deploy.json not found at {}", avs_deploy_path.display());
-                };
+                }
 
             }
 
