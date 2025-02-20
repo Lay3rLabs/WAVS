@@ -41,8 +41,14 @@ Edit `layer-tests.toml`:
   ```
 
 ## Running Tests
+Navigate to the `/docker/dev-desktop/` directory: 
 
-Navigate to the test package directory and execute tests:
+```sh
+docker compose build 
+docker compose up 
+```
+
+Open a new terminal and navigate to the test package directory and execute tests:
 
 ```sh
 cd packages/layer-tests
