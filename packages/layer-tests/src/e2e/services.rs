@@ -64,37 +64,6 @@ impl Services {
                 .chain(chain_names.eth_aggregator.iter())
             {
                 let chain = chain.clone();
-                // tracing::info!("Deploying Eigen Core contracts on {chain}");
-                // let DeployEigenCore {
-                //     addresses: core_addresses,
-                //     ..
-                // } = DeployEigenCore::run(
-                //     &clients.cli_ctx,
-                //     DeployEigenCoreArgs {
-                //         register_operator: true,
-                //         chain: chain.clone(),
-                //     },
-                // )
-                // .await
-                // .unwrap();
-
-                // eth_eigen_core.insert(chain.clone(), core_addresses);
-
-                // tracing::info!("Deploying Eigen Service manager on {chain}");
-                // let DeployEigenServiceManager {
-                //     address: service_manager_address,
-                //     ..
-                // } = DeployEigenServiceManager::run(
-                //     &clients.cli_ctx,
-                //     DeployEigenServiceManagerArgs {
-                //         chain: chain.clone(),
-                //         register_operator: true,
-                //     },
-                // )
-                // .await
-                // .unwrap();
-                
-                // Read service manager address from avs_deploy.json
                 let service_manager_address = alloy::primitives::Address::ZERO;
                 let avs_deploy_path =
                     std::path::Path::new("docker/dev-desktop/wavs-el-env/.nodes/avs_deploy.json");
