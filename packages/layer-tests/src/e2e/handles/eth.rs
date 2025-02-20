@@ -33,6 +33,7 @@ impl EthereumInstance {
             port,
             chain_id: chain_config.chain_id.clone(),
             block_time: configs.anvil_interval_seconds,
+            fork_url: chain_config.http_endpoint.clone(),
         }
         .spawn();
 
@@ -72,16 +73,24 @@ struct LameAnvilInstanceBuilder {
     pub port: u16,
     pub chain_id: String,
     pub block_time: Option<u64>,
+    pub fork_url: Option<String>,
 }
 
 impl LameAnvilInstanceBuilder {
     pub fn spawn(self) -> LameAnvilInstance {
         let mut args = vec![
+            "--host".to_string(),
+            "0.0.0.0".to_string(),
             "-p".to_string(),
             self.port.to_string(),
             "--chain-id".to_string(),
-            self.chain_id,
+            self.chain_id.clone(),
         ];
+
+        // Add fork URL if provided in chain config
+        if let Some(fork_url) = self.fork_url {
+            args.extend_from_slice(&["--fork-url".to_string(), fork_url]);
+        }
 
         if let Some(block_time) = self.block_time {
             args.push("-b".to_string());
