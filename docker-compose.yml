@@ -15,7 +15,7 @@ services:
       - "8545:8545"
     environment:
       ANVIL_IP_ADDR: 0.0.0.0
-    command: ["anvil", "--no-cors"]
+    command: ["anvil", "--no-cors", "--chain-id", "17000" ,"--fork-url" ,"<your-rpc-url>"]
 
   # The main instance all WAVS interaction will happen from
   wavs:

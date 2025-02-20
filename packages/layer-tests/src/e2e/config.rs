@@ -47,7 +47,8 @@ impl From<TestConfig> for Configs {
         let mut push_eth_chain = |aggregator: bool| {
             let http_endpoint = format!("http://127.0.0.1:{}", eth_port);
             let ws_endpoint = format!("ws://127.0.0.1:{}", eth_port);
-            let chain_id = eth_chain_id.to_string();
+            // let chain_id = eth_chain_id.to_string();
+            let chain_id = "17000".to_string();
 
             let chain_config = EthereumChainConfig {
                 chain_id: chain_id.to_string(),
