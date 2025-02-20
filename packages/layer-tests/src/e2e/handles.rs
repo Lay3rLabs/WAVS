@@ -46,6 +46,9 @@ impl AppHandles {
                     config.submission_mnemonic = Some(mnemonic);
                 }
             }
+            for chain in config.chains.eth.values_mut() {
+                chain.chain_id = "17000".to_string();
+            }
             move || {
                 wavs::run_server(ctx, config, dispatcher);
             }
