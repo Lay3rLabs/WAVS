@@ -20,7 +20,6 @@ use utils::{
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
     command::{
-        deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
         deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
         deploy_service::{DeployService, DeployServiceArgs},
         deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
@@ -31,7 +30,6 @@ use wavs_types::{
     Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
     WorkflowID,
 };
-use anyhow::Context;
 
 #[derive(Default)]
 pub struct Services {
