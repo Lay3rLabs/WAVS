@@ -39,7 +39,8 @@ impl AppHandles {
             let dispatcher = dispatcher.clone();
             let ctx = ctx.clone();
             let mut config = configs.wavs.clone();
-            let mnemonic_path = workspace_path().join("docker/dev-desktop/.nodes/operator_mnemonic1");
+            let mnemonic_path =
+                workspace_path().join("docker/dev-desktop/.nodes/operator_mnemonic1");
             if let Ok(contents) = std::fs::read_to_string(mnemonic_path) {
                 if let Some(mnemonic) = contents.lines().find(|l| l.starts_with("MNEMONIC_1=")) {
                     let mnemonic = mnemonic.trim_start_matches("MNEMONIC_1=").to_string();
