@@ -31,7 +31,7 @@ impl std::fmt::Display for ExecComponent {
                 if let Ok(s) = std::str::from_utf8(bytes) {
                     write!(f, "\n\nResult (utf8): \n{}", s)?;
                 }
-            } 
+            }
             None => write!(f, "\n\nResult: None")?,
         }
 

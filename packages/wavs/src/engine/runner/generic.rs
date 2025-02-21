@@ -51,7 +51,6 @@ pub trait EngineRunner: Send + Sync {
                 .execute(component, workflow.fuel_limit, action, &service.config)?;
 
         if let Some(wasi_result) = wasi_result {
-
             let service_id = trigger_config.service_id.clone();
             let workflow_id = trigger_config.workflow_id.clone();
 
