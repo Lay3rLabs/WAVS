@@ -93,12 +93,12 @@ impl Engine for MockEngine {
             .get(&component.wasm)
             .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
         let result = fx.execute(get_mock_trigger_data(&trigger.data))?;
-        Ok(Some(result))
+        Ok(result)
     }
 }
 
 pub trait Function: Send + Sync + 'static {
-    fn execute(&self, request: Vec<u8>) -> Result<Vec<u8>, EngineError>;
+    fn execute(&self, request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError>;
 }
 
 #[cfg(test)]
@@ -128,8 +128,8 @@ mod test {
     pub struct FixedResult(Vec<u8>);
 
     impl Function for FixedResult {
-        fn execute(&self, _request: Vec<u8>) -> Result<Vec<u8>, EngineError> {
-            Ok(self.0.clone())
+        fn execute(&self, _request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError> {
+            Ok(Some(self.0.clone()))
         }
     }
 
