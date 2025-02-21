@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use utils::filesystem::workspace_path;
 
@@ -55,7 +55,9 @@ cfg_if::cfg_if! {
 
                     Ok(std::fs::read(path)?)
                 },
-                Component::Registry(_) => todo!(),
+                Component::Registry(registry) => {
+                    serde_json::to_vec(registry).map_err(|e| anyhow!(e))
+                },
             }
         }
     } else {
@@ -65,7 +67,9 @@ cfg_if::cfg_if! {
                     let path = PathBuf::from(shellexpand::tilde(&path).to_string());
                     Ok(std::fs::read(path)?)
                 }
-                Component::Registry(_) => todo!(),
+                Component::Registry(registry) => {
+                    serde_json::to_vec(registry).map_err(|e| anyhow!(e))
+                },
             }
         }
     }

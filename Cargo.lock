@@ -8781,6 +8781,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.8",
  "thiserror 2.0.11",
+ "wasm-pkg-client",
  "wasm-pkg-common",
 ]
 

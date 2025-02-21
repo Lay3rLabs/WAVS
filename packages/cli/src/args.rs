@@ -11,6 +11,7 @@ use wavs_types::{ChainName, Registry, Service, ServiceConfig};
 use crate::config::Config;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
 pub enum Component {
     Path(String),
     Registry(Registry),

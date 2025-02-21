@@ -1,8 +1,8 @@
 use std::ops::Bound;
 
 use crate::AppContext;
-use wavs_types::{ComponentSource, Digest, Service, ServiceID};
 use async_trait::async_trait;
+use wavs_types::{ComponentSource, Digest, Service, ServiceID};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".

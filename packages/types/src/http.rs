@@ -1,4 +1,5 @@
 use std::{fmt, ops::Deref, str::FromStr};
+use wasm_pkg_client::RegistryMapping;
 
 use serde::{
     de::{self, Visitor},
@@ -7,8 +8,8 @@ use serde::{
 
 use crate::digest::Digest;
 
-use wasm_pkg_common::package::PackageRef;
 use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger, TriggerData};
+use wasm_pkg_common::package::{PackageRef, Version};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
     pub service: Service,
@@ -52,7 +53,8 @@ pub struct TestAppResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Registry {
-    pub registry: String,
+    pub domain: Option<RegistryMapping>,
+    pub version: Option<Version>,
     pub package: PackageRef,
 }
 

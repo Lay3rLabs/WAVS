@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use futures::TryStreamExt;
 use redb::ReadableTable;
-use wasm_pkg_client::caching::FileCache;
 use std::ops::Bound;
 use std::path::Path;
 use std::sync::Arc;
@@ -9,6 +8,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
+use wasm_pkg_client::caching::FileCache;
 use wavs_types::{
     ComponentSource, Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig,
 };
@@ -22,7 +22,7 @@ use crate::engine::runner::EngineRunner;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
-use wasm_pkg_client::{Client, caching::CachingClient};
+use wasm_pkg_client::{caching::CachingClient, Client};
 use wasm_pkg_client::Config;
 /// This should auto-derive clone if T, E, S: Clone
 #[derive(Clone)]
@@ -31,7 +31,6 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
-    pub registry: CachingClient<FileCache>
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
@@ -42,18 +41,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         db_storage_path: impl AsRef<Path>,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
-        let config = Config::global_defaults().await.unwrap();
-        let client = Client::new(config);
-        let cache_path = FileCache::global_cache_path().unwrap();
-        let cache = FileCache::new(cache_path).await.unwrap();
-        let registry = CachingClient::new(Some(client), cache);
 
         Ok(Dispatcher {
             triggers,
             engine,
             submission,
             storage,
-            registry,
         })
     }
 }
@@ -136,21 +129,27 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let bytecode = match source {
             ComponentSource::Bytecode(code) => code,
             ComponentSource::Registry { registry } => {
-                let mut versions = self
-                    .registry
-                    .list_all_versions(&registry.package)
-                    .await
-                    .unwrap();
-                versions.sort_by(|a, b| a.version.cmp_precedence(&b.version));
-                let latest = &versions[&versions.len() - 1];
+                let mut config = Config::global_defaults().await.unwrap();
+                if let Some(domain) = &registry.domain {
+                    config.set_package_registry_override(registry.package.clone(), domain.clone());
+                }
+                let client = Client::new(config);
+                let cache_path = FileCache::global_cache_path().unwrap();
+                let cache = FileCache::new(cache_path).await.unwrap();
+                let client = CachingClient::new(Some(client), cache);
+                let version = if let Some(v) = &registry.version {
+                    v.clone()
+                } else {
+                    let mut versions = client.list_all_versions(&registry.package).await.unwrap();
+                    versions.sort_by(|a, b| a.version.cmp_precedence(&b.version));
+                    versions[&versions.len() - 1].version.clone()
+                };
 
-                let release = self
-                    .registry
-                    .get_release(&registry.package, &latest.version)
+                let release = client
+                    .get_release(&registry.package, &version)
                     .await
                     .unwrap();
-                let mut content_stream = self
-                    .registry
+                let mut content_stream = client
                     .get_content(&registry.package, &release)
                     .await
                     .unwrap();

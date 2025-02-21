@@ -102,7 +102,8 @@ async fn get_digest(
             DigestName::EchoData => todo!(),
             DigestName::Permissions => todo!(),
             DigestName::Square => Registry {
-                registry: "wa.dev".to_string(),
+                domain: None,
+                version: None,
                 package: PackageRef::new(
                     "macovedj".to_string().try_into().unwrap(),
                     "square".to_string().try_into().unwrap(),

@@ -65,6 +65,10 @@ async fn main() {
             args: _,
         } => {
             let component = ComponentSource::Bytecode(read_component(&component).unwrap());
+            // let component = match component {
+            //     wavs_cli::args::Component::Path(_) => todo!(),
+            //     wavs_cli::args::Component::Registry(registry) => todo!(),
+            // }
 
             let trigger = match (trigger, &trigger_address) {
                 (Some(trigger), _) => trigger,
