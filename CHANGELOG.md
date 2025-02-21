@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-rc1]
+
+### Changed
+
+- components now return optional results. If `Ok(None)`, the workflow gracefully exits early without submission
+
 ## [v0.3.0-beta]
 
 ### Added
