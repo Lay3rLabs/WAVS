@@ -1,4 +1,4 @@
-package wavs:worker@0.3.0-beta;
+package wavs:worker@0.3.0-rc1;
 
 use wasi:io/poll@0.2.0;
 use wasi:clocks/monotonic-clock@0.2.0;
@@ -116,5 +116,5 @@ world layer-trigger-world {
 
   use layer-types.{trigger-action};
 
-  export run: func(trigger-action: trigger-action) -> result<list<u8>, string>;
+  export run: func(trigger-action: trigger-action) -> result<option<list<u8>>, string>;
 }
