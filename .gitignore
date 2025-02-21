@@ -13,3 +13,4 @@ out
 deployments
 .docker
 artifacts
+sdk/*.wasm
