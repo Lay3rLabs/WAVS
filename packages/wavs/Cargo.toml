@@ -1,6 +1,6 @@
 [package]
 name = "wavs"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 description = "WAVS Node Server"
 edition.workspace = true
 authors.workspace = true
