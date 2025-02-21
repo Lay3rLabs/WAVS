@@ -6,7 +6,7 @@ use crate::{EngineError, InstanceDeps};
 pub async fn execute(
     deps: &mut InstanceDeps,
     trigger: TriggerAction,
-) -> Result<Vec<u8>, EngineError> {
+) -> Result<Option<Vec<u8>>, EngineError> {
     let service_id = trigger.config.service_id.clone();
     let workflow_id = trigger.config.workflow_id.clone();
     let input: crate::bindings::world::wavs::worker::layer_types::TriggerAction =
