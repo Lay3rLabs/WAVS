@@ -11,7 +11,7 @@ use wstd::runtime::block_on;
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<Vec<u8>>, String> {
         block_on(async move {
             let (trigger_id, req) = decode_trigger_event(trigger_action.data)?;
 
@@ -57,6 +57,7 @@ impl Guest for Component {
                 .map(|output| encode_trigger_output(trigger_id, output))
         })
         .map_err(|e| e.to_string())
+        .map(Some)
     }
 }
 
