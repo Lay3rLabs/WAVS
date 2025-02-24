@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning].
 
 ### Changed
 
-- components now return optional results. If `Ok(None)`, the workflow gracefully exits early without submission
+- components now return optional results. If `Ok(None)`, the workflow gracefully exits early without submission.
+  You will need to migrate WASI components such that they export `fn run(a: TriggerAction) -> Result<Option<Vec<u8>>, String>` (the option is new here)
 
 ## [v0.3.0-beta]
 
