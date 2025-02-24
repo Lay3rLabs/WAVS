@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0-rc1]
+
+### Changed
+
+- components now return optional results. If `Ok(None)`, the workflow gracefully exits early without submission.
+  You will need to migrate WASI components such that they export `fn run(a: TriggerAction) -> Result<Option<Vec<u8>>, String>` (the option is new here)
+
 ## [v0.3.0-beta]
 
 ### Added
@@ -147,7 +154,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-beta...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-rc1...HEAD
+[v0.3.0-rc1]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-beta...v0.3.0-rc1
 [v0.3.0-beta]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha10...v0.3.0-beta
 [v0.3.0-alpha10]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha9...v0.3.0-alpha10
 [v0.3.0-alpha9]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha8...v0.3.0-alpha9

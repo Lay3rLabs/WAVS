@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<Vec<u8>>, String> {
         block_on(async move {
             let (trigger_id, req) =
                 decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
@@ -33,7 +33,7 @@ impl Guest for Component {
             let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
             let resp = inner_run_task(req).await.map_err(|e| e.to_string())?;
             let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
-            Ok(encode_trigger_output(trigger_id, resp))
+            Ok(Some(encode_trigger_output(trigger_id, resp)))
         })
     }
 }

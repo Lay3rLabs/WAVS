@@ -50,17 +50,23 @@ pub trait EngineRunner: Send + Sync {
             self.engine()
                 .execute(component, workflow.fuel_limit, action, &service.config)?;
 
-        let service_id = trigger_config.service_id.clone();
-        let workflow_id = trigger_config.workflow_id.clone();
+        // If Ok(Some(x)), send the result down the pipeline to the submit processor
+        // If Ok(None), just end early here, performing no action (but updating local state if needed)
+        if let Some(wasi_result) = wasi_result {
+            let service_id = trigger_config.service_id.clone();
+            let workflow_id = trigger_config.workflow_id.clone();
 
-        let msg = ChainMessage {
-            trigger_config,
-            wasi_result,
-            submit: workflow.submit.clone(),
-        };
+            let msg = ChainMessage {
+                trigger_config,
+                wasi_result,
+                submit: workflow.submit.clone(),
+            };
 
-        result_sender
-            .blocking_send(msg)
-            .map_err(|_| EngineError::WasiResultSend(service_id, workflow_id))
+            result_sender
+                .blocking_send(msg)
+                .map_err(|_| EngineError::WasiResultSend(service_id, workflow_id))
+        } else {
+            Ok(())
+        }
     }
 }

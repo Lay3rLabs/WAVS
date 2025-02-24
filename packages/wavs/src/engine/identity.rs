@@ -33,8 +33,8 @@ impl Engine for IdentityEngine {
         _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
-    ) -> Result<Vec<u8>, EngineError> {
-        Ok(get_mock_trigger_data(&trigger.data))
+    ) -> Result<Option<Vec<u8>>, EngineError> {
+        Ok(Some(get_mock_trigger_data(&trigger.data)))
     }
 }
 
@@ -72,6 +72,6 @@ mod test {
                 &ServiceConfig::default(),
             )
             .unwrap();
-        assert_eq!(request, result);
+        assert_eq!(request, result.unwrap());
     }
 }
