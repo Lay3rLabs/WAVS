@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
-use wasm_pkg_common::package::PackageRef;
+use wasm_pkg_common::{config::RegistryMapping, package::PackageRef, registry::Registry as WkgRegistry};
 use wavs_cli::clients::HttpClient;
 use wavs_types::{Digest, Registry};
 
@@ -102,7 +102,7 @@ async fn get_digest(
             DigestName::EchoData => todo!(),
             DigestName::Permissions => todo!(),
             DigestName::Square => Registry {
-                domain: None,
+                domain: Some(RegistryMapping::Registry(WkgRegistry::try_from("ghcr.io".to_string()).unwrap())),
                 version: None,
                 package: PackageRef::new(
                     "macovedj".to_string().try_into().unwrap(),
