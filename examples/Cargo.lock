@@ -4757,7 +4757,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-wasi-chain"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",

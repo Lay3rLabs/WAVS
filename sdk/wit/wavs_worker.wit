@@ -12,7 +12,7 @@ interface layer-types {
     bech32-addr: string,
     // prefix is the first part of the bech32 address
     prefix-len: u32
-  } 
+  }
 
   record cosmos-event {
     ty: string,
@@ -105,12 +105,14 @@ interface layer-types {
 }
 
 world layer-trigger-world {
+  include wasi:cli/imports@0.2.0;
+
   import host: interface {
     use layer-types.{eth-chain-config, cosmos-chain-config, log-level};
 
     get-eth-chain-config: func(chain-name: string) -> option<eth-chain-config>;
     get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
-    
+
     log: func(level: log-level, message: string);
   }
 
