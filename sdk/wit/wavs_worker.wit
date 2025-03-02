@@ -106,6 +106,7 @@ interface layer-types {
 
 world layer-trigger-world {
   include wasi:cli/imports@0.2.0;
+  include wasi:http/proxy@0.2.0;
 
   import host: interface {
     use layer-types.{eth-chain-config, cosmos-chain-config, log-level};
