@@ -131,7 +131,8 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let bytecode = match source {
             ComponentSource::Bytecode(code) => code,
             ComponentSource::Registry { registry } => {
-                let mut config = Config::global_defaults().await?;
+                let config_toml = r#"default_registry = "wa.dev""#;
+                let mut config = Config::from_toml(config_toml)?;
                 if let Some(domain) = &registry.domain {
                     config.set_package_registry_override(registry.package.clone(), domain.clone());
                 }
