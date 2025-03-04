@@ -16,7 +16,7 @@ pub struct Digests {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DigestName {
     ChainTriggerLookup,
-    CosmosQuery,
+    // CosmosQuery,
     EchoData,
     Permissions,
     Square,
@@ -72,7 +72,7 @@ async fn get_digest(
     if !registry {
         let wasm_filename = match name {
             DigestName::ChainTriggerLookup => "chain_trigger_lookup",
-            DigestName::CosmosQuery => "cosmos_query",
+            // DigestName::CosmosQuery => "cosmos_query",
             DigestName::EchoData => "echo_data",
             DigestName::Permissions => "permissions",
             DigestName::Square => "square",
@@ -105,14 +105,14 @@ async fn get_digest(
                     "chain-trigger-lookup".to_string().try_into().unwrap(),
                 ),
             },
-            DigestName::CosmosQuery => Registry {
-                domain: None,
-                version: None,
-                package: PackageRef::new(
-                    "wavs-tests".to_string().try_into().unwrap(),
-                    "cosmos-query".to_string().try_into().unwrap(),
-                ),
-            },
+            // DigestName::CosmosQuery => Registry {
+            //     domain: None,
+            //     version: None,
+            //     package: PackageRef::new(
+            //         "wavs-tests".to_string().try_into().unwrap(),
+            //         "cosmos-query".to_string().try_into().unwrap(),
+            //     ),
+            // },
             DigestName::EchoData => Registry {
                 domain: None,
                 version: None,

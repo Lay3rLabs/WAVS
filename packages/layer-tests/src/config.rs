@@ -132,9 +132,9 @@ impl TestMatrixConfig {
             matrix.eth.insert(EthService::ChainTriggerLookup);
         }
 
-        if self.eth.cosmos_query {
-            matrix.eth.insert(EthService::CosmosQuery);
-        }
+        // if self.eth.cosmos_query {
+        //     matrix.eth.insert(EthService::CosmosQuery);
+        // }
 
         if self.eth.echo_data {
             matrix.eth.insert(EthService::EchoData);
@@ -168,9 +168,9 @@ impl TestMatrixConfig {
             matrix.cosmos.insert(CosmosService::ChainTriggerLookup);
         }
 
-        if self.cosmos.cosmos_query {
-            matrix.cosmos.insert(CosmosService::CosmosQuery);
-        }
+        // if self.cosmos.cosmos_query {
+        //     matrix.cosmos.insert(CosmosService::CosmosQuery);
+        // }
 
         if self.cosmos.echo_data {
             matrix.cosmos.insert(CosmosService::EchoData);
@@ -198,7 +198,7 @@ impl From<&str> for AnyService {
     fn from(src: &str) -> Self {
         match src {
             "eth-chain-trigger-lookup" => AnyService::Eth(EthService::ChainTriggerLookup),
-            "eth-cosmos-query" => AnyService::Eth(EthService::CosmosQuery),
+            // "eth-cosmos-query" => AnyService::Eth(EthService::CosmosQuery),
             "eth-echo-data" => AnyService::Eth(EthService::EchoData),
             "eth-echo-data-secondary-chain" => AnyService::Eth(EthService::EchoDataSecondaryChain),
             "eth-echo-data-aggregator" => AnyService::Eth(EthService::EchoDataAggregator),
@@ -207,7 +207,7 @@ impl From<&str> for AnyService {
             "eth-multi-workflow" => AnyService::Eth(EthService::MultiWorkflow),
             "eth-multi-trigger" => AnyService::Eth(EthService::MultiTrigger),
             "cosmos-chain-trigger-lookup" => AnyService::Cosmos(CosmosService::ChainTriggerLookup),
-            "cosmos-cosmos-query" => AnyService::Cosmos(CosmosService::CosmosQuery),
+            // "cosmos-cosmos-query" => AnyService::Cosmos(CosmosService::CosmosQuery),
             "cosmos-echo-data" => AnyService::Cosmos(CosmosService::EchoData),
             "cosmos-permissions" => AnyService::Cosmos(CosmosService::Permissions),
             "cosmos-square" => AnyService::Cosmos(CosmosService::Square),

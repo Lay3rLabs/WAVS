@@ -1,6 +1,7 @@
 # Run all the tests
-registry = true
 all = true
+registry = true
+
 # Run just one test (cannot be enabled at the same time as all)
 
 # See matrix.rs for all the available options
