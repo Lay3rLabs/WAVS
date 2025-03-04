@@ -22,8 +22,8 @@ use crate::engine::runner::EngineRunner;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
-use wasm_pkg_client::{caching::CachingClient, Client};
 use wasm_pkg_client::Config;
+use wasm_pkg_client::{caching::CachingClient, Client};
 use wasm_pkg_common::Error as RegistryError;
 /// This should auto-derive clone if T, E, S: Clone
 #[derive(Clone)]
@@ -35,7 +35,7 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
-    pub async fn new(
+    pub fn new(
         triggers: T,
         engine: E,
         submission: S,
@@ -147,12 +147,8 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
                     versions[&versions.len() - 1].version.clone()
                 };
 
-                let release = client
-                    .get_release(&registry.package, &version)
-                    .await?;
-                let mut content_stream = client
-                    .get_content(&registry.package, &release)
-                    .await?;
+                let release = client.get_release(&registry.package, &version).await?;
+                let mut content_stream = client.get_content(&registry.package, &release).await?;
                 let mut content = Vec::new();
                 while let Some(chunk) = content_stream.try_next().await? {
                     content.append(&mut chunk.to_vec());
@@ -340,7 +336,7 @@ pub enum DispatcherError {
     Submission(#[from] SubmissionError),
 
     #[error("Registry error: {0}")]
-    Registry(#[from] RegistryError)
+    Registry(#[from] RegistryError),
 }
 
 #[cfg(test)]
@@ -384,16 +380,13 @@ mod tests {
         let ctx = AppContext::new();
 
         let action_clone = action.clone();
-        let dispatcher = ctx.rt.block_on(async move {
-            Dispatcher::new(
-                MockTriggerManagerVec::new().with_actions(vec![action_clone]),
-                SingleEngineRunner::new(IdentityEngine),
-                MockSubmission::new(),
-                db_file.as_ref(),
-            )
-            .await
-            .unwrap()
-        });
+        let dispatcher = Dispatcher::new(
+            MockTriggerManagerVec::new().with_actions(vec![action_clone]),
+            SingleEngineRunner::new(IdentityEngine),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
 
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
@@ -480,16 +473,13 @@ mod tests {
 
         let ctx = AppContext::new();
         // Set up the dispatcher
-        let dispatcher = ctx.rt.block_on(async move {
-            Dispatcher::new(
-                MockTriggerManagerVec::new().with_actions(actions),
-                SingleEngineRunner::new(MockEngine::new()),
-                MockSubmission::new(),
-                db_file.as_ref(),
-            )
-            .await
-            .unwrap()
-        });
+        let dispatcher = Dispatcher::new(
+            MockTriggerManagerVec::new().with_actions(actions),
+            SingleEngineRunner::new(MockEngine::new()),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");
@@ -572,16 +562,13 @@ mod tests {
 
         let ctx = AppContext::new();
         // Set up the dispatcher
-        let dispatcher = ctx.rt.block_on(async move {
-            Dispatcher::new(
-                MockTriggerManagerVec::new().with_actions(actions),
-                MultiEngineRunner::new(MockEngine::new(), 4),
-                MockSubmission::new(),
-                db_file.as_ref(),
-            )
-            .await
-            .unwrap()
-        });
+        let dispatcher = Dispatcher::new(
+            MockTriggerManagerVec::new().with_actions(actions),
+            MultiEngineRunner::new(MockEngine::new(), 4),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");

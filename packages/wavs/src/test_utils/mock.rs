@@ -41,9 +41,7 @@ impl MockE2ETestRunner {
         let dispatcher = ctx.rt.block_on({
             async move {
                 Arc::new(
-                    Dispatcher::new(trigger_manager, engine, submission, storage_path)
-                        .await
-                        .unwrap(),
+                    Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap(),
                 )
             }
         });
