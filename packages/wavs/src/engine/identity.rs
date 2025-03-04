@@ -37,7 +37,7 @@ impl Engine for IdentityEngine {
         Ok(Some(get_mock_trigger_data(&trigger.data)))
     }
 
-    fn reset_storage(&self) -> Result<(), EngineError> {
+    fn remove_wasm(&self, _digest: &Digest) -> Result<(), EngineError> {
         Ok(())
     }
 }

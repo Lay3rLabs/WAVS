@@ -96,7 +96,9 @@ impl Engine for MockEngine {
         Ok(result)
     }
 
-    fn reset_storage(&self) -> Result<(), EngineError> {
+    fn remove_wasm(&self, digest: &Digest) -> Result<(), EngineError> {
+        self.digests.write().unwrap().remove(digest);
+
         Ok(())
     }
 }

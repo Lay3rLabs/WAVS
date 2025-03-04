@@ -59,6 +59,12 @@ impl CAStorage for MemoryStorage {
         let it: Vec<_> = tree.keys().map(|d| Ok(d.clone())).collect();
         Ok(it.into_iter())
     }
+
+    fn remove_file(&self, digest: &Digest) -> Result<(), CAStorageError> {
+        let mut tree = self.data.write()?;
+        tree.remove(digest);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
