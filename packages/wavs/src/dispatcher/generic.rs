@@ -1,3 +1,4 @@
+use anyhow::Context;
 use async_trait::async_trait;
 use futures::TryStreamExt;
 use redb::ReadableTable;
@@ -130,13 +131,14 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let bytecode = match source {
             ComponentSource::Bytecode(code) => code,
             ComponentSource::Registry { registry } => {
-                let mut config = Config::global_defaults().await.unwrap();
+                let mut config = Config::global_defaults().await?;
                 if let Some(domain) = &registry.domain {
                     config.set_package_registry_override(registry.package.clone(), domain.clone());
                 }
                 let client = Client::new(config);
-                let cache_path = FileCache::global_cache_path().unwrap();
-                let cache = FileCache::new(cache_path).await.unwrap();
+                let cache_path =
+                    FileCache::global_cache_path().context("couldn't find global cache path")?;
+                let cache = FileCache::new(cache_path).await?;
                 let client = CachingClient::new(Some(client), cache);
                 // Use version provided if present, otherwise default to latest
                 let version = if let Some(v) = &registry.version {
@@ -337,6 +339,9 @@ pub enum DispatcherError {
 
     #[error("Registry error: {0}")]
     Registry(#[from] RegistryError),
+
+    #[error("Registry cache path error: {0}")]
+    RegistryCachePath(#[from] anyhow::Error),
 }
 
 #[cfg(test)]
@@ -560,7 +565,6 @@ mod tests {
             },
         ];
 
-        let ctx = AppContext::new();
         // Set up the dispatcher
         let dispatcher = Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(actions),
