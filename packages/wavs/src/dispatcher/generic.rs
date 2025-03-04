@@ -24,6 +24,7 @@ use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
 use wasm_pkg_client::{caching::CachingClient, Client};
 use wasm_pkg_client::Config;
+use wasm_pkg_common::Error as RegistryError;
 /// This should auto-derive clone if T, E, S: Clone
 #[derive(Clone)]
 pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
@@ -137,24 +138,23 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
                 let cache_path = FileCache::global_cache_path().unwrap();
                 let cache = FileCache::new(cache_path).await.unwrap();
                 let client = CachingClient::new(Some(client), cache);
+                // Use version provided if present, otherwise default to latest
                 let version = if let Some(v) = &registry.version {
                     v.clone()
                 } else {
-                    let mut versions = client.list_all_versions(&registry.package).await.unwrap();
+                    let mut versions = client.list_all_versions(&registry.package).await?;
                     versions.sort_by(|a, b| a.version.cmp_precedence(&b.version));
                     versions[&versions.len() - 1].version.clone()
                 };
 
                 let release = client
                     .get_release(&registry.package, &version)
-                    .await
-                    .unwrap();
+                    .await?;
                 let mut content_stream = client
                     .get_content(&registry.package, &release)
-                    .await
-                    .unwrap();
+                    .await?;
                 let mut content = Vec::new();
-                while let Some(chunk) = content_stream.try_next().await.unwrap() {
+                while let Some(chunk) = content_stream.try_next().await? {
                     content.append(&mut chunk.to_vec());
                 }
                 content
@@ -338,6 +338,9 @@ pub enum DispatcherError {
 
     #[error("Submission: {0}")]
     Submission(#[from] SubmissionError),
+
+    #[error("Registry error: {0}")]
+    Registry(#[from] RegistryError)
 }
 
 #[cfg(test)]
