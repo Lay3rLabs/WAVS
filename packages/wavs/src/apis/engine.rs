@@ -19,7 +19,7 @@ pub trait Engine: Send + Sync {
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<Vec<u8>, EngineError>;
+    ) -> Result<Option<Vec<u8>>, EngineError>;
 }
 
 impl<E: Engine> Engine for std::sync::Arc<E> {
@@ -37,7 +37,7 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<Vec<u8>, EngineError> {
+    ) -> Result<Option<Vec<u8>>, EngineError> {
         self.as_ref()
             .execute(component, fuel_limit, trigger, service_config)
     }

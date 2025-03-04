@@ -13,7 +13,7 @@ use wavs_wasi_chain::ethereum::new_eth_provider;
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<u8>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<Vec<u8>>, String> {
         wstd::runtime::block_on(async move {
             let (trigger_id, _) = decode_trigger_event(trigger_action.data.clone())?;
 
@@ -57,6 +57,7 @@ impl Guest for Component {
             Ok(encode_trigger_output(trigger_id, resp))
         })
         .map_err(|e| e.to_string())
+        .map(Some)
     }
 }
 

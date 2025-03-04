@@ -186,9 +186,17 @@ pub struct SquareOut {
 }
 
 impl Function for BigSquare {
-    fn execute(&self, request: Vec<u8>) -> Result<Vec<u8>, EngineError> {
+    fn execute(&self, request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError> {
         let SquareIn { x } = serde_json::from_slice(&request).unwrap();
         let output = SquareOut { y: x * x };
-        Ok(serde_json::to_vec(&output).unwrap())
+        Ok(Some(serde_json::to_vec(&output).unwrap()))
+    }
+}
+
+pub struct ComponentNone;
+
+impl Function for ComponentNone {
+    fn execute(&self, _request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError> {
+        Ok(None)
     }
 }

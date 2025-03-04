@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub struct ExecComponent {
-    pub output_bytes: Vec<u8>,
+    pub output_bytes: Option<Vec<u8>>,
     pub fuel_used: u64,
 }
 
@@ -21,14 +21,19 @@ impl std::fmt::Display for ExecComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Fuel used: \n{}", self.fuel_used)?;
 
-        write!(
-            f,
-            "\n\nResult (hex encoded): \n{}",
-            const_hex::encode(&self.output_bytes)
-        )?;
+        match &self.output_bytes {
+            Some(bytes) => {
+                write!(
+                    f,
+                    "\n\nResult (hex encoded): \n{}",
+                    const_hex::encode(bytes)
+                )?;
 
-        if let Ok(s) = std::str::from_utf8(&self.output_bytes) {
-            write!(f, "\n\nResult (utf8): \n{}", s)?;
+                if let Ok(s) = std::str::from_utf8(bytes) {
+                    write!(f, "\n\nResult (utf8): \n{}", s)?;
+                }
+            }
+            None => write!(f, "\n\nResult: None")?,
         }
 
         Ok(())
@@ -148,7 +153,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes, b"hello world");
+        assert_eq!(result.output_bytes.unwrap(), b"hello world");
         assert!(result.fuel_used > 0);
 
         // Same idea but hex-encoded with prefix
@@ -161,7 +166,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes, b"hello world");
+        assert_eq!(result.output_bytes.unwrap(), b"hello world");
         assert!(result.fuel_used > 0);
 
         // Do not hex-decode without the prefix
@@ -174,7 +179,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes, b"68656C6C6F20776F726C64");
+        assert_eq!(result.output_bytes.unwrap(), b"68656C6C6F20776F726C64");
         assert!(result.fuel_used > 0);
 
         // And filepath
@@ -191,7 +196,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes, b"hello world");
+        assert_eq!(result.output_bytes.unwrap(), b"hello world");
         assert!(result.fuel_used > 0);
     }
 }

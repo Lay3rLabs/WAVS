@@ -4396,7 +4396,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -7781,7 +7781,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -8665,7 +8665,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -8709,7 +8709,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -8730,7 +8730,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy",
  "alloy-json-abi",
@@ -8756,7 +8756,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -8771,7 +8771,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy-primitives",
  "const-hex",
@@ -8787,7 +8787,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-wasi-chain"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",

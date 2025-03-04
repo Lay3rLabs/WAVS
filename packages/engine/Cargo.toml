@@ -1,6 +1,6 @@
 [package]
 name = "wavs-engine"
-version = "0.3.0-beta"
+version = "0.3.0-rc1"
 description = "WAVS Engine"
 edition.workspace = true
 authors.workspace = true
