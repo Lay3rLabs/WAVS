@@ -1,7 +1,7 @@
 [package]
 name = "permissions"
 edition.workspace = true
-version.workspace = true
+version = "0.0.1"
 authors.workspace = true
 rust-version.workspace = true
 repository.workspace = true
@@ -19,4 +19,4 @@ wstd = { workspace = true }
 crate-type = ["cdylib"]
 
 [package.metadata.component]
-package = "component:permissions"
+package = "wavs-tests:permissions"

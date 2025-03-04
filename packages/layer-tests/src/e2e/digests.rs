@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
-use wasm_pkg_common::{config::RegistryMapping, package::PackageRef, registry::Registry as WkgRegistry};
+use wasm_pkg_common::package::PackageRef;
 use wavs_cli::clients::HttpClient;
 use wavs_types::{Digest, Registry};
 
@@ -97,15 +97,43 @@ async fn get_digest(
         )
     } else {
         let registry = match name {
-            DigestName::ChainTriggerLookup => todo!(),
-            DigestName::CosmosQuery => todo!(),
-            DigestName::EchoData => todo!(),
-            DigestName::Permissions => todo!(),
-            DigestName::Square => Registry {
-                domain: Some(RegistryMapping::Registry(WkgRegistry::try_from("ghcr.io".to_string()).unwrap())),
+            DigestName::ChainTriggerLookup => Registry {
+                domain: None,
                 version: None,
                 package: PackageRef::new(
-                    "macovedj".to_string().try_into().unwrap(),
+                    "wavs-tests".to_string().try_into().unwrap(),
+                    "chain-trigger-lookup".to_string().try_into().unwrap(),
+                ),
+            },
+            DigestName::CosmosQuery => Registry {
+                domain: None,
+                version: None,
+                package: PackageRef::new(
+                    "wavs-tests".to_string().try_into().unwrap(),
+                    "cosmos-query".to_string().try_into().unwrap(),
+                ),
+            },
+            DigestName::EchoData => Registry {
+                domain: None,
+                version: None,
+                package: PackageRef::new(
+                    "wavs-tests".to_string().try_into().unwrap(),
+                    "echo-data".to_string().try_into().unwrap(),
+                ),
+            },
+            DigestName::Permissions => Registry {
+                domain: None,
+                version: None,
+                package: PackageRef::new(
+                    "wavs-tests".to_string().try_into().unwrap(),
+                    "permissions".to_string().try_into().unwrap(),
+                ),
+            },
+            DigestName::Square => Registry {
+                domain: None,
+                version: None,
+                package: PackageRef::new(
+                    "wavs-tests".to_string().try_into().unwrap(),
                     "square".to_string().try_into().unwrap(),
                 ),
             },
