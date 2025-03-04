@@ -158,6 +158,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error> {
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.triggers.remove_service(id)?;
+        self.engine.engine().reset_storage()?;
 
         Ok(())
     }

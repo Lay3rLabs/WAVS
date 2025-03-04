@@ -95,6 +95,10 @@ impl Engine for MockEngine {
         let result = fx.execute(get_mock_trigger_data(&trigger.data))?;
         Ok(result)
     }
+
+    fn reset_storage(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
 }
 
 pub trait Function: Send + Sync + 'static {

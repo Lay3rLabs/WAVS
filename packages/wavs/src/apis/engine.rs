@@ -20,6 +20,8 @@ pub trait Engine: Send + Sync {
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Option<Vec<u8>>, EngineError>;
+
+    fn reset_storage(&self) -> Result<(), EngineError>;
 }
 
 impl<E: Engine> Engine for std::sync::Arc<E> {
@@ -40,6 +42,10 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
     ) -> Result<Option<Vec<u8>>, EngineError> {
         self.as_ref()
             .execute(component, fuel_limit, trigger, service_config)
+    }
+
+    fn reset_storage(&self) -> Result<(), EngineError> {
+        self.as_ref().reset_storage()
     }
 }
 

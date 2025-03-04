@@ -36,6 +36,10 @@ impl Engine for IdentityEngine {
     ) -> Result<Option<Vec<u8>>, EngineError> {
         Ok(Some(get_mock_trigger_data(&trigger.data)))
     }
+
+    fn reset_storage(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

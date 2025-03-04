@@ -149,6 +149,10 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 .map_err(|e| e.into())
         })
     }
+
+    fn reset_storage(&self) -> Result<(), EngineError> {
+        Ok(self.wasm_storage.reset()?)
+    }
 }
 
 impl<S: CAStorage> WasmEngine<S> {
