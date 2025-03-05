@@ -14,7 +14,7 @@ pub struct TestMatrix {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum EthService {
     ChainTriggerLookup,
-    // CosmosQuery,
+    CosmosQuery,
     EchoData,
     EchoDataSecondaryChain,
     EchoDataAggregator,
@@ -27,7 +27,7 @@ pub enum EthService {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum CosmosService {
     ChainTriggerLookup,
-    // CosmosQuery,
+    CosmosQuery,
     EchoData,
     Permissions,
     Square,
@@ -79,8 +79,8 @@ impl TestMatrix {
 
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
         // self.eth.contains(&EthService::CosmosQuery)
-            // || 
-            self.cosmos.contains(&CosmosService::ChainTriggerLookup)
+        // ||
+        self.cosmos.contains(&CosmosService::ChainTriggerLookup)
             // || self.cosmos.contains(&CosmosService::CosmosQuery)
             || self.cosmos.contains(&CosmosService::EchoData)
             || self.cosmos.contains(&CosmosService::Permissions)
@@ -95,7 +95,7 @@ impl From<EthService> for Vec<DigestName> {
     fn from(service: EthService) -> Self {
         match service {
             EthService::ChainTriggerLookup => vec![DigestName::ChainTriggerLookup],
-            // EthService::CosmosQuery => vec![DigestName::CosmosQuery],
+            EthService::CosmosQuery => vec![DigestName::CosmosQuery],
             EthService::EchoData => vec![DigestName::EchoData],
             EthService::Permissions => vec![DigestName::Permissions],
             EthService::Square => vec![DigestName::Square],
@@ -111,7 +111,7 @@ impl From<CosmosService> for Vec<DigestName> {
     fn from(service: CosmosService) -> Self {
         vec![match service {
             CosmosService::ChainTriggerLookup => DigestName::ChainTriggerLookup,
-            // CosmosService::CosmosQuery => DigestName::CosmosQuery,
+            CosmosService::CosmosQuery => DigestName::CosmosQuery,
             CosmosService::EchoData => DigestName::EchoData,
             CosmosService::Permissions => DigestName::Permissions,
             CosmosService::Square => DigestName::Square,

@@ -143,7 +143,6 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         }
         .build()?;
 
-
         self.block_on_run(async move {
             wavs_engine::execute(&mut instance_deps, trigger)
                 .await
@@ -383,9 +382,9 @@ mod tests {
             )
             .unwrap_err();
 
-        // assert!(matches!(
-        //     err,
-        //     EngineError::Engine(wavs_engine::EngineError::OutOfFuel(_, _))
-        // ));
+        assert!(matches!(
+            err,
+            EngineError::Engine(wavs_engine::EngineError::OutOfFuel(_, _))
+        ));
     }
 }

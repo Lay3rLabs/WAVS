@@ -79,7 +79,7 @@ async fn test_service(
                 Some(workflow_id.to_string()),
                 get_input_for_service(name, service, configs, workflow_index),
                 if is_final {
-                    Some(std::time::Duration::from_secs(1000))
+                    Some(std::time::Duration::from_secs(10))
                 } else {
                     None
                 },
@@ -159,7 +159,7 @@ async fn test_service(
 fn get_input_for_service(
     name: AnyService,
     _service: &Service,
-    _configs: &Configs,
+    configs: &Configs,
     workflow_index: usize,
 ) -> Vec<u8> {
     let permissions_req = || {
@@ -177,10 +177,10 @@ fn get_input_for_service(
     let input_data = match name {
         AnyService::Eth(name) => match name {
             EthService::ChainTriggerLookup => b"satoshi".to_vec(),
-            // EthService::CosmosQuery => CosmosQueryRequest::BlockHeight {
-            //     chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
-            // }
-            // .to_vec(),
+            EthService::CosmosQuery => CosmosQueryRequest::BlockHeight {
+                chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
+            }
+            .to_vec(),
             EthService::EchoData => b"The times".to_vec(),
             EthService::EchoDataAggregator => b"Chancellor".to_vec(),
             EthService::EchoDataSecondaryChain => b"collapse".to_vec(),
@@ -195,10 +195,10 @@ fn get_input_for_service(
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
-            // CosmosService::CosmosQuery => CosmosQueryRequest::BlockHeight {
-            //     chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
-            // }
-            // .to_vec(),
+            CosmosService::CosmosQuery => CosmosQueryRequest::BlockHeight {
+                chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
+            }
+            .to_vec(),
             CosmosService::EchoData => b"on brink".to_vec(),
             CosmosService::Permissions => permissions_req(),
             CosmosService::Square => SquareRequest { x: 3 }.to_vec(),
@@ -239,11 +239,11 @@ fn verify_signed_data(
                 _ => unimplemented!(),
             },
 
-            // EthService::CosmosQuery => {
-            //     let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
-            //     tracing::info!("Response: {:?}", resp);
-            //     None
-            // }
+            EthService::CosmosQuery => {
+                let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                tracing::info!("Response: {:?}", resp);
+                None
+            }
 
             EthService::Permissions => {
                 let resp: PermissionsResponse = serde_json::from_slice(&data).unwrap();
@@ -264,11 +264,11 @@ fn verify_signed_data(
                 None
             }
 
-            // CosmosService::CosmosQuery => {
-            //     let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
-            //     tracing::info!("Response: {:?}", resp);
-            //     None
-            // }
+            CosmosService::CosmosQuery => {
+                let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                tracing::info!("Response: {:?}", resp);
+                None
+            }
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
             CrossChainService::CosmosToEthEchoData => Some(get_input_for_service(
