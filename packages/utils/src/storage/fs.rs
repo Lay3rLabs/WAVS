@@ -159,4 +159,12 @@ mod tests {
         // it also gets cleaned up with Drop, in case of test failure
         dir.close().unwrap();
     }
+
+    #[test]
+    fn test_remove_digest() {
+        let (store, dir) = setup();
+        castorage::test_remove_digest(store);
+        // it also gets cleaned up with Drop, in case of test failure
+        dir.close().unwrap();
+    }
 }

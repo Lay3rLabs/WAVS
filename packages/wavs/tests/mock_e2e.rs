@@ -139,6 +139,8 @@ fn mock_e2e_service_lifecycle() {
                 .delete_services(vec![service_id1.clone(), service_id3.clone()])
                 .await;
 
+            // Check file systems were deleted
+
             let services = runner.list_services().await;
 
             assert_eq!(services.services.len(), 1);

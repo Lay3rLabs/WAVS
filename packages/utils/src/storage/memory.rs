@@ -96,4 +96,10 @@ mod tests {
         let store = MemoryStorage::new();
         castorage::test_list_digests(store);
     }
+
+    #[test]
+    fn test_remove_digest() {
+        let store = MemoryStorage::new();
+        castorage::test_remove_digest(store);
+    }
 }
