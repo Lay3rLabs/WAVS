@@ -1,6 +1,5 @@
-use anyhow::Context;
+use anyhow::Result;
 use async_trait::async_trait;
-use futures::TryStreamExt;
 use redb::ReadableTable;
 use std::ops::Bound;
 use std::path::Path;
@@ -9,7 +8,6 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use wasm_pkg_client::caching::FileCache;
 use wavs_types::{
     ComponentSource, Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig,
 };
@@ -23,16 +21,17 @@ use crate::engine::runner::EngineRunner;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
-use wasm_pkg_client::Config;
-use wasm_pkg_client::{caching::CachingClient, Client};
 use wasm_pkg_common::Error as RegistryError;
+
+use super::WkgClient;
+
 /// This should auto-derive clone if T, E, S: Clone
-#[derive(Clone)]
 pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub triggers: T,
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
+    pub wkg_client: WkgClient,
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
@@ -49,6 +48,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
             engine,
             submission,
             storage,
+            wkg_client: WkgClient::new()?,
         })
     }
 }
@@ -130,34 +130,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     async fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error> {
         let bytecode = match source {
             ComponentSource::Bytecode(code) => code,
-            ComponentSource::Registry { registry } => {
-                let config_toml = r#"default_registry = "wa.dev""#;
-                let mut config = Config::from_toml(config_toml)?;
-                if let Some(domain) = &registry.domain {
-                    config.set_package_registry_override(registry.package.clone(), domain.clone());
-                }
-                let client = Client::new(config);
-                let cache_path =
-                    FileCache::global_cache_path().context("couldn't find global cache path")?;
-                let cache = FileCache::new(cache_path).await?;
-                let client = CachingClient::new(Some(client), cache);
-                // Use version provided if present, otherwise default to latest
-                let version = if let Some(v) = &registry.version {
-                    v.clone()
-                } else {
-                    let mut versions = client.list_all_versions(&registry.package).await?;
-                    versions.sort_by(|a, b| a.version.cmp_precedence(&b.version));
-                    versions[&versions.len() - 1].version.clone()
-                };
-
-                let release = client.get_release(&registry.package, &version).await?;
-                let mut content_stream = client.get_content(&registry.package, &release).await?;
-                let mut content = Vec::new();
-                while let Some(chunk) = content_stream.try_next().await? {
-                    content.append(&mut chunk.to_vec());
-                }
-                content
-            }
+            ComponentSource::Registry { registry } => self.wkg_client.fetch(registry).await?,
             _ => todo!(),
         };
         let digest = self.engine.engine().store_wasm(&bytecode)?;

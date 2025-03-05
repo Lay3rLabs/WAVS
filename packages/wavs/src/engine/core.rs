@@ -345,7 +345,6 @@ mod tests {
             )
             .unwrap_err();
 
-        dbg!(&result);
         assert!(matches!(
             result,
             EngineError::Engine(wavs_engine::EngineError::ExecResult(_))

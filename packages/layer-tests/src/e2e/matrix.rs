@@ -78,10 +78,9 @@ impl TestMatrix {
     }
 
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
-        // self.eth.contains(&EthService::CosmosQuery)
-        // ||
-        self.cosmos.contains(&CosmosService::ChainTriggerLookup)
-            // || self.cosmos.contains(&CosmosService::CosmosQuery)
+        self.eth.contains(&EthService::CosmosQuery)
+            || self.cosmos.contains(&CosmosService::ChainTriggerLookup)
+            || self.cosmos.contains(&CosmosService::CosmosQuery)
             || self.cosmos.contains(&CosmosService::EchoData)
             || self.cosmos.contains(&CosmosService::Permissions)
             || self.cosmos.contains(&CosmosService::Square)
