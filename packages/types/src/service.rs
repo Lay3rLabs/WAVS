@@ -111,6 +111,10 @@ pub enum Trigger {
         chain_name: ChainName,
         event_hash: ByteArray<32>,
     },
+    BlockInterval {
+        chain_name: ChainName,
+        n_blocks: u32,
+    },
     // not a real trigger, just for testing
     Manual,
 }
@@ -121,7 +125,7 @@ pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
         contract_address: layer_climb_address::Address,
-        /// The chain name of the chain where the event was emitted
+        /// The name of the chain where the event was emitted
         chain_name: ChainName,
         /// The data that was emitted by the contract
         event: cosmwasm_std::Event,
@@ -131,10 +135,16 @@ pub enum TriggerData {
     EthContractEvent {
         /// The address of the contract that emitted the event
         contract_address: alloy_primitives::Address,
-        /// The chain name of the chain where the event was emitted
+        /// The name of the chain where the event was emitted
         chain_name: ChainName,
         /// The raw event log
         log: LogData,
+        /// The block height where the event was emitted
+        block_height: u64,
+    },
+    BlockInterval {
+        /// The name of the chain where the event was emitted
+        chain_name: ChainName,
         /// The block height where the event was emitted
         block_height: u64,
     },
