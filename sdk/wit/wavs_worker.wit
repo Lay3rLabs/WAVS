@@ -60,7 +60,7 @@ interface layer-types {
   variant trigger-source {
     eth-contract-event(trigger-source-eth-contract-event),
     cosmos-contract-event(trigger-source-cosmos-contract-event),
-    block-interval(block-interval-source)
+    block-interval(block-interval-source),
     manual
   }
 
