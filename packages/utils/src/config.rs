@@ -109,6 +109,7 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
                 cli_env_args.home_dir()
             ))?;
 
+        dbg!(&filepath);
         // lastly, our final config, which can have more complex types with easier TOML-like syntax
         // but is overriden by the cli/env args if they exist
         // and also fills in defaults for required values at the end

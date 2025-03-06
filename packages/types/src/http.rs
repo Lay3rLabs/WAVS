@@ -8,7 +8,7 @@ use serde::{
 
 use crate::digest::Digest;
 
-use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger, TriggerData};
+use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger};
 use wasm_pkg_common::package::{PackageRef, Version};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
@@ -40,21 +40,15 @@ pub struct UploadServiceResponse {
     pub digest: ShaDigest,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct TestAppRequest {
-    pub name: String,
-    pub input: TriggerData,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TestAppResponse {
-    pub output: serde_json::Value,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Registry {
+    /// Optional domain to use for a registry (sugch as ghcr.io)
+    /// if default of wa.dev (or whatever wavs uses in the future)
+    /// is not desired by user
     pub domain: Option<RegistryMapping>,
+    /// Optional semver value, if absent then latest is used
     pub version: Option<Version>,
+    /// Package identifier of form <namespace>:<packagename>
     pub package: PackageRef,
 }
 

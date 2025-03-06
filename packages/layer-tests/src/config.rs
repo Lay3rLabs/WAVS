@@ -15,6 +15,7 @@ use crate::e2e::matrix::{AnyService, CosmosService, CrossChainService, EthServic
 pub struct TestConfig {
     pub matrix: TestMatrixConfig,
     pub registry: Option<bool>,
+    pub registry_domain: Option<String>,
     pub isolated: Option<String>,
     pub all: Option<bool>,
     _log_levels: Vec<String>,
@@ -40,6 +41,7 @@ impl Default for TestConfig {
         Self {
             matrix: TestMatrixConfig::default(),
             registry: None,
+            registry_domain: None,
             _log_levels: EnvFilter::from_default_env()
                 .to_string()
                 .split(',')
@@ -168,9 +170,9 @@ impl TestMatrixConfig {
             matrix.cosmos.insert(CosmosService::ChainTriggerLookup);
         }
 
-        // if self.cosmos.cosmos_query {
-        //     matrix.cosmos.insert(CosmosService::CosmosQuery);
-        // }
+        if self.cosmos.cosmos_query {
+            matrix.cosmos.insert(CosmosService::CosmosQuery);
+        }
 
         if self.cosmos.echo_data {
             matrix.cosmos.insert(CosmosService::EchoData);

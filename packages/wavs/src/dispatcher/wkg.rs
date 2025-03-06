@@ -20,8 +20,8 @@ struct InnerWkgClient {
 }
 
 impl WkgClient {
-    pub fn new() -> Result<Self> {
-        let config_toml = r#"default_registry = "wa.dev""#;
+    pub fn new(domain: String) -> Result<Self> {
+        let config_toml = &format!("default_registry = \"{domain}\"");
         let config = Config::from_toml(config_toml)?;
         let inner = Arc::new(tokio::sync::Mutex::new(InnerWkgClient {
             client: None,
@@ -31,6 +31,12 @@ impl WkgClient {
         Ok(Self { inner })
     }
 
+    /// First initializes a cache path, needed to instantiate a new client for wkg
+    /// (potentially an upstream contribution could alleviate this so a default is used).
+    /// Then checks for a user provided version in case they want something other than the default
+    /// latest value.
+    /// Finally, checks if the user provided an alternative registry other than WAVS default (currently wa.dev),
+    /// before fetching the component from the registry.
     pub async fn fetch(&self, registry: Registry) -> Result<Vec<u8>> {
         let mut inner = self.inner.lock().await;
         let config = &inner.config;

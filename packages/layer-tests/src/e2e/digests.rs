@@ -96,47 +96,32 @@ async fn get_digest(
                 .unwrap(),
         )
     } else {
-        let registry = match name {
-            DigestName::ChainTriggerLookup => Registry {
-                domain: None,
-                version: None,
-                package: PackageRef::new(
-                    "wavs-tests".to_string().try_into().unwrap(),
-                    "chain-trigger-lookup".to_string().try_into().unwrap(),
-                ),
-            },
-            DigestName::CosmosQuery => Registry {
-                domain: None,
-                version: None,
-                package: PackageRef::new(
-                    "wavs-tests".to_string().try_into().unwrap(),
-                    "cosmos-query".to_string().try_into().unwrap(),
-                ),
-            },
-            DigestName::EchoData => Registry {
-                domain: None,
-                version: None,
-                package: PackageRef::new(
-                    "wavs-tests".to_string().try_into().unwrap(),
-                    "echo-data".to_string().try_into().unwrap(),
-                ),
-            },
-            DigestName::Permissions => Registry {
-                domain: None,
-                version: None,
-                package: PackageRef::new(
-                    "wavs-tests".to_string().try_into().unwrap(),
-                    "permissions".to_string().try_into().unwrap(),
-                ),
-            },
-            DigestName::Square => Registry {
-                domain: None,
-                version: None,
-                package: PackageRef::new(
-                    "wavs-tests".to_string().try_into().unwrap(),
-                    "square".to_string().try_into().unwrap(),
-                ),
-            },
+        let package = match name {
+            DigestName::ChainTriggerLookup => PackageRef::new(
+                "wavs-tests".to_string().try_into().unwrap(),
+                "chain-trigger-lookup".to_string().try_into().unwrap(),
+            ),
+            DigestName::CosmosQuery => PackageRef::new(
+                "wavs-tests".to_string().try_into().unwrap(),
+                "cosmos-query".to_string().try_into().unwrap(),
+            ),
+            DigestName::EchoData => PackageRef::new(
+                "wavs-tests".to_string().try_into().unwrap(),
+                "echo-data".to_string().try_into().unwrap(),
+            ),
+            DigestName::Permissions => PackageRef::new(
+                "wavs-tests".to_string().try_into().unwrap(),
+                "permissions".to_string().try_into().unwrap(),
+            ),
+            DigestName::Square => PackageRef::new(
+                "wavs-tests".to_string().try_into().unwrap(),
+                "square".to_string().try_into().unwrap(),
+            ),
+        };
+        let registry = Registry {
+            domain: None,
+            version: None,
+            package,
         };
         (
             name,

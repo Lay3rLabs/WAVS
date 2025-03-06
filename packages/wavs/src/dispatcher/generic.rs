@@ -31,7 +31,7 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
-    pub wkg_client: WkgClient,
+    pub wkg_client: Option<WkgClient>,
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
@@ -40,15 +40,18 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         engine: E,
         submission: S,
         db_storage_path: impl AsRef<Path>,
+        registry_domain: Option<String>
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
-
+        
         Ok(Dispatcher {
             triggers,
             engine,
             submission,
             storage,
-            wkg_client: WkgClient::new()?,
+            wkg_client: registry_domain.map(|r| {
+                WkgClient::new(r)
+            }).transpose()?,
         })
     }
 }
@@ -130,7 +133,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     async fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error> {
         let bytecode = match source {
             ComponentSource::Bytecode(code) => code,
-            ComponentSource::Registry { registry } => self.wkg_client.fetch(registry).await?,
+            ComponentSource::Registry { registry } => if let Some(client) = &self.wkg_client {
+                client.fetch(registry).await?
+            } else {
+                return Err(DispatcherError::NoRegistry);
+            }
+
             _ => todo!(),
         };
         let digest = self.engine.engine().store_wasm(&bytecode)?;
@@ -316,6 +324,9 @@ pub enum DispatcherError {
 
     #[error("Registry cache path error: {0}")]
     RegistryCachePath(#[from] anyhow::Error),
+
+    #[error("No registry domain provided in configuration")]
+    NoRegistry,
 }
 
 #[cfg(test)]
@@ -364,6 +375,7 @@ mod tests {
             SingleEngineRunner::new(IdentityEngine),
             MockSubmission::new(),
             db_file.as_ref(),
+            None
         )
         .unwrap();
 
@@ -457,6 +469,7 @@ mod tests {
             SingleEngineRunner::new(MockEngine::new()),
             MockSubmission::new(),
             db_file.as_ref(),
+            None
         )
         .unwrap();
 
@@ -545,6 +558,7 @@ mod tests {
             MultiEngineRunner::new(MockEngine::new(), 4),
             MockSubmission::new(),
             db_file.as_ref(),
+            None
         )
         .unwrap();
 

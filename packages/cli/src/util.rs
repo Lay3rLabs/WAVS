@@ -42,11 +42,11 @@ impl ComponentInput {
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(debug_assertions)] {
-        pub fn read_component(component: &Component) -> Result<Vec<u8>> {
-            match component {
-                Component::Path(path) => {
+pub fn read_component(component: &Component) -> Result<Vec<u8>> {
+    match component {
+        Component::Path(path) => {
+            cfg_if::cfg_if! {
+                if #[cfg(debug_assertions)] {
                     let mut path = PathBuf::from(shellexpand::tilde(&path).to_string());
 
                     if !path.is_absolute() {
@@ -54,23 +54,13 @@ cfg_if::cfg_if! {
                     };
 
                     Ok(std::fs::read(path)?)
-                },
-                Component::Registry(registry) => {
-                    serde_json::to_vec(registry).map_err(|e| anyhow!(e))
-                },
-            }
-        }
-    } else {
-        pub fn read_component(component: &Component) -> Result<Vec<u8>> {
-            match component {
-                Component::Path(path) => {
+                }
+                else {
                     let path = PathBuf::from(shellexpand::tilde(&path).to_string());
                     Ok(std::fs::read(path)?)
                 }
-                Component::Registry(registry) => {
-                    serde_json::to_vec(registry).map_err(|e| anyhow!(e))
-                },
             }
         }
+        Component::Registry(registry) => serde_json::to_vec(registry).map_err(|e| anyhow!(e)),
     }
 }

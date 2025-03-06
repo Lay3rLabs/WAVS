@@ -31,7 +31,7 @@ impl TestHttpApp {
         let storage_path = tempfile::NamedTempFile::new().unwrap();
 
         let dispatcher =
-            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
+            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path, None).unwrap());
 
         Self::new_with_dispatcher(dispatcher).await
     }
