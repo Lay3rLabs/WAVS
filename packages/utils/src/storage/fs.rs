@@ -84,7 +84,7 @@ impl CAStorage for FileStorage {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
-    fn remove_file(&self, digest: &Digest) -> Result<(), CAStorageError> {
+    fn remove_digest(&self, digest: &Digest) -> Result<(), CAStorageError> {
         let path = self.digest_to_path(digest)?;
         if path.exists() {
             std::fs::remove_file(path)?;
@@ -156,6 +156,14 @@ mod tests {
     fn test_list_digests() {
         let (store, dir) = setup();
         castorage::test_list_digests(store);
+        // it also gets cleaned up with Drop, in case of test failure
+        dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_remove_digest() {
+        let (store, dir) = setup();
+        castorage::test_remove_digest(store);
         // it also gets cleaned up with Drop, in case of test failure
         dir.close().unwrap();
     }

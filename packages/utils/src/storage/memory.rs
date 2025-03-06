@@ -60,7 +60,7 @@ impl CAStorage for MemoryStorage {
         Ok(it.into_iter())
     }
 
-    fn remove_file(&self, digest: &Digest) -> Result<(), CAStorageError> {
+    fn remove_digest(&self, digest: &Digest) -> Result<(), CAStorageError> {
         let mut tree = self.data.write()?;
         tree.remove(digest);
         Ok(())
@@ -95,5 +95,11 @@ mod tests {
     fn test_list_digests() {
         let store = MemoryStorage::new();
         castorage::test_list_digests(store);
+    }
+
+    #[test]
+    fn test_remove_digest() {
+        let store = MemoryStorage::new();
+        castorage::test_remove_digest(store);
     }
 }

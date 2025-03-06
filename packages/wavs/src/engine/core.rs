@@ -151,7 +151,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     }
 
     fn remove_wasm(&self, digest: &Digest) -> Result<(), EngineError> {
-        Ok(self.wasm_storage.remove_file(digest)?)
+        Ok(self.wasm_storage.remove_digest(digest)?)
     }
 }
 

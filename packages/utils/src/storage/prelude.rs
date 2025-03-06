@@ -36,8 +36,8 @@ pub trait CAStorage: Send + Sync {
     /// Looks up the data for a given digest and returns it. If data not present, returns CAStorageError::NotFound(_)
     fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError>;
 
-    /// Removes the file from storage
-    fn remove_file(&self, digest: &Digest) -> Result<(), CAStorageError>;
+    /// Removes the digest from storage
+    fn remove_digest(&self, digest: &Digest) -> Result<(), CAStorageError>;
 
     fn digests(
         &self,
