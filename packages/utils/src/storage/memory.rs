@@ -59,12 +59,6 @@ impl CAStorage for MemoryStorage {
         let it: Vec<_> = tree.keys().map(|d| Ok(d.clone())).collect();
         Ok(it.into_iter())
     }
-
-    fn remove_digest(&self, digest: &Digest) -> Result<(), CAStorageError> {
-        let mut tree = self.data.write()?;
-        tree.remove(digest);
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -95,11 +89,5 @@ mod tests {
     fn test_list_digests() {
         let store = MemoryStorage::new();
         castorage::test_list_digests(store);
-    }
-
-    #[test]
-    fn test_remove_digest() {
-        let store = MemoryStorage::new();
-        castorage::test_remove_digest(store);
     }
 }

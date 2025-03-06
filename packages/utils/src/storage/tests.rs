@@ -64,25 +64,4 @@ pub mod castorage {
         digests.sort();
         assert_eq!(expected, digests);
     }
-
-    pub fn test_remove_digest<S: CAStorage>(store: S) {
-        let data1 = b"hello world";
-        let data2 = b"hello mom";
-
-        // store two different data blobs
-        let digest1 = store.set_data(data1).unwrap();
-        let digest2 = store.set_data(data2).unwrap();
-
-        // remove digest 2
-        store.remove_digest(&digest2).unwrap();
-
-        // we can list the digests (sort both as order is not defined)
-        let expected = vec![digest1];
-        let digests = store
-            .digests()
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(expected, digests);
-    }
 }

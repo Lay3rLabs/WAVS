@@ -150,8 +150,31 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         })
     }
 
-    fn remove_wasm(&self, digest: &Digest) -> Result<(), EngineError> {
-        Ok(self.wasm_storage.remove_digest(digest)?)
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
+    fn remove_storage(&self, service_id: &ServiceID) {
+        let dir_path = self.app_data_dir.join(service_id.as_ref());
+
+        if dir_path.exists() {
+            match std::fs::remove_dir_all(&dir_path) {
+                Ok(_) => event!(
+                    tracing::Level::INFO,
+                    "Successfully removed storage at {:?}",
+                    dir_path
+                ),
+                Err(e) => event!(
+                    tracing::Level::ERROR,
+                    "Failed to remove storage at {:?}: {}",
+                    dir_path,
+                    e
+                ),
+            }
+        } else {
+            event!(
+                tracing::Level::WARN,
+                "Storage directory {:?} does not exist",
+                dir_path
+            );
+        }
     }
 }
 

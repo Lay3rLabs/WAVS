@@ -95,12 +95,6 @@ impl Engine for MockEngine {
         let result = fx.execute(get_mock_trigger_data(&trigger.data))?;
         Ok(result)
     }
-
-    fn remove_wasm(&self, digest: &Digest) -> Result<(), EngineError> {
-        self.digests.write().unwrap().remove(digest);
-
-        Ok(())
-    }
 }
 
 pub trait Function: Send + Sync + 'static {

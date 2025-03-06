@@ -21,7 +21,9 @@ pub trait Engine: Send + Sync {
         service_config: &ServiceConfig,
     ) -> Result<Option<Vec<u8>>, EngineError>;
 
-    fn remove_wasm(&self, digest: &Digest) -> Result<(), EngineError>;
+    /// Removes the storage for a service
+    /// Default implementation does nothing
+    fn remove_storage(&self, _service_id: &ServiceID) {}
 }
 
 impl<E: Engine> Engine for std::sync::Arc<E> {
@@ -44,8 +46,8 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
             .execute(component, fuel_limit, trigger, service_config)
     }
 
-    fn remove_wasm(&self, digest: &Digest) -> Result<(), EngineError> {
-        self.as_ref().remove_wasm(digest)
+    fn remove_storage(&self, service_id: &ServiceID) {
+        self.as_ref().remove_storage(service_id);
     }
 }
 

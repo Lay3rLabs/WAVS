@@ -36,10 +36,6 @@ impl Engine for IdentityEngine {
     ) -> Result<Option<Vec<u8>>, EngineError> {
         Ok(Some(get_mock_trigger_data(&trigger.data)))
     }
-
-    fn remove_wasm(&self, _digest: &Digest) -> Result<(), EngineError> {
-        Ok(())
-    }
 }
 
 #[cfg(test)]

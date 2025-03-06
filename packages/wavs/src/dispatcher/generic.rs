@@ -156,20 +156,9 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error> {
-        let service = match self.storage.get(SERVICE_TABLE, id.as_ref())? {
-            Some(service) => service.value(),
-            None => {
-                return Err(DispatcherError::UnknownService(id.clone()));
-            }
-        };
-
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
+        self.engine.engine().remove_storage(&id);
         self.triggers.remove_service(id)?;
-
-        let engine = self.engine.engine();
-        for (_, component) in service.components {
-            engine.remove_wasm(&component.wasm)?;
-        }
 
         Ok(())
     }
