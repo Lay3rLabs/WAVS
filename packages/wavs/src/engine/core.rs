@@ -413,4 +413,46 @@ mod tests {
             EngineError::Engine(wavs_engine::EngineError::OutOfFuel(_, _))
         ));
     }
+
+    #[test]
+    fn test_remove_storage() {
+        // Setup
+        let storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+        let app_data_path = app_data.path().to_path_buf();
+        let engine = WasmEngine::new(storage, &app_data_path, 3, ChainConfigs::default());
+
+        // Create a service ID
+        let service_id = ServiceID::new("test-service").unwrap();
+
+        // Create a directory and a test file for the service
+        let service_dir = app_data_path.join(service_id.as_ref());
+        std::fs::create_dir_all(&service_dir).unwrap();
+
+        let test_file = service_dir.join("test-data.txt");
+        std::fs::write(&test_file, "test content").unwrap();
+
+        // Verify directory and file exist
+        assert!(service_dir.exists());
+        assert!(test_file.exists());
+
+        // Call remove_storage
+        engine.remove_storage(&service_id);
+
+        // Verify the directory was removed
+        assert!(!service_dir.exists());
+
+        // Test non-existent directory case
+        let nonexistent_id = ServiceID::new("nonexistent").unwrap();
+        let nonexistent_dir = app_data_path.join(nonexistent_id.as_ref());
+
+        // Verify directory doesn't exist
+        assert!(!nonexistent_dir.exists());
+
+        // Call remove_storage on non-existent directory
+        engine.remove_storage(&nonexistent_id);
+
+        // Directory should still not exist
+        assert!(!nonexistent_dir.exists());
+    }
 }
