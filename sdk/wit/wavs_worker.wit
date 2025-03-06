@@ -1,4 +1,4 @@
-package wavs:worker@0.3.0-rc1;
+package wavs:worker@0.3.0;
 
 use wasi:io/poll@0.2.0;
 use wasi:clocks/monotonic-clock@0.2.0;
@@ -12,7 +12,7 @@ interface layer-types {
     bech32-addr: string,
     // prefix is the first part of the bech32 address
     prefix-len: u32
-  } 
+  }
 
   record cosmos-event {
     ty: string,
@@ -110,7 +110,7 @@ world layer-trigger-world {
 
     get-eth-chain-config: func(chain-name: string) -> option<eth-chain-config>;
     get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
-    
+
     log: func(level: log-level, message: string);
   }
 
