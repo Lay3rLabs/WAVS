@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0]
+- bumped `WIT`, `@wavs/solidity`, `wavs-types`, `wavs-wasi-chain` and `examples` to `0.3.0`
+
 ## [v0.3.0-rc1]
 
 ### Changed
@@ -54,12 +57,12 @@ and this project adheres to [Semantic Versioning].
 - Debug impl for `ByteArray` type
 
 ### Added
-- wavs-types bump, includes new `ByteArray` type 
+- wavs-types bump, includes new `ByteArray` type
 
 ## [v0.3.0-alpha8]
 
 ### Added
-- wavs-types bump, includes new `ByteArray` type 
+- wavs-types bump, includes new `ByteArray` type
 
 ### Changed
 - Eth event hash in trigger is now serialized as hex-encoded string (via `ByteArray` type)
@@ -114,7 +117,7 @@ and this project adheres to [Semantic Versioning].
 - Stronger separation between local utils and public types (now in its own crate)
 - Pinning foundry binaries in Docker
 - Update wstd to 0.5.0 (gets rid of Reactor etc.)
-- Solidity interface uses only primitive types (allows contracts to easily satisfy without imports) 
+- Solidity interface uses only primitive types (allows contracts to easily satisfy without imports)
 - Some refactoring of directories etc. (`sdk` is now only the `wit`, all Rust packages are in `packages`, all public contracts in `contracts`)
 
 ### Removed
@@ -144,7 +147,7 @@ and this project adheres to [Semantic Versioning].
 ### Changed
 
 - CLI writes full `Service` type into `deployments.json` (previously it was a reduced, cli-specific type)
-- CLI displays output on a per-command basis 
+- CLI displays output on a per-command basis
 - Moved more "public" types out of `wavs` package and into `utils`
 - More breaking changes to clean up API and deprecate cruft from `0.2.0`
 - CLI no longer imports `wavs` or `aggregator` packages
