@@ -29,6 +29,12 @@ impl CoreDispatcher {
 
         let submission = CoreSubmission::new(config)?;
 
-        Self::new(triggers, engine, submission, config.data.join("db"), config.registry_domain.clone())
+        Self::new(
+            triggers,
+            engine,
+            submission,
+            config.data.join("db"),
+            config.registry_domain.clone(),
+        )
     }
 }

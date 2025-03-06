@@ -40,18 +40,16 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         engine: E,
         submission: S,
         db_storage_path: impl AsRef<Path>,
-        registry_domain: Option<String>
+        registry_domain: Option<String>,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
-        
+
         Ok(Dispatcher {
             triggers,
             engine,
             submission,
             storage,
-            wkg_client: registry_domain.map(|r| {
-                WkgClient::new(r)
-            }).transpose()?,
+            wkg_client: registry_domain.map(WkgClient::new).transpose()?,
         })
     }
 }
@@ -133,10 +131,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     async fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error> {
         let bytecode = match source {
             ComponentSource::Bytecode(code) => code,
-            ComponentSource::Registry { registry } => if let Some(client) = &self.wkg_client {
-                client.fetch(registry).await?
-            } else {
-                return Err(DispatcherError::NoRegistry);
+            ComponentSource::Registry { registry } => {
+                if let Some(client) = &self.wkg_client {
+                    client.fetch(registry).await?
+                } else {
+                    return Err(DispatcherError::NoRegistry);
+                }
             }
 
             _ => todo!(),
@@ -375,7 +375,7 @@ mod tests {
             SingleEngineRunner::new(IdentityEngine),
             MockSubmission::new(),
             db_file.as_ref(),
-            None
+            None,
         )
         .unwrap();
 
@@ -469,7 +469,7 @@ mod tests {
             SingleEngineRunner::new(MockEngine::new()),
             MockSubmission::new(),
             db_file.as_ref(),
-            None
+            None,
         )
         .unwrap();
 
@@ -558,7 +558,7 @@ mod tests {
             MultiEngineRunner::new(MockEngine::new(), 4),
             MockSubmission::new(),
             db_file.as_ref(),
-            None
+            None,
         )
         .unwrap();
 

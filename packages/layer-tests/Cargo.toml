@@ -1,6 +1,6 @@
 [package]
 name = "layer-tests"
-version = "0.3.0-rc1"
+version = "0.3.0"
 description = "Layer end-to-end tests"
 edition.workspace = true
 authors.workspace = true
