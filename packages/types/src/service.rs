@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{digest::Digest, ByteArray};
 
-use super::{ChainName, ComponentID, ServiceID, WorkflowID};
+use super::{ChainName, ComponentID, ServiceID, TriggerName, WorkflowID};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -113,6 +113,7 @@ pub enum Trigger {
     },
     BlockInterval {
         chain_name: ChainName,
+        trigger_name: TriggerName,
         n_blocks: u32,
     },
     // not a real trigger, just for testing
@@ -143,8 +144,10 @@ pub enum TriggerData {
         block_height: u64,
     },
     BlockInterval {
-        /// The name of the chain where the event was emitted
+        /// The name of the chain where the blocks are checked
         chain_name: ChainName,
+        /// The unique name of the trigger to distinguish it
+        trigger_name: TriggerName,
         /// The block height where the event was emitted
         block_height: u64,
     },
