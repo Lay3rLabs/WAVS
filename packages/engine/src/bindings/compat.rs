@@ -107,6 +107,14 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                     }
                 ))
             },
+            wavs_types::TriggerData::BlockInterval { chain_name, block_height } => {
+                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::BlockInterval(
+                    crate::bindings::world::wavs::worker::layer_types::BlockIntervalData {
+                        chain_name: chain_name.to_string(),
+                        block_height,
+                    }
+                ))
+            },
             wavs_types::TriggerData::Raw(data) => {
                 Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Raw(data))
             },
