@@ -46,10 +46,11 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
                     }
                 )
             },
-            wavs_types::Trigger::BlockInterval { chain_name, n_blocks } => {
+            wavs_types::Trigger::BlockInterval { chain_name, trigger_name, n_blocks } => {
                 crate::bindings::world::wavs::worker::layer_types::TriggerSource::BlockInterval(
                     crate::bindings::world::wavs::worker::layer_types::BlockIntervalSource {
                         chain_name: chain_name.to_string(),
+                        trigger_name: trigger_name.to_string(),
                         n_blocks,
                     }
                 )
@@ -107,10 +108,11 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                     }
                 ))
             },
-            wavs_types::TriggerData::BlockInterval { chain_name, block_height } => {
+            wavs_types::TriggerData::BlockInterval { chain_name, trigger_name, block_height } => {
                 Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::BlockInterval(
                     crate::bindings::world::wavs::worker::layer_types::BlockIntervalData {
                         chain_name: chain_name.to_string(),
+                        trigger_name: trigger_name.to_string(),
                         block_height,
                     }
                 ))

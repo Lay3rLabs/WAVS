@@ -386,6 +386,7 @@ impl TriggerManager for CoreTriggerManager {
             }
             Trigger::BlockInterval {
                 chain_name,
+                trigger_name,
                 n_blocks,
             } => {
                 // let mut lock = self
@@ -563,6 +564,7 @@ fn remove_trigger_data(
         }
         Trigger::BlockInterval {
             chain_name,
+            trigger_name,
             n_blocks,
         } => {
             // triggers_by_cosmos_contract_address
