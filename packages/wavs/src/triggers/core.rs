@@ -380,6 +380,19 @@ impl TriggerManager for CoreTriggerManager {
 
                 lock.entry(key).or_default().insert(lookup_id);
             }
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks,
+            } => {
+                // let mut lock = self
+                //     .lookup_maps
+                //     .triggers_by_cosmos_contract_event
+                //     .write()
+                //     .unwrap();
+                // let key = (chain_name.clone(), address.clone(), event_type.clone());
+                // lock.entry(key).or_default().insert(lookup_id);
+                todo!()
+            }
             Trigger::Manual => {}
         }
 
@@ -543,6 +556,17 @@ fn remove_trigger_data(
                 .ok_or(TriggerError::NoSuchCosmosContractEvent(
                     chain_name, address, event_type,
                 ))?;
+        }
+        Trigger::BlockInterval {
+            chain_name,
+            n_blocks,
+        } => {
+            // triggers_by_cosmos_contract_address
+            //     .remove(&(chain_name.clone(), address.clone(), event_type.clone()))
+            //     .ok_or(TriggerError::NoSuchCosmosContractEvent(
+            //         chain_name, address, event_type,
+            //     ))?;
+            todo!()
         }
         Trigger::Manual => {}
     }
