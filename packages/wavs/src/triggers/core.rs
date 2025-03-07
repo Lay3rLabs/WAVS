@@ -19,7 +19,8 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
 use wavs_types::{
-    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData,
+    TriggerName, WorkflowID,
 };
 
 #[derive(Clone)]
@@ -40,6 +41,8 @@ struct LookupMaps {
     pub triggers_by_eth_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy::primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
+    pub triggers_by_block_interval:
+        Arc<RwLock<HashMap<(ChainName, TriggerName, u32), HashSet<LookupId>>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -54,6 +57,7 @@ impl LookupMaps {
             lookup_id: Arc::new(AtomicUsize::new(0)),
             triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_eth_contract_event: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_block_interval: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
