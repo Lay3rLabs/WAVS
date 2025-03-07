@@ -35,6 +35,7 @@ impl CommandDeployResult for DeployEigenCore {
                     if let Some(chain_name) = match &workflow.trigger {
                         Trigger::EthContractEvent { chain_name, .. } => Some(chain_name),
                         Trigger::CosmosContractEvent { chain_name, .. } => Some(chain_name),
+                        Trigger::BlockInterval { chain_name, .. } => Some(chain_name),
                         Trigger::Manual => None,
                     } {
                         if chain_name != chain {

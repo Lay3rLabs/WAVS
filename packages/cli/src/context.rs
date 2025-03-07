@@ -78,6 +78,9 @@ impl CliContext {
                         Trigger::CosmosContractEvent { chain_name, .. } => {
                             chains.insert(chain_name.clone());
                         }
+                        Trigger::BlockInterval { chain_name, .. } => {
+                            chains.insert(chain_name.clone());
+                        }
                         Trigger::Manual => {}
                     }
 
