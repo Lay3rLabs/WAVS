@@ -389,14 +389,10 @@ impl TriggerManager for CoreTriggerManager {
                 trigger_name,
                 n_blocks,
             } => {
-                // let mut lock = self
-                //     .lookup_maps
-                //     .triggers_by_cosmos_contract_event
-                //     .write()
-                //     .unwrap();
-                // let key = (chain_name.clone(), address.clone(), event_type.clone());
-                // lock.entry(key).or_default().insert(lookup_id);
-                todo!()
+                let mut lock = self.lookup_maps.triggers_by_block_interval.write().unwrap();
+                let key = (chain_name.clone(), trigger_name, n_blocks);
+
+                lock.entry(key).or_default().insert(lookup_id);
             }
             Trigger::Manual => {}
         }
@@ -451,6 +447,7 @@ impl TriggerManager for CoreTriggerManager {
                 .triggers_by_cosmos_contract_event
                 .write()
                 .unwrap(),
+            &mut self.lookup_maps.triggers_by_block_interval.write().unwrap(),
             lookup_id,
         )?;
 
@@ -470,6 +467,8 @@ impl TriggerManager for CoreTriggerManager {
             .triggers_by_cosmos_contract_event
             .write()
             .unwrap();
+        let mut triggers_by_block_interval =
+            self.lookup_maps.triggers_by_block_interval.write().unwrap();
         let mut triggers_by_service_workflow_lock = self
             .lookup_maps
             .triggers_by_service_workflow
@@ -485,6 +484,7 @@ impl TriggerManager for CoreTriggerManager {
                 &mut trigger_configs,
                 &mut triggers_by_eth_contract_event,
                 &mut triggers_by_cosmos_contract_event,
+                &mut triggers_by_block_interval,
                 *lookup_id,
             )?;
         }
@@ -531,6 +531,7 @@ fn remove_trigger_data(
         (ChainName, layer_climb::prelude::Address, String),
         HashSet<LookupId>,
     >,
+    triggers_by_block_interval: &mut HashMap<(ChainName, TriggerName, u32), HashSet<LookupId>>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -567,12 +568,13 @@ fn remove_trigger_data(
             trigger_name,
             n_blocks,
         } => {
-            // triggers_by_cosmos_contract_address
-            //     .remove(&(chain_name.clone(), address.clone(), event_type.clone()))
-            //     .ok_or(TriggerError::NoSuchCosmosContractEvent(
-            //         chain_name, address, event_type,
-            //     ))?;
-            todo!()
+            triggers_by_block_interval
+                .remove(&(chain_name.clone(), trigger_name.clone(), n_blocks))
+                .ok_or(TriggerError::NoSuchBlockIntervalTrigger(
+                    chain_name,
+                    trigger_name,
+                    n_blocks,
+                ))?;
         }
         Trigger::Manual => {}
     }
