@@ -86,7 +86,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<Vec<u8>, EngineError> {
+    ) -> Result<Option<Vec<u8>>, EngineError> {
         let digest = wasi.wasm.clone();
 
         fn log(
@@ -271,7 +271,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(&result, br#"{"x":12}"#);
+        assert_eq!(&result.unwrap(), br#"{"x":12}"#);
     }
 
     #[test]
@@ -307,7 +307,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(&result, br#"bar"#);
+        assert_eq!(&result.unwrap(), br#"bar"#);
 
         // verify whitelisted host env var is accessible
         let result = engine
@@ -326,7 +326,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(&result, br#"testing"#);
+        assert_eq!(&result.unwrap(), br#"testing"#);
 
         // verify the non-enabled env var is not accessible
         let result = engine

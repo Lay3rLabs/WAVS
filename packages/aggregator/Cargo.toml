@@ -1,6 +1,6 @@
 [package]
 name = "wavs-aggregator"
-version = "0.3.0-beta"
+version = "0.3.0"
 description = "WAVS Aggregator Server"
 edition.workspace = true
 authors.workspace = true

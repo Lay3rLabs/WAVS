@@ -86,7 +86,7 @@ impl Engine for MockEngine {
         _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
-    ) -> Result<Vec<u8>, EngineError> {
+    ) -> Result<Option<Vec<u8>>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
@@ -98,7 +98,7 @@ impl Engine for MockEngine {
 }
 
 pub trait Function: Send + Sync + 'static {
-    fn execute(&self, request: Vec<u8>) -> Result<Vec<u8>, EngineError>;
+    fn execute(&self, request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError>;
 }
 
 #[cfg(test)]
@@ -128,8 +128,8 @@ mod test {
     pub struct FixedResult(Vec<u8>);
 
     impl Function for FixedResult {
-        fn execute(&self, _request: Vec<u8>) -> Result<Vec<u8>, EngineError> {
-            Ok(self.0.clone())
+        fn execute(&self, _request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError> {
+            Ok(Some(self.0.clone()))
         }
     }
 
@@ -168,7 +168,7 @@ mod test {
                 &ServiceConfig::default(),
             )
             .unwrap();
-        assert_eq!(res, r1);
+        assert_eq!(res.unwrap(), r1);
 
         // d2 call gets r2
         let c2 = Component::new(d2);
@@ -190,7 +190,7 @@ mod test {
                 &ServiceConfig::default(),
             )
             .unwrap();
-        assert_eq!(res, r2);
+        assert_eq!(res.unwrap(), r2);
 
         // d3 call returns missing error
         let c3 = Component::new(d3);

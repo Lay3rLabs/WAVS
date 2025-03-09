@@ -7,7 +7,7 @@ use wavs::{
     engine::runner::EngineRunner,
     test_utils::{
         address::rand_address_eth,
-        mock::{BigSquare, MockE2ETestRunner, SquareIn, SquareOut},
+        mock::{BigSquare, ComponentNone, MockE2ETestRunner, SquareIn, SquareOut},
     },
 };
 use wavs_types::{Digest, ServiceID, WorkflowID};
@@ -158,4 +158,53 @@ fn mock_e2e_service_lifecycle() {
             assert_eq!(services.digests.len(), 4);
         }
     });
+}
+
+#[test]
+fn mock_e2e_component_none() {
+    let runner = MockE2ETestRunner::new(AppContext::new());
+
+    let service_id = ServiceID::new("service1").unwrap();
+    let task_queue_address = rand_address_eth();
+
+    // block and wait for creating the service
+    runner.ctx.rt.block_on({
+        let runner = runner.clone();
+        let service_id = service_id.clone();
+
+        async move {
+            let digest = Digest::new(b"wasm");
+
+            runner
+                .create_service(service_id.clone(), digest, ComponentNone)
+                .await;
+        }
+    });
+
+    // now pretend like we're reading some triggers off the chain
+    // this spawned into the async runtime, so it's sortof like the real TriggerManager
+    runner.ctx.rt.spawn({
+        let runner = runner.clone();
+
+        async move {
+            runner
+                .dispatcher
+                .triggers
+                .send_trigger(
+                    &service_id,
+                    &WorkflowID::default(),
+                    &task_queue_address.into(),
+                    &SquareIn { x: 3 },
+                    "eth",
+                )
+                .await;
+        }
+    });
+
+    // this _should_ error because submission is not fired
+    runner
+        .dispatcher
+        .submission
+        .wait_for_messages(1)
+        .unwrap_err();
 }

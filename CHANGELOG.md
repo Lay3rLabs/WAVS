@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.3.0]
+- bumped `WIT`, `@wavs/solidity`, `wavs-types`, `wavs-wasi-chain` and `examples` to `0.3.0`
+
+## [v0.3.0-rc1]
+
+### Changed
+
+- components now return optional results. If `Ok(None)`, the workflow gracefully exits early without submission.
+  You will need to migrate WASI components such that they export `fn run(a: TriggerAction) -> Result<Option<Vec<u8>>, String>` (the option is new here)
+
 ## [v0.3.0-beta]
 
 ### Added
@@ -47,12 +57,12 @@ and this project adheres to [Semantic Versioning].
 - Debug impl for `ByteArray` type
 
 ### Added
-- wavs-types bump, includes new `ByteArray` type 
+- wavs-types bump, includes new `ByteArray` type
 
 ## [v0.3.0-alpha8]
 
 ### Added
-- wavs-types bump, includes new `ByteArray` type 
+- wavs-types bump, includes new `ByteArray` type
 
 ### Changed
 - Eth event hash in trigger is now serialized as hex-encoded string (via `ByteArray` type)
@@ -107,7 +117,7 @@ and this project adheres to [Semantic Versioning].
 - Stronger separation between local utils and public types (now in its own crate)
 - Pinning foundry binaries in Docker
 - Update wstd to 0.5.0 (gets rid of Reactor etc.)
-- Solidity interface uses only primitive types (allows contracts to easily satisfy without imports) 
+- Solidity interface uses only primitive types (allows contracts to easily satisfy without imports)
 - Some refactoring of directories etc. (`sdk` is now only the `wit`, all Rust packages are in `packages`, all public contracts in `contracts`)
 
 ### Removed
@@ -137,7 +147,7 @@ and this project adheres to [Semantic Versioning].
 ### Changed
 
 - CLI writes full `Service` type into `deployments.json` (previously it was a reduced, cli-specific type)
-- CLI displays output on a per-command basis 
+- CLI displays output on a per-command basis
 - Moved more "public" types out of `wavs` package and into `utils`
 - More breaking changes to clean up API and deprecate cruft from `0.2.0`
 - CLI no longer imports `wavs` or `aggregator` packages
@@ -147,7 +157,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-beta...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-rc1...HEAD
+[v0.3.0-rc1]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-beta...v0.3.0-rc1
 [v0.3.0-beta]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha10...v0.3.0-beta
 [v0.3.0-alpha10]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha9...v0.3.0-alpha10
 [v0.3.0-alpha9]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha8...v0.3.0-alpha9
