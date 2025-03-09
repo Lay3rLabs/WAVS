@@ -156,24 +156,11 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
         if dir_path.exists() {
             match std::fs::remove_dir_all(&dir_path) {
-                Ok(_) => event!(
-                    tracing::Level::INFO,
-                    "Successfully removed storage at {:?}",
-                    dir_path
-                ),
-                Err(e) => event!(
-                    tracing::Level::ERROR,
-                    "Failed to remove storage at {:?}: {}",
-                    dir_path,
-                    e
-                ),
+                Ok(_) => tracing::info!("Successfully removed storage at {:?}", dir_path),
+                Err(e) => tracing::error!("Failed to remove storage at {:?}: {}", dir_path, e),
             }
         } else {
-            event!(
-                tracing::Level::WARN,
-                "Storage directory {:?} does not exist",
-                dir_path
-            );
+            tracing::warn!("Storage directory {:?} does not exist", dir_path);
         }
     }
 }
