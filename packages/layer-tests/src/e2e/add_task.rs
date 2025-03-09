@@ -1,3 +1,5 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 use anyhow::{bail, Result};
@@ -63,6 +65,19 @@ pub async fn add_task(
                 SimpleCosmosTriggerClient::new(ctx.get_cosmos_client(&chain_name)?, address);
             let trigger_id = client.add_trigger(input).await?;
             TriggerId::new(trigger_id.u64())
+        }
+        Trigger::BlockInterval {
+            chain_name,
+            trigger_name,
+            n_blocks,
+        } => {
+            // TODO: How to generate the new trigger id? Uniqueness is necessary only within the same WAVS instance
+            // TriggerName must be unique
+            let mut hasher = DefaultHasher::new();
+            chain_name.hash(&mut hasher);
+            trigger_name.hash(&mut hasher);
+            n_blocks.hash(&mut hasher);
+            TriggerId::new(hasher.finish())
         }
         Trigger::Manual => unimplemented!(),
     };
