@@ -111,8 +111,8 @@ setup_operator() {
     STRATEGY_MANAGER_ADDRESS=$(jq -r '.addresses.strategyManager' contracts/deployments/core/$CHAIN_ID.json)
 
     DELEGATION_MANAGER_ADDRESS=$(jq -r '.addresses.delegation' contracts/deployments/core/$CHAIN_ID.json)
-    token_address=$(jq -r '.addresses.token' contracts/deployments/layer-middleware/$CHAIN_ID.json)
-    strategy_address=$(jq -r '.addresses.strategy' contracts/deployments/layer-middleware/$CHAIN_ID.json)
+    token_address=$(jq -r '.addresses.token' contracts/deployments/wavs-middleware/$CHAIN_ID.json)
+    strategy_address=$(jq -r '.addresses.strategy' contracts/deployments/wavs-middleware/$CHAIN_ID.json)
     local mnemonic=$(cast wallet nm --json | jq -r '.mnemonic')
     local private_key=$(cast wallet pk "$mnemonic")
     local public_key=$(cast wallet address $private_key)
@@ -336,7 +336,7 @@ setup_mock_token_and_rewards() {
         --private-key '$deployer_private_key' \
         --broadcast > /dev/null 2>&1"
 
-    tokenAddress=$(cat deployments/layer-middleware/mockToken$CHAIN_ID.json | jq -r '.MockToken')
+    tokenAddress=$(cat deployments/wavs-middleware/mockToken$CHAIN_ID.json | jq -r '.MockToken')
 
     impersonate_account "$owner"
     if [ "$DEPLOY_ENV" = "TESTNET" ]; then
@@ -420,13 +420,13 @@ deploy_consumer_contract() {
     fi
 
     echo "OffchainMessageConsumer for e2e testing deployed with address: $offchainMessageConsumerAddress"
-    cd ../layer-middleware
+    cd ../wavs-middleware
     jq --arg addr "$offchainMessageConsumerAddress" \
        '.addresses.offchainMessageConsumer = $addr' \
-       contracts/deployments/layer-middleware/$CHAIN_ID.json \
-       > temp.json && mv temp.json contracts/deployments/layer-middleware/$CHAIN_ID.json
+       contracts/deployments/wavs-middleware/$CHAIN_ID.json \
+       > temp.json && mv temp.json contracts/deployments/wavs-middleware/$CHAIN_ID.json
 
-    cp contracts/deployments/layer-middleware/$CHAIN_ID.json ~/.nodes/avs_deploy.json
+    cp contracts/deployments/wavs-middleware/$CHAIN_ID.json ~/.nodes/avs_deploy.json
 }
 
 #############################################
@@ -481,9 +481,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-stakeRegistryAddress=$(cat deployments/layer-middleware/$CHAIN_ID.json | jq -r '.addresses.stakeRegistry')
-layerServiceManagerAddress=$(cat deployments/layer-middleware/$CHAIN_ID.json | jq -r '.addresses.layerServiceManager')
-avsRegistrarAddress=$(cat deployments/layer-middleware/$CHAIN_ID.json | jq -r '.addresses.avsRegistrar')
+stakeRegistryAddress=$(cat deployments/wavs-middleware/$CHAIN_ID.json | jq -r '.addresses.stakeRegistry')
+layerServiceManagerAddress=$(cat deployments/wavs-middleware/$CHAIN_ID.json | jq -r '.addresses.layerServiceManager')
+avsRegistrarAddress=$(cat deployments/wavs-middleware/$CHAIN_ID.json | jq -r '.addresses.avsRegistrar')
 [ -z "$stakeRegistryAddress" -o -z "$layerServiceManagerAddress" -o -z "$avsRegistrarAddress" ] && { echo "Error: One or more required addresses (stakeRegistryAddress, layerServiceManagerAddress, avsRegistrarAddress) are null or empty"; exit 1; }
 echo "Middleware contracts deployed with addresses: LayerServiceManager: $layerServiceManagerAddress, StakeRegistry: $stakeRegistryAddress, AVSRegistrar: $avsRegistrarAddress"
 
@@ -498,6 +498,9 @@ update_quorum_config "$owner" "$stakeRegistryAddress"
 # This function is used to update the AVS registrar for the stake registry, allowing injection of business logic to AVS registration
 update_avs_registrar "$owner" "$layerServiceManagerAddress" "$avsRegistrarAddress"
 
+# This function is used to update the metadata URL for the stake registry, allowing to be indexed by the Eigenlayer frontend
+update_metadata_url
+
 # This function is used to create the operator sets for the stake registry, allowing meta-avs functionality or otherwise discerneable operator sets
 for i in {1..2}; do
     create_operator_set "$i" "$owner" "$layerServiceManagerAddress"
@@ -511,8 +514,6 @@ done
 # This function is used to setup the mock token and rewards for the stake registry, allowing the AVS to submit rewards to the operators
 setup_mock_token_and_rewards "$owner" "$layerServiceManagerAddress"
 
-# This function is used to update the metadata URL for the stake registry, allowing to be indexed by the Eigenlayer frontend
-update_metadata_url
 
 # This function is used to validate the signature of operators on the consumer contract, allowing for e2e signature validation testing
 cargo run --bin validate_signature 3
