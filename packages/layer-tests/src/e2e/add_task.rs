@@ -71,8 +71,6 @@ pub async fn add_task(
             trigger_name,
             n_blocks,
         } => {
-            // TODO: How to generate the new trigger id? Uniqueness is necessary only within the same WAVS instance
-            // TriggerName must be unique
             let mut hasher = DefaultHasher::new();
             chain_name.hash(&mut hasher);
             trigger_name.hash(&mut hasher);
