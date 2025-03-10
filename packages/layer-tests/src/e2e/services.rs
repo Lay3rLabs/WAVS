@@ -65,8 +65,13 @@ impl Services {
             {
                 let chain = chain.clone();
                 let service_manager_address = alloy::primitives::Address::ZERO;
-                let avs_deploy_path =
-                    std::path::Path::new("docker/dev-desktop/wavs-el-env/.nodes/avs_deploy.json");
+                let current_dir = std::env::current_dir().unwrap();
+                tracing::info!("Current working directory: {}", current_dir.display());
+                let avs_deploy_path = workspace_path()
+                    .join("docker")
+                    .join("dev-desktop")
+                    .join(".nodes")
+                    .join("avs_deploy.json");
                 if avs_deploy_path.exists() {
                     let file = std::fs::File::open(avs_deploy_path)
                         .expect("Failed to open avs_deploy.json");
@@ -85,6 +90,7 @@ impl Services {
                             service_manager_address
                         }
                     };
+                    tracing::info!("Layer service manager address: {}", address);
                     eth_service_managers.insert(chain.clone(), address);
                 } else {
                     panic!("avs_deploy.json not found at {}", avs_deploy_path.display());

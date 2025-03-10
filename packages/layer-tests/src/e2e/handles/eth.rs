@@ -33,10 +33,13 @@ impl EthereumInstance {
             port,
             chain_id: chain_config.chain_id.clone(),
             block_time: configs.anvil_interval_seconds,
-            fork_url: chain_config.http_endpoint.clone(),
+            fork_url: Some("https://holesky.drpc.org".to_string()),
         }
         .spawn();
 
+        ctx.rt.block_on(async {
+            tokio::time::sleep(std::time::Duration::from_secs(90)).await;
+        });
         // if we don't have an explicit interval, alloy will move blocks forward by transaction
         // otherwise, we should wait to get a new block so we can be sure anvil is up and running fully
         if let Some(interval_seconds) = configs.anvil_interval_seconds {
@@ -45,9 +48,8 @@ impl EthereumInstance {
                     .build_query()
                     .await
                     .unwrap();
-
+                
                 let block = client.provider.get_block_number().await.unwrap();
-
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(interval_seconds)).await;
                     if client.provider.get_block_number().await.unwrap() > block {

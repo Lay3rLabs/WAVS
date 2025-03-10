@@ -36,9 +36,9 @@ just cosmwasm-build
 Edit `layer-tests.toml`:
 - Comment out **line 2**.
 - Change **line 5** to:
-  ```toml
-  isolated = "eth-echo-data"
-  ```
+```toml
+isolated = "eth-echo-data"
+```
 
 ## Running Tests
 Navigate to the `/docker/dev-desktop/` directory: 
