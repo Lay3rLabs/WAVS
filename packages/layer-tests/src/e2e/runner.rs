@@ -79,7 +79,7 @@ async fn test_service(
                 Some(workflow_id.to_string()),
                 get_input_for_service(name, service, configs, workflow_index),
                 if is_final {
-                    Some(std::time::Duration::from_secs(100))
+                    Some(std::time::Duration::from_secs(10))
                 } else {
                     None
                 },
@@ -135,7 +135,7 @@ async fn test_service(
                                 address,
                                 trigger_id,
                                 is_aggregator,
-                                std::time::Duration::from_secs(60),
+                                std::time::Duration::from_secs(10),
                             )
                             .await?;
 

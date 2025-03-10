@@ -64,6 +64,9 @@ impl From<TestConfig> for Configs {
             };
 
             // make sure each key is unique
+            // "17000-1"
+            // "17000-2"
+            // etc.
             chain_configs
                 .eth
                 .insert(ChainName::new(format!("{chain_id}-{eth_counter}")).unwrap(), chain_config);
