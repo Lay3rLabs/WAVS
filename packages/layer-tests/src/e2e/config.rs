@@ -42,8 +42,9 @@ impl From<TestConfig> for Configs {
         let mut chain_configs = ChainConfigs::default();
 
         let mut eth_port = 8545;
-        let mut eth_chain_id = 31337;
 
+        let mut eth_counter = 1;
+        
         let mut push_eth_chain = |aggregator: bool| {
             let http_endpoint = format!("http://127.0.0.1:{}", eth_port);
             let ws_endpoint = format!("ws://127.0.0.1:{}", eth_port);
@@ -62,12 +63,13 @@ impl From<TestConfig> for Configs {
                 faucet_endpoint: None,
             };
 
+            // make sure each key is unique
             chain_configs
                 .eth
-                .insert(ChainName::new(chain_id).unwrap(), chain_config);
+                .insert(ChainName::new(format!("{chain_id}-{eth_counter}")).unwrap(), chain_config);
 
             eth_port += 1;
-            eth_chain_id += 1;
+            eth_counter += 1;
         };
 
         let mut cosmos_port = 9545;
