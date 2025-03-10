@@ -181,7 +181,7 @@ setup_operator() {
     fi
 
     PRIVATE_KEY=$private_key
-    cargo run --bin register_layer_operator > /dev/null 2>&1
+    cargo run --bin register_layer_operator #> /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "Error: Failed to register operator $public_key to operator sets"
         exit 1
@@ -464,7 +464,7 @@ if [ "$DEPLOY_ENV" = "TESTNET" ]; then
         exit 1
     fi
 else
-    LOCAL_ETHEREUM_RPC_URL=http://ethereum:8545
+    LOCAL_ETHEREUM_RPC_URL=http://host.docker.internal:8545
     wait_for_ethereum
     cast rpc anvil_setBalance $deployer_public_key 0x10000000000000000000 -r $LOCAL_ETHEREUM_RPC_URL > /dev/null 2>&1
     if [ $? -ne 0 ]; then

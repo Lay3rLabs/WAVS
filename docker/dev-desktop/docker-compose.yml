@@ -1,14 +1,4 @@
 services:
-  # ethereum:
-  #   container_name: ethereum
-  #   platform: linux/amd64
-  #   build:
-  #     context: ./
-  #     dockerfile: docker/ethereum/Dockerfile
-  #   env_file:
-  #     - .env
-  #   ports:
-  #     - "8545:8545"
   eigenlayer:
     container_name: eigenlayer_setup
     platform: linux/amd64
