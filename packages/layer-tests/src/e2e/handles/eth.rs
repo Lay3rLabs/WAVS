@@ -1,7 +1,7 @@
 use std::process::{Command, Stdio};
 
 use alloy::providers::Provider;
-use utils::{config::EthereumChainConfig, context::AppContext, eth_client::EthClientBuilder};
+use utils::{config::EthereumChainConfig, context::AppContext, eth_client::EthClientBuilder, filesystem::workspace_path};
 
 use crate::e2e::config::Configs;
 
@@ -38,26 +38,24 @@ impl EthereumInstance {
         .spawn();
 
         ctx.rt.block_on(async {
-            tokio::time::sleep(std::time::Duration::from_secs(90)).await;
-        });
-        // if we don't have an explicit interval, alloy will move blocks forward by transaction
-        // otherwise, we should wait to get a new block so we can be sure anvil is up and running fully
-        if let Some(interval_seconds) = configs.anvil_interval_seconds {
-            ctx.rt.block_on(async {
-                let client = EthClientBuilder::new(chain_config.to_client_config(None, None, None))
-                    .build_query()
-                    .await
-                    .unwrap();
-                
-                let block = client.provider.get_block_number().await.unwrap();
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(interval_seconds)).await;
-                    if client.provider.get_block_number().await.unwrap() > block {
-                        break;
-                    }
+            // we're in an async context so we can also do things like query the chain, e.g.:
+            //
+            // let client = EthClientBuilder::new(chain_config.to_client_config(None, None, None))
+            //     .build_query()
+            //     .await
+            //     .unwrap();
+
+            // let block = client.provider.get_block_number().await.unwrap();
+
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                let mnemonic_path = workspace_path().join("docker/dev-desktop/.nodes/operator_mnemonic1");
+                if std::fs::exists(mnemonic_path).unwrap_or_default() {
+                    // file exists
+                    break;
                 }
-            })
-        }
+            }
+        });
 
         Self {
             _anvil: anvil,

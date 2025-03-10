@@ -26,9 +26,7 @@ use wavs_cli::{
     },
 };
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource,
-    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
-    WorkflowID,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource, EigenlayerDeployment, Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID
 };
 
 #[derive(Default)]
@@ -75,23 +73,11 @@ impl Services {
                 if avs_deploy_path.exists() {
                     let file = std::fs::File::open(avs_deploy_path)
                         .expect("Failed to open avs_deploy.json");
-                    let json: serde_json::Value =
-                        serde_json::from_reader(file).expect("Failed to parse avs_deploy.json");
-                    let address = match json["addresses"]["layerServiceManager"].as_str() {
-                        Some(addr) => match alloy::primitives::Address::from_str(addr) {
-                            Ok(parsed) => parsed,
-                            Err(e) => {
-                                tracing::error!("Failed to parse address: {}", e);
-                                service_manager_address
-                            }
-                        },
-                        None => {
-                            tracing::error!("Failed to get layerServiceManager address from JSON");
-                            service_manager_address
-                        }
-                    };
-                    tracing::info!("Layer service manager address: {}", address);
-                    eth_service_managers.insert(chain.clone(), address);
+
+
+                    let deployment: EigenlayerDeployment = serde_json::from_reader(file).expect("Failed to parse avs_deploy.json");
+                    tracing::info!("Layer service manager address: {}", deployment.addresses.layer_service_manager);
+                    eth_service_managers.insert(chain.clone(), deployment.addresses.layer_service_manager);
                 } else {
                     panic!("avs_deploy.json not found at {}", avs_deploy_path.display());
                 }

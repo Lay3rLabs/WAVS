@@ -3,8 +3,11 @@ mod digest;
 mod http;
 mod id;
 mod service;
+mod deployment;
+
 pub use bytes::*;
 pub use digest::*;
 pub use http::*;
 pub use id::*;
 pub use service::*;
+pub use deployment::*;
