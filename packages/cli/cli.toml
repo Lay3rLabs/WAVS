@@ -72,5 +72,5 @@ aggregator_endpoint = "http://localhost:8001"
 [chains.eth.holesky]
 chain_id = "17000"
 ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
-http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
+http_endpoint = "https://holesky.drpc.org"
 aggregator_endpoint = "http://localhost:8001"
