@@ -157,3 +157,19 @@ start-anvil:
 # e.g. `just cli-exec ./examples/build/components/echo_raw.wasm "hello world"`
 cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'
+
+# downloads the latest WIT file from the wavs-wasi repo
+download-wit:
+    # Create a temporary directory
+    rm -rf temp_clone
+    mkdir temp_clone
+    
+    # Clone the specific branch into the temp directory
+    git -C temp_clone clone --branch init/wavs-wasi-utils --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
+    
+    # Copy just the sdk directory to your destination
+    mkdir -p sdk
+    cp -r temp_clone/wavs-wasi/sdk/* sdk/
+    
+    # Clean up
+    rm -rf temp_clone
