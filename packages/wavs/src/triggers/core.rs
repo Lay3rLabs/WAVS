@@ -313,14 +313,14 @@ impl CoreTriggerManager {
                         }
                     }
 
-                    // Process block-based triggers
+                    // process block-based triggers
                     let mut triggers_by_block_interval_lock =
                         self.lookup_maps.triggers_by_block_interval.write().unwrap();
                     if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
                         countdowns.iter_mut().for_each(|(countdown, lookup_id)| {
                             *countdown -= 1;
 
-                            // If the countdown reaches zero, trigger the action
+                            // if the countdown reaches zero, trigger the action
                             if *countdown == 0 {
                                 let trigger_configs_lock =
                                     self.lookup_maps.trigger_configs.read().unwrap();
@@ -328,7 +328,7 @@ impl CoreTriggerManager {
                                     if let Trigger::BlockInterval { n_blocks, .. } =
                                         &trigger_config.trigger
                                     {
-                                        // Reset the countdown to `n_blocks`
+                                        // reset the countdown to `n_blocks`
                                         *countdown = *n_blocks;
                                         trigger_actions.push(TriggerAction {
                                             data: TriggerData::BlockInterval {
@@ -347,12 +347,36 @@ impl CoreTriggerManager {
                     chain_name,
                     block_height,
                 } => {
-                    let triggers_by_contract_event_lock =
-                        self.lookup_maps.triggers_by_block_interval.read().unwrap();
+                    let mut triggers_by_block_interval_lock =
+                        self.lookup_maps.triggers_by_block_interval.write().unwrap();
 
-                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+                    if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
+                        countdowns.iter_mut().for_each(|(countdown, lookup_id)| {
+                            *countdown -= 1;
 
-                    unimplemented!();
+                            // if the countdown reaches zero, trigger the action
+                            if *countdown == 0 {
+                                let trigger_configs_lock =
+                                    self.lookup_maps.trigger_configs.read().unwrap();
+                                if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
+                                    if let Trigger::BlockInterval { n_blocks, .. } =
+                                        &trigger_config.trigger
+                                    {
+                                        // reset the countdown to `n_blocks`
+                                        *countdown = *n_blocks;
+
+                                        trigger_actions.push(TriggerAction {
+                                            data: TriggerData::BlockInterval {
+                                                chain_name: chain_name.clone(),
+                                                block_height,
+                                            },
+                                            config: trigger_config.clone(),
+                                        });
+                                    }
+                                }
+                            }
+                        });
+                    }
                 }
             }
 
