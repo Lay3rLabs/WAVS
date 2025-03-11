@@ -68,12 +68,6 @@ pub async fn add_task(
             chain_name: _,
             n_blocks: _,
         } => {
-            // let mut hasher = DefaultHasher::new();
-            // chain_name.hash(&mut hasher);
-            // trigger_name.hash(&mut hasher);
-            // n_blocks.hash(&mut hasher);
-            // TriggerId::new(hasher.finish())
-            // That was one of the ideas, using the trigger_name
             todo!();
         }
         Trigger::Manual => unimplemented!(),
