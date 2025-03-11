@@ -1,5 +1,3 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 use anyhow::{bail, Result};
@@ -67,8 +65,8 @@ pub async fn add_task(
             TriggerId::new(trigger_id.u64())
         }
         Trigger::BlockInterval {
-            chain_name,
-            n_blocks,
+            chain_name: _,
+            n_blocks: _,
         } => {
             // let mut hasher = DefaultHasher::new();
             // chain_name.hash(&mut hasher);
