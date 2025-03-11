@@ -295,38 +295,41 @@ impl CoreTriggerManager {
                     chain_name,
                     block_height,
                 } => {
-                    let triggers_by_contract_event_lock = self
-                        .lookup_maps
-                        .triggers_by_cosmos_contract_event
-                        .read()
-                        .unwrap();
+                    // extra scope in order to properly drop the locks
+                    {
+                        let triggers_by_contract_event_lock = self
+                            .lookup_maps
+                            .triggers_by_cosmos_contract_event
+                            .read()
+                            .unwrap();
 
-                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+                        let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
 
-                    for (contract_address, event) in contract_events {
-                        if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
-                            chain_name.clone(),
-                            contract_address.clone(),
-                            event.ty.clone(),
-                        )) {
-                            for id in lookup_ids {
-                                match trigger_configs_lock.get(id) {
-                                    Some(trigger_config) => {
-                                        trigger_actions.push(TriggerAction {
-                                            data: TriggerData::CosmosContractEvent {
-                                                contract_address: contract_address.clone(),
-                                                chain_name: chain_name.clone(),
-                                                event: event.clone(),
-                                                block_height,
-                                            },
-                                            config: trigger_config.clone(),
-                                        });
-                                    }
-                                    None => {
-                                        tracing::error!(
-                                            "Trigger config not found for lookup_id {}",
-                                            id
-                                        );
+                        for (contract_address, event) in contract_events {
+                            if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
+                                chain_name.clone(),
+                                contract_address.clone(),
+                                event.ty.clone(),
+                            )) {
+                                for id in lookup_ids {
+                                    match trigger_configs_lock.get(id) {
+                                        Some(trigger_config) => {
+                                            trigger_actions.push(TriggerAction {
+                                                data: TriggerData::CosmosContractEvent {
+                                                    contract_address: contract_address.clone(),
+                                                    chain_name: chain_name.clone(),
+                                                    event: event.clone(),
+                                                    block_height,
+                                                },
+                                                config: trigger_config.clone(),
+                                            });
+                                        }
+                                        None => {
+                                            tracing::error!(
+                                                "Trigger config not found for lookup_id {}",
+                                                id
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -334,68 +337,20 @@ impl CoreTriggerManager {
                     }
 
                     // process block-based triggers
-                    let mut triggers_by_block_interval_lock =
-                        self.lookup_maps.triggers_by_block_interval.write().unwrap();
-                    if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
-                        countdowns.iter_mut().for_each(|(countdown, lookup_id)| {
-                            *countdown -= 1;
-
-                            // if the countdown reaches zero, trigger the action
-                            if *countdown == 0 {
-                                let trigger_configs_lock =
-                                    self.lookup_maps.trigger_configs.read().unwrap();
-                                if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
-                                    if let Trigger::BlockInterval { n_blocks, .. } =
-                                        &trigger_config.trigger
-                                    {
-                                        // reset the countdown to `n_blocks`
-                                        *countdown = *n_blocks;
-                                        trigger_actions.push(TriggerAction {
-                                            data: TriggerData::BlockInterval {
-                                                chain_name: chain_name.clone(),
-                                                block_height,
-                                            },
-                                            config: trigger_config.clone(),
-                                        });
-                                    }
-                                }
-                            }
-                        });
+                    if let Some(trigger_action) =
+                        self.process_blocks(chain_name, block_height).await
+                    {
+                        trigger_actions.push(trigger_action);
                     }
                 }
                 StreamTriggers::EthereumBlock {
                     chain_name,
                     block_height,
                 } => {
-                    let mut triggers_by_block_interval_lock =
-                        self.lookup_maps.triggers_by_block_interval.write().unwrap();
-
-                    if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
-                        countdowns.iter_mut().for_each(|(countdown, lookup_id)| {
-                            *countdown -= 1;
-
-                            // if the countdown reaches zero, trigger the action
-                            if *countdown == 0 {
-                                let trigger_configs_lock =
-                                    self.lookup_maps.trigger_configs.read().unwrap();
-                                if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
-                                    if let Trigger::BlockInterval { n_blocks, .. } =
-                                        &trigger_config.trigger
-                                    {
-                                        // reset the countdown to `n_blocks`
-                                        *countdown = *n_blocks;
-
-                                        trigger_actions.push(TriggerAction {
-                                            data: TriggerData::BlockInterval {
-                                                chain_name: chain_name.clone(),
-                                                block_height,
-                                            },
-                                            config: trigger_config.clone(),
-                                        });
-                                    }
-                                }
-                            }
-                        });
+                    if let Some(trigger_action) =
+                        self.process_blocks(chain_name, block_height).await
+                    {
+                        trigger_actions.push(trigger_action);
                     }
                 }
             }
@@ -408,6 +363,42 @@ impl CoreTriggerManager {
         tracing::debug!("Trigger Manager watcher finished");
 
         Ok(())
+    }
+
+    async fn process_blocks(
+        &self,
+        chain_name: ChainName,
+        block_height: u64,
+    ) -> Option<TriggerAction> {
+        let mut triggers_by_block_interval_lock =
+            self.lookup_maps.triggers_by_block_interval.write().unwrap();
+
+        if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
+            for (countdown, lookup_id) in countdowns.iter_mut() {
+                *countdown -= 1;
+
+                // if the countdown reaches zero, trigger the action
+                if *countdown == 0 {
+                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+                    if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
+                        if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
+                            // reset the countdown to n_blocks
+                            *countdown = *n_blocks;
+
+                            return Some(TriggerAction {
+                                data: TriggerData::BlockInterval {
+                                    chain_name: chain_name.clone(),
+                                    block_height,
+                                },
+                                config: trigger_config.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
 
