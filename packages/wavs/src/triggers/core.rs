@@ -213,20 +213,20 @@ impl CoreTriggerManager {
             let chain_name = chain_name.clone();
 
             // Start the block stream (for block-based triggers)
-            let block_stream = query_client
+            let stream = query_client
                 .provider
                 .subscribe_blocks()
                 .await
                 .map_err(|e| TriggerError::Ethereum(e.into()))?
                 .into_stream();
 
-            let block_event_stream = Box::pin(block_stream.map(move |block| {
+            let block_stream = Box::pin(stream.map(move |block| {
                 Ok(StreamTriggers::EthereumBlock {
                     chain_name: chain_name.clone(),
                     block_height: block.number,
                 })
             }));
-            streams.push(block_event_stream);
+            streams.push(block_stream);
         }
 
         // Multiplex all the stream of streams
