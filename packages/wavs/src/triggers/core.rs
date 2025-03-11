@@ -19,8 +19,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
 use wavs_types::{
-    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData,
-    TriggerName, WorkflowID,
+    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
 
 #[derive(Clone)]
@@ -41,8 +40,8 @@ struct LookupMaps {
     pub triggers_by_eth_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy::primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
-    pub triggers_by_block_interval:
-        Arc<RwLock<HashMap<(ChainName, TriggerName, u32), HashSet<LookupId>>>>,
+    /// lookup by chain_name -> n_blocks
+    pub triggers_by_block_interval: Arc<RwLock<HashMap<ChainName, Vec<(u32, LookupId)>>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -386,13 +385,12 @@ impl TriggerManager for CoreTriggerManager {
             }
             Trigger::BlockInterval {
                 chain_name,
-                trigger_name,
                 n_blocks,
             } => {
                 let mut lock = self.lookup_maps.triggers_by_block_interval.write().unwrap();
-                let key = (chain_name.clone(), trigger_name, n_blocks);
+                let key = chain_name.clone();
 
-                lock.entry(key).or_default().insert(lookup_id);
+                lock.entry(key).or_default().push((n_blocks, lookup_id));
             }
             Trigger::Manual => {}
         }
@@ -531,7 +529,7 @@ fn remove_trigger_data(
         (ChainName, layer_climb::prelude::Address, String),
         HashSet<LookupId>,
     >,
-    triggers_by_block_interval: &mut HashMap<(ChainName, TriggerName, u32), HashSet<LookupId>>,
+    triggers_by_block_interval: &mut HashMap<ChainName, Vec<(u32, LookupId)>>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -565,15 +563,12 @@ fn remove_trigger_data(
         }
         Trigger::BlockInterval {
             chain_name,
-            trigger_name,
             n_blocks,
         } => {
             triggers_by_block_interval
-                .remove(&(chain_name.clone(), trigger_name.clone(), n_blocks))
+                .remove(&chain_name.clone())
                 .ok_or(TriggerError::NoSuchBlockIntervalTrigger(
-                    chain_name,
-                    trigger_name,
-                    n_blocks,
+                    chain_name, n_blocks,
                 ))?;
         }
         Trigger::Manual => {}

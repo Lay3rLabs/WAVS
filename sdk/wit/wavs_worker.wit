@@ -78,7 +78,6 @@ interface layer-types {
 
   record block-interval-source {
     chain-name: string,
-    trigger-name: string,
     n-blocks: u32
   }
 
@@ -105,7 +104,6 @@ interface layer-types {
 
   record block-interval-data {
     chain-name: string,
-    trigger-name: string,
     block-height: u64
   }
 

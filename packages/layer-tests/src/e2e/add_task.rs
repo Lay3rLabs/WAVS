@@ -68,14 +68,15 @@ pub async fn add_task(
         }
         Trigger::BlockInterval {
             chain_name,
-            trigger_name,
             n_blocks,
         } => {
-            let mut hasher = DefaultHasher::new();
-            chain_name.hash(&mut hasher);
-            trigger_name.hash(&mut hasher);
-            n_blocks.hash(&mut hasher);
-            TriggerId::new(hasher.finish())
+            // let mut hasher = DefaultHasher::new();
+            // chain_name.hash(&mut hasher);
+            // trigger_name.hash(&mut hasher);
+            // n_blocks.hash(&mut hasher);
+            // TriggerId::new(hasher.finish())
+            // That was one of the ideas, using the trigger_name
+            todo!();
         }
         Trigger::Manual => unimplemented!(),
     };

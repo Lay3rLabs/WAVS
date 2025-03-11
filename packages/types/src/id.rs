@@ -95,8 +95,6 @@ new_id_type!(WorkflowID);
 // Distinct from a ChainConfig's ChainID - this is the *name* used within WAVS
 // It's allowed for multiple chains to have the same ChainID, but ChainName is unique
 new_id_type!(ChainName);
-// In order to distinguish a different BlockInterval triggers we are using a unique TriggerName
-new_id_type!(TriggerName);
 
 // Define FromStr for ServiceID to enable parsing from command line strings
 impl FromStr for ServiceID {

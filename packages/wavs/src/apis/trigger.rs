@@ -4,9 +4,7 @@ use tokio::sync::mpsc;
 
 use crate::AppContext;
 
-use wavs_types::{
-    ByteArray, ChainName, ServiceID, TriggerAction, TriggerConfig, TriggerName, WorkflowID,
-};
+use wavs_types::{ByteArray, ChainName, ServiceID, TriggerAction, TriggerConfig, WorkflowID};
 
 pub trait TriggerManager: Send + Sync {
     /// Start running the trigger manager.
@@ -49,8 +47,8 @@ pub enum TriggerError {
     NoSuchCosmosContractEvent(ChainName, Address, String),
     #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
     NoSuchEthContractEvent(ChainName, alloy::primitives::Address, ByteArray<32>),
-    #[error("Cannot find block interval trigger: {0} / {1} / {2}")]
-    NoSuchBlockIntervalTrigger(ChainName, TriggerName, u32),
+    #[error("Cannot find block interval trigger: {0} / {1}")]
+    NoSuchBlockIntervalTrigger(ChainName, u32),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
