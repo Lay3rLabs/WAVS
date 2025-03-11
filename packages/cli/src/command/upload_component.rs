@@ -1,7 +1,7 @@
 use anyhow::Result;
 use wavs_types::Digest;
 
-use crate::{args::Component, clients::HttpClient, config::Config, util::read_component};
+use crate::{clients::HttpClient, config::Config, util::read_component};
 
 pub struct UploadComponent {
     pub digest: Digest,
@@ -14,15 +14,15 @@ impl std::fmt::Display for UploadComponent {
 }
 
 pub struct UploadComponentArgs {
-    pub component: Component,
+    pub component_path: String,
 }
 
 impl UploadComponent {
     pub async fn run(
         config: &Config,
-        UploadComponentArgs { component }: UploadComponentArgs,
+        UploadComponentArgs { component_path }: UploadComponentArgs,
     ) -> Result<Self> {
-        let wasm_bytes = read_component(&component)?;
+        let wasm_bytes = read_component(&component_path)?;
         let http_client = HttpClient::new(config.wavs_endpoint.clone());
         let digest = http_client.upload_component(wasm_bytes).await?;
 

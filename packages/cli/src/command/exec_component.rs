@@ -7,7 +7,6 @@ use wavs_types::{
 };
 
 use crate::{
-    args::Component,
     config::Config,
     util::{read_component, ComponentInput},
 };
@@ -57,7 +56,7 @@ impl ExecComponent {
             fuel_limit,
         }: ExecComponentArgs,
     ) -> Result<Self> {
-        let wasm_bytes = read_component(&Component::Path(component_path))?;
+        let wasm_bytes = read_component(&component_path)?;
 
         let mut config = WTConfig::new();
         config.wasm_component_model(true);

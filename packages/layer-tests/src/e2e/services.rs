@@ -342,7 +342,7 @@ async fn deploy_service_raw(
     let digest_names = Vec::<DigestName>::from(service_kind);
 
     let component1 = Component {
-        wasm: digests.lookup.get(&digest_names[0]).unwrap().clone(),
+        source: ComponentSource::Digest(digests.lookup.get(&digest_names[0]).unwrap().clone()),
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
@@ -350,7 +350,7 @@ async fn deploy_service_raw(
     };
 
     let component2 = Component {
-        wasm: digests.lookup.get(&digest_names[1]).unwrap().clone(),
+        source: ComponentSource::Digest(digests.lookup.get(&digest_names[1]).unwrap().clone()),
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,

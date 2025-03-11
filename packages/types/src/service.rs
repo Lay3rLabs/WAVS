@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
 
-use crate::{digest::Digest, ByteArray};
+use crate::{ByteArray, ComponentSource};
 
 use super::{ChainName, ComponentID, ServiceID, WorkflowID};
 
@@ -34,7 +34,7 @@ impl Service {
         id: ServiceID,
         name: Option<String>,
         trigger: Trigger,
-        component_digest: Digest,
+        source: ComponentSource,
         submit: Submit,
         config: Option<ServiceConfig>,
     ) -> Self {
@@ -49,7 +49,7 @@ impl Service {
         };
 
         let component = Component {
-            wasm: component_digest,
+            source,
             permissions: Permissions::default(),
         };
 
@@ -71,7 +71,7 @@ impl Service {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct Component {
-    pub wasm: Digest,
+    pub source: ComponentSource,
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
@@ -223,7 +223,7 @@ pub enum AllowedHostPermission {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
-    use crate::{digest::Digest, id::ChainName, ByteArray, IDError, ServiceID, WorkflowID};
+    use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
     use super::{Component, Submit, Trigger, TriggerConfig};
 
@@ -242,9 +242,9 @@ mod test_ext {
     }
 
     impl Component {
-        pub fn new(digest: Digest) -> Component {
+        pub fn new(source: ComponentSource) -> Component {
             Self {
-                wasm: digest,
+                source,
                 permissions: Default::default(),
             }
         }

@@ -6,8 +6,8 @@ use utils::{
     eth_client::EthClientBuilder,
 };
 use wavs_types::{
-    AddServiceRequest, AllowedHostPermission, Digest, Permissions, Service, ServiceConfig,
-    ServiceID, Submit, Trigger, UploadServiceResponse,
+    AddServiceRequest, AllowedHostPermission, ComponentSource, Digest, Permissions, Service,
+    ServiceConfig, ServiceID, Submit, Trigger, UploadServiceResponse,
 };
 
 use crate::config::Config;
@@ -80,14 +80,14 @@ impl HttpClient {
         &self,
         trigger: Trigger,
         submit: Submit,
-        digest: Digest,
+        source: ComponentSource,
         config: ServiceConfig,
     ) -> Result<Service> {
         let mut service = Service::new_simple(
             ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?,
             None,
             trigger,
-            digest,
+            source,
             submit,
             Some(config),
         );

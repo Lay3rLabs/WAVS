@@ -20,8 +20,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tower::Service as _;
 use wavs_types::{
-    AddServiceRequest, DeleteServicesRequest, Digest, ListServicesResponse, Service, ServiceID,
-    Submit,
+    AddServiceRequest, ComponentSource, DeleteServicesRequest, ListServicesResponse, Service,
+    ServiceID, Submit,
 };
 
 pub struct MockE2ETestRunner {
@@ -86,22 +86,27 @@ impl MockE2ETestRunner {
     pub async fn create_service_simple(
         &self,
         service_id: ServiceID,
-        digest: Digest,
+        source: ComponentSource,
         function: impl Function,
     ) {
-        self.create_service(service_id, digest, function).await
+        self.create_service(service_id, source, function).await
     }
 
     #[allow(clippy::too_many_arguments)]
     pub async fn create_service(
         &self,
         service_id: ServiceID,
-        digest: Digest,
+        source: ComponentSource,
         function: impl Function,
     ) {
         // "upload" the component
         // not going through http for this because we don't have raw bytes, digest is fake
-        self.dispatcher.engine.engine().register(&digest, function);
+        let digest = match &source {
+            ComponentSource::Download { digest, .. } => digest,
+            ComponentSource::Registry { registry } => &registry.digest,
+            ComponentSource::Digest(digest) => digest,
+        };
+        self.dispatcher.engine.engine().register(digest, function);
 
         // but we can create a service via http router
         let trigger = mock_eth_event_trigger();
@@ -112,7 +117,7 @@ impl MockE2ETestRunner {
             service_id,
             Some("mock-service".to_string()),
             trigger,
-            digest,
+            source,
             submit,
             None,
         );

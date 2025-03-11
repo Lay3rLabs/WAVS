@@ -1,10 +1,20 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use utils::storage::CAStorageError;
 
 use wavs_types::{
-    Component, ComponentID, Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID,
+    ComponentID, Digest, Permissions, ServiceConfig, ServiceID, TriggerAction, WorkflowID,
 };
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct ExecutionComponent {
+    pub wasm: Digest,
+    // What permissions this component has.
+    // These are currently not enforced, you can pass in Default::default() for now
+    pub permissions: Permissions,
+}
 
 pub trait Engine: Send + Sync {
     fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
@@ -15,7 +25,7 @@ pub trait Engine: Send + Sync {
     /// This will execute a component that implements one of our supported interfaces
     fn execute(
         &self,
-        component: &Component,
+        component: &ExecutionComponent,
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
@@ -33,7 +43,7 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
 
     fn execute(
         &self,
-        component: &Component,
+        component: &ExecutionComponent,
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
@@ -68,4 +78,7 @@ pub enum EngineError {
 
     #[error{"Unable to send result after executing Service {0} / Workflow {1}"}]
     WasiResultSend(ServiceID, WorkflowID),
+
+    #[error("No registry configured")]
+    NoRegistry,
 }

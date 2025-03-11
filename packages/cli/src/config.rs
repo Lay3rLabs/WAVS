@@ -28,6 +28,8 @@ pub struct Config {
 
     /// The mnemonic to use for submitting transactions on ethereum chains (usually None, set via env var)
     pub eth_mnemonic: Option<String>,
+
+    pub registry_domain: Option<String>,
 }
 
 impl ConfigExt for Config {
@@ -56,6 +58,7 @@ impl Default for Config {
             },
             cosmos_mnemonic: None,
             eth_mnemonic: None,
+            registry_domain: None,
         }
     }
 }

@@ -1,7 +1,7 @@
 use tracing::instrument;
-use wavs_types::{Component, Digest, ServiceConfig, TriggerAction};
+use wavs_types::{Digest, ServiceConfig, TriggerAction};
 
-use crate::apis::engine::{Engine, EngineError};
+use crate::apis::engine::{Engine, EngineError, ExecutionComponent};
 use crate::triggers::mock::get_mock_trigger_data;
 
 /// Simply returns the request as the result.
@@ -29,7 +29,7 @@ impl Engine for IdentityEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        _component: &Component,
+        _component: &ExecutionComponent,
         _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
@@ -40,7 +40,7 @@ impl Engine for IdentityEngine {
 
 #[cfg(test)]
 mod test {
-    use wavs_types::TriggerData;
+    use wavs_types::{Permissions, TriggerData};
 
     use crate::triggers::mock::mock_eth_event_trigger_config;
 
@@ -60,10 +60,13 @@ mod test {
 
         // execute returns self
         let request = b"this is only a test".to_vec();
-        let component = Component::new(d1);
+        let execution_component = ExecutionComponent {
+            wasm: d1,
+            permissions: Permissions::default(),
+        };
         let result = engine
             .execute(
-                &component,
+                &execution_component,
                 None,
                 TriggerAction {
                     config: mock_eth_event_trigger_config("foobar", "baz"),

@@ -10,7 +10,7 @@ use wavs::{
         mock::{BigSquare, ComponentNone, MockE2ETestRunner, SquareIn, SquareOut},
     },
 };
-use wavs_types::{Digest, ServiceID, WorkflowID};
+use wavs_types::{ComponentSource, Digest, ServiceID, WorkflowID};
 
 #[test]
 fn mock_e2e_trigger_flow() {
@@ -28,7 +28,11 @@ fn mock_e2e_trigger_flow() {
             let digest = Digest::new(b"wasm");
 
             runner
-                .create_service(service_id.clone(), digest, BigSquare)
+                .create_service(
+                    service_id.clone(),
+                    ComponentSource::Digest(digest),
+                    BigSquare,
+                )
                 .await;
         }
     });
@@ -109,7 +113,11 @@ fn mock_e2e_service_lifecycle() {
                 (&service_id3, digest3),
             ] {
                 runner
-                    .create_service_simple(service_id.clone(), digest.clone(), BigSquare)
+                    .create_service_simple(
+                        service_id.clone(),
+                        ComponentSource::Digest(digest.clone()),
+                        BigSquare,
+                    )
                     .await;
             }
 
@@ -176,7 +184,11 @@ fn mock_e2e_component_none() {
             let digest = Digest::new(b"wasm");
 
             runner
-                .create_service(service_id.clone(), digest, ComponentNone)
+                .create_service(
+                    service_id.clone(),
+                    ComponentSource::Digest(digest),
+                    ComponentNone,
+                )
                 .await;
         }
     });

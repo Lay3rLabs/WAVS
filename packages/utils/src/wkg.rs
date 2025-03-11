@@ -37,13 +37,13 @@ impl WkgClient {
     /// latest value.
     /// Finally, checks if the user provided an alternative registry other than WAVS default (currently wa.dev),
     /// before fetching the component from the registry.
-    pub async fn fetch(&self, registry: Registry) -> Result<Vec<u8>> {
+    pub async fn fetch(&self, registry: &Registry) -> Result<Vec<u8>> {
         let mut inner = self.inner.lock().await;
         let config = &inner.config;
-        let client = if let Some(domain) = registry.domain {
+        let client = if let Some(_domain) = &registry.domain {
             let mut new_config = Config::empty();
             new_config.merge(config.clone());
-            new_config.set_package_registry_override(registry.package.clone(), domain.clone());
+            // new_config.set_package_registry_override(registry.package.clone(), domain.clone());
             let client = Client::new(new_config.clone());
             let cache_path =
                 FileCache::global_cache_path().context("couldn't find global cache path")?;
@@ -74,6 +74,10 @@ impl WkgClient {
         while let Some(chunk) = content_stream.try_next().await? {
             content.append(&mut chunk.to_vec());
         }
+        // TODO Hash contents and confirm digest matches before returning
+        // At the moment the latest published versions do not match the current checksums
+        // Wait to implement until decided upon mechanism for keeping published test components
+        // Up to date
         Ok(content)
     }
 }

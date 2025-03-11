@@ -127,24 +127,13 @@ impl DeployService {
 
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
-        let digest = match component {
-            ComponentSource::Bytecode(bytes) => http_client.upload_component(bytes).await?,
-            ComponentSource::Download { url: _, digest } => digest,
-            ComponentSource::Registry { registry } => {
-                http_client
-                    .upload_component(serde_json::to_vec(&registry)?)
-                    .await?
-            }
-            ComponentSource::Digest(digest) => digest,
-        };
-
         let service_config = service_config.unwrap_or_default();
 
         let service = http_client
             .create_service_simple(
                 trigger.clone(),
                 submit.clone(),
-                digest,
+                component,
                 service_config.clone(),
             )
             .await?;

@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
+use crate::apis::engine::ExecutionComponent;
 use crate::triggers::mock::get_mock_trigger_data;
 use tracing::instrument;
 use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
@@ -82,7 +83,7 @@ impl Engine for MockEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        component: &wavs_types::Component,
+        component: &ExecutionComponent,
         _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
@@ -103,9 +104,9 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use wavs_types::{ChainName, Component, TriggerConfig, TriggerData};
+    use wavs_types::{ChainName, Permissions, TriggerConfig, TriggerData};
 
-    use crate::test_utils::address::rand_event_eth;
+    use crate::{apis::engine::ExecutionComponent, test_utils::address::rand_event_eth};
 
     use super::*;
 
@@ -149,7 +150,10 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let c1 = wavs_types::Component::new(d1);
+        let c1 = ExecutionComponent {
+            wasm: d1,
+            permissions: Permissions::default(),
+        };
         let res = engine
             .execute(
                 &c1,
@@ -171,7 +175,10 @@ mod test {
         assert_eq!(res.unwrap(), r1);
 
         // d2 call gets r2
-        let c2 = Component::new(d2);
+        let c2 = ExecutionComponent {
+            wasm: d2,
+            permissions: Permissions::default(),
+        };
         let res = engine
             .execute(
                 &c2,
@@ -193,7 +200,10 @@ mod test {
         assert_eq!(res.unwrap(), r2);
 
         // d3 call returns missing error
-        let c3 = Component::new(d3);
+        let c3 = ExecutionComponent {
+            wasm: d3,
+            permissions: Permissions::default(),
+        };
         let err = engine
             .execute(
                 &c3,

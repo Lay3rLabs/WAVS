@@ -1,8 +1,6 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 use utils::filesystem::workspace_path;
-
-use crate::args::Component;
 
 //A wrapper type that will:
 // 1. treat strings prefixed with @ as filepaths
@@ -42,25 +40,19 @@ impl ComponentInput {
     }
 }
 
-pub fn read_component(component: &Component) -> Result<Vec<u8>> {
-    match component {
-        Component::Path(path) => {
-            cfg_if::cfg_if! {
-                if #[cfg(debug_assertions)] {
-                    let mut path = PathBuf::from(shellexpand::tilde(&path).to_string());
-
-                    if !path.is_absolute() {
-                        path = workspace_path().join(path)
-                    };
-
-                    Ok(std::fs::read(path)?)
-                }
-                else {
-                    let path = PathBuf::from(shellexpand::tilde(&path).to_string());
-                    Ok(std::fs::read(path)?)
-                }
-            }
+cfg_if::cfg_if! {
+    if #[cfg(debug_assertions)] {
+        pub fn read_component(path: &str) -> Result<Vec<u8>> {
+            let mut path = PathBuf::from(shellexpand::tilde(&path).to_string());
+            if !path.is_absolute() {
+                path = workspace_path().join(path)
+            };
+            Ok(std::fs::read(path)?)
         }
-        Component::Registry(registry) => serde_json::to_vec(registry).map_err(|e| anyhow!(e)),
+    } else {
+        pub fn read_component(path: &str) -> Result<Vec<u8>> {
+            let path = PathBuf::from(shellexpand::tilde(&path).to_string());
+            Ok(std::fs::read(path)?)
+        }
     }
 }

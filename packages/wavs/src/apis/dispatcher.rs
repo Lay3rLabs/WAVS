@@ -2,7 +2,7 @@ use std::ops::Bound;
 
 use crate::AppContext;
 use async_trait::async_trait;
-use wavs_types::{ComponentSource, Digest, Service, ServiceID};
+use wavs_types::{Digest, Service, ServiceID};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -21,9 +21,9 @@ pub trait DispatchManager: Send + Sync {
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
-    async fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error>;
+    fn store_component(&self, source: Vec<u8>) -> Result<Digest, Self::Error>;
 
-    fn add_service(&self, service: Service) -> Result<(), Self::Error>;
+    async fn add_service(&self, service: Service) -> Result<(), Self::Error>;
 
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error>;
 

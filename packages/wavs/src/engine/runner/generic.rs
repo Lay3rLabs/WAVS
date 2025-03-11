@@ -1,6 +1,7 @@
 use tokio::sync::mpsc;
 use wavs_types::{Service, TriggerAction};
 
+use crate::apis::engine::ExecutionComponent;
 use crate::apis::submission::ChainMessage;
 use crate::engine::{Engine, EngineError};
 use crate::AppContext;
@@ -44,11 +45,25 @@ pub trait EngineRunner: Send + Sync {
             .get(&workflow.component)
             .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
 
+        let digest = match &component.source {
+            wavs_types::ComponentSource::Download { digest, .. } => digest,
+            wavs_types::ComponentSource::Registry { registry } => &registry.digest,
+            wavs_types::ComponentSource::Digest(digest) => digest,
+        };
+
+        let execution_component = ExecutionComponent {
+            wasm: digest.clone(),
+            permissions: component.permissions.clone(),
+        };
+
         let trigger_config = action.config.clone();
 
-        let wasi_result =
-            self.engine()
-                .execute(component, workflow.fuel_limit, action, &service.config)?;
+        let wasi_result = self.engine().execute(
+            &execution_component,
+            workflow.fuel_limit,
+            action,
+            &service.config,
+        )?;
 
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)

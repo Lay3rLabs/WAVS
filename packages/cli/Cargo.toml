@@ -10,6 +10,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
+wasm-pkg-common = { workspace = true }
+wasm-pkg-client = { workspace = true }
 wavs-types = { workspace = true }
 wavs-engine = { workspace = true }
 utils = { workspace = true }

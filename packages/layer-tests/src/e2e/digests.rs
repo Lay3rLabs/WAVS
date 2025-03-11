@@ -1,7 +1,10 @@
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashSet},
+    str::FromStr,
+};
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use utils::{context::AppContext, filesystem::workspace_path};
+use utils::{context::AppContext, filesystem::workspace_path, wkg::WkgClient};
 use wasm_pkg_common::package::PackageRef;
 use wavs_cli::clients::HttpClient;
 use wavs_types::{Digest, Registry};
@@ -24,6 +27,7 @@ pub enum DigestName {
 
 impl Digests {
     pub fn new(ctx: AppContext, configs: &Configs, http_client: &HttpClient) -> Self {
+        let wkg_client = WkgClient::new(configs.wavs.registry_domain.clone().unwrap()).unwrap();
         ctx.rt.block_on(async {
             let digests: HashSet<DigestName> = configs
                 .matrix
@@ -50,7 +54,12 @@ impl Digests {
             let mut futures = FuturesUnordered::new();
 
             for service_digest in digests {
-                futures.push(get_digest(http_client, service_digest, configs.registry));
+                futures.push(get_digest(
+                    http_client,
+                    service_digest,
+                    configs.registry,
+                    &wkg_client,
+                ));
             }
 
             let mut lookup = BTreeMap::default();
@@ -68,6 +77,7 @@ async fn get_digest(
     http_client: &HttpClient,
     name: DigestName,
     registry: bool,
+    wkg_client: &WkgClient,
 ) -> (DigestName, Digest) {
     if !registry {
         let wasm_filename = match name {
@@ -96,39 +106,36 @@ async fn get_digest(
                 .unwrap(),
         )
     } else {
-        let package = match name {
-            DigestName::ChainTriggerLookup => PackageRef::new(
-                "wavs-tests".to_string().try_into().unwrap(),
-                "chain-trigger-lookup".to_string().try_into().unwrap(),
-            ),
-            DigestName::CosmosQuery => PackageRef::new(
-                "wavs-tests".to_string().try_into().unwrap(),
-                "cosmos-query".to_string().try_into().unwrap(),
-            ),
-            DigestName::EchoData => PackageRef::new(
-                "wavs-tests".to_string().try_into().unwrap(),
-                "echo-data".to_string().try_into().unwrap(),
-            ),
-            DigestName::Permissions => PackageRef::new(
-                "wavs-tests".to_string().try_into().unwrap(),
-                "permissions".to_string().try_into().unwrap(),
-            ),
-            DigestName::Square => PackageRef::new(
-                "wavs-tests".to_string().try_into().unwrap(),
-                "square".to_string().try_into().unwrap(),
-            ),
+        let pkg_name = match name {
+            DigestName::ChainTriggerLookup => "chain_trigger_lookup",
+            DigestName::CosmosQuery => "cosmos_query",
+            DigestName::EchoData => "echo_data",
+            DigestName::Permissions => "permissions",
+            DigestName::Square => "square",
         };
-        let registry = Registry {
-            domain: None,
-            version: None,
-            package,
-        };
-        (
-            name,
-            http_client
-                .upload_component(serde_json::to_vec(&registry).unwrap())
-                .await
-                .unwrap(),
-        )
+        let checksum_bytes = std::fs::read("../../checksums.txt").unwrap();
+        let checksums_raw = std::str::from_utf8(&checksum_bytes).unwrap();
+        let checksums: Vec<&str> = checksums_raw.split("\n").collect();
+        let checksum = checksums
+            .iter()
+            .find(|check| {
+                let path = check.split_ascii_whitespace().last().unwrap();
+                let file_name = path.split("/").last().unwrap();
+                let without_extension = file_name.split(".").next().unwrap();
+                without_extension == pkg_name
+            })
+            .unwrap();
+        let digest_string = checksum.split_ascii_whitespace().next().unwrap();
+        let pkg_name = pkg_name.replace("_", "-");
+        let bytes = wkg_client
+            .fetch(&Registry {
+                digest: Digest::from_str(digest_string).unwrap(),
+                domain: None,
+                version: None,
+                package: PackageRef::try_from(format!("wavs-tests:{0}", pkg_name)).unwrap(),
+            })
+            .await
+            .unwrap();
+        (name, http_client.upload_component(bytes).await.unwrap())
     }
 }

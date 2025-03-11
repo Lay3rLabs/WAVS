@@ -12,6 +12,8 @@ use wavs_types::{Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID};
 
 use utils::storage::{CAStorage, CAStorageError};
 
+use crate::apis::engine::ExecutionComponent;
+
 use super::{Engine, EngineError};
 
 pub struct WasmEngine<S: CAStorage> {
@@ -82,13 +84,12 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        wasi: &wavs_types::Component,
+        wasi: &ExecutionComponent,
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
     ) -> Result<Option<Vec<u8>>, EngineError> {
         let digest = wasi.wasm.clone();
-
         fn log(
             service_id: &ServiceID,
             workflow_id: &WorkflowID,
@@ -200,7 +201,7 @@ impl WasiHttpView for HostComponent {
 #[cfg(test)]
 mod tests {
     use utils::storage::memory::MemoryStorage;
-    use wavs_types::{ServiceID, Trigger, TriggerConfig, TriggerData, WorkflowID};
+    use wavs_types::{Permissions, ServiceID, Trigger, TriggerConfig, TriggerData, WorkflowID};
 
     use crate::engine::mock::mock_chain_configs;
 
@@ -252,12 +253,15 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
-        let component = wavs_types::Component::new(digest);
+        let execution_component = ExecutionComponent {
+            wasm: digest,
+            permissions: Permissions::default(),
+        };
 
         // execute it and get bytes back
         let result = engine
             .execute(
-                &component,
+                &execution_component,
                 None,
                 TriggerAction {
                     config: TriggerConfig {
@@ -284,7 +288,10 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
-        let component = wavs_types::Component::new(digest);
+        let execution_component = ExecutionComponent {
+            wasm: digest,
+            permissions: Permissions::default(),
+        };
         let service_config = ServiceConfig {
             host_envs: vec!["WAVS_ENV_TEST".to_string()],
             kv: vec![("foo".to_string(), "bar".to_string())],
@@ -293,7 +300,7 @@ mod tests {
         // verify service config kv is accessible
         let result = engine
             .execute(
-                &component,
+                &execution_component,
                 None,
                 TriggerAction {
                     config: TriggerConfig {
@@ -312,7 +319,7 @@ mod tests {
         // verify whitelisted host env var is accessible
         let result = engine
             .execute(
-                &component,
+                &execution_component,
                 None,
                 TriggerAction {
                     config: TriggerConfig {
@@ -331,7 +338,7 @@ mod tests {
         // verify the non-enabled env var is not accessible
         let result = engine
             .execute(
-                &component,
+                &execution_component,
                 None,
                 TriggerAction {
                     config: TriggerConfig {
@@ -361,13 +368,16 @@ mod tests {
 
         // store square digest
         let digest = engine.store_wasm(ECHO_RAW).unwrap();
-        let component = wavs_types::Component::new(digest);
+        let execution_component = ExecutionComponent {
+            wasm: digest,
+            permissions: Permissions::default(),
+        };
         let service_config = ServiceConfig::default();
 
         // execute it and get the error
         let err = engine
             .execute(
-                &component,
+                &execution_component,
                 Some(low_fuel_limit),
                 TriggerAction {
                     config: TriggerConfig {

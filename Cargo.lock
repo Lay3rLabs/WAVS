@@ -7864,6 +7864,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "walkdir",
+ "wasm-pkg-client",
+ "wasm-pkg-common",
  "wavs-types",
 ]
 
@@ -8809,6 +8811,8 @@ dependencies = [
  "tracing-subscriber",
  "utils",
  "uuid",
+ "wasm-pkg-client",
+ "wasm-pkg-common",
  "wasmtime",
  "wavs-engine",
  "wavs-types",

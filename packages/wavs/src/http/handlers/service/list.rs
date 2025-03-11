@@ -23,7 +23,8 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
     for service in services_list {
         for component in service.components.values() {
             services.push(ListServiceResponse {
-                digest: component.wasm.clone().into(),
+                source: component.source.clone(),
+                // digest: component.source.clone().into(),
                 permissions: component.permissions.clone(),
                 status: service.status,
                 id: service.id.clone(),
