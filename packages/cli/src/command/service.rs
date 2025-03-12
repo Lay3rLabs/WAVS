@@ -7,11 +7,13 @@ use crate::{args::ServiceCommand, context::CliContext};
 
 /// Handle service commands - this function will be called from main.rs
 pub fn handle_service_command(ctx: &CliContext, command: ServiceCommand) -> Result<()> {
-    let result = match command {
-        ServiceCommand::Init { name, id, file } => init_service(name, id, file)?,
-    };
+    match command {
+        ServiceCommand::Init { name, id, file } => {
+            let result = init_service(name, id, file)?;
+            ctx.handle_display_result(result);
+        }
+    }
 
-    ctx.handle_display_result(result);
     Ok(())
 }
 
