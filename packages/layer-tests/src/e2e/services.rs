@@ -171,6 +171,7 @@ async fn deploy_service_simple(
     let digest = digests.lookup.get(&digest_name).unwrap().clone();
 
     let trigger = match service {
+        AnyService::Eth(EthService::BlockInterval) => CliTriggerKind::EthContractEvent,
         AnyService::Eth(_) => CliTriggerKind::EthContractEvent,
         AnyService::Cosmos(_) => CliTriggerKind::CosmosContractEvent,
         AnyService::CrossChain(service) => match service {
@@ -185,6 +186,7 @@ async fn deploy_service_simple(
         CliTriggerKind::CosmosContractEvent => {
             Some(crate::example_cosmos_client::NewMessageEvent::KEY.to_string())
         }
+        _ => None,
     };
 
     let submit = match service {
@@ -200,6 +202,7 @@ async fn deploy_service_simple(
             _ => Some(chain_names.eth[0].clone()),
         },
         CliTriggerKind::CosmosContractEvent => Some(chain_names.cosmos[0].clone()),
+        CliTriggerKind::EthBlockInterval => Some(chain_names.eth[0].clone()),
     };
 
     let trigger_address = match trigger {
@@ -253,12 +256,14 @@ async fn deploy_service_simple(
                     .to_string(),
             )
         }
+        CliTriggerKind::EthBlockInterval => None,
     };
 
     let submit_chain = match submit {
         CliSubmitKind::EthServiceHandler => match trigger {
             CliTriggerKind::EthContractEvent => trigger_chain.clone(), // not strictly necessary, just easier to reason about same-chain
             CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()), // always eth for now
+            CliTriggerKind::EthBlockInterval => trigger_chain.clone(),
         },
         CliSubmitKind::None => None,
     };

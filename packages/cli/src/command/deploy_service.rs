@@ -106,6 +106,14 @@ impl DeployService {
                     event_type: trigger_event_name,
                 }
             }
+            CliTriggerKind::EthBlockInterval => {
+                let chain_name = trigger_chain.context("must have trigger chain for contract")?;
+
+                Trigger::BlockInterval {
+                    chain_name,
+                    n_blocks: 3,
+                }
+            }
         };
 
         let submit: Submit = match submit {
