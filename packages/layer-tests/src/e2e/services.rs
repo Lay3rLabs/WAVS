@@ -171,7 +171,7 @@ async fn deploy_service_simple(
     let digest = digests.lookup.get(&digest_name).unwrap().clone();
 
     let trigger = match service {
-        AnyService::Eth(EthService::BlockInterval) => CliTriggerKind::EthContractEvent,
+        AnyService::Eth(EthService::BlockInterval) => CliTriggerKind::EthBlockInterval,
         AnyService::Eth(_) => CliTriggerKind::EthContractEvent,
         AnyService::Cosmos(_) => CliTriggerKind::CosmosContractEvent,
         AnyService::CrossChain(service) => match service {
