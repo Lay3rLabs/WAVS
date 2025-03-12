@@ -5515,7 +5515,7 @@ dependencies = [
 [[package]]
 name = "wavs-wasi-utils"
 version = "0.3.0"
-source = "git+ssh://git@github.com/Lay3rLabs/wavs-wasi?branch=init/wavs-wasi-utils#7dc633be9633e8751a6c37ff82a3499d921ca45a"
+source = "git+ssh://git@github.com/Lay3rLabs/wavs-wasi#71c31453a8b78f65aec3b3f3ce3685b742c1db07"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
