@@ -8,7 +8,6 @@ use super::digests::DigestName;
 pub struct TestMatrix {
     pub eth: HashSet<EthService>,
     pub cosmos: HashSet<CosmosService>,
-    pub block_interval: HashSet<BlockIntervalService>,
     pub cross_chain: HashSet<CrossChainService>,
 }
 
@@ -23,7 +22,7 @@ pub enum EthService {
     Square,
     MultiWorkflow,
     MultiTrigger,
-    BlockInterval,
+    BlockInterval
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -36,12 +35,6 @@ pub enum CosmosService {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
-pub enum BlockIntervalService {
-    EthBlockInterval,
-    CosmosBlockInterval,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum CrossChainService {
     CosmosToEthEchoData,
 }
@@ -50,7 +43,6 @@ pub enum CrossChainService {
 pub enum AnyService {
     Eth(EthService),
     Cosmos(CosmosService),
-    BlockInterval(BlockIntervalService),
     CrossChain(CrossChainService),
 }
 
@@ -63,12 +55,6 @@ impl From<EthService> for AnyService {
 impl From<CosmosService> for AnyService {
     fn from(service: CosmosService) -> Self {
         AnyService::Cosmos(service)
-    }
-}
-
-impl From<BlockIntervalService> for AnyService {
-    fn from(service: BlockIntervalService) -> Self {
-        AnyService::BlockInterval(service)
     }
 }
 
@@ -134,12 +120,6 @@ impl From<CosmosService> for Vec<DigestName> {
     }
 }
 
-impl From<BlockIntervalService> for Vec<DigestName> {
-    fn from(_service: BlockIntervalService) -> Self {
-        vec![DigestName::EchoBlockInterval]
-    }
-}
-
 impl From<CrossChainService> for Vec<DigestName> {
     fn from(service: CrossChainService) -> Self {
         match service {
@@ -153,7 +133,6 @@ impl From<AnyService> for Vec<DigestName> {
         match service {
             AnyService::Eth(service) => service.into(),
             AnyService::Cosmos(service) => service.into(),
-            AnyService::BlockInterval(service) => service.into(),
             AnyService::CrossChain(service) => service.into(),
         }
     }

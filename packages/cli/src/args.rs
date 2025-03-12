@@ -160,8 +160,6 @@ fn parse_chain_name(s: &str) -> Result<ChainName, String> {
 pub enum CliTriggerKind {
     EthContractEvent,
     CosmosContractEvent,
-    EthBlockInterval,
-    CosmosBlockInterval,
 }
 
 impl std::fmt::Display for CliTriggerKind {
@@ -169,8 +167,6 @@ impl std::fmt::Display for CliTriggerKind {
         match self {
             Self::EthContractEvent => write!(f, "eth-contract-event"),
             Self::CosmosContractEvent => write!(f, "cosmos-contract-event"),
-            Self::EthBlockInterval => write!(f, "eth-block-interval"),
-            Self::CosmosBlockInterval => write!(f, "cosmos-block-interval"),
         }
     }
 }
