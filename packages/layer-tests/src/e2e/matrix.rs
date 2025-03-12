@@ -22,7 +22,7 @@ pub enum EthService {
     Square,
     MultiWorkflow,
     MultiTrigger,
-    BlockInterval
+    BlockInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]

@@ -192,9 +192,7 @@ fn get_input_for_service(
                 _ => unimplemented!(),
             },
             EthService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
-            EthService::BlockInterval => {
-                Vec::new()
-            }
+            EthService::BlockInterval => Vec::new(),
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
@@ -227,9 +225,10 @@ fn verify_signed_data(
 ) -> Result<()> {
     let data = signed_data.data;
 
-    let input_req = || get_input_for_service(name, service, configs, workflow_index).expect(
-        "expected input data to be present for this test",
-    );
+    let input_req = || {
+        get_input_for_service(name, service, configs, workflow_index)
+            .expect("expected input data to be present for this test")
+    };
 
     let expected_data = match name {
         AnyService::Eth(eth_name) => match eth_name {
@@ -258,10 +257,8 @@ fn verify_signed_data(
                 let resp: PermissionsResponse = serde_json::from_slice(&data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
-            },
-            EthService::BlockInterval => {
-                Some(b"block-interval data".to_vec())
             }
+            EthService::BlockInterval => Some(b"block-interval data".to_vec()),
         },
         AnyService::Cosmos(cosmos_name) => match cosmos_name {
             CosmosService::EchoData | CosmosService::ChainTriggerLookup => Some(input_req()),
@@ -281,7 +278,7 @@ fn verify_signed_data(
             }
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
-            CrossChainService::CosmosToEthEchoData => Some(input_req())
+            CrossChainService::CosmosToEthEchoData => Some(input_req()),
         },
     };
 
