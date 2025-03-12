@@ -165,11 +165,12 @@ download-wit:
     mkdir temp_clone
     
     # Clone the specific branch into the temp directory
-    git -C temp_clone clone --branch init/wavs-wasi-utils --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
+    git -C temp_clone clone --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
     
     # Copy just the sdk directory to your destination
-    mkdir -p sdk
-    cp -r temp_clone/wavs-wasi/sdk/* sdk/
+    mkdir -p wit
+    cp -r temp_clone/wavs-wasi/wit/* wit/
+    cp -r temp_clone/wavs-wasi/wkg.lock wkg.lock
     
     # Clean up
     rm -rf temp_clone
