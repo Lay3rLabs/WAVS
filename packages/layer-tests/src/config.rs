@@ -69,6 +69,7 @@ pub struct TestMatrixEthConfig {
     pub square: bool,
     pub multi_workflow: bool,
     pub multi_trigger: bool,
+    pub block_interval: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -162,6 +163,10 @@ impl TestMatrixConfig {
             matrix.eth.insert(EthService::MultiTrigger);
         }
 
+        if self.eth.block_interval {
+            matrix.eth.insert(EthService::BlockInterval);
+        }
+
         if self.cosmos.chain_trigger_lookup {
             matrix.cosmos.insert(CosmosService::ChainTriggerLookup);
         }
@@ -204,6 +209,7 @@ impl From<&str> for AnyService {
             "eth-square" => AnyService::Eth(EthService::Square),
             "eth-multi-workflow" => AnyService::Eth(EthService::MultiWorkflow),
             "eth-multi-trigger" => AnyService::Eth(EthService::MultiTrigger),
+            "eth-block-interval" => AnyService::Eth(EthService::BlockInterval),
             "cosmos-chain-trigger-lookup" => AnyService::Cosmos(CosmosService::ChainTriggerLookup),
             "cosmos-cosmos-query" => AnyService::Cosmos(CosmosService::CosmosQuery),
             "cosmos-echo-data" => AnyService::Cosmos(CosmosService::EchoData),

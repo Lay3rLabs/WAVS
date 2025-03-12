@@ -19,6 +19,7 @@ pub enum DigestName {
     EchoData,
     Permissions,
     Square,
+    EchoBlockInterval,
 }
 
 impl Digests {
@@ -70,6 +71,7 @@ async fn get_digest(http_client: &HttpClient, name: DigestName) -> (DigestName, 
         DigestName::EchoData => "echo_data",
         DigestName::Permissions => "permissions",
         DigestName::Square => "square",
+        DigestName::EchoBlockInterval => "echo_block_interval",
     };
 
     let wasm_path = workspace_path()
