@@ -23,6 +23,7 @@ pub enum DigestName {
     EchoData,
     Permissions,
     Square,
+    EchoBlockInterval,
 }
 
 impl Digests {
@@ -73,20 +74,15 @@ impl Digests {
     }
 }
 
-async fn get_digest(
-    http_client: &HttpClient,
-    name: DigestName,
-    registry: bool,
-    wkg_client: &WkgClient,
-) -> (DigestName, Digest) {
-    if !registry {
-        let wasm_filename = match name {
-            DigestName::ChainTriggerLookup => "chain_trigger_lookup",
-            DigestName::CosmosQuery => "cosmos_query",
-            DigestName::EchoData => "echo_data",
-            DigestName::Permissions => "permissions",
-            DigestName::Square => "square",
-        };
+async fn get_digest(http_client: &HttpClient, name: DigestName) -> (DigestName, Digest) {
+    let wasm_filename = match name {
+        DigestName::ChainTriggerLookup => "chain_trigger_lookup",
+        DigestName::CosmosQuery => "cosmos_query",
+        DigestName::EchoData => "echo_data",
+        DigestName::Permissions => "permissions",
+        DigestName::Square => "square",
+        DigestName::EchoBlockInterval => "echo_block_interval",
+    };
 
         let wasm_path = workspace_path()
             .join("examples")

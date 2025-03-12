@@ -6,6 +6,7 @@ members = [
   "components/echo-raw",
   "components/square",
   "components/permissions",
+  "components/echo-block-interval",
   "components/_helpers",
   # TODO - port from old/
   # "composition/http-allow-list/http-allowed-coingecko",

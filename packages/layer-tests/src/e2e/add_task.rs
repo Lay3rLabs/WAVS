@@ -14,7 +14,7 @@ pub async fn add_task(
     ctx: &CliContext,
     service_id: String,
     workflow_id: Option<String>,
-    input: Vec<u8>,
+    input: Option<Vec<u8>>,
     result_timeout: Option<Duration>,
     is_aggregator: bool,
 ) -> Result<(TriggerId, Option<SignedData>)> {
@@ -52,7 +52,7 @@ pub async fn add_task(
             event_hash: _,
         } => {
             let client = SimpleEthTriggerClient::new(ctx.get_eth_client(&chain_name)?.eth, address);
-            client.add_trigger(input).await?
+            client.add_trigger(input.expect("on-chain triggers require input data")).await?
         }
         Trigger::CosmosContractEvent {
             chain_name,
@@ -61,16 +61,16 @@ pub async fn add_task(
         } => {
             let client =
                 SimpleCosmosTriggerClient::new(ctx.get_cosmos_client(&chain_name)?, address);
-            let trigger_id = client.add_trigger(input).await?;
+            let trigger_id = client.add_trigger(input.expect("on-chain triggers require input data")).await?;
             TriggerId::new(trigger_id.u64())
         }
         Trigger::BlockInterval {
             chain_name: _,
             n_blocks: _,
+            ..
         } => {
             // Hardcoded id since the current flow expects it to come from the event
             TriggerId::new(1337)
-
         }
         Trigger::Manual => unimplemented!(),
     };
