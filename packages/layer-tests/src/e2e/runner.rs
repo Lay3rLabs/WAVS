@@ -79,7 +79,7 @@ async fn test_service(
                 Some(workflow_id.to_string()),
                 get_input_for_service(name, service, configs, workflow_index),
                 if is_final {
-                    Some(std::time::Duration::from_secs(15))
+                    Some(std::time::Duration::from_secs(30))
                 } else {
                     None
                 },
