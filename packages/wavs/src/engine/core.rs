@@ -397,7 +397,6 @@ mod tests {
     fn execute_without_enough_fuel() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-
         let low_fuel_limit = 1;
         let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
 
