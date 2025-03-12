@@ -6,10 +6,14 @@ use wavs_types::{Service, ServiceConfig, ServiceID, ServiceStatus};
 use crate::{args::ServiceCommand, context::CliContext};
 
 /// Handle service commands - this function will be called from main.rs
-pub fn handle_service_command(ctx: &CliContext, command: ServiceCommand) -> Result<()> {
+pub fn handle_service_command(
+    ctx: &CliContext,
+    file: PathBuf,
+    command: ServiceCommand,
+) -> Result<()> {
     match command {
-        ServiceCommand::Init { name, id, file } => {
-            let result = init_service(name, id, file)?;
+        ServiceCommand::Init { name, id } => {
+            let result = init_service(file, name, id)?;
             ctx.handle_display_result(result);
         }
     }
@@ -37,9 +41,9 @@ impl std::fmt::Display for ServiceInitResult {
 
 /// Run the service initialization
 pub fn init_service(
+    file_path: PathBuf,
     name: String,
     id: Option<String>,
-    file: Option<PathBuf>,
 ) -> Result<ServiceInitResult> {
     // Generate service ID if not provided
     let id = ServiceID::new(match id {
@@ -56,9 +60,6 @@ pub fn init_service(
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
     };
-
-    // Determine output file path
-    let file_path = file.unwrap_or_else(|| PathBuf::from("./service.json"));
 
     // Convert service to JSON
     let service_json = serde_json::to_string_pretty(&service)?;
@@ -90,9 +91,9 @@ mod tests {
 
         // Initialize service
         let result = init_service(
+            file_path.clone(),
             "Test Service".to_string(),
             Some("test-id-123".to_string()),
-            Some(file_path.clone()),
         )
         .unwrap();
 
@@ -120,8 +121,7 @@ mod tests {
         let file_path = temp_dir.path().join("generated_id_service.json");
 
         // Initialize service with no ID (should generate one)
-        let result =
-            init_service("Auto ID Service".to_string(), None, Some(file_path.clone())).unwrap();
+        let result = init_service(file_path.clone(), "Auto ID Service".to_string(), None).unwrap();
 
         // Verify the result has a generated ID
         assert!(!result.service.id.is_empty());

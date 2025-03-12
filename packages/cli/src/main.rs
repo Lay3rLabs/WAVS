@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::config::ConfigExt;
@@ -159,6 +161,15 @@ async fn main() {
 
             ctx.handle_display_result(res);
         }
-        Command::Service { command, args: _ } => handle_service_command(&ctx, command).unwrap(),
+        Command::Service {
+            command,
+            file,
+            args: _,
+        } => {
+            // Determine output file path
+            let file_path = file.unwrap_or_else(|| PathBuf::from("./service.json"));
+
+            handle_service_command(&ctx, file_path, command).unwrap();
+        }
     }
 }
