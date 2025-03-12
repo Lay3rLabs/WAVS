@@ -159,6 +159,6 @@ async fn main() {
 
             ctx.handle_display_result(res);
         }
-        Command::Service { command } => handle_service_command(&ctx, command).unwrap(),
+        Command::Service { command, args: _ } => handle_service_command(&ctx, command).unwrap(),
     }
 }

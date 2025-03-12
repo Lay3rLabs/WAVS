@@ -146,6 +146,9 @@ pub enum Command {
     Service {
         #[clap(subcommand)]
         command: ServiceCommand,
+
+        #[clap(flatten)]
+        args: CliArgs,
     },
 }
 
@@ -163,7 +166,7 @@ pub enum ServiceCommand {
         id: Option<String>,
 
         /// Output file path (optional, defaults to `./service.json`)
-        #[clap(long)]
+        #[clap(long, short)]
         file: Option<PathBuf>,
     },
 }
@@ -256,7 +259,7 @@ impl Command {
             Self::DeployServiceRaw { args, .. } => args,
             Self::UploadComponent { args, .. } => args,
             Self::Exec { args, .. } => args,
-            Self::Service { .. } => &CliArgs::default(),
+            Self::Service { args, .. } => args,
         };
 
         args.clone()
