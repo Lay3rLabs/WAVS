@@ -52,7 +52,9 @@ pub async fn add_task(
             event_hash: _,
         } => {
             let client = SimpleEthTriggerClient::new(ctx.get_eth_client(&chain_name)?.eth, address);
-            client.add_trigger(input.expect("on-chain triggers require input data")).await?
+            client
+                .add_trigger(input.expect("on-chain triggers require input data"))
+                .await?
         }
         Trigger::CosmosContractEvent {
             chain_name,
@@ -61,7 +63,9 @@ pub async fn add_task(
         } => {
             let client =
                 SimpleCosmosTriggerClient::new(ctx.get_cosmos_client(&chain_name)?, address);
-            let trigger_id = client.add_trigger(input.expect("on-chain triggers require input data")).await?;
+            let trigger_id = client
+                .add_trigger(input.expect("on-chain triggers require input data"))
+                .await?;
             TriggerId::new(trigger_id.u64())
         }
         Trigger::BlockInterval {

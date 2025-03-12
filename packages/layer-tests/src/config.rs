@@ -121,6 +121,9 @@ impl TestMatrixConfig {
                     AnyService::Cosmos(service) => {
                         matrix.cosmos.insert(service);
                     }
+                    AnyService::BlockInterval(service) => {
+                        matrix.block_interval.insert(service);
+                    }
                     AnyService::CrossChain(service) => {
                         matrix.cross_chain.insert(service);
                     }
