@@ -138,7 +138,7 @@ mod tests {
         // test length
         let err = ServiceID::new("fo").unwrap_err();
         assert_eq!(err, IDError::LengthError);
-        let err = ServiceID::new("123456789012345678901234567890123").unwrap_err();
+        let err = ServiceID::new("1234567890123456789012345678901234567").unwrap_err();
         assert_eq!(err, IDError::LengthError);
 
         // test chars
