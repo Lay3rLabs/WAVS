@@ -94,6 +94,7 @@ impl CliContext {
             }
             Command::UploadComponent { .. } => {}
             Command::Exec { .. } => {}
+            Command::Service { .. } => {}
         }
 
         Self::new_chains(
