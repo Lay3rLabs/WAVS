@@ -154,10 +154,6 @@ fn mock_e2e_service_lifecycle() {
             assert_eq!(services.services[0].id, service_id2);
 
             // and make sure we can delete the last one but still get an empty list
-            runner
-                .delete_services(vec![service_id1.clone(), service_id3.clone()])
-                .await;
-
             runner.delete_services(vec![service_id2.clone()]).await;
 
             let services = runner.list_services().await;
