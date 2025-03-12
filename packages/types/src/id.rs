@@ -1,10 +1,10 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use std::ops::Deref;
+use std::{ops::Deref, str::FromStr};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum IDError {
-    #[error("ID must be between 3 and 32 characters")]
+    #[error("ID must be between 3 and 36 characters")]
     LengthError,
     #[error("ID must be lowercase alphanumeric")]
     CharError,
@@ -13,7 +13,7 @@ pub enum IDError {
 /// Macro for generating new ID like types
 macro_rules! new_id_type {
     ($type_name:ident) => {
-        /// It is a string, but with some strict validation rules. It must be lowercase alphanumeric: `[a-z0-9-_]{3,32}`
+        /// It is a string, but with some strict validation rules. It must be lowercase alphanumeric: `[a-z0-9-_]{3,36}`
         #[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[serde(transparent)]
         pub struct $type_name(String);
@@ -25,7 +25,7 @@ macro_rules! new_id_type {
             pub fn new(id: impl Into<String>) -> Result<Self, IDError> {
                 let id = id.into();
 
-                if id.len() < 3 || id.len() > 32 {
+                if id.len() < 3 || id.len() > 36 {
                     return Err(IDError::LengthError);
                 }
                 if !id
@@ -95,6 +95,15 @@ new_id_type!(WorkflowID);
 // Distinct from a ChainConfig's ChainID - this is the *name* used within WAVS
 // It's allowed for multiple chains to have the same ChainID, but ChainName is unique
 new_id_type!(ChainName);
+
+// Define FromStr for ServiceID to enable parsing from command line strings
+impl FromStr for ServiceID {
+    type Err = IDError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        ServiceID::new(s.to_string())
+    }
+}
 
 impl Default for WorkflowID {
     fn default() -> Self {

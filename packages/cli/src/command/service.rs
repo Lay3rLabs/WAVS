@@ -43,13 +43,13 @@ impl std::fmt::Display for ServiceInitResult {
 pub fn init_service(
     file_path: PathBuf,
     name: String,
-    id: Option<String>,
+    id: Option<ServiceID>,
 ) -> Result<ServiceInitResult> {
     // Generate service ID if not provided
-    let id = ServiceID::new(match id {
+    let id = match id {
         Some(id) => id,
-        None => Uuid::now_v7().as_simple().to_string(),
-    })?;
+        None => ServiceID::new(Uuid::now_v7().as_hyphenated().to_string())?,
+    };
 
     // Create the service
     let service = Service {
@@ -90,16 +90,16 @@ mod tests {
         let file_path = temp_dir.path().join("test_service.json");
 
         // Initialize service
+        let service_id = ServiceID::new("test-id-123").unwrap();
         let result = init_service(
             file_path.clone(),
             "Test Service".to_string(),
-            Some("test-id-123".to_string()),
+            Some(service_id.clone()),
         )
         .unwrap();
 
         // Verify the result
-        let expected = ServiceID::new("test-id-123").unwrap();
-        assert_eq!(result.service.id, expected);
+        assert_eq!(result.service.id, service_id);
         assert_eq!(result.service.name, "Test Service");
         assert_eq!(result.file_path, file_path);
 
@@ -110,7 +110,7 @@ mod tests {
         let file_content = std::fs::read_to_string(file_path).unwrap();
         let parsed_service: Service = serde_json::from_str(&file_content).unwrap();
 
-        assert_eq!(parsed_service.id, expected);
+        assert_eq!(parsed_service.id, service_id);
         assert_eq!(parsed_service.name, "Test Service");
     }
 
