@@ -68,7 +68,9 @@ pub async fn add_task(
             chain_name: _,
             n_blocks: _,
         } => {
-            todo!();
+            // Hardcoded id since the current flow expects it to come from the event
+            TriggerId::new(1337)
+
         }
         Trigger::Manual => unimplemented!(),
     };
