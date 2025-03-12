@@ -4,11 +4,12 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
+use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wasmtime_wasi::{WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_engine::InstanceDepsBuilder;
-use wavs_types::{Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID};
+use wavs_types::{ComponentSource, Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID};
 
 use utils::storage::{CAStorage, CAStorageError};
 
@@ -22,6 +23,7 @@ pub struct WasmEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
     app_data_dir: PathBuf,
+    wkg_client: Option<WkgClient>,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -31,6 +33,7 @@ impl<S: CAStorage> WasmEngine<S> {
         app_data_dir: impl AsRef<Path>,
         lru_size: usize,
         chain_configs: ChainConfigs,
+        registry_domain: Option<String>,
     ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -52,13 +55,14 @@ impl<S: CAStorage> WasmEngine<S> {
             memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
             chain_configs,
+            wkg_client: registry_domain.map(|d| WkgClient::new(d).unwrap()),
         }
     }
 }
 
 impl<S: CAStorage> Engine for WasmEngine<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+    fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
         let cm = Component::new(&self.wasm_engine, bytecode).map_err(EngineError::Compile)?;
 
@@ -71,6 +75,37 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         self.memory_cache.write().unwrap().put(digest.clone(), cm);
 
         Ok(digest)
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    async fn store_component_from_source(
+        &self,
+        source: &ComponentSource,
+    ) -> Result<Digest, EngineError> {
+        match source {
+            // Leaving unimplemented for now, should do validations to confirm bytes
+            // really are a wasm component before registring component
+            ComponentSource::Download { .. } => todo!(),
+            ComponentSource::Registry { registry } => {
+                if !(self.wasm_storage.data_exists(&registry.digest)?) {
+                    if let Some(client) = &self.wkg_client {
+                        let bytes = client.fetch(registry).await?;
+                        self.store_component_bytes(&bytes)
+                    } else {
+                        return Err(EngineError::NoRegistry);
+                    }
+                } else {
+                    Ok(registry.digest.clone())
+                }
+            }
+            ComponentSource::Digest(digest) => {
+                if self.wasm_storage.data_exists(digest)? {
+                    Ok(digest.clone())
+                } else {
+                    Err(EngineError::UnknownDigest(digest.clone()))
+                }
+            }
+        }
     }
 
     // TODO: paginate this
@@ -215,11 +250,11 @@ mod tests {
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
+        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default(), None);
 
         // store two blobs
-        let digest = engine.store_wasm(ECHO_RAW).unwrap();
-        let digest2 = engine.store_wasm(PERMISSIONS).unwrap();
+        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let digest2 = engine.store_component_bytes(PERMISSIONS).unwrap();
         assert_ne!(digest, digest2);
 
         // list them
@@ -233,12 +268,12 @@ mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default());
+        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default(), None);
 
         // store valid wasm
-        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
         // fail on invalid wasm
-        engine.store_wasm(b"foobarbaz").unwrap_err();
+        engine.store_component_bytes(b"foobarbaz").unwrap_err();
 
         // only list the valid one
         let digests = engine.list_digests().unwrap();
@@ -249,10 +284,10 @@ mod tests {
     fn execute_echo() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
 
         // store square digest
-        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
         let execution_component = ExecutionComponent {
             wasm: digest,
             permissions: Permissions::default(),
@@ -282,12 +317,12 @@ mod tests {
     fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
         let execution_component = ExecutionComponent {
             wasm: digest,
             permissions: Permissions::default(),
@@ -364,10 +399,10 @@ mod tests {
         let app_data = tempfile::tempdir().unwrap();
 
         let low_fuel_limit = 1;
-        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs());
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
 
         // store square digest
-        let digest = engine.store_wasm(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
         let execution_component = ExecutionComponent {
             wasm: digest,
             permissions: Permissions::default(),

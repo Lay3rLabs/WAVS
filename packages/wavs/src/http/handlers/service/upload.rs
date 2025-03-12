@@ -17,14 +17,13 @@ async fn inner_handle_upload_service(
     state: HttpState,
     bytes: Bytes,
 ) -> HttpResult<UploadServiceResponse> {
-    let digest =
-        tokio::task::spawn_blocking(
-            || async move { state.dispatcher.store_component(bytes.to_vec()) },
-        )
-        .await
-        .unwrap()
-        .await?
-        .into();
+    let digest = tokio::task::spawn_blocking(|| async move {
+        state.dispatcher.store_component_bytes(bytes.to_vec())
+    })
+    .await
+    .unwrap()
+    .await?
+    .into();
 
     Ok(UploadServiceResponse { digest })
 }

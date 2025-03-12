@@ -38,9 +38,8 @@ impl MockE2ETestRunner {
         let engine = SingleEngineRunner::new(MockEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
-        let dispatcher = Arc::new(
-            Dispatcher::new(trigger_manager, engine, submission, storage_path, None).unwrap(),
-        );
+        let dispatcher =
+            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
 
         // start up the dispatcher in its own thread, before creating any data (similar to how we do it in main)
         std::thread::spawn({

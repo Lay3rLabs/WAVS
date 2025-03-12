@@ -21,15 +21,12 @@ use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
 use wasm_pkg_common::Error as RegistryError;
 
-use utils::wkg::WkgClient;
-
 /// This should auto-derive clone if T, E, S: Clone
 pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub triggers: T,
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
-    pub wkg_client: Option<WkgClient>,
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
@@ -38,7 +35,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         engine: E,
         submission: S,
         db_storage_path: impl AsRef<Path>,
-        registry_domain: Option<String>,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
 
@@ -47,7 +43,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
             engine,
             submission,
             storage,
-            wkg_client: registry_domain.map(WkgClient::new).transpose()?,
         })
     }
 }
@@ -126,8 +121,8 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn store_component(&self, source: Vec<u8>) -> Result<Digest, Self::Error> {
-        let digest = self.engine.engine().store_wasm(&source)?;
+    fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, Self::Error> {
+        let digest = self.engine.engine().store_component_bytes(&source)?;
         Ok(digest)
     }
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
@@ -137,7 +132,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digests)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     async fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
@@ -148,36 +142,11 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
             return Err(DispatcherError::ServiceRegistered(service.id));
         }
 
-        let digests = self.engine.engine().list_digests()?;
-
         for component in service.components.values() {
-            let bytes = match &component.source {
-                // Leaving unimplemented for now, should do validations to confirm bytes
-                // really are a wasm component before registring component
-                wavs_types::ComponentSource::Download { .. } => todo!(),
-                wavs_types::ComponentSource::Registry { registry } => {
-                    // Fetch wasm component from registry if it has not already been added
-                    if !digests.contains(&registry.digest) {
-                        if let Some(client) = &self.wkg_client {
-                            client.fetch(registry).await
-                        } else {
-                            return Err(DispatcherError::NoRegistry);
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-                // This variant indicates the service should already be registered
-                // Do nothing if this is true, otherwise error
-                wavs_types::ComponentSource::Digest(digest) => {
-                    if digests.contains(digest) {
-                        continue;
-                    } else {
-                        return Err(DispatcherError::UnknownDigest(digest.clone()));
-                    }
-                }
-            }?;
-            self.engine.engine().store_wasm(&bytes)?;
+            self.engine
+                .engine()
+                .store_component_from_source(&component.source)
+                .await?;
         }
 
         self.storage
@@ -352,9 +321,9 @@ pub enum DispatcherError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        // apis::submission::ChainMessage,
+        apis::submission::ChainMessage,
         engine::{
-            // identity::IdentityEngine,
+            identity::IdentityEngine,
             mock::MockEngine,
             runner::{MultiEngineRunner, SingleEngineRunner},
         },
@@ -365,9 +334,7 @@ mod tests {
             mock::BigSquare,
         },
         triggers::mock::{
-            mock_eth_event_trigger,
-            // mock_eth_event_trigger_config,
-            MockTriggerManagerVec,
+            mock_eth_event_trigger, mock_eth_event_trigger_config, MockTriggerManagerVec,
         },
     };
     use wavs_types::{
@@ -377,81 +344,80 @@ mod tests {
 
     use super::*;
 
-    ///// Ensure that some items pass end-to-end in simplest possible setup
-    // #[test]
-    // fn dispatcher_pipeline_happy_path() {
-    //     init_tracing_tests();
+    /// Ensure that some items pass end-to-end in simplest possible setup
+    #[test]
+    fn dispatcher_pipeline_happy_path() {
+        init_tracing_tests();
 
-    //     let db_file = tempfile::NamedTempFile::new().unwrap();
-    //     let payload = b"foobar";
+        let db_file = tempfile::NamedTempFile::new().unwrap();
+        let payload = b"foobar";
 
-    //     let action = TriggerAction {
-    //         config: mock_eth_event_trigger_config("service1", "workflow1"),
-    //         data: TriggerData::new_raw(payload),
-    //     };
-    //     let ctx = AppContext::new();
+        let action = TriggerAction {
+            config: mock_eth_event_trigger_config("service1", "workflow1"),
+            data: TriggerData::new_raw(payload),
+        };
+        let ctx = AppContext::new();
 
-    //     let action_clone = action.clone();
-    //     let dispatcher = Dispatcher::new(
-    //         MockTriggerManagerVec::new().with_actions(vec![action_clone]),
-    //         SingleEngineRunner::new(IdentityEngine),
-    //         MockSubmission::new(),
-    //         db_file.as_ref(),
-    //         None,
-    //     )
-    //     .unwrap();
+        let action_clone = action.clone();
+        let dispatcher = Dispatcher::new(
+            MockTriggerManagerVec::new().with_actions(vec![action_clone]),
+            SingleEngineRunner::new(IdentityEngine),
+            MockSubmission::new(),
+            db_file.as_ref(),
+        )
+        .unwrap();
 
-    //     // Register a service to handle this action
-    //     let digest = Digest::new(b"wasm1");
-    //     let component_id = ComponentID::new("component1").unwrap();
-    //     let service_manager_addr = rand_address_eth();
-    //     let service = Service {
-    //         id: action.config.service_id.clone(),
-    //         name: "My awesome service".to_string(),
-    //         components: [(
-    //             component_id.clone(),
-    //             Component::new(ComponentSource::Digest(digest)),
-    //         )]
-    //         .into(),
-    //         config: ServiceConfig::default(),
-    //         workflows: [(
-    //             action.config.workflow_id.clone(),
-    //             Workflow {
-    //                 component: component_id.clone(),
-    //                 trigger: mock_eth_event_trigger(),
-    //                 submit: Submit::eth_contract(
-    //                     ChainName::new("eth").unwrap(),
-    //                     service_manager_addr,
-    //                     None,
-    //                 ),
-    //                 fuel_limit: None,
-    //             },
-    //         )]
-    //         .into(),
-    //         status: ServiceStatus::Active,
-    //     };
-    //     ctx.rt.block_on(async {
-    //         dispatcher.add_service(service).await.unwrap();
-    //     });
+        // Register a service to handle this action
+        let digest = Digest::new(b"wasm1");
+        let component_id = ComponentID::new("component1").unwrap();
+        let service_manager_addr = rand_address_eth();
+        let service = Service {
+            id: action.config.service_id.clone(),
+            name: "My awesome service".to_string(),
+            components: [(
+                component_id.clone(),
+                Component::new(ComponentSource::Digest(digest)),
+            )]
+            .into(),
+            config: ServiceConfig::default(),
+            workflows: [(
+                action.config.workflow_id.clone(),
+                Workflow {
+                    component: component_id.clone(),
+                    trigger: mock_eth_event_trigger(),
+                    submit: Submit::eth_contract(
+                        ChainName::new("eth").unwrap(),
+                        service_manager_addr,
+                        None,
+                    ),
+                    fuel_limit: None,
+                },
+            )]
+            .into(),
+            status: ServiceStatus::Active,
+        };
+        ctx.rt.block_on(async {
+            dispatcher.add_service(service).await.unwrap();
+        });
 
-    //     // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-    //     dispatcher.start(ctx).unwrap();
+        // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
+        dispatcher.start(ctx).unwrap();
 
-    //     // check that this event was properly handled and arrived at submission
-    //     dispatcher.submission.wait_for_messages(1).unwrap();
-    //     let processed = dispatcher.submission.received();
-    //     assert_eq!(processed.len(), 1);
-    //     let expected = ChainMessage {
-    //         trigger_config: action.config,
-    //         wasi_result: payload.into(),
-    //         submit: Submit::eth_contract(
-    //             ChainName::new("eth").unwrap(),
-    //             service_manager_addr,
-    //             None,
-    //         ),
-    //     };
-    //     assert_eq!(processed[0], expected);
-    // }
+        // check that this event was properly handled and arrived at submission
+        dispatcher.submission.wait_for_messages(1).unwrap();
+        let processed = dispatcher.submission.received();
+        assert_eq!(processed.len(), 1);
+        let expected = ChainMessage {
+            trigger_config: action.config,
+            wasi_result: payload.into(),
+            submit: Submit::eth_contract(
+                ChainName::new("eth").unwrap(),
+                service_manager_addr,
+                None,
+            ),
+        };
+        assert_eq!(processed[0], expected);
+    }
 
     /// Simulate running the square workflow but Function not WASI component
     #[test]
@@ -497,7 +463,6 @@ mod tests {
             SingleEngineRunner::new(MockEngine::new()),
             MockSubmission::new(),
             db_file.as_ref(),
-            None,
         )
         .unwrap();
 
@@ -595,7 +560,6 @@ mod tests {
             MultiEngineRunner::new(MockEngine::new(), 4),
             MockSubmission::new(),
             db_file.as_ref(),
-            None,
         )
         .unwrap();
 

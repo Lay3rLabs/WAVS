@@ -24,17 +24,12 @@ impl CoreDispatcher {
             app_storage,
             config.wasm_lru_size,
             config.chains.clone(),
+            config.registry_domain.clone(),
         ));
         let engine = MultiEngineRunner::new(engine, config.wasm_threads);
 
         let submission = CoreSubmission::new(config)?;
 
-        Self::new(
-            triggers,
-            engine,
-            submission,
-            config.data.join("db"),
-            config.registry_domain.clone(),
-        )
+        Self::new(triggers, engine, submission, config.data.join("db"))
     }
 }

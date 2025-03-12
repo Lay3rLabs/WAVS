@@ -4,7 +4,8 @@ use thiserror::Error;
 use utils::storage::CAStorageError;
 
 use wavs_types::{
-    ComponentID, Digest, Permissions, ServiceConfig, ServiceID, TriggerAction, WorkflowID,
+    ComponentID, ComponentSource, Digest, Permissions, ServiceConfig, ServiceID, TriggerAction,
+    WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -17,7 +18,11 @@ pub struct ExecutionComponent {
 }
 
 pub trait Engine: Send + Sync {
-    fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
+    fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
+    fn store_component_from_source(
+        &self,
+        source: &ComponentSource,
+    ) -> impl std::future::Future<Output = Result<Digest, EngineError>> + Send;
 
     // TODO: paginate this
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError>;
@@ -33,8 +38,15 @@ pub trait Engine: Send + Sync {
 }
 
 impl<E: Engine> Engine for std::sync::Arc<E> {
-    fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
-        self.as_ref().store_wasm(bytecode)
+    fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+        self.as_ref().store_component_bytes(bytecode)
+    }
+
+    async fn store_component_from_source(
+        &self,
+        source: &ComponentSource,
+    ) -> Result<Digest, EngineError> {
+        self.as_ref().store_component_from_source(source).await
     }
 
     fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
@@ -81,4 +93,7 @@ pub enum EngineError {
 
     #[error("No registry configured")]
     NoRegistry,
+
+    #[error("{0}")]
+    RegistryError(#[from] anyhow::Error),
 }

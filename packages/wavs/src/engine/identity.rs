@@ -17,8 +17,24 @@ impl IdentityEngine {
 
 impl Engine for IdentityEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+    fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         Ok(Digest::new(bytecode))
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    async fn store_component_from_source(
+        &self,
+        source: &wavs_types::ComponentSource,
+    ) -> Result<Digest, EngineError> {
+        match source {
+            wavs_types::ComponentSource::Download { digest, .. } => {
+                Err(EngineError::UnknownDigest(digest.clone()))
+            }
+            wavs_types::ComponentSource::Registry { registry } => {
+                Err(EngineError::UnknownDigest(registry.digest.clone()))
+            }
+            wavs_types::ComponentSource::Digest(digest) => Ok(digest.clone()),
+        }
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
@@ -51,8 +67,8 @@ mod test {
         let engine = IdentityEngine::new();
 
         // stores and returns unique digest
-        let d1 = engine.store_wasm(b"foo").unwrap();
-        let d2 = engine.store_wasm(b"bar").unwrap();
+        let d1 = engine.store_component_bytes(b"foo").unwrap();
+        let d2 = engine.store_component_bytes(b"bar").unwrap();
         assert_ne!(d1, d2);
 
         // list doesn't fail
