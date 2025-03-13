@@ -9,6 +9,7 @@ use wavs_cli::{
         deploy_service::{DeployService, DeployServiceArgs},
         deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
+        service::handle_service_command,
         upload_component::{UploadComponent, UploadComponentArgs},
     },
     context::CliContext,
@@ -155,5 +156,10 @@ async fn main() {
 
             ctx.handle_display_result(res);
         }
+        Command::Service {
+            command,
+            file,
+            args: _,
+        } => handle_service_command(&ctx, file, command).unwrap(),
     }
 }
