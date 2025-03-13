@@ -1,7 +1,6 @@
 use std::process::{Command, Stdio};
 
-use alloy::providers::Provider;
-use utils::{config::EthereumChainConfig, context::AppContext, eth_client::EthClientBuilder};
+use utils::{config::EthereumChainConfig, context::AppContext};
 
 use crate::e2e::config::Configs;
 
@@ -11,7 +10,7 @@ pub struct EthereumInstance {
 }
 
 impl EthereumInstance {
-    pub fn spawn(ctx: AppContext, configs: &Configs, chain_config: EthereumChainConfig) -> Self {
+    pub fn spawn(_ctx: AppContext, _configs: &Configs, chain_config: EthereumChainConfig) -> Self {
         let port = chain_config
             .http_endpoint
             .as_ref()
@@ -32,29 +31,8 @@ impl EthereumInstance {
         let anvil = LameAnvilInstanceBuilder {
             port,
             chain_id: chain_config.chain_id.clone(),
-            block_time: configs.anvil_interval_seconds,
         }
         .spawn();
-
-        // if we don't have an explicit interval, alloy will move blocks forward by transaction
-        // otherwise, we should wait to get a new block so we can be sure anvil is up and running fully
-        if let Some(interval_seconds) = configs.anvil_interval_seconds {
-            ctx.rt.block_on(async {
-                let client = EthClientBuilder::new(chain_config.to_client_config(None, None, None))
-                    .build_query()
-                    .await
-                    .unwrap();
-
-                let block = client.provider.get_block_number().await.unwrap();
-
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(interval_seconds)).await;
-                    if client.provider.get_block_number().await.unwrap() > block {
-                        break;
-                    }
-                }
-            })
-        }
 
         Self {
             _anvil: anvil,
@@ -71,22 +49,16 @@ impl EthereumInstance {
 struct LameAnvilInstanceBuilder {
     pub port: u16,
     pub chain_id: String,
-    pub block_time: Option<u64>,
 }
 
 impl LameAnvilInstanceBuilder {
     pub fn spawn(self) -> LameAnvilInstance {
-        let mut args = vec![
+        let args = vec![
             "-p".to_string(),
             self.port.to_string(),
             "--chain-id".to_string(),
             self.chain_id,
         ];
-
-        if let Some(block_time) = self.block_time {
-            args.push("-b".to_string());
-            args.push(block_time.to_string());
-        }
 
         let child = Command::new("anvil")
             .args(args)
