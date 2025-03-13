@@ -2,7 +2,8 @@ use anyhow::Result;
 use std::{collections::BTreeMap, fs::File, io::Write, path::PathBuf};
 use uuid::Uuid;
 use wavs_types::{
-    Component, ComponentID, Digest, Permissions, Service, ServiceConfig, ServiceID, ServiceStatus,
+    AllowedHostPermission, Component, ComponentID, Digest, Permissions, Service, ServiceConfig,
+    ServiceID, ServiceStatus,
 };
 
 use crate::{
@@ -26,6 +27,23 @@ pub async fn handle_service_command(
         ServiceCommand::Component { command } => match command {
             ComponentCommand::Add { id, component } => {
                 let result = add_component(ctx, file, id, component).await?;
+                ctx.handle_display_result(result);
+            }
+            ComponentCommand::Permissions {
+                id,
+                allow_all_http,
+                allow_no_http,
+                allowed_http_hosts,
+                file_system,
+            } => {
+                let result = update_component_permissions(
+                    file,
+                    id,
+                    allow_all_http,
+                    allow_no_http,
+                    allowed_http_hosts,
+                    file_system,
+                )?;
                 ctx.handle_display_result(result);
             }
         },
@@ -69,6 +87,52 @@ impl std::fmt::Display for ComponentAddResult {
         writeln!(f, "  Component ID: {}", self.component_id)?;
         writeln!(f, "  Digest:       {}", self.digest)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
+    }
+}
+
+/// Result of updating component permissions
+#[derive(Debug, Clone)]
+pub struct ComponentPermissionsResult {
+    /// The component id that was edited
+    pub component_id: ComponentID,
+    /// The updated permissions
+    pub permissions: Permissions,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentPermissionsResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component permissions updated successfully!")?;
+        writeln!(f, "  Component ID: {}", self.component_id)?;
+
+        // Display HTTP permissions
+        match &self.permissions.allowed_http_hosts {
+            AllowedHostPermission::All => {
+                writeln!(f, "  HTTP Hosts:   All allowed")?;
+            }
+            AllowedHostPermission::None => {
+                writeln!(f, "  HTTP Hosts:   None allowed")?;
+            }
+            AllowedHostPermission::Only(hosts) => {
+                writeln!(f, "  HTTP Hosts:   Only specific hosts allowed")?;
+                for host in hosts {
+                    writeln!(f, "    - {}", host)?;
+                }
+            }
+        }
+
+        // Display file system permission
+        writeln!(
+            f,
+            "  File System: {}",
+            if self.permissions.file_system {
+                "Enabled"
+            } else {
+                "Disabled"
+            }
+        )?;
+        writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }
 
@@ -158,6 +222,57 @@ pub async fn add_component(
     Ok(ComponentAddResult {
         component_id,
         digest,
+        file_path,
+    })
+}
+
+/// Update component permissions
+pub fn update_component_permissions(
+    file_path: PathBuf,
+    component_id: ComponentID,
+    allow_all_http: bool,
+    allow_no_http: bool,
+    allowed_http_hosts: Option<Vec<String>>,
+    file_system: Option<bool>,
+) -> Result<ComponentPermissionsResult> {
+    // Read the service file
+    let service_json = std::fs::read_to_string(&file_path)?;
+
+    // Parse the service JSON
+    let mut service: Service = serde_json::from_str(&service_json)?;
+
+    // Check if the component exists
+    let component = service.components.get_mut(&component_id).ok_or_else(|| {
+        anyhow::anyhow!("Component with ID '{}' not found in service", component_id)
+    })?;
+
+    // Update HTTP permissions
+    if allow_all_http {
+        component.permissions.allowed_http_hosts = AllowedHostPermission::All;
+    } else if allow_no_http {
+        component.permissions.allowed_http_hosts = AllowedHostPermission::None;
+    } else if let Some(hosts) = allowed_http_hosts {
+        component.permissions.allowed_http_hosts = AllowedHostPermission::Only(hosts);
+    }
+
+    // Update file system permission if specified
+    if let Some(fs_perm) = file_system {
+        component.permissions.file_system = fs_perm;
+    }
+
+    // Clone the updated permissions for the result
+    let updated_permissions = component.permissions.clone();
+
+    // Convert updated service to JSON
+    let updated_service_json = serde_json::to_string_pretty(&service)?;
+
+    // Write the updated JSON back to file
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_service_json.as_bytes())?;
+
+    Ok(ComponentPermissionsResult {
+        component_id,
+        permissions: updated_permissions,
         file_path,
     })
 }

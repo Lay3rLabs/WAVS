@@ -189,6 +189,28 @@ pub enum ComponentCommand {
         #[clap(long)]
         component: PathBuf,
     },
+    /// Manage permissions of a component
+    Permissions {
+        /// The ID of the component to edit
+        #[clap(long)]
+        id: ComponentID,
+
+        /// Allow all HTTP hosts
+        #[clap(long, group = "http_perm")]
+        allow_all_http: bool,
+
+        /// Allow no HTTP hosts
+        #[clap(long, group = "http_perm")]
+        allow_no_http: bool,
+
+        /// Allowed HTTP hosts (comma-separated list)
+        #[clap(long, value_delimiter = ',', group = "http_perm")]
+        allowed_http_hosts: Option<Vec<String>>,
+
+        /// Enable file system access
+        #[clap(long)]
+        file_system: Option<bool>,
+    },
 }
 
 fn parse_service_input(s: &str) -> Result<Service, String> {
