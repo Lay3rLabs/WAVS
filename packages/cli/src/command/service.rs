@@ -28,6 +28,10 @@ pub async fn handle_service_command(
                 let result = add_component(ctx, file, id, component).await?;
                 ctx.handle_display_result(result);
             }
+            ComponentCommand::Delete { id } => {
+                let result = delete_component(file, id)?;
+                ctx.handle_display_result(result);
+            }
         },
     }
 
@@ -68,6 +72,23 @@ impl std::fmt::Display for ComponentAddResult {
         writeln!(f, "Component added successfully!")?;
         writeln!(f, "  Component ID: {}", self.component_id)?;
         writeln!(f, "  Digest:       {}", self.digest)?;
+        writeln!(f, "  Updated:      {}", self.file_path.display())
+    }
+}
+
+/// Result of deleting a component
+#[derive(Debug, Clone)]
+pub struct ComponentDeleteResult {
+    /// The component id that was deleted
+    pub component_id: ComponentID,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentDeleteResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component deleted successfully!")?;
+        writeln!(f, "  Component ID: {}", self.component_id)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
     }
 }
@@ -158,6 +179,41 @@ pub async fn add_component(
     Ok(ComponentAddResult {
         component_id,
         digest,
+        file_path,
+    })
+}
+
+/// Delete a component from a service
+pub fn delete_component(
+    file_path: PathBuf,
+    component_id: ComponentID,
+) -> Result<ComponentDeleteResult> {
+    // Read the service file
+    let service_json = std::fs::read_to_string(&file_path)?;
+
+    // Parse the service JSON
+    let mut service: Service = serde_json::from_str(&service_json)?;
+
+    // Check if the component exists
+    if !service.components.contains_key(&component_id) {
+        return Err(anyhow::anyhow!(
+            "Component with ID '{}' not found in service",
+            component_id
+        ));
+    }
+
+    // Remove the component
+    service.components.remove(&component_id);
+
+    // Convert updated service to JSON
+    let updated_service_json = serde_json::to_string_pretty(&service)?;
+
+    // Write the updated JSON back to file
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_service_json.as_bytes())?;
+
+    Ok(ComponentDeleteResult {
+        component_id,
         file_path,
     })
 }

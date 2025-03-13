@@ -189,6 +189,12 @@ pub enum ComponentCommand {
         #[clap(long)]
         component: PathBuf,
     },
+    /// Delete a component from a service
+    Delete {
+        /// The ID of the component to delete
+        #[clap(long)]
+        id: ComponentID,
+    },
 }
 
 fn parse_service_input(s: &str) -> Result<Service, String> {
