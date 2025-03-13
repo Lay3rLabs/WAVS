@@ -3,10 +3,11 @@ use std::{collections::BTreeMap, fs::File, io::Write, path::PathBuf};
 use uuid::Uuid;
 use wavs_types::{
     Component, ComponentID, Digest, Permissions, Service, ServiceConfig, ServiceID, ServiceStatus,
+    Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::{
-    args::{ComponentCommand, ServiceCommand},
+    args::{ComponentCommand, ServiceCommand, WorkflowCommand},
     clients::HttpClient,
     context::CliContext,
     util::read_component,
@@ -26,6 +27,16 @@ pub async fn handle_service_command(
         ServiceCommand::Component { command } => match command {
             ComponentCommand::Add { id, component } => {
                 let result = add_component(ctx, file, id, component).await?;
+                ctx.handle_display_result(result);
+            }
+        },
+        ServiceCommand::Workflow { command } => match command {
+            WorkflowCommand::Add {
+                id,
+                component_id,
+                fuel_limit,
+            } => {
+                let result = add_workflow(file, id, component_id, fuel_limit)?;
                 ctx.handle_display_result(result);
             }
         },
@@ -69,6 +80,23 @@ impl std::fmt::Display for ComponentAddResult {
         writeln!(f, "  Component ID: {}", self.component_id)?;
         writeln!(f, "  Digest:       {}", self.digest)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
+    }
+}
+
+/// Result of adding a workflow
+#[derive(Debug, Clone)]
+pub struct WorkflowAddResult {
+    /// The workflow id
+    pub workflow_id: WorkflowID,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for WorkflowAddResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow added successfully!")?;
+        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
+        writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }
 
@@ -158,6 +186,61 @@ pub async fn add_component(
     Ok(ComponentAddResult {
         component_id,
         digest,
+        file_path,
+    })
+}
+
+/// Add a workflow to a service
+pub fn add_workflow(
+    file_path: PathBuf,
+    id: Option<WorkflowID>,
+    component_id: ComponentID,
+    fuel_limit: Option<u64>,
+) -> Result<WorkflowAddResult> {
+    // Read the service file
+    let service_json = std::fs::read_to_string(&file_path)?;
+
+    // Parse the service JSON
+    let mut service: Service = serde_json::from_str(&service_json)?;
+
+    // Check if the component exists
+    if !service.components.contains_key(&component_id) {
+        return Err(anyhow::anyhow!(
+            "Component with ID '{}' not found in service",
+            component_id
+        ));
+    }
+
+    // Generate workflow ID if not provided
+    let workflow_id = match id {
+        Some(id) => id,
+        None => WorkflowID::new(Uuid::now_v7().as_hyphenated().to_string())?,
+    };
+
+    // Create default trigger and submit
+    let trigger = Trigger::Manual;
+    let submit = Submit::None;
+
+    // Create a new workflow entry
+    let workflow = Workflow {
+        trigger,
+        component: component_id,
+        submit,
+        fuel_limit,
+    };
+
+    // Add the workflow to the service
+    service.workflows.insert(workflow_id.clone(), workflow);
+
+    // Convert updated service to JSON
+    let updated_service_json = serde_json::to_string_pretty(&service)?;
+
+    // Write the updated JSON back to file
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_service_json.as_bytes())?;
+
+    Ok(WorkflowAddResult {
+        workflow_id,
         file_path,
     })
 }

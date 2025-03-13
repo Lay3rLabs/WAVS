@@ -113,6 +113,14 @@ impl FromStr for ComponentID {
     }
 }
 
+impl FromStr for WorkflowID {
+    type Err = IDError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        WorkflowID::new(s.to_string())
+    }
+}
+
 impl Default for WorkflowID {
     fn default() -> Self {
         WorkflowID::new("default").unwrap()
