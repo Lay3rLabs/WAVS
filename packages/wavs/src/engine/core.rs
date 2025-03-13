@@ -89,6 +89,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             ComponentSource::Registry { registry } => {
                 if !(self.wasm_storage.data_exists(&registry.digest)?) {
                     if let Some(client) = &self.wkg_client {
+                        // Fetches package from registry and validates it has the expected digest
                         let bytes = client.fetch(registry).await?;
                         self.store_component_bytes(&bytes)
                     } else {

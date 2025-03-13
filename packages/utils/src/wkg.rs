@@ -6,11 +6,12 @@ use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     Client, Config,
 };
-use wavs_types::Registry;
+use wavs_types::{Digest, Registry};
 
 pub struct WkgClient {
     // due to a bug in the client which can deadlock with the filesystem
     // we want to use a mutex, and hold it across the await point, only releasing when we're done
+    // https://github.com/bytecodealliance/wasm-pkg-tools/issues/155
     inner: Arc<tokio::sync::Mutex<InnerWkgClient>>,
 }
 
@@ -74,10 +75,8 @@ impl WkgClient {
         while let Some(chunk) = content_stream.try_next().await? {
             content.append(&mut chunk.to_vec());
         }
-        // TODO Hash contents and confirm digest matches before returning
-        // At the moment the latest published versions do not match the current checksums
-        // Wait to implement until decided upon mechanism for keeping published test components
-        // Up to date
+        let fetched_digest = Digest::new(&content);
+        assert_eq!(fetched_digest, registry.digest);
         Ok(content)
     }
 }

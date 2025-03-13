@@ -106,6 +106,10 @@ async fn get_digest(
                 .unwrap(),
         )
     } else {
+        // Adding a component from the registry requires calculating the digest ahead-of-time.
+        // While we could do that by either loading the files from disk or downloading from the registry
+        // and calculating the hash from that - using the checksums is faster and gives us an extra
+        // sanity check that we've deployed the latest builds to the test registry
         let pkg_name = match name {
             DigestName::ChainTriggerLookup => "chain_trigger_lookup",
             DigestName::CosmosQuery => "cosmos_query",

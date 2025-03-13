@@ -21,6 +21,7 @@ pub trait DispatchManager: Send + Sync {
 
     /// Used to install new wasm bytecode into the system.
     /// Either the bytecode is provided directly, or it is downloaded from a URL.
+    /// Used excluslively by the `upload` endpoint
     fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, Self::Error>;
 
     async fn add_service(&self, service: Service) -> Result<(), Self::Error>;
