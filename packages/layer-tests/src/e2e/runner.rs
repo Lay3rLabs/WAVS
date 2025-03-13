@@ -136,6 +136,9 @@ async fn test_service(
                                 trigger_id,
                                 is_aggregator,
                                 std::time::Duration::from_secs(10),
+                                // we control the tests and *only* use on-chain triggers
+                                // for multi-service tests
+                                false,
                             )
                             .await?;
 
