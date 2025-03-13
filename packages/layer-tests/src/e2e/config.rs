@@ -11,6 +11,7 @@ use super::matrix::TestMatrix;
 #[derive(Clone, Debug)]
 pub struct Configs {
     pub matrix: TestMatrix,
+    pub registry: bool,
     pub wavs: wavs::config::Config,
     pub cli: wavs_cli::config::Config,
     pub cli_args: wavs_cli::args::CliArgs,
@@ -161,6 +162,7 @@ impl From<TestConfig> for Configs {
 
         Self {
             matrix,
+            registry: test_config.registry.map_or_else(|| false, |t| t),
             cli: cli_config,
             cli_args,
             aggregator: aggregator_config,

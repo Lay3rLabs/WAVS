@@ -44,11 +44,9 @@ cfg_if::cfg_if! {
     if #[cfg(debug_assertions)] {
         pub fn read_component(path: &str) -> Result<Vec<u8>> {
             let mut path = PathBuf::from(shellexpand::tilde(&path).to_string());
-
             if !path.is_absolute() {
                 path = workspace_path().join(path)
             };
-
             Ok(std::fs::read(path)?)
         }
     } else {

@@ -13,6 +13,9 @@ repository = "https://github.com/Lay3rLabs/WAVS"
 rust-version = "1.84.0"
 
 [workspace.dependencies]
+wasm-pkg-client = "0.10.0"
+wasm-pkg-common = "0.10.0"
+semver = "1.0.0"
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 wavs-engine = { path = "packages/engine" }

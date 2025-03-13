@@ -1,3 +1,5 @@
+use anyhow::Result;
+use async_trait::async_trait;
 use redb::ReadableTable;
 use std::ops::Bound;
 use std::path::Path;
@@ -6,9 +8,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use wavs_types::{
-    ComponentSource, Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig,
-};
+use wavs_types::{Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig};
 
 use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
@@ -19,9 +19,9 @@ use crate::engine::runner::EngineRunner;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
+use wasm_pkg_common::Error as RegistryError;
 
 /// This should auto-derive clone if T, E, S: Clone
-#[derive(Clone)]
 pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub triggers: T,
     pub engine: E,
@@ -37,6 +37,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         db_storage_path: impl AsRef<Path>,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
+
         Ok(Dispatcher {
             triggers,
             engine,
@@ -51,6 +52,7 @@ const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 const TRIGGER_PIPELINE_SIZE: usize = 20;
 const SUBMISSION_PIPELINE_SIZE: usize = 20;
 
+#[async_trait]
 impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;
 
@@ -119,15 +121,10 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn store_component(&self, source: ComponentSource) -> Result<Digest, Self::Error> {
-        let bytecode = match source {
-            ComponentSource::Bytecode(code) => code,
-            _ => todo!(),
-        };
-        let digest = self.engine.engine().store_wasm(&bytecode)?;
+    fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, Self::Error> {
+        let digest = self.engine.engine().store_component_bytes(&source)?;
         Ok(digest)
     }
-
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn list_component_digests(&self) -> Result<Vec<Digest>, Self::Error> {
         let digests = self.engine.engine().list_digests()?;
@@ -135,8 +132,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digests)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn add_service(&self, service: Service) -> Result<(), Self::Error> {
+    async fn add_service(&self, service: Service) -> Result<(), Self::Error> {
         // persist it in storage if not there yet
         if self
             .storage
@@ -144,6 +140,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
             .is_some()
         {
             return Err(DispatcherError::ServiceRegistered(service.id));
+        }
+
+        for component in service.components.values() {
+            self.engine
+                .engine()
+                .store_component_from_source(&component.source)
+                .await?;
         }
 
         self.storage
@@ -302,6 +305,18 @@ pub enum DispatcherError {
 
     #[error("Submission: {0}")]
     Submission(#[from] SubmissionError),
+
+    #[error("Registry error: {0}")]
+    Registry(#[from] RegistryError),
+
+    #[error("Registry cache path error: {0}")]
+    RegistryCachePath(#[from] anyhow::Error),
+
+    #[error("No registry domain provided in configuration")]
+    NoRegistry,
+
+    #[error("Unknown service digest: {0}")]
+    UnknownDigest(Digest),
 }
 
 #[cfg(test)]
@@ -324,8 +339,8 @@ mod tests {
         },
     };
     use wavs_types::{
-        ChainName, Component, ComponentID, ServiceConfig, ServiceID, ServiceStatus, Submit,
-        TriggerData, Workflow, WorkflowID,
+        ChainName, Component, ComponentID, ComponentSource, ServiceConfig, ServiceID,
+        ServiceStatus, Submit, TriggerData, Workflow, WorkflowID,
     };
 
     use super::*;
@@ -342,9 +357,11 @@ mod tests {
             config: mock_eth_event_trigger_config("service1", "workflow1"),
             data: TriggerData::new_raw(payload),
         };
+        let ctx = AppContext::new();
 
+        let action_clone = action.clone();
         let dispatcher = Dispatcher::new(
-            MockTriggerManagerVec::new().with_actions(vec![action.clone()]),
+            MockTriggerManagerVec::new().with_actions(vec![action_clone]),
             SingleEngineRunner::new(IdentityEngine),
             MockSubmission::new(),
             db_file.as_ref(),
@@ -358,7 +375,11 @@ mod tests {
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
-            components: [(component_id.clone(), Component::new(digest))].into(),
+            components: [(
+                component_id.clone(),
+                Component::new(ComponentSource::Digest(digest)),
+            )]
+            .into(),
             config: ServiceConfig::default(),
             workflows: [(
                 action.config.workflow_id.clone(),
@@ -376,10 +397,11 @@ mod tests {
             .into(),
             status: ServiceStatus::Active,
         };
-        dispatcher.add_service(service).unwrap();
+        ctx.rt.block_on(async {
+            dispatcher.add_service(service).await.unwrap();
+        });
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-        let ctx = AppContext::new();
         dispatcher.start(ctx).unwrap();
 
         // check that this event was properly handled and arrived at submission
@@ -435,6 +457,7 @@ mod tests {
             },
         ];
 
+        let ctx = AppContext::new();
         // Set up the dispatcher
         let dispatcher = Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(actions),
@@ -446,14 +469,21 @@ mod tests {
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");
-        dispatcher.engine.engine().register(&digest, BigSquare);
+        dispatcher
+            .engine
+            .engine()
+            .register(&digest.clone(), BigSquare);
 
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
-            components: [(component_id.clone(), Component::new(digest))].into(),
+            components: [(
+                component_id.clone(),
+                Component::new(ComponentSource::Digest(digest)),
+            )]
+            .into(),
             config: ServiceConfig::default(),
             workflows: [(
                 workflow_id.clone(),
@@ -471,10 +501,11 @@ mod tests {
             .into(),
             status: ServiceStatus::Active,
         };
-        dispatcher.add_service(service).unwrap();
+        ctx.rt.block_on(async {
+            dispatcher.add_service(service).await.unwrap();
+        });
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-        let ctx = AppContext::new();
         dispatcher.start(ctx).unwrap();
 
         // check that the events were properly handled and arrived at submission
@@ -535,14 +566,21 @@ mod tests {
 
         // Register the BigSquare function on our known digest
         let digest = Digest::new(b"wasm1");
-        dispatcher.engine.engine().register(&digest, BigSquare);
+        dispatcher
+            .engine
+            .engine()
+            .register(&digest.clone(), BigSquare);
 
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
-            components: [(component_id.clone(), Component::new(digest))].into(),
+            components: [(
+                component_id.clone(),
+                Component::new(ComponentSource::Digest(digest)),
+            )]
+            .into(),
             config: ServiceConfig::default(),
             workflows: [(
                 workflow_id.clone(),
@@ -560,10 +598,12 @@ mod tests {
             .into(),
             status: ServiceStatus::Active,
         };
-        dispatcher.add_service(service).unwrap();
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
         let ctx = AppContext::new();
+        ctx.rt.block_on(async {
+            dispatcher.add_service(service).await.unwrap();
+        });
         dispatcher.start(ctx).unwrap();
 
         // check that the events were properly handled and arrived at submission
