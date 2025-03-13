@@ -213,6 +213,12 @@ pub enum WorkflowCommand {
         #[clap(long)]
         fuel_limit: Option<u64>,
     },
+    /// Delete a workflow from a service
+    Delete {
+        /// The ID of the workflow to delete
+        #[clap(long)]
+        id: WorkflowID,
+    },
 }
 
 fn parse_service_input(s: &str) -> Result<Service, String> {
