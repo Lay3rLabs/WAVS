@@ -132,7 +132,7 @@ pub async fn add_component(
 
     // Upload the component
     let wasm_bytes = read_component(
-        &component_path
+        component_path
             .to_str()
             .expect("Invalid component path specified"),
     )?;
