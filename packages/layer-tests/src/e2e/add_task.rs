@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use alloy::providers::ext::AnvilApi;
 use anyhow::{bail, Result};
 use utils::avs_client::{layer_service_aggregator::WavsServiceAggregator, SignedData};
 use wavs_cli::context::CliContext;
@@ -10,7 +11,10 @@ use crate::{
     example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient, TriggerId},
 };
 
+use super::config::Configs;
+
 pub async fn add_task(
+    configs: &Configs,
     ctx: &CliContext,
     service_id: String,
     workflow_id: Option<String>,
@@ -45,16 +49,16 @@ pub async fn add_task(
         }
     };
 
-    let trigger_id = match workflow.trigger {
+    let (trigger_is_time_based, trigger_id) = match workflow.trigger {
         Trigger::EthContractEvent {
             chain_name,
             address,
             event_hash: _,
         } => {
             let client = SimpleEthTriggerClient::new(ctx.get_eth_client(&chain_name)?.eth, address);
-            client
+            (false, client
                 .add_trigger(input.expect("on-chain triggers require input data"))
-                .await?
+                .await?)
         }
         Trigger::CosmosContractEvent {
             chain_name,
@@ -66,7 +70,7 @@ pub async fn add_task(
             let trigger_id = client
                 .add_trigger(input.expect("on-chain triggers require input data"))
                 .await?;
-            TriggerId::new(trigger_id.u64())
+            (false, TriggerId::new(trigger_id.u64()))
         }
         Trigger::BlockInterval {
             chain_name: _,
@@ -74,7 +78,7 @@ pub async fn add_task(
             ..
         } => {
             // Hardcoded id since the current flow expects it to come from the event
-            TriggerId::new(1337)
+            (true, TriggerId::new(1337))
         }
         Trigger::Manual => unimplemented!(),
     };
@@ -101,12 +105,14 @@ pub async fn add_task(
                 trigger_id,
                 Some(
                     wait_for_task_to_land(
+                        &configs,
                         ctx,
                         &chain_name,
                         address,
                         trigger_id,
                         is_aggregator,
                         result_timeout,
+                        trigger_is_time_based,
                     )
                     .await?,
                 ),
@@ -117,14 +123,18 @@ pub async fn add_task(
 }
 
 pub async fn wait_for_task_to_land(
+    configs: &Configs,
     ctx: &CliContext,
     chain_name: &ChainName,
     address: alloy::primitives::Address,
     trigger_id: TriggerId,
     is_aggregator: bool,
     result_timeout: Duration,
+    trigger_is_time_based: bool
 ) -> Result<SignedData> {
     let client = ctx.get_eth_client(chain_name)?;
+
+    let provider = client.eth.provider.clone();
 
     let address = match is_aggregator {
         false => address,
@@ -136,8 +146,15 @@ pub async fn wait_for_task_to_land(
 
     let submit_client = SimpleEthSubmitClient::new(client.eth, address);
 
+
     tokio::time::timeout(result_timeout, async move {
         loop {
+            if trigger_is_time_based || configs.anvil_interval_seconds.is_none() {
+                // if the trigger is time based and anvil is *not* time-based
+                // we need to manually tell anvil to move the block forward
+
+               provider.evm_mine(None).await?;
+            }
             match submit_client.trigger_validated(trigger_id).await {
                 true => {
                     let data = submit_client.trigger_data(trigger_id).await?;

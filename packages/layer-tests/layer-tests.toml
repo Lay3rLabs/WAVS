@@ -9,14 +9,11 @@ isolated = "eth-block-interval"
 # You can run groups of tests like:
 
 # [matrix.eth]
-# chain-trigger-lookup = true
-# cosmos-query = true
-# etc.
+# block-interval = true
 
 # [matrix.cosmos]
-# chain-trigger-lookup = true
-# cosmos-query = true
-# etc.
+# echo-data = true
+# block-interval = true
 
 # [matrix.crosschain]
 # cosmos-to-eth-echo-data = true

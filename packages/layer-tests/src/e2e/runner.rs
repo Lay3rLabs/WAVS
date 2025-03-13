@@ -74,6 +74,7 @@ async fn test_service(
             let is_aggregator = n_tasks > 1;
 
             let (trigger_id, signed_data) = add_task(
+                &configs,
                 &clients.cli_ctx,
                 service_id.clone(),
                 Some(workflow_id.to_string()),
@@ -130,12 +131,17 @@ async fn test_service(
                             ..
                         } => {
                             let signed_data = wait_for_task_to_land(
+                                &configs,
                                 &clients.cli_ctx,
                                 &chain_name,
                                 address,
                                 trigger_id,
                                 is_aggregator,
                                 std::time::Duration::from_secs(10),
+                                // technically, this could involve time-based triggers
+                                // but we control the tests and *only* use on-chain triggers
+                                // for multi-service tests
+                                false
                             )
                             .await?;
 
