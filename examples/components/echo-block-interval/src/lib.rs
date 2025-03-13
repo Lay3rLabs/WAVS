@@ -1,7 +1,7 @@
 use example_helpers::bindings::compat::TriggerData;
 use example_helpers::bindings::world::{Guest, TriggerAction};
 use example_helpers::export_layer_trigger_world;
-use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
+use example_helpers::trigger::encode_trigger_output;
 
 struct Component;
 

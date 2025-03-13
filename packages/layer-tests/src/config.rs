@@ -84,6 +84,7 @@ pub struct TestMatrixCosmosConfig {
     pub echo_data: bool,
     pub permissions: bool,
     pub square: bool,
+    pub block_interval: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -191,6 +192,10 @@ impl TestMatrixConfig {
             matrix.cosmos.insert(CosmosService::Square);
         }
 
+        if self.cosmos.block_interval {
+            matrix.cosmos.insert(CosmosService::BlockInterval);
+        }
+
         if self.crosschain.cosmos_to_eth_echo_data {
             matrix
                 .cross_chain
@@ -219,6 +224,7 @@ impl From<&str> for AnyService {
             "cosmos-echo-data" => AnyService::Cosmos(CosmosService::EchoData),
             "cosmos-permissions" => AnyService::Cosmos(CosmosService::Permissions),
             "cosmos-square" => AnyService::Cosmos(CosmosService::Square),
+            "cosmos-block-interval" => AnyService::Cosmos(CosmosService::BlockInterval),
             "crosschain-cosmos-to-eth-echo-data" => {
                 AnyService::CrossChain(CrossChainService::CosmosToEthEchoData)
             }

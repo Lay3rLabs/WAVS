@@ -206,6 +206,7 @@ fn get_input_for_service(
             CosmosService::EchoData => b"on brink".to_vec(),
             CosmosService::Permissions => permissions_req(),
             CosmosService::Square => SquareRequest { x: 3 }.to_vec(),
+            CosmosService::BlockInterval => Vec::new(),
         },
         AnyService::CrossChain(name) => match name {
             CrossChainService::CosmosToEthEchoData => b"hello eth world from cosmos".to_vec(),
@@ -279,6 +280,7 @@ fn verify_signed_data(
                 tracing::info!("Response: {:?}", resp);
                 None
             }
+            CosmosService::BlockInterval => Some(b"block-interval data".to_vec()),
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
             CrossChainService::CosmosToEthEchoData => Some(input_req()),

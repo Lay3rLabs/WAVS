@@ -114,6 +114,14 @@ impl DeployService {
                     n_blocks: 3,
                 }
             }
+            CliTriggerKind::CosmosBlockInterval => {
+                let chain_name = trigger_chain.context("must have trigger chain for contract")?;
+
+                Trigger::BlockInterval {
+                    chain_name,
+                    n_blocks: 3,
+                }
+            }
         };
 
         let submit: Submit = match submit {

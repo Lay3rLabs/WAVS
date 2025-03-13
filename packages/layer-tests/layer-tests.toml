@@ -1,19 +1,19 @@
 # Run all the tests
 # all = true
-isolated = "eth-block-interval" 
+# isolated = "eth-block-interval" 
 
 # Run just one test (cannot be enabled at the same time as all)
 
 # See matrix.rs for all the available options
 # You can run groups of tests like:
 
-# [matrix.eth]
-# chain-trigger-lookup = true
+[matrix.eth]
+block-interval = true
 # cosmos-query = true
 # etc.
 
-# [matrix.cosmos]
-# chain-trigger-lookup = true
+[matrix.cosmos]
+block-interval = true
 # cosmos-query = true
 # etc.
 

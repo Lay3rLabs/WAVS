@@ -32,6 +32,7 @@ pub enum CosmosService {
     EchoData,
     Permissions,
     Square,
+    BlockInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -116,6 +117,7 @@ impl From<CosmosService> for Vec<DigestName> {
             CosmosService::EchoData => DigestName::EchoData,
             CosmosService::Permissions => DigestName::Permissions,
             CosmosService::Square => DigestName::Square,
+            CosmosService::BlockInterval => DigestName::EchoBlockInterval,
         }]
     }
 }
