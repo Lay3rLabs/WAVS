@@ -40,8 +40,9 @@ wait_for_ethereum() {
     echo "Waiting for Ethereum node to be ready..."
     while ! curl -s -X POST -H "Content-Type: application/json" \
                  --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' \
-                 "$LOCAL_ETHEREUM_RPC_URL" > /dev/null
+                 "$LOCAL_ETHEREUM_RPC_URL"
     do
+        echo "Pinging $LOCAL_ETHEREUM_RPC_URL"
         sleep 1
     done
     echo "Ethereum node is ready!"
@@ -464,7 +465,7 @@ if [ "$DEPLOY_ENV" = "TESTNET" ]; then
         exit 1
     fi
 else
-    LOCAL_ETHEREUM_RPC_URL=http://host.docker.internal:8545
+    LOCAL_ETHEREUM_RPC_URL=${LOCAL_ETHEREUM_RPC_URL:-http://host.docker.internal:8545}
     wait_for_ethereum
     cast rpc anvil_setBalance $deployer_public_key 0x10000000000000000000 -r $LOCAL_ETHEREUM_RPC_URL > /dev/null 2>&1
     if [ $? -ne 0 ]; then

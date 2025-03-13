@@ -9,3 +9,13 @@ services:
       - .env
     volumes:
       - ./.nodes:/root/.nodes
+  anvil:
+    container_name: anvil
+    platform: linux/amd64
+    build:
+      context: ./docker/ethereum
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    expose:
+      - 8545
