@@ -1,12 +1,19 @@
 use anyhow::Result;
 use std::{collections::BTreeMap, fs::File, io::Write, path::PathBuf};
 use uuid::Uuid;
-use wavs_types::{Service, ServiceConfig, ServiceID, ServiceStatus};
+use wavs_types::{
+    Component, ComponentID, Digest, Permissions, Service, ServiceConfig, ServiceID, ServiceStatus,
+};
 
-use crate::{args::ServiceCommand, context::CliContext};
+use crate::{
+    args::{ComponentCommand, ServiceCommand},
+    clients::HttpClient,
+    context::CliContext,
+    util::read_component,
+};
 
 /// Handle service commands - this function will be called from main.rs
-pub fn handle_service_command(
+pub async fn handle_service_command(
     ctx: &CliContext,
     file: PathBuf,
     command: ServiceCommand,
@@ -16,6 +23,12 @@ pub fn handle_service_command(
             let result = init_service(file, name, id)?;
             ctx.handle_display_result(result);
         }
+        ServiceCommand::Component { command } => match command {
+            ComponentCommand::Add { id, component } => {
+                let result = add_component(ctx, file, id, component).await?;
+                ctx.handle_display_result(result);
+            }
+        },
     }
 
     Ok(())
@@ -36,6 +49,26 @@ impl std::fmt::Display for ServiceInitResult {
         writeln!(f, "  ID:   {}", self.service.id)?;
         writeln!(f, "  Name: {}", self.service.name)?;
         writeln!(f, "  File: {}", self.file_path.display())
+    }
+}
+
+/// Result of adding a component
+#[derive(Debug, Clone)]
+pub struct ComponentAddResult {
+    /// The component id
+    pub component_id: ComponentID,
+    /// The component digest
+    pub digest: Digest,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentAddResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component added successfully!")?;
+        writeln!(f, "  Component ID: {}", self.component_id)?;
+        writeln!(f, "  Digest:       {}", self.digest)?;
+        writeln!(f, "  Updated:      {}", self.file_path.display())
     }
 }
 
@@ -76,6 +109,57 @@ pub fn init_service(
     file.write_all(service_json.as_bytes())?;
 
     Ok(ServiceInitResult { service, file_path })
+}
+
+/// Add a component to a service
+pub async fn add_component(
+    ctx: &CliContext,
+    file_path: PathBuf,
+    id: Option<ComponentID>,
+    component_path: PathBuf,
+) -> Result<ComponentAddResult> {
+    // Read the service file
+    let service_json = std::fs::read_to_string(&file_path)?;
+
+    // Parse the service JSON
+    let mut service: Service = serde_json::from_str(&service_json)?;
+
+    // Generate component ID if not provided
+    let component_id = match id {
+        Some(id) => id,
+        None => ComponentID::new(Uuid::now_v7().as_hyphenated().to_string())?,
+    };
+
+    // Upload the component
+    let wasm_bytes = read_component(
+        &component_path
+            .to_str()
+            .expect("Invalid component path specified"),
+    )?;
+    let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
+    let digest = http_client.upload_component(wasm_bytes).await?;
+
+    // Create a new component entry
+    let component = Component {
+        wasm: digest.clone(),
+        permissions: Permissions::default(),
+    };
+
+    // Add the component to the service
+    service.components.insert(component_id.clone(), component);
+
+    // Convert updated service to JSON
+    let updated_service_json = serde_json::to_string_pretty(&service)?;
+
+    // Write the updated JSON back to file
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_service_json.as_bytes())?;
+
+    Ok(ComponentAddResult {
+        component_id,
+        digest,
+        file_path,
+    })
 }
 
 #[cfg(test)]
