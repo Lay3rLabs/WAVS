@@ -11,8 +11,7 @@ impl Guest for Component {
         // but this component is not event-based
         let trigger_id = 1337;
         let return_data = b"block-interval data";
-        if let TriggerData::BlockInterval(data) = trigger_action.data {
-            println!("BlockInterval data: {:?}", data);
+        if let TriggerData::BlockInterval(_data) = trigger_action.data {
             return Ok(Some(encode_trigger_output(trigger_id, return_data)));
         } else {
             return Err("Invalid trigger data".to_string());
