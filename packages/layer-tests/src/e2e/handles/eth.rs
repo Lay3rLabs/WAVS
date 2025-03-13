@@ -40,6 +40,8 @@ impl EthereumInstance {
         // otherwise, we should wait to get a new block so we can be sure anvil is up and running fully
         if let Some(interval_seconds) = configs.anvil_interval_seconds {
             ctx.rt.block_on(async {
+                tokio::time::sleep(std::time::Duration::from_secs(interval_seconds)).await;
+
                 let client = EthClientBuilder::new(chain_config.to_client_config(None, None, None))
                     .build_query()
                     .await

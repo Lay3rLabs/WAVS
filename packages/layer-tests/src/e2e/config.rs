@@ -35,7 +35,7 @@ impl From<TestConfig> for Configs {
                 );
                 Some(1)
             } else {
-                None
+                Some(1)
             }
         };
 
