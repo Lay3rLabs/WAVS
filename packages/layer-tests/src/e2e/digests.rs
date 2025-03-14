@@ -74,15 +74,21 @@ impl Digests {
     }
 }
 
-async fn get_digest(http_client: &HttpClient, name: DigestName) -> (DigestName, Digest) {
-    let wasm_filename = match name {
-        DigestName::ChainTriggerLookup => "chain_trigger_lookup",
-        DigestName::CosmosQuery => "cosmos_query",
-        DigestName::EchoData => "echo_data",
-        DigestName::Permissions => "permissions",
-        DigestName::Square => "square",
-        DigestName::EchoBlockInterval => "echo_block_interval",
-    };
+async fn get_digest(
+    http_client: &HttpClient,
+    name: DigestName,
+    registry: bool,
+    wkg_client: &WkgClient,
+) -> (DigestName, Digest) {
+    if !registry {
+        let wasm_filename = match name {
+            DigestName::ChainTriggerLookup => "chain_trigger_lookup",
+            DigestName::CosmosQuery => "cosmos_query",
+            DigestName::EchoData => "echo_data",
+            DigestName::Permissions => "permissions",
+            DigestName::Square => "square",
+            DigestName::EchoBlockInterval => "echo_block_interval",
+        };
 
         let wasm_path = workspace_path()
             .join("examples")
@@ -112,6 +118,7 @@ async fn get_digest(http_client: &HttpClient, name: DigestName) -> (DigestName, 
             DigestName::EchoData => "echo_data",
             DigestName::Permissions => "permissions",
             DigestName::Square => "square",
+            DigestName::EchoBlockInterval => "echo_block_interval",
         };
         let checksum_bytes = std::fs::read("../../checksums.txt").unwrap();
         let checksums_raw = std::str::from_utf8(&checksum_bytes).unwrap();
