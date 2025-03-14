@@ -111,7 +111,7 @@ impl DeployService {
 
                 Trigger::BlockInterval {
                     chain_name,
-                    n_blocks: 3,
+                    n_blocks: 10,
                 }
             }
             CliTriggerKind::CosmosBlockInterval => {
@@ -119,7 +119,7 @@ impl DeployService {
 
                 Trigger::BlockInterval {
                     chain_name,
-                    n_blocks: 3,
+                    n_blocks: 10,
                 }
             }
         };
