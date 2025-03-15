@@ -13,7 +13,7 @@ import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptogra
  * typically this contract is called from some "IWavsServiceHandler"
  */
 contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
-    string public metadataURI;
+    string public metaDataURI;
     // ------------------------------------------------------------------------
     // Constructor
     // ------------------------------------------------------------------------
@@ -56,8 +56,12 @@ contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
         }
     }
 
-    function updateAVSMetadataURI(string memory _metadataURI) external {
-        metadataURI = _metadataURI;
+    /**
+     * @notice Update the metadata URI for the AVS
+     * @param _metadataURI The new metadata URI to be set
+     */
+    function updateAVSMetadataURI(string memory _metadataURI) override external {
+        metaDataURI = _metadataURI;
         _updateAVSMetadataURI(_metadataURI);
     }
 }
