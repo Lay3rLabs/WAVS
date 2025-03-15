@@ -13,7 +13,7 @@ import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptogra
  * typically this contract is called from some "IWavsServiceHandler"
  */
 contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
-
+    string public metadataURI;
     // ------------------------------------------------------------------------
     // Constructor
     // ------------------------------------------------------------------------
@@ -54,5 +54,10 @@ contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
         ) {
             revert IWavsServiceManager.InvalidSignature();
         }
+    }
+
+    function updateAVSMetadataURI(string memory _metadataURI) external {
+        metadataURI = _metadataURI;
+        _updateAVSMetadataURI(_metadataURI);
     }
 }
