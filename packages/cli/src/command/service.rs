@@ -39,6 +39,10 @@ pub async fn handle_service_command(
                 let result = add_workflow(file, id, component_id, fuel_limit)?;
                 ctx.handle_display_result(result);
             }
+            WorkflowCommand::Delete { id } => {
+                let result = delete_workflow(file, id)?;
+                ctx.handle_display_result(result);
+            }
         },
     }
 
@@ -95,6 +99,23 @@ pub struct WorkflowAddResult {
 impl std::fmt::Display for WorkflowAddResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Workflow added successfully!")?;
+        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+/// Result of deleting a workflow
+#[derive(Debug, Clone)]
+pub struct WorkflowDeleteResult {
+    /// The workflow id that was deleted
+    pub workflow_id: WorkflowID,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for WorkflowDeleteResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow deleted successfully!")?;
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
         writeln!(f, "  Updated:     {}", self.file_path.display())
     }
@@ -240,6 +261,41 @@ pub fn add_workflow(
     file.write_all(updated_service_json.as_bytes())?;
 
     Ok(WorkflowAddResult {
+        workflow_id,
+        file_path,
+    })
+}
+
+/// Delete a workflow from a service
+pub fn delete_workflow(
+    file_path: PathBuf,
+    workflow_id: WorkflowID,
+) -> Result<WorkflowDeleteResult> {
+    // Read the service file
+    let service_json = std::fs::read_to_string(&file_path)?;
+
+    // Parse the service JSON
+    let mut service: Service = serde_json::from_str(&service_json)?;
+
+    // Check if the workflow exists
+    if !service.workflows.contains_key(&workflow_id) {
+        return Err(anyhow::anyhow!(
+            "Workflow with ID '{}' not found in service",
+            workflow_id
+        ));
+    }
+
+    // Remove the workflow
+    service.workflows.remove(&workflow_id);
+
+    // Convert updated service to JSON
+    let updated_service_json = serde_json::to_string_pretty(&service)?;
+
+    // Write the updated JSON back to file
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_service_json.as_bytes())?;
+
+    Ok(WorkflowDeleteResult {
         workflow_id,
         file_path,
     })
