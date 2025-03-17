@@ -7,7 +7,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wavs_types::{
-    ChainName, ComponentID, ComponentSource, Digest, Service, ServiceConfig, ServiceID,
+    ChainName, ComponentID, ComponentSource, Digest, Service, ServiceConfig, ServiceID, WorkflowID,
 };
 
 use crate::config::Config;

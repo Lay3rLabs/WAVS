@@ -12,8 +12,7 @@ use wavs_types::{
 };
 
 use crate::{
-    args::{ComponentCommand, ServiceCommand},
-    clients::HttpClient,
+    args::{ComponentCommand, ServiceCommand, WorkflowCommand},
     context::CliContext,
 };
 
@@ -35,20 +34,6 @@ pub async fn handle_service_command(
             }
             ComponentCommand::Delete { id } => {
                 let result = delete_component(&file, id)?;
-                ctx.handle_display_result(result);
-            }
-        },
-        ServiceCommand::Workflow { command } => match command {
-            WorkflowCommand::Add {
-                id,
-                component_id,
-                fuel_limit,
-            } => {
-                let result = add_workflow(file, id, component_id, fuel_limit)?;
-                ctx.handle_display_result(result);
-            }
-            WorkflowCommand::Delete { id } => {
-                let result = delete_workflow(file, id)?;
                 ctx.handle_display_result(result);
             }
         },
@@ -293,51 +278,43 @@ pub fn add_workflow(
     component_id: ComponentID,
     fuel_limit: Option<u64>,
 ) -> Result<WorkflowAddResult> {
-    // Read the service file
-    let service_json = std::fs::read_to_string(&file_path)?;
+    modify_service_file(file_path.clone(), |mut service| {
+        // Check if the component exists
+        if !service.components.contains_key(&component_id) {
+            return Err(anyhow::anyhow!(
+                "Component with ID '{}' not found in service",
+                component_id
+            ));
+        }
 
-    // Parse the service JSON
-    let mut service: Service = serde_json::from_str(&service_json)?;
+        // Generate workflow ID if not provided
+        let workflow_id = match id {
+            Some(id) => id,
+            None => WorkflowID::new(Uuid::now_v7().as_hyphenated().to_string())?,
+        };
 
-    // Check if the component exists
-    if !service.components.contains_key(&component_id) {
-        return Err(anyhow::anyhow!(
-            "Component with ID '{}' not found in service",
-            component_id
-        ));
-    }
+        // Create default trigger and submit
+        let trigger = Trigger::Manual;
+        let submit = Submit::None;
 
-    // Generate workflow ID if not provided
-    let workflow_id = match id {
-        Some(id) => id,
-        None => WorkflowID::new(Uuid::now_v7().as_hyphenated().to_string())?,
-    };
+        // Create a new workflow entry
+        let workflow = Workflow {
+            trigger,
+            component: component_id,
+            submit,
+            fuel_limit,
+        };
 
-    // Create default trigger and submit
-    let trigger = Trigger::Manual;
-    let submit = Submit::None;
+        // Add the workflow to the service
+        service.workflows.insert(workflow_id.clone(), workflow);
 
-    // Create a new workflow entry
-    let workflow = Workflow {
-        trigger,
-        component: component_id,
-        submit,
-        fuel_limit,
-    };
-
-    // Add the workflow to the service
-    service.workflows.insert(workflow_id.clone(), workflow);
-
-    // Convert updated service to JSON
-    let updated_service_json = serde_json::to_string_pretty(&service)?;
-
-    // Write the updated JSON back to file
-    let mut file = File::create(&file_path)?;
-    file.write_all(updated_service_json.as_bytes())?;
-
-    Ok(WorkflowAddResult {
-        workflow_id,
-        file_path,
+        Ok((
+            service,
+            WorkflowAddResult {
+                workflow_id,
+                file_path,
+            },
+        ))
     })
 }
 
@@ -346,33 +323,25 @@ pub fn delete_workflow(
     file_path: PathBuf,
     workflow_id: WorkflowID,
 ) -> Result<WorkflowDeleteResult> {
-    // Read the service file
-    let service_json = std::fs::read_to_string(&file_path)?;
+    modify_service_file(file_path.clone(), |mut service| {
+        // Check if the workflow exists
+        if !service.workflows.contains_key(&workflow_id) {
+            return Err(anyhow::anyhow!(
+                "Workflow with ID '{}' not found in service",
+                workflow_id
+            ));
+        }
 
-    // Parse the service JSON
-    let mut service: Service = serde_json::from_str(&service_json)?;
+        // Remove the workflow
+        service.workflows.remove(&workflow_id);
 
-    // Check if the workflow exists
-    if !service.workflows.contains_key(&workflow_id) {
-        return Err(anyhow::anyhow!(
-            "Workflow with ID '{}' not found in service",
-            workflow_id
-        ));
-    }
-
-    // Remove the workflow
-    service.workflows.remove(&workflow_id);
-
-    // Convert updated service to JSON
-    let updated_service_json = serde_json::to_string_pretty(&service)?;
-
-    // Write the updated JSON back to file
-    let mut file = File::create(&file_path)?;
-    file.write_all(updated_service_json.as_bytes())?;
-
-    Ok(WorkflowDeleteResult {
-        workflow_id,
-        file_path,
+        Ok((
+            service,
+            WorkflowDeleteResult {
+                workflow_id,
+                file_path,
+            },
+        ))
     })
 }
 
@@ -549,5 +518,106 @@ mod tests {
         let error_msg = error_result.unwrap_err().to_string();
         assert!(error_msg.contains(&non_existent_id.to_string()));
         assert!(error_msg.contains("not found"));
+    }
+
+    #[test]
+    fn test_workflow_operations() {
+        // Create a temporary directory and file
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("workflow_operations_test.json");
+
+        // Create a test digest
+        let test_digest =
+            Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+                .unwrap();
+
+        // Initialize a service
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        init_service(
+            file_path.clone(),
+            "Test Service".to_string(),
+            Some(service_id.clone()),
+        )
+        .unwrap();
+
+        // Add a component to use in workflows
+        let component_id = ComponentID::new("component-123").unwrap();
+        add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
+
+        // Test adding a workflow with specific ID
+        let workflow_id = WorkflowID::new("workflow-123").unwrap();
+        let add_result = add_workflow(
+            file_path.clone(),
+            Some(workflow_id.clone()),
+            component_id.clone(),
+            Some(1000),
+        )
+        .unwrap();
+
+        // Verify add result
+        assert_eq!(add_result.workflow_id, workflow_id);
+        assert_eq!(add_result.file_path, file_path);
+
+        // Verify the file was modified by adding the workflow
+        let service_after_add: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        assert!(service_after_add.workflows.contains_key(&workflow_id));
+        assert_eq!(service_after_add.workflows.len(), 1);
+
+        // Verify workflow properties
+        let added_workflow = service_after_add.workflows.get(&workflow_id).unwrap();
+        assert_eq!(added_workflow.component, component_id);
+        assert_eq!(added_workflow.fuel_limit, Some(1000));
+        assert!(matches!(added_workflow.trigger, Trigger::Manual));
+        assert!(matches!(added_workflow.submit, Submit::None));
+
+        // Test adding a workflow with autogenerated ID
+        let auto_id_result =
+            add_workflow(file_path.clone(), None, component_id.clone(), None).unwrap();
+        let auto_workflow_id = auto_id_result.workflow_id;
+
+        // Verify the auto-generated workflow was added
+        let service_after_auto: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        assert!(service_after_auto.workflows.contains_key(&auto_workflow_id));
+        assert_eq!(service_after_auto.workflows.len(), 2); // Two workflows now
+
+        // Test error when adding workflow with non-existent component
+        let non_existent_component = ComponentID::new("does-not-exist").unwrap();
+        let component_error = add_workflow(
+            file_path.clone(),
+            None,
+            non_existent_component.clone(),
+            None,
+        );
+
+        // Verify error for non-existent component
+        assert!(component_error.is_err());
+        let component_error_msg = component_error.unwrap_err().to_string();
+        assert!(component_error_msg.contains(&non_existent_component.to_string()));
+        assert!(component_error_msg.contains("not found"));
+
+        // Test deleting a workflow
+        let delete_result = delete_workflow(file_path.clone(), workflow_id.clone()).unwrap();
+
+        // Verify delete result
+        assert_eq!(delete_result.workflow_id, workflow_id);
+        assert_eq!(delete_result.file_path, file_path);
+
+        // Verify the file was modified by deleting the workflow
+        let service_after_delete: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        assert!(!service_after_delete.workflows.contains_key(&workflow_id));
+        assert_eq!(service_after_delete.workflows.len(), 1); // One workflow remaining
+
+        // Test error handling for non-existent workflow
+        let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
+        let workflow_error = delete_workflow(file_path.clone(), non_existent_workflow.clone());
+
+        // Verify it returns an error with appropriate message
+        assert!(workflow_error.is_err());
+        let workflow_error_msg = workflow_error.unwrap_err().to_string();
+        assert!(workflow_error_msg.contains(&non_existent_workflow.to_string()));
+        assert!(workflow_error_msg.contains("not found"));
     }
 }
