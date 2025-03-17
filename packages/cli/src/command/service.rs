@@ -29,11 +29,11 @@ pub async fn handle_service_command(
         }
         ServiceCommand::Component { command } => match command {
             ComponentCommand::Add { id, digest } => {
-                let result = add_component(&file, id, digest).await?;
+                let result = add_component(&file, id, digest)?;
                 ctx.handle_display_result(result);
             }
             ComponentCommand::Delete { id } => {
-                let result = delete_component(&file, id).await?;
+                let result = delete_component(&file, id)?;
                 ctx.handle_display_result(result);
             }
         },
@@ -98,11 +98,10 @@ impl std::fmt::Display for ComponentDeleteResult {
 }
 
 /// Helper function to load a service, modify it, and save it back
-pub async fn modify_service_file<P, F, Fut, R>(file_path: P, modifier: F) -> Result<R>
+pub fn modify_service_file<P, F, R>(file_path: P, modifier: F) -> Result<R>
 where
     P: AsRef<Path>,
-    F: FnOnce(Service) -> Fut,
-    Fut: std::future::Future<Output = Result<(Service, R)>>,
+    F: FnOnce(Service) -> Result<(Service, R)>,
 {
     let file_path = file_path.as_ref();
 
@@ -113,7 +112,7 @@ where
     let service: Service = serde_json::from_str(&service_json)?;
 
     // Apply the modification and get the result
-    let (updated_service, result) = modifier(service).await?;
+    let (updated_service, result) = modifier(service)?;
 
     // Convert updated service to JSON
     let updated_service_json = serde_json::to_string_pretty(&updated_service)?;
@@ -165,12 +164,12 @@ pub fn init_service(
 }
 
 /// Add a component to a service
-pub async fn add_component(
+pub fn add_component(
     file_path: &PathBuf,
     id: Option<ComponentID>,
     digest: Digest,
 ) -> Result<ComponentAddResult> {
-    modify_service_file(file_path, |mut service| async move {
+    modify_service_file(file_path, |mut service| {
         // Generate component ID if not provided
         let component_id = match id {
             Some(id) => id,
@@ -195,15 +194,14 @@ pub async fn add_component(
             },
         ))
     })
-    .await
 }
 
 /// Delete a component from a service
-pub async fn delete_component(
+pub fn delete_component(
     file_path: &PathBuf,
     component_id: ComponentID,
 ) -> Result<ComponentDeleteResult> {
-    modify_service_file(file_path, |mut service| async move {
+    modify_service_file(file_path, |mut service| {
         // Check if the component exists
         if !service.components.contains_key(&component_id) {
             return Err(anyhow::anyhow!(
@@ -223,7 +221,6 @@ pub async fn delete_component(
             },
         ))
     })
-    .await
 }
 
 #[cfg(test)]
@@ -232,7 +229,6 @@ mod tests {
 
     use super::*;
     use tempfile::tempdir;
-    use tokio::runtime::Runtime;
 
     #[test]
     fn test_service_init() {
@@ -297,9 +293,6 @@ mod tests {
 
     #[test]
     fn test_component_operations() {
-        // Create a runtime for executing async code in tests
-        let rt = Runtime::new().unwrap();
-
         // Create a temporary directory and file
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("component_operations_test.json");
@@ -325,11 +318,8 @@ mod tests {
 
         // Test adding first component using Digest source
         let component_id = ComponentID::new("component-123").unwrap();
-        let add_result = rt
-            .block_on(async {
-                add_component(&file_path, Some(component_id.clone()), test_digest.clone()).await
-            })
-            .unwrap();
+        let add_result =
+            add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
 
         // Verify add result
         assert_eq!(add_result.component_id, component_id);
@@ -344,16 +334,12 @@ mod tests {
 
         // Test adding second component with Digest source
         let second_component_id = ComponentID::new("component-456").unwrap();
-        let second_add_result = rt
-            .block_on(async {
-                add_component(
-                    &file_path,
-                    Some(second_component_id.clone()),
-                    test_digest.clone(),
-                )
-                .await
-            })
-            .unwrap();
+        let second_add_result = add_component(
+            &file_path,
+            Some(second_component_id.clone()),
+            test_digest.clone(),
+        )
+        .unwrap();
 
         // Verify second add result
         assert_eq!(second_add_result.component_id, second_component_id);
@@ -369,16 +355,12 @@ mod tests {
 
         // Test adding third component with Digest source
         let third_component_id = ComponentID::new("component-789").unwrap();
-        let third_add_result = rt
-            .block_on(async {
-                add_component(
-                    &file_path,
-                    Some(third_component_id.clone()),
-                    test_digest.clone(),
-                )
-                .await
-            })
-            .unwrap();
+        let third_add_result = add_component(
+            &file_path,
+            Some(third_component_id.clone()),
+            test_digest.clone(),
+        )
+        .unwrap();
 
         // Verify third add result
         assert_eq!(third_add_result.component_id, third_component_id);
@@ -393,9 +375,7 @@ mod tests {
         assert_eq!(service_after_third_add.components.len(), 3); // All three components
 
         // Test deleting a component
-        let delete_result = rt
-            .block_on(async { delete_component(&file_path, component_id.clone()).await })
-            .unwrap();
+        let delete_result = delete_component(&file_path, component_id.clone()).unwrap();
 
         // Verify delete result
         assert_eq!(delete_result.component_id, component_id);
@@ -409,8 +389,7 @@ mod tests {
 
         // Test error handling for non-existent component
         let non_existent_id = ComponentID::new("does-not-exist").unwrap();
-        let error_result =
-            rt.block_on(async { delete_component(&file_path, non_existent_id.clone()).await });
+        let error_result = delete_component(&file_path, non_existent_id.clone());
 
         // Verify it returns an error with appropriate message
         assert!(error_result.is_err());
