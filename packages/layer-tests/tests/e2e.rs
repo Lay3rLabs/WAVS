@@ -1,4 +1,5 @@
 use layer_tests::args::TestArgs;
+use utils::context::AppContext;
 
 // This is so we automatically run tests via `cargo test --workspace`
 // However, for developer purposes, we can also override and isolate tests
@@ -6,5 +7,6 @@ use layer_tests::args::TestArgs;
 // e.g. `cargo run -- --isolated eth-square`
 #[test]
 fn e2e_tests() {
-    layer_tests::e2e::run(TestArgs::default());
+    let ctx = AppContext::new();
+    layer_tests::e2e::run(TestArgs::default(), ctx);
 }

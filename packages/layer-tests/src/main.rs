@@ -1,8 +1,10 @@
 use clap::Parser;
 use layer_tests::args::TestArgs;
+use utils::context::AppContext;
 
 // for easier debugging without messing with the toml config
 // e.g. `cargo run -- --isolated eth-square`
 pub fn main() {
-    layer_tests::e2e::run(TestArgs::parse());
+    let ctx = AppContext::new();
+    layer_tests::e2e::run(TestArgs::parse(), ctx);
 }

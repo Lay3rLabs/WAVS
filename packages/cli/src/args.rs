@@ -6,7 +6,9 @@ use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
 };
-use wavs_types::{ChainName, ComponentID, Service, ServiceConfig, ServiceID};
+use wavs_types::{
+    ChainName, ComponentID, ComponentSource, Digest, Service, ServiceConfig, ServiceID,
+};
 
 use crate::config::Config;
 
@@ -46,8 +48,8 @@ pub enum Command {
     /// Uses core contracts that were previously deployed via the CLI
     DeployService {
         /// Path to the WASI component
-        #[clap(long)]
-        component: String,
+        #[clap(long, value_parser = |json: &str| serde_json::from_str::<ComponentSource>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
+        component: ComponentSource,
 
         /// The kind of trigger to deploy
         /// If not set, will assume the trigger from the trigger_address
@@ -97,8 +99,7 @@ pub enum Command {
     /// Uploads a WASI component
     UploadComponent {
         /// Path to the WASI component
-        #[clap(long)]
-        component: String,
+        component_path: String,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -185,9 +186,15 @@ pub enum ComponentCommand {
         #[clap(long)]
         id: Option<ComponentID>,
 
-        /// Path to the WASI component file
+        /// Digest of an existing component
+        #[clap(short, long)]
+        digest: Digest,
+    },
+    /// Delete a component from a service
+    Delete {
+        /// The ID of the component to delete
         #[clap(long)]
-        component: PathBuf,
+        id: ComponentID,
     },
     /// Manage permissions of a component
     Permissions {

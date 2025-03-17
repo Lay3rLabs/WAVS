@@ -52,6 +52,12 @@ impl CAStorage for MemoryStorage {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    fn data_exists(&self, digest: &Digest) -> Result<bool, CAStorageError> {
+        let tree = self.data.read()?;
+        Ok(tree.get(digest).is_some())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
     fn digests(
         &self,
     ) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, CAStorageError> {

@@ -6,7 +6,7 @@ use wavs::test_utils::{
     address::rand_address_eth,
     mock::{BigSquare, MockE2ETestRunner, SquareIn},
 };
-use wavs_types::{Digest, ServiceID, WorkflowID};
+use wavs_types::{ComponentSource, Digest, ServiceID, WorkflowID};
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let runner = MockE2ETestRunner::new(AppContext::new());
@@ -23,7 +23,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         async move {
             let digest = Digest::new(b"wasm");
             runner
-                .create_service_simple(service_id.clone(), digest, BigSquare)
+                .create_service_simple(
+                    service_id.clone(),
+                    ComponentSource::Digest(digest),
+                    BigSquare,
+                )
                 .await;
         }
     });

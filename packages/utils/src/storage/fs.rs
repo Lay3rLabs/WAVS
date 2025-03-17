@@ -83,6 +83,12 @@ impl CAStorage for FileStorage {
         Ok(data)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    fn data_exists(&self, digest: &Digest) -> Result<bool, CAStorageError> {
+        let path = self.digest_to_path(digest)?;
+        return Ok(path.exists());
+    }
+
     /// Returns an iterator over all the digests in the storage.
     /// We store these multiple levels deep (see digest_to_path), so we need to walk the directory tree.
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
