@@ -7,7 +7,8 @@ use std::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    Component, ComponentID, Digest, Permissions, Service, ServiceConfig, ServiceID, ServiceStatus,
+    Component, ComponentID, ComponentSource, Digest, Permissions, Service, ServiceConfig,
+    ServiceID, ServiceStatus,
 };
 
 use crate::{
@@ -178,7 +179,7 @@ pub async fn add_component(
 
         // Create a new component entry
         let component = Component {
-            wasm: digest.clone(),
+            source: ComponentSource::Digest(digest.clone()),
             permissions: Permissions::default(),
         };
 
