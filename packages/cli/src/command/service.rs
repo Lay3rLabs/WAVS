@@ -463,7 +463,7 @@ mod tests {
 
         // Verify permissions result
         assert_eq!(permissions_result.component_id, component_id);
-        assert_eq!(permissions_result.permissions.file_system, true);
+        assert!(permissions_result.permissions.file_system);
         assert!(matches!(
             permissions_result.permissions.allowed_http_hosts,
             AllowedHostPermission::All
@@ -476,7 +476,7 @@ mod tests {
             .components
             .get(&component_id)
             .unwrap();
-        assert_eq!(updated_component.permissions.file_system, true);
+        assert!(updated_component.permissions.file_system);
         assert!(matches!(
             updated_component.permissions.allowed_http_hosts,
             AllowedHostPermission::All
