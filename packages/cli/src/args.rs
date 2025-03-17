@@ -195,17 +195,13 @@ pub enum ComponentCommand {
         #[clap(long)]
         id: ComponentID,
 
-        /// Allow all HTTP hosts
-        #[clap(long, group = "http_perm")]
-        allow_all_http: bool,
-
-        /// Allow no HTTP hosts
-        #[clap(long, group = "http_perm")]
-        allow_no_http: bool,
-
-        /// Allowed HTTP hosts (comma-separated list)
-        #[clap(long, value_delimiter = ',', group = "http_perm")]
-        allowed_http_hosts: Option<Vec<String>>,
+        /// HTTP hosts allowed for access:
+        /// Use --http-hosts '' to disallow all hosts
+        /// Use --http-hosts '*' to allow all hosts
+        /// Use --http-hosts 'host1,host2,...' to allow specific hosts
+        /// Omit to leave HTTP permissions unchanged
+        #[clap(long, value_delimiter = ',')]
+        http_hosts: Option<Vec<String>>,
 
         /// Enable file system access
         #[clap(long)]

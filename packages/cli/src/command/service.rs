@@ -31,19 +31,10 @@ pub async fn handle_service_command(
             }
             ComponentCommand::Permissions {
                 id,
-                allow_all_http,
-                allow_no_http,
-                allowed_http_hosts,
+                http_hosts,
                 file_system,
             } => {
-                let result = update_component_permissions(
-                    file,
-                    id,
-                    allow_all_http,
-                    allow_no_http,
-                    allowed_http_hosts,
-                    file_system,
-                )?;
+                let result = update_component_permissions(file, id, http_hosts, file_system)?;
                 ctx.handle_display_result(result);
             }
         },
@@ -225,14 +216,11 @@ pub async fn add_component(
         file_path,
     })
 }
-
 /// Update component permissions
 pub fn update_component_permissions(
     file_path: PathBuf,
     component_id: ComponentID,
-    allow_all_http: bool,
-    allow_no_http: bool,
-    allowed_http_hosts: Option<Vec<String>>,
+    http_hosts: Option<Vec<String>>,
     file_system: Option<bool>,
 ) -> Result<ComponentPermissionsResult> {
     // Read the service file
@@ -246,13 +234,25 @@ pub fn update_component_permissions(
         anyhow::anyhow!("Component with ID '{}' not found in service", component_id)
     })?;
 
-    // Update HTTP permissions
-    if allow_all_http {
-        component.permissions.allowed_http_hosts = AllowedHostPermission::All;
-    } else if allow_no_http {
-        component.permissions.allowed_http_hosts = AllowedHostPermission::None;
-    } else if let Some(hosts) = allowed_http_hosts {
-        component.permissions.allowed_http_hosts = AllowedHostPermission::Only(hosts);
+    // Update HTTP permissions if specified
+    if let Some(mut hosts) = http_hosts {
+        // Sanitize inputs by trimming whitespace and removing empty strings
+        hosts = hosts
+            .into_iter()
+            .map(|host| host.trim().to_string())
+            .filter(|host| !host.is_empty())
+            .collect();
+
+        if hosts.is_empty() {
+            // Empty list means no hosts allowed
+            component.permissions.allowed_http_hosts = AllowedHostPermission::None;
+        } else if hosts.len() == 1 && hosts[0] == "*" {
+            // ["*"] means all hosts allowed
+            component.permissions.allowed_http_hosts = AllowedHostPermission::All;
+        } else {
+            // List of specific hosts
+            component.permissions.allowed_http_hosts = AllowedHostPermission::Only(hosts);
+        }
     }
 
     // Update file system permission if specified
