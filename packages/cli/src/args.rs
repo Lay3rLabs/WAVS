@@ -6,7 +6,7 @@ use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
 };
-use wavs_types::{ChainName, ComponentID, Service, ServiceConfig, ServiceID};
+use wavs_types::{ChainName, ComponentID, Digest, Service, ServiceConfig, ServiceID};
 
 use crate::config::Config;
 
@@ -185,9 +185,9 @@ pub enum ComponentCommand {
         #[clap(long)]
         id: Option<ComponentID>,
 
-        /// Path to the WASI component file
-        #[clap(long)]
-        component: PathBuf,
+        /// Digest of an existing component
+        #[clap(short, long)]
+        digest: Digest,
     },
     /// Delete a component from a service
     Delete {
