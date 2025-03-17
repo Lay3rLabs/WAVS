@@ -45,6 +45,9 @@ pub struct Config {
 
     /// The mnemonic to use for submitting transactions on Cosmos chains
     pub cosmos_submission_mnemonic: Option<String>,
+
+    /// Domain to use for registries
+    pub registry_domain: Option<String>,
 }
 
 impl ConfigExt for Config {
@@ -78,6 +81,7 @@ impl Default for Config {
             wasm_threads: 4,
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
+            registry_domain: None,
         }
     }
 }

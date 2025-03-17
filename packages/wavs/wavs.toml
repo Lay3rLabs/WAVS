@@ -10,6 +10,7 @@
 # The log level, in the format of tracing directives. Default is ["info"]
 # See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives for more information
 # e.g. WAVS_LOG_LEVEL="info, wavs=debug"
+registry_domain = "wa.dev"
 log_level = ["info", "wavs=debug"]
 
 # the allowed cors origins. Default is empty list.

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
+use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
     AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, Trigger, TriggerAction,
@@ -80,7 +80,7 @@ impl ExecComponent {
             service_id: trigger.config.service_id.clone(),
             workflow_id: trigger.config.workflow_id.clone(),
             digest: Digest::new(&wasm_bytes),
-            component: Component::new(&engine, &wasm_bytes)?,
+            component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
             engine: &engine,
             permissions: &Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,

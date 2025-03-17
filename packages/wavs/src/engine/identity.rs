@@ -1,7 +1,7 @@
 use tracing::instrument;
-use wavs_types::{Component, Digest, ServiceConfig, TriggerAction};
+use wavs_types::{Digest, ServiceConfig, TriggerAction};
 
-use crate::apis::engine::{Engine, EngineError};
+use crate::apis::engine::{Engine, EngineError, ExecutionComponent};
 use crate::triggers::mock::get_mock_trigger_data;
 
 /// Simply returns the request as the result.
@@ -17,8 +17,24 @@ impl IdentityEngine {
 
 impl Engine for IdentityEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn store_wasm(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+    fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         Ok(Digest::new(bytecode))
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    async fn store_component_from_source(
+        &self,
+        source: &wavs_types::ComponentSource,
+    ) -> Result<Digest, EngineError> {
+        match source {
+            wavs_types::ComponentSource::Download { digest, .. } => {
+                Err(EngineError::UnknownDigest(digest.clone()))
+            }
+            wavs_types::ComponentSource::Registry { registry } => {
+                Err(EngineError::UnknownDigest(registry.digest.clone()))
+            }
+            wavs_types::ComponentSource::Digest(digest) => Ok(digest.clone()),
+        }
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
@@ -29,7 +45,7 @@ impl Engine for IdentityEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        _component: &Component,
+        _component: &ExecutionComponent,
         _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
@@ -40,7 +56,7 @@ impl Engine for IdentityEngine {
 
 #[cfg(test)]
 mod test {
-    use wavs_types::TriggerData;
+    use wavs_types::{Permissions, TriggerData};
 
     use crate::triggers::mock::mock_eth_event_trigger_config;
 
@@ -51,8 +67,8 @@ mod test {
         let engine = IdentityEngine::new();
 
         // stores and returns unique digest
-        let d1 = engine.store_wasm(b"foo").unwrap();
-        let d2 = engine.store_wasm(b"bar").unwrap();
+        let d1 = engine.store_component_bytes(b"foo").unwrap();
+        let d2 = engine.store_component_bytes(b"bar").unwrap();
         assert_ne!(d1, d2);
 
         // list doesn't fail
@@ -60,10 +76,13 @@ mod test {
 
         // execute returns self
         let request = b"this is only a test".to_vec();
-        let component = Component::new(d1);
+        let execution_component = ExecutionComponent {
+            wasm: d1,
+            permissions: Permissions::default(),
+        };
         let result = engine
             .execute(
-                &component,
+                &execution_component,
                 None,
                 TriggerAction {
                     config: mock_eth_event_trigger_config("foobar", "baz"),

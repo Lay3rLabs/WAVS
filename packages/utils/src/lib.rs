@@ -9,6 +9,7 @@ pub mod eth_client;
 pub mod filesystem;
 pub mod serde;
 pub mod storage;
+pub mod wkg;
 
 // the test version of init_tracing does not take a config
 // since config itself is tested and modified from different parallel tests
