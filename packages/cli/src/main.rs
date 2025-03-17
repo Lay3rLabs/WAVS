@@ -13,9 +13,8 @@ use wavs_cli::{
         upload_component::{UploadComponent, UploadComponentArgs},
     },
     context::CliContext,
-    util::{read_component, ComponentInput},
+    util::ComponentInput,
 };
-use wavs_types::ComponentSource;
 
 #[tokio::main]
 async fn main() {
@@ -33,7 +32,9 @@ async fn main() {
         .try_init()
         .unwrap();
 
-    let ctx = CliContext::try_new(&command, config, None).await.unwrap();
+    let ctx = CliContext::try_new(&command, config.clone(), None)
+        .await
+        .unwrap();
 
     match command {
         Command::DeployEigenCore {
@@ -65,8 +66,6 @@ async fn main() {
             trigger_event_name,
             args: _,
         } => {
-            let component = ComponentSource::Bytecode(read_component(&component).unwrap());
-
             let trigger = match (trigger, &trigger_address) {
                 (Some(trigger), _) => trigger,
                 (None, Some(trigger_address)) => {
@@ -126,15 +125,13 @@ async fn main() {
 
             ctx.handle_deploy_result(res).unwrap();
         }
-        Command::UploadComponent { component, args: _ } => {
-            let res = UploadComponent::run(
-                &ctx.config,
-                UploadComponentArgs {
-                    component_path: component,
-                },
-            )
-            .await
-            .unwrap();
+        Command::UploadComponent {
+            component_path,
+            args: _,
+        } => {
+            let res = UploadComponent::run(&ctx.config, UploadComponentArgs { component_path })
+                .await
+                .unwrap();
 
             ctx.handle_display_result(res);
         }

@@ -50,7 +50,7 @@ async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResu
         }
     }
 
-    state.dispatcher.add_service(service)?;
+    state.dispatcher.add_service(service).await?;
 
     Ok(())
 }

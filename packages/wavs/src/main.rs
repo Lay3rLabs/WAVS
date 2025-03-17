@@ -25,7 +25,8 @@ fn main() {
 
     let ctx = AppContext::new();
 
-    let dispatcher = Arc::new(CoreDispatcher::new_core(&config).unwrap());
+    let config_clone = config.clone();
+    let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone).unwrap());
 
     wavs::run_server(ctx, config, dispatcher);
 }

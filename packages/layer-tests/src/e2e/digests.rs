@@ -1,9 +1,13 @@
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashSet},
+    str::FromStr,
+};
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use utils::{context::AppContext, filesystem::workspace_path};
+use utils::{context::AppContext, filesystem::workspace_path, wkg::WkgClient};
+use wasm_pkg_common::package::PackageRef;
 use wavs_cli::clients::HttpClient;
-use wavs_types::Digest;
+use wavs_types::{Digest, Registry};
 
 use super::config::Configs;
 
@@ -23,6 +27,7 @@ pub enum DigestName {
 
 impl Digests {
     pub fn new(ctx: AppContext, configs: &Configs, http_client: &HttpClient) -> Self {
+        let wkg_client = WkgClient::new(configs.wavs.registry_domain.clone().unwrap()).unwrap();
         ctx.rt.block_on(async {
             let digests: HashSet<DigestName> = configs
                 .matrix
@@ -49,7 +54,12 @@ impl Digests {
             let mut futures = FuturesUnordered::new();
 
             for service_digest in digests {
-                futures.push(get_digest(http_client, service_digest));
+                futures.push(get_digest(
+                    http_client,
+                    service_digest,
+                    configs.registry,
+                    &wkg_client,
+                ));
             }
 
             let mut lookup = BTreeMap::default();
@@ -63,30 +73,73 @@ impl Digests {
     }
 }
 
-async fn get_digest(http_client: &HttpClient, name: DigestName) -> (DigestName, Digest) {
-    let wasm_filename = match name {
-        DigestName::ChainTriggerLookup => "chain_trigger_lookup",
-        DigestName::CosmosQuery => "cosmos_query",
-        DigestName::EchoData => "echo_data",
-        DigestName::Permissions => "permissions",
-        DigestName::Square => "square",
-    };
+async fn get_digest(
+    http_client: &HttpClient,
+    name: DigestName,
+    registry: bool,
+    wkg_client: &WkgClient,
+) -> (DigestName, Digest) {
+    if !registry {
+        let wasm_filename = match name {
+            DigestName::ChainTriggerLookup => "chain_trigger_lookup",
+            DigestName::CosmosQuery => "cosmos_query",
+            DigestName::EchoData => "echo_data",
+            DigestName::Permissions => "permissions",
+            DigestName::Square => "square",
+        };
 
-    let wasm_path = workspace_path()
-        .join("examples")
-        .join("build")
-        .join("components")
-        .join(format!("{}.wasm", wasm_filename));
+        let wasm_path = workspace_path()
+            .join("examples")
+            .join("build")
+            .join("components")
+            .join(format!("{}.wasm", wasm_filename));
 
-    tracing::info!("Uploading wasm: {}", wasm_path.display());
+        tracing::info!("Uploading wasm: {}", wasm_path.display());
 
-    let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
+        let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
 
-    (
-        name,
-        http_client
-            .upload_component(wasm_bytes.to_vec())
+        (
+            name,
+            http_client
+                .upload_component(wasm_bytes.to_vec())
+                .await
+                .unwrap(),
+        )
+    } else {
+        // Adding a component from the registry requires calculating the digest ahead-of-time.
+        // While we could do that by either loading the files from disk or downloading from the registry
+        // and calculating the hash from that - using the checksums is faster and gives us an extra
+        // sanity check that we've deployed the latest builds to the test registry
+        let pkg_name = match name {
+            DigestName::ChainTriggerLookup => "chain_trigger_lookup",
+            DigestName::CosmosQuery => "cosmos_query",
+            DigestName::EchoData => "echo_data",
+            DigestName::Permissions => "permissions",
+            DigestName::Square => "square",
+        };
+        let checksum_bytes = std::fs::read("../../checksums.txt").unwrap();
+        let checksums_raw = std::str::from_utf8(&checksum_bytes).unwrap();
+        let checksums: Vec<&str> = checksums_raw.split("\n").collect();
+        let checksum = checksums
+            .iter()
+            .find(|check| {
+                let path = check.split_ascii_whitespace().last().unwrap();
+                let file_name = path.split("/").last().unwrap();
+                let without_extension = file_name.split(".").next().unwrap();
+                without_extension == pkg_name
+            })
+            .unwrap();
+        let digest_string = checksum.split_ascii_whitespace().next().unwrap();
+        let pkg_name = pkg_name.replace("_", "-");
+        let bytes = wkg_client
+            .fetch(&Registry {
+                digest: Digest::from_str(digest_string).unwrap(),
+                domain: None,
+                version: None,
+                package: PackageRef::try_from(format!("wavs-tests:{0}", pkg_name)).unwrap(),
+            })
             .await
-            .unwrap(),
-    )
+            .unwrap();
+        (name, http_client.upload_component(bytes).await.unwrap())
+    }
 }

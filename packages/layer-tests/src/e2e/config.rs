@@ -11,12 +11,12 @@ use super::matrix::TestMatrix;
 #[derive(Clone, Debug)]
 pub struct Configs {
     pub matrix: TestMatrix,
+    pub registry: bool,
     pub wavs: wavs::config::Config,
     pub cli: wavs_cli::config::Config,
     pub cli_args: wavs_cli::args::CliArgs,
     pub aggregator: Option<wavs_aggregator::config::Config>,
     pub chains: ChainConfigs,
-    pub anvil_interval_seconds: Option<u64>,
 }
 
 impl From<TestConfig> for Configs {
@@ -24,20 +24,6 @@ impl From<TestConfig> for Configs {
         let matrix = test_config
             .matrix
             .into_validated(test_config.all, test_config.isolated.as_deref());
-
-        // ideally we want anvil to run as fast as possible, not on an interval
-        // but this causes bugs when we don't have any ethereum trigger chains
-        // since the signing will be at the same block height as the operator registering itself
-        let anvil_interval_seconds = {
-            if matrix.eth.is_empty() && matrix.cross_chain.is_empty() {
-                tracing::warn!(
-                    "No ethereum or cross-chain tests enabled, setting anvil to 1 second intervals"
-                );
-                Some(1)
-            } else {
-                None
-            }
-        };
 
         let mut chain_configs = ChainConfigs::default();
 
@@ -176,12 +162,12 @@ impl From<TestConfig> for Configs {
 
         Self {
             matrix,
+            registry: test_config.registry.map_or_else(|| false, |t| t),
             cli: cli_config,
             cli_args,
             aggregator: aggregator_config,
             wavs: wavs_config,
             chains: chain_configs,
-            anvil_interval_seconds,
         }
     }
 }
