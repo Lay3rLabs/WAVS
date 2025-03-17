@@ -337,9 +337,7 @@ impl CoreTriggerManager {
                     }
 
                     // process block-based triggers
-                    if let Some(trigger_action) =
-                        self.process_blocks(chain_name, block_height).await
-                    {
+                    if let Some(trigger_action) = self.process_blocks(chain_name, block_height) {
                         trigger_actions.push(trigger_action);
                     }
                 }
@@ -347,9 +345,7 @@ impl CoreTriggerManager {
                     chain_name,
                     block_height,
                 } => {
-                    if let Some(trigger_action) =
-                        self.process_blocks(chain_name, block_height).await
-                    {
+                    if let Some(trigger_action) = self.process_blocks(chain_name, block_height) {
                         trigger_actions.push(trigger_action);
                     }
                 }
@@ -365,11 +361,7 @@ impl CoreTriggerManager {
         Ok(())
     }
 
-    async fn process_blocks(
-        &self,
-        chain_name: ChainName,
-        block_height: u64,
-    ) -> Option<TriggerAction> {
+    fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Option<TriggerAction> {
         let mut triggers_by_block_interval_lock =
             self.lookup_maps.triggers_by_block_interval.write().unwrap();
 
