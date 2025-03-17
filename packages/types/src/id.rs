@@ -121,6 +121,14 @@ impl FromStr for WorkflowID {
     }
 }
 
+impl FromStr for ChainName {
+    type Err = IDError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        ChainName::new(s.to_string())
+    }
+}
+
 impl Default for WorkflowID {
     fn default() -> Self {
         WorkflowID::new("default").unwrap()
