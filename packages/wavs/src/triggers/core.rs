@@ -360,7 +360,6 @@ impl CoreTriggerManager {
     fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
         let mut triggers_by_block_interval_lock =
             self.lookup_maps.triggers_by_block_interval.write().unwrap();
-    
         let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
     
         let mut trigger_actions = vec![];
@@ -368,9 +367,10 @@ impl CoreTriggerManager {
         if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
             // Since we don't remove the trigger data when the trigger config is removed,
             // for efficiency we want to do it here.
-            let mut i = 0;
-            while i < countdowns.len() {
-                let (countdown, lookup_id) = &mut countdowns[i];
+            let mut trigger_index = 0;
+            let n_triggers = countdowns.len();
+            while trigger_index < n_triggers {
+                let (countdown, lookup_id) = &mut countdowns[trigger_index];
                 *countdown -= 1;
     
                 if *countdown == 0 {
@@ -387,7 +387,7 @@ impl CoreTriggerManager {
                                 config: trigger_config.clone(),
                             });
     
-                            i += 1;
+                            trigger_index += 1;
                             continue;
                         }
                     }
@@ -395,13 +395,12 @@ impl CoreTriggerManager {
     
                 // if the trigger config is missing, remove this countdown
                 if !trigger_configs_lock.contains_key(lookup_id) {
-                    countdowns.remove(i);
+                    countdowns.remove(trigger_index);
                 } else {
-                    i += 1;
+                    trigger_index += 1;
                 }
             }
         }
-    
         trigger_actions
     }
 }
