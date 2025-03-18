@@ -361,9 +361,9 @@ impl CoreTriggerManager {
         let mut triggers_by_block_interval_lock =
             self.lookup_maps.triggers_by_block_interval.write().unwrap();
         let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-    
+
         let mut trigger_actions = vec![];
-    
+
         if let Some(triggers) = triggers_by_block_interval_lock.get_mut(&chain_name) {
             // Since we don't remove the trigger data when the trigger config is removed,
             // for efficiency we want to do it here.
@@ -377,7 +377,7 @@ impl CoreTriggerManager {
                     continue;
                 }
                 *countdown -= 1;
-    
+
                 if *countdown == 0 {
                     if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
                         if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
@@ -641,8 +641,7 @@ fn remove_trigger_data(
                     chain_name, address, event_type,
                 ))?;
         }
-        Trigger::BlockInterval {
-            .. } => {
+        Trigger::BlockInterval { .. } => {
             // after being removed from the trigger config, actual trigger is deleted
             // during the block processing
         }
