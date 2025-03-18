@@ -185,6 +185,11 @@ pub enum ServiceCommand {
         #[clap(subcommand)]
         command: TriggerCommand,
     },
+    /// Operations on workflow submits
+    Submit {
+        #[clap(subcommand)]
+        command: SubmitCommand,
+    },
 }
 
 /// Commands for managing components
@@ -288,6 +293,28 @@ pub enum TriggerCommand {
         /// The event hash as a hex string (32 bytes)
         #[clap(long)]
         event_hash: String,
+    },
+}
+
+#[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
+pub enum SubmitCommand {
+    /// Set an Ethereum submit for a workflow
+    SetEthereum {
+        /// The ID of the workflow to update
+        #[clap(long)]
+        workflow_id: WorkflowID,
+
+        /// The hexadecimal Ethereum address (e.g., "0x1234...")
+        #[clap(long)]
+        address: String,
+
+        /// The chain name (e.g., "ethereum-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The maximum gas to use for the submission (optional)
+        #[clap(long)]
+        max_gas: Option<u64>,
     },
 }
 
