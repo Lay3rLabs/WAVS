@@ -364,21 +364,25 @@ impl CoreTriggerManager {
     
         let mut trigger_actions = vec![];
     
-        if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
+        if let Some(triggers) = triggers_by_block_interval_lock.get_mut(&chain_name) {
             // Since we don't remove the trigger data when the trigger config is removed,
             // for efficiency we want to do it here.
             let mut trigger_index = 0;
-            let n_triggers = countdowns.len();
-            while trigger_index < n_triggers {
-                let (countdown, lookup_id) = &mut countdowns[trigger_index];
+            while trigger_index < triggers.len() {
+                let (countdown, lookup_id) = &mut triggers[trigger_index];
+                // if the trigger config is missing, remove the data
+                if !trigger_configs_lock.contains_key(lookup_id) {
+                    triggers.remove(trigger_index);
+                    trigger_index += 1;
+                    continue;
+                }
                 *countdown -= 1;
     
                 if *countdown == 0 {
                     if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
                         if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
-                            // reset the countdown to `n_blocks`
+                            // reset the countdown to n_blocks
                             *countdown = *n_blocks;
-    
                             trigger_actions.push(TriggerAction {
                                 data: TriggerData::BlockInterval {
                                     chain_name: chain_name.clone(),
@@ -386,21 +390,13 @@ impl CoreTriggerManager {
                                 },
                                 config: trigger_config.clone(),
                             });
-    
-                            trigger_index += 1;
-                            continue;
                         }
                     }
                 }
-    
-                // if the trigger config is missing, remove this countdown
-                if !trigger_configs_lock.contains_key(lookup_id) {
-                    countdowns.remove(trigger_index);
-                } else {
-                    trigger_index += 1;
-                }
+                trigger_index += 1;
             }
         }
+
         trigger_actions
     }
 }
