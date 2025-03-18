@@ -66,7 +66,6 @@ impl Services {
                 .chain(chain_names.eth_aggregator.iter())
             {
                 let chain = chain.clone();
-                tracing::info!("Deploying Eigen Core contracts on {chain}");
                 let DeployEigenCore {
                     addresses: core_addresses,
                     ..
@@ -82,7 +81,6 @@ impl Services {
 
                 eth_eigen_core.insert(chain.clone(), core_addresses);
 
-                tracing::info!("Deploying Eigen Service manager on {chain}");
                 let DeployEigenServiceManager {
                     address: service_manager_address,
                     ..
