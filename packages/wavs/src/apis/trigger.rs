@@ -47,6 +47,8 @@ pub enum TriggerError {
     NoSuchCosmosContractEvent(ChainName, Address, String),
     #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
     NoSuchEthContractEvent(ChainName, alloy::primitives::Address, ByteArray<32>),
+    #[error("Cannot find block interval trigger: {0} / {1}")]
+    NoSuchBlockIntervalTrigger(ChainName, u32),
     #[error("Service exists, cannot register again: {0}")]
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]

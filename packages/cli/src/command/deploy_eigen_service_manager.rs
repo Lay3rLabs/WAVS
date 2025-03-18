@@ -41,6 +41,8 @@ impl CommandDeployResult for DeployEigenServiceManager {
 
 impl DeployEigenServiceManager {
     pub async fn run(ctx: &CliContext, args: DeployEigenServiceManagerArgs) -> Result<Self> {
+        tracing::info!("Deploying Eigenlayer service manager on {}", args.chain);
+
         let DeployEigenServiceManagerArgs {
             chain,
             register_operator,

@@ -22,6 +22,7 @@ pub enum EthService {
     Square,
     MultiWorkflow,
     MultiTrigger,
+    BlockInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -31,6 +32,7 @@ pub enum CosmosService {
     EchoData,
     Permissions,
     Square,
+    BlockInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -66,6 +68,7 @@ impl From<CrossChainService> for AnyService {
 impl TestMatrix {
     pub fn eth_regular_chain_enabled(&self) -> bool {
         // since we currently only submit to eth, it's always enabled
+        // TODO - if we have `Submit::None` then this should be false if no other test is enabled
         true
     }
 
@@ -79,11 +82,7 @@ impl TestMatrix {
 
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
         self.eth.contains(&EthService::CosmosQuery)
-            || self.cosmos.contains(&CosmosService::ChainTriggerLookup)
-            || self.cosmos.contains(&CosmosService::CosmosQuery)
-            || self.cosmos.contains(&CosmosService::EchoData)
-            || self.cosmos.contains(&CosmosService::Permissions)
-            || self.cosmos.contains(&CosmosService::Square)
+            || !self.cosmos.is_empty()
             || self
                 .cross_chain
                 .contains(&CrossChainService::CosmosToEthEchoData)
@@ -102,6 +101,7 @@ impl From<EthService> for Vec<DigestName> {
             EthService::EchoDataAggregator => vec![DigestName::EchoData],
             EthService::MultiWorkflow => vec![DigestName::Square, DigestName::EchoData],
             EthService::MultiTrigger => vec![DigestName::EchoData],
+            EthService::BlockInterval => vec![DigestName::EchoBlockInterval],
         }
     }
 }
@@ -114,6 +114,7 @@ impl From<CosmosService> for Vec<DigestName> {
             CosmosService::EchoData => DigestName::EchoData,
             CosmosService::Permissions => DigestName::Permissions,
             CosmosService::Square => DigestName::Square,
+            CosmosService::BlockInterval => DigestName::EchoBlockInterval,
         }]
     }
 }

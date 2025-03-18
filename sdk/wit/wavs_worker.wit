@@ -60,6 +60,7 @@ interface layer-types {
   variant trigger-source {
     eth-contract-event(trigger-source-eth-contract-event),
     cosmos-contract-event(trigger-source-cosmos-contract-event),
+    block-interval(block-interval-source),
     manual
   }
 
@@ -75,9 +76,15 @@ interface layer-types {
     event-type: string
   }
 
+  record block-interval-source {
+    chain-name: string,
+    n-blocks: u32
+  }
+
   variant trigger-data {
     eth-contract-event(trigger-data-eth-contract-event),
     cosmos-contract-event(trigger-data-cosmos-contract-event),
+    block-interval(block-interval-data),
     raw(list<u8>)
   }
 
@@ -92,6 +99,11 @@ interface layer-types {
     contract-address: cosmos-address,
     chain-name: string,
     event: cosmos-event,
+    block-height: u64
+  }
+
+  record block-interval-data {
+    chain-name: string,
     block-height: u64
   }
 
