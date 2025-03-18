@@ -35,6 +35,7 @@ impl CommandDeployResult for DeployEigenCore {
                     if let Some(chain_name) = match &workflow.trigger {
                         Trigger::EthContractEvent { chain_name, .. } => Some(chain_name),
                         Trigger::CosmosContractEvent { chain_name, .. } => Some(chain_name),
+                        Trigger::BlockInterval { chain_name, .. } => Some(chain_name),
                         Trigger::Manual => None,
                     } {
                         if chain_name != chain {
@@ -83,6 +84,7 @@ pub struct DeployEigenCoreArgs {
 
 impl DeployEigenCore {
     pub async fn run(ctx: &CliContext, args: DeployEigenCoreArgs) -> Result<Self> {
+        tracing::info!("Deploying Eigenlayer core on {}", args.chain);
         let eigen_client = ctx.get_eth_client(&args.chain)?;
 
         let core_contracts = eigen_client.deploy_core_contracts().await?;
