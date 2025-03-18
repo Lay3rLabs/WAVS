@@ -1540,6 +1540,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "echo-block-interval"
+version = "0.3.0"
+dependencies = [
+ "example-helpers",
+]
+
+[[package]]
 name = "echo-data"
 version = "0.0.5"
 dependencies = [
