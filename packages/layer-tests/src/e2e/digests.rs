@@ -23,6 +23,7 @@ pub enum DigestName {
     EchoData,
     Permissions,
     Square,
+    EchoBlockInterval,
 }
 
 impl Digests {
@@ -86,6 +87,7 @@ async fn get_digest(
             DigestName::EchoData => "echo_data",
             DigestName::Permissions => "permissions",
             DigestName::Square => "square",
+            DigestName::EchoBlockInterval => "echo_block_interval",
         };
 
         let wasm_path = workspace_path()
@@ -116,6 +118,7 @@ async fn get_digest(
             DigestName::EchoData => "echo_data",
             DigestName::Permissions => "permissions",
             DigestName::Square => "square",
+            DigestName::EchoBlockInterval => "echo_block_interval",
         };
         let checksum_bytes = std::fs::read("../../checksums.txt").unwrap();
         let checksums_raw = std::str::from_utf8(&checksum_bytes).unwrap();

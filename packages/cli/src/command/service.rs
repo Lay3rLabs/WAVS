@@ -9,8 +9,8 @@ use std::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    ByteArray, ChainName, Component, ComponentID, ComponentSource, Digest, Permissions, Service,
-    ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    AllowedHostPermission, ByteArray, Component, ComponentID, ComponentSource, Digest, Permissions,
+    Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::{
@@ -36,6 +36,14 @@ pub async fn handle_service_command(
             }
             ComponentCommand::Delete { id } => {
                 let result = delete_component(&file, id)?;
+                ctx.handle_display_result(result);
+            }
+            ComponentCommand::Permissions {
+                id,
+                http_hosts,
+                file_system,
+            } => {
+                let result = update_component_permissions(file, id, http_hosts, file_system)?;
                 ctx.handle_display_result(result);
             }
         },
@@ -247,6 +255,52 @@ where
     file.write_all(updated_service_json.as_bytes())?;
 
     Ok(result)
+}
+
+/// Result of updating component permissions
+#[derive(Debug, Clone)]
+pub struct ComponentPermissionsResult {
+    /// The component id that was edited
+    pub component_id: ComponentID,
+    /// The updated permissions
+    pub permissions: Permissions,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentPermissionsResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component permissions updated successfully!")?;
+        writeln!(f, "  Component ID: {}", self.component_id)?;
+
+        // Display HTTP permissions
+        match &self.permissions.allowed_http_hosts {
+            AllowedHostPermission::All => {
+                writeln!(f, "  HTTP Hosts:   All allowed")?;
+            }
+            AllowedHostPermission::None => {
+                writeln!(f, "  HTTP Hosts:   None allowed")?;
+            }
+            AllowedHostPermission::Only(hosts) => {
+                writeln!(f, "  HTTP Hosts:   Only specific hosts allowed")?;
+                for host in hosts {
+                    writeln!(f, "    - {}", host)?;
+                }
+            }
+        }
+
+        // Display file system permission
+        writeln!(
+            f,
+            "  File System: {}",
+            if self.permissions.file_system {
+                "Enabled"
+            } else {
+                "Disabled"
+            }
+        )?;
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
 }
 
 /// Run the service initialization
@@ -511,6 +565,59 @@ pub fn set_ethereum_trigger(
     })
 }
 
+/// Update component permissions
+pub fn update_component_permissions(
+    file_path: PathBuf,
+    component_id: ComponentID,
+    http_hosts: Option<Vec<String>>,
+    file_system: Option<bool>,
+) -> Result<ComponentPermissionsResult> {
+    modify_service_file(file_path.clone(), |mut service| {
+        // Check if the component exists
+        let component = service.components.get_mut(&component_id).ok_or_else(|| {
+            anyhow::anyhow!("Component with ID '{}' not found in service", component_id)
+        })?;
+
+        // Update HTTP permissions if specified
+        if let Some(mut hosts) = http_hosts {
+            // Sanitize inputs by trimming whitespace and removing empty strings
+            hosts = hosts
+                .into_iter()
+                .map(|host| host.trim().to_string())
+                .filter(|host| !host.is_empty())
+                .collect();
+
+            if hosts.is_empty() {
+                // Empty list means no hosts allowed
+                component.permissions.allowed_http_hosts = AllowedHostPermission::None;
+            } else if hosts.len() == 1 && hosts[0] == "*" {
+                // ["*"] means all hosts allowed
+                component.permissions.allowed_http_hosts = AllowedHostPermission::All;
+            } else {
+                // List of specific hosts
+                component.permissions.allowed_http_hosts = AllowedHostPermission::Only(hosts);
+            }
+        }
+
+        // Update file system permission if specified
+        if let Some(fs_perm) = file_system {
+            component.permissions.file_system = fs_perm;
+        }
+
+        // Clone the updated permissions for the result
+        let updated_permissions = component.permissions.clone();
+
+        Ok((
+            service,
+            ComponentPermissionsResult {
+                component_id,
+                permissions: updated_permissions,
+                file_path,
+            },
+        ))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr as _;
@@ -636,13 +743,117 @@ mod tests {
         assert_eq!(second_add_result.component_id, second_component_id);
         assert_eq!(second_add_result.digest, test_digest);
 
-        // Verify the second component was added
-        let service_after_second_add: Service =
+        // Test updating permissions - allow all HTTP hosts
+        let permissions_result = update_component_permissions(
+            file_path.clone(),
+            component_id.clone(),
+            Some(vec!["*".to_string()]),
+            Some(true),
+        )
+        .unwrap();
+
+        // Verify permissions result
+        assert_eq!(permissions_result.component_id, component_id);
+        assert!(permissions_result.permissions.file_system);
+        assert!(matches!(
+            permissions_result.permissions.allowed_http_hosts,
+            AllowedHostPermission::All
+        ));
+
+        // Verify the service was updated with new permissions
+        let service_after_permissions: Service =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        assert!(service_after_second_add
+        let updated_component = service_after_permissions
             .components
-            .contains_key(&second_component_id));
-        assert_eq!(service_after_second_add.components.len(), 2); // First + second component
+            .get(&component_id)
+            .unwrap();
+        assert!(updated_component.permissions.file_system);
+        assert!(matches!(
+            updated_component.permissions.allowed_http_hosts,
+            AllowedHostPermission::All
+        ));
+
+        // Test updating to specific HTTP hosts
+        let specific_hosts = vec!["example.com".to_string(), "api.example.com".to_string()];
+        let specific_hosts_result = update_component_permissions(
+            file_path.clone(),
+            second_component_id.clone(),
+            Some(specific_hosts.clone()),
+            None,
+        )
+        .unwrap();
+
+        // Verify specific hosts result
+        assert_eq!(specific_hosts_result.component_id, second_component_id);
+        if let AllowedHostPermission::Only(hosts) =
+            &specific_hosts_result.permissions.allowed_http_hosts
+        {
+            assert_eq!(hosts.len(), 2);
+            assert!(hosts.contains(&"example.com".to_string()));
+            assert!(hosts.contains(&"api.example.com".to_string()));
+        } else {
+            panic!("Expected AllowedHostPermission::Only");
+        }
+
+        // Verify the service was updated with specific hosts
+        let service_after_specific: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let specific_component = service_after_specific
+            .components
+            .get(&second_component_id)
+            .unwrap();
+        if let AllowedHostPermission::Only(hosts) =
+            &specific_component.permissions.allowed_http_hosts
+        {
+            assert_eq!(hosts.len(), 2);
+            assert!(hosts.contains(&"example.com".to_string()));
+            assert!(hosts.contains(&"api.example.com".to_string()));
+        } else {
+            panic!("Expected AllowedHostPermission::Only");
+        }
+
+        // Test updating to no HTTP hosts
+        let no_hosts_result = update_component_permissions(
+            file_path.clone(),
+            component_id.clone(),
+            Some(vec![]),
+            None,
+        )
+        .unwrap();
+
+        // Verify no hosts result
+        assert_eq!(no_hosts_result.component_id, component_id);
+        assert!(matches!(
+            no_hosts_result.permissions.allowed_http_hosts,
+            AllowedHostPermission::None
+        ));
+
+        // Verify the service was updated with no hosts permission
+        let service_after_no_hosts: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let no_hosts_component = service_after_no_hosts
+            .components
+            .get(&component_id)
+            .unwrap();
+        assert!(matches!(
+            no_hosts_component.permissions.allowed_http_hosts,
+            AllowedHostPermission::None
+        ));
+
+        // Test error handling for permissions update with non-existent component
+        let non_existent_id = ComponentID::new("does-not-exist").unwrap();
+        let error_permissions = update_component_permissions(
+            file_path.clone(),
+            non_existent_id.clone(),
+            Some(vec!["*".to_string()]),
+            None,
+        );
+
+        // Verify error for permissions update
+        assert!(error_permissions.is_err());
+        let permissions_error = error_permissions.unwrap_err().to_string();
+        assert!(permissions_error.contains(&non_existent_id.to_string()));
+        assert!(permissions_error.contains("not found"));
 
         // Test adding third component with Digest source
         let third_component_id = ComponentID::new("component-789").unwrap();
@@ -679,7 +890,6 @@ mod tests {
         assert_eq!(service_after_delete.components.len(), 2); // One removed, two remaining
 
         // Test error handling for non-existent component
-        let non_existent_id = ComponentID::new("does-not-exist").unwrap();
         let error_result = delete_component(&file_path, non_existent_id.clone());
 
         // Verify it returns an error with appropriate message

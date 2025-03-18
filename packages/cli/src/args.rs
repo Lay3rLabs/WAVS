@@ -206,6 +206,24 @@ pub enum ComponentCommand {
         #[clap(long)]
         id: ComponentID,
     },
+    /// Manage permissions of a component
+    Permissions {
+        /// The ID of the component to edit
+        #[clap(long)]
+        id: ComponentID,
+
+        /// HTTP hosts allowed for access:
+        /// Use --http-hosts '' to disallow all hosts
+        /// Use --http-hosts '*' to allow all hosts
+        /// Use --http-hosts 'host1,host2,...' to allow specific hosts
+        /// Omit to leave HTTP permissions unchanged
+        #[clap(long, value_delimiter = ',')]
+        http_hosts: Option<Vec<String>>,
+
+        /// Enable file system access
+        #[clap(long)]
+        file_system: Option<bool>,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
@@ -290,6 +308,8 @@ fn parse_chain_name(s: &str) -> Result<ChainName, String> {
 pub enum CliTriggerKind {
     EthContractEvent,
     CosmosContractEvent,
+    EthBlockInterval,
+    CosmosBlockInterval,
 }
 
 impl std::fmt::Display for CliTriggerKind {
@@ -297,6 +317,8 @@ impl std::fmt::Display for CliTriggerKind {
         match self {
             Self::EthContractEvent => write!(f, "eth-contract-event"),
             Self::CosmosContractEvent => write!(f, "cosmos-contract-event"),
+            Self::EthBlockInterval => write!(f, "eth-block-interval"),
+            Self::CosmosBlockInterval => write!(f, "cosmos-block-interval"),
         }
     }
 }

@@ -40,6 +40,8 @@ struct LookupMaps {
     pub triggers_by_eth_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy::primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
+    /// lookup by chain_name -> n_blocks
+    pub triggers_by_block_interval: Arc<RwLock<HashMap<ChainName, Vec<(u32, LookupId)>>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -54,6 +56,7 @@ impl LookupMaps {
             lookup_id: Arc::new(AtomicUsize::new(0)),
             triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_eth_contract_event: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_block_interval: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
@@ -74,6 +77,11 @@ enum StreamTriggers {
     Ethereum {
         chain_name: ChainName,
         log: Log,
+        block_height: u64,
+    },
+    // We need a separate stream for Ethereum block interval triggers
+    EthereumBlock {
+        chain_name: ChainName,
         block_height: u64,
     },
 }
@@ -201,6 +209,26 @@ impl CoreTriggerManager {
             streams.push(event_stream);
         }
 
+        for (chain_name, query_client) in ethereum_clients.iter() {
+            let chain_name = chain_name.clone();
+
+            // Start the block stream (for block-based triggers)
+            let stream = query_client
+                .provider
+                .subscribe_blocks()
+                .await
+                .map_err(|e| TriggerError::Ethereum(e.into()))?
+                .into_stream();
+
+            let block_stream = Box::pin(stream.map(move |block| {
+                Ok(StreamTriggers::EthereumBlock {
+                    chain_name: chain_name.clone(),
+                    block_height: block.number,
+                })
+            }));
+            streams.push(block_stream);
+        }
+
         // Multiplex all the stream of streams
         let mut streams = futures::stream::select_all(streams);
 
@@ -267,43 +295,55 @@ impl CoreTriggerManager {
                     chain_name,
                     block_height,
                 } => {
-                    let triggers_by_contract_event_lock = self
-                        .lookup_maps
-                        .triggers_by_cosmos_contract_event
-                        .read()
-                        .unwrap();
+                    // extra scope in order to properly drop the locks
+                    {
+                        let triggers_by_contract_event_lock = self
+                            .lookup_maps
+                            .triggers_by_cosmos_contract_event
+                            .read()
+                            .unwrap();
 
-                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+                        let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
 
-                    for (contract_address, event) in contract_events {
-                        if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
-                            chain_name.clone(),
-                            contract_address.clone(),
-                            event.ty.clone(),
-                        )) {
-                            for id in lookup_ids {
-                                match trigger_configs_lock.get(id) {
-                                    Some(trigger_config) => {
-                                        trigger_actions.push(TriggerAction {
-                                            data: TriggerData::CosmosContractEvent {
-                                                contract_address: contract_address.clone(),
-                                                chain_name: chain_name.clone(),
-                                                event: event.clone(),
-                                                block_height,
-                                            },
-                                            config: trigger_config.clone(),
-                                        });
-                                    }
-                                    None => {
-                                        tracing::error!(
-                                            "Trigger config not found for lookup_id {}",
-                                            id
-                                        );
+                        for (contract_address, event) in contract_events {
+                            if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
+                                chain_name.clone(),
+                                contract_address.clone(),
+                                event.ty.clone(),
+                            )) {
+                                for id in lookup_ids {
+                                    match trigger_configs_lock.get(id) {
+                                        Some(trigger_config) => {
+                                            trigger_actions.push(TriggerAction {
+                                                data: TriggerData::CosmosContractEvent {
+                                                    contract_address: contract_address.clone(),
+                                                    chain_name: chain_name.clone(),
+                                                    event: event.clone(),
+                                                    block_height,
+                                                },
+                                                config: trigger_config.clone(),
+                                            });
+                                        }
+                                        None => {
+                                            tracing::error!(
+                                                "Trigger config not found for lookup_id {}",
+                                                id
+                                            );
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+
+                    // process block-based triggers
+                    trigger_actions.extend(self.process_blocks(chain_name, block_height));
+                }
+                StreamTriggers::EthereumBlock {
+                    chain_name,
+                    block_height,
+                } => {
+                    trigger_actions.extend(self.process_blocks(chain_name, block_height));
                 }
             }
 
@@ -315,6 +355,39 @@ impl CoreTriggerManager {
         tracing::debug!("Trigger Manager watcher finished");
 
         Ok(())
+    }
+
+    fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
+        let mut triggers_by_block_interval_lock =
+            self.lookup_maps.triggers_by_block_interval.write().unwrap();
+
+        let mut trigger_actions = vec![];
+        if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
+            for (countdown, lookup_id) in countdowns.iter_mut() {
+                *countdown -= 1;
+
+                // if the countdown reaches zero, trigger the action
+                if *countdown == 0 {
+                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+                    if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
+                        if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
+                            // reset the countdown to n_blocks
+                            *countdown = *n_blocks;
+
+                            trigger_actions.push(TriggerAction {
+                                data: TriggerData::BlockInterval {
+                                    chain_name: chain_name.clone(),
+                                    block_height,
+                                },
+                                config: trigger_config.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        trigger_actions
     }
 }
 
@@ -380,6 +453,15 @@ impl TriggerManager for CoreTriggerManager {
 
                 lock.entry(key).or_default().insert(lookup_id);
             }
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks,
+            } => {
+                let mut lock = self.lookup_maps.triggers_by_block_interval.write().unwrap();
+                let key = chain_name.clone();
+
+                lock.entry(key).or_default().push((n_blocks, lookup_id));
+            }
             Trigger::Manual => {}
         }
 
@@ -433,6 +515,7 @@ impl TriggerManager for CoreTriggerManager {
                 .triggers_by_cosmos_contract_event
                 .write()
                 .unwrap(),
+            &mut self.lookup_maps.triggers_by_block_interval.write().unwrap(),
             lookup_id,
         )?;
 
@@ -452,6 +535,8 @@ impl TriggerManager for CoreTriggerManager {
             .triggers_by_cosmos_contract_event
             .write()
             .unwrap();
+        let mut triggers_by_block_interval =
+            self.lookup_maps.triggers_by_block_interval.write().unwrap();
         let mut triggers_by_service_workflow_lock = self
             .lookup_maps
             .triggers_by_service_workflow
@@ -467,6 +552,7 @@ impl TriggerManager for CoreTriggerManager {
                 &mut trigger_configs,
                 &mut triggers_by_eth_contract_event,
                 &mut triggers_by_cosmos_contract_event,
+                &mut triggers_by_block_interval,
                 *lookup_id,
             )?;
         }
@@ -513,6 +599,7 @@ fn remove_trigger_data(
         (ChainName, layer_climb::prelude::Address, String),
         HashSet<LookupId>,
     >,
+    triggers_by_block_interval: &mut HashMap<ChainName, Vec<(u32, LookupId)>>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -542,6 +629,16 @@ fn remove_trigger_data(
                 .remove(&(chain_name.clone(), address.clone(), event_type.clone()))
                 .ok_or(TriggerError::NoSuchCosmosContractEvent(
                     chain_name, address, event_type,
+                ))?;
+        }
+        Trigger::BlockInterval {
+            chain_name,
+            n_blocks,
+        } => {
+            triggers_by_block_interval
+                .remove(&chain_name.clone())
+                .ok_or(TriggerError::NoSuchBlockIntervalTrigger(
+                    chain_name, n_blocks,
                 ))?;
         }
         Trigger::Manual => {}
