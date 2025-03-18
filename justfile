@@ -159,16 +159,19 @@ cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'
 
 # downloads the latest WIT file from the wavs-wasi repo
-download-wit:
+download-wit branch="main":
     # Create a temporary directory
     rm -rf temp_clone
     mkdir temp_clone
     
     # Clone the specific branch into the temp directory
-    git -C temp_clone clone --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
+    git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
     
-    # Copy just the sdk directory to your destination
+    # Clear existing content and create wit directory
+    rm -rf wit
     mkdir -p wit
+    
+    # Copy just the wit directory and lock file from the cloned repo
     cp -r temp_clone/wavs-wasi/wit/* wit/
     cp -r temp_clone/wavs-wasi/wkg.lock wkg.lock
     
