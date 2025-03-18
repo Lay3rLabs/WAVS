@@ -360,20 +360,25 @@ impl CoreTriggerManager {
     fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
         let mut triggers_by_block_interval_lock =
             self.lookup_maps.triggers_by_block_interval.write().unwrap();
-
+    
+        let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+    
         let mut trigger_actions = vec![];
+    
         if let Some(countdowns) = triggers_by_block_interval_lock.get_mut(&chain_name) {
-            for (countdown, lookup_id) in countdowns.iter_mut() {
+            // Since we don't remove the trigger data when the trigger config is removed,
+            // for efficiency we want to do it here.
+            let mut i = 0;
+            while i < countdowns.len() {
+                let (countdown, lookup_id) = &mut countdowns[i];
                 *countdown -= 1;
-
-                // if the countdown reaches zero, trigger the action
+    
                 if *countdown == 0 {
-                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
                     if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
                         if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
-                            // reset the countdown to n_blocks
+                            // reset the countdown to `n_blocks`
                             *countdown = *n_blocks;
-
+    
                             trigger_actions.push(TriggerAction {
                                 data: TriggerData::BlockInterval {
                                     chain_name: chain_name.clone(),
@@ -381,12 +386,22 @@ impl CoreTriggerManager {
                                 },
                                 config: trigger_config.clone(),
                             });
+    
+                            i += 1;
+                            continue;
                         }
                     }
                 }
+    
+                // if the trigger config is missing, remove this countdown
+                if !trigger_configs_lock.contains_key(lookup_id) {
+                    countdowns.remove(i);
+                } else {
+                    i += 1;
+                }
             }
         }
-
+    
         trigger_actions
     }
 }
@@ -599,7 +614,7 @@ fn remove_trigger_data(
         (ChainName, layer_climb::prelude::Address, String),
         HashSet<LookupId>,
     >,
-    triggers_by_block_interval: &mut HashMap<ChainName, Vec<(u32, LookupId)>>,
+    _triggers_by_block_interval: &mut HashMap<ChainName, Vec<(u32, LookupId)>>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -632,14 +647,9 @@ fn remove_trigger_data(
                 ))?;
         }
         Trigger::BlockInterval {
-            chain_name,
-            n_blocks,
-        } => {
-            triggers_by_block_interval
-                .remove(&chain_name.clone())
-                .ok_or(TriggerError::NoSuchBlockIntervalTrigger(
-                    chain_name, n_blocks,
-                ))?;
+            .. } => {
+            // after being removed from the trigger config, actual trigger is deleted
+            // during the block processing
         }
         Trigger::Manual => {}
     }
