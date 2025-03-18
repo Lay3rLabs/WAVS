@@ -9,8 +9,9 @@ use std::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    AllowedHostPermission, ByteArray, Component, ComponentID, ComponentSource, Digest, Permissions,
-    Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource, Digest,
+    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
+    WorkflowID,
 };
 
 use crate::{
@@ -223,6 +224,14 @@ impl std::fmt::Display for WorkflowTriggerResult {
             }
             Trigger::Manual => {
                 writeln!(f, "  Trigger Type: Manual")?;
+            }
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks,
+            } => {
+                writeln!(f, "  Trigger Type: Block Interval")?;
+                writeln!(f, "    Chain:      {}", chain_name)?;
+                writeln!(f, "    Interval:   {} blocks", n_blocks)?;
             }
         }
 
