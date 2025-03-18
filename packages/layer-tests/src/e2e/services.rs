@@ -54,6 +54,8 @@ impl Services {
 
             chain_names.cosmos = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
 
+            tracing::info!("chain names: {:?}", chain_names);
+
             let mut eth_eigen_core = BTreeMap::default();
             let mut eth_service_managers = BTreeMap::default();
             // hrmf, "nonce too low" errors, gotta go sequentially...
@@ -113,7 +115,7 @@ impl Services {
             for service_kind in all_services {
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
-                        deploy_service_raw(service_kind, clients, digests, &chain_names).await
+                        deploy_service_raw(service_kind, clients, digests, &chain_names, &eth_service_managers).await
                     }
                     _ => {
                         deploy_service_simple(
@@ -337,6 +339,7 @@ async fn deploy_service_raw(
     clients: &Clients,
     digests: &Digests,
     chain_names: &ChainNames,
+    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
 ) -> Service {
     if !matches!(service_kind, AnyService::Eth(EthService::MultiWorkflow)) {
         panic!("unexpected service kind: {:?}", service_kind);
@@ -366,8 +369,8 @@ async fn deploy_service_raw(
         },
     };
 
-    let submit1 = deploy_submit_raw(clients, chain_names).await;
-    let submit2 = deploy_submit_raw(clients, chain_names).await;
+    let submit1 = deploy_submit_raw(clients, chain_names, eth_service_managers).await;
+    let submit2 = deploy_submit_raw(clients, chain_names, eth_service_managers).await;
 
     let workflow_id1 = WorkflowID::new("workflow1").unwrap();
     let workflow_id2 = WorkflowID::new("workflow2").unwrap();
@@ -430,24 +433,11 @@ async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trig
     }
 }
 
-async fn deploy_submit_raw(clients: &Clients, chain_names: &ChainNames) -> Submit {
+async fn deploy_submit_raw(clients: &Clients, chain_names: &ChainNames, eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>) -> Submit {
     let chain_name = chain_names.eth[0].clone();
     let eigen_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
 
-    let res = DeployEigenServiceManager::run(
-        &clients.cli_ctx,
-        DeployEigenServiceManagerArgs {
-            chain: chain_name.clone(),
-            register_operator: true,
-        },
-    )
-    .await
-    .unwrap();
-
-    let DeployEigenServiceManager {
-        address: service_manager_address,
-        ..
-    } = res;
+    let service_manager_address = *eth_service_managers.get(&chain_name).unwrap();
 
     let simple_submit =
         SimpleSubmit::deploy(eigen_client.eth.provider.clone(), service_manager_address)
@@ -461,7 +451,7 @@ async fn deploy_submit_raw(clients: &Clients, chain_names: &ChainNames) -> Submi
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ChainNames {
     eth: Vec<ChainName>,
     eth_aggregator: Vec<ChainName>,
