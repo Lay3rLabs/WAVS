@@ -84,6 +84,7 @@ pub struct DeployEigenCoreArgs {
 
 impl DeployEigenCore {
     pub async fn run(ctx: &CliContext, args: DeployEigenCoreArgs) -> Result<Self> {
+        tracing::info!("Deploying Eigenlayer core on {}", args.chain);
         let eigen_client = ctx.get_eth_client(&args.chain)?;
 
         let core_contracts = eigen_client.deploy_core_contracts().await?;
