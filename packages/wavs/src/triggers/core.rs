@@ -525,7 +525,6 @@ impl TriggerManager for CoreTriggerManager {
                 .triggers_by_cosmos_contract_event
                 .write()
                 .unwrap(),
-            &mut self.lookup_maps.triggers_by_block_interval.write().unwrap(),
             lookup_id,
         )?;
 
@@ -545,8 +544,6 @@ impl TriggerManager for CoreTriggerManager {
             .triggers_by_cosmos_contract_event
             .write()
             .unwrap();
-        let mut triggers_by_block_interval =
-            self.lookup_maps.triggers_by_block_interval.write().unwrap();
         let mut triggers_by_service_workflow_lock = self
             .lookup_maps
             .triggers_by_service_workflow
@@ -562,7 +559,6 @@ impl TriggerManager for CoreTriggerManager {
                 &mut trigger_configs,
                 &mut triggers_by_eth_contract_event,
                 &mut triggers_by_cosmos_contract_event,
-                &mut triggers_by_block_interval,
                 *lookup_id,
             )?;
         }
@@ -609,7 +605,6 @@ fn remove_trigger_data(
         (ChainName, layer_climb::prelude::Address, String),
         HashSet<LookupId>,
     >,
-    _triggers_by_block_interval: &mut HashMap<ChainName, Vec<(u32, LookupId)>>,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
