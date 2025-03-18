@@ -115,7 +115,14 @@ impl Services {
             for service_kind in all_services {
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
-                        deploy_service_raw(service_kind, clients, digests, &chain_names, &eth_service_managers).await
+                        deploy_service_raw(
+                            service_kind,
+                            clients,
+                            digests,
+                            &chain_names,
+                            &eth_service_managers,
+                        )
+                        .await
                     }
                     _ => {
                         deploy_service_simple(
@@ -433,7 +440,11 @@ async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trig
     }
 }
 
-async fn deploy_submit_raw(clients: &Clients, chain_names: &ChainNames, eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>) -> Submit {
+async fn deploy_submit_raw(
+    clients: &Clients,
+    chain_names: &ChainNames,
+    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
+) -> Submit {
     let chain_name = chain_names.eth[0].clone();
     let eigen_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
 

@@ -68,6 +68,7 @@ impl From<CrossChainService> for AnyService {
 impl TestMatrix {
     pub fn eth_regular_chain_enabled(&self) -> bool {
         // since we currently only submit to eth, it's always enabled
+        // TODO - if we have `Submit::None` then this should be false if no other test is enabled
         true
     }
 
@@ -81,11 +82,7 @@ impl TestMatrix {
 
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
         self.eth.contains(&EthService::CosmosQuery)
-            || self.cosmos.contains(&CosmosService::ChainTriggerLookup)
-            || self.cosmos.contains(&CosmosService::CosmosQuery)
-            || self.cosmos.contains(&CosmosService::EchoData)
-            || self.cosmos.contains(&CosmosService::Permissions)
-            || self.cosmos.contains(&CosmosService::Square)
+            || !self.cosmos.is_empty()
             || self
                 .cross_chain
                 .contains(&CrossChainService::CosmosToEthEchoData)
