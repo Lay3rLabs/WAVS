@@ -201,6 +201,9 @@ async fn deploy_service_simple(
         _ => CliSubmitKind::EthServiceHandler,
     };
 
+    // unlike submission chains (see below), we currently support both cosmos and ethereum for trigger chains
+    // we also support time-based triggers which do not need a contract on the chain
+    // in the future, we may easily support many more chains for triggers (solana, etc)
     let trigger_chain = match trigger {
         CliTriggerKind::EthContractEvent => match service {
             AnyService::Eth(EthService::EchoDataAggregator) => {
@@ -269,12 +272,18 @@ async fn deploy_service_simple(
         CliTriggerKind::CosmosBlockInterval => None,
     };
 
+    // right now, the only chain we submit signed data to is eth+eigenlayer
+    // in the future, we may want to submit to other chains too (commitments, cosmos, etc)
+    // but for now, non-eth trigger chains effectively *always* become cross-chain services to ethereum
+    //
+    // for the sake of convenience, we just re-use the trigger chain for ethereum (we don't have a eth1->eth2 test)
+    // and use the first entry in the list of eth chains for cosmos (effectively becomes cosmos->eth1)
     let submit_chain = match submit {
         CliSubmitKind::EthServiceHandler => match trigger {
-            CliTriggerKind::EthContractEvent => trigger_chain.clone(), // not strictly necessary, just easier to reason about same-chain
-            CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()), // always eth for now
+            CliTriggerKind::EthContractEvent => trigger_chain.clone(),
+            CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()),
             CliTriggerKind::EthBlockInterval => trigger_chain.clone(),
-            CliTriggerKind::CosmosBlockInterval => Some(chain_names.eth[0].clone()), // always eth for now as above
+            CliTriggerKind::CosmosBlockInterval => Some(chain_names.eth[0].clone()),
         },
         CliSubmitKind::None => None,
     };
