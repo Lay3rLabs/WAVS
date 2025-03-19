@@ -15,7 +15,7 @@ use wavs_types::{
 };
 
 use crate::{
-    args::{ComponentCommand, ServiceCommand, TriggerCommand, WorkflowCommand},
+    args::{ComponentCommand, ServiceCommand, SubmitCommand, TriggerCommand, WorkflowCommand},
     context::CliContext,
 };
 
@@ -88,6 +88,17 @@ pub async fn handle_service_command(
             } => {
                 let result =
                     set_ethereum_trigger(file, workflow_id, address, chain_name, event_hash)?;
+                ctx.handle_display_result(result);
+            }
+        },
+        ServiceCommand::Submit { command } => match command {
+            SubmitCommand::SetEthereum {
+                workflow_id,
+                address,
+                chain_name,
+                max_gas,
+            } => {
+                let result = set_ethereum_submit(file, workflow_id, address, chain_name, max_gas)?;
                 ctx.handle_display_result(result);
             }
         },
@@ -232,6 +243,44 @@ impl std::fmt::Display for WorkflowTriggerResult {
                 writeln!(f, "  Trigger Type: Block Interval")?;
                 writeln!(f, "    Chain:      {}", chain_name)?;
                 writeln!(f, "    Interval:   {} blocks", n_blocks)?;
+            }
+        }
+
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+/// Result of updating a workflow's submit
+#[derive(Debug, Clone)]
+pub struct WorkflowSubmitResult {
+    /// The workflow id that was updated
+    pub workflow_id: WorkflowID,
+    /// The updated submit type
+    pub submit: Submit,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for WorkflowSubmitResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow submit updated successfully!")?;
+        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
+
+        match &self.submit {
+            Submit::EthereumContract {
+                address,
+                chain_name,
+                max_gas,
+            } => {
+                writeln!(f, "  Submit Type: Ethereum Service Handler")?;
+                writeln!(f, "    Address:    {}", address)?;
+                writeln!(f, "    Chain:      {}", chain_name)?;
+                if let Some(gas) = max_gas {
+                    writeln!(f, "    Max Gas:    {}", gas)?;
+                }
+            }
+            Submit::None => {
+                writeln!(f, "  Submit Type: None")?;
             }
         }
 
@@ -621,6 +670,41 @@ pub fn update_component_permissions(
             ComponentPermissionsResult {
                 component_id,
                 permissions: updated_permissions,
+                file_path,
+            },
+        ))
+    })
+}
+
+pub fn set_ethereum_submit(
+    file_path: PathBuf,
+    workflow_id: WorkflowID,
+    address_str: String,
+    chain_name: ChainName,
+    max_gas: Option<u64>,
+) -> Result<WorkflowSubmitResult> {
+    // Parse the Ethereum address
+    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
+
+    modify_service_file(file_path.clone(), |mut service| {
+        // Check if the workflow exists
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        // Update the submit
+        let submit = Submit::EthereumContract {
+            address,
+            chain_name,
+            max_gas,
+        };
+        workflow.submit = submit.clone();
+
+        Ok((
+            service,
+            WorkflowSubmitResult {
+                workflow_id,
+                submit,
                 file_path,
             },
         ))
@@ -1225,5 +1309,142 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("invalid string length"));
+    }
+
+    #[test]
+    fn test_workflow_submit_operations() {
+        // Create a temporary directory and file
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("workflow_submit_test.json");
+
+        // Create a test digest
+        let test_digest =
+            Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+                .unwrap();
+
+        // Initialize a service
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        init_service(
+            file_path.clone(),
+            "Test Service".to_string(),
+            Some(service_id.clone()),
+        )
+        .unwrap();
+
+        // Add a component to use in workflows
+        let component_id = ComponentID::new("component-123").unwrap();
+        add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
+
+        // Add a workflow
+        let workflow_id = WorkflowID::new("workflow-123").unwrap();
+        add_workflow(
+            file_path.clone(),
+            Some(workflow_id.clone()),
+            component_id.clone(),
+            Some(1000),
+        )
+        .unwrap();
+
+        // Initial workflow should have None submit (default when created)
+        let service_initial: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let initial_workflow = service_initial.workflows.get(&workflow_id).unwrap();
+        assert!(matches!(initial_workflow.submit, Submit::None));
+
+        // Test setting Ethereum submit
+        let eth_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let eth_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+        let max_gas = Some(1000000u64);
+
+        let eth_result = set_ethereum_submit(
+            file_path.clone(),
+            workflow_id.clone(),
+            eth_address.clone(),
+            eth_chain.clone(),
+            max_gas,
+        )
+        .unwrap();
+
+        // Verify ethereum submit result
+        assert_eq!(eth_result.workflow_id, workflow_id);
+        if let Submit::EthereumContract {
+            address,
+            chain_name,
+            max_gas: result_max_gas,
+        } = &eth_result.submit
+        {
+            assert_eq!(address.to_string(), eth_address);
+            assert_eq!(chain_name, &eth_chain);
+            assert_eq!(result_max_gas, &max_gas);
+        } else {
+            panic!("Expected EthServiceHandler submit");
+        }
+
+        // Verify the service was updated with ethereum submit
+        let service_after_eth: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let eth_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
+        if let Submit::EthereumContract {
+            address,
+            chain_name,
+            max_gas: result_max_gas,
+        } = &eth_workflow.submit
+        {
+            assert_eq!(address.to_string(), eth_address);
+            assert_eq!(chain_name, &eth_chain);
+            assert_eq!(result_max_gas, &max_gas);
+        } else {
+            panic!("Expected EthServiceHandler submit in service");
+        }
+
+        // Test updating with null max_gas
+        let eth_result_no_gas = set_ethereum_submit(
+            file_path.clone(),
+            workflow_id.clone(),
+            eth_address.clone(),
+            eth_chain.clone(),
+            None,
+        )
+        .unwrap();
+
+        // Verify ethereum submit result without gas
+        if let Submit::EthereumContract {
+            max_gas: result_max_gas,
+            ..
+        } = &eth_result_no_gas.submit
+        {
+            assert_eq!(result_max_gas, &None);
+        } else {
+            panic!("Expected EthServiceHandler submit");
+        }
+
+        // Test error handling for non-existent workflow
+        let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
+        let submit_error = set_ethereum_submit(
+            file_path.clone(),
+            non_existent_workflow.clone(),
+            eth_address.clone(),
+            eth_chain.clone(),
+            max_gas,
+        );
+
+        // Verify it returns an error with appropriate message
+        assert!(submit_error.is_err());
+        let submit_error_msg = submit_error.unwrap_err().to_string();
+        assert!(submit_error_msg.contains(&non_existent_workflow.to_string()));
+        assert!(submit_error_msg.contains("not found"));
+
+        // Test error handling for invalid address
+        let invalid_eth_address = "invalid-eth-address".to_string();
+        let invalid_eth_result = set_ethereum_submit(
+            file_path.clone(),
+            workflow_id.clone(),
+            invalid_eth_address,
+            eth_chain.clone(),
+            max_gas,
+        );
+        assert!(invalid_eth_result.is_err());
+        let invalid_address_error = invalid_eth_result.unwrap_err().to_string();
+        assert!(invalid_address_error.contains("invalid"));
     }
 }
