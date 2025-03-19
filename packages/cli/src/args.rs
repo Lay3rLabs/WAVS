@@ -180,6 +180,11 @@ pub enum ServiceCommand {
         #[clap(subcommand)]
         command: WorkflowCommand,
     },
+    /// Operations on workflow triggers
+    Trigger {
+        #[clap(subcommand)]
+        command: TriggerCommand,
+    },
 }
 
 /// Commands for managing components
@@ -242,6 +247,47 @@ pub enum WorkflowCommand {
         /// The ID of the workflow to delete
         #[clap(long)]
         id: WorkflowID,
+    },
+}
+
+#[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
+pub enum TriggerCommand {
+    /// Set a Cosmos contract event trigger for a workflow
+    SetCosmos {
+        /// The ID of the workflow to update
+        #[clap(long)]
+        workflow_id: WorkflowID,
+
+        /// The bech32 contract address (e.g., "cosmos1...")
+        #[clap(long)]
+        address: String,
+
+        /// The chain name (e.g., "cosmoshub-4")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The event type to listen for
+        #[clap(long)]
+        event_type: String,
+    },
+
+    /// Set an Ethereum contract event trigger for a workflow
+    SetEthereum {
+        /// The ID of the workflow to update
+        #[clap(long)]
+        workflow_id: WorkflowID,
+
+        /// The hexadecimal Ethereum address (e.g., "0x1234...")
+        #[clap(long)]
+        address: String,
+
+        /// The chain name (e.g., "ethereum-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The event hash as a hex string (32 bytes)
+        #[clap(long)]
+        event_hash: String,
     },
 }
 

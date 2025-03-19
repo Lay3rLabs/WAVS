@@ -1,4 +1,6 @@
-use anyhow::Result;
+use alloy_json_abi::Event;
+use anyhow::{Context as _, Result};
+use layer_climb::{prelude::ConfigAddressExt as _, querier::QueryClient as CosmosQueryClient};
 use std::{
     collections::BTreeMap,
     fs::File,
@@ -7,12 +9,13 @@ use std::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    AllowedHostPermission, Component, ComponentID, ComponentSource, Digest, Permissions, Service,
-    ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource, Digest,
+    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
+    WorkflowID,
 };
 
 use crate::{
-    args::{ComponentCommand, ServiceCommand, WorkflowCommand},
+    args::{ComponentCommand, ServiceCommand, TriggerCommand, WorkflowCommand},
     context::CliContext,
 };
 
@@ -56,6 +59,35 @@ pub async fn handle_service_command(
             }
             WorkflowCommand::Delete { id } => {
                 let result = delete_workflow(file, id)?;
+                ctx.handle_display_result(result);
+            }
+        },
+        ServiceCommand::Trigger { command } => match command {
+            TriggerCommand::SetCosmos {
+                workflow_id,
+                address,
+                chain_name,
+                event_type,
+            } => {
+                let query_client = ctx.get_cosmos_client(&chain_name)?.querier;
+                let result = set_cosmos_trigger(
+                    query_client,
+                    file,
+                    workflow_id,
+                    address,
+                    chain_name,
+                    event_type,
+                )?;
+                ctx.handle_display_result(result);
+            }
+            TriggerCommand::SetEthereum {
+                workflow_id,
+                address,
+                chain_name,
+                event_hash,
+            } => {
+                let result =
+                    set_ethereum_trigger(file, workflow_id, address, chain_name, event_hash)?;
                 ctx.handle_display_result(result);
             }
         },
@@ -150,6 +182,60 @@ impl std::fmt::Display for ComponentDeleteResult {
         writeln!(f, "Component deleted successfully!")?;
         writeln!(f, "  Component ID: {}", self.component_id)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
+    }
+}
+
+/// Result of updating a workflow's trigger
+#[derive(Debug, Clone)]
+pub struct WorkflowTriggerResult {
+    /// The workflow id that was updated
+    pub workflow_id: WorkflowID,
+    /// The updated trigger type
+    pub trigger: Trigger,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for WorkflowTriggerResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow trigger updated successfully!")?;
+        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
+
+        match &self.trigger {
+            Trigger::CosmosContractEvent {
+                address,
+                chain_name,
+                event_type,
+            } => {
+                writeln!(f, "  Trigger Type: Cosmos Contract Event")?;
+                writeln!(f, "    Address:    {}", address)?;
+                writeln!(f, "    Chain:      {}", chain_name)?;
+                writeln!(f, "    Event Type: {}", event_type)?;
+            }
+            Trigger::EthContractEvent {
+                address,
+                chain_name,
+                event_hash,
+            } => {
+                writeln!(f, "  Trigger Type: Ethereum Contract Event")?;
+                writeln!(f, "    Address:    {}", address)?;
+                writeln!(f, "    Chain:      {}", chain_name)?;
+                writeln!(f, "    Event Hash: {}", event_hash)?;
+            }
+            Trigger::Manual => {
+                writeln!(f, "  Trigger Type: Manual")?;
+            }
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks,
+            } => {
+                writeln!(f, "  Trigger Type: Block Interval")?;
+                writeln!(f, "    Chain:      {}", chain_name)?;
+                writeln!(f, "    Interval:   {} blocks", n_blocks)?;
+            }
+        }
+
+        writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }
 
@@ -399,6 +485,95 @@ pub fn delete_workflow(
     })
 }
 
+/// Set a Cosmos contract event trigger for a workflow
+pub fn set_cosmos_trigger(
+    query_client: CosmosQueryClient,
+    file_path: PathBuf,
+    workflow_id: WorkflowID,
+    address_str: String,
+    chain_name: ChainName,
+    event_type: String,
+) -> Result<WorkflowTriggerResult> {
+    // Parse the Cosmos address
+    let address = query_client.chain_config.parse_address(&address_str)?;
+
+    modify_service_file(file_path.clone(), |mut service| {
+        // Check if the workflow exists
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        // Update the trigger
+        let trigger = Trigger::CosmosContractEvent {
+            address,
+            chain_name,
+            event_type,
+        };
+        workflow.trigger = trigger.clone();
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path,
+            },
+        ))
+    })
+}
+
+/// Set an Ethereum contract event trigger for a workflow
+pub fn set_ethereum_trigger(
+    file_path: PathBuf,
+    workflow_id: WorkflowID,
+    address_str: String,
+    chain_name: ChainName,
+    event_hash_str: String,
+) -> Result<WorkflowTriggerResult> {
+    // Parse the Ethereum address
+    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
+
+    // Order the match cases from most explicit to event parsing:
+    // 1. 0x-prefixed hex string
+    // 2. raw hex string (no 0x)
+    // 3. event name to be parsed into signature
+    let trigger_event_name = match event_hash_str {
+        name if name.starts_with("0x") => name,
+        name if const_hex::const_check(name.as_bytes()).is_ok() => name,
+        name => Event::parse(&name)
+            .context("Invalid event signature format")?
+            .selector()
+            .to_string(),
+    };
+
+    let mut event_hash: [u8; 32] = [0; 32];
+    event_hash.copy_from_slice(&const_hex::decode(trigger_event_name)?);
+
+    modify_service_file(file_path.clone(), |mut service| {
+        // Check if the workflow exists
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        // Update the trigger
+        let trigger = Trigger::EthContractEvent {
+            address,
+            chain_name,
+            event_hash: ByteArray::new(event_hash),
+        };
+        workflow.trigger = trigger.clone();
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path,
+            },
+        ))
+    })
+}
+
 /// Update component permissions
 pub fn update_component_permissions(
     file_path: PathBuf,
@@ -457,6 +632,9 @@ mod tests {
     use std::str::FromStr as _;
 
     use super::*;
+    use alloy::hex;
+    use layer_climb::prelude::{ChainConfig, ChainId};
+    use layer_climb::querier::QueryClient as CosmosQueryClient;
     use tempfile::tempdir;
 
     #[test]
@@ -829,5 +1007,223 @@ mod tests {
         let workflow_error_msg = workflow_error.unwrap_err().to_string();
         assert!(workflow_error_msg.contains(&non_existent_workflow.to_string()));
         assert!(workflow_error_msg.contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_workflow_trigger_operations() {
+        // Create a temporary directory and file
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("workflow_trigger_test.json");
+
+        // Create a test digest
+        let test_digest =
+            Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+                .unwrap();
+
+        // Initialize a service
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        init_service(
+            file_path.clone(),
+            "Test Service".to_string(),
+            Some(service_id.clone()),
+        )
+        .unwrap();
+
+        // Add a component to use in workflows
+        let component_id = ComponentID::new("component-123").unwrap();
+        add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
+
+        // Add a workflow
+        let workflow_id = WorkflowID::new("workflow-123").unwrap();
+        add_workflow(
+            file_path.clone(),
+            Some(workflow_id.clone()),
+            component_id.clone(),
+            Some(1000),
+        )
+        .unwrap();
+
+        // Initial workflow should have manual trigger (default when created)
+        let service_initial: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let initial_workflow = service_initial.workflows.get(&workflow_id).unwrap();
+        assert!(matches!(initial_workflow.trigger, Trigger::Manual));
+
+        // Create a mock CosmosQueryClient for testing
+        let cosmos_chain_name = ChainName::from_str("cosmoshub-4").unwrap();
+        let chain_config = ChainConfig {
+            chain_id: ChainId::new(cosmos_chain_name.clone()),
+            rpc_endpoint: Some("https://rpc.cosmos.network".to_string()),
+            grpc_endpoint: Some("https://grpc.cosmos.network:443".to_string()),
+            grpc_web_endpoint: Some("https://grpc-web.cosmos.network".to_string()),
+            gas_price: 0.025,
+            gas_denom: "uatom".to_string(),
+            address_kind: layer_climb::prelude::AddrKind::Cosmos {
+                prefix: "cosmos".to_string(),
+            },
+        };
+        let query_client = CosmosQueryClient::new(chain_config, None)
+            .await
+            .expect("Failed to create Cosmos query client");
+
+        // Test setting Cosmos trigger
+        let cosmos_address = "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh".to_string();
+        let cosmos_event = "transfer".to_string();
+
+        let cosmos_result = set_cosmos_trigger(
+            query_client.clone(),
+            file_path.clone(),
+            workflow_id.clone(),
+            cosmos_address.clone(),
+            cosmos_chain_name.clone(),
+            cosmos_event.clone(),
+        )
+        .unwrap();
+
+        // Verify cosmos trigger result
+        assert_eq!(cosmos_result.workflow_id, workflow_id);
+        if let Trigger::CosmosContractEvent {
+            address,
+            chain_name,
+            event_type,
+        } = &cosmos_result.trigger
+        {
+            assert_eq!(address.to_string(), cosmos_address);
+            assert_eq!(chain_name, &cosmos_chain_name);
+            assert_eq!(event_type, &cosmos_event);
+        } else {
+            panic!("Expected CosmosContractEvent trigger");
+        }
+
+        // Verify the service was updated with cosmos trigger
+        let service_after_cosmos: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let cosmos_workflow = service_after_cosmos.workflows.get(&workflow_id).unwrap();
+        if let Trigger::CosmosContractEvent {
+            address,
+            chain_name,
+            event_type,
+        } = &cosmos_workflow.trigger
+        {
+            assert_eq!(address.to_string(), cosmos_address);
+            assert_eq!(chain_name, &cosmos_chain_name);
+            assert_eq!(event_type, &cosmos_event);
+        } else {
+            panic!("Expected CosmosContractEvent trigger in service");
+        }
+
+        // Test for incorrect prefix - using Neutron (ntrn) prefix on Cosmos Hub
+        let neutron_address = "ntrn1m8wnvy0jk8xf0hhn5uycrhjr3zpaqf4d0z9k8f".to_string();
+        let wrong_prefix_result = set_cosmos_trigger(
+            query_client.clone(),
+            file_path.clone(),
+            workflow_id.clone(),
+            neutron_address,
+            cosmos_chain_name.clone(),
+            cosmos_event.clone(),
+        );
+
+        // This should fail with a prefix validation error
+        assert!(wrong_prefix_result.is_err());
+        assert!(wrong_prefix_result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid bech32"),);
+
+        // Test setting Ethereum trigger
+        let eth_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let eth_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+        let eth_event_hash =
+            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef".to_string();
+
+        let eth_result = set_ethereum_trigger(
+            file_path.clone(),
+            workflow_id.clone(),
+            eth_address.clone(),
+            eth_chain.clone(),
+            eth_event_hash.clone(),
+        )
+        .unwrap();
+
+        // Verify ethereum trigger result
+        assert_eq!(eth_result.workflow_id, workflow_id);
+        if let Trigger::EthContractEvent {
+            address,
+            chain_name,
+            event_hash,
+        } = &eth_result.trigger
+        {
+            assert_eq!(address.to_string(), eth_address);
+            assert_eq!(chain_name, &eth_chain);
+            // For event_hash we'll need to check the bytes match what we expect
+            let expected_hash_bytes = hex::decode(eth_event_hash.trim_start_matches("0x")).unwrap();
+            assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
+        } else {
+            panic!("Expected EthContractEvent trigger");
+        }
+
+        // Verify the service was updated with ethereum trigger
+        let service_after_eth: Service =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let eth_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
+        if let Trigger::EthContractEvent {
+            address,
+            chain_name,
+            event_hash,
+        } = &eth_workflow.trigger
+        {
+            assert_eq!(address.to_string(), eth_address);
+            assert_eq!(chain_name, &eth_chain);
+            let expected_hash_bytes = hex::decode(eth_event_hash.trim_start_matches("0x")).unwrap();
+            assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
+        } else {
+            panic!("Expected EthContractEvent trigger in service");
+        }
+
+        // Test error handling for non-existent workflow
+        let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
+        let trigger_error = set_ethereum_trigger(
+            file_path.clone(),
+            non_existent_workflow.clone(),
+            eth_address.clone(),
+            eth_chain.clone(),
+            eth_event_hash.clone(),
+        );
+
+        // Verify it returns an error with appropriate message
+        assert!(trigger_error.is_err());
+        let trigger_error_msg = trigger_error.unwrap_err().to_string();
+        assert!(trigger_error_msg.contains(&non_existent_workflow.to_string()));
+        assert!(trigger_error_msg.contains("not found"));
+
+        // Test error handling for invalid addresses
+        let invalid_cosmos_address = "invalid-cosmos-address".to_string();
+        let invalid_cosmos_result = set_cosmos_trigger(
+            query_client, // Reuse the same query client
+            file_path.clone(),
+            workflow_id.clone(),
+            invalid_cosmos_address,
+            cosmos_chain_name.clone(),
+            cosmos_event.clone(),
+        );
+        assert!(invalid_cosmos_result.is_err());
+        assert!(invalid_cosmos_result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid bech32"));
+
+        let invalid_eth_address = "invalid-eth-address".to_string();
+        let invalid_eth_result = set_ethereum_trigger(
+            file_path.clone(),
+            workflow_id.clone(),
+            invalid_eth_address,
+            eth_chain.clone(),
+            eth_event_hash.clone(),
+        );
+        assert!(invalid_eth_result.is_err());
+        assert!(invalid_eth_result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid string length"));
     }
 }
