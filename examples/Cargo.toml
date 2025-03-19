@@ -25,21 +25,22 @@ rust-version = "1.80.0"
 repository = "https://github.com/Lay3rLabs/wasmatic"
 
 [workspace.dependencies]
-wavs-wasi-chain = { path = "../packages/wasi-chain" }
+wavs-wasi-utils = "0.4.0-alpha.1"
 example-helpers = { path = "./components/_helpers" }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 anyhow = "1.0.90"
 wit-bindgen = "0.39.0"
-alloy-primitives = {version = "0.8.20", features = ["serde"]}
-alloy-sol-macro = {version = "0.8.20", features = ["json"]}
+alloy-primitives = { version = "0.8.20", features = ["serde"] }
+alloy-sol-macro = { version = "0.8.20", features = ["json"] }
 alloy-sol-types = "0.8.20"
 alloy-provider = "0.11.0"
 alloy-contract = "0.11.0"
+alloy-network = "0.11.0"
 layer-climb = "0.3.7"
 wstd = "0.5.0"
 url = "2.5.3"
-cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
+cosmwasm-std = { version = "2.2.0", features = ["stargate"] }
 cosmwasm-schema = "2.2.0"
 cw-storage-plus = "2.0.0"
 cw2 = "2.0.0"

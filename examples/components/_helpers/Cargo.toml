@@ -7,18 +7,18 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-wavs-wasi-chain = {workspace = true}
-alloy-primitives = {workspace = true}
-alloy-provider = {workspace = true}
-alloy-sol-macro = {workspace = true}
-alloy-sol-types = {workspace = true}
-alloy-contract = {workspace = true} 
-layer-climb = {workspace = true}
+wavs-wasi-utils = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-provider = { workspace = true }
+alloy-sol-macro = { workspace = true }
+alloy-sol-types = { workspace = true }
+alloy-contract = { workspace = true }
+layer-climb = { workspace = true }
 serde = { workspace = true }
 anyhow = { workspace = true }
 cosmwasm-std = { workspace = true }
 wit-bindgen = { workspace = true }
-cosmos-contract-simple-example = {path = "../../contracts/cosmwasm/simple", package = "simple-example"}
+cosmos-contract-simple-example = { path = "../../contracts/cosmwasm/simple", package = "simple-example" }
 
 [lib]
 crate-type = ["rlib", "cdylib"]
