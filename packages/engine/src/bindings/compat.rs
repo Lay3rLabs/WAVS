@@ -50,7 +50,7 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
                 crate::bindings::world::wavs::worker::layer_types::TriggerSource::BlockInterval(
                     crate::bindings::world::wavs::worker::layer_types::BlockIntervalSource {
                         chain_name: chain_name.to_string(),
-                        n_blocks,
+                        n_blocks: n_blocks.into(),
                     }
                 )
             },
