@@ -9,7 +9,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use wavs_wasi_chain::http::{fetch_json, fetch_string, http_request_get, http_request_post_json};
+use wavs_wasi_utils::http::{fetch_json, fetch_string, http_request_get, http_request_post_json};
 use wstd::runtime::block_on;
 
 use anyhow::Result;

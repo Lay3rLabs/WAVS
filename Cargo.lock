@@ -8850,29 +8850,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wavs-wasi-chain"
-version = "0.3.0"
-dependencies = [
- "alloy-json-rpc",
- "alloy-primitives",
- "alloy-provider",
- "alloy-rpc-client",
- "alloy-sol-types",
- "alloy-transport",
- "alloy-transport-http",
- "anyhow",
- "cfg-if",
- "futures-utils-wasm",
- "http",
- "serde",
- "serde_json",
- "tower-service",
- "wasi 0.14.2+wasi-0.2.4",
- "wit-bindgen-rt 0.39.0",
- "wstd",
-]
-
-[[package]]
 name = "web-sys"
 version = "0.3.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9232,8 +9209,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
  "bitflags 2.9.0",
- "futures",
- "once_cell",
 ]
 
 [[package]]

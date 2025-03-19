@@ -7,12 +7,13 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-wavs-wasi-chain = { workspace = true}
-serde = { workspace = true}
+wavs-wasi-utils = { workspace = true }
+serde = { workspace = true }
 wstd = { workspace = true }
 example-helpers = { workspace = true }
 anyhow = { workspace = true }
 layer-climb = { workspace = true }
+alloy-network = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
