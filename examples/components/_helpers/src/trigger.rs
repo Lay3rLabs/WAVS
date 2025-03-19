@@ -8,7 +8,7 @@ use anyhow::Result;
 use example_submit::DataWithId;
 use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
 use serde::{Deserialize, Serialize};
-use wavs_wasi_chain::decode_event_log_data;
+use wavs_wasi_utils::decode_event_log_data;
 
 pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)> {
     match trigger_data {

@@ -4,7 +4,7 @@
 
 wit_bindgen::generate!({
     world: "layer-trigger-world",
-    path: "../../../sdk/wit",
+    path: "../../../wit",
     pub_export_macro: true,
     generate_all,
     //async: true,
