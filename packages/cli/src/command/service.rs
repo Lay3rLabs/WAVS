@@ -1009,14 +1009,11 @@ mod tests {
         assert!(workflow_error_msg.contains("not found"));
     }
 
-    #[test]
-    fn test_workflow_trigger_operations() {
+    #[tokio::test]
+    async fn test_workflow_trigger_operations() {
         // Create a temporary directory and file
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("workflow_trigger_test.json");
-
-        // Create a runtime for async operations
-        let rt = tokio::runtime::Runtime::new().unwrap();
 
         // Create a test digest
         let test_digest =
@@ -1065,11 +1062,9 @@ mod tests {
                 prefix: "cosmos".to_string(),
             },
         };
-        let query_client = rt.block_on(async {
-            CosmosQueryClient::new(chain_config, None)
-                .await
-                .expect("Failed to create Cosmos query client")
-        });
+        let query_client = CosmosQueryClient::new(chain_config, None)
+            .await
+            .expect("Failed to create Cosmos query client");
 
         // Test setting Cosmos trigger
         let cosmos_address = "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh".to_string();
