@@ -373,7 +373,6 @@ impl CoreTriggerManager {
                 // if the trigger config is missing, remove the data
                 if !trigger_configs_lock.contains_key(lookup_id) {
                     triggers.remove(trigger_index);
-                    trigger_index += 1;
                     continue;
                 }
                 *countdown -= 1;
