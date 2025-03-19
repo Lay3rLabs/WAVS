@@ -1049,11 +1049,12 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "chain-trigger-lookup"
 version = "0.0.5"
 dependencies = [
+ "alloy-network",
  "anyhow",
  "example-helpers",
  "layer-climb",
  "serde",
- "wavs-wasi-chain",
+ "wavs-wasi-utils",
  "wstd",
 ]
 
@@ -1131,7 +1132,7 @@ dependencies = [
  "layer-climb",
  "serde",
  "serde_json",
- "wavs-wasi-chain",
+ "wavs-wasi-utils",
  "wstd",
 ]
 
@@ -1662,7 +1663,7 @@ dependencies = [
  "layer-climb",
  "serde",
  "simple-example",
- "wavs-wasi-chain",
+ "wavs-wasi-utils",
  "wit-bindgen",
 ]
 
@@ -2946,7 +2947,7 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
- "wavs-wasi-chain",
+ "wavs-wasi-utils",
  "wstd",
 ]
 
@@ -4791,8 +4792,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "wavs-wasi-chain"
-version = "0.3.0"
+name = "wavs-wasi-utils"
+version = "0.4.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23813dfcc233bb9aaa3d403bf59fa96c7bf64290a66cf31caec26765c3811270"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",

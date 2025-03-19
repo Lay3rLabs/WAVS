@@ -1,7 +1,5 @@
 [workspace]
-members = [
-  "packages/*",
-]
+members = ["packages/*"]
 resolver = "2"
 
 [workspace.package]
@@ -50,7 +48,12 @@ futures = "0.3.31"
 reqwest = { version = "0.12.9", features = ["json"] }
 rand = "0.9.0"
 cfg-if = "1.0.0"
-wasmtime = { version = "29.0.1", features = ["cache", "component-model", "runtime", "std"] } # add "async" ?
+wasmtime = { version = "29.0.1", features = [
+  "cache",
+  "component-model",
+  "runtime",
+  "std",
+] } # add "async" ?
 wasmtime-wasi-http = "29.0.1"
 wasmtime-wasi = { version = "29.0.1", default-features = true }
 lru = "0.13.0"
@@ -62,9 +65,13 @@ temp-env = { version = "0.3.6", features = ["async_closure"] }
 criterion = "0.5.1"
 chrono = "0.4.38"
 shellexpand = "3.1.0"
-wit-bindgen-rt = {version = "0.39.0", features = ["bitflags", "async"]}
-alloy = { version = "0.11.0", features = ["full", "signer-mnemonic", "node-bindings"] }
-alloy-primitives = {version = "0.8.20", features = ["serde"]}
+wit-bindgen-rt = { version = "0.39.0", features = ["bitflags", "async"] }
+alloy = { version = "0.11.0", features = [
+  "full",
+  "signer-mnemonic",
+  "node-bindings",
+] }
+alloy-primitives = { version = "0.8.20", features = ["serde"] }
 alloy-sol-types = "0.8.20"
 alloy-json-rpc = "0.11.0"
 alloy-provider = "0.11.0"
@@ -74,7 +81,7 @@ alloy-rpc-client = "0.11.0"
 alloy-json-abi = "0.8.21"
 wstd = "0.5.1"
 wasi = "0.14.0"
-cosmwasm-std = {version = "2.2.0", features = ["stargate"]}
+cosmwasm-std = { version = "2.2.0", features = ["stargate"] }
 cosmwasm-schema = "2.2.0"
 cw-storage-plus = "2.0.0"
 cw2 = "2.0.0"

@@ -1,3 +1,4 @@
+use alloy_network::Ethereum;
 use anyhow::Context;
 use example_helpers::bindings::{
     compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
@@ -8,7 +9,7 @@ use example_helpers::{
     trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt},
 };
 use serde::{Deserialize, Serialize};
-use wavs_wasi_chain::ethereum::new_eth_provider;
+use wavs_wasi_utils::ethereum::new_eth_provider;
 
 struct Component;
 
@@ -41,7 +42,7 @@ impl Guest for Component {
                         anyhow::anyhow!("eth chain config for {chain_name} not found"),
                     )?;
 
-                    new_eth_provider(
+                    new_eth_provider::<Ethereum>(
                         chain_config
                             .http_endpoint
                             .context("http_endpoint is missing")?,
