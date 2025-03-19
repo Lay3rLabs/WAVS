@@ -848,7 +848,7 @@ mod tests {
         .unwrap();
         manager.add_trigger(trigger.clone()).unwrap();
 
-        // verify that triggers exists in the lookup maps
+        // verify that triggers exist in the lookup maps
         {
             let triggers_by_block_interval_lock = manager
                 .lookup_maps
@@ -865,7 +865,7 @@ mod tests {
 
         let trigger_actions = manager.process_blocks(chain_name.clone(), 10);
 
-        // verify only one trigger actions is generated
+        // verify only one trigger action is generated
         assert_eq!(trigger_actions.len(), 1);
 
         // verify the trigger data is removed from the lookup maps
@@ -886,7 +886,7 @@ mod tests {
 
         let trigger_actions = manager.process_blocks(chain_name.clone(), 10);
 
-        // verify no trigger actions is generated this time
+        // verify no trigger action is generated this time
         assert!(trigger_actions.is_empty());
 
         // verify the trigger data is now empty
