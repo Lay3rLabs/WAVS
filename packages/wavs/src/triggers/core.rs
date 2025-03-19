@@ -381,7 +381,7 @@ impl CoreTriggerManager {
                     if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
                         if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
                             // reset the countdown to n_blocks
-                            *countdown = *n_blocks;
+                            *countdown = (*n_blocks).into();
                             trigger_actions.push(TriggerAction {
                                 data: TriggerData::BlockInterval {
                                     chain_name: chain_name.clone(),
@@ -469,7 +469,9 @@ impl TriggerManager for CoreTriggerManager {
                 let mut lock = self.lookup_maps.triggers_by_block_interval.write().unwrap();
                 let key = chain_name.clone();
 
-                lock.entry(key).or_default().push((n_blocks, lookup_id));
+                lock.entry(key)
+                    .or_default()
+                    .push((n_blocks.into(), lookup_id));
             }
             Trigger::Manual => {}
         }
@@ -647,6 +649,8 @@ fn remove_trigger_data(
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use crate::{
         apis::trigger::TriggerManager,
         config::Config,
@@ -828,7 +832,7 @@ mod tests {
         let chain_name = ChainName::new("eth").unwrap();
 
         // set number of blocks to 1 to fire the trigger immediately
-        let n_blocks = 1;
+        let n_blocks = NonZero::new(1).unwrap();
         let trigger = TriggerConfig::block_interval_event(
             &service_id,
             &workflow_id,

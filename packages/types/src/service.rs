@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 
 use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
@@ -113,7 +114,7 @@ pub enum Trigger {
     },
     BlockInterval {
         chain_name: ChainName,
-        n_blocks: u32,
+        n_blocks: NonZeroU32,
     },
     // not a real trigger, just for testing
     Manual,
@@ -233,6 +234,8 @@ pub enum AllowedHostPermission {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
+    use std::num::NonZeroU32;
+
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
     use super::{Component, Submit, Trigger, TriggerConfig};
@@ -318,7 +321,7 @@ mod test_ext {
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             chain_name: impl Into<ChainName>,
-            n_blocks: u32,
+            n_blocks: NonZeroU32,
         ) -> Result<Self, IDError> {
             Ok(Self {
                 service_id: service_id.try_into()?,

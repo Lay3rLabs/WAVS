@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use anyhow::{bail, Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
 use wavs_types::{ByteArray, ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
@@ -111,7 +113,7 @@ impl DeployService {
 
                 Trigger::BlockInterval {
                     chain_name,
-                    n_blocks: 10,
+                    n_blocks: NonZero::new(10).unwrap(),
                 }
             }
             CliTriggerKind::CosmosBlockInterval => {
@@ -119,7 +121,7 @@ impl DeployService {
 
                 Trigger::BlockInterval {
                     chain_name,
-                    n_blocks: 10,
+                    n_blocks: NonZero::new(10).unwrap(),
                 }
             }
         };
