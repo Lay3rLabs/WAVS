@@ -798,4 +798,106 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn block_interval_trigger_is_removed_when_config_is_gone() {
+        let config = Config {
+            active_trigger_chains: vec![ChainName::new("test").unwrap()],
+            chains: ChainConfigs {
+                eth: [(
+                    ChainName::new("test-eth").unwrap(),
+                    EthereumChainConfig {
+                        chain_id: "eth-local".parse().unwrap(),
+                        ws_endpoint: Some("ws://127.0.0.1:26657".to_string()),
+                        http_endpoint: Some("http://127.0.0.1:26657".to_string()),
+                        aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
+                        faucet_endpoint: None,
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                cosmos: Default::default(),
+            },
+            ..Default::default()
+        };
+
+        let manager = CoreTriggerManager::new(&config).unwrap();
+
+        let service_id = ServiceID::new("service-1").unwrap();
+        let workflow_id = WorkflowID::new("workflow-1").unwrap();
+        let chain_name = ChainName::new("eth").unwrap();
+
+        // set number of blocks to 1 to fire the trigger immediately
+        let n_blocks = 1;
+        let trigger = TriggerConfig::block_interval_event(
+            &service_id,
+            &workflow_id,
+            chain_name.clone(),
+            n_blocks,
+        )
+        .unwrap();
+        manager.add_trigger(trigger.clone()).unwrap();
+
+        let service_id2 = ServiceID::new("service-2").unwrap();
+        let trigger = TriggerConfig::block_interval_event(
+            &service_id2,
+            &workflow_id,
+            chain_name.clone(),
+            n_blocks,
+        )
+        .unwrap();
+        manager.add_trigger(trigger.clone()).unwrap();
+
+        // verify that triggers exists in the lookup maps
+        {
+            let triggers_by_block_interval_lock = manager
+                .lookup_maps
+                .triggers_by_block_interval
+                .read()
+                .unwrap();
+            let countdowns = triggers_by_block_interval_lock.get(&chain_name).unwrap();
+            assert_eq!(countdowns.len(), 2);
+        }
+
+        manager
+            .remove_trigger(service_id.clone(), workflow_id.clone())
+            .unwrap();
+
+        let trigger_actions = manager.process_blocks(chain_name.clone(), 10);
+
+        // verify only one trigger actions is generated
+        assert_eq!(trigger_actions.len(), 1);
+
+        // verify the trigger data is removed from the lookup maps
+        {
+            let triggers_by_block_interval_lock = manager
+                .lookup_maps
+                .triggers_by_block_interval
+                .read()
+                .unwrap();
+            let countdowns = triggers_by_block_interval_lock.get(&chain_name).unwrap();
+            assert_eq!(countdowns.len(), 1);
+        }
+
+        // remove the last trigger config
+        manager
+            .remove_trigger(service_id2.clone(), workflow_id.clone())
+            .unwrap();
+
+        let trigger_actions = manager.process_blocks(chain_name.clone(), 10);
+
+        // verify no trigger actions is generated this time
+        assert!(trigger_actions.is_empty());
+
+        // verify the trigger data is now empty
+        {
+            let triggers_by_block_interval_lock = manager
+                .lookup_maps
+                .triggers_by_block_interval
+                .read()
+                .unwrap();
+            let countdowns = triggers_by_block_interval_lock.get(&chain_name).unwrap();
+            assert!(countdowns.is_empty());
+        }
+    }
 }

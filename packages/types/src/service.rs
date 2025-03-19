@@ -314,6 +314,22 @@ mod test_ext {
             })
         }
 
+        pub fn block_interval_event(
+            service_id: impl TryInto<ServiceID, Error = IDError>,
+            workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+            chain_name: impl Into<ChainName>,
+            n_blocks: u32,
+        ) -> Result<Self, IDError> {
+            Ok(Self {
+                service_id: service_id.try_into()?,
+                workflow_id: workflow_id.try_into()?,
+                trigger: Trigger::BlockInterval {
+                    chain_name: chain_name.into(),
+                    n_blocks,
+                },
+            })
+        }
+
         pub fn manual(
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
