@@ -73,7 +73,15 @@ impl Services {
                     .join("e2e")
                     .join("solidity")
                     .join("scripts")
-                    .join("TempDeploy.s.sol");
+                    .join("TempDeploy.s.sol")
+                    .canonicalize()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+
+                let deploy_script_path = format!("{}:TempDeploy", deploy_script_path);
+
+                tracing::info!("Deploying script: {}", deploy_script_path);
 
                 // yes, this is ridiculous, but all the fields are private
                 let mut global_args =
@@ -86,14 +94,7 @@ impl Services {
 
                 let mut script_args = forge_script::ScriptArgs {
                     global: global_args,
-                    path: format!(
-                        "{}:TempDeploy",
-                        deploy_script_path
-                            .canonicalize()
-                            .unwrap()
-                            .to_string_lossy()
-                            .to_string()
-                    ),
+                    path: deploy_script_path,
                     sig: "run(string calldata message)".to_string(),
                     args: vec!["hello".to_string()],
                     broadcast: true,
@@ -106,6 +107,7 @@ impl Services {
                     ..Default::default()
                 };
 
+                // sanity check
                 assert_eq!(
                     configs
                         .chains
@@ -119,6 +121,7 @@ impl Services {
                 );
                 script_args.evm.fork_url = Some("http://127.0.0.1:8545".to_string());
 
+                // script will pick up the mnemonic from the same env var
                 let eth_mnemonic = configs
                     .cli
                     .eth_mnemonic
@@ -126,6 +129,8 @@ impl Services {
                     .expect("eth mnemonic not set");
                 std::env::set_var("TEMP_SCRIPT_MNEMONIC", eth_mnemonic);
 
+                // ultimately, equivilent of:
+                // TEMP_SCRIPT_MNEMONIC="test test test test test test test test test test test junk" forge script [path/to/TempDeploy.s.sol]:TempDeploy "hello world" --sig "run(string calldata message)" --fork-url http://127.0.0.1:8545 --broadcast
                 TempCallScript::run(&clients.cli_ctx, script_args)
                     .await
                     .unwrap();
