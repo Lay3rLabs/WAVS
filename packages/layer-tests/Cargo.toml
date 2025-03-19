@@ -32,4 +32,6 @@ futures = { workspace = true }
 cosmwasm-std = { workspace = true }
 alloy = { workspace = true }
 uuid = {workspace = true}
-derive-enum-all-values = "=0.1.0"
+derive-enum-all-values = {workspace = true} 
+forge-script = {workspace = true} 
+foundry-cli = {workspace = true} 

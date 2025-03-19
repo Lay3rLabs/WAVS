@@ -10,6 +10,7 @@ use wavs_cli::{
         deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
+        temp_call_script::TempCallScript,
         upload_component::{UploadComponent, UploadComponentArgs},
     },
     context::CliContext,
@@ -161,5 +162,14 @@ async fn main() {
             file,
             args: _,
         } => handle_service_command(&ctx, file, command).await.unwrap(),
+
+        Command::TempCallScript {
+            forge_args,
+            args: _,
+        } => {
+            let res = TempCallScript::run(&ctx, forge_args).await.unwrap();
+
+            ctx.handle_display_result(res);
+        }
     }
 }

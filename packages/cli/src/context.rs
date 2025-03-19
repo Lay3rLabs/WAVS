@@ -95,6 +95,7 @@ impl CliContext {
             Command::UploadComponent { .. } => {}
             Command::Exec { .. } => {}
             Command::Service { .. } => {}
+            Command::TempCallScript { .. } => {}
         }
 
         Self::new_chains(

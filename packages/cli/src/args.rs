@@ -155,6 +155,14 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
     },
+
+    TempCallScript {
+        #[clap(flatten)]
+        forge_args: forge_script::ScriptArgs,
+
+        #[clap(flatten)]
+        args: CliArgs,
+    },
 }
 
 /// Commands for managing services
@@ -338,6 +346,7 @@ impl Command {
             Self::UploadComponent { args, .. } => args,
             Self::Exec { args, .. } => args,
             Self::Service { args, .. } => args,
+            Self::TempCallScript { args, .. } => args,
         };
 
         args.clone()

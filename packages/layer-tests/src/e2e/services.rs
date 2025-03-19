@@ -12,7 +12,7 @@ use super::{
     matrix::{AnyService, CosmosService, CrossChainService, EthService},
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
-use alloy::sol_types::SolEvent;
+use alloy::{primitives::utils::parse_ether, sol_types::SolEvent};
 use utils::{
     avs_client::layer_service_aggregator::WavsServiceAggregator, context::AppContext,
     eigen_client::CoreAVSAddresses, filesystem::workspace_path,
@@ -24,6 +24,7 @@ use wavs_cli::{
         deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
         deploy_service::{DeployService, DeployServiceArgs},
         deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
+        temp_call_script::TempCallScript,
     },
 };
 use wavs_types::{
@@ -65,7 +66,70 @@ impl Services {
                 .iter()
                 .chain(chain_names.eth_aggregator.iter())
             {
-                let chain = chain.clone();
+                let deploy_script_path = workspace_path()
+                    .join("packages")
+                    .join("layer-tests")
+                    .join("src")
+                    .join("e2e")
+                    .join("solidity")
+                    .join("scripts")
+                    .join("TempDeploy.s.sol");
+
+                // yes, this is ridiculous, but all the fields are private
+                let mut global_args =
+                    serde_json::to_value(foundry_cli::opts::GlobalArgs::default()).unwrap();
+                global_args["verbosity"] = serde_json::to_value(5).unwrap();
+                global_args["quiet"] = serde_json::to_value(false).unwrap();
+                global_args["json"] = serde_json::to_value(true).unwrap();
+                let global_args: foundry_cli::opts::GlobalArgs =
+                    serde_json::from_value(global_args).unwrap();
+
+                let mut script_args = forge_script::ScriptArgs {
+                    global: global_args,
+                    path: format!(
+                        "{}:TempDeploy",
+                        deploy_script_path
+                            .canonicalize()
+                            .unwrap()
+                            .to_string_lossy()
+                            .to_string()
+                    ),
+                    sig: "run(string calldata message)".to_string(),
+                    args: vec!["hello".to_string()],
+                    broadcast: true,
+                    non_interactive: true,
+                    //slow: true,
+                    //target_contract: Some("TempDeploy".to_string()),
+                    //debug: true,
+                    //skip_simulation: true,
+                    //with_gas_price: Some(parse_ether("1").unwrap()),
+                    ..Default::default()
+                };
+
+                assert_eq!(
+                    configs
+                        .chains
+                        .eth
+                        .get(chain)
+                        .unwrap()
+                        .http_endpoint
+                        .clone()
+                        .unwrap(),
+                    "http://127.0.0.1:8545".to_string()
+                );
+                script_args.evm.fork_url = Some("http://127.0.0.1:8545".to_string());
+
+                let eth_mnemonic = configs
+                    .cli
+                    .eth_mnemonic
+                    .as_ref()
+                    .expect("eth mnemonic not set");
+                std::env::set_var("TEMP_SCRIPT_MNEMONIC", eth_mnemonic);
+
+                TempCallScript::run(&clients.cli_ctx, script_args)
+                    .await
+                    .unwrap();
+
                 let DeployEigenCore {
                     addresses: core_addresses,
                     ..

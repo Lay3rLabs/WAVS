@@ -32,3 +32,4 @@ shellexpand = { workspace = true }
 uuid = { workspace = true }
 cfg-if = { workspace = true }
 alloy-json-abi ={ workspace = true }
+forge-script ={ workspace = true }

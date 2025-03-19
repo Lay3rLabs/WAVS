@@ -89,3 +89,10 @@ tower-service = "0.3.3"
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
 futures-utils-wasm = "0.1.0"
 http = "1.2.0"
+derive-enum-all-values = "=0.1.0"
+forge-script = { git = "https://github.com/foundry-rs/foundry.git", rev = "e2a22506797d05e64808302a14f2292fe163ba35" }
+foundry-cli = { git = "https://github.com/foundry-rs/foundry.git", rev = "e2a22506797d05e64808302a14f2292fe163ba35" }
+
+[patch.crates-io]
+# patch for color-eyre to fix a bug with outdated deps, and forge uses 0.6, essentially 0.6.0
+color-eyre = { git = "https://github.com/eyre-rs/eyre.git", tag = "color-eyre-v0.6.3" }
