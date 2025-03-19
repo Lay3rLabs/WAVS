@@ -1,8 +1,13 @@
+use alloy::providers::{Provider, RootProvider};
 use alloy_json_abi::Event;
 use anyhow::{Context as _, Result};
-use layer_climb::{prelude::ConfigAddressExt as _, querier::QueryClient as CosmosQueryClient};
+use layer_climb::{
+    prelude::{Address, ConfigAddressExt as _},
+    querier::QueryClient as CosmosQueryClient,
+};
+use reqwest::Client;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap, HashSet},
     fs::File,
     io::Write,
     path::{Path, PathBuf},
@@ -102,6 +107,10 @@ pub async fn handle_service_command(
                 ctx.handle_display_result(result);
             }
         },
+        ServiceCommand::Validate {} => {
+            let result = validate_service(&file, Some(ctx)).await?;
+            ctx.handle_display_result(result);
+        }
     }
 
     Ok(())
@@ -285,6 +294,32 @@ impl std::fmt::Display for WorkflowSubmitResult {
         }
 
         writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+/// Result of service validation
+#[derive(Debug, Clone)]
+pub struct ServiceValidationResult {
+    /// The service ID
+    pub service_id: String,
+    /// Any errors generated during validation
+    pub errors: Vec<String>,
+}
+
+impl std::fmt::Display for ServiceValidationResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.errors.is_empty() {
+            writeln!(f, "✅ Service validation successful!")?;
+            writeln!(f, "   Service ID: {}", self.service_id)?;
+        } else {
+            writeln!(f, "❌ Service validation failed with errors")?;
+            writeln!(f, "   Service ID: {}", self.service_id)?;
+            writeln!(f, "   Errors:")?;
+            for (i, error) in self.errors.iter().enumerate() {
+                writeln!(f, "   {}: {}", i + 1, error)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -709,6 +744,517 @@ pub fn set_ethereum_submit(
             },
         ))
     })
+}
+
+/// Validate a service JSON file
+pub async fn validate_service(
+    file_path: &Path,
+    ctx: Option<&CliContext>,
+) -> Result<ServiceValidationResult> {
+    // Read the service file
+    let service_json = std::fs::read_to_string(file_path).context("Failed to read service file")?;
+
+    // Parse the service JSON
+    let service: Service = serde_json::from_str(&service_json)
+        .context("Failed to parse service JSON. Check for syntax errors")?;
+
+    let mut errors = Vec::new();
+
+    // Basic service validation
+    if service.name.is_empty() {
+        errors.push("Service name cannot be empty".to_string());
+    }
+
+    // Check component availability (can we download it?)
+    if let Some(ctx) = ctx {
+        validate_registry_availability(&ctx.config.wavs_endpoint, &mut errors).await;
+    }
+
+    // Collect all triggers and submits for later validation
+    let mut chains_to_validate = HashSet::new();
+    let mut triggers = Vec::new();
+    let mut submits = Vec::new();
+
+    for (workflow_id, workflow) in &service.workflows {
+        // Check if the component exists
+        if !service.components.contains_key(&workflow.component) {
+            errors.push(format!(
+                "Workflow '{}' references non-existent component '{}'",
+                workflow_id, workflow.component
+            ));
+        }
+
+        // Collect chains used in triggers
+        match &workflow.trigger {
+            Trigger::CosmosContractEvent { chain_name, .. } => {
+                chains_to_validate.insert((chain_name.clone(), true)); // true = cosmos
+            }
+            Trigger::EthContractEvent { chain_name, .. } => {
+                chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
+            }
+            _ => {}
+        }
+
+        // Collect chains used in submits
+        if let Submit::EthereumContract { chain_name, .. } = &workflow.submit {
+            chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
+        }
+
+        // Validate workflow trigger (basic validation)
+        if let Some(ctx) = ctx {
+            match &workflow.trigger {
+                Trigger::CosmosContractEvent { chain_name, .. } => {
+                    if let Ok(client) = ctx.get_cosmos_client(chain_name) {
+                        validate_workflow_trigger(
+                            workflow_id,
+                            &workflow.trigger,
+                            &client.querier,
+                            &mut errors,
+                        )
+                        .await;
+                    } else {
+                        errors.push(format!(
+                            "Workflow '{}' uses chain '{}' in Cosmos trigger, but client configuration is invalid",
+                            workflow_id, chain_name
+                        ));
+                    }
+                }
+                _ => {
+                    // For other trigger types, do basic validation without client
+                    validate_workflow_trigger_basic(workflow_id, &workflow.trigger, &mut errors);
+                }
+            }
+        } else {
+            // Without context, we can only do basic validation
+            validate_workflow_trigger_basic(workflow_id, &workflow.trigger, &mut errors);
+        }
+
+        // Collect trigger for contract existence check
+        triggers.push((workflow_id, &workflow.trigger));
+
+        // Validate workflow submit (basic)
+        validate_workflow_submit(workflow_id, &workflow.submit, &mut errors);
+
+        // Collect submit for contract existence check
+        submits.push((workflow_id, &workflow.submit));
+
+        // Validate fuel limit
+        if let Some(limit) = workflow.fuel_limit {
+            if limit == 0 {
+                errors.push(format!(
+                    "Workflow '{}' has a fuel limit of zero, which will prevent execution",
+                    workflow_id
+                ));
+            }
+        }
+    }
+
+    // If we have a context, perform deeper validation for contracts
+    if let Some(ctx) = ctx {
+        // Build maps of clients for chains actually used
+        let mut cosmos_clients = HashMap::new();
+        let mut eth_providers = HashMap::new();
+
+        // Only get clients for chains actually used in triggers or submits
+        for (chain_name, is_cosmos) in chains_to_validate.iter() {
+            if *is_cosmos {
+                if let Ok(client) = ctx.get_cosmos_client(chain_name) {
+                    cosmos_clients.insert(chain_name.clone(), client.querier);
+                }
+            } else if let Ok(client) = ctx.get_eth_client(chain_name) {
+                eth_providers.insert(chain_name.clone(), client.eth.provider.root().clone());
+            }
+        }
+
+        // Validate that referenced contracts exist on-chain
+        if !cosmos_clients.is_empty() || !eth_providers.is_empty() {
+            if let Err(err) = validate_contracts_exist(
+                service.id.as_ref(),
+                triggers,
+                submits,
+                &eth_providers,
+                &cosmos_clients,
+                &mut errors,
+            )
+            .await
+            {
+                errors.push(format!("Error during contract validation: {}", err));
+            }
+        }
+    }
+
+    Ok(ServiceValidationResult {
+        service_id: service.id.to_string(),
+        errors,
+    })
+}
+
+/// Basic validation for workflow triggers that doesn't require a client
+fn validate_workflow_trigger_basic(
+    workflow_id: &WorkflowID,
+    trigger: &Trigger,
+    errors: &mut Vec<String>,
+) {
+    match trigger {
+        Trigger::CosmosContractEvent { event_type, .. } => {
+            // Validate event type
+            if event_type.is_empty() {
+                errors.push(format!(
+                    "Workflow '{}' has an empty event type in Cosmos trigger",
+                    workflow_id
+                ));
+            }
+        }
+        Trigger::EthContractEvent {
+            address,
+            chain_name: _,
+            event_hash,
+        } => {
+            // Validate Ethereum address format - similar to set_ethereum_trigger
+            if let Err(err) =
+                alloy::primitives::Address::parse_checksummed(address.to_string(), None)
+            {
+                errors.push(format!(
+                    "Workflow '{}' has an invalid Ethereum address format: {}",
+                    workflow_id, err
+                ));
+            }
+
+            // Validate event hash (should be 32 bytes)
+            if event_hash.as_slice().len() != 32 {
+                errors.push(format!(
+                    "Workflow '{}' has an invalid event hash length: expected 32 bytes but got {} bytes",
+                    workflow_id, event_hash.as_slice().len()
+                ));
+            }
+        }
+        Trigger::BlockInterval {
+            chain_name: _,
+            n_blocks,
+        } => {
+            // Check if n_blocks is a reasonable value
+            if *n_blocks == 0 {
+                errors.push(format!(
+                    "Workflow '{}' has a block interval of zero, which will never trigger",
+                    workflow_id
+                ));
+            }
+        }
+        Trigger::Manual => {
+            // Manual triggers are always valid, no validation needed
+        }
+    }
+}
+
+/// Validate a workflow trigger using a Cosmos query client
+async fn validate_workflow_trigger(
+    workflow_id: &WorkflowID,
+    trigger: &Trigger,
+    query_client: &CosmosQueryClient,
+    errors: &mut Vec<String>,
+) {
+    match trigger {
+        Trigger::CosmosContractEvent {
+            address,
+            chain_name,
+            event_type,
+        } => {
+            // Use same validation as in set_cosmos_trigger
+            if let Err(err) = query_client
+                .chain_config
+                .parse_address(address.to_string().as_ref())
+            {
+                errors.push(format!(
+                    "Workflow '{}' has an invalid Cosmos address format for chain {}: {}",
+                    workflow_id, chain_name, err
+                ));
+            }
+
+            // Validate event type
+            if event_type.is_empty() {
+                errors.push(format!(
+                    "Workflow '{}' has an empty event type in Cosmos trigger",
+                    workflow_id
+                ));
+            }
+        }
+        _ => {
+            // For other trigger types, use the basic validation
+            validate_workflow_trigger_basic(workflow_id, trigger, errors);
+        }
+    }
+}
+
+/// Check registry availability for component services
+async fn validate_registry_availability(registry_url: &str, errors: &mut Vec<String>) {
+    // Create HTTP client with reasonable timeouts
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap();
+
+    // Construct the URL for the app endpoint
+    let app_url = format!("{}/app", registry_url);
+
+    // Try to fetch the app endpoint using HTTP GET request to check availability
+    let result = match client.get(&app_url).send().await {
+        Ok(response) => {
+            if response.status().is_success() {
+                Ok(())
+            } else if response.status().is_client_error() {
+                // 4xx status usually means endpoint doesn't exist or access denied
+                Err(format!(
+                    "Registry app endpoint returned client error (status: {})",
+                    response.status()
+                ))
+            } else {
+                // 5xx or other unexpected status
+                Err(format!(
+                    "Registry returned error status: {}",
+                    response.status()
+                ))
+            }
+        }
+        Err(err) => {
+            if err.is_timeout() {
+                Err("Connection to registry timed out".to_string())
+            } else if err.is_connect() {
+                Err("Failed to connect to registry".to_string())
+            } else {
+                Err(format!("Network error: {}", err))
+            }
+        }
+    };
+
+    // Add error message if availability check failed
+    if let Err(msg) = result {
+        errors.push(format!("Registry availability check failed: {}", msg));
+    }
+}
+
+/// Validate a workflow submit
+fn validate_workflow_submit(workflow_id: &WorkflowID, submit: &Submit, errors: &mut Vec<String>) {
+    match submit {
+        Submit::EthereumContract {
+            address,
+            chain_name: _,
+            max_gas,
+        } => {
+            // Validate Ethereum address format - similar to set_ethereum_submit
+            if let Err(err) =
+                alloy::primitives::Address::parse_checksummed(address.to_string(), None)
+            {
+                errors.push(format!(
+                    "Workflow '{}' has an invalid Ethereum address format in submit action: {}",
+                    workflow_id, err
+                ));
+            }
+
+            // Check if max_gas is reasonable if specified
+            if let Some(gas) = max_gas {
+                if *gas == 0 {
+                    errors.push(format!(
+                        "Workflow '{}' has max_gas of zero, which will prevent transactions",
+                        workflow_id
+                    ));
+                }
+            }
+        }
+        Submit::None => {
+            // None submit type is always valid, no validation needed
+        }
+    }
+}
+
+/// Validation helper to check if contracts referenced in triggers exist on-chain
+pub async fn validate_contracts_exist(
+    service_id: &str,
+    triggers: Vec<(&WorkflowID, &Trigger)>,
+    submits: Vec<(&WorkflowID, &Submit)>,
+    eth_providers: &HashMap<ChainName, RootProvider>,
+    cosmos_clients: &HashMap<ChainName, CosmosQueryClient>,
+    errors: &mut Vec<String>,
+) -> Result<()> {
+    // Track which contracts we've already checked to avoid duplicate checks
+    let mut checked_eth_contracts = HashMap::new();
+    let mut checked_cosmos_contracts = HashMap::new();
+
+    // Check all trigger contracts
+    for (workflow_id, trigger) in triggers {
+        match trigger {
+            Trigger::EthContractEvent {
+                address,
+                chain_name,
+                ..
+            } => {
+                // Check if we have a provider for this chain
+                if let Some(provider) = eth_providers.get(chain_name) {
+                    // Only check each contract once per chain
+                    let key = (address.to_string(), chain_name.to_string());
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        checked_eth_contracts.entry(key)
+                    {
+                        let context =
+                            format!("Service {} workflow {} trigger", service_id, workflow_id);
+                        match check_ethereum_contract_exists(address, provider, errors, &context)
+                            .await
+                        {
+                            Ok(exists) => {
+                                e.insert(exists);
+                            }
+                            Err(err) => {
+                                errors.push(format!(
+                                    "Error checking Ethereum contract for workflow {}: {}",
+                                    workflow_id, err
+                                ));
+                            }
+                        }
+                    }
+                } else {
+                    errors.push(format!(
+                        "Cannot check Ethereum contract for workflow {} - no provider configured for chain {}",
+                        workflow_id, chain_name
+                    ));
+                }
+            }
+            Trigger::CosmosContractEvent {
+                address,
+                chain_name,
+                ..
+            } => {
+                // Check if we have a query client for this chain
+                if let Some(client) = cosmos_clients.get(chain_name) {
+                    // Only check each contract once per chain
+                    let key = (address.to_string(), chain_name.to_string());
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        checked_cosmos_contracts.entry(key)
+                    {
+                        let context =
+                            format!("Service {} workflow {} trigger", service_id, workflow_id);
+                        match check_cosmos_contract_exists(address, client, errors, &context).await
+                        {
+                            Ok(exists) => {
+                                e.insert(exists);
+                            }
+                            Err(err) => {
+                                errors.push(format!(
+                                    "Error checking Cosmos contract for workflow {}: {}",
+                                    workflow_id, err
+                                ));
+                            }
+                        }
+                    }
+                } else {
+                    errors.push(format!(
+                        "Cannot check Cosmos contract for workflow {} - no client configured for chain {}",
+                        workflow_id, chain_name
+                    ));
+                }
+            }
+            // Other trigger types don't need contract validation
+            Trigger::Manual | Trigger::BlockInterval { .. } => {}
+        }
+    }
+
+    // Check all submit contracts
+    for (workflow_id, submit) in submits {
+        match submit {
+            Submit::EthereumContract {
+                address,
+                chain_name,
+                ..
+            } => {
+                // Check if we have a provider for this chain
+                if let Some(provider) = eth_providers.get(chain_name) {
+                    // Only check each contract once per chain
+                    let key = (address.to_string(), chain_name.to_string());
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        checked_eth_contracts.entry(key)
+                    {
+                        let context =
+                            format!("Service {} workflow {} submit", service_id, workflow_id);
+                        match check_ethereum_contract_exists(address, provider, errors, &context)
+                            .await
+                        {
+                            Ok(exists) => {
+                                e.insert(exists);
+                            }
+                            Err(err) => {
+                                errors.push(format!(
+                                    "Error checking Ethereum contract for workflow {} submit: {}",
+                                    workflow_id, err
+                                ));
+                            }
+                        }
+                    }
+                } else {
+                    errors.push(format!(
+                        "Cannot check Ethereum contract for workflow {} submit - no provider configured for chain {}",
+                        workflow_id, chain_name
+                    ));
+                }
+            }
+            Submit::None => {}
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if an Ethereum contract exists at the specified address
+async fn check_ethereum_contract_exists(
+    address: &alloy::primitives::Address,
+    provider: &RootProvider,
+    errors: &mut Vec<String>,
+    context: &str,
+) -> Result<bool> {
+    // Get the code at the address - if empty, no contract exists
+    match provider.get_code_at(*address).await {
+        Ok(code) => {
+            let exists = !code.is_empty();
+            if !exists {
+                errors.push(format!(
+                    "{}: Ethereum address {} has no contract deployed on chain (empty bytecode)",
+                    context, address
+                ));
+            }
+            Ok(exists)
+        }
+        Err(err) => {
+            errors.push(format!(
+                "{}: Failed to check Ethereum contract at {}: {} (RPC connection issue)",
+                context, address, err
+            ));
+            Err(err.into())
+        }
+    }
+}
+
+/// Check if a Cosmos contract exists at the specified address
+async fn check_cosmos_contract_exists(
+    address: &Address,
+    query_client: &CosmosQueryClient,
+    errors: &mut Vec<String>,
+    context: &str,
+) -> Result<bool> {
+    // Query contract info to check if it exists
+    // This uses CosmWasm-specific query if supported by the chain
+    let result = query_client.contract_info(address).await;
+
+    match result {
+        Ok(_) => {
+            // Contract exists and returned info
+            Ok(true)
+        }
+        Err(err) => {
+            errors.push(format!(
+                "{}: Failed to check Cosmos contract at {}: {}",
+                context, address, err
+            ));
+            Err(err)
+        }
+    }
 }
 
 #[cfg(test)]
