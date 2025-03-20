@@ -11,81 +11,98 @@ repository = "https://github.com/Lay3rLabs/WAVS"
 rust-version = "1.84.0"
 
 [workspace.dependencies]
+# http utilities
+axum = { version = "0.8.1", features = ["macros"] }
+http = "1.2.0"
+http-body-util = "0.1.2"
+reqwest = { version = "0.12.9", features = ["json"] }
+tower-http = { version = "0.6.1", features = ["cors", "trace"] }
+tower = { version = "0.5.1", features = ["util"] }
+tower-service = "0.3.3"
+
+# error handling and logging
+anyhow = "1.0.90"
+thiserror = "2.0.11"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+# cli and config
+clap = { version = "4.5.20", features = ["derive", "env", "string"] }
+dotenvy = { version = "0.15.7", features = ["cli"] }
+figment = { version = "0.10.19", features = ["toml", "env"] }
+dirs = "6.0.0"
+shellexpand = "3.1.0"
+
+# async runtime
+tokio = { version = "1.41.0", features = ["full"] }
+futures = "0.3.31"
+futures-utils-wasm = "0.1.0"
+rayon = "1.5.1"
+ctrlc = "3.4.5"
+temp-env = { version = "0.3.6", features = ["async_closure"] }
+
+# fs
+tempfile = "3.13.0"
+walkdir = "2.5.0"
+wildmatch = "2.4.0"
+
+# bc
+alloy = { version = "0.11.0", features = [
+  "full",
+  "signer-mnemonic",
+  "node-bindings",
+] }
+alloy-json-abi = "0.8.21"
+alloy-json-rpc = "0.11.0"
+alloy-primitives = { version = "0.8.20", features = ["serde"] }
+alloy-provider = "0.11.0"
+alloy-rpc-client = "0.11.0"
+alloy-sol-types = "0.8.20"
+alloy-transport = "0.11.0"
+alloy-transport-http = "0.11.0"
+cosmwasm-schema = "2.2.0"
+cosmwasm-std = { version = "2.2.0", features = ["stargate"] }
+cw-storage-plus = "2.0.0"
+cw2 = "2.0.0"
+layer-climb = "0.3.7"
+layer-climb-address = "0.3.7"
+layer-climb-cli = "0.3.7"
+wstd = "0.5.1"
+
+# WASM and WIT bindings
 wasm-pkg-client = "0.10.0"
 wasm-pkg-common = "0.10.0"
 semver = "1.0.0"
+wasmtime = { version = "29.0.1", features = [
+  "cache",
+  "component-model",
+  "runtime",
+  "std",
+] }
+wasmtime-wasi = { version = "29.0.1", default-features = true }
+wasmtime-wasi-http = "29.0.1"
+wasi = "0.14.0"
+wit-bindgen-rt = { version = "0.39.0", features = ["bitflags", "async"] }
+
+# utilis
+bip39 = "2.0.0"
+cfg-if = "1.0.0"
+chrono = "0.4.38"
+const-hex = "1.14.0"
+criterion = "0.5.1"
+lru = "0.13.0"
+rand = "0.9.0"
+redb = { version = "2.1" }
+serde = { version = "1.0.211", features = ["derive"] }
+serde_json = "1.0.127"
+sha2 = "0.10.8"
+url = "2.5.3"
+uuid = { version = "1.11.0", features = ["v7", "serde"] }
+
+# local
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
-clap = { version = "4.5.20", features = ["derive", "env", "string"] }
-anyhow = "1.0.90"
-tokio = { version = "1.41.0", features = ["full"] }
-serde = { version = "1.0.211", features = ["derive"] }
-serde_json = "1.0.127"
-dirs = "6.0.0"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-dotenvy = { version = "0.15.7", features = ["cli"] }
-figment = { version = "0.10.19", features = ["toml", "env"] }
-sha2 = "0.10.8"
-const-hex = "1.14.0"
-thiserror = "2.0.11"
-redb = { version = "2.1" }
-axum = { version = "0.8.1", features = ["macros"] }
-tower-http = { version = "0.6.1", features = ["cors", "trace"] }
-tower = { version = "0.5.1", features = ["util"] }
-http-body-util = "0.1.2"
-wildmatch = "2.4.0"
-layer-climb = "0.3.7"
-layer-climb-cli = "0.3.7"
-layer-climb-address = "0.3.7"
-ctrlc = "3.4.5"
-tempfile = "3.13.0"
-futures = "0.3.31"
-reqwest = { version = "0.12.9", features = ["json"] }
-rand = "0.9.0"
-cfg-if = "1.0.0"
-wasmtime = { version = "29.0.1", features = [
-  "cache",
-  "component-model",
-  "runtime",
-  "std",
-] } # add "async" ?
-wasmtime-wasi-http = "29.0.1"
-wasmtime-wasi = { version = "29.0.1", default-features = true }
-lru = "0.13.0"
-rayon = "1.5.1"
-walkdir = "2.5.0"
-url = "2.5.3"
-bip39 = "2.0.0"
-temp-env = { version = "0.3.6", features = ["async_closure"] }
-criterion = "0.5.1"
-chrono = "0.4.38"
-shellexpand = "3.1.0"
-wit-bindgen-rt = { version = "0.39.0", features = ["bitflags", "async"] }
-alloy = { version = "0.11.0", features = [
-  "full",
-  "signer-mnemonic",
-  "node-bindings",
-] }
-alloy-primitives = { version = "0.8.20", features = ["serde"] }
-alloy-sol-types = "0.8.20"
-alloy-json-rpc = "0.11.0"
-alloy-provider = "0.11.0"
-alloy-transport-http = "0.11.0"
-alloy-transport = "0.11.0"
-alloy-rpc-client = "0.11.0"
-alloy-json-abi = "0.8.21"
-wstd = "0.5.1"
-wasi = "0.14.0"
-cosmwasm-std = { version = "2.2.0", features = ["stargate"] }
-cosmwasm-schema = "2.2.0"
-cw-storage-plus = "2.0.0"
-cw2 = "2.0.0"
-tower-service = "0.3.3"
-uuid = { version = "1.11.0", features = ["v7", "serde"] }
-futures-utils-wasm = "0.1.0"
-http = "1.2.0"
