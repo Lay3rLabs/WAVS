@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+- added a block-interval trigger type; it works by specifying the blockchain name and the number of blocks at which you want it to be triggered
+
 ## [v0.3.0]
 - bumped `WIT`, `@wavs/solidity`, `wavs-types`, `wavs-wasi-chain` and `examples` to `0.3.0`
 
