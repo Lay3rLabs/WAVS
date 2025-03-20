@@ -24,6 +24,12 @@ use crate::{
     service_json::{Json, ServiceJson, SubmitJson, TriggerJson, WorkflowJson},
 };
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ChainType {
+    Cosmos,
+    Ethereum,
+}
+
 /// Handle service commands - this function will be called from main.rs
 pub async fn handle_service_command(
     ctx: &CliContext,
@@ -752,11 +758,10 @@ pub async fn validate_service(
     ctx: Option<&CliContext>,
 ) -> Result<ServiceValidationResult> {
     // Read the service file
-    let service_json = std::fs::read_to_string(file_path).context("Failed to read service file")?;
+    let service_json = std::fs::read_to_string(file_path)?;
 
     // Parse the service JSON
-    let service: ServiceJson = serde_json::from_str(&service_json)
-        .context("Failed to parse service JSON. Check for syntax errors")?;
+    let service: ServiceJson = serde_json::from_str(&service_json)?;
 
     let mut errors = Vec::new();
 
@@ -792,10 +797,10 @@ pub async fn validate_service(
             TriggerJson::Trigger(trigger) => {
                 match trigger {
                     Trigger::CosmosContractEvent { chain_name, .. } => {
-                        chains_to_validate.insert((chain_name.clone(), true)); // true = cosmos
+                        chains_to_validate.insert((chain_name.clone(), ChainType::Cosmos));
                     }
                     Trigger::EthContractEvent { chain_name, .. } => {
-                        chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
+                        chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
                     }
                     _ => {}
                 }
@@ -841,7 +846,7 @@ pub async fn validate_service(
             }
             SubmitJson::Submit(submit) => {
                 if let Submit::EthereumContract { chain_name, .. } = submit {
-                    chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
+                    chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
                 }
 
                 // Validate workflow submit (basic)
@@ -870,13 +875,19 @@ pub async fn validate_service(
         let mut eth_providers = HashMap::new();
 
         // Only get clients for chains actually used in triggers or submits
-        for (chain_name, is_cosmos) in chains_to_validate.iter() {
-            if *is_cosmos {
-                if let Ok(client) = ctx.get_cosmos_client(chain_name) {
-                    cosmos_clients.insert(chain_name.clone(), client.querier);
+        for (chain_name, chain_type) in chains_to_validate.iter() {
+            match chain_type {
+                ChainType::Cosmos => {
+                    if let Ok(client) = ctx.get_cosmos_client(chain_name) {
+                        cosmos_clients.insert(chain_name.clone(), client.querier);
+                    }
                 }
-            } else if let Ok(client) = ctx.get_eth_client(chain_name) {
-                eth_providers.insert(chain_name.clone(), client.eth.provider.root().clone());
+                ChainType::Ethereum => {
+                    if let Ok(client) = ctx.get_eth_client(chain_name) {
+                        eth_providers
+                            .insert(chain_name.clone(), client.eth.provider.root().clone());
+                    }
+                }
             }
         }
 
