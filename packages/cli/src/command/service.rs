@@ -15,13 +15,13 @@ use std::{
 use uuid::Uuid;
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource, Digest,
-    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
-    WorkflowID,
+    Permissions, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, WorkflowID,
 };
 
 use crate::{
     args::{ComponentCommand, ServiceCommand, SubmitCommand, TriggerCommand, WorkflowCommand},
     context::CliContext,
+    service_json::{Json, ServiceJson, SubmitJson, TriggerJson, WorkflowJson},
 };
 
 /// Handle service commands - this function will be called from main.rs
@@ -120,7 +120,7 @@ pub async fn handle_service_command(
 #[derive(Debug, Clone)]
 pub struct ServiceInitResult {
     /// The generated service
-    pub service: Service,
+    pub service: ServiceJson,
     /// The file path where the service JSON was saved
     pub file_path: PathBuf,
 }
@@ -327,7 +327,7 @@ impl std::fmt::Display for ServiceValidationResult {
 pub fn modify_service_file<P, F, R>(file_path: P, modifier: F) -> Result<R>
 where
     P: AsRef<Path>,
-    F: FnOnce(Service) -> Result<(Service, R)>,
+    F: FnOnce(ServiceJson) -> Result<(ServiceJson, R)>,
 {
     let file_path = file_path.as_ref();
 
@@ -335,7 +335,7 @@ where
     let service_json = std::fs::read_to_string(file_path)?;
 
     // Parse the service JSON
-    let service: Service = serde_json::from_str(&service_json)?;
+    let service: ServiceJson = serde_json::from_str(&service_json)?;
 
     // Apply the modification and get the result
     let (updated_service, result) = modifier(service)?;
@@ -409,7 +409,7 @@ pub fn init_service(
     };
 
     // Create the service
-    let service = Service {
+    let service = ServiceJson {
         id,
         name,
         components: BTreeMap::new(),
@@ -518,11 +518,11 @@ pub fn add_workflow(
         };
 
         // Create default trigger and submit
-        let trigger = Trigger::Manual;
-        let submit = Submit::None;
+        let trigger = TriggerJson::default();
+        let submit = SubmitJson::default();
 
         // Create a new workflow entry
-        let workflow = Workflow {
+        let workflow = WorkflowJson {
             trigger,
             component: component_id,
             submit,
@@ -593,7 +593,7 @@ pub fn set_cosmos_trigger(
             chain_name,
             event_type,
         };
-        workflow.trigger = trigger.clone();
+        workflow.trigger = TriggerJson::Trigger(trigger.clone());
 
         Ok((
             service,
@@ -645,7 +645,7 @@ pub fn set_ethereum_trigger(
             chain_name,
             event_hash: ByteArray::new(event_hash),
         };
-        workflow.trigger = trigger.clone();
+        workflow.trigger = TriggerJson::Trigger(trigger.clone());
 
         Ok((
             service,
@@ -733,7 +733,7 @@ pub fn set_ethereum_submit(
             chain_name,
             max_gas,
         };
-        workflow.submit = submit.clone();
+        workflow.submit = SubmitJson::Submit(submit.clone());
 
         Ok((
             service,
@@ -755,7 +755,7 @@ pub async fn validate_service(
     let service_json = std::fs::read_to_string(file_path).context("Failed to read service file")?;
 
     // Parse the service JSON
-    let service: Service = serde_json::from_str(&service_json)
+    let service: ServiceJson = serde_json::from_str(&service_json)
         .context("Failed to parse service JSON. Check for syntax errors")?;
 
     let mut errors = Vec::new();
@@ -784,59 +784,73 @@ pub async fn validate_service(
             ));
         }
 
-        // Collect chains used in triggers
+        // Check if trigger is unset
         match &workflow.trigger {
-            Trigger::CosmosContractEvent { chain_name, .. } => {
-                chains_to_validate.insert((chain_name.clone(), true)); // true = cosmos
+            TriggerJson::Json(Json::Unset {}) => {
+                errors.push(format!("Workflow '{}' has an unset trigger", workflow_id));
             }
-            Trigger::EthContractEvent { chain_name, .. } => {
-                chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
-            }
-            _ => {}
-        }
-
-        // Collect chains used in submits
-        if let Submit::EthereumContract { chain_name, .. } = &workflow.submit {
-            chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
-        }
-
-        // Validate workflow trigger (basic validation)
-        if let Some(ctx) = ctx {
-            match &workflow.trigger {
-                Trigger::CosmosContractEvent { chain_name, .. } => {
-                    if let Ok(client) = ctx.get_cosmos_client(chain_name) {
-                        validate_workflow_trigger(
-                            workflow_id,
-                            &workflow.trigger,
-                            &client.querier,
-                            &mut errors,
-                        )
-                        .await;
-                    } else {
-                        errors.push(format!(
-                            "Workflow '{}' uses chain '{}' in Cosmos trigger, but client configuration is invalid",
-                            workflow_id, chain_name
-                        ));
+            TriggerJson::Trigger(trigger) => {
+                match trigger {
+                    Trigger::CosmosContractEvent { chain_name, .. } => {
+                        chains_to_validate.insert((chain_name.clone(), true)); // true = cosmos
                     }
+                    Trigger::EthContractEvent { chain_name, .. } => {
+                        chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
+                    }
+                    _ => {}
                 }
-                _ => {
-                    // For other trigger types, do basic validation without client
-                    validate_workflow_trigger_basic(workflow_id, &workflow.trigger, &mut errors);
+
+                // Validate workflow trigger (basic validation)
+                if let Some(ctx) = ctx {
+                    match trigger {
+                        Trigger::CosmosContractEvent { chain_name, .. } => {
+                            if let Ok(client) = ctx.get_cosmos_client(chain_name) {
+                                validate_workflow_trigger(
+                                    workflow_id,
+                                    trigger,
+                                    &client.querier,
+                                    &mut errors,
+                                )
+                                .await;
+                            } else {
+                                errors.push(format!(
+                                "Workflow '{}' uses chain '{}' in Cosmos trigger, but client configuration is invalid",
+                                workflow_id, chain_name
+                            ));
+                            }
+                        }
+                        _ => {
+                            // For other trigger types, do basic validation without client
+                            validate_workflow_trigger_basic(workflow_id, trigger, &mut errors);
+                        }
+                    }
+                } else {
+                    // Without context, we can only do basic validation
+                    validate_workflow_trigger_basic(workflow_id, trigger, &mut errors);
                 }
+
+                // Collect trigger for contract existence check
+                triggers.push((workflow_id, trigger));
             }
-        } else {
-            // Without context, we can only do basic validation
-            validate_workflow_trigger_basic(workflow_id, &workflow.trigger, &mut errors);
         }
 
-        // Collect trigger for contract existence check
-        triggers.push((workflow_id, &workflow.trigger));
+        // Check if submit is unset
+        match &workflow.submit {
+            SubmitJson::Json(Json::Unset {}) => {
+                errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
+            }
+            SubmitJson::Submit(submit) => {
+                if let Submit::EthereumContract { chain_name, .. } = submit {
+                    chains_to_validate.insert((chain_name.clone(), false)); // false = ethereum
+                }
 
-        // Validate workflow submit (basic)
-        validate_workflow_submit(workflow_id, &workflow.submit, &mut errors);
+                // Validate workflow submit (basic)
+                validate_workflow_submit(workflow_id, submit, &mut errors);
 
-        // Collect submit for contract existence check
-        submits.push((workflow_id, &workflow.submit));
+                // Collect submit for contract existence check
+                submits.push((workflow_id, submit));
+            }
+        }
 
         // Validate fuel limit
         if let Some(limit) = workflow.fuel_limit {
@@ -1292,7 +1306,7 @@ mod tests {
 
         // Parse the created file to verify its contents
         let file_content = std::fs::read_to_string(file_path).unwrap();
-        let parsed_service: Service = serde_json::from_str(&file_content).unwrap();
+        let parsed_service: ServiceJson = serde_json::from_str(&file_content).unwrap();
 
         assert_eq!(parsed_service.id, service_id);
         assert_eq!(parsed_service.name, "Test Service");
@@ -1317,7 +1331,7 @@ mod tests {
 
         // Parse file to verify contents
         let auto_id_content = std::fs::read_to_string(auto_id_file_path).unwrap();
-        let auto_id_parsed: Service = serde_json::from_str(&auto_id_content).unwrap();
+        let auto_id_parsed: ServiceJson = serde_json::from_str(&auto_id_content).unwrap();
 
         assert_eq!(auto_id_parsed.id, auto_id_result.service.id);
         assert_eq!(auto_id_parsed.name, "Auto ID Service");
@@ -1364,7 +1378,7 @@ mod tests {
         assert_eq!(add_result.file_path, file_path);
 
         // Verify the file was modified by adding the component
-        let service_after_add: Service =
+        let service_after_add: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(service_after_add.components.contains_key(&component_id));
         assert_eq!(service_after_add.components.len(), 1);
@@ -1400,7 +1414,7 @@ mod tests {
         ));
 
         // Verify the service was updated with new permissions
-        let service_after_permissions: Service =
+        let service_after_permissions: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let updated_component = service_after_permissions
             .components
@@ -1435,7 +1449,7 @@ mod tests {
         }
 
         // Verify the service was updated with specific hosts
-        let service_after_specific: Service =
+        let service_after_specific: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let specific_component = service_after_specific
             .components
@@ -1468,7 +1482,7 @@ mod tests {
         ));
 
         // Verify the service was updated with no hosts permission
-        let service_after_no_hosts: Service =
+        let service_after_no_hosts: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let no_hosts_component = service_after_no_hosts
             .components
@@ -1508,7 +1522,7 @@ mod tests {
         assert_eq!(third_add_result.digest, test_digest);
 
         // Verify the third component was added
-        let service_after_third_add: Service =
+        let service_after_third_add: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(service_after_third_add
             .components
@@ -1523,7 +1537,7 @@ mod tests {
         assert_eq!(delete_result.file_path, file_path);
 
         // Verify the file was modified by deleting the component
-        let service_after_delete: Service =
+        let service_after_delete: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(!service_after_delete.components.contains_key(&component_id));
         assert_eq!(service_after_delete.components.len(), 2); // One removed, two remaining
@@ -1577,17 +1591,29 @@ mod tests {
         assert_eq!(add_result.file_path, file_path);
 
         // Verify the file was modified by adding the workflow
-        let service_after_add: Service =
+        let service_after_add: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(service_after_add.workflows.contains_key(&workflow_id));
         assert_eq!(service_after_add.workflows.len(), 1);
 
-        // Verify workflow properties
+        // Verify workflow properties - need to handle TriggerJson and SubmitJson wrappers
         let added_workflow = service_after_add.workflows.get(&workflow_id).unwrap();
         assert_eq!(added_workflow.component, component_id);
         assert_eq!(added_workflow.fuel_limit, Some(1000));
-        assert!(matches!(added_workflow.trigger, Trigger::Manual));
-        assert!(matches!(added_workflow.submit, Submit::None));
+
+        // Check trigger type with pattern matching for TriggerJson
+        if let TriggerJson::Trigger(trigger) = &added_workflow.trigger {
+            assert!(matches!(trigger, Trigger::Manual));
+        } else {
+            panic!("Expected TriggerJson::Trigger");
+        }
+
+        // Check submit type with pattern matching for SubmitJson
+        if let SubmitJson::Submit(submit) = &added_workflow.submit {
+            assert!(matches!(submit, Submit::None));
+        } else {
+            panic!("Expected SubmitJson::Submit");
+        }
 
         // Test adding a workflow with autogenerated ID
         let auto_id_result =
@@ -1595,7 +1621,7 @@ mod tests {
         let auto_workflow_id = auto_id_result.workflow_id;
 
         // Verify the auto-generated workflow was added
-        let service_after_auto: Service =
+        let service_after_auto: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(service_after_auto.workflows.contains_key(&auto_workflow_id));
         assert_eq!(service_after_auto.workflows.len(), 2); // Two workflows now
@@ -1623,7 +1649,7 @@ mod tests {
         assert_eq!(delete_result.file_path, file_path);
 
         // Verify the file was modified by deleting the workflow
-        let service_after_delete: Service =
+        let service_after_delete: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(!service_after_delete.workflows.contains_key(&workflow_id));
         assert_eq!(service_after_delete.workflows.len(), 1); // One workflow remaining
@@ -1674,10 +1700,16 @@ mod tests {
         .unwrap();
 
         // Initial workflow should have manual trigger (default when created)
-        let service_initial: Service =
+        let service_initial: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let initial_workflow = service_initial.workflows.get(&workflow_id).unwrap();
-        assert!(matches!(initial_workflow.trigger, Trigger::Manual));
+
+        // Check the trigger type with proper handling of TriggerJson wrapper
+        if let TriggerJson::Trigger(trigger) = &initial_workflow.trigger {
+            assert!(matches!(trigger, Trigger::Manual));
+        } else {
+            panic!("Expected TriggerJson::Trigger");
+        }
 
         // Create a mock CosmosQueryClient for testing
         let cosmos_chain_name = ChainName::from_str("cosmoshub-4").unwrap();
@@ -1726,20 +1758,26 @@ mod tests {
         }
 
         // Verify the service was updated with cosmos trigger
-        let service_after_cosmos: Service =
+        let service_after_cosmos: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let cosmos_workflow = service_after_cosmos.workflows.get(&workflow_id).unwrap();
-        if let Trigger::CosmosContractEvent {
-            address,
-            chain_name,
-            event_type,
-        } = &cosmos_workflow.trigger
-        {
-            assert_eq!(address.to_string(), cosmos_address);
-            assert_eq!(chain_name, &cosmos_chain_name);
-            assert_eq!(event_type, &cosmos_event);
+
+        // Handle TriggerJson wrapper
+        if let TriggerJson::Trigger(trigger) = &cosmos_workflow.trigger {
+            if let Trigger::CosmosContractEvent {
+                address,
+                chain_name,
+                event_type,
+            } = trigger
+            {
+                assert_eq!(address.to_string(), cosmos_address);
+                assert_eq!(chain_name, &cosmos_chain_name);
+                assert_eq!(event_type, &cosmos_event);
+            } else {
+                panic!("Expected CosmosContractEvent trigger in service");
+            }
         } else {
-            panic!("Expected CosmosContractEvent trigger in service");
+            panic!("Expected TriggerJson::Trigger");
         }
 
         // Test for incorrect prefix - using Neutron (ntrn) prefix on Cosmos Hub
@@ -1793,21 +1831,28 @@ mod tests {
         }
 
         // Verify the service was updated with ethereum trigger
-        let service_after_eth: Service =
+        let service_after_eth: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let eth_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
-        if let Trigger::EthContractEvent {
-            address,
-            chain_name,
-            event_hash,
-        } = &eth_workflow.trigger
-        {
-            assert_eq!(address.to_string(), eth_address);
-            assert_eq!(chain_name, &eth_chain);
-            let expected_hash_bytes = hex::decode(eth_event_hash.trim_start_matches("0x")).unwrap();
-            assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
+
+        // Handle TriggerJson wrapper
+        if let TriggerJson::Trigger(trigger) = &eth_workflow.trigger {
+            if let Trigger::EthContractEvent {
+                address,
+                chain_name,
+                event_hash,
+            } = trigger
+            {
+                assert_eq!(address.to_string(), eth_address);
+                assert_eq!(chain_name, &eth_chain);
+                let expected_hash_bytes =
+                    hex::decode(eth_event_hash.trim_start_matches("0x")).unwrap();
+                assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
+            } else {
+                panic!("Expected EthContractEvent trigger in service");
+            }
         } else {
-            panic!("Expected EthContractEvent trigger in service");
+            panic!("Expected TriggerJson::Trigger");
         }
 
         // Test error handling for non-existent workflow
@@ -1892,10 +1937,16 @@ mod tests {
         .unwrap();
 
         // Initial workflow should have None submit (default when created)
-        let service_initial: Service =
+        let service_initial: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let initial_workflow = service_initial.workflows.get(&workflow_id).unwrap();
-        assert!(matches!(initial_workflow.submit, Submit::None));
+
+        // Handle SubmitJson wrapper
+        if let SubmitJson::Submit(submit) = &initial_workflow.submit {
+            assert!(matches!(submit, Submit::None));
+        } else {
+            panic!("Expected SubmitJson::Submit");
+        }
 
         // Test setting Ethereum submit
         let eth_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
@@ -1927,20 +1978,26 @@ mod tests {
         }
 
         // Verify the service was updated with ethereum submit
-        let service_after_eth: Service =
+        let service_after_eth: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let eth_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
-        if let Submit::EthereumContract {
-            address,
-            chain_name,
-            max_gas: result_max_gas,
-        } = &eth_workflow.submit
-        {
-            assert_eq!(address.to_string(), eth_address);
-            assert_eq!(chain_name, &eth_chain);
-            assert_eq!(result_max_gas, &max_gas);
+
+        // Handle SubmitJson wrapper
+        if let SubmitJson::Submit(submit) = &eth_workflow.submit {
+            if let Submit::EthereumContract {
+                address,
+                chain_name,
+                max_gas: result_max_gas,
+            } = submit
+            {
+                assert_eq!(address.to_string(), eth_address);
+                assert_eq!(chain_name, &eth_chain);
+                assert_eq!(result_max_gas, &max_gas);
+            } else {
+                panic!("Expected EthServiceHandler submit in service");
+            }
         } else {
-            panic!("Expected EthServiceHandler submit in service");
+            panic!("Expected SubmitJson::Submit");
         }
 
         // Test updating with null max_gas
