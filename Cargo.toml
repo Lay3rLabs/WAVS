@@ -19,6 +19,7 @@ reqwest = { version = "0.12.9", features = ["json"] }
 tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3.3"
+url = "2.5.3"
 
 # error handling and logging
 anyhow = "1.0.90"
@@ -29,7 +30,6 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 # cli and config
 clap = { version = "4.5.20", features = ["derive", "env", "string"] }
 dotenvy = { version = "0.15.7", features = ["cli"] }
-figment = { version = "0.10.19", features = ["toml", "env"] }
 dirs = "6.0.0"
 shellexpand = "3.1.0"
 
@@ -46,7 +46,7 @@ tempfile = "3.13.0"
 walkdir = "2.5.0"
 wildmatch = "2.4.0"
 
-# bc
+# Ethereum-specific dependencies
 alloy = { version = "0.11.0", features = [
   "full",
   "signer-mnemonic",
@@ -60,13 +60,15 @@ alloy-rpc-client = "0.11.0"
 alloy-sol-types = "0.8.20"
 alloy-transport = "0.11.0"
 alloy-transport-http = "0.11.0"
+layer-climb = "0.3.7"
+layer-climb-address = "0.3.7"
+layer-climb-cli = "0.3.7"
+
+# Cosmos-specific dependencies
 cosmwasm-schema = "2.2.0"
 cosmwasm-std = { version = "2.2.0", features = ["stargate"] }
 cw-storage-plus = "2.0.0"
 cw2 = "2.0.0"
-layer-climb = "0.3.7"
-layer-climb-address = "0.3.7"
-layer-climb-cli = "0.3.7"
 wstd = "0.5.1"
 
 # WASM and WIT bindings
@@ -84,20 +86,32 @@ wasmtime-wasi-http = "29.0.1"
 wasi = "0.14.0"
 wit-bindgen-rt = { version = "0.39.0", features = ["bitflags", "async"] }
 
-# utilis
-bip39 = "2.0.0"
-cfg-if = "1.0.0"
-chrono = "0.4.38"
-const-hex = "1.14.0"
+# benchmarking
 criterion = "0.5.1"
-lru = "0.13.0"
-rand = "0.9.0"
-redb = { version = "2.1" }
+
+# serialization
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
+figment = { version = "0.10.19", features = ["toml", "env"] }
+
+# randomness
+rand = "0.9.0"
+bip39 = "2.0.0"
+
+# hashing
 sha2 = "0.10.8"
-url = "2.5.3"
+const-hex = "1.14.0"
+
+# database
+redb = { version = "2.1" }
+lru = "0.13.0"
+
+# time
+chrono = "0.4.38"
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
+
+# utilis
+cfg-if = "1.0.0"
 
 # local
 utils = { path = "packages/utils" }
