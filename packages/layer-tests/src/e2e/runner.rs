@@ -167,8 +167,8 @@ fn get_input_for_service(
 ) -> Option<Vec<u8>> {
     let permissions_req = || {
         PermissionsRequest {
-            get_url: "https://httpbin.org/get".to_string(),
-            post_url: "https://httpbin.org/post".to_string(),
+            get_url: "https://postman-echo.com/get".to_string(),
+            post_url: "https://postman-echo.com/post".to_string(),
             post_data: ("hello".to_string(), "world".to_string()),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

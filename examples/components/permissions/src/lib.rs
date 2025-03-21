@@ -61,7 +61,7 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
 
     if post_response.json != input.post_data {
         return Err(anyhow::anyhow!(
-            "The post data is not the same as the one sent (check https://httpbin.org/post ?)"
+            "The post data is not the same as the one sent"
         ));
     }
 
