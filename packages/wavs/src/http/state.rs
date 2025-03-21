@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
+use utils::storage::db::{DBError, RedbStorage, Table, JSON};
+use wavs_types::ServiceID;
+
 use crate::{apis::dispatcher::DispatchManager, config::Config, dispatcher::DispatcherError};
+
+const SERVICES: Table<&str, JSON<wavs_types::Service>> = Table::new("services");
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -8,6 +13,7 @@ pub struct HttpState {
     pub dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
     pub is_mock_chain_client: bool,
     pub http_client: reqwest::Client,
+    pub storage: Arc<RedbStorage>,
 }
 
 impl HttpState {
@@ -16,11 +22,37 @@ impl HttpState {
         dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
         is_mock_chain_client: bool,
     ) -> anyhow::Result<Self> {
+        if !config.data.exists() {
+            std::fs::create_dir_all(&config.data).map_err(|err| {
+                anyhow::anyhow!(
+                    "Failed to create directory {} for http database: {}",
+                    config.data.display(),
+                    err
+                )
+            })?;
+        }
+
+        let storage = Arc::new(RedbStorage::new(config.data.join("http-db"))?);
+
         Ok(Self {
             config,
             dispatcher,
             is_mock_chain_client,
             http_client: reqwest::Client::new(),
+            storage,
         })
+    }
+
+    pub fn load_service(&self, service_id: &ServiceID) -> anyhow::Result<wavs_types::Service> {
+        match self.storage.get(SERVICES, service_id.as_ref()) {
+            Ok(Some(service)) => Ok(service.value()),
+            _ => Err(anyhow::anyhow!(
+                "Service ID {service_id} has not been set on the http server",
+            )),
+        }
+    }
+
+    pub fn save_service(&self, service: &wavs_types::Service) -> Result<(), DBError> {
+        self.storage.set(SERVICES, service.id.as_ref(), service)
     }
 }
