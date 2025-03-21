@@ -61,3 +61,13 @@ services:
       - "./packages/cli:/wavs"
       - "./.docker/cli:/root/wavs/cli/"
     network_mode: "host"
+
+  # Default all-memory Jaeger
+  jaeger:
+    image: jaegertracing/all-in-one:1.67.0
+    expose:
+      - "6831/udp"
+      - "6832/udp"
+      - "14268"
+    ports:
+      - "8080:16686"
