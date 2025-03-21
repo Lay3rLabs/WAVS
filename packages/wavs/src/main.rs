@@ -14,7 +14,7 @@ use utils::{
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
 
-fn setup_tracing(collector: &str) {
+fn setup_tracing(collector: &str, config: &Config) {
     global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
     let endpoint = format!("{}/v1/traces", collector);
     let exporter = SpanExporter::builder()
@@ -34,7 +34,9 @@ fn setup_tracing(collector: &str) {
     let tracer = provider.tracer("readme_example");
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let subscriber = tracing_subscriber::Registry::default().with(telemetry);
+    let subscriber = tracing_subscriber::Registry::default()
+        .with(config.tracing_env_filter().unwrap())
+        .with(telemetry);
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set global default subscriber");
@@ -48,7 +50,7 @@ fn main() {
 
     // setup tracing
     if let Some(collector) = config.jaeger.as_ref() {
-        setup_tracing(collector);
+        setup_tracing(collector, &config);
     } else {
         tracing_subscriber::registry()
             .with(
