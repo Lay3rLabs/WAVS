@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use opentelemetry::{global, trace::TracerProvider as _};
+use opentelemetry_otlp::{SpanExporter, WithExportConfig};
+use opentelemetry_sdk::{
+    resource::Resource,
+    trace::{self, Sampler, SdkTracerProvider},
+};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
