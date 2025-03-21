@@ -50,6 +50,9 @@ pub struct Config {
 
     /// Domain to use for registries
     pub registry_domain: Option<String>,
+
+    /// Jeager collector to send trace data
+    pub jaeger: Option<String>,
 }
 
 impl ConfigExt for Config {
@@ -82,6 +85,7 @@ impl Default for Config {
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
             registry_domain: None,
+            jaeger: None,
         }
     }
 }
