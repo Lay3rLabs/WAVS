@@ -955,18 +955,10 @@ fn validate_workflow_trigger_basic(
         }
         Trigger::BlockInterval {
             chain_name: _,
-            n_blocks,
-        } => {
-            // Check if n_blocks is a reasonable value
-            if *n_blocks == 0 {
-                errors.push(format!(
-                    "Workflow '{}' has a block interval of zero, which will never trigger",
-                    workflow_id
-                ));
-            }
+            n_blocks: _,
         }
-        Trigger::Manual => {
-            // Manual triggers are always valid, no validation needed
+        | Trigger::Manual => {
+            // Manual and block triggers are always valid, no extra validation needed
         }
     }
 }
