@@ -17,7 +17,7 @@ use utils::{
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
 
-fn setup_tracing(collector: &str, config: &Config) {
+fn setup_tracing(collector: &str, config: &Config) -> SdkTracerProvider {
     global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
     let endpoint = format!("{}/v1/traces", collector);
     let exporter = SpanExporter::builder()
@@ -45,6 +45,7 @@ fn setup_tracing(collector: &str, config: &Config) {
         .expect("Failed to set global default subscriber");
 
     tracing::info!("Jaeger tracing enabled");
+    provider
 }
 
 fn main() {
@@ -53,7 +54,7 @@ fn main() {
 
     // setup tracing
     // if let Some(collector) = config.jaeger.as_ref() {
-        setup_tracing("http://localhost:4317", &config);
+    let tracer_provider = setup_tracing("http://localhost:4317", &config);
     // } else {
     //     tracing_subscriber::registry()
     //         .with(
@@ -66,10 +67,10 @@ fn main() {
     //         .unwrap();
     // }
 
-    let span = tracing::span!(tracing::Level::INFO, "main-span");
-    let _enter = span.enter();
-    
-    tracing::info!("Application started");
+    let tracer = tracer_provider.tracer("wavs-tracer");
+    tracer.in_span("doing_work", |cx| {
+        tracing::info!("This is a trace log inside the span");
+    });
 
     let ctx = AppContext::new();
 
@@ -77,4 +78,7 @@ fn main() {
     let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone).unwrap());
 
     wavs::run_server(ctx, config, dispatcher);
+    tracer_provider
+        .shutdown()
+        .expect("TracerProvider should shutdown successfully")
 }
