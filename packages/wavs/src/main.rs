@@ -52,32 +52,24 @@ fn main() {
     let config: Config = ConfigBuilder::new(args).build().unwrap();
 
     // setup tracing
-    if let Some(collector) = config.jaeger.as_ref() {
-        setup_tracing(collector, &config);
-    } else {
-        tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::fmt::layer()
-                    .without_time()
-                    .with_target(false),
-            )
-            .with(config.tracing_env_filter().unwrap())
-            .try_init()
-            .unwrap();
-    }
+    // if let Some(collector) = config.jaeger.as_ref() {
+        setup_tracing("http://localhost:4317", &config);
+    // } else {
+    //     tracing_subscriber::registry()
+    //         .with(
+    //             tracing_subscriber::fmt::layer()
+    //                 .without_time()
+    //                 .with_target(false),
+    //         )
+    //         .with(config.tracing_env_filter().unwrap())
+    //         .try_init()
+    //         .unwrap();
+    // }
 
-    let tracer = opentelemetry::global::tracer("example-tracer");
-    let mut span = tracer.start("main-span");
-    span.set_attribute(opentelemetry::KeyValue::new("key", "value"));
-    {
-        span.add_event(
-            "processing-started",
-            vec![
-                opentelemetry::KeyValue::new("event_key", "event_value"),
-                opentelemetry::KeyValue::new("status", "started"),
-            ],
-        );
-    }
+    let span = tracing::span!(tracing::Level::INFO, "main-span");
+    let _enter = span.enter();
+    
+    tracing::info!("Application started");
 
     let ctx = AppContext::new();
 
