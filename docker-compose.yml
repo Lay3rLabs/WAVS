@@ -19,8 +19,9 @@ services:
 
   # The main instance all WAVS interaction will happen from
   wavs:
-    build: .
-    image: "ghcr.io/lay3rlabs/wavs:local"
+    build:
+    #image: "ghcr.io/lay3rlabs/wavs:local"
+      context: .
     container_name: "wavs"
     stop_signal: SIGKILL
     depends_on: ["anvil"]
