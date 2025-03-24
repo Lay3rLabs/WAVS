@@ -2165,7 +2165,7 @@ mod tests {
 
         // Check that validation fails with appropriate error
         assert!(
-            invalid_result.errors.len() > 0,
+            !invalid_result.errors.is_empty(),
             "Invalid service should have validation errors"
         );
         let component_error = invalid_result.errors.iter().any(|error| {
@@ -2205,7 +2205,7 @@ mod tests {
 
         // Check that validation fails with appropriate error
         assert!(
-            zero_fuel_result.errors.len() > 0,
+            !zero_fuel_result.errors.is_empty(),
             "Zero fuel service should have validation errors"
         );
         let fuel_error = zero_fuel_result.errors.iter().any(|error| {
@@ -2230,7 +2230,7 @@ mod tests {
 
         // Check that validation fails with appropriate error
         assert!(
-            empty_name_result.errors.len() > 0,
+            !empty_name_result.errors.is_empty(),
             "Empty name service should have validation errors"
         );
         let name_error = empty_name_result
