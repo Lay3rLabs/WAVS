@@ -2053,4 +2053,190 @@ mod tests {
         let invalid_address_error = invalid_eth_result.unwrap_err().to_string();
         assert!(invalid_address_error.contains("invalid"));
     }
+
+    #[tokio::test]
+    async fn test_service_validation() {
+        // Create a temporary directory for test files
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("test_service.json");
+
+        // Create a valid service configuration
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        let component_id = ComponentID::new("component-123").unwrap();
+        let workflow_id = WorkflowID::new("workflow-123").unwrap();
+        let ethereum_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+        let ethereum_address = alloy::primitives::Address::parse_checksummed(
+            "0x00000000219ab540356cBB839Cbe05303d7705Fa",
+            None,
+        )
+        .unwrap();
+
+        // Create component with digest
+        let test_digest =
+            Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+                .unwrap();
+        let component = Component {
+            source: ComponentSource::Digest(test_digest.clone()),
+            permissions: Permissions::default(),
+        };
+
+        // Create a valid trigger for the workflow
+        let trigger = Trigger::EthContractEvent {
+            address: ethereum_address,
+            chain_name: ethereum_chain.clone(),
+            event_hash: wavs_types::ByteArray::new([1u8; 32]),
+        };
+
+        // Create a valid submit for the workflow
+        let submit = Submit::EthereumContract {
+            address: ethereum_address,
+            chain_name: ethereum_chain.clone(),
+            max_gas: Some(1000000u64),
+        };
+
+        // Create workflow with the trigger and submit
+        let workflow = WorkflowJson {
+            trigger: TriggerJson::Trigger(trigger.clone()),
+            component: component_id.clone(),
+            submit: SubmitJson::Submit(submit.clone()),
+            fuel_limit: Some(1000),
+        };
+
+        // Create a valid service
+        let mut components = BTreeMap::new();
+        components.insert(component_id.clone(), component);
+
+        let mut workflows = BTreeMap::new();
+        workflows.insert(workflow_id.clone(), workflow);
+
+        let service = ServiceJson {
+            id: service_id.clone(),
+            name: "Test Service".to_string(),
+            components,
+            workflows,
+            status: ServiceStatus::Active,
+            config: ServiceConfig::default(),
+        };
+
+        // Write the service to a file
+        let service_json = serde_json::to_string_pretty(&service).unwrap();
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(service_json.as_bytes()).unwrap();
+
+        // Validate the service - this should pass with no errors since we've created a valid service
+        // Note: Using None for ctx since we can't easily mock connection to blockchain
+        let result = validate_service(&file_path, None).await.unwrap();
+
+        // Check that validation succeeds
+        assert_eq!(
+            result.errors.len(),
+            0,
+            "Valid service should have no validation errors"
+        );
+        assert_eq!(result.service_id, service_id.to_string());
+
+        // Create an invalid service with missing component reference
+        let mut invalid_service = service.clone();
+
+        // Create a new workflow that references a non-existent component
+        let non_existent_component_id = ComponentID::new("does-not-exist").unwrap();
+        let invalid_workflow = WorkflowJson {
+            trigger: TriggerJson::Trigger(trigger.clone()),
+            component: non_existent_component_id.clone(),
+            submit: SubmitJson::Submit(submit.clone()),
+            fuel_limit: Some(1000),
+        };
+
+        let invalid_workflow_id = WorkflowID::new("invalid-workflow").unwrap();
+        invalid_service
+            .workflows
+            .insert(invalid_workflow_id.clone(), invalid_workflow);
+
+        // Write the invalid service to a file
+        let invalid_service_path = temp_dir.path().join("invalid_service.json");
+        let invalid_service_json = serde_json::to_string_pretty(&invalid_service).unwrap();
+        let mut invalid_file = File::create(&invalid_service_path).unwrap();
+        invalid_file
+            .write_all(invalid_service_json.as_bytes())
+            .unwrap();
+
+        // Validate the service - this should fail with component reference error
+        let invalid_result = validate_service(&invalid_service_path, None).await.unwrap();
+
+        // Check that validation fails with appropriate error
+        assert!(
+            invalid_result.errors.len() > 0,
+            "Invalid service should have validation errors"
+        );
+        let component_error = invalid_result.errors.iter().any(|error| {
+            error.contains(&invalid_workflow_id.to_string())
+                && error.contains(&non_existent_component_id.to_string())
+                && error.contains("non-existent component")
+        });
+        assert!(
+            component_error,
+            "Validation should catch missing component reference"
+        );
+
+        // Create an invalid service with zero fuel limit
+        let mut zero_fuel_service = service.clone();
+
+        // Modify the workflow to have a zero fuel limit
+        let zero_fuel_workflow = WorkflowJson {
+            trigger: TriggerJson::Trigger(trigger),
+            component: component_id.clone(),
+            submit: SubmitJson::Submit(submit),
+            fuel_limit: Some(0), // Invalid - zero fuel limit
+        };
+
+        zero_fuel_service.workflows.clear();
+        zero_fuel_service
+            .workflows
+            .insert(workflow_id.clone(), zero_fuel_workflow);
+
+        // Write the zero fuel service to a file
+        let zero_fuel_path = temp_dir.path().join("zero_fuel_service.json");
+        let zero_fuel_json = serde_json::to_string_pretty(&zero_fuel_service).unwrap();
+        let mut zero_fuel_file = File::create(&zero_fuel_path).unwrap();
+        zero_fuel_file.write_all(zero_fuel_json.as_bytes()).unwrap();
+
+        // Validate the service - this should fail with fuel limit error
+        let zero_fuel_result = validate_service(&zero_fuel_path, None).await.unwrap();
+
+        // Check that validation fails with appropriate error
+        assert!(
+            zero_fuel_result.errors.len() > 0,
+            "Zero fuel service should have validation errors"
+        );
+        let fuel_error = zero_fuel_result.errors.iter().any(|error| {
+            error.contains(&workflow_id.to_string()) && error.contains("fuel limit of zero")
+        });
+        assert!(fuel_error, "Validation should catch zero fuel limit");
+
+        // Create a service with empty name
+        let mut empty_name_service = service.clone();
+        empty_name_service.name = "".to_string(); // Invalid - empty name
+
+        // Write the empty name service to a file
+        let empty_name_path = temp_dir.path().join("empty_name_service.json");
+        let empty_name_json = serde_json::to_string_pretty(&empty_name_service).unwrap();
+        let mut empty_name_file = File::create(&empty_name_path).unwrap();
+        empty_name_file
+            .write_all(empty_name_json.as_bytes())
+            .unwrap();
+
+        // Validate the service - this should fail with name error
+        let empty_name_result = validate_service(&empty_name_path, None).await.unwrap();
+
+        // Check that validation fails with appropriate error
+        assert!(
+            empty_name_result.errors.len() > 0,
+            "Empty name service should have validation errors"
+        );
+        let name_error = empty_name_result
+            .errors
+            .iter()
+            .any(|error| error.contains("Service name cannot be empty"));
+        assert!(name_error, "Validation should catch empty service name");
+    }
 }
