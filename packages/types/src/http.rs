@@ -35,7 +35,7 @@ pub struct ListServiceResponse {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct UploadServiceResponse {
+pub struct UploadComponentResponse {
     pub digest: ShaDigest,
 }
 

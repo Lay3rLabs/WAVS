@@ -1,6 +1,6 @@
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{body::Bytes, extract::State, response::IntoResponse, Json};
-use wavs_types::UploadServiceResponse;
+use wavs_types::UploadComponentResponse;
 
 #[axum::debug_handler]
 pub async fn handle_upload_service(
@@ -16,7 +16,7 @@ pub async fn handle_upload_service(
 async fn inner_handle_upload_service(
     state: HttpState,
     bytes: Bytes,
-) -> HttpResult<UploadServiceResponse> {
+) -> HttpResult<UploadComponentResponse> {
     let digest = tokio::task::spawn_blocking(|| async move {
         state.dispatcher.store_component_bytes(bytes.to_vec())
     })
@@ -25,5 +25,5 @@ async fn inner_handle_upload_service(
     .await?
     .into();
 
-    Ok(UploadServiceResponse { digest })
+    Ok(UploadComponentResponse { digest })
 }
