@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use opentelemetry::{global, trace::TracerProvider as _};
+use opentelemetry::{
+    global,
+    trace::{Span, Tracer, TracerProvider as _},
+};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
     resource::Resource,
@@ -61,6 +64,19 @@ fn main() {
             .with(config.tracing_env_filter().unwrap())
             .try_init()
             .unwrap();
+    }
+
+    let tracer = opentelemetry::global::tracer("example-tracer");
+    let mut span = tracer.start("main-span");
+    span.set_attribute(opentelemetry::KeyValue::new("key", "value"));
+    {
+        span.add_event(
+            "processing-started",
+            vec![
+                opentelemetry::KeyValue::new("event_key", "event_value"),
+                opentelemetry::KeyValue::new("status", "started"),
+            ],
+        );
     }
 
     let ctx = AppContext::new();
