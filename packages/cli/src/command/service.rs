@@ -21,7 +21,7 @@ use wavs_types::{
 use crate::{
     args::{ComponentCommand, ServiceCommand, SubmitCommand, TriggerCommand, WorkflowCommand},
     context::CliContext,
-    service_json::{Json, ServiceJson, SubmitJson, TriggerJson, WorkflowJson},
+    service_json::{ServiceJson, SubmitJson, TriggerJson, WorkflowJson},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -763,41 +763,41 @@ pub async fn validate_service(
     // Parse the service JSON
     let service: ServiceJson = serde_json::from_str(&service_json)?;
 
-    let mut errors = Vec::new();
+    // Get basic validation errors from the ServiceJson::validate method
+    let mut errors = service.validate();
 
-    // Basic service validation
-    if service.name.is_empty() {
-        errors.push("Service name cannot be empty".to_string());
-    }
-
-    // Check component availability (can we download it?)
+    // All remaining validation needs CliContext, so only do it if ctx is provided
     if let Some(ctx) = ctx {
+        // Check component availability (can we download it?)
         validate_registry_availability(&ctx.config.wavs_endpoint, &mut errors).await;
-    }
 
-    // Collect all triggers and submits for later validation
-    let mut chains_to_validate = HashSet::new();
-    let mut triggers = Vec::new();
-    let mut submits = Vec::new();
+        // Collect all triggers and submits for later validation
+        let mut chains_to_validate = HashSet::new();
+        let mut triggers = Vec::new();
+        let mut submits = Vec::new();
 
-    for (workflow_id, workflow) in &service.workflows {
-        // Check if the component exists
-        if !service.components.contains_key(&workflow.component) {
-            errors.push(format!(
-                "Workflow '{}' references non-existent component '{}'",
-                workflow_id, workflow.component
-            ));
-        }
-
-        // Check if trigger is unset
-        match &workflow.trigger {
-            TriggerJson::Json(Json::Unset {}) => {
-                errors.push(format!("Workflow '{}' has an unset trigger", workflow_id));
-            }
-            TriggerJson::Trigger(trigger) => {
+        // Collect information for network-dependent validation
+        for (workflow_id, workflow) in &service.workflows {
+            if let TriggerJson::Trigger(trigger) = &workflow.trigger {
                 match trigger {
                     Trigger::CosmosContractEvent { chain_name, .. } => {
                         chains_to_validate.insert((chain_name.clone(), ChainType::Cosmos));
+
+                        // Cosmos-specific validation with client
+                        if let Ok(client) = ctx.get_cosmos_client(chain_name) {
+                            validate_workflow_trigger(
+                                workflow_id,
+                                trigger,
+                                &client.querier,
+                                &mut errors,
+                            )
+                            .await;
+                        } else {
+                            errors.push(format!(
+                                "Workflow '{}' uses chain '{}' in Cosmos trigger, but client configuration is invalid",
+                                workflow_id, chain_name
+                            ));
+                        }
                     }
                     Trigger::EthContractEvent { chain_name, .. } => {
                         chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
@@ -805,71 +805,20 @@ pub async fn validate_service(
                     _ => {}
                 }
 
-                // Validate workflow trigger (basic validation)
-                if let Some(ctx) = ctx {
-                    match trigger {
-                        Trigger::CosmosContractEvent { chain_name, .. } => {
-                            if let Ok(client) = ctx.get_cosmos_client(chain_name) {
-                                validate_workflow_trigger(
-                                    workflow_id,
-                                    trigger,
-                                    &client.querier,
-                                    &mut errors,
-                                )
-                                .await;
-                            } else {
-                                errors.push(format!(
-                                "Workflow '{}' uses chain '{}' in Cosmos trigger, but client configuration is invalid",
-                                workflow_id, chain_name
-                            ));
-                            }
-                        }
-                        _ => {
-                            // For other trigger types, do basic validation without client
-                            validate_workflow_trigger_basic(workflow_id, trigger, &mut errors);
-                        }
-                    }
-                } else {
-                    // Without context, we can only do basic validation
-                    validate_workflow_trigger_basic(workflow_id, trigger, &mut errors);
-                }
-
                 // Collect trigger for contract existence check
                 triggers.push((workflow_id, trigger));
             }
-        }
 
-        // Check if submit is unset
-        match &workflow.submit {
-            SubmitJson::Json(Json::Unset {}) => {
-                errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
-            }
-            SubmitJson::Submit(submit) => {
+            if let SubmitJson::Submit(submit) = &workflow.submit {
                 if let Submit::EthereumContract { chain_name, .. } = submit {
                     chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
                 }
-
-                // Validate workflow submit (basic)
-                validate_workflow_submit(workflow_id, submit, &mut errors);
 
                 // Collect submit for contract existence check
                 submits.push((workflow_id, submit));
             }
         }
 
-        // Validate fuel limit
-        if let Some(limit) = workflow.fuel_limit {
-            if limit == 0 {
-                errors.push(format!(
-                    "Workflow '{}' has a fuel limit of zero, which will prevent execution",
-                    workflow_id
-                ));
-            }
-        }
-    }
-
-    // If we have a context, perform deeper validation for contracts
-    if let Some(ctx) = ctx {
         // Build maps of clients for chains actually used
         let mut cosmos_clients = HashMap::new();
         let mut eth_providers = HashMap::new();
@@ -914,55 +863,6 @@ pub async fn validate_service(
     })
 }
 
-/// Basic validation for workflow triggers that doesn't require a client
-fn validate_workflow_trigger_basic(
-    workflow_id: &WorkflowID,
-    trigger: &Trigger,
-    errors: &mut Vec<String>,
-) {
-    match trigger {
-        Trigger::CosmosContractEvent { event_type, .. } => {
-            // Validate event type
-            if event_type.is_empty() {
-                errors.push(format!(
-                    "Workflow '{}' has an empty event type in Cosmos trigger",
-                    workflow_id
-                ));
-            }
-        }
-        Trigger::EthContractEvent {
-            address,
-            chain_name: _,
-            event_hash,
-        } => {
-            // Validate Ethereum address format - similar to set_ethereum_trigger
-            if let Err(err) =
-                alloy::primitives::Address::parse_checksummed(address.to_string(), None)
-            {
-                errors.push(format!(
-                    "Workflow '{}' has an invalid Ethereum address format: {}",
-                    workflow_id, err
-                ));
-            }
-
-            // Validate event hash (should be 32 bytes)
-            if event_hash.as_slice().len() != 32 {
-                errors.push(format!(
-                    "Workflow '{}' has an invalid event hash length: expected 32 bytes but got {} bytes",
-                    workflow_id, event_hash.as_slice().len()
-                ));
-            }
-        }
-        Trigger::BlockInterval {
-            chain_name: _,
-            n_blocks: _,
-        }
-        | Trigger::Manual => {
-            // Manual and block triggers are always valid, no extra validation needed
-        }
-    }
-}
-
 /// Validate a workflow trigger using a Cosmos query client
 async fn validate_workflow_trigger(
     workflow_id: &WorkflowID,
@@ -996,8 +896,7 @@ async fn validate_workflow_trigger(
             }
         }
         _ => {
-            // For other trigger types, use the basic validation
-            validate_workflow_trigger_basic(workflow_id, trigger, errors);
+            // For other trigger types, this has already been validated in ServiceJson::validate
         }
     }
 }
@@ -1047,40 +946,6 @@ async fn validate_registry_availability(registry_url: &str, errors: &mut Vec<Str
     // Add error message if availability check failed
     if let Err(msg) = result {
         errors.push(format!("Registry availability check failed: {}", msg));
-    }
-}
-
-/// Validate a workflow submit
-fn validate_workflow_submit(workflow_id: &WorkflowID, submit: &Submit, errors: &mut Vec<String>) {
-    match submit {
-        Submit::EthereumContract {
-            address,
-            chain_name: _,
-            max_gas,
-        } => {
-            // Validate Ethereum address format - similar to set_ethereum_submit
-            if let Err(err) =
-                alloy::primitives::Address::parse_checksummed(address.to_string(), None)
-            {
-                errors.push(format!(
-                    "Workflow '{}' has an invalid Ethereum address format in submit action: {}",
-                    workflow_id, err
-                ));
-            }
-
-            // Check if max_gas is reasonable if specified
-            if let Some(gas) = max_gas {
-                if *gas == 0 {
-                    errors.push(format!(
-                        "Workflow '{}' has max_gas of zero, which will prevent transactions",
-                        workflow_id
-                    ));
-                }
-            }
-        }
-        Submit::None => {
-            // None submit type is always valid, no validation needed
-        }
     }
 }
 
@@ -1277,6 +1142,8 @@ async fn check_cosmos_contract_exists(
 #[cfg(test)]
 mod tests {
     use std::str::FromStr as _;
+
+    use crate::service_json::Json;
 
     use super::*;
     use alloy::hex;
