@@ -3,11 +3,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - main
-    paths:
-      - 'packages/types/Cargo.toml'
-      - 'packages/types/src/**'
 
 env:
   CRATE_NAME: wavs-types
@@ -32,13 +27,16 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#v}"
-          else
-            VERSION=$(cargo read-manifest --manifest-path ${{ env.CRATE_PATH }}/Cargo.toml | jq -r .version)
+          # Extract version from Cargo.toml using cargo read-manifest and jq
+          VERSION=$(cargo read-manifest --manifest-path ${{ env.CRATE_PATH }}/Cargo.toml | jq -r .version)
+          
+          # Ensure the tag name matches the version from Cargo.toml
+          if [ "v$VERSION" != "${{ github.ref_name }}" ]; then
+              echo "Error: Tag name '${{ github.ref_name }}' does not match version '$VERSION' from Cargo.toml"
+              exit 1
           fi
-          echo "value=$VERSION" >> $GITHUB_OUTPUT
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Check if crate exists
         id: crate_exists
@@ -47,17 +45,17 @@ jobs:
           # Get the HTTP status code when checking if the crate exists
           # We expect either 200 (exists) or 404 (doesn't exist)
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            https://crates.io/api/v1/crates/${{ env.CRATE_NAME }}/${{ steps.version.outputs.value }})
+            https://crates.io/api/v1/crates/${{ env.CRATE_NAME }}/${{ steps.version.outputs.version }})
           
           # Handle status codes appropriately
           if [ "$HTTP_STATUS" = "200" ]; then
             # Crate exists
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Crate ${{ env.CRATE_NAME }} version ${{ steps.version.outputs.value }} already exists"
+            echo "Crate ${{ env.CRATE_NAME }} version ${{ steps.version.outputs.version }} already exists"
           elif [ "$HTTP_STATUS" = "404" ]; then
             # Crate doesn't exist - we're good to publish
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Crate ${{ env.CRATE_NAME }} version ${{ steps.version.outputs.value }} not found - OK to publish"
+            echo "Crate ${{ env.CRATE_NAME }} version ${{ steps.version.outputs.version }} not found - OK to publish"
           else
             # Any other status code is unexpected and should fail the workflow
             echo "Error: Received unexpected HTTP status $HTTP_STATUS when checking if crate exists"
@@ -66,15 +64,8 @@ jobs:
 
       - name: Display version information
         run: |
-          echo "Publishing version: ${{ steps.version.outputs.value }}"
+          echo "Publishing version: ${{ steps.version.outputs.version }}"
           echo "Crate exists on crates.io: ${{ steps.crate_exists.outputs.exists }}"
-
-      - name: Verify crate builds
-        if: steps.crate_exists.outputs.exists == 'false'
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --manifest-path ${{ env.CRATE_PATH }}/Cargo.toml
       
       - name: Run cargo package
         if: steps.crate_exists.outputs.exists == 'false'
