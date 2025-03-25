@@ -34,7 +34,7 @@ fn setup_tracing(collector: &str, config: &Config) -> SdkTracerProvider {
         .with_resource(Resource::builder().with_service_name("wavs").build())
         .build();
     global::set_tracer_provider(provider.clone());
-    let tracer = provider.tracer("readme_example");
+    let tracer = provider.tracer("wavs-tracer");
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
     let subscriber = tracing_subscriber::Registry::default()
@@ -69,9 +69,13 @@ async fn main() {
     // }
 
     let tracer = tracer_provider.tracer("wavs-tracer");
+    let root_span = tracing::span!(tracing::Level::INFO, "root-span");
+    let _guard = root_span.enter(); // Enter the root span
+
     tracer.in_span("doing_work", |cx| {
         tracing::info!("This is a trace log inside the span");
     });
+    tracing::info!("This is a trace log outside the span");
 
     let ctx = AppContext::new();
 
