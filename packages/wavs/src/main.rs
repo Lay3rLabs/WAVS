@@ -38,7 +38,10 @@ fn setup_tracing(collector: &str, config: &Config) -> SdkTracerProvider {
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
     let subscriber = tracing_subscriber::Registry::default()
-        .with(config.tracing_env_filter().unwrap())
+        .with(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("trace".parse().unwrap()), /*config.tracing_env_filter().unwrap()*/
+        )
         .with(telemetry);
 
     tracing::subscriber::set_global_default(subscriber)
@@ -72,7 +75,7 @@ async fn main() {
     let root_span = tracing::span!(tracing::Level::INFO, "root-span");
     let _guard = root_span.enter(); // Enter the root span
 
-    tracer.in_span("doing_work", |cx| {
+    tracer.in_span("child_span_test", |cx| {
         tracing::info!("This is a trace log inside the span");
     });
     tracing::info!("This is a trace log outside the span");
