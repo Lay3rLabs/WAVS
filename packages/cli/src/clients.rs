@@ -7,7 +7,7 @@ use utils::{
 };
 use wavs_types::{
     AddServiceRequest, AllowedHostPermission, ComponentSource, Digest, Permissions, Service,
-    ServiceConfig, ServiceID, Submit, Trigger, UploadServiceResponse,
+    ServiceConfig, ServiceID, Submit, Trigger, UploadComponentResponse,
 };
 
 use crate::config::Config;
@@ -64,7 +64,7 @@ impl HttpClient {
     }
 
     pub async fn upload_component(&self, wasm_bytes: Vec<u8>) -> Result<Digest> {
-        let response: UploadServiceResponse = self
+        let response: UploadComponentResponse = self
             .inner
             .post(format!("{}/upload", self.endpoint))
             .body(wasm_bytes)
@@ -105,6 +105,23 @@ impl HttpClient {
     }
 
     pub async fn create_service_raw(&self, service: Service) -> Result<()> {
+        let body = serde_json::to_string(&service)?;
+
+        self.inner
+            .post(format!("{}/save-service", self.endpoint))
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let service_uri = format!("{}/service/{}", self.endpoint, service.id);
+        tracing::info!("Service URI: {}", service_uri);
+
+        // TODO - deprecate this old add-service endpoint, instead
+        // broadcast the service uri to the nodes by way of the service manager metadata
+        // but for now, we'll support both until all the dust settles
+
         let body = serde_json::to_string(&AddServiceRequest { service })?;
 
         self.inner

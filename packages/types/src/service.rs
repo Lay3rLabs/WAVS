@@ -8,7 +8,7 @@ use crate::{ByteArray, ComponentSource};
 
 use super::{ChainName, ComponentID, ServiceID, WorkflowID};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
     // Public identifier. Must be unique for all services
