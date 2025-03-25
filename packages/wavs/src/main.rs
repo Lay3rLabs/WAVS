@@ -48,7 +48,8 @@ fn setup_tracing(collector: &str, config: &Config) -> SdkTracerProvider {
     provider
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = CliArgs::parse();
     let config: Config = ConfigBuilder::new(args).build().unwrap();
 
