@@ -39,8 +39,9 @@ fn setup_tracing(collector: &str, config: &Config) -> SdkTracerProvider {
 
     let subscriber = tracing_subscriber::Registry::default()
         .with(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("trace".parse().unwrap()), /*config.tracing_env_filter().unwrap()*/
+            /*tracing_subscriber::EnvFilter::from_default_env()
+            .add_directive("trace".parse().unwrap()), */
+            config.tracing_env_filter().unwrap(),
         )
         .with(telemetry);
 
