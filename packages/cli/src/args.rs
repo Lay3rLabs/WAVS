@@ -190,6 +190,8 @@ pub enum ServiceCommand {
         #[clap(subcommand)]
         command: SubmitCommand,
     },
+    /// Validates the service JSON
+    Validate {},
 }
 
 /// Commands for managing components
