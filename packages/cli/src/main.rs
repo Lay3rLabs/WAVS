@@ -160,6 +160,8 @@ async fn main() {
             command,
             file,
             args: _,
-        } => handle_service_command(&ctx, file, command).await.unwrap(),
+        } => handle_service_command(&ctx, file, ctx.json, command)
+            .await
+            .unwrap(),
     }
 }

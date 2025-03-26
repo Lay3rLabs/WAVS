@@ -34,29 +34,30 @@ pub enum ChainType {
 pub async fn handle_service_command(
     ctx: &CliContext,
     file: PathBuf,
+    json: bool,
     command: ServiceCommand,
 ) -> Result<()> {
     match command {
         ServiceCommand::Init { name, id } => {
-            let result = init_service(file, name, id)?;
-            ctx.handle_display_result(result);
+            let result = init_service(&file, name, id)?;
+            display_result(ctx, result, &file, json)?;
         }
         ServiceCommand::Component { command } => match command {
             ComponentCommand::Add { id, digest } => {
                 let result = add_component(&file, id, digest)?;
-                ctx.handle_display_result(result);
+                display_result(ctx, result, &file, json)?;
             }
             ComponentCommand::Delete { id } => {
                 let result = delete_component(&file, id)?;
-                ctx.handle_display_result(result);
+                display_result(ctx, result, &file, json)?;
             }
             ComponentCommand::Permissions {
                 id,
                 http_hosts,
                 file_system,
             } => {
-                let result = update_component_permissions(file, id, http_hosts, file_system)?;
-                ctx.handle_display_result(result);
+                let result = update_component_permissions(&file, id, http_hosts, file_system)?;
+                display_result(ctx, result, &file, json)?;
             }
         },
         ServiceCommand::Workflow { command } => match command {
@@ -65,12 +66,12 @@ pub async fn handle_service_command(
                 component_id,
                 fuel_limit,
             } => {
-                let result = add_workflow(file, id, component_id, fuel_limit)?;
-                ctx.handle_display_result(result);
+                let result = add_workflow(&file, id, component_id, fuel_limit)?;
+                display_result(ctx, result, &file, json)?;
             }
             WorkflowCommand::Delete { id } => {
-                let result = delete_workflow(file, id)?;
-                ctx.handle_display_result(result);
+                let result = delete_workflow(&file, id)?;
+                display_result(ctx, result, &file, json)?;
             }
         },
         ServiceCommand::Trigger { command } => match command {
@@ -83,13 +84,13 @@ pub async fn handle_service_command(
                 let query_client = ctx.get_cosmos_client(&chain_name)?.querier;
                 let result = set_cosmos_trigger(
                     query_client,
-                    file,
+                    &file,
                     workflow_id,
                     address,
                     chain_name,
                     event_type,
                 )?;
-                ctx.handle_display_result(result);
+                display_result(ctx, result, &file, json)?;
             }
             TriggerCommand::SetEthereum {
                 workflow_id,
@@ -98,8 +99,8 @@ pub async fn handle_service_command(
                 event_hash,
             } => {
                 let result =
-                    set_ethereum_trigger(file, workflow_id, address, chain_name, event_hash)?;
-                ctx.handle_display_result(result);
+                    set_ethereum_trigger(&file, workflow_id, address, chain_name, event_hash)?;
+                display_result(ctx, result, &file, json)?;
             }
         },
         ServiceCommand::Submit { command } => match command {
@@ -109,15 +110,44 @@ pub async fn handle_service_command(
                 chain_name,
                 max_gas,
             } => {
-                let result = set_ethereum_submit(file, workflow_id, address, chain_name, max_gas)?;
-                ctx.handle_display_result(result);
+                let result = set_ethereum_submit(&file, workflow_id, address, chain_name, max_gas)?;
+                display_result(ctx, result, &file, json)?;
             }
         },
         ServiceCommand::Validate {} => {
             let result = validate_service(&file, Some(ctx)).await?;
-            ctx.handle_display_result(result);
+            display_result(ctx, result, &file, json)?;
         }
     }
+
+    Ok(())
+}
+
+// Helper function to handle display based on json flag
+fn display_result<T: std::fmt::Display>(
+    ctx: &CliContext,
+    result: T,
+    file_path: &Path,
+    json: bool,
+) -> Result<()> {
+    if json {
+        print_file_as_json(file_path)?;
+    } else {
+        ctx.handle_display_result(result);
+    }
+    Ok(())
+}
+
+/// Helper function to print file content as JSON
+fn print_file_as_json(file_path: &Path) -> Result<()> {
+    // Read the file content
+    let file_content = std::fs::read_to_string(file_path)?;
+
+    // Parse it as JSON to ensure it's valid
+    let json_value: serde_json::Value = serde_json::from_str(&file_content)?;
+
+    // Print the pretty-printed JSON
+    println!("{}", serde_json::to_string_pretty(&json_value)?);
 
     Ok(())
 }
@@ -404,7 +434,7 @@ impl std::fmt::Display for ComponentPermissionsResult {
 
 /// Run the service initialization
 pub fn init_service(
-    file_path: PathBuf,
+    file_path: &Path,
     name: String,
     id: Option<ServiceID>,
 ) -> Result<ServiceInitResult> {
@@ -435,15 +465,18 @@ pub fn init_service(
     }
 
     // Write the JSON to file
-    let mut file = File::create(&file_path)?;
+    let mut file = File::create(file_path)?;
     file.write_all(service_json.as_bytes())?;
 
-    Ok(ServiceInitResult { service, file_path })
+    Ok(ServiceInitResult {
+        service,
+        file_path: file_path.to_path_buf(),
+    })
 }
 
 /// Add a component to a service
 pub fn add_component(
-    file_path: &PathBuf,
+    file_path: &Path,
     id: Option<ComponentID>,
     digest: Digest,
 ) -> Result<ComponentAddResult> {
@@ -468,7 +501,7 @@ pub fn add_component(
             ComponentAddResult {
                 component_id,
                 digest,
-                file_path: file_path.clone(),
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
@@ -476,7 +509,7 @@ pub fn add_component(
 
 /// Delete a component from a service
 pub fn delete_component(
-    file_path: &PathBuf,
+    file_path: &Path,
     component_id: ComponentID,
 ) -> Result<ComponentDeleteResult> {
     modify_service_file(file_path, |mut service| {
@@ -495,7 +528,7 @@ pub fn delete_component(
             service,
             ComponentDeleteResult {
                 component_id,
-                file_path: file_path.clone(),
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
@@ -503,12 +536,12 @@ pub fn delete_component(
 
 /// Add a workflow to a service
 pub fn add_workflow(
-    file_path: PathBuf,
+    file_path: &Path,
     id: Option<WorkflowID>,
     component_id: ComponentID,
     fuel_limit: Option<u64>,
 ) -> Result<WorkflowAddResult> {
-    modify_service_file(file_path.clone(), |mut service| {
+    modify_service_file(file_path, |mut service| {
         // Check if the component exists
         if !service.components.contains_key(&component_id) {
             return Err(anyhow::anyhow!(
@@ -542,18 +575,15 @@ pub fn add_workflow(
             service,
             WorkflowAddResult {
                 workflow_id,
-                file_path,
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
 }
 
 /// Delete a workflow from a service
-pub fn delete_workflow(
-    file_path: PathBuf,
-    workflow_id: WorkflowID,
-) -> Result<WorkflowDeleteResult> {
-    modify_service_file(file_path.clone(), |mut service| {
+pub fn delete_workflow(file_path: &Path, workflow_id: WorkflowID) -> Result<WorkflowDeleteResult> {
+    modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         if !service.workflows.contains_key(&workflow_id) {
             return Err(anyhow::anyhow!(
@@ -569,7 +599,7 @@ pub fn delete_workflow(
             service,
             WorkflowDeleteResult {
                 workflow_id,
-                file_path,
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
@@ -578,7 +608,7 @@ pub fn delete_workflow(
 /// Set a Cosmos contract event trigger for a workflow
 pub fn set_cosmos_trigger(
     query_client: CosmosQueryClient,
-    file_path: PathBuf,
+    file_path: &Path,
     workflow_id: WorkflowID,
     address_str: String,
     chain_name: ChainName,
@@ -587,7 +617,7 @@ pub fn set_cosmos_trigger(
     // Parse the Cosmos address
     let address = query_client.chain_config.parse_address(&address_str)?;
 
-    modify_service_file(file_path.clone(), |mut service| {
+    modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
@@ -606,7 +636,7 @@ pub fn set_cosmos_trigger(
             WorkflowTriggerResult {
                 workflow_id,
                 trigger,
-                file_path,
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
@@ -614,7 +644,7 @@ pub fn set_cosmos_trigger(
 
 /// Set an Ethereum contract event trigger for a workflow
 pub fn set_ethereum_trigger(
-    file_path: PathBuf,
+    file_path: &Path,
     workflow_id: WorkflowID,
     address_str: String,
     chain_name: ChainName,
@@ -639,7 +669,7 @@ pub fn set_ethereum_trigger(
     let mut event_hash: [u8; 32] = [0; 32];
     event_hash.copy_from_slice(&const_hex::decode(trigger_event_name)?);
 
-    modify_service_file(file_path.clone(), |mut service| {
+    modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
@@ -658,7 +688,7 @@ pub fn set_ethereum_trigger(
             WorkflowTriggerResult {
                 workflow_id,
                 trigger,
-                file_path,
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
@@ -666,12 +696,12 @@ pub fn set_ethereum_trigger(
 
 /// Update component permissions
 pub fn update_component_permissions(
-    file_path: PathBuf,
+    file_path: &Path,
     component_id: ComponentID,
     http_hosts: Option<Vec<String>>,
     file_system: Option<bool>,
 ) -> Result<ComponentPermissionsResult> {
-    modify_service_file(file_path.clone(), |mut service| {
+    modify_service_file(file_path, |mut service| {
         // Check if the component exists
         let component = service.components.get_mut(&component_id).ok_or_else(|| {
             anyhow::anyhow!("Component with ID '{}' not found in service", component_id)
@@ -711,14 +741,14 @@ pub fn update_component_permissions(
             ComponentPermissionsResult {
                 component_id,
                 permissions: updated_permissions,
-                file_path,
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
 }
 
 pub fn set_ethereum_submit(
-    file_path: PathBuf,
+    file_path: &Path,
     workflow_id: WorkflowID,
     address_str: String,
     chain_name: ChainName,
@@ -727,7 +757,7 @@ pub fn set_ethereum_submit(
     // Parse the Ethereum address
     let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
 
-    modify_service_file(file_path.clone(), |mut service| {
+    modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
@@ -746,7 +776,7 @@ pub fn set_ethereum_submit(
             WorkflowSubmitResult {
                 workflow_id,
                 submit,
-                file_path,
+                file_path: file_path.to_path_buf(),
             },
         ))
     })
@@ -1160,7 +1190,7 @@ mod tests {
         // Initialize service
         let service_id = ServiceID::new("test-id-123").unwrap();
         let result = init_service(
-            file_path.clone(),
+            &file_path,
             "Test Service".to_string(),
             Some(service_id.clone()),
         )
@@ -1185,12 +1215,8 @@ mod tests {
         let auto_id_file_path = temp_dir.path().join("auto_id_test.json");
 
         // Initialize service with no ID (should generate one)
-        let auto_id_result = init_service(
-            auto_id_file_path.clone(),
-            "Auto ID Service".to_string(),
-            None,
-        )
-        .unwrap();
+        let auto_id_result =
+            init_service(&auto_id_file_path, "Auto ID Service".to_string(), None).unwrap();
 
         // Verify service has generated ID
         assert!(!auto_id_result.service.id.is_empty());
@@ -1226,7 +1252,7 @@ mod tests {
         // Initialize a service using the init_service method
         let service_id = ServiceID::new("test-service-id").unwrap();
         let init_result = init_service(
-            file_path.clone(),
+            &file_path,
             "Test Service".to_string(),
             Some(service_id.clone()),
         )
@@ -1268,7 +1294,7 @@ mod tests {
 
         // Test updating permissions - allow all HTTP hosts
         let permissions_result = update_component_permissions(
-            file_path.clone(),
+            &file_path,
             component_id.clone(),
             Some(vec!["*".to_string()]),
             Some(true),
@@ -1299,7 +1325,7 @@ mod tests {
         // Test updating to specific HTTP hosts
         let specific_hosts = vec!["example.com".to_string(), "api.example.com".to_string()];
         let specific_hosts_result = update_component_permissions(
-            file_path.clone(),
+            &file_path,
             second_component_id.clone(),
             Some(specific_hosts.clone()),
             None,
@@ -1336,13 +1362,9 @@ mod tests {
         }
 
         // Test updating to no HTTP hosts
-        let no_hosts_result = update_component_permissions(
-            file_path.clone(),
-            component_id.clone(),
-            Some(vec![]),
-            None,
-        )
-        .unwrap();
+        let no_hosts_result =
+            update_component_permissions(&file_path, component_id.clone(), Some(vec![]), None)
+                .unwrap();
 
         // Verify no hosts result
         assert_eq!(no_hosts_result.component_id, component_id);
@@ -1366,7 +1388,7 @@ mod tests {
         // Test error handling for permissions update with non-existent component
         let non_existent_id = ComponentID::new("does-not-exist").unwrap();
         let error_permissions = update_component_permissions(
-            file_path.clone(),
+            &file_path,
             non_existent_id.clone(),
             Some(vec!["*".to_string()]),
             None,
@@ -1436,7 +1458,7 @@ mod tests {
         // Initialize a service
         let service_id = ServiceID::new("test-service-id").unwrap();
         init_service(
-            file_path.clone(),
+            &file_path,
             "Test Service".to_string(),
             Some(service_id.clone()),
         )
@@ -1449,7 +1471,7 @@ mod tests {
         // Test adding a workflow with specific ID
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
         let add_result = add_workflow(
-            file_path.clone(),
+            &file_path,
             Some(workflow_id.clone()),
             component_id.clone(),
             Some(1000),
@@ -1486,8 +1508,7 @@ mod tests {
         }
 
         // Test adding a workflow with autogenerated ID
-        let auto_id_result =
-            add_workflow(file_path.clone(), None, component_id.clone(), None).unwrap();
+        let auto_id_result = add_workflow(&file_path, None, component_id.clone(), None).unwrap();
         let auto_workflow_id = auto_id_result.workflow_id;
 
         // Verify the auto-generated workflow was added
@@ -1498,12 +1519,7 @@ mod tests {
 
         // Test error when adding workflow with non-existent component
         let non_existent_component = ComponentID::new("does-not-exist").unwrap();
-        let component_error = add_workflow(
-            file_path.clone(),
-            None,
-            non_existent_component.clone(),
-            None,
-        );
+        let component_error = add_workflow(&file_path, None, non_existent_component.clone(), None);
 
         // Verify error for non-existent component
         assert!(component_error.is_err());
@@ -1512,7 +1528,7 @@ mod tests {
         assert!(component_error_msg.contains("not found"));
 
         // Test deleting a workflow
-        let delete_result = delete_workflow(file_path.clone(), workflow_id.clone()).unwrap();
+        let delete_result = delete_workflow(&file_path, workflow_id.clone()).unwrap();
 
         // Verify delete result
         assert_eq!(delete_result.workflow_id, workflow_id);
@@ -1526,7 +1542,7 @@ mod tests {
 
         // Test error handling for non-existent workflow
         let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
-        let workflow_error = delete_workflow(file_path.clone(), non_existent_workflow.clone());
+        let workflow_error = delete_workflow(&file_path, non_existent_workflow.clone());
 
         // Verify it returns an error with appropriate message
         assert!(workflow_error.is_err());
@@ -1549,7 +1565,7 @@ mod tests {
         // Initialize a service
         let service_id = ServiceID::new("test-service-id").unwrap();
         init_service(
-            file_path.clone(),
+            &file_path,
             "Test Service".to_string(),
             Some(service_id.clone()),
         )
@@ -1562,7 +1578,7 @@ mod tests {
         // Add a workflow
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
         add_workflow(
-            file_path.clone(),
+            &file_path,
             Some(workflow_id.clone()),
             component_id.clone(),
             Some(1000),
@@ -1604,7 +1620,7 @@ mod tests {
 
         let cosmos_result = set_cosmos_trigger(
             query_client.clone(),
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             cosmos_address.clone(),
             cosmos_chain_name.clone(),
@@ -1654,7 +1670,7 @@ mod tests {
         let neutron_address = "ntrn1m8wnvy0jk8xf0hhn5uycrhjr3zpaqf4d0z9k8f".to_string();
         let wrong_prefix_result = set_cosmos_trigger(
             query_client.clone(),
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             neutron_address,
             cosmos_chain_name.clone(),
@@ -1675,7 +1691,7 @@ mod tests {
             "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef".to_string();
 
         let eth_result = set_ethereum_trigger(
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             eth_address.clone(),
             eth_chain.clone(),
@@ -1728,7 +1744,7 @@ mod tests {
         // Test error handling for non-existent workflow
         let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
         let trigger_error = set_ethereum_trigger(
-            file_path.clone(),
+            &file_path,
             non_existent_workflow.clone(),
             eth_address.clone(),
             eth_chain.clone(),
@@ -1745,7 +1761,7 @@ mod tests {
         let invalid_cosmos_address = "invalid-cosmos-address".to_string();
         let invalid_cosmos_result = set_cosmos_trigger(
             query_client, // Reuse the same query client
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             invalid_cosmos_address,
             cosmos_chain_name.clone(),
@@ -1759,7 +1775,7 @@ mod tests {
 
         let invalid_eth_address = "invalid-eth-address".to_string();
         let invalid_eth_result = set_ethereum_trigger(
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             invalid_eth_address,
             eth_chain.clone(),
@@ -1786,7 +1802,7 @@ mod tests {
         // Initialize a service
         let service_id = ServiceID::new("test-service-id").unwrap();
         init_service(
-            file_path.clone(),
+            &file_path,
             "Test Service".to_string(),
             Some(service_id.clone()),
         )
@@ -1799,7 +1815,7 @@ mod tests {
         // Add a workflow
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
         add_workflow(
-            file_path.clone(),
+            &file_path,
             Some(workflow_id.clone()),
             component_id.clone(),
             Some(1000),
@@ -1824,7 +1840,7 @@ mod tests {
         let max_gas = Some(1000000u64);
 
         let eth_result = set_ethereum_submit(
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             eth_address.clone(),
             eth_chain.clone(),
@@ -1872,7 +1888,7 @@ mod tests {
 
         // Test updating with null max_gas
         let eth_result_no_gas = set_ethereum_submit(
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             eth_address.clone(),
             eth_chain.clone(),
@@ -1894,7 +1910,7 @@ mod tests {
         // Test error handling for non-existent workflow
         let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
         let submit_error = set_ethereum_submit(
-            file_path.clone(),
+            &file_path,
             non_existent_workflow.clone(),
             eth_address.clone(),
             eth_chain.clone(),
@@ -1910,7 +1926,7 @@ mod tests {
         // Test error handling for invalid address
         let invalid_eth_address = "invalid-eth-address".to_string();
         let invalid_eth_result = set_ethereum_submit(
-            file_path.clone(),
+            &file_path,
             workflow_id.clone(),
             invalid_eth_address,
             eth_chain.clone(),

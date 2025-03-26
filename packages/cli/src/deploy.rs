@@ -20,12 +20,17 @@ pub struct Deployment {
 }
 
 impl Deployment {
-    pub fn load(config: &Config) -> Result<Self> {
+    pub fn load(config: &Config, json: bool) -> Result<Self> {
         let path = Self::path(config);
-        tracing::debug!("Loading deployment from {}", path.display());
+
+        if !json {
+            tracing::debug!("Loading deployment from {}", path.display());
+        }
 
         if !path.exists() {
-            tracing::warn!("No deployment file found at {:?}, using default", path);
+            if !json {
+                tracing::warn!("No deployment file found at {:?}, using default", path);
+            }
             return Ok(Self::default());
         }
 

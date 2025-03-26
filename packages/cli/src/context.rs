@@ -23,6 +23,7 @@ pub struct CliContext {
     pub config: Config,
     pub save_deployment: bool,
     pub quiet_results: bool,
+    pub json: bool,
     _clients: HashMap<ChainName, AnyClient>,
 }
 
@@ -40,7 +41,7 @@ impl CliContext {
         let mut chains: HashSet<ChainName> = HashSet::new();
 
         let deployment = match deployment {
-            None => Deployment::load(&config)?,
+            None => Deployment::load(&config, command.args().json.unwrap_or_default())?,
             Some(deployment) => deployment,
         };
 
@@ -112,8 +113,9 @@ impl CliContext {
         config: Config,
         deployment: Option<Deployment>,
     ) -> Result<Self> {
+        let json = args.json.unwrap_or_default();
         let deployment = match deployment {
-            None => Deployment::load(&config)?,
+            None => Deployment::load(&config, json)?,
             Some(deployment) => deployment,
         };
 
@@ -146,6 +148,7 @@ impl CliContext {
             deployment: Mutex::new(deployment),
             save_deployment: args.save_deployment.unwrap_or(true),
             quiet_results: args.quiet_results.unwrap_or_default(),
+            json,
             _clients: clients,
         })
     }
