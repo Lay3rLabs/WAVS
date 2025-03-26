@@ -480,6 +480,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quiet_results: Option<bool>,
+
+    /// Returns result as JSON
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub json: Option<bool>,
 }
 
 impl CliEnvExt for CliArgs {
