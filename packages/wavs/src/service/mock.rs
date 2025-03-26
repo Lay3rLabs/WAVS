@@ -43,7 +43,7 @@ impl ServiceCache for MockServiceCache {
                 service
                     .workflows
                     .values()
-                    .find(|workflow| match &workflow.submit {
+                    .any(|workflow| match &workflow.submit {
                         Submit::EthereumContract {
                             chain_name,
                             address,
@@ -51,7 +51,6 @@ impl ServiceCache for MockServiceCache {
                         } => chain_name == source_chain_name && address == source_address,
                         _ => false,
                     })
-                    .is_some()
             })
             .unwrap()
             .clone())

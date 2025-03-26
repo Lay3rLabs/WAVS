@@ -48,7 +48,7 @@ impl ServiceCache for CoreServiceCache {
             ServiceMetadataSource::EthereumServiceManager {
                 chain_name,
                 contract_address,
-            } => (chain_name.clone(), contract_address.clone()),
+            } => (chain_name.clone(), *contract_address),
         };
 
         let eth_client = {
@@ -79,7 +79,7 @@ impl ServiceCache for CoreServiceCache {
         };
 
         let service_manager_client =
-            ServiceManagerQueryClient::new(eth_client.clone(), contract_addr.clone());
+            ServiceManagerQueryClient::new(eth_client.clone(), contract_addr);
 
         let service_uri = service_manager_client
             .get_service_metadata_uri()

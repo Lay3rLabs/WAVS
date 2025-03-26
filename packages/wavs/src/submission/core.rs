@@ -268,15 +268,13 @@ impl Submission for CoreSubmission {
         let mut lock = self.service_index_by_service_handler.lock().unwrap();
 
         for workflow in service.workflows.values() {
-            match &workflow.submit {
-                Submit::EthereumContract {
-                    chain_name,
-                    address,
-                    ..
-                } => {
-                    lock.insert((chain_name.clone(), *address), index);
-                }
-                _ => {}
+            if let Submit::EthereumContract {
+                chain_name,
+                address,
+                ..
+            } = &workflow.submit
+            {
+                lock.insert((chain_name.clone(), *address), index);
             }
         }
 

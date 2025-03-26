@@ -28,7 +28,7 @@ async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResu
                 .config
                 .chains
                 .eth
-                .get(&chain_name)
+                .get(chain_name)
                 .context(format!("No chain config found for chain: {chain_name}"))?;
             if let Some(aggregator_endpoint) = &chain_config.aggregator_endpoint {
                 tracing::info!("SETTING AGGREAGATOR ENDPOINT: {aggregator_endpoint}");
