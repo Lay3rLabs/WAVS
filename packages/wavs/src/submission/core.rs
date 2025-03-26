@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicU32, Arc, Mutex},
 };
 
 use crate::{
@@ -22,7 +22,7 @@ use utils::{
     config::{AnyChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
 };
-use wavs_types::{ChainName, Submit};
+use wavs_types::{ChainName, Service, Submit};
 
 #[derive(Clone)]
 pub struct CoreSubmission {
@@ -31,6 +31,9 @@ pub struct CoreSubmission {
     // created on-demand from chain_name and hd_index
     eth_clients: Arc<Mutex<HashMap<(ChainName, u32), EthSigningClient>>>,
     eth_mnemonic: String,
+    service_index_count: Arc<AtomicU32>,
+    service_index_by_service_handler:
+        Arc<Mutex<HashMap<(ChainName, alloy::primitives::Address), u32>>>,
 }
 
 impl CoreSubmission {
@@ -45,6 +48,8 @@ impl CoreSubmission {
                 .submission_mnemonic
                 .clone()
                 .ok_or(SubmissionError::MissingMnemonic)?,
+            service_index_count: Arc::new(AtomicU32::new(0)),
+            service_index_by_service_handler: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -52,9 +57,14 @@ impl CoreSubmission {
     async fn get_eth_client(
         &self,
         chain_name: &ChainName,
+        address: alloy::primitives::Address,
     ) -> Result<EthSigningClient, SubmissionError> {
-        // TODO - where should hd_index come from?
-        let hd_index = 0;
+        let hd_index = *self
+            .service_index_by_service_handler
+            .lock()
+            .unwrap()
+            .get(&(chain_name.clone(), address))
+            .ok_or(SubmissionError::MissingServiceHandlerIndex)?;
 
         if let Some(client) = self
             .eth_clients
@@ -128,7 +138,7 @@ impl CoreSubmission {
         max_gas: Option<u64>,
     ) -> Result<(), SubmissionError> {
         let eth_client = self
-            .get_eth_client(&chain_name)
+            .get_eth_client(&chain_name, address)
             .await
             .map_err(|_| SubmissionError::MissingEthereumChain)?;
 
@@ -245,6 +255,32 @@ impl Submission for CoreSubmission {
                 }
             }
         });
+
+        Ok(())
+    }
+
+    fn add_service(&self, service: &Service) -> Result<(), SubmissionError> {
+        tracing::info!("Adding service to submission: {}", service.id);
+        let index = self
+            .service_index_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        let mut lock = self.service_index_by_service_handler.lock().unwrap();
+
+        for workflow in service.workflows.values() {
+            match &workflow.submit {
+                Submit::EthereumContract {
+                    chain_name,
+                    address,
+                    ..
+                } => {
+                    lock.insert((chain_name.clone(), *address), index);
+                }
+                _ => {}
+            }
+        }
+
+        tracing::info!("ADDED SERVICE! {}", service.id);
 
         Ok(())
     }

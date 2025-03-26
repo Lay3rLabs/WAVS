@@ -1,16 +1,20 @@
 use std::sync::Arc;
 
-use crate::config::Config;
 use crate::engine::runner::MultiEngineRunner;
 use crate::engine::WasmEngine;
 use crate::submission::core::CoreSubmission;
 use crate::triggers::core::CoreTriggerManager;
+use crate::{config::Config, service::core::CoreServiceCache};
 use utils::storage::fs::FileStorage;
 
 use super::generic::{Dispatcher, DispatcherError};
 
-pub type CoreDispatcher =
-    Dispatcher<CoreTriggerManager, MultiEngineRunner<Arc<WasmEngine<FileStorage>>>, CoreSubmission>;
+pub type CoreDispatcher = Dispatcher<
+    CoreTriggerManager,
+    MultiEngineRunner<Arc<WasmEngine<FileStorage>>>,
+    CoreSubmission,
+    CoreServiceCache,
+>;
 
 impl CoreDispatcher {
     pub fn new_core(config: &Config) -> Result<CoreDispatcher, DispatcherError> {
@@ -30,6 +34,14 @@ impl CoreDispatcher {
 
         let submission = CoreSubmission::new(config)?;
 
-        Self::new(triggers, engine, submission, config.data.join("db"))
+        let service_manager = CoreServiceCache::new(config);
+
+        Self::new(
+            triggers,
+            engine,
+            submission,
+            service_manager,
+            config.data.join("db"),
+        )
     }
 }

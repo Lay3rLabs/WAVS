@@ -16,6 +16,6 @@ pub async fn handle_add_service(
 
 pub async fn add_service(state: HttpState, req: AddAggregatorServiceRequest) -> anyhow::Result<()> {
     match req {
-        AddAggregatorServiceRequest::EthTrigger { address } => state.register_service(address),
+        AddAggregatorServiceRequest::Ethereum { address } => state.register_service(address),
     }
 }

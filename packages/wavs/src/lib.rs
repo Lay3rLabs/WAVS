@@ -4,9 +4,10 @@ pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
 pub mod engine; // where we manage and execute wasm
 pub mod http;
+pub mod service;
 pub mod submission; // where we submit the results to the chain
 pub mod test_utils;
-pub mod triggers; // where we handle the trigger runtime
+pub mod triggers; // where we handle the trigger runtime // where we handle the service manager
 
 use apis::dispatcher::DispatchManager;
 use config::Config;

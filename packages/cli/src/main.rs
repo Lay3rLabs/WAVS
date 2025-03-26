@@ -64,6 +64,7 @@ async fn main() {
             submit_chain,
             service_config,
             trigger_event_name,
+            service_source,
             args: _,
         } => {
             let trigger = match (trigger, &trigger_address) {
@@ -92,6 +93,7 @@ async fn main() {
                     submit,
                     submit_chain,
                     service_config,
+                    service_source,
                 },
             )
             .await

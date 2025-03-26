@@ -5,12 +5,13 @@ use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    apis::{submission::Submission, trigger::TriggerManager},
+    apis::{service::ServiceCache, submission::Submission, trigger::TriggerManager},
     dispatcher::Dispatcher,
     engine::{
         identity::IdentityEngine,
         runner::{EngineRunner, SingleEngineRunner},
     },
+    service::mock::MockServiceCache,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerVec,
 };
@@ -28,19 +29,29 @@ impl TestHttpApp {
         let trigger_manager = MockTriggerManagerVec::new();
         let engine = SingleEngineRunner::new(IdentityEngine::new());
         let submission = MockSubmission::new();
+        let service_manager = MockServiceCache::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
 
-        let dispatcher =
-            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
+        let dispatcher = Arc::new(
+            Dispatcher::new(
+                trigger_manager,
+                engine,
+                submission,
+                service_manager,
+                storage_path,
+            )
+            .unwrap(),
+        );
 
         Self::new_with_dispatcher(dispatcher).await
     }
 
-    pub async fn new_with_dispatcher<T, E, S>(dispatcher: Arc<Dispatcher<T, E, S>>) -> Self
+    pub async fn new_with_dispatcher<T, E, S, C>(dispatcher: Arc<Dispatcher<T, E, S, C>>) -> Self
     where
         T: TriggerManager + 'static,
         E: EngineRunner + 'static,
         S: Submission + 'static,
+        C: ServiceCache + 'static,
     {
         let inner = TestApp::new().await;
 

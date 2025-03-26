@@ -86,6 +86,11 @@ impl Submission for MockSubmission {
 
         Ok(())
     }
+
+    fn add_service(&self, _service: &wavs_types::Service) -> Result<(), SubmissionError> {
+        // mock doesn't need to do anything here
+        Ok(())
+    }
 }
 
 #[cfg(test)]

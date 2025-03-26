@@ -10,10 +10,10 @@ use crate::{
     config::Config,
     deploy::CommandDeployResult,
 };
-use alloy::providers::Provider;
+use alloy::{network::Ethereum, providers::Provider};
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
-use utils::{config::AnyChainConfig, eigen_client::EigenClient};
+use utils::{config::AnyChainConfig, eigen_client::EigenClient, eth_client::EthSigningClient};
 use wavs_types::{ChainName, Submit, Trigger};
 
 use crate::{args::Command, deploy::Deployment};
@@ -157,6 +157,17 @@ impl CliContext {
             .context(format!("chain {chain_name} not found"))?
         {
             AnyClient::Eth(client) => Ok(client.clone()),
+            _ => Err(anyhow::anyhow!("expected eth client")),
+        }
+    }
+
+    pub fn get_eth_signing_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
+        match self
+            ._clients
+            .get(chain_name)
+            .context(format!("chain {chain_name} not found"))?
+        {
+            AnyClient::Eth(client) => Ok(client.eth.clone()),
             _ => Err(anyhow::anyhow!("expected eth client")),
         }
     }

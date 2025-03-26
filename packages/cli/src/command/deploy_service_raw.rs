@@ -1,6 +1,6 @@
 use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResult};
 use anyhow::Result;
-use wavs_types::Service;
+use wavs_types::{Service, ServiceMetadataSource};
 
 pub struct DeployServiceRaw {
     pub args: DeployServiceRawArgs,
@@ -32,7 +32,7 @@ impl DeployServiceRaw {
 
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
-        http_client.create_service_raw(service).await?;
+        http_client.create_service_raw(ctx, service).await?;
 
         let _self = Self { args };
 

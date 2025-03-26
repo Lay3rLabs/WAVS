@@ -5,13 +5,24 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::digest::Digest;
+use crate::{digest::Digest, ChainName};
 
-use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger};
+use super::{Permissions, ServiceID, ServiceStatus, Trigger};
 use wasm_pkg_common::package::{PackageRef, Version};
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
-    pub service: Service,
+    pub source: ServiceMetadataSource,
+}
+
+/// This tells us the contract address where the service metadata should be loaded from
+/// (i.e. querying the address, getting the metadata uri, and then loading it from there)
+#[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ServiceMetadataSource {
+    EthereumServiceManager {
+        chain_name: ChainName,
+        contract_address: alloy_primitives::Address,
+    },
 }
 
 #[derive(Serialize, Deserialize)]

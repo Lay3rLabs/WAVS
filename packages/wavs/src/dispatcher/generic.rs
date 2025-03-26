@@ -8,32 +8,38 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use wavs_types::{Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig};
+use wavs_types::{
+    Digest, IDError, Service, ServiceID, ServiceMetadataSource, TriggerAction, TriggerConfig,
+};
 
 use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
+use crate::apis::service::ServiceCache;
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 
 use crate::apis::trigger::{TriggerError, TriggerManager};
 use crate::engine::runner::EngineRunner;
+use crate::service::error::ServiceError;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
 use wasm_pkg_common::Error as RegistryError;
 
 /// This should auto-derive clone if T, E, S: Clone
-pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
+pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission, C: ServiceCache> {
     pub triggers: T,
     pub engine: E,
     pub submission: S,
+    pub service_cache: C,
     pub storage: Arc<RedbStorage>,
 }
 
-impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
+impl<T: TriggerManager, E: EngineRunner, S: Submission, C: ServiceCache> Dispatcher<T, E, S, C> {
     pub fn new(
         triggers: T,
         engine: E,
         submission: S,
+        service_cache: C,
         db_storage_path: impl AsRef<Path>,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
@@ -42,6 +48,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
             triggers,
             engine,
             submission,
+            service_cache,
             storage,
         })
     }
@@ -53,7 +60,9 @@ const TRIGGER_PIPELINE_SIZE: usize = 20;
 const SUBMISSION_PIPELINE_SIZE: usize = 20;
 
 #[async_trait]
-impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
+impl<T: TriggerManager, E: EngineRunner, S: Submission, C: ServiceCache> DispatchManager
+    for Dispatcher<T, E, S, C>
+{
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
@@ -132,7 +141,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digests)
     }
 
-    async fn add_service(&self, service: Service) -> Result<(), Self::Error> {
+    async fn add_service(&self, source: ServiceMetadataSource) -> Result<(), Self::Error> {
+        let service = self
+            .service_cache
+            .get(&source)
+            .await
+            .map_err(DispatcherError::ServiceManager)?;
+
         // persist it in storage if not there yet
         if self
             .storage
@@ -152,7 +167,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
-        add_service_to_trigger_manager(service, &self.triggers)?;
+        tracing::info!("Adding service {} to submission...", service.id);
+        add_service_to_submission_manager(&service, &self.submission)?;
+
+        tracing::info!("Adding service {} to trigger...", service.id);
+        add_service_to_trigger_manager(service.clone(), &self.triggers)?;
+
+        tracing::info!("Added service to dispatcher: {}!", service.id);
 
         Ok(())
     }
@@ -277,6 +298,17 @@ fn add_service_to_trigger_manager(
     Ok(())
 }
 
+// called at init and when a new service is added
+// TODO - this isn't really going to work right!
+// the hd_index will be restarted from 0
+// and may not match the order they actually came in
+fn add_service_to_submission_manager(
+    service: &Service,
+    submission: &impl Submission,
+) -> Result<(), DispatcherError> {
+    Ok(submission.add_service(service)?)
+}
+
 #[derive(Error, Debug)]
 pub enum DispatcherError {
     #[error("Service {0} already registered")]
@@ -317,6 +349,9 @@ pub enum DispatcherError {
 
     #[error("Unknown service digest: {0}")]
     UnknownDigest(Digest),
+
+    #[error("Service: {0}")]
+    ServiceManager(#[from] ServiceError),
 }
 
 #[cfg(test)]
@@ -329,6 +364,7 @@ mod tests {
             runner::{MultiEngineRunner, SingleEngineRunner},
         },
         init_tracing_tests,
+        service::mock::MockServiceCache,
         submission::mock::MockSubmission,
         test_utils::{
             address::{rand_address_eth, rand_event_eth},
@@ -360,10 +396,14 @@ mod tests {
         let ctx = AppContext::new();
 
         let action_clone = action.clone();
+
+        let service_cache = MockServiceCache::new();
+
         let dispatcher = Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(vec![action_clone]),
             SingleEngineRunner::new(IdentityEngine),
             MockSubmission::new(),
+            service_cache.clone(),
             db_file.as_ref(),
         )
         .unwrap();
@@ -372,6 +412,10 @@ mod tests {
         let digest = Digest::new(b"wasm1");
         let component_id = ComponentID::new("component1").unwrap();
         let service_manager_addr = rand_address_eth();
+        let metadata_source = ServiceMetadataSource::EthereumServiceManager {
+            chain_name: ChainName::new("eth").unwrap(),
+            contract_address: service_manager_addr,
+        };
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -396,9 +440,13 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
+            metadata_source: metadata_source.clone(),
         };
+
+        service_cache.add_service(service);
+
         ctx.rt.block_on(async {
-            dispatcher.add_service(service).await.unwrap();
+            dispatcher.add_service(metadata_source).await.unwrap();
         });
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
@@ -458,11 +506,14 @@ mod tests {
         ];
 
         let ctx = AppContext::new();
+
+        let service_cache = MockServiceCache::new();
         // Set up the dispatcher
         let dispatcher = Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(actions),
             SingleEngineRunner::new(MockEngine::new()),
             MockSubmission::new(),
+            service_cache.clone(),
             db_file.as_ref(),
         )
         .unwrap();
@@ -476,6 +527,13 @@ mod tests {
 
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
+
+        let service_manager_addr = rand_address_eth();
+        let metadata_source = ServiceMetadataSource::EthereumServiceManager {
+            chain_name: ChainName::new("eth").unwrap(),
+            contract_address: service_manager_addr,
+        };
+
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -492,7 +550,7 @@ mod tests {
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
-                        rand_address_eth(),
+                        service_manager_addr,
                         None,
                     ),
                     fuel_limit: None,
@@ -500,9 +558,13 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
+            metadata_source: metadata_source.clone(),
         };
+
+        service_cache.add_service(service);
+
         ctx.rt.block_on(async {
-            dispatcher.add_service(service).await.unwrap();
+            dispatcher.add_service(metadata_source).await.unwrap();
         });
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
@@ -556,10 +618,13 @@ mod tests {
         ];
 
         // Set up the dispatcher
+        let service_cache = MockServiceCache::new();
+
         let dispatcher = Dispatcher::new(
             MockTriggerManagerVec::new().with_actions(actions),
             MultiEngineRunner::new(MockEngine::new(), 4),
             MockSubmission::new(),
+            service_cache.clone(),
             db_file.as_ref(),
         )
         .unwrap();
@@ -573,6 +638,12 @@ mod tests {
 
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
+        let service_manager_addr = rand_address_eth();
+        let metadata_source = ServiceMetadataSource::EthereumServiceManager {
+            chain_name: ChainName::new("eth").unwrap(),
+            contract_address: service_manager_addr,
+        };
+
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -589,7 +660,7 @@ mod tests {
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
-                        rand_address_eth(),
+                        service_manager_addr,
                         None,
                     ),
                     fuel_limit: None,
@@ -597,12 +668,15 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
+            metadata_source: metadata_source.clone(),
         };
+
+        service_cache.add_service(service);
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
         let ctx = AppContext::new();
         ctx.rt.block_on(async {
-            dispatcher.add_service(service).await.unwrap();
+            dispatcher.add_service(metadata_source).await.unwrap();
         });
         dispatcher.start(ctx).unwrap();
 

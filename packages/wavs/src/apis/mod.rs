@@ -3,6 +3,7 @@
 
 pub mod dispatcher;
 pub mod engine;
+pub mod service;
 pub mod submission;
 pub mod trigger;
 

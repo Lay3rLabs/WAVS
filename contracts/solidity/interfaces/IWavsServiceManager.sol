@@ -12,4 +12,8 @@ interface IWavsServiceManager {
      * @param signature The signature of the data.
      */
     function validate(bytes calldata data, bytes calldata signature) external view;
+
+    function setWavsMetadataURI(string memory _metadataURI) external;
+
+    function getWavsMetadataURI() external view returns (string memory);
 }

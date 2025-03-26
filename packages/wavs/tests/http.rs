@@ -5,11 +5,15 @@ use axum::{
 use tower::Service;
 use wavs::{
     config::Config,
-    submission::mock::mock_eigen_submit,
-    test_utils::http::{map_response, TestHttpApp},
+    test_utils::{
+        address::rand_address_eth,
+        http::{map_response, TestHttpApp},
+    },
     triggers::mock::mock_eth_event_trigger,
 };
-use wavs_types::{ComponentSource, Digest, ServiceID, UploadComponentResponse};
+use wavs_types::{
+    ComponentSource, Digest, ServiceID, ServiceMetadataSource, Submit, UploadComponentResponse,
+};
 
 #[tokio::test]
 async fn http_not_found() {
@@ -74,13 +78,21 @@ async fn http_upload_component() {
 async fn http_save_service() {
     let mut app = TestHttpApp::new().await;
 
+    let service_manager_addr = rand_address_eth();
+
+    let metadata_source = ServiceMetadataSource::EthereumServiceManager {
+        chain_name: "eth".try_into().unwrap(),
+        contract_address: service_manager_addr,
+    };
+
     let service = wavs_types::Service::new_simple(
         ServiceID::new("service-1").unwrap(),
         Some("My amazing service".to_string()),
         mock_eth_event_trigger(),
         ComponentSource::Digest(Digest::new(&[1, 2, 3])),
-        mock_eigen_submit(),
+        Submit::eth_contract("eth".try_into().unwrap(), service_manager_addr, None),
         None,
+        metadata_source,
     );
 
     let body = Body::from(serde_json::to_vec(&service).unwrap());

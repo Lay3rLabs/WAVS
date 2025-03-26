@@ -7,7 +7,8 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wavs_types::{
-    ChainName, ComponentID, ComponentSource, Digest, Service, ServiceConfig, ServiceID, WorkflowID,
+    ChainName, ComponentID, ComponentSource, Digest, Service, ServiceConfig, ServiceID,
+    ServiceMetadataSource, WorkflowID,
 };
 
 use crate::config::Config;
@@ -94,6 +95,9 @@ pub enum Command {
 
         #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
         service_config: Option<ServiceConfig>,
+
+        #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceMetadataSource>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
+        service_source: ServiceMetadataSource,
     },
 
     /// Uploads a WASI component

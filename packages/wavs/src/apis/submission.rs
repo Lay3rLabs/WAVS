@@ -12,6 +12,8 @@ pub trait Submission: Send + Sync {
         ctx: AppContext,
         receiver: mpsc::Receiver<ChainMessage>,
     ) -> Result<(), SubmissionError>;
+
+    fn add_service(&self, service: &wavs_types::Service) -> Result<(), SubmissionError>;
 }
 
 /// The data returned from a trigger action
@@ -60,4 +62,6 @@ pub enum SubmissionError {
     FailedToSubmitEthDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
     FailedToSubmitCosmos(anyhow::Error),
+    #[error("missing service handler index")]
+    MissingServiceHandlerIndex,
 }

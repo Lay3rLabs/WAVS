@@ -28,8 +28,8 @@ use wavs_cli::{
 };
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource,
-    Permissions, Service, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, Workflow,
-    WorkflowID,
+    Permissions, Service, ServiceConfig, ServiceID, ServiceMetadataSource, ServiceStatus, Submit,
+    Trigger, Workflow, WorkflowID,
 };
 
 #[derive(Default)]
@@ -57,7 +57,6 @@ impl Services {
             tracing::info!("chain names: {:?}", chain_names);
 
             let mut eth_eigen_core = BTreeMap::default();
-            let mut eth_service_managers = BTreeMap::default();
             // hrmf, "nonce too low" errors, gotta go sequentially...
 
             for chain in chain_names
@@ -80,21 +79,6 @@ impl Services {
                 .unwrap();
 
                 eth_eigen_core.insert(chain.clone(), core_addresses);
-
-                let DeployEigenServiceManager {
-                    address: service_manager_address,
-                    ..
-                } = DeployEigenServiceManager::run(
-                    &clients.cli_ctx,
-                    DeployEigenServiceManagerArgs {
-                        chain: chain.clone(),
-                        register_operator: true,
-                    },
-                )
-                .await
-                .unwrap();
-
-                eth_service_managers.insert(chain.clone(), service_manager_address);
             }
 
             let all_services = configs
@@ -113,14 +97,7 @@ impl Services {
             for service_kind in all_services {
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
-                        deploy_service_raw(
-                            service_kind,
-                            clients,
-                            digests,
-                            &chain_names,
-                            &eth_service_managers,
-                        )
-                        .await
+                        deploy_service_raw(service_kind, clients, digests, &chain_names).await
                     }
                     _ => {
                         deploy_service_simple(
@@ -130,26 +107,21 @@ impl Services {
                             digests,
                             &chain_names,
                             &mut cosmos_code_ids,
-                            &eth_service_managers,
                         )
                         .await
                     }
                 };
 
                 if service_kind == AnyService::Eth(EthService::MultiTrigger) {
-                    let mut additional_service = service.clone();
-
-                    additional_service.id =
-                        ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
-
-                    DeployServiceRaw::run(
-                        &clients.cli_ctx,
-                        DeployServiceRawArgs {
-                            service: additional_service.clone(),
-                        },
+                    let additional_service = deploy_service_simple(
+                        service_kind,
+                        configs,
+                        clients,
+                        digests,
+                        &chain_names,
+                        &mut cosmos_code_ids,
                     )
-                    .await
-                    .unwrap();
+                    .await;
 
                     lookup.insert(service_kind, vec![service, additional_service]);
                 } else {
@@ -172,7 +144,6 @@ async fn deploy_service_simple(
     digests: &Digests,
     chain_names: &ChainNames,
     cosmos_code_ids: &mut BTreeMap<ChainName, u64>,
-    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
 ) -> Service {
     let digest_name = Vec::<DigestName>::from(service)[0];
     let digest = digests.lookup.get(&digest_name).unwrap().clone();
@@ -279,11 +250,27 @@ async fn deploy_service_simple(
         CliSubmitKind::None => None,
     };
 
+    let metadata_source_chain = submit_chain
+        .as_ref()
+        .expect("We need at least some submit chain here");
+
+    let DeployEigenServiceManager {
+        address: service_manager_address,
+        ..
+    } = DeployEigenServiceManager::run(
+        &clients.cli_ctx,
+        DeployEigenServiceManagerArgs {
+            chain: metadata_source_chain.clone(),
+            register_operator: true,
+        },
+    )
+    .await
+    .unwrap();
+
     let submit_address = match submit {
         CliSubmitKind::EthServiceHandler => {
             let submit_chain = submit_chain.as_ref().unwrap();
             let client = clients.cli_ctx.get_eth_client(submit_chain).unwrap();
-            let service_manager_address = *eth_service_managers.get(submit_chain).unwrap();
 
             tracing::info!("Deploying new eth submit contract");
             let handler_address =
@@ -319,6 +306,11 @@ async fn deploy_service_simple(
         submit_chain.as_deref().unwrap_or("none")
     );
 
+    let service_source = ServiceMetadataSource::EthereumServiceManager {
+        chain_name: metadata_source_chain.clone(),
+        contract_address: service_manager_address,
+    };
+
     DeployService::run(
         &clients.cli_ctx,
         DeployServiceArgs {
@@ -331,6 +323,7 @@ async fn deploy_service_simple(
             submit,
             submit_chain,
             service_config: None,
+            service_source,
         },
     )
     .await
@@ -344,7 +337,6 @@ async fn deploy_service_raw(
     clients: &Clients,
     digests: &Digests,
     chain_names: &ChainNames,
-    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
 ) -> Service {
     if !matches!(service_kind, AnyService::Eth(EthService::MultiWorkflow)) {
         panic!("unexpected service kind: {:?}", service_kind);
@@ -374,8 +366,23 @@ async fn deploy_service_raw(
         },
     };
 
-    let submit1 = deploy_submit_raw(clients, chain_names, eth_service_managers).await;
-    let submit2 = deploy_submit_raw(clients, chain_names, eth_service_managers).await;
+    let chain_name = chain_names.eth[0].clone();
+
+    let DeployEigenServiceManager {
+        address: service_manager_address,
+        ..
+    } = DeployEigenServiceManager::run(
+        &clients.cli_ctx,
+        DeployEigenServiceManagerArgs {
+            chain: chain_name.clone(),
+            register_operator: true,
+        },
+    )
+    .await
+    .unwrap();
+
+    let submit1 = deploy_submit_raw(clients, chain_names, service_manager_address).await;
+    let submit2 = deploy_submit_raw(clients, chain_names, service_manager_address).await;
 
     let workflow_id1 = WorkflowID::new("workflow1").unwrap();
     let workflow_id2 = WorkflowID::new("workflow2").unwrap();
@@ -401,6 +408,11 @@ async fn deploy_service_raw(
 
     let workflows = BTreeMap::from([(workflow_id1, workflow1), (workflow_id2, workflow2)]);
 
+    let service_source = ServiceMetadataSource::EthereumServiceManager {
+        contract_address: service_manager_address,
+        chain_name,
+    };
+
     let service = Service {
         id: ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap(),
         name: "".to_string(),
@@ -408,6 +420,7 @@ async fn deploy_service_raw(
         workflows,
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
+        metadata_source: service_source,
     };
 
     DeployServiceRaw::run(
@@ -441,12 +454,10 @@ async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trig
 async fn deploy_submit_raw(
     clients: &Clients,
     chain_names: &ChainNames,
-    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
+    service_manager_address: alloy::primitives::Address,
 ) -> Submit {
     let chain_name = chain_names.eth[0].clone();
     let eigen_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
-
-    let service_manager_address = *eth_service_managers.get(&chain_name).unwrap();
 
     let simple_submit =
         SimpleSubmit::deploy(eigen_client.eth.provider.clone(), service_manager_address)

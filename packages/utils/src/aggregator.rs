@@ -38,8 +38,8 @@ pub enum AggregateAvsResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum AddAggregatorServiceRequest {
-    EthTrigger {
-        /// Address of the avs
+    Ethereum {
+        /// Service handler address
         address: Address,
     },
 }

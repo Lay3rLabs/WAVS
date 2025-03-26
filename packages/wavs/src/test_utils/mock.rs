@@ -8,6 +8,7 @@ use crate::{
         mock::{Function, MockEngine},
         runner::{EngineRunner, SingleEngineRunner},
     },
+    service::mock::MockServiceCache,
     submission::mock::MockSubmission,
     test_utils::address::rand_address_eth,
     triggers::mock::{mock_eth_event_trigger, MockTriggerManagerChannel},
@@ -21,13 +22,20 @@ use serde::{Deserialize, Serialize};
 use tower::Service as _;
 use wavs_types::{
     AddServiceRequest, ComponentSource, DeleteServicesRequest, ListServicesResponse, Service,
-    ServiceID, Submit,
+    ServiceID, ServiceMetadataSource, Submit,
 };
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,
-    pub dispatcher:
-        Arc<Dispatcher<MockTriggerManagerChannel, SingleEngineRunner<MockEngine>, MockSubmission>>,
+    pub service_cache: MockServiceCache,
+    pub dispatcher: Arc<
+        Dispatcher<
+            MockTriggerManagerChannel,
+            SingleEngineRunner<MockEngine>,
+            MockSubmission,
+            MockServiceCache,
+        >,
+    >,
     pub http_app: TestHttpApp,
 }
 
@@ -37,9 +45,18 @@ impl MockE2ETestRunner {
         let trigger_manager = MockTriggerManagerChannel::new(10);
         let engine = SingleEngineRunner::new(MockEngine::new());
         let submission = MockSubmission::new();
+        let service_cache = MockServiceCache::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
-        let dispatcher =
-            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
+        let dispatcher = Arc::new(
+            Dispatcher::new(
+                trigger_manager,
+                engine,
+                submission,
+                service_cache.clone(),
+                storage_path,
+            )
+            .unwrap(),
+        );
 
         // start up the dispatcher in its own thread, before creating any data (similar to how we do it in main)
         std::thread::spawn({
@@ -59,6 +76,7 @@ impl MockE2ETestRunner {
         Arc::new(Self {
             ctx,
             dispatcher,
+            service_cache,
             http_app,
         })
     }
@@ -110,7 +128,14 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let trigger = mock_eth_event_trigger();
 
-        let submit = Submit::eth_contract("eth".try_into().unwrap(), rand_address_eth(), None);
+        let service_manager_addr = rand_address_eth();
+
+        let submit = Submit::eth_contract("eth".try_into().unwrap(), service_manager_addr, None);
+
+        let metadata_source = ServiceMetadataSource::EthereumServiceManager {
+            chain_name: "eth".try_into().unwrap(),
+            contract_address: service_manager_addr,
+        };
 
         let service = Service::new_simple(
             service_id,
@@ -119,9 +144,15 @@ impl MockE2ETestRunner {
             source,
             submit,
             None,
+            metadata_source.clone(),
         );
 
-        let body = serde_json::to_string(&AddServiceRequest { service }).unwrap();
+        self.service_cache.add_service(service.clone());
+
+        let body = serde_json::to_string(&AddServiceRequest {
+            source: metadata_source,
+        })
+        .unwrap();
 
         let req = Request::builder()
             .method(Method::POST)

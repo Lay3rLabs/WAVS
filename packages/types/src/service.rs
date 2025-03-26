@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
 
-use crate::{ByteArray, ComponentSource};
+use crate::{ByteArray, ComponentSource, ServiceMetadataSource};
 
 use super::{ChainName, ComponentID, ServiceID, WorkflowID};
 
@@ -28,6 +28,8 @@ pub struct Service {
     pub status: ServiceStatus,
 
     pub config: ServiceConfig,
+
+    pub metadata_source: ServiceMetadataSource,
 }
 
 impl Service {
@@ -35,9 +37,10 @@ impl Service {
         id: ServiceID,
         name: Option<String>,
         trigger: Trigger,
-        source: ComponentSource,
+        component_source: ComponentSource,
         submit: Submit,
         config: Option<ServiceConfig>,
+        metadata_source: ServiceMetadataSource,
     ) -> Self {
         let component_id = ComponentID::default();
         let workflow_id = WorkflowID::default();
@@ -50,7 +53,7 @@ impl Service {
         };
 
         let component = Component {
-            source,
+            source: component_source,
             permissions: Permissions::default(),
         };
 
@@ -65,6 +68,7 @@ impl Service {
             workflows,
             status: ServiceStatus::Active,
             config: config.unwrap_or_default(),
+            metadata_source,
         }
     }
 }

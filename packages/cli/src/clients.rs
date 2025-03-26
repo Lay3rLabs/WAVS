@@ -1,16 +1,17 @@
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
+    avs_client::ServiceManagerSigningClient,
     config::{CosmosChainConfig, EthereumChainConfig},
     eigen_client::EigenClient,
-    eth_client::EthClientBuilder,
+    eth_client::{EthClientBuilder, EthSigningClient},
 };
 use wavs_types::{
     AddServiceRequest, AllowedHostPermission, ComponentSource, Digest, Permissions, Service,
-    ServiceConfig, ServiceID, Submit, Trigger, UploadComponentResponse,
+    ServiceConfig, ServiceID, ServiceMetadataSource, Submit, Trigger, UploadComponentResponse,
 };
 
-use crate::config::Config;
+use crate::{config::Config, context::CliContext};
 
 pub async fn get_eigen_client(
     config: &Config,
@@ -21,6 +22,17 @@ pub async fn get_eigen_client(
     let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
 
     Ok(EigenClient::new(eth_client))
+}
+
+pub async fn get_eth_signing_client(
+    config: &Config,
+    chain_config: EthereumChainConfig,
+) -> Result<EthSigningClient> {
+    let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone(), None);
+
+    let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
+
+    Ok(eth_client)
 }
 
 pub async fn get_cosmos_client(
@@ -78,18 +90,21 @@ impl HttpClient {
 
     pub async fn create_service_simple(
         &self,
+        ctx: &CliContext,
         trigger: Trigger,
         submit: Submit,
-        source: ComponentSource,
+        component_source: ComponentSource,
         config: ServiceConfig,
+        service_source: ServiceMetadataSource,
     ) -> Result<Service> {
         let mut service = Service::new_simple(
             ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?,
             None,
             trigger,
-            source,
+            component_source,
             submit,
             Some(config),
+            service_source,
         );
 
         for component in service.components.values_mut() {
@@ -99,12 +114,13 @@ impl HttpClient {
             }
         }
 
-        self.create_service_raw(service.clone()).await?;
+        self.create_service_raw(ctx, service.clone()).await?;
 
         Ok(service)
     }
 
-    pub async fn create_service_raw(&self, service: Service) -> Result<()> {
+    pub async fn create_service_raw(&self, ctx: &CliContext, service: Service) -> Result<()> {
+        tracing::info!("--- Creating service {} ---", service.id);
         let body = serde_json::to_string(&service)?;
 
         self.inner
@@ -116,22 +132,54 @@ impl HttpClient {
             .error_for_status()?;
 
         let service_uri = format!("{}/service/{}", self.endpoint, service.id);
-        tracing::info!("Service URI: {}", service_uri);
+
+        let service_manager_client = match &service.metadata_source {
+            ServiceMetadataSource::EthereumServiceManager {
+                chain_name,
+                contract_address,
+            } => {
+                let signing_client = ctx.get_eth_signing_client(&chain_name)?;
+                ServiceManagerSigningClient::new(signing_client, *contract_address)
+            }
+        };
+
+        service_manager_client
+            .set_metadata_uri(service_uri.clone())
+            .await?;
+
+        tracing::info!(
+            "Set metadata URI {} on service manager {}",
+            service_uri,
+            service_manager_client.address
+        );
 
         // TODO - deprecate this old add-service endpoint, instead
         // broadcast the service uri to the nodes by way of the service manager metadata
         // but for now, we'll support both until all the dust settles
 
-        let body = serde_json::to_string(&AddServiceRequest { service })?;
+        let body = serde_json::to_string(&AddServiceRequest {
+            source: service.metadata_source.clone(),
+        })?;
 
-        self.inner
+        let resp = self
+            .inner
             .post(format!("{}/app", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
             .send()
-            .await?
-            .error_for_status()?;
+            .await?;
 
-        Ok(())
+        let status = resp.status();
+
+        if !status.is_success() {
+            Err(anyhow::anyhow!(
+                "Failed to add service to app (status: {:?}): {:?}",
+                status,
+                resp.text().await
+            ))
+        } else {
+            tracing::info!("--- CREATED service {} ---", service.id);
+            Ok(())
+        }
     }
 }

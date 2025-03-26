@@ -13,7 +13,7 @@ import {ECDSAUpgradeable} from "@openzeppelin-upgrades/contracts/utils/cryptogra
  * typically this contract is called from some "IWavsServiceHandler"
  */
 contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
-    string public metaDataURI;
+    string public wavsMetadataURI;
     // ------------------------------------------------------------------------
     // Constructor
     // ------------------------------------------------------------------------
@@ -61,7 +61,15 @@ contract WavsServiceManager is ECDSAServiceManagerBase,IWavsServiceManager {
      * @param _metadataURI The new metadata URI to be set
      */
     function updateAVSMetadataURI(string memory _metadataURI) override external onlyOwner {
-        metaDataURI = _metadataURI;
         _updateAVSMetadataURI(_metadataURI);
+    }
+
+    // TODO: onlyOwner? Do we care for e2e tests?
+    function setWavsMetadataURI(string memory _metadataURI) external {
+        wavsMetadataURI = _metadataURI;
+    }
+
+    function getWavsMetadataURI() external view returns (string memory) {
+        return wavsMetadataURI;
     }
 }

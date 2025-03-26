@@ -2,7 +2,10 @@ use std::num::NonZero;
 
 use anyhow::{bail, Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
-use wavs_types::{ByteArray, ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
+use wavs_types::{
+    ByteArray, ChainName, ComponentSource, Service, ServiceConfig, ServiceMetadataSource, Submit,
+    Trigger,
+};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -43,6 +46,7 @@ pub struct DeployServiceArgs {
     pub submit: CliSubmitKind,
     pub submit_chain: Option<ChainName>,
     pub service_config: Option<ServiceConfig>,
+    pub service_source: ServiceMetadataSource,
 }
 
 impl DeployService {
@@ -57,6 +61,7 @@ impl DeployService {
             submit,
             submit_chain,
             service_config,
+            service_source,
         } = args.clone();
 
         let trigger: Trigger = match trigger {
@@ -149,10 +154,12 @@ impl DeployService {
 
         let service = http_client
             .create_service_simple(
+                ctx,
                 trigger.clone(),
                 submit.clone(),
                 component,
                 service_config.clone(),
+                service_source,
             )
             .await?;
 

@@ -1,7 +1,7 @@
 use alloy::sol;
 use layer_service_manager::WavsServiceManager::WavsServiceManagerInstance;
 
-use crate::eth_client::SigningProvider;
+use crate::eth_client::{QueryProvider, SigningProvider};
 
 pub mod stake_registry {
     use super::*;
@@ -34,11 +34,19 @@ pub mod token {
 
 pub mod layer_service_manager {
     use super::*;
+
     sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
         WavsServiceManager,
         "../../contracts/solidity/abi/WavsServiceManager.sol/WavsServiceManager.json"
+    );
+
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        IWavsServiceManager,
+        "../../contracts/solidity/abi/IWavsServiceManager.sol/IWavsServiceManager.json"
     );
 }
 
@@ -63,5 +71,12 @@ pub mod layer_service_handler {
 }
 
 pub type WavsServiceManagerT = WavsServiceManagerInstance<(), SigningProvider>;
+
 pub type IWavsServiceHandlerT =
     layer_service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), SigningProvider>;
+
+pub type IWavsServiceManagerQueryT =
+    layer_service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), QueryProvider>;
+
+pub type IWavsServiceManagerSigningT =
+    layer_service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), SigningProvider>;
