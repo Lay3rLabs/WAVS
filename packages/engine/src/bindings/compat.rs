@@ -57,6 +57,11 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
             wavs_types::Trigger::Manual => {
                 crate::bindings::world::wavs::worker::layer_types::TriggerSource::Manual
             },
+            wavs_types::Trigger::Cron { schedule, start_time, end_time } => {
+                crate::bindings::world::wavs::worker::layer_types::TriggerSource::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerSourceCron{
+                    schedule, start_time, end_time
+                })
+            }
         })
     }
 }
@@ -115,6 +120,7 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                     }
                 ))
             },
+            wavs_types::TriggerData::Cron { execution_time } => Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerDataCron { execution_time })),
             wavs_types::TriggerData::Raw(data) => {
                 Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Raw(data))
             },

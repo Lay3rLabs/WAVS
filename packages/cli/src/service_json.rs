@@ -1,5 +1,7 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr as _};
 
+use chrono::Utc;
+use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use wavs_types::{
     Component, ComponentID, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, WorkflowID,
@@ -72,8 +74,21 @@ impl ServiceJson {
                             // Validate event hash (should be 32 bytes)
                             if event_hash.as_slice().len() != 32 {
                                 errors.push(format!(
-                                    "Workflow '{}' has an invalid event hash length: expected 32 bytes but got {} bytes",
-                                    workflow_id, event_hash.as_slice().len()
+                                                        "Workflow '{}' has an invalid event hash length: expected 32 bytes but got {} bytes",
+                                                        workflow_id, event_hash.as_slice().len()
+                                                    ));
+                            }
+                        }
+                        Trigger::Cron {
+                            schedule,
+                            start_time,
+                            end_time,
+                        } => {
+                            if let Err(err) = validate_cron_config(schedule, *start_time, *end_time)
+                            {
+                                errors.push(format!(
+                                    "Workflow '{}' has an invalid cron trigger: {}",
+                                    workflow_id, err
                                 ));
                             }
                         }
@@ -142,6 +157,32 @@ impl ServiceJson {
 
         errors
     }
+}
+
+pub fn validate_cron_config(
+    schedule: &str,
+    start_time: Option<u64>,
+    end_time: Option<u64>,
+) -> Result<(), String> {
+    // Validate the cron schedule expression
+    Schedule::from_str(schedule).map_err(|e| format!("Invalid cron schedule: {}", e))?;
+
+    // Ensure start_time <= end_time if both are provided
+    if let (Some(start), Some(end)) = (start_time, end_time) {
+        if start > end {
+            return Err("start_time must be before or equal to end_time".to_string());
+        }
+    }
+
+    // Ensure end_time is in the future
+    if let Some(end) = end_time {
+        let now = Utc::now().timestamp() as u64;
+        if end < now {
+            return Err("end_time must be in the future".to_string());
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

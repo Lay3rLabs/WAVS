@@ -22,6 +22,8 @@ use wavs_types::{
     ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
 
+use super::cron_scheduler::CronScheduler;
+
 #[derive(Clone)]
 pub struct CoreTriggerManager {
     pub chain_configs: HashMap<ChainName, AnyChainConfig>,
@@ -47,6 +49,8 @@ struct LookupMaps {
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
     /// latest lookup_id
     pub lookup_id: Arc<AtomicUsize>,
+    /// cron scheduler
+    pub cron_scheduler: CronScheduler,
 }
 
 impl LookupMaps {
@@ -58,11 +62,12 @@ impl LookupMaps {
             triggers_by_eth_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_block_interval: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
+            cron_scheduler: CronScheduler::default(),
         }
     }
 }
 
-type LookupId = usize;
+pub(crate) type LookupId = usize;
 
 // *potential* triggers that we can react to
 // this is just a local encapsulation, not a full trigger
@@ -83,6 +88,10 @@ enum StreamTriggers {
     EthereumBlock {
         chain_name: ChainName,
         block_height: u64,
+    },
+    Cron {
+        trigger_time: u64,
+        lookup_id: LookupId,
     },
 }
 
@@ -229,6 +238,32 @@ impl CoreTriggerManager {
             streams.push(block_stream);
         }
 
+        // Create a stream for cron triggers that produces a trigger for each due task
+        let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
+        let interval = tokio::time::interval(std::time::Duration::from_secs(1));
+        let interval_stream = futures::stream::unfold(interval, |mut interval| async move {
+            interval.tick().await;
+            Some(((), interval))
+        });
+
+        // Process cron triggers on each interval tick
+        let cron_stream = Box::pin(interval_stream.flat_map(move |_| {
+            // Process all due triggers in this tick
+            let current_time = chrono::Utc::now();
+            let due_triggers = cron_scheduler.process_due_triggers(current_time);
+            let trigger_time = current_time.timestamp() as u64;
+
+            // Convert to a stream of results using futures::stream::iter
+            futures::stream::iter(due_triggers.into_iter().map(move |(lookup_id, _)| {
+                Ok(StreamTriggers::Cron {
+                    lookup_id,
+                    trigger_time,
+                })
+            }))
+        }));
+
+        streams.push(cron_stream);
+
         // Multiplex all the stream of streams
         let mut streams = futures::stream::select_all(streams);
 
@@ -344,6 +379,29 @@ impl CoreTriggerManager {
                     block_height,
                 } => {
                     trigger_actions.extend(self.process_blocks(chain_name, block_height));
+                }
+                StreamTriggers::Cron {
+                    trigger_time,
+                    lookup_id,
+                } => {
+                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+
+                    match trigger_configs_lock.get(&lookup_id) {
+                        Some(trigger_config) => {
+                            trigger_actions.push(TriggerAction {
+                                data: TriggerData::Cron {
+                                    execution_time: trigger_time,
+                                },
+                                config: trigger_config.clone(),
+                            });
+                        }
+                        None => {
+                            tracing::warn!(
+                                "Trigger config not found for cron lookup_id {}",
+                                lookup_id
+                            );
+                        }
+                    }
                 }
             }
 
@@ -473,6 +531,16 @@ impl TriggerManager for CoreTriggerManager {
                     .or_default()
                     .push((n_blocks.into(), lookup_id));
             }
+            Trigger::Cron {
+                schedule,
+                start_time,
+                end_time,
+            } => {
+                // Add directly to the cron scheduler
+                self.lookup_maps
+                    .cron_scheduler
+                    .add_trigger(lookup_id, schedule, start_time, end_time)?;
+            }
             Trigger::Manual => {}
         }
 
@@ -526,6 +594,7 @@ impl TriggerManager for CoreTriggerManager {
                 .triggers_by_cosmos_contract_event
                 .write()
                 .unwrap(),
+            &self.lookup_maps.cron_scheduler,
             lookup_id,
         )?;
 
@@ -560,6 +629,7 @@ impl TriggerManager for CoreTriggerManager {
                 &mut trigger_configs,
                 &mut triggers_by_eth_contract_event,
                 &mut triggers_by_cosmos_contract_event,
+                &self.lookup_maps.cron_scheduler,
                 *lookup_id,
             )?;
         }
@@ -606,6 +676,7 @@ fn remove_trigger_data(
         (ChainName, layer_climb::prelude::Address, String),
         HashSet<LookupId>,
     >,
+    cron_scheduler: &CronScheduler,
     lookup_id: LookupId,
 ) -> Result<(), TriggerError> {
     // 1. remove from triggers
@@ -640,6 +711,10 @@ fn remove_trigger_data(
         Trigger::BlockInterval { .. } => {
             // after being removed from the trigger config, actual trigger is deleted
             // during the block processing
+        }
+        Trigger::Cron { .. } => {
+            // Remove from cron scheduler - errors are already handled inside
+            cron_scheduler.remove_trigger(lookup_id)?;
         }
         Trigger::Manual => {}
     }

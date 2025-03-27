@@ -53,4 +53,6 @@ pub enum TriggerError {
     ServiceAlreadyExists(ServiceID),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
+    #[error("Invalid cron expression: {0} / {1}")]
+    InvalidCronExpression(String, String),
 }

@@ -61,6 +61,7 @@ interface layer-types {
     eth-contract-event(trigger-source-eth-contract-event),
     cosmos-contract-event(trigger-source-cosmos-contract-event),
     block-interval(block-interval-source),
+    cron(trigger-source-cron),
     manual
   }
 
@@ -81,10 +82,17 @@ interface layer-types {
     n-blocks: u32
   }
 
+  record trigger-source-cron {
+    schedule: string,
+    start-time: option<u64>,
+    end-time: option<u64>
+  }
+
   variant trigger-data {
     eth-contract-event(trigger-data-eth-contract-event),
     cosmos-contract-event(trigger-data-cosmos-contract-event),
     block-interval(block-interval-data),
+    cron(trigger-data-cron),
     raw(list<u8>)
   }
 
@@ -105,6 +113,10 @@ interface layer-types {
   record block-interval-data {
     chain-name: string,
     block-height: u64
+  }
+
+  record trigger-data-cron {
+    execution-time: u64
   }
 
   variant log-level {

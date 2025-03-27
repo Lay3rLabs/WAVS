@@ -116,6 +116,11 @@ pub enum Trigger {
         chain_name: ChainName,
         n_blocks: NonZeroU32,
     },
+    Cron {
+        schedule: String,
+        start_time: Option<u64>,
+        end_time: Option<u64>,
+    },
     // not a real trigger, just for testing
     Manual,
 }
@@ -148,6 +153,10 @@ pub enum TriggerData {
         chain_name: ChainName,
         /// The block height where the event was emitted
         block_height: u64,
+    },
+    Cron {
+        /// The execution time
+        execution_time: u64,
     },
     Raw(Vec<u8>),
 }

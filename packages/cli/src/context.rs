@@ -82,7 +82,7 @@ impl CliContext {
                         Trigger::BlockInterval { chain_name, .. } => {
                             chains.insert(chain_name.clone());
                         }
-                        Trigger::Manual => {}
+                        Trigger::Cron { .. } | Trigger::Manual => {}
                     }
 
                     match &workflow.submit {

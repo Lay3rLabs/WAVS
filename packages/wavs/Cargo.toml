@@ -47,6 +47,8 @@ wasm-pkg-client = { workspace = true }
 wasm-pkg-common = { workspace = true }
 semver = { workspace = true }
 async-trait = "0.1.86"
+chrono = { workspace = true }
+cron = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

@@ -36,7 +36,7 @@ impl CommandDeployResult for DeployEigenCore {
                         Trigger::EthContractEvent { chain_name, .. } => Some(chain_name),
                         Trigger::CosmosContractEvent { chain_name, .. } => Some(chain_name),
                         Trigger::BlockInterval { chain_name, .. } => Some(chain_name),
-                        Trigger::Manual => None,
+                        Trigger::Cron { .. } | Trigger::Manual => None,
                     } {
                         if chain_name != chain {
                             deleted_services = true;

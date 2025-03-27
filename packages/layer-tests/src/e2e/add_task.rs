@@ -80,6 +80,7 @@ pub async fn add_task(
             // Hardcoded id since the current flow expects it to come from the event
             (true, TriggerId::new(1337))
         }
+        Trigger::Cron { .. } => (true, TriggerId::new(1338)),
         Trigger::Manual => unimplemented!(),
     };
 
