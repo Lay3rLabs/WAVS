@@ -47,7 +47,7 @@ async fn test_service(
     let service = services.first().unwrap();
     let service_id = service.id.to_string();
 
-    tracing::info!("Testing service: {:?}", name);
+    tracing::info!("\n\n --- TESTING SERVICE: {:?}", name);
 
     let n_workflows = service.workflows.len();
 

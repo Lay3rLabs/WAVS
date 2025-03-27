@@ -10,7 +10,7 @@ use crate::{
     config::Config,
     deploy::CommandDeployResult,
 };
-use alloy::{network::Ethereum, providers::Provider};
+use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
 use utils::{config::AnyChainConfig, eigen_client::EigenClient, eth_client::EthSigningClient};

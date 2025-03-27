@@ -2,6 +2,7 @@ use super::layer_service_handler::IWavsServiceHandler;
 use super::IWavsServiceHandlerT;
 use crate::eth_client::EthSigningClient;
 use alloy::contract::Error;
+use alloy::hex;
 use alloy::primitives::{Bytes, FixedBytes};
 use alloy::{
     dyn_abi::DynSolValue,
@@ -39,7 +40,7 @@ impl ServiceHandlerClient {
         // EIP-1559 has a default 30m gas limit per block without override. Else:
         // 'a intrinsic gas too high -- tx.gas_limit > env.block.gas_limit' is thrown
         let gas = gas.unwrap_or(1_000_000).min(30_000_000);
-        tracing::debug!("Adding signed payload with gas {}", gas);
+        tracing::info!("Adding signed payload: {}, with gas {}", hex::encode(&signed_payload.data), gas);
 
         let (data, signature) = signed_payload.into_submission_abi();
         let result = self

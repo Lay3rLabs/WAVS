@@ -138,7 +138,7 @@ impl HttpClient {
                 chain_name,
                 contract_address,
             } => {
-                let signing_client = ctx.get_eth_signing_client(&chain_name)?;
+                let signing_client = ctx.get_eth_signing_client(chain_name)?;
                 ServiceManagerSigningClient::new(signing_client, *contract_address)
             }
         };

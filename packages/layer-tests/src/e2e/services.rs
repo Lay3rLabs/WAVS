@@ -12,7 +12,7 @@ use super::{
     matrix::{AnyService, CosmosService, CrossChainService, EthService},
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
-use alloy::sol_types::SolEvent;
+use alloy::{providers::Provider, sol_types::SolEvent};
 use utils::{
     avs_client::layer_service_aggregator::WavsServiceAggregator, context::AppContext,
     eigen_client::CoreAVSAddresses, filesystem::workspace_path,
@@ -88,6 +88,17 @@ impl Services {
                 .map(|s| (*s).into())
                 .chain(configs.matrix.cosmos.iter().map(|s| (*s).into()))
                 .chain(configs.matrix.cross_chain.iter().map(|s| (*s).into()))
+                .filter(
+                    |s| {
+                        match s {
+                            AnyService::Eth(EthService::BlockInterval) => false,
+                            AnyService::Eth(EthService::MultiWorkflow) => false,
+                            AnyService::Eth(EthService::MultiTrigger) => false,
+                            AnyService::Cosmos(CosmosService::BlockInterval) => false,
+                            _ => true,
+                        }
+                    },
+                )
                 .collect::<Vec<AnyService>>();
 
             let mut lookup = BTreeMap::default();
@@ -95,6 +106,14 @@ impl Services {
 
             // nonce errors here too, gotta go sequentially :/
             for service_kind in all_services {
+                tracing::info!("\n\n-- DEPLOYING SERVICE {}...",
+                    match service_kind {
+                        AnyService::Eth(service) => format!("Ethereum {:?}", service),
+                        AnyService::Cosmos(service) => format!("Cosmos {:?}", service),
+                        AnyService::CrossChain(service) => format!("CrossChain {:?}", service),
+                    },
+                );
+                tracing::info!("Current balance: {:?}", clients.cli_ctx.get_eth_client(&chain_names.eth[0]).unwrap().eth.provider.get_balance(clients.cli_ctx.get_eth_client(&chain_names.eth[0]).unwrap().eth.address()).await.unwrap());
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
                         deploy_service_raw(service_kind, clients, digests, &chain_names).await
@@ -127,6 +146,13 @@ impl Services {
                 } else {
                     lookup.insert(service_kind, vec![service]);
                 }
+                tracing::info!("-- DEPLOYED SERVICE {}!",
+                    match service_kind {
+                        AnyService::Eth(service) => format!("Ethereum {:?}", service),
+                        AnyService::Cosmos(service) => format!("Cosmos {:?}", service),
+                        AnyService::CrossChain(service) => format!("CrossChain {:?}", service),
+                    },
+                );
             }
 
             Self {
@@ -295,17 +321,6 @@ async fn deploy_service_simple(
         CliSubmitKind::None => None,
     };
 
-    tracing::info!(
-        "Deploying Service {} on trigger_chain: [{}] submit_chain: [{}]",
-        match service {
-            AnyService::Eth(service) => format!("Ethereum {:?}", service),
-            AnyService::Cosmos(service) => format!("Cosmos {:?}", service),
-            AnyService::CrossChain(service) => format!("CrossChain {:?}", service),
-        },
-        trigger_chain.as_deref().unwrap_or("none"),
-        submit_chain.as_deref().unwrap_or("none")
-    );
-
     let service_source = ServiceMetadataSource::EthereumServiceManager {
         chain_name: metadata_source_chain.clone(),
         contract_address: service_manager_address,
@@ -422,6 +437,7 @@ async fn deploy_service_raw(
         config: ServiceConfig::default(),
         metadata_source: service_source,
     };
+
 
     DeployServiceRaw::run(
         &clients.cli_ctx,

@@ -21,7 +21,7 @@ impl EigenClient {
             stakerOptOutWindowBlocks: 0,
         };
         let contract_call = contract.registerAsOperator(operator, "".to_string());
-        let binding_tx = contract_call.gas(300000).send().await?;
+        let binding_tx = contract_call.gas(500000).send().await?;
 
         let receipt: TransactionReceipt = binding_tx.get_receipt().await?;
 
