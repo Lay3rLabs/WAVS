@@ -1,5 +1,6 @@
 use thiserror::Error;
 use tokio::sync::mpsc;
+use utils::error::EthClientError;
 use wavs_types::{Submit, TriggerConfig};
 
 use crate::AppContext;
@@ -24,6 +25,8 @@ pub struct ChainMessage {
 
 #[derive(Error, Debug)]
 pub enum SubmissionError {
+    #[error("eth client: {0}")]
+    EthClient(#[from] EthClientError),
     #[error("climb: {0}")]
     Climb(anyhow::Error),
     #[error("missing mnemonic")]

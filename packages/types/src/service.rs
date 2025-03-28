@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 
-use alloy_primitives::LogData;
+use alloy::primitives::LogData;
 use serde::{Deserialize, Serialize};
 
 use crate::{ByteArray, ComponentSource};
@@ -28,6 +28,29 @@ pub struct Service {
     pub status: ServiceStatus,
 
     pub config: ServiceConfig,
+
+    pub manager: ServiceManager,
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceManager {
+    Ethereum(alloy::primitives::Address),
+}
+
+impl From<alloy::primitives::Address> for ServiceManager {
+    fn from(addr: alloy::primitives::Address) -> Self {
+        Self::Ethereum(addr)
+    }
+}
+
+impl ServiceManager {
+    pub fn eth_address_unchecked(&self) -> alloy::primitives::Address {
+        match self {
+            ServiceManager::Ethereum(address) => *address,
+        }
+    }
 }
 
 impl Service {
@@ -47,6 +70,7 @@ impl Service {
             component: component_id,
             submit,
             fuel_limit: None,
+            aggregator: None,
         };
 
         let component = Component {
@@ -58,6 +82,8 @@ impl Service {
 
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
 
+        let manager = ServiceManager::Ethereum(alloy::primitives::Address::ZERO);
+
         Self {
             name: name.unwrap_or_else(|| id.to_string()),
             id,
@@ -65,6 +91,7 @@ impl Service {
             workflows,
             status: ServiceStatus::Active,
             config: config.unwrap_or_default(),
+            manager,
         }
     }
 }
@@ -87,10 +114,14 @@ pub struct Workflow {
     /// A reference to which component to run with this data - for now, always "default"
     pub component: ComponentID,
     /// How to submit the result of the component.
+    /// TODO: We need to pull out some of this into an aggregator section (https://github.com/Lay3rLabs/WAVS/issues/477)
     pub submit: Submit,
     /// The maximum amount of compute metering to allow for a single component execution
     /// If not supplied, will be `Workflow::DEFAULT_FUEL_LIMIT`
+    // TODO: move this into the component section
     pub fuel_limit: Option<u64>,
+
+    pub aggregator: Option<Aggregator>,
 }
 
 impl Workflow {
@@ -98,7 +129,7 @@ impl Workflow {
 }
 
 // The TriggerManager reacts to these triggers
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     // A contract that emits an event
@@ -108,7 +139,7 @@ pub enum Trigger {
         event_type: String,
     },
     EthContractEvent {
-        address: alloy_primitives::Address,
+        address: alloy::primitives::Address,
         chain_name: ChainName,
         event_hash: ByteArray<32>,
     },
@@ -135,7 +166,7 @@ pub enum TriggerData {
     },
     EthContractEvent {
         /// The address of the contract that emitted the event
-        contract_address: alloy_primitives::Address,
+        contract_address: alloy::primitives::Address,
         /// The name of the chain where the event was emitted
         chain_name: ChainName,
         /// The raw event log
@@ -182,12 +213,44 @@ pub struct TriggerConfig {
 pub enum Submit {
     // useful for when the component just does something with its own state
     None,
-    // Ethereum Contract which implements the ILayerService interface
-    EthereumContract {
-        chain_name: ChainName,
-        address: alloy_primitives::Address,
-        max_gas: Option<u64>,
+    Aggregator {
+        /// The aggregator endpoint
+        url: String 
     },
+    /// Service handler directly
+    EthereumContract(EthereumContractSubmission)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Aggregator {
+    Ethereum(EthereumContractSubmission)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct EthereumContractSubmission {
+    pub chain_name: ChainName,
+    /// Should be an IWavsServiceHandler contract
+    pub address: alloy::primitives::Address,
+    /// max gas for the submnission
+    /// with an aggregator, that will be for all the signed envelopes combined
+    /// without an aggregator, it's just the single signed envelope
+    pub max_gas: Option<u64>,
+}
+
+impl EthereumContractSubmission {
+    pub fn new(
+        chain_name: ChainName,
+        address: alloy::primitives::Address,
+        max_gas: Option<u64>,
+    ) -> Self {
+        Self {
+            chain_name,
+            address,
+            max_gas,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
@@ -238,19 +301,19 @@ mod test_ext {
 
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
-    use super::{Component, Submit, Trigger, TriggerConfig};
+    use super::{Component, EthereumContractSubmission, Submit, Trigger, TriggerConfig};
 
     impl Submit {
         pub fn eth_contract(
             chain_name: ChainName,
-            address: alloy_primitives::Address,
+            address: alloy::primitives::Address,
             max_gas: Option<u64>,
         ) -> Submit {
-            Submit::EthereumContract {
+            Submit::EthereumContract(EthereumContractSubmission::new(
                 chain_name,
                 address,
                 max_gas,
-            }
+            ))
         }
     }
 
@@ -276,7 +339,7 @@ mod test_ext {
             }
         }
         pub fn eth_contract_event(
-            address: alloy_primitives::Address,
+            address: alloy::primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Self {
@@ -306,7 +369,7 @@ mod test_ext {
         pub fn eth_contract_event(
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-            contract_address: alloy_primitives::Address,
+            contract_address: alloy::primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Result<Self, IDError> {

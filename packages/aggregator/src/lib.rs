@@ -1,7 +1,6 @@
 pub mod args;
 pub mod config;
 pub mod http;
-pub mod test_utils;
 
 use utils::{context::AppContext, storage::fs::FileStorage};
 

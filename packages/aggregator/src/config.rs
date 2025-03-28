@@ -34,10 +34,6 @@ pub struct Config {
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
 
-    /// The chosen chain name (default is `local`)
-    //TODO - why limit to one chain??
-    pub chain: ChainName,
-
     /// All the available chains
     pub chains: ChainConfigs,
 
@@ -63,7 +59,6 @@ impl Default for Config {
             cors_allowed_origins: Vec::new(),
             mnemonic: None,
             hd_index: None,
-            chain: ChainName::new("local").unwrap(),
             chains: ChainConfigs {
                 cosmos: Default::default(),
                 eth: Default::default(),
@@ -74,11 +69,12 @@ impl Default for Config {
 }
 
 impl Config {
-    pub async fn signing_client(&self) -> Result<EthSigningClient> {
+    pub async fn signing_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
         let chain_config = self
             .chains
-            .get_chain(&self.chain)?
-            .context(format!("chain not found for {}", self.chain))?;
+            .get_chain(chain_name)?
+            .context(format!("chain not found for {}", chain_name))?;
+
         let chain_config = EthereumChainConfig::try_from(chain_config)?;
         let client_config = chain_config.to_client_config(None, self.mnemonic.clone(), None);
 

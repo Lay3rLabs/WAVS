@@ -91,13 +91,8 @@ solidity-build CLEAN="":
     mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/contracts/solidity;
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
-    forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware --out {{REPO_ROOT}}/out;
-    forge build --root {{REPO_ROOT}}/lib/eigenlayer-middleware/lib/eigenlayer-contracts --out {{REPO_ROOT}}/out;
     @for contract in \
-        DelegationManager TransparentUpgradeableProxy ProxyAdmin PauserRegistry AVSDirectory \
-        StrategyManager StrategyFactory EigenPodManager RewardsCoordinator EigenPod UpgradeableBeacon StrategyBase \
-        ECDSAStakeRegistry LayerToken IStrategy EmptyContract \
-        WavsServiceManager WavsServiceAggregator IWavsServiceHandler IWavsServiceManager IWavsServiceAggregator; do \
+        IWavsServiceHandler IWavsServiceManager IWavsServiceAggregator; do \
         cp -r {{REPO_ROOT}}/out/$contract.sol {{REPO_ROOT}}/contracts/solidity/abi; \
     done
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
@@ -174,6 +169,25 @@ download-wit branch="main":
     # Copy just the wit directory and lock file from the cloned repo
     cp -r temp_clone/wavs-wasi/wit/* wit/
     cp -r temp_clone/wavs-wasi/wkg.lock wkg.lock
+    
+    # Clean up
+    rm -rf temp_clone
+
+# downloads the latest solidity repo
+download-solidity branch="feat/envelope":
+    # Create a temporary directory
+    rm -rf temp_clone
+    mkdir temp_clone
+    
+    # Clone the specific branch into the temp directory
+    git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-middleware.git 
+    
+    # Clear existing content and create solidity directory
+    rm -rf contracts/solidity
+    mkdir -p contracts/solidity
+    
+    # Copy just what we need 
+    cp -r temp_clone/wavs-middleware/contracts/interfaces contracts/solidity/interfaces
     
     # Clean up
     rm -rf temp_clone

@@ -17,12 +17,10 @@ use anyhow::anyhow;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    aggregator::{AggregateAvsRequest, AggregateAvsResponse},
-    avs_client::{ServiceHandlerClient, SignedPayload},
     config::{AnyChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
 };
-use wavs_types::{ChainName, Submit};
+use wavs_types::{aggregator::{AddPacketRequest, AddPacketResponse}, ChainName, Envelope, EthereumContractSubmission, Packet, PacketRoute, SignerAddress, Submit};
 
 #[derive(Clone)]
 pub struct CoreSubmission {
@@ -118,93 +116,114 @@ impl CoreSubmission {
         todo!()
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    #[allow(clippy::too_many_arguments)]
-    async fn submit_to_ethereum(
-        &self,
-        chain_name: ChainName,
-        address: alloy::primitives::Address,
-        data: Vec<u8>,
-        max_gas: Option<u64>,
-    ) -> Result<(), SubmissionError> {
+    async fn make_packet(&self, chain_name: ChainName, payload: Vec<u8>) -> Result<Packet, SubmissionError> {
         let eth_client = self
             .get_eth_client(&chain_name)
             .await
             .map_err(|_| SubmissionError::MissingEthereumChain)?;
 
-        let data_hash = eip191_hash_message(keccak256(&data));
-        let signature: Vec<u8> = eth_client
-            .signer
-            .sign_hash_sync(&data_hash)
-            .map_err(|_| SubmissionError::FailedToSignPayload)?
-            .into();
+        let block_height = eth_client
+            .provider
+            .get_block_number()
+            .await
+            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
+            - 1;
 
-        let signed_payload = SignedPayload {
-            operator: eth_client.address(),
-            data,
-            data_hash,
-            signature,
-            signed_block_height: eth_client
-                .provider
-                .get_block_number()
-                .await
-                .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
-                - 1,
-        };
+        let signer = eth_client.address();
+        let envelope:Envelope = unimplemented!("envelope needs to be passed through");
 
-        if let Some(aggregator_url) = self
-            .chain_configs
-            .get(&chain_name)
-            .and_then(|chain| EthereumChainConfig::try_from(chain.clone()).ok())
-            .and_then(|config| config.aggregator_endpoint.clone())
-        {
-            let response = self
-                .http_client
-                .post(format!("{aggregator_url}/add-payload"))
-                .header("Content-Type", "application/json")
-                .json(&AggregateAvsRequest::EthereumContract {
-                    signed_payload,
-                    address,
-                })
-                .send()
-                .await
-                .map_err(SubmissionError::Reqwest)?;
+        let signature = eth_client.sign_envelope(&envelope).await?;
+        let route:PacketRoute = unimplemented!("route needs to be passed through");
 
-            if !response.status().is_success() {
-                return Err(SubmissionError::Aggregator(format!(
-                    "error hitting {aggregator_url} response: {:?}",
-                    response
-                )));
-            }
+        Ok(Packet { 
+            route, 
+            envelope, 
+            signer: SignerAddress::Ethereum(signer),
+            signature, 
+            block_height
+        })
 
-            let response: AggregateAvsResponse =
-                response.json().await.map_err(SubmissionError::Reqwest)?;
+    }
 
-            match response {
-                AggregateAvsResponse::Sent { tx_hash, count } => {
-                    tracing::debug!(
-                        "Aggregator submitted with tx hash {} and payload count {}",
-                        tx_hash,
-                        count
-                    );
-                }
-                AggregateAvsResponse::Aggregated { count } => {
-                    tracing::debug!("Aggregated with current payload count {}", count);
-                }
-            }
-        } else {
-            if let Err(err) = self.maybe_tap_eth_faucet(chain_name, &eth_client).await {
-                tracing::error!(
-                    "Failed to tap faucet for client {}: {:?}",
-                    eth_client.address(),
-                    err
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    async fn submit_to_ethereum(
+        &self,
+        submission: EthereumContractSubmission,
+        packet: Packet,
+    ) -> Result<(), SubmissionError> {
+
+        let EthereumContractSubmission {
+            chain_name,
+            max_gas,
+            address
+        } = submission;
+
+
+
+        let eth_client = self
+            .get_eth_client(&chain_name)
+            .await
+            .map_err(|_| SubmissionError::MissingEthereumChain)?;
+
+        if let Err(err) = self.maybe_tap_eth_faucet(chain_name, &eth_client).await {
+            tracing::error!(
+                "Failed to tap faucet for client {}: {:?}",
+                eth_client.address(),
+                err
+            );
+        }
+
+        let signer_and_signatures = vec![(packet.signer, packet.signature)];
+
+        let tx_receipt = eth_client.send_envelope_signatures(
+            packet.envelope, 
+            signer_and_signatures, 
+            packet.block_height, 
+            address, 
+            max_gas
+        ).await.map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
+
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    async fn submit_to_aggregator(
+        &self,
+        url: String,
+        packet: Packet,
+    ) -> Result<(), SubmissionError> {
+        let response = self
+            .http_client
+            .post(format!("{url}/packet"))
+            .header("Content-Type", "application/json")
+            .json(&AddPacketRequest {
+                packet
+            })
+            .send()
+            .await
+            .map_err(SubmissionError::Reqwest)?;
+
+        if !response.status().is_success() {
+            return Err(SubmissionError::Aggregator(format!(
+                "error hitting {url} response: {:?}",
+                response
+            )));
+        }
+
+        let response: AddPacketResponse =
+            response.json().await.map_err(SubmissionError::Reqwest)?;
+
+        match response {
+            AddPacketResponse::Sent { tx_receipt, count } => {
+                tracing::debug!(
+                    "Aggregator submitted with tx hash {} and payload count {}",
+                    tx_receipt.transaction_hash,
+                    count
                 );
             }
-
-            ServiceHandlerClient::new(eth_client.clone(), address)
-                .add_signed_payload(signed_payload, max_gas)
-                .await
-                .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?;
+            AddPacketResponse::Aggregated { count } => {
+                tracing::debug!("Aggregated with current payload count {}", count);
+            }
         }
 
         Ok(())
@@ -230,13 +249,40 @@ impl Submission for CoreSubmission {
                     _ = async move {
                     } => {
                         while let Some(msg) = rx.recv().await {
+                            let chain_name = match &msg.submit {
+                                Submit::EthereumContract(submission) => {
+                                    submission.chain_name.clone()
+                                },
+                                Submit::Aggregator{url} => {
+                                    todo!()
+                                    // TODO - get chain name from service.manager
+                                }
+                                Submit::None => {
+                                    continue;
+                                }
+                            };
+
+                            let packet = match _self.make_packet(chain_name, msg.wasi_result).await {
+                                Ok(packet) => packet,
+                                Err(e) => {
+                                    tracing::error!("Failed to make packet: {:?}", e);
+                                    continue;
+                                }
+                            };
+                            
                             match msg.submit {
-                                Submit::EthereumContract {chain_name, address, max_gas } => {
-                                    if let Err(e) = _self.submit_to_ethereum(chain_name, address, msg.wasi_result, max_gas).await {
+                                Submit::EthereumContract(submission) => {
+                                    if let Err(e) = _self.submit_to_ethereum(submission, packet).await {
                                         tracing::error!("{:?}", e);
                                     }
                                 },
+                                Submit::Aggregator{url} => {
+                                    if let Err(e) = _self.submit_to_aggregator(url, packet).await {
+                                        tracing::error!("{:?}", e);
+                                    }
+                                }
                                 Submit::None => {
+                                    tracing::error!("Submit::None here should be unreachable!");
                                 }
                             };
                         }

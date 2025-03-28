@@ -392,10 +392,12 @@ mod tests {
                         None,
                     ),
                     fuel_limit: None,
+                    aggregator: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
+            manager: service_manager_addr.into()
         };
         ctx.rt.block_on(async {
             dispatcher.add_service(service).await.unwrap();
@@ -476,6 +478,7 @@ mod tests {
 
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
+
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -496,10 +499,12 @@ mod tests {
                         None,
                     ),
                     fuel_limit: None,
+                    aggregator: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
+            manager: rand_address_eth().into()
         };
         ctx.rt.block_on(async {
             dispatcher.add_service(service).await.unwrap();
@@ -593,10 +598,12 @@ mod tests {
                         None,
                     ),
                     fuel_limit: None,
+                    aggregator: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
+            manager: rand_address_eth().into()
         };
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
