@@ -404,7 +404,7 @@ mod tests {
             status: ServiceStatus::Active,
             manager: ServiceManager::Ethereum {
                 chain_name: ChainName::new("eth").unwrap(),
-                address: service_manager_addr.into(),
+                address: service_manager_addr,
             },
         };
         ctx.rt.block_on(async {
@@ -517,7 +517,7 @@ mod tests {
             status: ServiceStatus::Active,
             manager: ServiceManager::Ethereum {
                 chain_name: ChainName::new("eth").unwrap(),
-                address: rand_address_eth().into(),
+                address: rand_address_eth(),
             },
         };
         ctx.rt.block_on(async {
@@ -619,7 +619,7 @@ mod tests {
             status: ServiceStatus::Active,
             manager: ServiceManager::Ethereum {
                 chain_name: ChainName::new("eth").unwrap(),
-                address: rand_address_eth().into(),
+                address: rand_address_eth(),
             },
         };
 
