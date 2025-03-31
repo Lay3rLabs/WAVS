@@ -125,7 +125,7 @@ impl DeployService {
                 }
             }
             CliTriggerKind::CronInterval => Trigger::Cron {
-                schedule: "* * * * *".to_owned(),
+                schedule: "* * * * * *".to_owned(),
                 start_time: None,
                 end_time: None,
             },

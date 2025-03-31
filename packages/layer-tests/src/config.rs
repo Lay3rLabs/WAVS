@@ -74,6 +74,7 @@ pub struct TestMatrixEthConfig {
     pub multi_workflow: bool,
     pub multi_trigger: bool,
     pub block_interval: bool,
+    pub cron_interval: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -85,6 +86,7 @@ pub struct TestMatrixCosmosConfig {
     pub permissions: bool,
     pub square: bool,
     pub block_interval: bool,
+    pub cron_interval: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -172,6 +174,10 @@ impl TestMatrixConfig {
             matrix.eth.insert(EthService::BlockInterval);
         }
 
+        if self.eth.cron_interval {
+            matrix.eth.insert(EthService::CronInterval);
+        }
+
         if self.cosmos.chain_trigger_lookup {
             matrix.cosmos.insert(CosmosService::ChainTriggerLookup);
         }
@@ -194,6 +200,10 @@ impl TestMatrixConfig {
 
         if self.cosmos.block_interval {
             matrix.cosmos.insert(CosmosService::BlockInterval);
+        }
+
+        if self.cosmos.cron_interval {
+            matrix.cosmos.insert(CosmosService::CronInterval);
         }
 
         if self.crosschain.cosmos_to_eth_echo_data {
@@ -219,12 +229,14 @@ impl From<&str> for AnyService {
             "eth-multi-workflow" => AnyService::Eth(EthService::MultiWorkflow),
             "eth-multi-trigger" => AnyService::Eth(EthService::MultiTrigger),
             "eth-block-interval" => AnyService::Eth(EthService::BlockInterval),
+            "eth-cron-interval" => AnyService::Eth(EthService::CronInterval),
             "cosmos-chain-trigger-lookup" => AnyService::Cosmos(CosmosService::ChainTriggerLookup),
             "cosmos-cosmos-query" => AnyService::Cosmos(CosmosService::CosmosQuery),
             "cosmos-echo-data" => AnyService::Cosmos(CosmosService::EchoData),
             "cosmos-permissions" => AnyService::Cosmos(CosmosService::Permissions),
             "cosmos-square" => AnyService::Cosmos(CosmosService::Square),
             "cosmos-block-interval" => AnyService::Cosmos(CosmosService::BlockInterval),
+            "cosmos-cron-interval" => AnyService::Cosmos(CosmosService::CronInterval),
             "crosschain-cosmos-to-eth-echo-data" => {
                 AnyService::CrossChain(CrossChainService::CosmosToEthEchoData)
             }

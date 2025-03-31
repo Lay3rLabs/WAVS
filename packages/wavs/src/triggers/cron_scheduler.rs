@@ -132,61 +132,64 @@ impl CronScheduler {
         let mut expired_ids = Vec::new();
         let mut updated_triggers = Vec::new(); // Store updates separately
 
-        let mut queue = self.trigger_queue.write().unwrap();
-        let lookup = self.trigger_lookup.read().unwrap();
+        // Scope for queue and lookup locks
+        {
+            let mut queue = self.trigger_queue.write().unwrap();
+            let lookup = self.trigger_lookup.read().unwrap();
 
-        queue.retain(|trigger| {
-            // Skip if this trigger has been removed
-            if !lookup.contains(&trigger.lookup_id) {
-                return false;
-            }
-
-            // Check if trigger is expired
-            if let Some(end_time) = trigger.end_time {
-                if current_unix > end_time.as_seconds() {
-                    expired_ids.push(trigger.lookup_id);
-                    tracing::debug!(
-                        "Removing expired cron trigger ID {}: current time {} > end time {}",
-                        trigger.lookup_id,
-                        current_unix,
-                        end_time.as_seconds()
-                    );
-                    return false; // Remove from queue
+            queue.retain(|trigger| {
+                // Skip if this trigger has been removed
+                if !lookup.contains(&trigger.lookup_id) {
+                    return false;
                 }
-            }
 
-            // Determine if it should execute
-            if trigger.next_trigger_time <= current_time {
-                let should_execute_now = match (trigger.start_time, trigger.end_time) {
-                    (Some(start), Some(end)) => {
-                        current_unix >= start.as_seconds() && current_unix <= end.as_seconds()
+                // Check if trigger is expired
+                if let Some(end_time) = trigger.end_time {
+                    if current_unix > end_time.as_seconds() {
+                        expired_ids.push(trigger.lookup_id);
+                        tracing::debug!(
+                            "Removing expired cron trigger ID {}: current time {} > end time {}",
+                            trigger.lookup_id,
+                            current_unix,
+                            end_time.as_seconds()
+                        );
+                        return false; // Remove from queue
                     }
-                    (Some(start), None) => current_unix >= start.as_seconds(),
-                    (None, Some(end)) => current_unix <= end.as_seconds(),
-                    (None, None) => true,
-                };
-
-                if should_execute_now {
-                    due_triggers.push(trigger.lookup_id);
-
-                    // Recalculate next trigger time
-                    if let Ok(next_time) = Self::calculate_next_trigger(&trigger.schedule) {
-                        let mut updated_trigger = trigger.clone();
-                        updated_trigger.next_trigger_time = next_time;
-                        updated_triggers.push(updated_trigger);
-                        return false; // Remove old trigger and add updated one later
-                    }
-                    return false; // Remove on failure
                 }
-            }
 
-            true // Keep in queue if not expired or due
-        });
+                // Determine if it should execute
+                if trigger.next_trigger_time <= current_time {
+                    let should_execute_now = match (trigger.start_time, trigger.end_time) {
+                        (Some(start), Some(end)) => {
+                            current_unix >= start.as_seconds() && current_unix <= end.as_seconds()
+                        }
+                        (Some(start), None) => current_unix >= start.as_seconds(),
+                        (None, Some(end)) => current_unix <= end.as_seconds(),
+                        (None, None) => true,
+                    };
 
-        // Add updated triggers back to the queue
-        queue.extend(updated_triggers);
+                    if should_execute_now {
+                        due_triggers.push(trigger.lookup_id);
 
-        // Remove expired IDs separately
+                        // Recalculate next trigger time
+                        if let Ok(next_time) = Self::calculate_next_trigger(&trigger.schedule) {
+                            let mut updated_trigger = trigger.clone();
+                            updated_trigger.next_trigger_time = next_time;
+                            updated_triggers.push(updated_trigger);
+                            return false; // Remove old trigger and add updated one later
+                        }
+                        return false; // Remove on failure
+                    }
+                }
+
+                true // Keep in queue if not expired or due
+            });
+
+            // Add updated triggers back to the queue
+            queue.extend(updated_triggers);
+        } // Both queue and lookup locks are dropped here
+
+        // Now handle expired IDs with a separate write lock
         if !expired_ids.is_empty() {
             let mut lookup = self.trigger_lookup.write().unwrap();
             for id in &expired_ids {

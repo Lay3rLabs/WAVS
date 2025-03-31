@@ -979,4 +979,91 @@ mod tests {
             assert!(countdowns.is_empty());
         }
     }
+
+    #[tokio::test]
+    async fn cron_trigger_is_removed_when_config_is_gone() {
+        // Setup configuration and manager
+        let config = Config {
+            active_trigger_chains: vec![ChainName::new("test").unwrap()],
+            ..Default::default()
+        };
+
+        let manager = CoreTriggerManager::new(&config).unwrap();
+
+        // Create service and workflow IDs
+        let service_id = ServiceID::new("service-1").unwrap();
+        let workflow_id = WorkflowID::new("workflow-1").unwrap();
+
+        // Set up the first trigger
+        let trigger1 = TriggerConfig {
+            service_id: service_id.clone(),
+            workflow_id: workflow_id.clone(),
+            trigger: Trigger::Cron {
+                schedule: "* * * * * *".to_string(),
+                start_time: None,
+                end_time: None,
+            },
+        };
+        manager.add_trigger(trigger1).unwrap();
+
+        // Set up the second trigger
+        let service_id2 = ServiceID::new("service-2").unwrap();
+        let trigger2 = TriggerConfig {
+            service_id: service_id2.clone(),
+            workflow_id: workflow_id.clone(),
+            trigger: Trigger::Cron {
+                schedule: "* * * * * *".to_string(),
+                start_time: None,
+                end_time: None,
+            },
+        };
+        manager.add_trigger(trigger2).unwrap();
+
+        // Use a future time to process triggers
+        let future_time = chrono::Utc::now() + chrono::Duration::seconds(10);
+        let lookup_ids = manager
+            .lookup_maps
+            .cron_scheduler
+            .process_due_triggers(future_time);
+
+        // Verify both triggers fire
+        assert_eq!(lookup_ids.len(), 2, "Expected 2 triggers to fire");
+
+        // Remove the first trigger
+        manager
+            .remove_trigger(service_id.clone(), workflow_id.clone())
+            .unwrap();
+
+        // Process triggers again
+        let future_time = chrono::Utc::now() + chrono::Duration::seconds(10);
+        let lookup_ids = manager
+            .lookup_maps
+            .cron_scheduler
+            .process_due_triggers(future_time);
+
+        // Verify only one trigger fires now
+        assert_eq!(
+            lookup_ids.len(),
+            1,
+            "Expected 1 trigger to fire after removing one"
+        );
+
+        // Remove the second trigger
+        manager
+            .remove_trigger(service_id2.clone(), workflow_id.clone())
+            .unwrap();
+
+        // Process triggers one more time
+        let future_time = chrono::Utc::now() + chrono::Duration::seconds(10);
+        let lookup_ids = manager
+            .lookup_maps
+            .cron_scheduler
+            .process_due_triggers(future_time);
+
+        // Verify no triggers fire
+        assert!(
+            lookup_ids.is_empty(),
+            "Expected no triggers to fire after removing all"
+        );
+    }
 }

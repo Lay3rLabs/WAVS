@@ -23,6 +23,7 @@ pub enum EthService {
     MultiWorkflow,
     MultiTrigger,
     BlockInterval,
+    CronInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -33,6 +34,7 @@ pub enum CosmosService {
     Permissions,
     Square,
     BlockInterval,
+    CronInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
@@ -102,6 +104,7 @@ impl From<EthService> for Vec<DigestName> {
             EthService::MultiWorkflow => vec![DigestName::Square, DigestName::EchoData],
             EthService::MultiTrigger => vec![DigestName::EchoData],
             EthService::BlockInterval => vec![DigestName::EchoBlockInterval],
+            EthService::CronInterval => vec![DigestName::EchoCronInterval],
         }
     }
 }
@@ -115,6 +118,7 @@ impl From<CosmosService> for Vec<DigestName> {
             CosmosService::Permissions => DigestName::Permissions,
             CosmosService::Square => DigestName::Square,
             CosmosService::BlockInterval => DigestName::EchoBlockInterval,
+            CosmosService::CronInterval => DigestName::EchoCronInterval,
         }]
     }
 }

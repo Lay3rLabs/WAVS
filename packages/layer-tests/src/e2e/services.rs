@@ -179,7 +179,9 @@ async fn deploy_service_simple(
 
     let trigger = match service {
         AnyService::Eth(EthService::BlockInterval) => CliTriggerKind::EthBlockInterval,
+        AnyService::Eth(EthService::CronInterval) => CliTriggerKind::CronInterval,
         AnyService::Eth(_) => CliTriggerKind::EthContractEvent,
+        AnyService::Cosmos(CosmosService::CronInterval) => CliTriggerKind::CronInterval,
         AnyService::Cosmos(CosmosService::BlockInterval) => CliTriggerKind::CosmosBlockInterval,
         AnyService::Cosmos(_) => CliTriggerKind::CosmosContractEvent,
         AnyService::CrossChain(service) => match service {
@@ -277,7 +279,7 @@ async fn deploy_service_simple(
             CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()), // always eth for now
             CliTriggerKind::EthBlockInterval => trigger_chain.clone(),
             CliTriggerKind::CosmosBlockInterval => Some(chain_names.eth[0].clone()), // always eth for now as above
-            CliTriggerKind::CronInterval => None,
+            CliTriggerKind::CronInterval => Some(chain_names.eth[0].clone()),
         },
         CliSubmitKind::None => None,
     };
