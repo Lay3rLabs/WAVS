@@ -39,6 +39,7 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
             bail!("Unexpected envelope difference!");
         }
 
+        // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
         if packet.block_height != last_packet.block_height {
             bail!("Unexpected block height difference!");
         }
