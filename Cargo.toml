@@ -107,8 +107,8 @@ redb = { version = "2.1" }
 lru = "0.13.0"
 
 # time
-cron = "0.15.0"
 chrono = "0.4.38"
+cron = "0.15.0"
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
 
 # utilis
