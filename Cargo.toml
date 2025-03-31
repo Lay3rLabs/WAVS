@@ -35,6 +35,7 @@ shellexpand = "3.1.0"
 
 # async runtime
 tokio = { version = "1.41.0", features = ["full"] }
+tokio-stream = { version = "0.1" }
 futures = "0.3.31"
 futures-utils-wasm = "0.1.0"
 rayon = "1.5.1"

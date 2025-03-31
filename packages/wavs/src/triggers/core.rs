@@ -16,6 +16,7 @@ use std::{
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::IntervalStream;
 use tracing::instrument;
 use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
 use wavs_types::{
@@ -240,11 +241,8 @@ impl CoreTriggerManager {
 
         // Create a stream for cron triggers that produces a trigger for each due task
         let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
-        let interval = tokio::time::interval(std::time::Duration::from_secs(1));
-        let interval_stream = futures::stream::unfold(interval, |mut interval| async move {
-            interval.tick().await;
-            Some(((), interval))
-        });
+        let interval_stream =
+            IntervalStream::new(tokio::time::interval(std::time::Duration::from_secs(1)));
 
         // Process cron triggers on each interval tick
         let cron_stream = Box::pin(interval_stream.flat_map(move |_| {
