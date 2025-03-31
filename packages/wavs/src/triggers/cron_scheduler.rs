@@ -148,6 +148,9 @@ impl CronScheduler {
                 if let Some(end_time) = trigger.end_time {
                     if current_unix > end_time {
                         // Trigger has expired, don't add it back to the queue
+                        let mut lookup = self.trigger_lookup.write().unwrap();
+                        lookup.remove(&trigger.lookup_id);
+
                         tracing::debug!(
                             "Removing expired cron trigger ID {}: current time {} > end time {}",
                             trigger.lookup_id,
