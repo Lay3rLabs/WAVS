@@ -138,7 +138,7 @@ impl CronScheduler {
             let mut pending_triggers = Vec::new();
 
             // Extract and process all due triggers in one pass
-            while let Some(trigger) = queue.pop() {
+            while let Some(mut trigger) = queue.pop() {
                 // Skip if this trigger has been removed
                 if !lookup.contains(&trigger.lookup_id) {
                     continue;
@@ -179,13 +179,8 @@ impl CronScheduler {
 
                     // Calculate next trigger time
                     if let Ok(next_time) = Self::calculate_next_trigger(&trigger.schedule) {
-                        pending_triggers.push(CronTriggerItem {
-                            lookup_id: trigger.lookup_id,
-                            schedule: trigger.schedule,
-                            next_trigger_time: next_time,
-                            start_time: trigger.start_time,
-                            end_time: trigger.end_time,
-                        });
+                        trigger.next_trigger_time = next_time;
+                        pending_triggers.push(trigger);
                     }
                 } else {
                     // Keep trigger since it's valid but should not execute now
