@@ -91,7 +91,10 @@ enum StreamTriggers {
         block_height: u64,
     },
     Cron {
+        /// Unix timestamp (in seconds) when these triggers were processed.
         trigger_time: u64,
+        /// Vector of lookup IDs for all triggers that are due at this time.
+        /// Multiple triggers can fire simultaneously in a single tick.
         lookup_ids: Vec<LookupId>,
     },
 }

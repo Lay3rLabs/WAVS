@@ -117,8 +117,11 @@ pub enum Trigger {
         n_blocks: NonZeroU32,
     },
     Cron {
+        /// A cron expression defining the schedule for execution.
         schedule: String,
+        /// Optional start time (timestamp in seconds) indicating when the schedule begins.
         start_time: Option<u64>,
+        /// Optional end time (timestamp in seconds) indicating when the schedule ends.
         end_time: Option<u64>,
     },
     // not a real trigger, just for testing
