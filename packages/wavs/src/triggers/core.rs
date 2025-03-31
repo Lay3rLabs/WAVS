@@ -92,7 +92,7 @@ enum StreamTriggers {
     },
     Cron {
         trigger_time: u64,
-        lookup_id: LookupId,
+        lookup_ids: Vec<LookupId>,
     },
 }
 
@@ -245,19 +245,15 @@ impl CoreTriggerManager {
             IntervalStream::new(tokio::time::interval(std::time::Duration::from_secs(1)));
 
         // Process cron triggers on each interval tick
-        let cron_stream = Box::pin(interval_stream.flat_map(move |_| {
-            // Process all due triggers in this tick
+        let cron_stream = Box::pin(interval_stream.map(move |_| {
             let current_time = chrono::Utc::now();
-            let due_triggers = cron_scheduler.process_due_triggers(current_time);
+            let lookup_ids = cron_scheduler.process_due_triggers(current_time);
             let trigger_time = current_time.timestamp() as u64;
 
-            // Convert to a stream of results using futures::stream::iter
-            futures::stream::iter(due_triggers.into_iter().map(move |(lookup_id, _)| {
-                Ok(StreamTriggers::Cron {
-                    lookup_id,
-                    trigger_time,
-                })
-            }))
+            Ok(StreamTriggers::Cron {
+                lookup_ids,
+                trigger_time,
+            })
         }));
 
         streams.push(cron_stream);
@@ -380,24 +376,26 @@ impl CoreTriggerManager {
                 }
                 StreamTriggers::Cron {
                     trigger_time,
-                    lookup_id,
+                    lookup_ids,
                 } => {
                     let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
 
-                    match trigger_configs_lock.get(&lookup_id) {
-                        Some(trigger_config) => {
-                            trigger_actions.push(TriggerAction {
-                                data: TriggerData::Cron {
-                                    execution_time: trigger_time,
-                                },
-                                config: trigger_config.clone(),
-                            });
-                        }
-                        None => {
-                            tracing::warn!(
-                                "Trigger config not found for cron lookup_id {}",
-                                lookup_id
-                            );
+                    for lookup_id in lookup_ids {
+                        match trigger_configs_lock.get(&lookup_id) {
+                            Some(trigger_config) => {
+                                trigger_actions.push(TriggerAction {
+                                    data: TriggerData::Cron {
+                                        execution_time: trigger_time,
+                                    },
+                                    config: trigger_config.clone(),
+                                });
+                            }
+                            None => {
+                                tracing::warn!(
+                                    "Trigger config not found for cron lookup_id {}",
+                                    lookup_id
+                                );
+                            }
                         }
                     }
                 }

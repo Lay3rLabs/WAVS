@@ -124,8 +124,8 @@ impl CronScheduler {
         Ok(())
     }
 
-    // Process due triggers
-    pub fn process_due_triggers(&self, current_time: DateTime<Utc>) -> Vec<(LookupId, String)> {
+    // Process due triggers and return IDs of triggers that are due
+    pub fn process_due_triggers(&self, current_time: DateTime<Utc>) -> Vec<LookupId> {
         let mut due_triggers = Vec::new();
         let current_unix = current_time.timestamp() as u64;
         let mut expired_ids = Vec::new();
@@ -164,7 +164,7 @@ impl CronScheduler {
                 };
 
                 if should_execute_now {
-                    due_triggers.push((trigger.lookup_id, trigger.schedule.clone()));
+                    due_triggers.push(trigger.lookup_id);
 
                     // Recalculate next trigger time
                     if let Ok(next_time) = Self::calculate_next_trigger(&trigger.schedule) {
