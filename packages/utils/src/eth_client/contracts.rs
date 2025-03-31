@@ -1,8 +1,10 @@
 use alloy::primitives::Address;
-use wavs_types::{IWavsServiceHandler, IWavsServiceHandlerQueryT, IWavsServiceHandlerSigningT, IWavsServiceManager, IWavsServiceManagerQueryT, IWavsServiceManagerSigningT};
+use wavs_types::{
+    IWavsServiceHandler, IWavsServiceHandlerQueryT, IWavsServiceHandlerSigningT,
+    IWavsServiceManager, IWavsServiceManagerQueryT, IWavsServiceManagerSigningT,
+};
 
 use super::{EthQueryClient, EthSigningClient};
-
 
 impl EthSigningClient {
     pub fn service_handler(&self, address: Address) -> IWavsServiceHandlerSigningT {

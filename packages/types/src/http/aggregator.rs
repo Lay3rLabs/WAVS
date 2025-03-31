@@ -6,13 +6,18 @@ use crate::{Packet, Service};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct AddPacketRequest {
-    pub packet: Packet
+    pub packet: Packet,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AddPacketResponse {
-    Sent { tx_receipt: TransactionReceipt, count: usize },
-    Aggregated { count: usize },
+    Sent {
+        tx_receipt: TransactionReceipt,
+        count: usize,
+    },
+    Aggregated {
+        count: usize,
+    },
 }
 
 // Only the operator can call this endoint

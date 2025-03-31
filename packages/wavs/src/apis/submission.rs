@@ -1,10 +1,12 @@
+use async_trait::async_trait;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use utils::error::EthClientError;
-use wavs_types::{Submit, TriggerConfig};
+use wavs_types::{ChainName, Envelope, PacketRoute, Service, ServiceID, Submit};
 
 use crate::AppContext;
 
+#[async_trait]
 pub trait Submission: Send + Sync {
     /// Start running the submission manager
     /// This should only be called once in the lifetime of the object.
@@ -13,13 +15,15 @@ pub trait Submission: Send + Sync {
         ctx: AppContext,
         receiver: mpsc::Receiver<ChainMessage>,
     ) -> Result<(), SubmissionError>;
+
+    async fn add_service(&self, service: &Service) -> Result<(), SubmissionError>;
 }
 
 /// The data returned from a trigger action
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct ChainMessage {
-    pub trigger_config: TriggerConfig,
-    pub wasi_result: Vec<u8>,
+    pub packet_route: PacketRoute,
+    pub envelope: Envelope,
     pub submit: Submit,
 }
 
@@ -63,4 +67,8 @@ pub enum SubmissionError {
     FailedToSubmitEthDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
     FailedToSubmitCosmos(anyhow::Error),
+    #[error("missing ethereum signing client for service {0}")]
+    MissingEthereumSigningClient(ServiceID),
+    #[error("missing ethereum signing client for chain {0}")]
+    MissingEthereumSendingClient(ChainName),
 }

@@ -1,10 +1,12 @@
+use alloy::primitives::Uint;
+use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use wavs_types::Submit;
+use wavs_types::{EventId, Submit};
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 use crate::test_utils::address::rand_address_eth;
@@ -62,6 +64,7 @@ pub enum WaitError {
     Timeout,
 }
 
+#[async_trait]
 impl Submission for MockSubmission {
     // doing this sync so easier to block on
     // TODO: how to add support for aborting on the kill signal from ctx
@@ -86,29 +89,36 @@ impl Submission for MockSubmission {
 
         Ok(())
     }
+
+    async fn add_service(&self, _service: &wavs_types::Service) -> Result<(), SubmissionError> {
+        Ok(())
+    }
+}
+
+pub fn mock_event_id() -> EventId {
+    Uint::from_le_bytes([0; 32]).into()
 }
 
 #[cfg(test)]
 mod test {
     use std::{thread::sleep, time::Duration};
 
-    use wavs_types::{ChainName, TriggerConfig};
+    use wavs_types::{ChainName, Envelope, PacketRoute};
 
-    use crate::test_utils::address::{rand_address_eth, rand_event_eth};
+    use crate::test_utils::address::rand_address_eth;
 
     use super::*;
 
     fn dummy_message(service: &str, payload: &str) -> ChainMessage {
         ChainMessage {
-            trigger_config: TriggerConfig::eth_contract_event(
-                service,
-                service,
-                rand_address_eth(),
-                ChainName::new("eth").unwrap(),
-                rand_event_eth(),
-            )
-            .unwrap(),
-            wasi_result: payload.as_bytes().to_vec(),
+            packet_route: PacketRoute {
+                service_id: service.parse().unwrap(),
+                workflow_id: service.parse().unwrap(),
+            },
+            envelope: Envelope {
+                payload: payload.as_bytes().to_vec().into(),
+                eventId: mock_event_id().into(),
+            },
             submit: Submit::eth_contract(ChainName::new("eth").unwrap(), rand_address_eth(), None),
         }
     }
@@ -116,7 +126,7 @@ mod test {
     #[test]
     fn collect_messages_with_sleep() {
         let submission = MockSubmission::new();
-        assert_eq!(submission.received(), vec![]);
+        assert!(submission.received().is_empty());
 
         let ctx = AppContext::new();
 
@@ -130,19 +140,26 @@ mod test {
         send.blocking_send(msg1.clone()).unwrap();
         // try waiting a bit. is there a way to block somehow?
         sleep(Duration::from_millis(100));
-        assert_eq!(submission.received(), vec![msg1.clone()]);
+        assert_eq!(submission.received()[0].packet_route, msg1.packet_route);
 
         send.blocking_send(msg2.clone()).unwrap();
         send.blocking_send(msg3.clone()).unwrap();
         // try waiting a bit. is there a way to block somehow?
         sleep(Duration::from_millis(100));
-        assert_eq!(submission.received(), vec![msg1, msg2, msg3]);
+        assert_eq!(
+            submission
+                .received()
+                .into_iter()
+                .map(|x| x.packet_route)
+                .collect::<Vec<_>>(),
+            vec![msg1.packet_route, msg2.packet_route, msg3.packet_route]
+        );
     }
 
     #[test]
     fn collect_messages_with_wait() {
         let submission = MockSubmission::new();
-        assert_eq!(submission.received(), vec![]);
+        assert!(submission.received().is_empty());
 
         let ctx = AppContext::new();
         let (send, rx) = mpsc::channel::<ChainMessage>(2);
@@ -154,12 +171,19 @@ mod test {
 
         send.blocking_send(msg1.clone()).unwrap();
         submission.wait_for_messages(1).unwrap();
-        assert_eq!(submission.received(), vec![msg1.clone()]);
+        assert_eq!(submission.received()[0].packet_route, msg1.packet_route);
 
         send.blocking_send(msg2.clone()).unwrap();
         send.blocking_send(msg3.clone()).unwrap();
         submission.wait_for_messages(3).unwrap();
-        assert_eq!(submission.received(), vec![msg1, msg2, msg3]);
+        assert_eq!(
+            submission
+                .received()
+                .into_iter()
+                .map(|x| x.packet_route)
+                .collect::<Vec<_>>(),
+            vec![msg1.packet_route, msg2.packet_route, msg3.packet_route]
+        );
 
         // show this doesn't loop forever if the 4th never appears
         let err = submission

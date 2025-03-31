@@ -1,8 +1,14 @@
 use anyhow::bail;
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{aggregator::{AddPacketRequest, AddPacketResponse}, EthereumContractSubmission, Packet};
+use wavs_types::{
+    aggregator::{AddPacketRequest, AddPacketResponse},
+    EthereumContractSubmission, Packet,
+};
 
-use crate::http::{error::AnyError, state::{Destination, HttpState, PacketQueue}};
+use crate::http::{
+    error::AnyError,
+    state::{Destination, HttpState, PacketQueue},
+};
 
 #[axum::debug_handler]
 pub async fn handle_packet(
@@ -18,17 +24,14 @@ pub async fn handle_packet(
     }
 }
 
-async fn inner(
-    state: HttpState,
-    packet: Packet,
-) -> anyhow::Result<AddPacketResponse> {
+async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResponse> {
     let event_id = packet.event_id();
 
     let mut queue = match state.get_packet_queue(&event_id)? {
         PacketQueue::Burned => {
             bail!("Packet queue for event {event_id} is already burned");
-        },
-        PacketQueue::Alive(queue) => queue
+        }
+        PacketQueue::Alive(queue) => queue,
     };
 
     if let Some(last_packet) = queue.first() {
@@ -53,13 +56,28 @@ async fn inner(
     if count >= state.config.tasks_quorum as usize {
         let destination = state.get_destination(&route)?;
         match destination {
-            Destination::Eth(EthereumContractSubmission{chain_name, address, max_gas}) => {
+            Destination::Eth(EthereumContractSubmission {
+                chain_name,
+                address,
+                max_gas,
+            }) => {
                 let client = state.get_eth_client(&chain_name).await?;
-                let signer_and_signatures = queue.drain(..).map(|packet| (packet.signer, packet.signature)).collect();
-                let tx_receipt = client.send_envelope_signatures(envelope, signer_and_signatures, block_height, address, max_gas).await?;
+                let signer_and_signatures = queue
+                    .drain(..)
+                    .map(|packet| (packet.signer, packet.signature))
+                    .collect();
+                let tx_receipt = client
+                    .send_envelope_signatures(
+                        envelope,
+                        signer_and_signatures,
+                        block_height,
+                        address,
+                        max_gas,
+                    )
+                    .await?;
 
                 state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-                Ok(AddPacketResponse::Sent{ tx_receipt, count })
+                Ok(AddPacketResponse::Sent { tx_receipt, count })
             }
         }
     } else {

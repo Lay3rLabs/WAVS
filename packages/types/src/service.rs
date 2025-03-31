@@ -32,23 +32,25 @@ pub struct Service {
     pub manager: ServiceManager,
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {
-    Ethereum(alloy::primitives::Address),
-}
-
-impl From<alloy::primitives::Address> for ServiceManager {
-    fn from(addr: alloy::primitives::Address) -> Self {
-        Self::Ethereum(addr)
-    }
+    Ethereum {
+        chain_name: ChainName,
+        address: alloy::primitives::Address,
+    },
 }
 
 impl ServiceManager {
+    pub fn chain_name(&self) -> &ChainName {
+        match self {
+            ServiceManager::Ethereum { chain_name, .. } => &chain_name,
+        }
+    }
+
     pub fn eth_address_unchecked(&self) -> alloy::primitives::Address {
         match self {
-            ServiceManager::Ethereum(address) => *address,
+            ServiceManager::Ethereum { address, .. } => *address,
         }
     }
 }
@@ -64,6 +66,16 @@ impl Service {
     ) -> Self {
         let component_id = ComponentID::default();
         let workflow_id = WorkflowID::default();
+
+        let manager = ServiceManager::Ethereum {
+            chain_name: match &submit {
+                Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) => {
+                    chain_name.clone()
+                }
+                _ => panic!("ServiceManager::Ethereum requires an EthereumContractSubmission"),
+            },
+            address: alloy::primitives::Address::ZERO,
+        };
 
         let workflow = Workflow {
             trigger,
@@ -81,8 +93,6 @@ impl Service {
         let components = BTreeMap::from([(workflow.component.clone(), component)]);
 
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
-
-        let manager = ServiceManager::Ethereum(alloy::primitives::Address::ZERO);
 
         Self {
             name: name.unwrap_or_else(|| id.to_string()),
@@ -215,16 +225,16 @@ pub enum Submit {
     None,
     Aggregator {
         /// The aggregator endpoint
-        url: String 
+        url: String,
     },
     /// Service handler directly
-    EthereumContract(EthereumContractSubmission)
+    EthereumContract(EthereumContractSubmission),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Aggregator {
-    Ethereum(EthereumContractSubmission)
+    Ethereum(EthereumContractSubmission),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -310,9 +320,7 @@ mod test_ext {
             max_gas: Option<u64>,
         ) -> Submit {
             Submit::EthereumContract(EthereumContractSubmission::new(
-                chain_name,
-                address,
-                max_gas,
+                chain_name, address, max_gas,
             ))
         }
     }

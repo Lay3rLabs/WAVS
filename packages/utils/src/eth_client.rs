@@ -3,8 +3,15 @@ pub mod signing;
 
 use std::sync::Arc;
 
-
-use alloy::{network::EthereumWallet, primitives::Address, providers::ProviderBuilder, signers::{k256::ecdsa::SigningKey, local::{coins_bip39::English, LocalSigner, MnemonicBuilder}}};
+use alloy::{
+    network::EthereumWallet,
+    primitives::Address,
+    providers::ProviderBuilder,
+    signers::{
+        k256::ecdsa::SigningKey,
+        local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
+    },
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use wavs_types::{QueryProvider, SigningProvider};

@@ -3,12 +3,13 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
-use utils::{avs_client::SignedData, context::AppContext};
-use wavs_types::{ChainName, Service, Submit};
+use utils::context::AppContext;
+use wavs_types::{ChainName, EthereumContractSubmission, Service, Submit};
 
 use crate::e2e::add_task::{add_task, wait_for_task_to_land};
 
 use super::{
+    add_task::SignedData,
     clients::Clients,
     config::Configs,
     matrix::{AnyService, CosmosService, CrossChainService, EthService},
@@ -55,23 +56,13 @@ async fn test_service(
         let (workflow_id, workflow) = service.workflows.iter().nth(workflow_index).unwrap();
 
         let n_tasks = match &workflow.submit {
-            Submit::EthereumContract { chain_name, .. } => {
-                let chain = configs
-                    .chains
-                    .eth
-                    .get(chain_name)
-                    .context("couldn't get submission chain to detect aggregation")?;
-                match chain.aggregator_endpoint.is_some() {
-                    true => configs.aggregator.as_ref().unwrap().tasks_quorum,
-                    false => 1,
-                }
-            }
+            Submit::EthereumContract(EthereumContractSubmission { .. }) => 1,
+            Submit::Aggregator { .. } => configs.aggregator.as_ref().unwrap().tasks_quorum,
             Submit::None => 1,
         };
 
         for task_number in 1..=n_tasks {
             let is_final = task_number == n_tasks;
-            let is_aggregator = n_tasks > 1;
 
             let (trigger_id, signed_data) = add_task(
                 &clients.cli_ctx,
@@ -83,7 +74,6 @@ async fn test_service(
                 } else {
                     None
                 },
-                is_aggregator,
             )
             .await?;
 
@@ -109,7 +99,7 @@ async fn test_service(
                             .collect::<Vec<_>>(),
                     );
 
-                    let workflow = clients
+                    let service = clients
                         .cli_ctx
                         .deployment
                         .lock()
@@ -117,39 +107,37 @@ async fn test_service(
                         .services
                         .get(&additional_service.id)
                         .unwrap()
-                        .workflows
-                        .get(workflow_id)
-                        .unwrap()
                         .clone();
 
-                    match workflow.submit {
-                        Submit::None => {}
-                        Submit::EthereumContract {
+                    let workflow = service.workflows.get(workflow_id).unwrap().clone();
+
+                    let chain_and_addr = match workflow.submit {
+                        Submit::None => None,
+                        Submit::EthereumContract(EthereumContractSubmission {
                             chain_name,
                             address,
                             ..
-                        } => {
-                            let signed_data = wait_for_task_to_land(
-                                &clients.cli_ctx,
-                                &chain_name,
-                                address,
-                                trigger_id,
-                                is_aggregator,
-                                std::time::Duration::from_secs(10),
-                                // we control the tests and *only* use on-chain triggers
-                                // for multi-service tests
-                                false,
-                            )
-                            .await?;
+                        }) => Some((chain_name, address)),
+                        Submit::Aggregator { url: _ } => Some((
+                            service.manager.chain_name().clone(),
+                            service.manager.eth_address_unchecked(),
+                        )),
+                    };
 
-                            verify_signed_data(
-                                name,
-                                signed_data,
-                                service,
-                                configs,
-                                workflow_index,
-                            )?;
-                        }
+                    if let Some((chain_name, address)) = chain_and_addr {
+                        let signed_data = wait_for_task_to_land(
+                            &clients.cli_ctx,
+                            &chain_name,
+                            address,
+                            trigger_id,
+                            std::time::Duration::from_secs(10),
+                            // we control the tests and *only* use on-chain triggers
+                            // for multi-service tests
+                            false,
+                        )
+                        .await?;
+
+                        verify_signed_data(name, signed_data, &service, configs, workflow_index)?;
                     }
                 }
             }

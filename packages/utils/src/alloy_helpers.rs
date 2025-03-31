@@ -1,6 +1,5 @@
 use alloy::{rpc::types::TransactionReceipt, sol_types::SolEvent};
 
-
 pub trait SolidityEventFinder<E> {
     fn solidity_event(&self) -> Option<E>;
 }

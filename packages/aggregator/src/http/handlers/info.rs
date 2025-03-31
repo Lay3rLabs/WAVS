@@ -18,8 +18,7 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 }
 
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
-
     Ok(InfoResponse {
-        chains: state.config.chains
+        chains: state.config.chains,
     })
 }

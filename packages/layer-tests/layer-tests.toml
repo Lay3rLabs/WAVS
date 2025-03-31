@@ -1,5 +1,6 @@
 # Run all the tests
 all = true
+# isolated = "eth-echo-data"
 # isolated = "cosmos-block-interval"
 # registry = true
 
@@ -11,12 +12,22 @@ all = true
 # [matrix.eth]
 # chain-trigger-lookup = true
 # cosmos-query = true
-# etc.
+# echo-data = true
+# echo-data-secondary-chain = true
+# echo-data-aggregator = true
+# permissions = true
+# square = true
+# multi-workflow = true
+# block-interval = true
 
 # [matrix.cosmos]
 # chain-trigger-lookup = true
 # cosmos-query = true
-# etc.
+# echo-data = true
+# permissions = true
+# square = true
+# block-interval = true
+
 
 # [matrix.crosschain]
 # cosmos-to-eth-echo-data = true

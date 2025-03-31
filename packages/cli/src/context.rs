@@ -80,9 +80,11 @@ impl CliContext {
                     }
 
                     match &workflow.submit {
-                        Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) => {
+                        Submit::EthereumContract(EthereumContractSubmission {
+                            chain_name, ..
+                        }) => {
                             chains.insert(chain_name.clone());
-                        },
+                        }
                         Submit::Aggregator { .. } => {}
                         Submit::None => {}
                     }

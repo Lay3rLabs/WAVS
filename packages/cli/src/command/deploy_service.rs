@@ -2,7 +2,10 @@ use std::num::NonZero;
 
 use anyhow::{bail, Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
-use wavs_types::{ByteArray, ChainName, ComponentSource, EthereumContractSubmission, Service, ServiceConfig, Submit, Trigger};
+use wavs_types::{
+    ByteArray, ChainName, ComponentSource, EthereumContractSubmission, Service, ServiceConfig,
+    Submit, Trigger,
+};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},

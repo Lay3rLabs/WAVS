@@ -1,7 +1,6 @@
 mod service_manager {
     use alloy::sol;
 
-
     sol!(
         #[allow(missing_docs)]
         #[cfg(feature = "solidity-rpc")]
@@ -14,7 +13,6 @@ mod service_manager {
 mod service_handler {
     use alloy::sol;
 
-
     sol!(
         #[allow(missing_docs)]
         #[cfg(feature = "solidity-rpc")]
@@ -25,9 +23,10 @@ mod service_handler {
     );
 }
 
-pub use service_manager::IWavsServiceManager; 
-pub use service_handler::{IWavsServiceHandler, IWavsServiceHandler::Envelope, IWavsServiceHandler::SignatureData};
-
+pub use service_handler::{
+    IWavsServiceHandler, IWavsServiceHandler::Envelope, IWavsServiceHandler::SignatureData,
+};
+pub use service_manager::IWavsServiceManager;
 
 #[cfg(feature = "solidity-rpc")]
 mod rpc {
@@ -51,21 +50,32 @@ mod rpc {
         Ethereum,
     >;
 
-    use alloy::providers::{fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller}, network::{Ethereum, EthereumWallet}, Identity, RootProvider};
-
+    use alloy::providers::{
+        fillers::{
+            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+            WalletFiller,
+        },
+        network::{Ethereum, EthereumWallet},
+        Identity, RootProvider,
+    };
 
     pub type IWavsServiceHandlerSigningT =
-        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), SigningProvider>;
+        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<
+            (),
+            SigningProvider,
+        >;
 
     pub type IWavsServiceHandlerQueryT =
         super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), QueryProvider>;
 
     pub type IWavsServiceManagerSigningT =
-        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), SigningProvider>;
+        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<
+            (),
+            SigningProvider,
+        >;
 
     pub type IWavsServiceManagerQueryT =
         super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), QueryProvider>;
-
 }
 
 #[cfg(feature = "solidity-rpc")]
