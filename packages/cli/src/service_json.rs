@@ -4,7 +4,8 @@ use chrono::Utc;
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Component, ComponentID, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, WorkflowID,
+    Component, ComponentID, ServiceConfig, ServiceID, ServiceStatus, Submit, Timestamp, Trigger,
+    WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -161,8 +162,8 @@ impl ServiceJson {
 
 pub fn validate_cron_config(
     schedule: &str,
-    start_time: Option<u64>,
-    end_time: Option<u64>,
+    start_time: Option<Timestamp>,
+    end_time: Option<Timestamp>,
 ) -> Result<(), String> {
     // Validate the cron schedule expression
     Schedule::from_str(schedule).map_err(|e| format!("Invalid cron schedule: {}", e))?;
@@ -177,7 +178,7 @@ pub fn validate_cron_config(
     // Ensure end_time is in the future
     if let Some(end) = end_time {
         let now = Utc::now().timestamp() as u64;
-        if end < now {
+        if end.as_seconds() < now {
             return Err("end_time must be in the future".to_string());
         }
     }

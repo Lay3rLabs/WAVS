@@ -297,12 +297,12 @@ impl std::fmt::Display for WorkflowTriggerResult {
                 writeln!(f, "  Trigger Type: Cron")?;
                 writeln!(f, "    Schedule:   {}", schedule)?;
                 if let Some(start) = start_time {
-                    writeln!(f, "    Start Time: {}", start)?;
+                    writeln!(f, "    Start Time: {}", start.as_seconds())?;
                 } else {
                     writeln!(f, "    Start Time: None")?;
                 }
                 if let Some(end) = end_time {
-                    writeln!(f, "    End Time:   {}", end)?;
+                    writeln!(f, "    End Time:   {}", end.as_seconds())?;
                 } else {
                     writeln!(f, "    End Time:   None")?;
                 }

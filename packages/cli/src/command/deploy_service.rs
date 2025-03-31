@@ -124,6 +124,11 @@ impl DeployService {
                     n_blocks: NonZero::new(10).unwrap(),
                 }
             }
+            CliTriggerKind::CronInterval => Trigger::Cron {
+                schedule: "* * * * *".to_owned(),
+                start_time: None,
+                end_time: None,
+            },
         };
 
         let submit: Submit = match submit {

@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
+use wavs_types::Timestamp;
 
 use super::core::LookupId;
 use crate::apis::trigger::TriggerError;
@@ -13,8 +14,8 @@ struct CronTriggerItem {
     lookup_id: LookupId,
     schedule: String,
     next_trigger_time: DateTime<Utc>,
-    start_time: Option<u64>,
-    end_time: Option<u64>,
+    start_time: Option<Timestamp>,
+    end_time: Option<Timestamp>,
 }
 
 // Make comparison more specific by including lookup_id to handle same-time triggers
@@ -75,8 +76,8 @@ impl CronScheduler {
         &self,
         lookup_id: LookupId,
         schedule: String,
-        start_time: Option<u64>,
-        end_time: Option<u64>,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>,
     ) -> Result<(), TriggerError> {
         // Validate the cron schedule first
         let next_trigger_time = Self::calculate_next_trigger(&schedule)?;
@@ -142,13 +143,13 @@ impl CronScheduler {
 
             // Check if trigger is expired
             if let Some(end_time) = trigger.end_time {
-                if current_unix > end_time {
+                if current_unix > end_time.as_seconds() {
                     expired_ids.push(trigger.lookup_id);
                     tracing::debug!(
                         "Removing expired cron trigger ID {}: current time {} > end time {}",
                         trigger.lookup_id,
                         current_unix,
-                        end_time
+                        end_time.as_seconds()
                     );
                     return false; // Remove from queue
                 }
@@ -157,9 +158,11 @@ impl CronScheduler {
             // Determine if it should execute
             if trigger.next_trigger_time <= current_time {
                 let should_execute_now = match (trigger.start_time, trigger.end_time) {
-                    (Some(start), Some(end)) => current_unix >= start && current_unix <= end,
-                    (Some(start), None) => current_unix >= start,
-                    (None, Some(end)) => current_unix <= end,
+                    (Some(start), Some(end)) => {
+                        current_unix >= start.as_seconds() && current_unix <= end.as_seconds()
+                    }
+                    (Some(start), None) => current_unix >= start.as_seconds(),
+                    (None, Some(end)) => current_unix <= end.as_seconds(),
                     (None, None) => true,
                 };
 

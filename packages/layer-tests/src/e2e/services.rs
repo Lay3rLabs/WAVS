@@ -212,6 +212,7 @@ async fn deploy_service_simple(
         CliTriggerKind::CosmosContractEvent => Some(chain_names.cosmos[0].clone()),
         CliTriggerKind::EthBlockInterval => Some(chain_names.eth[0].clone()),
         CliTriggerKind::CosmosBlockInterval => Some(chain_names.cosmos[0].clone()),
+        CliTriggerKind::CronInterval => None,
     };
 
     let trigger_address = match trigger {
@@ -267,6 +268,7 @@ async fn deploy_service_simple(
         }
         CliTriggerKind::EthBlockInterval => None,
         CliTriggerKind::CosmosBlockInterval => None,
+        CliTriggerKind::CronInterval => None,
     };
 
     let submit_chain = match submit {
@@ -275,6 +277,7 @@ async fn deploy_service_simple(
             CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()), // always eth for now
             CliTriggerKind::EthBlockInterval => trigger_chain.clone(),
             CliTriggerKind::CosmosBlockInterval => Some(chain_names.eth[0].clone()), // always eth for now as above
+            CliTriggerKind::CronInterval => None,
         },
         CliSubmitKind::None => None,
     };

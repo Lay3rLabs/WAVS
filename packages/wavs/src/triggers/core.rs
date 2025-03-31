@@ -20,7 +20,8 @@ use tokio_stream::wrappers::IntervalStream;
 use tracing::instrument;
 use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
 use wavs_types::{
-    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ByteArray, ChainName, ServiceID, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
+    WorkflowID,
 };
 
 use super::cron_scheduler::CronScheduler;
@@ -388,7 +389,7 @@ impl CoreTriggerManager {
                             Some(trigger_config) => {
                                 trigger_actions.push(TriggerAction {
                                     data: TriggerData::Cron {
-                                        execution_time: trigger_time,
+                                        execution_time: Timestamp(trigger_time),
                                     },
                                     config: trigger_config.clone(),
                                 });

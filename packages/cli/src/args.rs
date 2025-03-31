@@ -339,6 +339,7 @@ pub enum CliTriggerKind {
     CosmosContractEvent,
     EthBlockInterval,
     CosmosBlockInterval,
+    CronInterval,
 }
 
 impl std::fmt::Display for CliTriggerKind {
@@ -348,6 +349,7 @@ impl std::fmt::Display for CliTriggerKind {
             Self::CosmosContractEvent => write!(f, "cosmos-contract-event"),
             Self::EthBlockInterval => write!(f, "eth-block-interval"),
             Self::CosmosBlockInterval => write!(f, "cosmos-block-interval"),
+            Self::CronInterval => write!(f, "cron-interval"),
         }
     }
 }

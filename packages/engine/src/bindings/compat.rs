@@ -59,7 +59,7 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
             },
             wavs_types::Trigger::Cron { schedule, start_time, end_time } => {
                 crate::bindings::world::wavs::worker::layer_types::TriggerSource::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerSourceCron{
-                    schedule, start_time, end_time
+                    schedule, start_time: start_time.map(Into::into), end_time: end_time.map(Into::into)
                 })
             }
         })
@@ -120,7 +120,7 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                     }
                 ))
             },
-            wavs_types::TriggerData::Cron { execution_time } => Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerDataCron { execution_time })),
+            wavs_types::TriggerData::Cron { execution_time } => Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerDataCron { execution_time: execution_time.into() })),
             wavs_types::TriggerData::Raw(data) => {
                 Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Raw(data))
             },
@@ -195,5 +195,19 @@ impl From<utils::config::EthereumChainConfig> for super::world::host::EthChainCo
             ws_endpoint: config.ws_endpoint,
             http_endpoint: config.http_endpoint,
         }
+    }
+}
+
+impl From<wavs_types::Timestamp> for component::Timestamp {
+    fn from(src: wavs_types::Timestamp) -> Self {
+        component::Timestamp {
+            seconds: src.as_seconds(),
+        }
+    }
+}
+
+impl From<component::Timestamp> for wavs_types::Timestamp {
+    fn from(src: component::Timestamp) -> Self {
+        wavs_types::Timestamp(src.seconds)
     }
 }
