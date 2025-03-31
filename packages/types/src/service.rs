@@ -44,7 +44,7 @@ pub enum ServiceManager {
 impl ServiceManager {
     pub fn chain_name(&self) -> &ChainName {
         match self {
-            ServiceManager::Ethereum { chain_name, .. } => &chain_name,
+            ServiceManager::Ethereum { chain_name, .. } => chain_name,
         }
     }
 

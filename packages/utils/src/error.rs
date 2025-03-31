@@ -15,7 +15,7 @@ pub enum EthClientError {
     TransactionWithoutReceipt(anyhow::Error),
 
     #[error("Transaction Receipt: {0:#?}")]
-    TransactionWithReceipt(TransactionReceipt),
+    TransactionWithReceipt(Box<TransactionReceipt>),
 
     #[error("Unable to sign: {0:#?}")]
     Signing(anyhow::Error),

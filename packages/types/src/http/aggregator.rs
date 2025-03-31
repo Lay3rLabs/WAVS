@@ -12,7 +12,7 @@ pub struct AddPacketRequest {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AddPacketResponse {
     Sent {
-        tx_receipt: TransactionReceipt,
+        tx_receipt: Box<TransactionReceipt>,
         count: usize,
     },
     Aggregated {

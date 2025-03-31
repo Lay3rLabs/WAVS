@@ -63,7 +63,7 @@ impl EthSigningClient {
 
         match receipt.status() {
             true => Ok(receipt),
-            false => Err(EthClientError::TransactionWithReceipt(receipt)),
+            false => Err(EthClientError::TransactionWithReceipt(Box::new(receipt))),
         }
     }
 }

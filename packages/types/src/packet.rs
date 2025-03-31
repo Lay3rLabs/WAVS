@@ -86,7 +86,7 @@ impl From<TriggerAction> for EventId {
 
 impl std::fmt::Display for EventId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", const_hex::encode(&self.0))
+        write!(f, "{}", const_hex::encode(self.0))
     }
 }
 

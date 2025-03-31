@@ -77,7 +77,10 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
                     .await?;
 
                 state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-                Ok(AddPacketResponse::Sent { tx_receipt, count })
+                Ok(AddPacketResponse::Sent {
+                    tx_receipt: Box::new(tx_receipt),
+                    count,
+                })
             }
         }
     } else {
