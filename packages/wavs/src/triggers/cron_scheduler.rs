@@ -126,9 +126,9 @@ impl CronScheduler {
 
     // Process due triggers
     pub fn process_due_triggers(&self, current_time: DateTime<Utc>) -> Vec<(LookupId, String)> {
-        // Take write lock on queue to modify it
         let mut due_triggers = Vec::new();
         let current_unix = current_time.timestamp() as u64;
+        let mut expired_ids = Vec::new();
 
         // Minimize lock time by scoping the queue operations
         {
@@ -147,9 +147,8 @@ impl CronScheduler {
                 // Check if trigger is expired based on end_time
                 if let Some(end_time) = trigger.end_time {
                     if current_unix > end_time {
-                        // Trigger has expired, don't add it back to the queue
-                        let mut lookup = self.trigger_lookup.write().unwrap();
-                        lookup.remove(&trigger.lookup_id);
+                        // Collect expired trigger IDs for later removal
+                        expired_ids.push(trigger.lookup_id);
 
                         tracing::debug!(
                             "Removing expired cron trigger ID {}: current time {} > end time {}",
@@ -168,14 +167,14 @@ impl CronScheduler {
                 }
 
                 // Check time bounds
-                let in_time_bounds = match (trigger.start_time, trigger.end_time) {
+                let should_execute_now = match (trigger.start_time, trigger.end_time) {
                     (Some(start), Some(end)) => current_unix >= start && current_unix <= end,
                     (Some(start), None) => current_unix >= start,
                     (None, Some(end)) => current_unix <= end,
                     (None, None) => true,
                 };
 
-                if in_time_bounds {
+                if should_execute_now {
                     due_triggers.push((trigger.lookup_id, trigger.schedule.clone()));
 
                     // Calculate next trigger time
@@ -189,7 +188,7 @@ impl CronScheduler {
                         });
                     }
                 } else {
-                    // Keep trigger if it's still within bounds but not due
+                    // Keep trigger since it's valid but should not execute now
                     pending_triggers.push(trigger);
                 }
             }
@@ -204,6 +203,14 @@ impl CronScheduler {
             // Reinsert all pending triggers
             for trigger in pending_triggers {
                 queue.push(trigger);
+            }
+        }
+
+        // Now remove expired IDs with a separate write lock
+        if !expired_ids.is_empty() {
+            let mut lookup = self.trigger_lookup.write().unwrap();
+            for id in &expired_ids {
+                lookup.remove(id);
             }
         }
 
