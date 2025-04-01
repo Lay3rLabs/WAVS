@@ -66,37 +66,39 @@ impl CronScheduler {
     pub fn add_trigger(
         &self,
         lookup_id: LookupId,
-        schedule: String,
+        schedule_str: String,
         start_time: Option<Timestamp>,
         end_time: Option<Timestamp>,
     ) -> Result<(), TriggerError> {
-        let schedule = Schedule::from_str(&schedule)
-            .map_err(|e| TriggerError::InvalidCronExpression(schedule, e.to_string()))?;
+        let schedule = Schedule::from_str(&schedule_str).map_err(|e| TriggerError::Cron {
+            expression: schedule_str.clone(),
+            reason: e.to_string(),
+        })?;
 
         // Validate time boundaries
         if let (Some(start), Some(end)) = (start_time, end_time) {
             if start > end {
-                return Err(TriggerError::InvalidCronExpression(
-                    schedule.to_string(),
-                    "Start time cannot be after end time".to_string(),
-                ));
+                return Err(TriggerError::Cron {
+                    expression: schedule_str.clone(),
+                    reason: "Start time cannot be after end time".to_string(),
+                });
             }
         }
 
         // Calculate next trigger time
-        let next_trigger_time = schedule.upcoming(Utc).next();
-        if next_trigger_time.is_none() {
-            return Err(TriggerError::InvalidCronExpression(
-                schedule.to_string(),
-                "Schedule does not produce any upcoming trigger times".to_string(),
-            ));
-        }
+        let next_trigger_time =
+            schedule
+                .upcoming(Utc)
+                .next()
+                .ok_or_else(|| TriggerError::Cron {
+                    expression: schedule_str.clone(),
+                    reason: "Schedule does not produce any upcoming trigger times".to_string(),
+                })?;
+
         let next_trigger_timestamp =
-            Timestamp::from_datetime(next_trigger_time.unwrap()).map_err(|e| {
-                TriggerError::InvalidCronExpression(
-                    schedule.to_string(),
-                    format!("Failed to convert trigger time: {}", e),
-                )
+            Timestamp::from_datetime(next_trigger_time).map_err(|e| TriggerError::Cron {
+                expression: schedule_str.clone(),
+                reason: format!("Failed to convert trigger time: {}", e),
             })?;
 
         // First update the lookup table
