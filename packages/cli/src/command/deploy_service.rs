@@ -1,7 +1,6 @@
-use std::{num::NonZero, str::FromStr};
+use std::num::NonZero;
 
 use anyhow::{bail, Context, Result};
-use cron::Schedule;
 use layer_climb::prelude::ConfigAddressExt;
 use wavs_types::{
     ByteArray, ChainName, ComponentSource, EthereumContractSubmission, Service, ServiceConfig,
@@ -129,7 +128,7 @@ impl DeployService {
                 }
             }
             CliTriggerKind::CronInterval => Trigger::Cron {
-                schedule: Schedule::from_str("* * * * * *")?,
+                schedule: "* * * * * *".to_owned(),
                 start_time: None,
                 end_time: None,
             },

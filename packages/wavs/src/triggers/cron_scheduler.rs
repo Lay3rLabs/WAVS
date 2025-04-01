@@ -2,6 +2,7 @@ use chrono::Utc;
 use cron::Schedule;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
+use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use wavs_types::Timestamp;
 
@@ -65,15 +66,18 @@ impl CronScheduler {
     pub fn add_trigger(
         &self,
         lookup_id: LookupId,
-        schedule: Schedule,
+        schedule: String,
         start_time: Option<Timestamp>,
         end_time: Option<Timestamp>,
     ) -> Result<(), TriggerError> {
+        let schedule = Schedule::from_str(&schedule)
+            .map_err(|e| TriggerError::InvalidCronExpression(schedule, e.to_string()))?;
+
         // Validate time boundaries
         if let (Some(start), Some(end)) = (start_time, end_time) {
             if start > end {
                 return Err(TriggerError::InvalidCronExpression(
-                    schedule.clone(),
+                    schedule.to_string(),
                     "Start time cannot be after end time".to_string(),
                 ));
             }
@@ -83,14 +87,14 @@ impl CronScheduler {
         let next_trigger_time = schedule.upcoming(Utc).next();
         if next_trigger_time.is_none() {
             return Err(TriggerError::InvalidCronExpression(
-                schedule.clone(),
+                schedule.to_string(),
                 "Schedule does not produce any upcoming trigger times".to_string(),
             ));
         }
         let next_trigger_timestamp =
             Timestamp::from_datetime(next_trigger_time.unwrap()).map_err(|e| {
                 TriggerError::InvalidCronExpression(
-                    schedule.clone(),
+                    schedule.to_string(),
                     format!("Failed to convert trigger time: {}", e),
                 )
             })?;

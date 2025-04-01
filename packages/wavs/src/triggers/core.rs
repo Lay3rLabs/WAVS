@@ -725,14 +725,13 @@ fn remove_trigger_data(
 
 #[cfg(test)]
 mod tests {
-    use std::{num::NonZero, str::FromStr};
+    use std::num::NonZero;
 
     use crate::{
         apis::trigger::TriggerManager,
         config::Config,
         test_utils::address::{rand_address_eth, rand_event_eth},
     };
-    use cron::Schedule;
     use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
 
     use layer_climb::prelude::*;
@@ -1001,7 +1000,7 @@ mod tests {
             service_id: service_id.clone(),
             workflow_id: workflow_id.clone(),
             trigger: Trigger::Cron {
-                schedule: Schedule::from_str("* * * * * *").unwrap(),
+                schedule: "* * * * * *".to_owned(),
                 start_time: None,
                 end_time: None,
             },
@@ -1014,7 +1013,7 @@ mod tests {
             service_id: service_id2.clone(),
             workflow_id: workflow_id.clone(),
             trigger: Trigger::Cron {
-                schedule: Schedule::from_str("* * * * * *").unwrap(),
+                schedule: "* * * * * *".to_owned(),
                 start_time: None,
                 end_time: None,
             },

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use wavs_types::{
     Component, ComponentID, EthereumContractSubmission, ServiceConfig, ServiceID, ServiceStatus,
-    Submit, Trigger, WorkflowID,
+    Submit, Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
