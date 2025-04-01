@@ -92,8 +92,8 @@ enum StreamTriggers {
         block_height: u64,
     },
     Cron {
-        /// Unix timestamp (in seconds) when these triggers were processed.
-        trigger_time: u64,
+        /// Unix timestamp (in nanos) when these triggers were processed
+        trigger_time: Timestamp,
         /// Vector of lookup IDs for all triggers that are due at this time.
         /// Multiple triggers can fire simultaneously in a single tick.
         lookup_ids: Vec<LookupId>,
@@ -250,9 +250,8 @@ impl CoreTriggerManager {
 
         // Process cron triggers on each interval tick
         let cron_stream = Box::pin(interval_stream.map(move |_| {
-            let current_time = chrono::Utc::now();
-            let lookup_ids = cron_scheduler.process_due_triggers(current_time);
-            let trigger_time = current_time.timestamp() as u64;
+            let trigger_time = Timestamp::now();
+            let lookup_ids = cron_scheduler.process_due_triggers(trigger_time);
 
             Ok(StreamTriggers::Cron {
                 lookup_ids,
@@ -383,13 +382,15 @@ impl CoreTriggerManager {
                     lookup_ids,
                 } => {
                     let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+                    let now = Timestamp::now();
 
                     for lookup_id in lookup_ids {
                         match trigger_configs_lock.get(&lookup_id) {
                             Some(trigger_config) => {
                                 trigger_actions.push(TriggerAction {
                                     data: TriggerData::Cron {
-                                        execution_time: Timestamp(trigger_time),
+                                        execution_time: now,
+                                        trigger_time,
                                     },
                                     config: trigger_config.clone(),
                                 });
@@ -724,14 +725,15 @@ fn remove_trigger_data(
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZero;
+    use std::{num::NonZero, str::FromStr};
 
     use crate::{
         apis::trigger::TriggerManager,
         config::Config,
         test_utils::address::{rand_address_eth, rand_event_eth},
     };
-    use wavs_types::{ChainName, ServiceID, Trigger, TriggerConfig, WorkflowID};
+    use cron::Schedule;
+    use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
 
     use layer_climb::prelude::*;
     use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
@@ -999,7 +1001,7 @@ mod tests {
             service_id: service_id.clone(),
             workflow_id: workflow_id.clone(),
             trigger: Trigger::Cron {
-                schedule: "* * * * * *".to_string(),
+                schedule: Schedule::from_str("* * * * * *").unwrap(),
                 start_time: None,
                 end_time: None,
             },
@@ -1012,7 +1014,7 @@ mod tests {
             service_id: service_id2.clone(),
             workflow_id: workflow_id.clone(),
             trigger: Trigger::Cron {
-                schedule: "* * * * * *".to_string(),
+                schedule: Schedule::from_str("* * * * * *").unwrap(),
                 start_time: None,
                 end_time: None,
             },
@@ -1020,7 +1022,8 @@ mod tests {
         manager.add_trigger(trigger2).unwrap();
 
         // Use a future time to process triggers
-        let future_time = chrono::Utc::now() + chrono::Duration::seconds(10);
+        let future_time =
+            Timestamp::from_datetime(chrono::Utc::now() + chrono::Duration::seconds(10)).unwrap();
         let lookup_ids = manager
             .lookup_maps
             .cron_scheduler
@@ -1035,7 +1038,8 @@ mod tests {
             .unwrap();
 
         // Process triggers again
-        let future_time = chrono::Utc::now() + chrono::Duration::seconds(10);
+        let future_time =
+            Timestamp::from_datetime(chrono::Utc::now() + chrono::Duration::seconds(10)).unwrap();
         let lookup_ids = manager
             .lookup_maps
             .cron_scheduler
@@ -1054,7 +1058,8 @@ mod tests {
             .unwrap();
 
         // Process triggers one more time
-        let future_time = chrono::Utc::now() + chrono::Duration::seconds(10);
+        let future_time =
+            Timestamp::from_datetime(chrono::Utc::now() + chrono::Duration::seconds(10)).unwrap();
         let lookup_ids = manager
             .lookup_maps
             .cron_scheduler

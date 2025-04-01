@@ -1,24 +1,26 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use cron::Schedule;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use wavs_types::Timestamp;
 
 use super::core::LookupId;
 use crate::apis::trigger::TriggerError;
 
+/// Represents a scheduled cron trigger with metadata for the priority queue
 #[derive(Debug, Clone, Eq)]
 struct CronTriggerItem {
     lookup_id: LookupId,
-    schedule: String,
-    next_trigger_time: DateTime<Utc>,
+    schedule: Schedule,
+    next_trigger_time: Timestamp,
     start_time: Option<Timestamp>,
     end_time: Option<Timestamp>,
 }
 
-// Make comparison more specific by including lookup_id to handle same-time triggers
+// For the binary heap, we need items with earliest trigger times at the top
+// We invert the normal ordering and use lookup_id as a tiebreaker
+// for deterministic ordering of same-time triggers
 impl Ord for CronTriggerItem {
     fn cmp(&self, other: &Self) -> Ordering {
         match other.next_trigger_time.cmp(&self.next_trigger_time) {
@@ -40,7 +42,11 @@ impl PartialEq for CronTriggerItem {
     }
 }
 
-// Make CronScheduler thread-safe with proper Arc handling
+/// A thread-safe scheduler for cron-based triggers
+///
+/// The CronScheduler maintains a priority queue of cron triggers ordered by their
+/// next execution time. It provides atomic operations for adding, removing, and
+/// processing triggers in a multi-threaded environment.
 #[derive(Clone, Default)]
 pub struct CronScheduler {
     trigger_queue: Arc<RwLock<BinaryHeap<CronTriggerItem>>>,
@@ -55,33 +61,15 @@ impl CronScheduler {
         }
     }
 
-    // Calculate next trigger time
-    pub fn calculate_next_trigger(schedule_str: &str) -> Result<DateTime<Utc>, TriggerError> {
-        let schedule = Schedule::from_str(schedule_str).map_err(|e| {
-            TriggerError::InvalidCronExpression(schedule_str.to_string(), e.to_string())
-        })?;
-
-        let next = schedule.upcoming(Utc).next().ok_or_else(|| {
-            TriggerError::InvalidCronExpression(
-                schedule_str.to_string(),
-                "Could not determine next trigger time".to_string(),
-            )
-        })?;
-
-        Ok(next)
-    }
-
     // Add a new cron trigger
     pub fn add_trigger(
         &self,
         lookup_id: LookupId,
-        schedule: String,
+        schedule: Schedule,
         start_time: Option<Timestamp>,
         end_time: Option<Timestamp>,
     ) -> Result<(), TriggerError> {
-        // Validate the cron schedule first
-        let next_trigger_time = Self::calculate_next_trigger(&schedule)?;
-
+        // Validate time boundaries
         if let (Some(start), Some(end)) = (start_time, end_time) {
             if start > end {
                 return Err(TriggerError::InvalidCronExpression(
@@ -91,7 +79,23 @@ impl CronScheduler {
             }
         }
 
-        // First update the lookup table - do this first to avoid partial updates
+        // Calculate next trigger time
+        let next_trigger_time = schedule.upcoming(Utc).next();
+        if next_trigger_time.is_none() {
+            return Err(TriggerError::InvalidCronExpression(
+                schedule.clone(),
+                "Schedule does not produce any upcoming trigger times".to_string(),
+            ));
+        }
+        let next_trigger_timestamp =
+            Timestamp::from_datetime(next_trigger_time.unwrap()).map_err(|e| {
+                TriggerError::InvalidCronExpression(
+                    schedule.clone(),
+                    format!("Failed to convert trigger time: {}", e),
+                )
+            })?;
+
+        // First update the lookup table
         {
             let mut lookup = self.trigger_lookup.write().unwrap();
             lookup.insert(lookup_id);
@@ -103,7 +107,7 @@ impl CronScheduler {
             queue.push(CronTriggerItem {
                 lookup_id,
                 schedule,
-                next_trigger_time,
+                next_trigger_time: next_trigger_timestamp,
                 start_time,
                 end_time,
             });
@@ -125,69 +129,100 @@ impl CronScheduler {
         Ok(())
     }
 
-    // Process due triggers and return IDs of triggers that are due
-    pub fn process_due_triggers(&self, current_time: DateTime<Utc>) -> Vec<LookupId> {
+    /// Processes all cron triggers that are due at the specified time.
+    ///
+    /// This method:
+    /// 1. Identifies triggers that should fire at or before the given timestamp
+    /// 2. Updates their next trigger time and reinserts them into the queue
+    /// 3. Removes expired triggers that have passed their end time
+    /// 4. Returns the lookup IDs of all triggers that should fire
+    pub fn process_due_triggers(&self, now: Timestamp) -> Vec<LookupId> {
         let mut due_triggers = Vec::new();
-        let current_unix = current_time.timestamp() as u64;
         let mut expired_ids = Vec::new();
         let mut updated_triggers = Vec::new(); // Store updates separately
 
-        // Scope for queue and lookup locks
+        // Process queue under a write lock, but minimize lock duration
         {
             let mut queue = self.trigger_queue.write().unwrap();
             let lookup = self.trigger_lookup.read().unwrap();
 
             queue.retain(|trigger| {
-                // Skip if this trigger has been removed
+                // Skip if this trigger has been removed from the lookup table
                 if !lookup.contains(&trigger.lookup_id) {
-                    return false;
+                    return false; // Remove from queue
                 }
 
-                // Check if trigger is expired
+                // Check if trigger has passed its end time
                 if let Some(end_time) = trigger.end_time {
-                    if current_unix > end_time.as_seconds() {
+                    if now > end_time {
                         expired_ids.push(trigger.lookup_id);
                         tracing::debug!(
                             "Removing expired cron trigger ID {}: current time {} > end time {}",
                             trigger.lookup_id,
-                            current_unix,
-                            end_time.as_seconds()
+                            now.as_nanos(),
+                            end_time.as_nanos()
                         );
                         return false; // Remove from queue
                     }
                 }
 
-                // Determine if it should execute
-                if trigger.next_trigger_time <= current_time {
-                    let should_execute_now = match (trigger.start_time, trigger.end_time) {
-                        (Some(start), Some(end)) => {
-                            current_unix >= start.as_seconds() && current_unix <= end.as_seconds()
-                        }
-                        (Some(start), None) => current_unix >= start.as_seconds(),
-                        (None, Some(end)) => current_unix <= end.as_seconds(),
-                        (None, None) => true,
-                    };
+                // Skip if trigger time hasn't been reached yet
+                if trigger.next_trigger_time > now {
+                    return true; // Keep in queue for future
+                }
 
-                    if should_execute_now {
-                        due_triggers.push(trigger.lookup_id);
+                // Check time boundaries to see if trigger is active
+                let should_execute_now = match (trigger.start_time, trigger.end_time) {
+                    (Some(start), Some(end)) => now >= start && now <= end,
+                    (Some(start), None) => now >= start,
+                    (None, Some(end)) => now <= end,
+                    (None, None) => true, // Always active without boundaries
+                };
 
-                        // Recalculate next trigger time
-                        if let Ok(next_time) = Self::calculate_next_trigger(&trigger.schedule) {
-                            let mut updated_trigger = trigger.clone();
-                            updated_trigger.next_trigger_time = next_time;
-                            updated_triggers.push(updated_trigger);
-                            return false; // Remove old trigger and add updated one later
+                if !should_execute_now {
+                    return true; // Keep in queue but don't execute now
+                }
+
+                // Trigger is due to execute
+                due_triggers.push(trigger.lookup_id);
+
+                // Calculate the next trigger time
+                if let Some(next_time) = trigger.schedule.upcoming(Utc).next() {
+                    if let Ok(next_timestamp) = Timestamp::from_datetime(next_time) {
+                        // Check if next execution would be after end time
+                        if let Some(end) = trigger.end_time {
+                            if next_timestamp > end {
+                                expired_ids.push(trigger.lookup_id);
+                                tracing::debug!(
+                                    "Removing cron trigger ID {}: next execution time {} exceeds end time {}",
+                                    trigger.lookup_id,
+                                    next_timestamp.as_nanos(),
+                                    end.as_nanos()
+                                );
+                                return false; // Remove from queue as all future executions would be beyond end time
+                            }
                         }
-                        return false; // Remove on failure
+
+                        // Update for next execution
+                        let mut updated_trigger = trigger.clone();
+                        updated_trigger.next_trigger_time = next_timestamp;
+                        updated_triggers.push(updated_trigger);
+                        return false; // Remove current version, updated version gets added later
                     }
                 }
 
-                true // Keep in queue if not expired or due
+                // Failed to calculate next time or it's invalid - remove from queue
+                expired_ids.push(trigger.lookup_id);
+                tracing::debug!(
+                    "Removing cron trigger ID {} - no valid next execution time",
+                    trigger.lookup_id
+                );
+                false
             });
 
             // Add updated triggers back to the queue
             queue.extend(updated_triggers);
-        } // Both queue and lookup locks are dropped here
+        }
 
         // Now handle expired IDs with a separate write lock
         if !expired_ids.is_empty() {

@@ -9,7 +9,7 @@ use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
 
 interface layer-types {
   record timestamp {
-    seconds: u64
+    nanos: u64
   }
 
   record cosmos-address {
@@ -120,6 +120,7 @@ interface layer-types {
   }
 
   record trigger-data-cron {
+    trigger-time: timestamp,
     execution-time: timestamp
   }
 

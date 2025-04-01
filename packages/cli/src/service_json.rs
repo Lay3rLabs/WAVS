@@ -1,7 +1,5 @@
-use std::{collections::BTreeMap, str::FromStr as _};
+use std::collections::BTreeMap;
 
-use chrono::Utc;
-use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use wavs_types::{
     Component, ComponentID, ServiceConfig, ServiceID, ServiceStatus, Submit, Timestamp, Trigger,
@@ -81,12 +79,11 @@ impl ServiceJson {
                             }
                         }
                         Trigger::Cron {
-                            schedule,
+                            schedule: _,
                             start_time,
                             end_time,
                         } => {
-                            if let Err(err) = validate_cron_config(schedule, *start_time, *end_time)
-                            {
+                            if let Err(err) = validate_cron_config(*start_time, *end_time) {
                                 errors.push(format!(
                                     "Workflow '{}' has an invalid cron trigger: {}",
                                     workflow_id, err
@@ -161,13 +158,9 @@ impl ServiceJson {
 }
 
 pub fn validate_cron_config(
-    schedule: &str,
     start_time: Option<Timestamp>,
     end_time: Option<Timestamp>,
 ) -> Result<(), String> {
-    // Validate the cron schedule expression
-    Schedule::from_str(schedule).map_err(|e| format!("Invalid cron schedule: {}", e))?;
-
     // Ensure start_time <= end_time if both are provided
     if let (Some(start), Some(end)) = (start_time, end_time) {
         if start > end {
@@ -177,8 +170,8 @@ pub fn validate_cron_config(
 
     // Ensure end_time is in the future
     if let Some(end) = end_time {
-        let now = Utc::now().timestamp() as u64;
-        if end.as_seconds() < now {
+        let now = Timestamp::now();
+        if end < now {
             return Err("end_time must be in the future".to_string());
         }
     }

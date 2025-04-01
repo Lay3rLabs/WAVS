@@ -118,7 +118,7 @@ pub enum Trigger {
     },
     Cron {
         /// A cron expression defining the schedule for execution.
-        schedule: String,
+        schedule: cron::Schedule,
         /// Optional start time (timestamp in seconds) indicating when the schedule begins.
         start_time: Option<Timestamp>,
         /// Optional end time (timestamp in seconds) indicating when the schedule ends.
@@ -160,6 +160,8 @@ pub enum TriggerData {
     Cron {
         /// The execution time
         execution_time: Timestamp,
+        /// The trigger time
+        trigger_time: Timestamp,
     },
     Raw(Vec<u8>),
 }

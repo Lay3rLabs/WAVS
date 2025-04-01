@@ -2405,6 +2405,7 @@ checksum = "5877d3fbf742507b66bc2a1945106bd30dd8504019d596901ddd012a4dd01740"
 dependencies = [
  "chrono",
  "once_cell",
+ "serde",
  "winnow 0.6.26",
 ]
 
@@ -8854,8 +8855,11 @@ name = "wavs-types"
 version = "0.3.0"
 dependencies = [
  "alloy-primitives",
+ "anyhow",
+ "chrono",
  "const-hex",
  "cosmwasm-std",
+ "cron",
  "layer-climb-address",
  "serde",
  "serde_json",

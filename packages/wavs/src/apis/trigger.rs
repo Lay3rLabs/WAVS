@@ -1,3 +1,4 @@
+use cron::Schedule;
 use layer_climb::prelude::*;
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -54,5 +55,5 @@ pub enum TriggerError {
     #[error("Workflow exists, cannot register again: {0} / {1}")]
     WorkflowAlreadyExists(ServiceID, WorkflowID),
     #[error("Invalid cron expression: {0} / {1}")]
-    InvalidCronExpression(String, String),
+    InvalidCronExpression(Schedule, String),
 }

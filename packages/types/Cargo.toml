@@ -10,6 +10,9 @@ license.workspace = true
 publish = true
 
 [dependencies]
+anyhow = { workspace = true }
+cron = { workspace = true, features = ["serde"] }
+chrono = { workspace = true }
 serde = { workspace = true }
 wasm-pkg-client = { workspace = true }
 wasm-pkg-common = { workspace = true }
