@@ -2,9 +2,19 @@
 pragma solidity ^0.8.0;
 
 interface IWavsServiceHandler {
+    struct SignatureData {
+        address[] operators;
+        bytes[] signatures;
+        uint32 referenceBlock;
+    }
+    struct Envelope {
+        bytes payload;
+        uint256 eventId;
+    }
+
     /**
-     * @param data The arbitrary data that was signed.
-     * @param signature The signature of the data.
+     * @param envelope The envelope containing the data.
+     * @param signatureData The signature data.
      */
-    function handleSignedData(bytes calldata data, bytes calldata signature) external;
+    function handleSignedEnvelope(Envelope calldata envelope, SignatureData calldata signatureData) external;
 }

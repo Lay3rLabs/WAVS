@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Component, ComponentID, ServiceConfig, ServiceID, ServiceStatus, Submit, Timestamp, Trigger,
-    WorkflowID,
+    Component, ComponentID, EthereumContractSubmission, ServiceConfig, ServiceID, ServiceStatus,
+    Submit, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -109,11 +109,11 @@ impl ServiceJson {
                 SubmitJson::Submit(submit) => {
                     // Basic submit validation
                     match submit {
-                        Submit::EthereumContract {
+                        Submit::EthereumContract(EthereumContractSubmission {
                             address,
-                            chain_name: _,
                             max_gas,
-                        } => {
+                            chain_name: _,
+                        }) => {
                             // Validate Ethereum address format
                             if let Err(err) = alloy::primitives::Address::parse_checksummed(
                                 address.to_string(),
@@ -137,6 +137,9 @@ impl ServiceJson {
                         }
                         Submit::None => {
                             // None submit type is always valid
+                        }
+                        Submit::Aggregator { url: _ } => {
+                            // TODO - validate aggregator url ?
                         }
                     }
                 }

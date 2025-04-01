@@ -3,7 +3,10 @@ use std::{num::NonZero, str::FromStr};
 use anyhow::{bail, Context, Result};
 use cron::Schedule;
 use layer_climb::prelude::ConfigAddressExt;
-use wavs_types::{ByteArray, ChainName, ComponentSource, Service, ServiceConfig, Submit, Trigger};
+use wavs_types::{
+    ByteArray, ChainName, ComponentSource, EthereumContractSubmission, Service, ServiceConfig,
+    Submit, Trigger,
+};
 
 use crate::{
     args::{CliSubmitKind, CliTriggerKind},
@@ -139,11 +142,11 @@ impl DeployService {
                     .context("must have submit address")?
                     .parse()?;
 
-                Submit::EthereumContract {
+                Submit::EthereumContract(EthereumContractSubmission {
                     chain_name,
                     address,
                     max_gas: None,
-                }
+                })
             }
 
             CliSubmitKind::None => Submit::None,

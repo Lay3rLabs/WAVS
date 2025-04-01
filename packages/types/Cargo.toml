@@ -9,6 +9,10 @@ repository.workspace = true
 license.workspace = true
 publish = true
 
+[features]
+default = ["solidity-rpc"]
+solidity-rpc = []
+
 [dependencies]
 anyhow = { workspace = true }
 cron = { workspace = true, features = ["serde"] }
@@ -20,6 +24,11 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 const-hex = { workspace = true }
-alloy-primitives = { workspace = true }
 cosmwasm-std = { workspace = true }
 layer-climb-address = { workspace = true }
+alloy = {workspace = true}
+# alloy-primitives = { workspace = true }
+# alloy-sol-macro = { workspace = true }
+# alloy-sol-types = { workspace = true }
+# alloy-provider = { workspace = true, optional = true}
+# alloy-contract = { workspace = true, optional = true}

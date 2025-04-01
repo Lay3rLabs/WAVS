@@ -1,6 +1,6 @@
 use example_submit::SimpleSubmit::SimpleSubmitInstance;
 use example_trigger::SimpleTrigger::SimpleTriggerInstance;
-use utils::eth_client::SigningProvider;
+use wavs_types::SigningProvider;
 
 pub mod example_trigger {
     use alloy::sol;
@@ -37,5 +37,17 @@ pub mod example_submit {
     }
 }
 
+pub mod example_service_manager {
+    use alloy::sol;
+
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        SimpleServiceManager,
+        "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
+    );
+}
+
 pub type SimpleTriggerT = SimpleTriggerInstance<(), SigningProvider>;
 pub type SimpleSubmitT = SimpleSubmitInstance<(), SigningProvider>;
+pub type SimpleServiceManagerT = SimpleSubmitInstance<(), SigningProvider>;

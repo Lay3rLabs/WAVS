@@ -1,9 +1,8 @@
-use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use reqwest::StatusCode;
 
 use crate::http::{error::HttpResult, state::HttpState};
-use wavs_types::{AddServiceRequest, Submit};
+use wavs_types::AddServiceRequest;
 
 #[axum::debug_handler]
 pub async fn handle_add_service(
@@ -18,37 +17,6 @@ pub async fn handle_add_service(
 
 async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResult<()> {
     let AddServiceRequest { service } = req;
-
-    for workflow in service.workflows.values() {
-        match &workflow.submit {
-            Submit::None => {}
-            Submit::EthereumContract {
-                chain_name,
-                address,
-                max_gas: _,
-            } => {
-                let chain_config = state
-                    .config
-                    .chains
-                    .eth
-                    .get(chain_name)
-                    .context(format!("No chain config found for chain: {chain_name}"))?;
-                if let Some(aggregator_endpoint) = &chain_config.aggregator_endpoint {
-                    state
-                        .http_client
-                        .post(format!("{}/add-service", aggregator_endpoint))
-                        .header("Content-Type", "application/json")
-                        .json(
-                            &utils::aggregator::AddAggregatorServiceRequest::EthTrigger {
-                                address: *address,
-                            },
-                        )
-                        .send()
-                        .await?;
-                }
-            }
-        }
-    }
 
     state.dispatcher.add_service(service).await?;
 

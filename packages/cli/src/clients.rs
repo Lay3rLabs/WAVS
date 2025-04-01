@@ -2,8 +2,7 @@ use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
     config::{CosmosChainConfig, EthereumChainConfig},
-    eigen_client::EigenClient,
-    eth_client::EthClientBuilder,
+    eth_client::{EthClientBuilder, EthSigningClient},
 };
 use wavs_types::{
     AddServiceRequest, AllowedHostPermission, ComponentSource, Digest, Permissions, Service,
@@ -12,15 +11,15 @@ use wavs_types::{
 
 use crate::config::Config;
 
-pub async fn get_eigen_client(
+pub async fn get_eth_client(
     config: &Config,
     chain_config: EthereumChainConfig,
-) -> Result<EigenClient> {
+) -> Result<EthSigningClient> {
     let client_config = chain_config.to_client_config(None, config.eth_mnemonic.clone(), None);
 
     let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
 
-    Ok(EigenClient::new(eth_client))
+    Ok(eth_client)
 }
 
 pub async fn get_cosmos_client(

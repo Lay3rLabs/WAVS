@@ -124,10 +124,6 @@ impl From<TestConfig> for Configs {
 
             aggregator_config.chains = chain_configs.clone();
 
-            // for now, we just assume it's always the last eth chain...
-            // down the line, we might want to make this configurable
-            aggregator_config.chain = chain_configs.eth.keys().last().cloned().unwrap();
-
             Some(aggregator_config)
         } else {
             None

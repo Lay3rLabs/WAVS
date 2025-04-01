@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 
-use alloy_primitives::LogData;
+use alloy::primitives::LogData;
 use serde::{Deserialize, Serialize};
 
 use crate::{ByteArray, ComponentSource, Timestamp};
@@ -17,17 +17,40 @@ pub struct Service {
     /// This is any utf-8 string, for human-readable display.
     pub name: String,
 
-    /// We will supoort multiple components in one service with unique service-scoped IDs. For now, just add one called "default".
-    /// This allows clean mapping from backwards-compatible API endpoints.
+    /// We supoort multiple components in one service with unique service-scoped IDs.
     pub components: BTreeMap<ComponentID, Component>,
 
-    /// We will support multiple workflows in one service with unique service-scoped IDs. For now, only one called "default".
-    /// The workflows reference components by name (for now, always "default").
+    /// We support multiple workflows in one service with unique service-scoped IDs.
     pub workflows: BTreeMap<WorkflowID, Workflow>,
 
     pub status: ServiceStatus,
 
     pub config: ServiceConfig,
+
+    pub manager: ServiceManager,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceManager {
+    Ethereum {
+        chain_name: ChainName,
+        address: alloy::primitives::Address,
+    },
+}
+
+impl ServiceManager {
+    pub fn chain_name(&self) -> &ChainName {
+        match self {
+            ServiceManager::Ethereum { chain_name, .. } => chain_name,
+        }
+    }
+
+    pub fn eth_address_unchecked(&self) -> alloy::primitives::Address {
+        match self {
+            ServiceManager::Ethereum { address, .. } => *address,
+        }
+    }
 }
 
 impl Service {
@@ -42,11 +65,22 @@ impl Service {
         let component_id = ComponentID::default();
         let workflow_id = WorkflowID::default();
 
+        let manager = ServiceManager::Ethereum {
+            chain_name: match &submit {
+                Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) => {
+                    chain_name.clone()
+                }
+                _ => panic!("ServiceManager::Ethereum requires an EthereumContractSubmission"),
+            },
+            address: alloy::primitives::Address::ZERO,
+        };
+
         let workflow = Workflow {
             trigger,
             component: component_id,
             submit,
             fuel_limit: None,
+            aggregator: None,
         };
 
         let component = Component {
@@ -65,6 +99,7 @@ impl Service {
             workflows,
             status: ServiceStatus::Active,
             config: config.unwrap_or_default(),
+            manager,
         }
     }
 }
@@ -85,12 +120,16 @@ pub struct Component {
 pub struct Workflow {
     pub trigger: Trigger,
     /// A reference to which component to run with this data - for now, always "default"
+    /// FIXME: should move fuel_limit here
     pub component: ComponentID,
     /// How to submit the result of the component.
     pub submit: Submit,
     /// The maximum amount of compute metering to allow for a single component execution
     /// If not supplied, will be `Workflow::DEFAULT_FUEL_LIMIT`
+    // FIXME: (same as above) move this into the component section
     pub fuel_limit: Option<u64>,
+
+    pub aggregator: Option<Aggregator>,
 }
 
 impl Workflow {
@@ -98,7 +137,7 @@ impl Workflow {
 }
 
 // The TriggerManager reacts to these triggers
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     // A contract that emits an event
@@ -108,7 +147,7 @@ pub enum Trigger {
         event_type: String,
     },
     EthContractEvent {
-        address: alloy_primitives::Address,
+        address: alloy::primitives::Address,
         chain_name: ChainName,
         event_hash: ByteArray<32>,
     },
@@ -143,7 +182,7 @@ pub enum TriggerData {
     },
     EthContractEvent {
         /// The address of the contract that emitted the event
-        contract_address: alloy_primitives::Address,
+        contract_address: alloy::primitives::Address,
         /// The name of the chain where the event was emitted
         chain_name: ChainName,
         /// The raw event log
@@ -196,12 +235,44 @@ pub struct TriggerConfig {
 pub enum Submit {
     // useful for when the component just does something with its own state
     None,
-    // Ethereum Contract which implements the ILayerService interface
-    EthereumContract {
-        chain_name: ChainName,
-        address: alloy_primitives::Address,
-        max_gas: Option<u64>,
+    Aggregator {
+        /// The aggregator endpoint
+        url: String,
     },
+    /// Service handler directly
+    EthereumContract(EthereumContractSubmission),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Aggregator {
+    Ethereum(EthereumContractSubmission),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct EthereumContractSubmission {
+    pub chain_name: ChainName,
+    /// Should be an IWavsServiceHandler contract
+    pub address: alloy::primitives::Address,
+    /// max gas for the submnission
+    /// with an aggregator, that will be for all the signed envelopes combined
+    /// without an aggregator, it's just the single signed envelope
+    pub max_gas: Option<u64>,
+}
+
+impl EthereumContractSubmission {
+    pub fn new(
+        chain_name: ChainName,
+        address: alloy::primitives::Address,
+        max_gas: Option<u64>,
+    ) -> Self {
+        Self {
+            chain_name,
+            address,
+            max_gas,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
@@ -252,19 +323,17 @@ mod test_ext {
 
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
-    use super::{Component, Submit, Trigger, TriggerConfig};
+    use super::{Component, EthereumContractSubmission, Submit, Trigger, TriggerConfig};
 
     impl Submit {
         pub fn eth_contract(
             chain_name: ChainName,
-            address: alloy_primitives::Address,
+            address: alloy::primitives::Address,
             max_gas: Option<u64>,
         ) -> Submit {
-            Submit::EthereumContract {
-                chain_name,
-                address,
-                max_gas,
-            }
+            Submit::EthereumContract(EthereumContractSubmission::new(
+                chain_name, address, max_gas,
+            ))
         }
     }
 
@@ -290,7 +359,7 @@ mod test_ext {
             }
         }
         pub fn eth_contract_event(
-            address: alloy_primitives::Address,
+            address: alloy::primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Self {
@@ -320,7 +389,7 @@ mod test_ext {
         pub fn eth_contract_event(
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-            contract_address: alloy_primitives::Address,
+            contract_address: alloy::primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Result<Self, IDError> {

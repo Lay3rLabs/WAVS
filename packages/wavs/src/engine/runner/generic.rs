@@ -1,5 +1,5 @@
 use tokio::sync::mpsc;
-use wavs_types::{Service, TriggerAction};
+use wavs_types::{Envelope, EventId, PacketRoute, Service, TriggerAction};
 
 use crate::apis::engine::ExecutionComponent;
 use crate::apis::submission::ChainMessage;
@@ -61,7 +61,7 @@ pub trait EngineRunner: Send + Sync {
         let wasi_result = self.engine().execute(
             &execution_component,
             workflow.fuel_limit,
-            action,
+            action.clone(),
             &service.config,
         )?;
 
@@ -72,8 +72,11 @@ pub trait EngineRunner: Send + Sync {
             let workflow_id = trigger_config.workflow_id.clone();
 
             let msg = ChainMessage {
-                trigger_config,
-                wasi_result,
+                packet_route: PacketRoute::new_trigger_config(&trigger_config),
+                envelope: Envelope {
+                    payload: wasi_result.into(),
+                    eventId: EventId::from(action).into(),
+                },
                 submit: workflow.submit.clone(),
             };
 

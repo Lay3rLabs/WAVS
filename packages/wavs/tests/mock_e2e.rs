@@ -77,7 +77,7 @@ fn mock_e2e_trigger_flow() {
         .submission
         .received()
         .iter()
-        .map(|msg| serde_json::from_slice(&msg.wasi_result).unwrap())
+        .map(|msg| serde_json::from_slice(&msg.envelope.payload).unwrap())
         .collect();
 
     assert_eq!(results, vec![SquareOut { y: 9 }, SquareOut { y: 441 }]);

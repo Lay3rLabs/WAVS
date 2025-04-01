@@ -1,23 +1,20 @@
+pub mod contracts;
+pub mod signing;
+
 use std::sync::Arc;
 
 use alloy::{
-    network::{Ethereum, EthereumWallet},
+    network::EthereumWallet,
     primitives::Address,
-    providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-            WalletFiller,
-        },
-        Identity, ProviderBuilder, RootProvider,
-    },
+    providers::ProviderBuilder,
     signers::{
         k256::ecdsa::SigningKey,
         local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
     },
 };
-
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use wavs_types::{QueryProvider, SigningProvider};
 
 use crate::error::EthClientError;
 
@@ -155,26 +152,6 @@ impl EthClientBuilder {
         })
     }
 }
-
-pub type QueryProvider = FillProvider<
-    JoinFill<
-        Identity,
-        JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-    >,
-    RootProvider,
-    Ethereum,
->;
-pub type SigningProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider,
-    Ethereum,
->;
 
 #[cfg(test)]
 mod test {

@@ -3,10 +3,8 @@ use std::ops::Deref;
 use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use utils::{
-    alloy_helpers::SolidityEventFinder,
-    eth_client::{EthSigningClient, SigningProvider},
-};
+use utils::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};
+use wavs_types::SigningProvider;
 
 use super::{
     example_trigger::ISimpleTrigger::TriggerInfo,

@@ -1,3 +1,5 @@
+pub mod aggregator;
+
 use std::{fmt, ops::Deref, str::FromStr};
 
 use serde::{

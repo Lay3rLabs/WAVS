@@ -15,7 +15,8 @@ use std::{
 use uuid::Uuid;
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource, Digest,
-    Permissions, ServiceConfig, ServiceID, ServiceStatus, Submit, Trigger, WorkflowID,
+    EthereumContractSubmission, Permissions, ServiceConfig, ServiceID, ServiceStatus, Submit,
+    Trigger, WorkflowID,
 };
 
 use crate::{
@@ -330,11 +331,11 @@ impl std::fmt::Display for WorkflowSubmitResult {
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
 
         match &self.submit {
-            Submit::EthereumContract {
+            Submit::EthereumContract(EthereumContractSubmission {
                 address,
                 chain_name,
                 max_gas,
-            } => {
+            }) => {
                 writeln!(f, "  Submit Type: Ethereum Service Handler")?;
                 writeln!(f, "    Address:    {}", address)?;
                 writeln!(f, "    Chain:      {}", chain_name)?;
@@ -344,6 +345,10 @@ impl std::fmt::Display for WorkflowSubmitResult {
             }
             Submit::None => {
                 writeln!(f, "  Submit Type: None")?;
+            }
+            Submit::Aggregator { url } => {
+                writeln!(f, "  Submit Type: Aggregator")?;
+                writeln!(f, "    Url:    {}", url)?;
             }
         }
 
@@ -782,11 +787,11 @@ pub fn set_ethereum_submit(
         })?;
 
         // Update the submit
-        let submit = Submit::EthereumContract {
+        let submit = Submit::EthereumContract(EthereumContractSubmission {
             address,
             chain_name,
             max_gas,
-        };
+        });
         workflow.submit = SubmitJson::Submit(submit.clone());
 
         Ok((
@@ -858,7 +863,9 @@ pub async fn validate_service(
             }
 
             if let SubmitJson::Submit(submit) = &workflow.submit {
-                if let Submit::EthereumContract { chain_name, .. } = submit {
+                if let Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) =
+                    submit
+                {
                     chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
                 }
 
@@ -881,8 +888,7 @@ pub async fn validate_service(
                 }
                 ChainType::Ethereum => {
                     if let Ok(client) = ctx.get_eth_client(chain_name) {
-                        eth_providers
-                            .insert(chain_name.clone(), client.eth.provider.root().clone());
+                        eth_providers.insert(chain_name.clone(), client.provider.root().clone());
                     }
                 }
             }
@@ -1090,11 +1096,11 @@ pub async fn validate_contracts_exist(
     // Check all submit contracts
     for (workflow_id, submit) in submits {
         match submit {
-            Submit::EthereumContract {
+            Submit::EthereumContract(EthereumContractSubmission {
                 address,
                 chain_name,
                 ..
-            } => {
+            }) => {
                 // Check if we have a provider for this chain
                 if let Some(provider) = eth_providers.get(chain_name) {
                     // Only check each contract once per chain
@@ -1126,6 +1132,9 @@ pub async fn validate_contracts_exist(
                 }
             }
             Submit::None => {}
+            Submit::Aggregator { url: _ } => {
+                // TODO - anything to validate here?
+            }
         }
     }
 
@@ -1868,11 +1877,11 @@ mod tests {
 
         // Verify ethereum submit result
         assert_eq!(eth_result.workflow_id, workflow_id);
-        if let Submit::EthereumContract {
+        if let Submit::EthereumContract(EthereumContractSubmission {
             address,
             chain_name,
             max_gas: result_max_gas,
-        } = &eth_result.submit
+        }) = &eth_result.submit
         {
             assert_eq!(address.to_string(), eth_address);
             assert_eq!(chain_name, &eth_chain);
@@ -1888,11 +1897,11 @@ mod tests {
 
         // Handle SubmitJson wrapper
         if let SubmitJson::Submit(submit) = &eth_workflow.submit {
-            if let Submit::EthereumContract {
+            if let Submit::EthereumContract(EthereumContractSubmission {
                 address,
                 chain_name,
                 max_gas: result_max_gas,
-            } = submit
+            }) = submit
             {
                 assert_eq!(address.to_string(), eth_address);
                 assert_eq!(chain_name, &eth_chain);
@@ -1915,10 +1924,10 @@ mod tests {
         .unwrap();
 
         // Verify ethereum submit result without gas
-        if let Submit::EthereumContract {
+        if let Submit::EthereumContract(EthereumContractSubmission {
             max_gas: result_max_gas,
             ..
-        } = &eth_result_no_gas.submit
+        }) = &eth_result_no_gas.submit
         {
             assert_eq!(result_max_gas, &None);
         } else {
@@ -1989,11 +1998,11 @@ mod tests {
         };
 
         // Create a valid submit for the workflow
-        let submit = Submit::EthereumContract {
+        let submit = Submit::EthereumContract(EthereumContractSubmission {
             address: ethereum_address,
             chain_name: ethereum_chain.clone(),
             max_gas: Some(1000000u64),
-        };
+        });
 
         // Create workflow with the trigger and submit
         let workflow = WorkflowJson {
