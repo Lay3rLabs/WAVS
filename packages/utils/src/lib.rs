@@ -1,9 +1,6 @@
-pub mod aggregator;
 pub mod alloy_helpers;
-pub mod avs_client;
 pub mod config;
 pub mod context;
-pub mod eigen_client;
 pub mod error;
 pub mod eth_client;
 pub mod filesystem;

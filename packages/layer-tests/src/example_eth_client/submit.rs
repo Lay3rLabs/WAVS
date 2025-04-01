@@ -75,7 +75,7 @@ impl SimpleEthSubmitClient {
             .getSignature(*trigger_id)
             .call()
             .await
-            .map(|x| x.signature.to_vec())
+            .map(|x| x.signatureData.signatures[0].to_vec())
             .map_err(|e| e.into())
     }
 }

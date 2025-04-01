@@ -25,5 +25,6 @@ wildmatch = { workspace = true }
 alloy = { workspace = true }
 utils = { workspace = true }
 tempfile = { workspace = true }
+redb = { workspace = true }
 
 [dev-dependencies]

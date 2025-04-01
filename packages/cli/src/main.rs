@@ -4,8 +4,6 @@ use utils::config::ConfigExt;
 use wavs_cli::{
     args::{CliTriggerKind, Command},
     command::{
-        deploy_eigen_core::{DeployEigenCore, DeployEigenCoreArgs},
-        deploy_eigen_service_manager::{DeployEigenServiceManager, DeployEigenServiceManagerArgs},
         deploy_service::{DeployService, DeployServiceArgs},
         deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
@@ -37,23 +35,6 @@ async fn main() {
         .unwrap();
 
     match command {
-        Command::DeployEigenCore {
-            register_operator,
-            chain,
-            args: _,
-        } => {
-            let res = DeployEigenCore::run(
-                &ctx,
-                DeployEigenCoreArgs {
-                    register_operator,
-                    chain: chain.clone(),
-                },
-            )
-            .await
-            .unwrap();
-
-            ctx.handle_deploy_result(res).unwrap();
-        }
         Command::DeployService {
             component,
             trigger,
@@ -105,23 +86,6 @@ async fn main() {
             let res = DeployServiceRaw::run(&ctx, DeployServiceRawArgs { service })
                 .await
                 .unwrap();
-
-            ctx.handle_deploy_result(res).unwrap();
-        }
-        Command::DeployEigenServiceManager {
-            chain,
-            register_operator,
-            args: _,
-        } => {
-            let res = DeployEigenServiceManager::run(
-                &ctx,
-                DeployEigenServiceManagerArgs {
-                    chain: chain.clone(),
-                    register_operator,
-                },
-            )
-            .await
-            .unwrap();
 
             ctx.handle_deploy_result(res).unwrap();
         }

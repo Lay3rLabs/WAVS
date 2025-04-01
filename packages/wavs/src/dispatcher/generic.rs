@@ -76,7 +76,9 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let initial_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
         tracing::info!("Initializing {} services", initial_services.len());
         for service in initial_services {
-            add_service_to_trigger_manager(service, &self.triggers)?;
+            ctx.rt.block_on(async {
+                add_service_to_managers(service, &self.triggers, &self.submission).await
+            })?;
         }
 
         // since triggers listens to the async kill signal handler and closes the channel when
@@ -152,7 +154,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
-        add_service_to_trigger_manager(service, &self.triggers)?;
+        add_service_to_managers(service, &self.triggers, &self.submission).await?;
 
         Ok(())
     }
@@ -161,7 +163,8 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error> {
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.engine.engine().remove_storage(&id);
-        self.triggers.remove_service(id)?;
+        self.triggers.remove_service(id.clone())?;
+        self.submission.remove_service(id)?;
 
         Ok(())
     }
@@ -261,10 +264,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
 }
 
 // called at init and when a new service is added
-fn add_service_to_trigger_manager(
+async fn add_service_to_managers(
     service: Service,
     triggers: &impl TriggerManager,
+    submissions: &impl Submission,
 ) -> Result<(), DispatcherError> {
+    submissions.add_service(&service).await?;
+
     for (id, workflow) in service.workflows {
         let trigger = TriggerConfig {
             service_id: service.id.clone(),
@@ -329,7 +335,7 @@ mod tests {
             runner::{MultiEngineRunner, SingleEngineRunner},
         },
         init_tracing_tests,
-        submission::mock::MockSubmission,
+        submission::mock::{mock_event_id, MockSubmission},
         test_utils::{
             address::{rand_address_eth, rand_event_eth},
             mock::BigSquare,
@@ -339,8 +345,8 @@ mod tests {
         },
     };
     use wavs_types::{
-        ChainName, Component, ComponentID, ComponentSource, ServiceConfig, ServiceID,
-        ServiceStatus, Submit, TriggerData, Workflow, WorkflowID,
+        ChainName, Component, ComponentID, ComponentSource, Envelope, PacketRoute, ServiceConfig,
+        ServiceID, ServiceManager, ServiceStatus, Submit, TriggerData, Workflow, WorkflowID,
     };
 
     use super::*;
@@ -392,10 +398,15 @@ mod tests {
                         None,
                     ),
                     fuel_limit: None,
+                    aggregator: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
+            manager: ServiceManager::Ethereum {
+                chain_name: ChainName::new("eth").unwrap(),
+                address: service_manager_addr,
+            },
         };
         ctx.rt.block_on(async {
             dispatcher.add_service(service).await.unwrap();
@@ -409,15 +420,18 @@ mod tests {
         let processed = dispatcher.submission.received();
         assert_eq!(processed.len(), 1);
         let expected = ChainMessage {
-            trigger_config: action.config,
-            wasi_result: payload.into(),
+            packet_route: PacketRoute::new_trigger_config(&action.config),
+            envelope: Envelope {
+                eventId: mock_event_id().into(),
+                payload: payload.into(),
+            },
             submit: Submit::eth_contract(
                 ChainName::new("eth").unwrap(),
                 service_manager_addr,
                 None,
             ),
         };
-        assert_eq!(processed[0], expected);
+        assert_eq!(processed[0].envelope.payload, expected.envelope.payload);
     }
 
     /// Simulate running the square workflow but Function not WASI component
@@ -476,6 +490,7 @@ mod tests {
 
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
+
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -496,10 +511,15 @@ mod tests {
                         None,
                     ),
                     fuel_limit: None,
+                    aggregator: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
+            manager: ServiceManager::Ethereum {
+                chain_name: ChainName::new("eth").unwrap(),
+                address: rand_address_eth(),
+            },
         };
         ctx.rt.block_on(async {
             dispatcher.add_service(service).await.unwrap();
@@ -514,8 +534,8 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasi_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasi_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].envelope.payload.to_vec(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].envelope.payload.to_vec(), br#"{"y":441}"#);
     }
 
     /// Simulate big-square on a multi-threaded dispatcher
@@ -593,10 +613,15 @@ mod tests {
                         None,
                     ),
                     fuel_limit: None,
+                    aggregator: None,
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
+            manager: ServiceManager::Ethereum {
+                chain_name: ChainName::new("eth").unwrap(),
+                address: rand_address_eth(),
+            },
         };
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
@@ -612,7 +637,7 @@ mod tests {
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].wasi_result, br#"{"y":9}"#);
-        assert_eq!(&processed[1].wasi_result, br#"{"y":441}"#);
+        assert_eq!(&processed[0].envelope.payload.to_vec(), br#"{"y":9}"#);
+        assert_eq!(&processed[1].envelope.payload.to_vec(), br#"{"y":441}"#);
     }
 }

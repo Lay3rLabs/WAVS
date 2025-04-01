@@ -16,34 +16,6 @@ use crate::config::Config;
 #[command(version, about, long_about = None)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command {
-    /// Deploy the core Eigenlayer contracts and (optionally) register as an Operator
-    DeployEigenCore {
-        #[clap(long, default_value_t = true)]
-        register_operator: bool,
-
-        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
-        chain: ChainName,
-
-        #[clap(flatten)]
-        args: CliArgs,
-    },
-
-    /// Deploy a service manager contract for eigenlayer
-    /// Uses core contracts that were previously deployed via the CLI
-    /// Typically used for getting an address to pass to DeployEigenServiceHandler
-    DeployEigenServiceManager {
-        /// The chain to deploy the submit on, if applicable
-        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
-        chain: ChainName,
-
-        /// If set, will register as an operator for the service too
-        #[clap(long, default_value_t = true)]
-        register_operator: bool,
-
-        #[clap(flatten)]
-        args: CliArgs,
-    },
-
     /// Deploy a full service and (optionally) register as an Operator on the Submit target
     /// Uses core contracts that were previously deployed via the CLI
     DeployService {
@@ -406,8 +378,6 @@ impl From<CliSubmitKind> for clap::builder::OsStr {
 impl Command {
     pub fn args(&self) -> CliArgs {
         let args = match self {
-            Self::DeployEigenCore { args, .. } => args,
-            Self::DeployEigenServiceManager { args, .. } => args,
             Self::DeployService { args, .. } => args,
             Self::DeployServiceRaw { args, .. } => args,
             Self::UploadComponent { args, .. } => args,

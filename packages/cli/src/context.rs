@@ -6,15 +6,15 @@ use std::{
 
 use crate::{
     args::{CliArgs, CliSubmitKind},
-    clients::{get_cosmos_client, get_eigen_client},
+    clients::{get_cosmos_client, get_eth_client},
     config::Config,
     deploy::CommandDeployResult,
 };
 use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
-use utils::{config::AnyChainConfig, eigen_client::EigenClient};
-use wavs_types::{ChainName, Submit, Trigger};
+use utils::{config::AnyChainConfig, eth_client::EthSigningClient};
+use wavs_types::{ChainName, EthereumContractSubmission, Submit, Trigger};
 
 use crate::{args::Command, deploy::Deployment};
 
@@ -28,7 +28,7 @@ pub struct CliContext {
 }
 
 enum AnyClient {
-    Eth(EigenClient),
+    Eth(EthSigningClient),
     Cosmos(SigningClient),
 }
 
@@ -46,12 +46,6 @@ impl CliContext {
         };
 
         match command {
-            Command::DeployEigenCore { chain, .. } => {
-                chains.insert(chain.clone());
-            }
-            Command::DeployEigenServiceManager { chain, .. } => {
-                chains.insert(chain.clone());
-            }
             Command::DeployService {
                 trigger_chain,
                 submit_chain,
@@ -86,9 +80,12 @@ impl CliContext {
                     }
 
                     match &workflow.submit {
-                        Submit::EthereumContract { chain_name, .. } => {
+                        Submit::EthereumContract(EthereumContractSubmission {
+                            chain_name, ..
+                        }) => {
                             chains.insert(chain_name.clone());
                         }
+                        Submit::Aggregator { .. } => {}
                         Submit::None => {}
                     }
                 }
@@ -131,7 +128,7 @@ impl CliContext {
                 AnyChainConfig::Eth(eth_chain_config) => {
                     clients.insert(
                         chain_name,
-                        AnyClient::Eth(get_eigen_client(&config, eth_chain_config).await?),
+                        AnyClient::Eth(get_eth_client(&config, eth_chain_config).await?),
                     );
                 }
                 AnyChainConfig::Cosmos(cosmos_chain_config) => {
@@ -153,7 +150,7 @@ impl CliContext {
         })
     }
 
-    pub fn get_eth_client(&self, chain_name: &ChainName) -> Result<EigenClient> {
+    pub fn get_eth_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
         match self
             ._clients
             .get(chain_name)
@@ -189,7 +186,7 @@ impl CliContext {
                 AnyClient::Eth(client) => {
                     let address = address.try_into()?;
 
-                    match client.eth.provider.get_code_at(address).await {
+                    match client.provider.get_code_at(address).await {
                         Ok(addr) => **addr != alloy::primitives::Address::ZERO,
                         Err(_) => false,
                     }
