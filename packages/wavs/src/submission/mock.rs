@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use wavs_types::{EventId, Submit};
+use wavs_types::{EventId, ServiceID, Submit};
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 use crate::test_utils::address::rand_address_eth;
@@ -91,6 +91,10 @@ impl Submission for MockSubmission {
     }
 
     async fn add_service(&self, _service: &wavs_types::Service) -> Result<(), SubmissionError> {
+        Ok(())
+    }
+
+    fn remove_service(&self, _service_id: ServiceID) -> Result<(), SubmissionError> {
         Ok(())
     }
 }

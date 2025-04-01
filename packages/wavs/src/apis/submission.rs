@@ -17,6 +17,8 @@ pub trait Submission: Send + Sync {
     ) -> Result<(), SubmissionError>;
 
     async fn add_service(&self, service: &Service) -> Result<(), SubmissionError>;
+
+    fn remove_service(&self, service_id: ServiceID) -> Result<(), SubmissionError>;
 }
 
 /// The data returned from a trigger action

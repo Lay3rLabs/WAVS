@@ -332,4 +332,10 @@ impl Submission for CoreSubmission {
 
         Ok(())
     }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    fn remove_service(&self, _service_id: ServiceID) -> Result<(), SubmissionError> {
+        // nothing we really care about here, it's okay to keep the signing clients in memory
+        Ok(())
+    }
 }
