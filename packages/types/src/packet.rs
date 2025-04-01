@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 pub struct Packet {
     pub route: PacketRoute,
     pub envelope: Envelope,
+    // TODO - should this be pubkey or address?
+    // it is used to check against operator set, so it's determined on the solidity side
     pub signer: SignerAddress,
     pub signature: Vec<u8>,
     pub block_height: u64,
@@ -53,6 +55,8 @@ impl PacketRoute {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
+// TODO - this should be a wrapper around an address type
+// see: https://github.com/Lay3rLabs/wavs-middleware/pull/48#issuecomment-2769035569
 pub struct EventId([u8; 32]);
 
 impl From<Uint<256, 4>> for EventId {
@@ -76,6 +80,10 @@ impl From<TriggerAction> for EventId {
         let bytes = serde_json::to_vec(&trigger_action).unwrap();
 
         let digest = Sha256::digest(&bytes);
+
+        // FIXME: once EventId takes an address, do this instead:
+        // let mut arr = [0; 20];
+        // arr.copy_from_slice(digest.as_slice()[..20]);
 
         let mut arr = [0; 32];
         arr.copy_from_slice(digest.as_slice());

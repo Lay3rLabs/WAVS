@@ -17,12 +17,10 @@ pub struct Service {
     /// This is any utf-8 string, for human-readable display.
     pub name: String,
 
-    /// We will supoort multiple components in one service with unique service-scoped IDs. For now, just add one called "default".
-    /// This allows clean mapping from backwards-compatible API endpoints.
+    /// We supoort multiple components in one service with unique service-scoped IDs.
     pub components: BTreeMap<ComponentID, Component>,
 
-    /// We will support multiple workflows in one service with unique service-scoped IDs. For now, only one called "default".
-    /// The workflows reference components by name (for now, always "default").
+    /// We support multiple workflows in one service with unique service-scoped IDs.
     pub workflows: BTreeMap<WorkflowID, Workflow>,
 
     pub status: ServiceStatus,
@@ -122,13 +120,13 @@ pub struct Component {
 pub struct Workflow {
     pub trigger: Trigger,
     /// A reference to which component to run with this data - for now, always "default"
+    /// FIXME: should move fuel_limit here
     pub component: ComponentID,
     /// How to submit the result of the component.
-    /// TODO: We need to pull out some of this into an aggregator section (https://github.com/Lay3rLabs/WAVS/issues/477)
     pub submit: Submit,
     /// The maximum amount of compute metering to allow for a single component execution
     /// If not supplied, will be `Workflow::DEFAULT_FUEL_LIMIT`
-    // TODO: move this into the component section
+    // FIXME: (same as above) move this into the component section
     pub fuel_limit: Option<u64>,
 
     pub aggregator: Option<Aggregator>,

@@ -37,9 +37,6 @@ pub struct Config {
     /// All the available chains
     pub chains: ChainConfigs,
 
-    /// Number of tasks to trigger transactions
-    pub tasks_quorum: u32,
-
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
 
@@ -63,7 +60,6 @@ impl Default for Config {
                 cosmos: Default::default(),
                 eth: Default::default(),
             },
-            tasks_quorum: 3,
         }
     }
 }

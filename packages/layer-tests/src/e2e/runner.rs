@@ -57,7 +57,7 @@ async fn test_service(
 
         let n_tasks = match &workflow.submit {
             Submit::EthereumContract(EthereumContractSubmission { .. }) => 1,
-            Submit::Aggregator { .. } => configs.aggregator.as_ref().unwrap().tasks_quorum,
+            Submit::Aggregator { .. } => 3, // TODO: make sure this value will work as aggregator is updated to calculate quorum, power, etc.
             Submit::None => 1,
         };
 
