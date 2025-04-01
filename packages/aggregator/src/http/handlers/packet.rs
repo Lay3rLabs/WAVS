@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EthereumContractSubmission, Packet,
+    Aggregator, EthereumContractSubmission, Packet, SignerAddress,
 };
 
 use crate::http::{
@@ -34,31 +34,19 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
         PacketQueue::Alive(queue) => queue,
     };
 
-    // TODO: move this into a method on PacketQueue so we can test etc.
-    if let Some(last_packet) = queue.first() {
-        if packet.envelope.payload != last_packet.envelope.payload {
-            bail!("Unexpected envelope difference!");
-        }
+    // TODO - query operator set from ServiceManager contract
+    // it may be some struct, using a Vec as a placeholder for now
+    let operator_set = Vec::new();
 
-        // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
-        // if packet.block_height != last_packet.block_height {
-        //     bail!("Unexpected block height difference!");
-        // }
-    }
-
-    // TODO:
-    // 1. Ensure that the signer is not already in the queue
-    // 2. Ensure that the signature is valid
-    // 3. Ensure that the signer is in the operator set  (note - this will be used below for checking quorum satisfaction too)
+    validate_packet(&packet, &queue, &operator_set)?;
 
     let envelope = packet.envelope.clone();
-    let block_height = packet.block_height; // related to https://github.com/Lay3rLabs/wavs-middleware/issues/54
+    let block_height = packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
     let route = packet.route.clone();
 
     queue.push(packet);
 
     let count = queue.len();
-    tracing::debug!("Aggregator count: {}", count);
 
     // TODO:
     // given the total power of the quorum (which could be, say, 60% of the total operator set power)
@@ -105,4 +93,32 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
         state.save_packet_queue(&event_id, PacketQueue::Alive(queue))?;
         Ok(AddPacketResponse::Aggregated { count })
     }
+}
+
+fn validate_packet(
+    packet: &Packet,
+    queue: &[Packet],
+    _operator_set: &[SignerAddress], /* TODO: placeholder */
+) -> anyhow::Result<()> {
+    // TODO
+    // 1. ensure that the signature is valid
+    // 2. ensure that the signer is in the operator set
+    match queue.first() {
+        None => {}
+        Some(last_packet) => {
+            // check if the packet is the same as the last one
+            if packet.envelope != last_packet.envelope {
+                bail!("Unexpected envelope difference!");
+            }
+
+            // TODO: ensure that the signer is not already in the queue
+
+            // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
+            // if packet.block_height != last_packet.block_height {
+            //     bail!("Unexpected block height difference!");
+            // }
+        }
+    }
+
+    Ok(())
 }

@@ -17,7 +17,7 @@ mod service_handler {
         #[allow(missing_docs)]
         #[cfg(feature = "solidity-rpc")]
         #[sol(rpc)]
-        #[derive(serde::Deserialize, serde::Serialize, Debug)]
+        #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Eq)]
         IWavsServiceHandler,
         "../../contracts/solidity/abi/IWavsServiceHandler.sol/IWavsServiceHandler.json"
     );
