@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 use alloy::primitives::LogData;
 use serde::{Deserialize, Serialize};
 
-use crate::{ByteArray, ComponentSource};
+use crate::{ByteArray, ComponentSource, Timestamp};
 
 use super::{ChainName, ComponentID, ServiceID, WorkflowID};
 
@@ -155,6 +155,14 @@ pub enum Trigger {
         chain_name: ChainName,
         n_blocks: NonZeroU32,
     },
+    Cron {
+        /// A cron expression defining the schedule for execution.
+        schedule: String,
+        /// Optional start time (timestamp in seconds) indicating when the schedule begins.
+        start_time: Option<Timestamp>,
+        /// Optional end time (timestamp in seconds) indicating when the schedule ends.
+        end_time: Option<Timestamp>,
+    },
     // not a real trigger, just for testing
     Manual,
 }
@@ -187,6 +195,10 @@ pub enum TriggerData {
         chain_name: ChainName,
         /// The block height where the event was emitted
         block_height: u64,
+    },
+    Cron {
+        /// The trigger time
+        trigger_time: Timestamp,
     },
     Raw(Vec<u8>),
 }

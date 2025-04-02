@@ -290,6 +290,24 @@ impl std::fmt::Display for WorkflowTriggerResult {
                 writeln!(f, "    Chain:      {}", chain_name)?;
                 writeln!(f, "    Interval:   {} blocks", n_blocks)?;
             }
+            Trigger::Cron {
+                schedule,
+                start_time,
+                end_time,
+            } => {
+                writeln!(f, "  Trigger Type: Cron")?;
+                writeln!(f, "    Schedule:   {}", schedule)?;
+                if let Some(start) = start_time {
+                    writeln!(f, "    Start Time: {}", start.as_nanos())?;
+                } else {
+                    writeln!(f, "    Start Time: None")?;
+                }
+                if let Some(end) = end_time {
+                    writeln!(f, "    End Time:   {}", end.as_nanos())?;
+                } else {
+                    writeln!(f, "    End Time:   None")?;
+                }
+            }
         }
 
         writeln!(f, "  Updated:     {}", self.file_path.display())
@@ -1071,7 +1089,7 @@ pub async fn validate_contracts_exist(
                 }
             }
             // Other trigger types don't need contract validation
-            Trigger::Manual | Trigger::BlockInterval { .. } => {}
+            Trigger::Cron { .. } | Trigger::Manual | Trigger::BlockInterval { .. } => {}
         }
     }
 

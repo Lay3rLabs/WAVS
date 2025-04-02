@@ -16,6 +16,7 @@ utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+tokio-stream = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -47,6 +48,8 @@ wasm-pkg-client = { workspace = true }
 wasm-pkg-common = { workspace = true }
 semver = { workspace = true }
 async-trait = "0.1.86"
+chrono = { workspace = true }
+cron = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

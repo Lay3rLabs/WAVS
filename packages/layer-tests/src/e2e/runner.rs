@@ -183,7 +183,7 @@ fn get_input_for_service(
                 _ => unimplemented!(),
             },
             EthService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
-            EthService::BlockInterval => Vec::new(),
+            EthService::CronInterval | EthService::BlockInterval => Vec::new(),
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
@@ -194,7 +194,7 @@ fn get_input_for_service(
             CosmosService::EchoData => b"on brink".to_vec(),
             CosmosService::Permissions => permissions_req(),
             CosmosService::Square => SquareRequest { x: 3 }.to_vec(),
-            CosmosService::BlockInterval => Vec::new(),
+            CosmosService::CronInterval | CosmosService::BlockInterval => Vec::new(),
         },
         AnyService::CrossChain(name) => match name {
             CrossChainService::CosmosToEthEchoData => b"hello eth world from cosmos".to_vec(),
@@ -251,6 +251,7 @@ fn verify_signed_data(
                 None
             }
             EthService::BlockInterval => Some(b"block-interval data".to_vec()),
+            EthService::CronInterval => Some(b"cron-interval data".to_vec()),
         },
         AnyService::Cosmos(cosmos_name) => match cosmos_name {
             CosmosService::EchoData | CosmosService::ChainTriggerLookup => Some(input_req()),
@@ -269,6 +270,7 @@ fn verify_signed_data(
                 None
             }
             CosmosService::BlockInterval => Some(b"block-interval data".to_vec()),
+            CosmosService::CronInterval => Some(b"cron-interval data".to_vec()),
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
             CrossChainService::CosmosToEthEchoData => Some(input_req()),
