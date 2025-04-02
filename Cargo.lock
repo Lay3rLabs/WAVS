@@ -8807,7 +8807,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "async-trait",
- "axum 0.8.1",
+ "axum 0.8.3",
  "bincode",
  "bip39",
  "chrono",
@@ -8921,8 +8921,8 @@ version = "0.3.0"
 dependencies = [
  "alloy",
  "anyhow",
- "chrono",
  "bincode",
+ "chrono",
  "const-hex",
  "cosmwasm-std",
  "cron",
