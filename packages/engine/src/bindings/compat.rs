@@ -120,7 +120,7 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                     }
                 ))
             },
-            wavs_types::TriggerData::Cron { execution_time, trigger_time } => Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerDataCron { execution_time: execution_time.into(), trigger_time: trigger_time.into() })),
+            wavs_types::TriggerData::Cron { trigger_time } => Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerDataCron {  trigger_time: trigger_time.into() })),
             wavs_types::TriggerData::Raw(data) => {
                 Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Raw(data))
             },
@@ -208,6 +208,6 @@ impl From<wavs_types::Timestamp> for component::Timestamp {
 
 impl From<component::Timestamp> for wavs_types::Timestamp {
     fn from(src: component::Timestamp) -> Self {
-        wavs_types::Timestamp::new(src.nanos)
+        wavs_types::Timestamp::from_nanos(src.nanos)
     }
 }

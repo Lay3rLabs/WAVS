@@ -120,8 +120,7 @@ interface layer-types {
   }
 
   record trigger-data-cron {
-    trigger-time: timestamp,
-    execution-time: timestamp
+    trigger-time: timestamp
   }
 
   variant log-level {

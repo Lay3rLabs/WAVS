@@ -8,7 +8,7 @@ pub struct Timestamp(u64);
 
 impl Timestamp {
     // Create a new Timestamp directly from nanoseconds
-    pub fn new(nanos: u64) -> Self {
+    pub fn from_nanos(nanos: u64) -> Self {
         Timestamp(nanos)
     }
 

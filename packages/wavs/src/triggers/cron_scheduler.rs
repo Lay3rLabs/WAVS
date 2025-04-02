@@ -145,17 +145,25 @@ impl CronScheduler {
     pub fn process_due_triggers(&self, now: Timestamp) -> Vec<LookupId> {
         let mut due_triggers = Vec::new();
         let mut expired_ids = Vec::new();
-        let mut updated_triggers = Vec::new(); // Store updates separately
 
-        // Process queue under a write lock, but minimize lock duration
+        // Process queue with a write lock
         {
             let mut queue = self.trigger_queue.write().unwrap();
             let lookup = self.trigger_lookup.read().unwrap();
+            let mut updated_triggers = Vec::new();
 
-            queue.retain(|trigger| {
+            // Process only triggers that are due (at the top of the heap)
+            while let Some(trigger) = queue.pop() {
                 // Skip if this trigger has been removed from the lookup table
                 if !lookup.contains(&trigger.lookup_id) {
-                    return false; // Remove from queue
+                    continue; // Skip this trigger entirely
+                }
+
+                // If this trigger is not yet due, put it back and stop processing
+                // (since the heap is ordered, no other triggers will be due either)
+                if trigger.next_trigger_time > now {
+                    queue.push(trigger);
+                    break;
                 }
 
                 // Check if trigger has passed its end time
@@ -168,13 +176,8 @@ impl CronScheduler {
                             now.as_nanos(),
                             end_time.as_nanos()
                         );
-                        return false; // Remove from queue
+                        continue; // Skip this trigger, don't add back to queue
                     }
-                }
-
-                // Skip if trigger time hasn't been reached yet
-                if trigger.next_trigger_time > now {
-                    return true; // Keep in queue for future
                 }
 
                 // Check time boundaries to see if trigger is active
@@ -185,12 +188,10 @@ impl CronScheduler {
                     (None, None) => true, // Always active without boundaries
                 };
 
-                if !should_execute_now {
-                    return true; // Keep in queue but don't execute now
+                if should_execute_now {
+                    // Trigger is due to execute
+                    due_triggers.push(trigger.lookup_id);
                 }
-
-                // Trigger is due to execute
-                due_triggers.push(trigger.lookup_id);
 
                 // Calculate the next trigger time
                 if let Some(next_time) = trigger.schedule.upcoming(Utc).next() {
@@ -205,15 +206,15 @@ impl CronScheduler {
                                     next_timestamp.as_nanos(),
                                     end.as_nanos()
                                 );
-                                return false; // Remove from queue as all future executions would be beyond end time
+                                continue; // Don't add back to queue
                             }
                         }
 
-                        // Update for next execution
-                        let mut updated_trigger = trigger.clone();
+                        // Update for next execution and add to temporary queue
+                        let mut updated_trigger = trigger;
                         updated_trigger.next_trigger_time = next_timestamp;
                         updated_triggers.push(updated_trigger);
-                        return false; // Remove current version, updated version gets added later
+                        continue;
                     }
                 }
 
@@ -223,11 +224,12 @@ impl CronScheduler {
                     "Removing cron trigger ID {} - no valid next execution time",
                     trigger.lookup_id
                 );
-                false
-            });
+            }
 
-            // Add updated triggers back to the queue
-            queue.extend(updated_triggers);
+            // Add all updated triggers back to the queue at once
+            for trigger in updated_triggers {
+                queue.push(trigger);
+            }
         }
 
         // Now handle expired IDs with a separate write lock

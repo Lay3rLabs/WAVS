@@ -197,8 +197,6 @@ pub enum TriggerData {
         block_height: u64,
     },
     Cron {
-        /// The execution time
-        execution_time: Timestamp,
         /// The trigger time
         trigger_time: Timestamp,
     },

@@ -382,16 +382,12 @@ impl CoreTriggerManager {
                     lookup_ids,
                 } => {
                     let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-                    let now = Timestamp::now();
 
                     for lookup_id in lookup_ids {
                         match trigger_configs_lock.get(&lookup_id) {
                             Some(trigger_config) => {
                                 trigger_actions.push(TriggerAction {
-                                    data: TriggerData::Cron {
-                                        execution_time: now,
-                                        trigger_time,
-                                    },
+                                    data: TriggerData::Cron { trigger_time },
                                     config: trigger_config.clone(),
                                 });
                             }
