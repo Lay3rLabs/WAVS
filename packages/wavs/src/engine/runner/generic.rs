@@ -1,5 +1,5 @@
 use tokio::sync::mpsc;
-use wavs_types::{Envelope, EventId, PacketRoute, Service, TriggerAction};
+use wavs_types::{Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction};
 
 use crate::apis::engine::ExecutionComponent;
 use crate::apis::submission::ChainMessage;
@@ -75,7 +75,12 @@ pub trait EngineRunner: Send + Sync {
                 packet_route: PacketRoute::new_trigger_config(&trigger_config),
                 envelope: Envelope {
                     payload: wasi_result.into(),
-                    eventId: EventId::from(action).into(),
+                    eventId: EventId::try_from(&action)
+                        .map_err(EngineError::EncodeEventId)?
+                        .into(),
+                    ordering: EventOrder::try_from(&action)
+                        .map_err(EngineError::EncodeEventOrder)?
+                        .into(),
                 },
                 submit: workflow.submit.clone(),
             };

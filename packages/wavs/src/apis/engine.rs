@@ -104,4 +104,10 @@ pub enum EngineError {
 
     #[error("{0}")]
     RegistryError(#[from] anyhow::Error),
+
+    #[error("could not encode EventId {0:?}")]
+    EncodeEventId(bincode::error::EncodeError),
+
+    #[error("could not encode EventOrder {0:?}")]
+    EncodeEventOrder(bincode::error::EncodeError),
 }
