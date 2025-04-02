@@ -8,8 +8,10 @@ interface IWavsServiceHandler {
         uint32 referenceBlock;
     }
     struct Envelope {
+        bytes20 eventId;
+        // currently unused, for future version. added now for padding
+        bytes12 ordering;
         bytes payload;
-        uint256 eventId;
     }
 
     /**
