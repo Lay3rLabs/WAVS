@@ -1,19 +1,18 @@
 pub mod aggregator;
-
-use std::{fmt, ops::Deref, str::FromStr};
-
+use super::{Permissions, ServiceID, ServiceStatus, Trigger};
+use crate::{digest::Digest, ChainName};
+use layer_climb_address::Address;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-
-use crate::digest::Digest;
-
-use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger};
+use std::{fmt, ops::Deref, str::FromStr};
 use wasm_pkg_common::package::{PackageRef, Version};
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
-    pub service: Service,
+    pub chain_name: ChainName,
+    pub address: Address,
 }
 
 #[derive(Serialize, Deserialize)]

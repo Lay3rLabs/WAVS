@@ -1,5 +1,7 @@
+use alloy::providers::ProviderBuilder;
 use anyhow::Result;
 use async_trait::async_trait;
+use layer_climb::prelude::Address;
 use redb::ReadableTable;
 use std::ops::Bound;
 use std::path::Path;
@@ -8,7 +10,13 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use wavs_types::{Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig};
+use url::Url;
+use utils::config::{AnyChainConfig, ChainConfigs};
+use wavs_types::IWavsServiceManager::{getServiceURICall, IWavsServiceManagerInstance};
+use wavs_types::{
+    ChainName, Digest, IDError, IWavsServiceManager, Service, ServiceID, TriggerAction,
+    TriggerConfig,
+};
 
 use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
@@ -27,6 +35,7 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
+    pub chain_configs: ChainConfigs,
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
@@ -34,6 +43,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         triggers: T,
         engine: E,
         submission: S,
+        chain_configs: ChainConfigs,
         db_storage_path: impl AsRef<Path>,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
@@ -43,6 +53,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
             engine,
             submission,
             storage,
+            chain_configs,
         })
     }
 }
@@ -134,7 +145,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(digests)
     }
 
-    async fn add_service(&self, service: Service) -> Result<(), Self::Error> {
+    async fn add_service(
+        &self,
+        chain_name: ChainName,
+        address: Address,
+    ) -> Result<(), Self::Error> {
+        let service = query_service_from_address(chain_name, address, &self.chain_configs).await?;
+
         // persist it in storage if not there yet
         if self
             .storage
@@ -263,6 +280,55 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 }
 
+async fn query_service_from_address(
+    chain_name: ChainName,
+    address: Address,
+    chain_configs: &ChainConfigs,
+) -> Result<Service, DispatcherError> {
+    // Get the chain config
+    let chain = chain_configs.get_chain(&chain_name)?.ok_or_else(|| {
+        DispatcherError::Config(format!(
+            "Could not get chain config for chain {}",
+            chain_name
+        ))
+    })?;
+
+    // Handle different chain types
+    match chain {
+        AnyChainConfig::Eth(eth_config) => {
+            // Get the HTTP endpoint, required for contract calls
+            let http_endpoint = eth_config.http_endpoint.clone().ok_or_else(|| {
+                DispatcherError::Config(format!(
+                    "No HTTP endpoint configured for chain {}",
+                    chain_name
+                ))
+            })?;
+
+            // Create a provider using the HTTP endpoint
+            let provider = ProviderBuilder::new().on_http(
+                Url::parse(&http_endpoint)
+                    .expect(&format!("Could not parse http endpoint {}", http_endpoint)),
+            );
+
+            let contract = IWavsServiceManagerInstance::new(address.try_into()?, provider);
+
+            let service_uri = contract.getServiceURI().call().await?._0;
+
+            // Fetch the service JSON from the URI
+            let response = reqwest::get(&service_uri).await?;
+            let service_json = response.text().await?;
+
+            // Parse the JSON into a Service object
+            let service: Service = serde_json::from_str(&service_json)?;
+
+            Ok(service)
+        }
+        AnyChainConfig::Cosmos(_) => {
+            unimplemented!()
+        }
+    }
+}
+
 // called at init and when a new service is added
 async fn add_service_to_managers(
     service: Service,
@@ -318,11 +384,23 @@ pub enum DispatcherError {
     #[error("Registry cache path error: {0}")]
     RegistryCachePath(#[from] anyhow::Error),
 
+    #[error("Alloy contract error: {0}")]
+    AlloyContract(#[from] alloy::contract::Error),
+
+    #[error("Reqwest error: {0}")]
+    Reqwest(#[from] reqwest::Error),
+
+    #[error("Serde error: {0}")]
+    Serde(#[from] serde_json::Error),
+
     #[error("No registry domain provided in configuration")]
     NoRegistry,
 
     #[error("Unknown service digest: {0}")]
     UnknownDigest(Digest),
+
+    #[error("Config error: {0}")]
+    Config(String),
 }
 
 #[cfg(test)]

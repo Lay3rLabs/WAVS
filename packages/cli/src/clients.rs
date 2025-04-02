@@ -121,7 +121,10 @@ impl HttpClient {
         // broadcast the service uri to the nodes by way of the service manager metadata
         // but for now, we'll support both until all the dust settles
 
-        let body = serde_json::to_string(&AddServiceRequest { service })?;
+        let body: String = serde_json::to_string(&AddServiceRequest {
+            chain_name: service.manager.chain_name().clone(),
+            address: Address::Eth(service.manager.eth_address_unchecked().into()),
+        })?;
 
         self.inner
             .post(format!("{}/app", self.endpoint))
