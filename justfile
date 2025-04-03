@@ -91,8 +91,8 @@ solidity-build CLEAN="":
     mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/contracts/solidity;
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
-    cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
@@ -173,7 +173,7 @@ download-wit branch="main":
     rm -rf temp_clone
 
 # downloads the latest solidity repo
-download-solidity branch="feat/envelope":
+download-solidity branch="dev":
     # Create a temporary directory
     rm -rf temp_clone
     mkdir temp_clone

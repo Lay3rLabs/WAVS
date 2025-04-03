@@ -26,6 +26,8 @@ thiserror = { workspace = true }
 const-hex = { workspace = true }
 cosmwasm-std = { workspace = true }
 layer-climb-address = { workspace = true }
+bincode = {workspace = true}
+ripemd = {workspace = true}
 alloy = {workspace = true}
 # alloy-primitives = { workspace = true }
 # alloy-sol-macro = { workspace = true }
