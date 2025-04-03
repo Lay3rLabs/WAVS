@@ -6,9 +6,7 @@ use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
 };
-use wavs_types::{
-    ChainName, ComponentID, ComponentSource, Digest, Service, ServiceConfig, ServiceID, WorkflowID,
-};
+use wavs_types::{ChainName, ComponentID, Digest, Service, ServiceConfig, ServiceID, WorkflowID};
 
 use crate::config::Config;
 
@@ -16,58 +14,6 @@ use crate::config::Config;
 #[command(version, about, long_about = None)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command {
-    /// Deploy a full service and (optionally) register as an Operator on the Submit target
-    /// Uses core contracts that were previously deployed via the CLI
-    DeployService {
-        /// Path to the WASI component
-        #[clap(long, value_parser = |json: &str| serde_json::from_str::<ComponentSource>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
-        component: ComponentSource,
-
-        /// The kind of trigger to deploy
-        /// If not set, will assume the trigger from the trigger_address
-        #[clap(long)]
-        trigger: Option<CliTriggerKind>,
-
-        /// The will be event name for cosmos triggers, hex-encoded event signature for eth triggers
-        #[clap(long, required_if_eq_any([
-            ("trigger", CliTriggerKind::EthContractEvent),
-            ("trigger", CliTriggerKind::CosmosContractEvent)
-        ]))]
-        trigger_event_name: Option<String>,
-
-        /// The address used for trigger contracts, if applicable
-        #[clap(long, required_if_eq_any([
-            ("trigger", CliTriggerKind::EthContractEvent),
-            ("trigger", CliTriggerKind::CosmosContractEvent)
-        ]))]
-        trigger_address: Option<String>,
-
-        /// The kind of submit to deploy
-        #[clap(long, default_value_t = CliSubmitKind::EthServiceHandler)]
-        submit: CliSubmitKind,
-
-        /// The address used for submit contracts, if applicable
-        #[clap(long, required_if_eq_any([
-            ("submit", CliSubmitKind::EthServiceHandler),
-        ]))]
-        #[clap(long)]
-        submit_address: Option<String>,
-
-        /// The chain to deploy the trigger on, if applicable
-        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
-        trigger_chain: Option<ChainName>,
-
-        /// The chain to deploy the submit on, if applicable
-        #[clap(long, default_value = "local", value_parser = parse_chain_name)]
-        submit_chain: Option<ChainName>,
-
-        #[clap(flatten)]
-        args: CliArgs,
-
-        #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
-        service_config: Option<ServiceConfig>,
-    },
-
     /// Uploads a WASI component
     UploadComponent {
         /// Path to the WASI component
@@ -301,10 +247,6 @@ fn parse_service_input(s: &str) -> Result<Service, String> {
     }
 }
 
-fn parse_chain_name(s: &str) -> Result<ChainName, String> {
-    ChainName::try_from(s).map_err(|e| e.to_string())
-}
-
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum CliTriggerKind {
     EthContractEvent,
@@ -380,7 +322,6 @@ impl From<CliSubmitKind> for clap::builder::OsStr {
 impl Command {
     pub fn args(&self) -> CliArgs {
         let args = match self {
-            Self::DeployService { args, .. } => args,
             Self::DeployServiceRaw { args, .. } => args,
             Self::UploadComponent { args, .. } => args,
             Self::Exec { args, .. } => args,

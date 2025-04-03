@@ -2,9 +2,8 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::config::ConfigExt;
 use wavs_cli::{
-    args::{CliTriggerKind, Command},
+    args::Command,
     command::{
-        deploy_service::{DeployService, DeployServiceArgs},
         deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
@@ -35,53 +34,6 @@ async fn main() {
         .unwrap();
 
     match command {
-        Command::DeployService {
-            component,
-            trigger,
-            trigger_chain,
-            trigger_address,
-            submit_address,
-            submit,
-            submit_chain,
-            service_config,
-            trigger_event_name,
-            args: _,
-        } => {
-            let trigger = match (trigger, &trigger_address) {
-                (Some(trigger), _) => trigger,
-                (None, Some(trigger_address)) => {
-                    if trigger_address.starts_with("0x") {
-                        CliTriggerKind::EthContractEvent
-                    } else {
-                        CliTriggerKind::CosmosContractEvent
-                    }
-                }
-                (None, None) => {
-                    panic!("trigger is required to be set if trigger_address is not set");
-                }
-            };
-
-            let res = DeployService::run(
-                &ctx,
-                DeployServiceArgs {
-                    component,
-                    trigger,
-                    trigger_event_name,
-                    trigger_chain,
-                    trigger_address,
-                    submit_address,
-                    submit,
-                    submit_chain,
-                    service_config,
-                },
-            )
-            .await
-            .unwrap();
-
-            if let Some(res) = res {
-                ctx.handle_deploy_result(res).unwrap();
-            }
-        }
         Command::DeployServiceRaw { service, args: _ } => {
             let res = DeployServiceRaw::run(&ctx, DeployServiceRawArgs { service })
                 .await
