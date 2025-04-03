@@ -1,5 +1,5 @@
 use tracing::instrument;
-use wavs_types::{Digest, ServiceConfig, TriggerAction};
+use wavs_types::{Digest, ServiceConfig, TriggerAction, WasmResponse};
 
 use crate::apis::engine::{Engine, EngineError, ExecutionComponent};
 use crate::triggers::mock::get_mock_trigger_data;
@@ -49,8 +49,11 @@ impl Engine for IdentityEngine {
         _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
-    ) -> Result<Option<Vec<u8>>, EngineError> {
-        Ok(Some(get_mock_trigger_data(&trigger.data)))
+    ) -> Result<Option<WasmResponse>, EngineError> {
+        Ok(Some(WasmResponse {
+            payload: get_mock_trigger_data(&trigger.data),
+            ordering: None,
+        }))
     }
 }
 
@@ -91,6 +94,6 @@ mod test {
                 &ServiceConfig::default(),
             )
             .unwrap();
-        assert_eq!(request, result.unwrap());
+        assert_eq!(request, result.unwrap().payload);
     }
 }

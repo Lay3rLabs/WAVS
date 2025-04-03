@@ -1,7 +1,9 @@
 use alloy_network::Ethereum;
 use anyhow::Context;
 use example_helpers::bindings::{
-    compat::{TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent},
+    compat::{
+        TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent, WasmResponse,
+    },
     world::{host, Guest, TriggerAction},
 };
 use example_helpers::{
@@ -14,7 +16,7 @@ use wavs_wasi_utils::ethereum::new_eth_provider;
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<Vec<u8>>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<WasmResponse>, String> {
         wstd::runtime::block_on(async move {
             let (trigger_id, _) = decode_trigger_event(trigger_action.data.clone())?;
 

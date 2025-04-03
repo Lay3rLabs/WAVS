@@ -316,6 +316,14 @@ pub enum AllowedHostPermission {
     None,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(default, rename_all = "snake_case")]
+#[derive(Default)]
+pub struct WasmResponse {
+    pub payload: Vec<u8>,
+    pub ordering: Option<u64>,
+}
+
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
