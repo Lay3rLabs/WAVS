@@ -1,13 +1,19 @@
+#[cfg(feature = "mock")]
 use std::time::Duration;
 
+#[cfg(feature = "mock")]
 use criterion::{criterion_group, criterion_main, Criterion};
+#[cfg(feature = "mock")]
 use utils::context::AppContext;
+#[cfg(feature = "mock")]
 use wavs::test_utils::{
     address::rand_address_eth,
     mock::{BigSquare, MockE2ETestRunner, SquareIn},
 };
+#[cfg(feature = "mock")]
 use wavs_types::{ComponentSource, Digest, ServiceID, WorkflowID};
 
+#[cfg(feature = "mock")]
 pub fn criterion_benchmark(c: &mut Criterion) {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
@@ -72,5 +78,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
+#[cfg(feature = "mock")]
 criterion_group!(benches, criterion_benchmark);
+#[cfg(feature = "mock")]
 criterion_main!(benches);
+
+#[cfg(not(feature = "mock"))]
+fn main() {
+    println!("This benchmark requires the 'mock' feature. Run with: cargo bench --features mock");
+}

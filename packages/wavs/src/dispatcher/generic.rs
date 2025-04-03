@@ -12,11 +12,8 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use url::Url;
 use utils::config::{AnyChainConfig, ChainConfigs};
-use wavs_types::IWavsServiceManager::{getServiceURICall, IWavsServiceManagerInstance};
-use wavs_types::{
-    ChainName, Digest, IDError, IWavsServiceManager, Service, ServiceID, TriggerAction,
-    TriggerConfig,
-};
+use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
+use wavs_types::{ChainName, Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig};
 
 use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
@@ -171,6 +168,35 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
+        add_service_to_managers(service, &self.triggers, &self.submission).await?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "mock")]
+    async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
+        // Check if service is already registered
+        if self
+            .storage
+            .get(SERVICE_TABLE, service.id.as_ref())?
+            .is_some()
+        {
+            return Err(DispatcherError::ServiceRegistered(service.id));
+        }
+
+        // Store components
+        for component in service.components.values() {
+            self.engine
+                .engine()
+                .store_component_from_source(&component.source)
+                .await?;
+        }
+
+        // Store the service
+        self.storage
+            .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
+
+        // Set up triggers and submissions
         add_service_to_managers(service, &self.triggers, &self.submission).await?;
 
         Ok(())
@@ -404,7 +430,10 @@ pub enum DispatcherError {
 }
 
 #[cfg(test)]
+#[cfg(feature = "mock")]
 mod tests {
+    use std::collections::BTreeMap;
+
     use crate::{
         apis::submission::ChainMessage,
         engine::{
@@ -448,6 +477,7 @@ mod tests {
             MockTriggerManagerVec::new().with_actions(vec![action_clone]),
             SingleEngineRunner::new(IdentityEngine),
             MockSubmission::new(),
+            ChainConfigs::default(),
             db_file.as_ref(),
         )
         .unwrap();
@@ -487,7 +517,7 @@ mod tests {
             },
         };
         ctx.rt.block_on(async {
-            dispatcher.add_service(service).await.unwrap();
+            dispatcher.add_service_direct(service).await.unwrap();
         });
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
@@ -555,6 +585,7 @@ mod tests {
             MockTriggerManagerVec::new().with_actions(actions),
             SingleEngineRunner::new(MockEngine::new()),
             MockSubmission::new(),
+            ChainConfigs::default(),
             db_file.as_ref(),
         )
         .unwrap();
@@ -569,6 +600,7 @@ mod tests {
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
 
+        let service_manager_addr = rand_address_eth();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -596,11 +628,12 @@ mod tests {
             status: ServiceStatus::Active,
             manager: ServiceManager::Ethereum {
                 chain_name: ChainName::new("eth").unwrap(),
-                address: rand_address_eth(),
+                address: service_manager_addr,
             },
         };
+
         ctx.rt.block_on(async {
-            dispatcher.add_service(service).await.unwrap();
+            dispatcher.add_service_direct(service).await.unwrap();
         });
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
@@ -658,6 +691,10 @@ mod tests {
             MockTriggerManagerVec::new().with_actions(actions),
             MultiEngineRunner::new(MockEngine::new(), 4),
             MockSubmission::new(),
+            ChainConfigs {
+                cosmos: BTreeMap::new(),
+                eth: BTreeMap::new(),
+            },
             db_file.as_ref(),
         )
         .unwrap();
@@ -671,6 +708,7 @@ mod tests {
 
         // Register a service to handle this action
         let component_id = ComponentID::new("component1").unwrap();
+        let service_manager_addr = rand_address_eth();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -698,14 +736,14 @@ mod tests {
             status: ServiceStatus::Active,
             manager: ServiceManager::Ethereum {
                 chain_name: ChainName::new("eth").unwrap(),
-                address: rand_address_eth(),
+                address: service_manager_addr,
             },
         };
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
         let ctx = AppContext::new();
         ctx.rt.block_on(async {
-            dispatcher.add_service(service).await.unwrap();
+            dispatcher.add_service_direct(service).await.unwrap();
         });
         dispatcher.start(ctx).unwrap();
 
