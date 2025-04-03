@@ -10,7 +10,6 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use url::Url;
 use utils::config::{AnyChainConfig, ChainConfigs};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{ChainName, Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig};
@@ -332,7 +331,7 @@ async fn query_service_from_address(
 
             // Create a provider using the HTTP endpoint
             let provider = ProviderBuilder::new().on_http(
-                Url::parse(&http_endpoint)
+                reqwest::Url::parse(&http_endpoint)
                     .expect(&format!("Could not parse http endpoint {}", http_endpoint)),
             );
 

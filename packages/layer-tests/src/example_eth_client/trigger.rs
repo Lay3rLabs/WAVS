@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use alloy::{primitives::Address, sol_types::SolValue};
+use alloy::{primitives::Address, providers::Provider, sol_types::SolValue};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use utils::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};
@@ -38,8 +38,18 @@ impl SimpleEthTriggerClient {
     }
 
     pub async fn deploy(provider: SigningProvider) -> Result<Address> {
-        let contract = SimpleTrigger::deploy(provider).await?;
-        Ok(*contract.address())
+        let tx_hash = SimpleTrigger::deploy_builder(provider.clone())
+            .send()
+            .await?
+            .watch()
+            .await?;
+
+        Ok(provider
+            .get_transaction_receipt(tx_hash)
+            .await?
+            .expect("Transaction receipt not found")
+            .contract_address
+            .expect("Contract address not found in transaction receipt"))
     }
 
     // just a static helper to simulate the data that would be emitted from the contract
