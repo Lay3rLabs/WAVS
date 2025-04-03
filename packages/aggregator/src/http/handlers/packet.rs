@@ -101,8 +101,6 @@ fn validate_packet(
             // check if the packet is the same as the last one
             if packet.envelope != prev.packet.envelope {
                 bail!("Unexpected envelope difference!");
-            } else {
-                println!("ENVELOPE IS THE SAME: {:?}", packet.envelope);
             }
 
             // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
