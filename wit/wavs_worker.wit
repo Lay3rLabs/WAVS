@@ -1,4 +1,4 @@
-package wavs:worker@0.4.0-alpha.1;
+package wavs:worker@0.4.0-alpha.2;
 
 use wasi:io/poll@0.2.0;
 use wasi:clocks/monotonic-clock@0.2.0;
@@ -123,6 +123,11 @@ interface layer-types {
     trigger-time: timestamp
   }
 
+  record wasm-response {
+    payload: list<u8>,
+    ordering: option<u64>
+  }
+
   variant log-level {
     error,
     warn,
@@ -133,6 +138,11 @@ interface layer-types {
 }
 
 world layer-trigger-world {
+  // includes and imports for golang support
+  include wasi:cli/imports@0.2.0;
+  import wasi:http/types@0.2.0;
+  import wasi:http/outgoing-handler@0.2.0;
+
   import host: interface {
     use layer-types.{eth-chain-config, cosmos-chain-config, log-level};
 
@@ -142,7 +152,7 @@ world layer-trigger-world {
     log: func(level: log-level, message: string);
   }
 
-  use layer-types.{trigger-action};
+  use layer-types.{trigger-action, wasm-response};
 
-  export run: func(trigger-action: trigger-action) -> result<option<list<u8>>, string>;
+  export run: func(trigger-action: trigger-action) -> result<option<wasm-response>, string>;
 }
