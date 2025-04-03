@@ -23,7 +23,15 @@ const SERVICES: Table<&str, JSON<Service>> = Table::new("services");
 #[serde(rename_all = "snake_case")]
 pub enum PacketQueue {
     Burned,
-    Alive(Vec<Packet>),
+    Alive(Vec<QueuedPacket>),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct QueuedPacket {
+    pub packet: Packet,
+    // so we don't need to recalculate it every time
+    pub signer: alloy::primitives::Address,
 }
 
 #[derive(Clone)]

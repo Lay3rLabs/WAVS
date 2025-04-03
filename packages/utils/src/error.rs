@@ -22,6 +22,8 @@ pub enum EthClientError {
 
     #[error("Unable to estimate gas: {0:#?}")]
     GasEstimation(anyhow::Error),
+    #[error("Unable to recover signer address: {0:#?}")]
+    RecoverSignerAddress(anyhow::Error),
 }
 
 #[derive(Debug, Error)]
