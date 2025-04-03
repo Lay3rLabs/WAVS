@@ -1,4 +1,4 @@
-use alloy::primitives::Uint;
+use alloy::primitives::FixedBytes;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use wavs_types::{EventId, ServiceID, Submit};
+use wavs_types::{EventId, EventOrder, ServiceID, Submit};
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 use crate::test_utils::address::rand_address_eth;
@@ -100,7 +100,11 @@ impl Submission for MockSubmission {
 }
 
 pub fn mock_event_id() -> EventId {
-    Uint::from_le_bytes([0; 32]).into()
+    FixedBytes::new([0; 20]).into()
+}
+
+pub fn mock_event_order() -> EventOrder {
+    FixedBytes::new([0; 12]).into()
 }
 
 #[cfg(test)]
@@ -122,6 +126,7 @@ mod test {
             envelope: Envelope {
                 payload: payload.as_bytes().to_vec().into(),
                 eventId: mock_event_id().into(),
+                ordering: mock_event_order().into(),
             },
             submit: Submit::eth_contract(ChainName::new("eth").unwrap(), rand_address_eth(), None),
         }

@@ -441,7 +441,7 @@ mod tests {
             runner::{MultiEngineRunner, SingleEngineRunner},
         },
         init_tracing_tests,
-        submission::mock::{mock_event_id, MockSubmission},
+        submission::mock::{mock_event_id, mock_event_order, MockSubmission},
         test_utils::{
             address::{rand_address_eth, rand_event_eth},
             mock::BigSquare,
@@ -530,6 +530,7 @@ mod tests {
             packet_route: PacketRoute::new_trigger_config(&action.config),
             envelope: Envelope {
                 eventId: mock_event_id().into(),
+                ordering: mock_event_order().into(),
                 payload: payload.into(),
             },
             submit: Submit::eth_contract(

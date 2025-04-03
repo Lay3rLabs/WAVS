@@ -1,8 +1,9 @@
 pub use crate::solidity_types::Envelope;
 use crate::{ServiceID, TriggerAction, TriggerConfig, WorkflowID};
-use alloy::primitives::Uint;
+use alloy::primitives::FixedBytes;
+use ripemd::Ripemd160;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::Digest;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -54,41 +55,32 @@ impl PacketRoute {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case")]
-// TODO - this should be a wrapper around an address type
-// see: https://github.com/Lay3rLabs/wavs-middleware/pull/48#issuecomment-2769035569
-pub struct EventId([u8; 32]);
+#[serde(transparent)]
+pub struct EventId([u8; 20]);
 
-impl From<Uint<256, 4>> for EventId {
-    fn from(value: Uint<256, 4>) -> Self {
-        let mut arr = [0; 32];
-        arr.copy_from_slice(&value.as_le_bytes());
-        Self(arr)
+impl From<FixedBytes<20>> for EventId {
+    fn from(value: FixedBytes<20>) -> Self {
+        Self(value.0)
     }
 }
 
-impl From<EventId> for Uint<256, 4> {
+impl From<EventId> for FixedBytes<20> {
     fn from(value: EventId) -> Self {
-        Uint::from_le_bytes(value.0)
+        FixedBytes(value.0)
     }
 }
 
-impl From<TriggerAction> for EventId {
-    // TODO - ordering? is this the right source?
-    fn from(trigger_action: TriggerAction) -> EventId {
-        // TODO - something more efficient
-        let bytes = serde_json::to_vec(&trigger_action).unwrap();
+impl TryFrom<&TriggerAction> for EventId {
+    type Error = bincode::error::EncodeError;
 
-        let digest = Sha256::digest(&bytes);
+    fn try_from(trigger_action: &TriggerAction) -> std::result::Result<EventId, Self::Error> {
+        let bytes = bincode::encode_to_vec(trigger_action, bincode::config::standard())?;
 
-        // FIXME: once EventId takes an address, do this instead:
-        // let mut arr = [0; 20];
-        // arr.copy_from_slice(digest.as_slice()[..20]);
+        let mut hasher = Ripemd160::new();
+        hasher.update(&bytes);
+        let result = hasher.finalize();
 
-        let mut arr = [0; 32];
-        arr.copy_from_slice(digest.as_slice());
-
-        EventId(arr)
+        Ok(EventId(result.into()))
     }
 }
 
@@ -99,6 +91,43 @@ impl std::fmt::Display for EventId {
 }
 
 impl AsRef<[u8]> for EventId {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(transparent)]
+pub struct EventOrder([u8; 12]);
+
+impl From<FixedBytes<12>> for EventOrder {
+    fn from(value: FixedBytes<12>) -> Self {
+        Self(value.0)
+    }
+}
+
+impl From<EventOrder> for FixedBytes<12> {
+    fn from(value: EventOrder) -> Self {
+        FixedBytes(value.0)
+    }
+}
+
+impl TryFrom<&TriggerAction> for EventOrder {
+    type Error = bincode::error::EncodeError;
+
+    fn try_from(_trigger_action: &TriggerAction) -> std::result::Result<EventOrder, Self::Error> {
+        // TODO - ordering...
+        Ok(EventOrder([0; 12]))
+    }
+}
+
+impl std::fmt::Display for EventOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", const_hex::encode(self.0))
+    }
+}
+
+impl AsRef<[u8]> for EventOrder {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }

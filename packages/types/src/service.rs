@@ -210,11 +210,13 @@ impl TriggerData {
 }
 
 /// A bundle of the trigger and the associated data needed to take action on it
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode)]
 pub struct TriggerAction {
+    #[bincode(with_serde)]
     /// Identify which trigger this came from
     pub config: TriggerConfig,
 
+    #[bincode(with_serde)]
     /// The data that came from the trigger
     pub data: TriggerData,
 }
