@@ -332,7 +332,7 @@ async fn query_service_from_address(
             // Create a provider using the HTTP endpoint
             let provider = ProviderBuilder::new().on_http(
                 reqwest::Url::parse(&http_endpoint)
-                    .expect(&format!("Could not parse http endpoint {}", http_endpoint)),
+                    .unwrap_or_else(|_| panic!("Could not parse http endpoint {}", http_endpoint)),
             );
 
             let contract = IWavsServiceManagerInstance::new(address.try_into()?, provider);
