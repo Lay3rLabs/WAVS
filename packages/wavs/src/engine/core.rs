@@ -9,7 +9,9 @@ use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wasmtime_wasi::{WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_engine::InstanceDepsBuilder;
-use wavs_types::{ComponentSource, Digest, ServiceConfig, ServiceID, TriggerAction, WorkflowID};
+use wavs_types::{
+    ComponentSource, Digest, ServiceConfig, ServiceID, TriggerAction, WasmResponse, WorkflowID,
+};
 
 use utils::storage::{CAStorage, CAStorageError};
 
@@ -124,7 +126,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<Option<Vec<u8>>, EngineError> {
+    ) -> Result<Option<WasmResponse>, EngineError> {
         let digest = wasi.wasm.clone();
         fn log(
             service_id: &ServiceID,
@@ -325,7 +327,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(&result.unwrap(), br#"{"x":12}"#);
+        assert_eq!(&result.unwrap().payload, br#"{"x":12}"#);
     }
 
     #[test]
@@ -364,7 +366,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(&result.unwrap(), br#"bar"#);
+        assert_eq!(&result.unwrap().payload, br#"bar"#);
 
         // verify whitelisted host env var is accessible
         let result = engine
@@ -383,7 +385,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(&result.unwrap(), br#"testing"#);
+        assert_eq!(&result.unwrap().payload, br#"testing"#);
 
         // verify the non-enabled env var is not accessible
         let result = engine

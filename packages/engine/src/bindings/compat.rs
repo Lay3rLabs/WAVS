@@ -1,5 +1,23 @@
 use crate::{bindings::world::wavs::worker::layer_types as component, EngineError};
 
+impl From<wavs_types::WasmResponse> for component::WasmResponse {
+    fn from(src: wavs_types::WasmResponse) -> Self {
+        Self {
+            payload: src.payload,
+            ordering: src.ordering,
+        }
+    }
+}
+
+impl From<component::WasmResponse> for wavs_types::WasmResponse {
+    fn from(src: component::WasmResponse) -> Self {
+        Self {
+            payload: src.payload,
+            ordering: src.ordering,
+        }
+    }
+}
+
 impl TryFrom<wavs_types::TriggerAction> for component::TriggerAction {
     type Error = EngineError;
 

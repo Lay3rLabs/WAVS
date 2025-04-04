@@ -5,7 +5,7 @@ use utils::storage::CAStorageError;
 
 use wavs_types::{
     ComponentID, ComponentSource, Digest, Permissions, ServiceConfig, ServiceID, TriggerAction,
-    WorkflowID,
+    WasmResponse, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -34,7 +34,7 @@ pub trait Engine: Send + Sync {
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<Option<Vec<u8>>, EngineError>;
+    ) -> Result<Option<WasmResponse>, EngineError>;
 
     /// Removes the storage for a service
     /// Default implementation does nothing
@@ -63,7 +63,7 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
         fuel_limit: Option<u64>,
         trigger: TriggerAction,
         service_config: &ServiceConfig,
-    ) -> Result<Option<Vec<u8>>, EngineError> {
+    ) -> Result<Option<WasmResponse>, EngineError> {
         self.as_ref()
             .execute(component, fuel_limit, trigger, service_config)
     }

@@ -5,7 +5,7 @@ use crate::apis::engine::ExecutionComponent;
 use crate::triggers::mock::get_mock_trigger_data;
 use tracing::instrument;
 use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
-use wavs_types::{Digest, ServiceConfig, TriggerAction};
+use wavs_types::{Digest, ServiceConfig, TriggerAction, WasmResponse};
 
 use super::{Engine, EngineError};
 
@@ -103,14 +103,18 @@ impl Engine for MockEngine {
         _fuel_limit: Option<u64>,
         trigger: TriggerAction,
         _service_config: &ServiceConfig,
-    ) -> Result<Option<Vec<u8>>, EngineError> {
+    ) -> Result<Option<WasmResponse>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
         let fx = store
             .get(&component.wasm)
             .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
-        let result = fx.execute(get_mock_trigger_data(&trigger.data))?;
-        Ok(result)
+        let payload = fx.execute(get_mock_trigger_data(&trigger.data))?;
+
+        Ok(payload.map(|payload| WasmResponse {
+            payload,
+            ordering: None,
+        }))
     }
 }
 
@@ -188,7 +192,7 @@ mod test {
                 &ServiceConfig::default(),
             )
             .unwrap();
-        assert_eq!(res.unwrap(), r1);
+        assert_eq!(res.unwrap().payload, r1);
 
         // d2 call gets r2
         let c2 = ExecutionComponent {
@@ -213,7 +217,7 @@ mod test {
                 &ServiceConfig::default(),
             )
             .unwrap();
-        assert_eq!(res.unwrap(), r2);
+        assert_eq!(res.unwrap().payload, r2);
 
         // d3 call returns missing error
         let c3 = ExecutionComponent {

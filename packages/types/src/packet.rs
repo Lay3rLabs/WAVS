@@ -100,6 +100,14 @@ impl AsRef<[u8]> for EventId {
 #[serde(transparent)]
 pub struct EventOrder([u8; 12]);
 
+impl EventOrder {
+    pub fn new_u64(value: u64) -> Self {
+        let mut bytes = [0; 12];
+        bytes[0..8].copy_from_slice(&value.to_be_bytes());
+        Self(bytes)
+    }
+}
+
 impl From<FixedBytes<12>> for EventOrder {
     fn from(value: FixedBytes<12>) -> Self {
         Self(value.0)
@@ -109,15 +117,6 @@ impl From<FixedBytes<12>> for EventOrder {
 impl From<EventOrder> for FixedBytes<12> {
     fn from(value: EventOrder) -> Self {
         FixedBytes(value.0)
-    }
-}
-
-impl TryFrom<&TriggerAction> for EventOrder {
-    type Error = bincode::error::EncodeError;
-
-    fn try_from(_trigger_action: &TriggerAction) -> std::result::Result<EventOrder, Self::Error> {
-        // TODO - ordering...
-        Ok(EventOrder([0; 12]))
     }
 }
 
