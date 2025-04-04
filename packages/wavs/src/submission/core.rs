@@ -20,7 +20,7 @@ use utils::{
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
     ChainName, Envelope, EthereumContractSubmission, Packet, PacketRoute, ServiceID, SignerAddress,
-    Submit,
+    SigningKeyResponse, Submit,
 };
 
 #[derive(Clone)]
@@ -337,5 +337,21 @@ impl Submission for CoreSubmission {
     fn remove_service(&self, _service_id: ServiceID) -> Result<(), SubmissionError> {
         // nothing we really care about here, it's okay to keep the signing clients in memory
         Ok(())
+    }
+
+    fn get_service_key(
+        &self,
+        service_id: ServiceID,
+    ) -> Result<SigningKeyResponse, SubmissionError> {
+        self.eth_signing_clients
+            .read()
+            .unwrap()
+            .get(&service_id)
+            .ok_or(SubmissionError::MissingMnemonic)
+            .map(|client| {
+                let key_bytes = client.signer.credential().to_bytes().to_vec();
+
+                SigningKeyResponse::Secp256k1(key_bytes)
+            })
     }
 }

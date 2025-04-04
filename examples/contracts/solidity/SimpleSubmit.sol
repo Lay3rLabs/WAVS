@@ -12,6 +12,7 @@ contract SimpleSubmit is IWavsServiceHandler {
     mapping(ISimpleTrigger.TriggerId => bool) validTriggers;
     mapping(ISimpleTrigger.TriggerId => bytes) datas;
     mapping(ISimpleTrigger.TriggerId => IWavsServiceHandler.SignatureData) signatures;
+    mapping(ISimpleTrigger.TriggerId => IWavsServiceHandler.Envelope) envelopes;
 
     constructor(IWavsServiceManager serviceManager) {
         _serviceManager = serviceManager;
@@ -24,6 +25,7 @@ contract SimpleSubmit is IWavsServiceHandler {
 
         signatures[dataWithId.triggerId] = signatureData;
         datas[dataWithId.triggerId] = dataWithId.data;
+        envelopes[dataWithId.triggerId] = envelope;
         validTriggers[dataWithId.triggerId] = true;
     }
 
@@ -37,5 +39,9 @@ contract SimpleSubmit is IWavsServiceHandler {
 
     function getData(ISimpleTrigger.TriggerId triggerId) external view returns (bytes memory data) {
         data = datas[triggerId];
+    }
+
+    function getEnvelope(ISimpleTrigger.TriggerId triggerId) external view returns (IWavsServiceHandler.Envelope memory envelope) {
+        envelope = envelopes[triggerId];
     }
 }

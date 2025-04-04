@@ -1,10 +1,15 @@
 use std::path::PathBuf;
 
+use alloy::{
+    primitives::{eip191_hash_message, keccak256},
+    signers::k256::ecdsa::SigningKey,
+    sol_types::SolValue,
+};
 use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use utils::context::AppContext;
-use wavs_types::{ChainName, EthereumContractSubmission, Service, Submit};
+use wavs_types::{ChainName, EthereumContractSubmission, Service, SigningKeyResponse, Submit};
 
 use crate::e2e::add_task::{add_task, wait_for_task_to_land};
 
@@ -79,7 +84,8 @@ async fn test_service(
 
             if is_final {
                 let signed_data = signed_data.context("no signed data returned")?;
-                verify_signed_data(name, signed_data, service, configs, workflow_index)?;
+                verify_signed_data(clients, name, signed_data, service, configs, workflow_index)
+                    .await?;
             }
 
             if services.len() > 1 {
@@ -137,7 +143,15 @@ async fn test_service(
                         )
                         .await?;
 
-                        verify_signed_data(name, signed_data, &service, configs, workflow_index)?;
+                        verify_signed_data(
+                            clients,
+                            name,
+                            signed_data,
+                            &service,
+                            configs,
+                            workflow_index,
+                        )
+                        .await?;
                     }
                 }
             }
@@ -208,14 +222,15 @@ fn get_input_for_service(
     }
 }
 
-fn verify_signed_data(
+async fn verify_signed_data(
+    clients: &Clients,
     name: AnyService,
     signed_data: SignedData,
     service: &Service,
     configs: &Configs,
     workflow_index: usize,
 ) -> Result<()> {
-    let data = signed_data.data;
+    let data = &signed_data.data;
 
     let input_req = || {
         get_input_for_service(name, service, configs, workflow_index)
@@ -280,10 +295,40 @@ fn verify_signed_data(
     // in some cases we just verify that we could deserialize the data
     // in others, we know what we expect exactly, make sure we got it
     if let Some(expected_data) = expected_data {
-        assert_eq!(data, expected_data);
+        assert_eq!(*data, expected_data);
 
-        if let Ok(msg) = String::from_utf8(data) {
+        if let Ok(msg) = String::from_utf8(data.clone()) {
             tracing::info!("Response: {}", msg);
+        }
+    }
+
+    let signing_key = clients
+        .http_client
+        .get_service_key(service.id.clone())
+        .await?;
+
+    // TODO - re-use stuff from https://github.com/Lay3rLabs/WAVS/pull/496 when it lands
+
+    match signing_key {
+        SigningKeyResponse::Secp256k1(bytes) => {
+            let private_key = SigningKey::from_slice(&bytes)?;
+            let service_address = alloy::primitives::Address::from_private_key(&private_key);
+
+            let signature =
+                alloy::primitives::PrimitiveSignature::from_raw(&signed_data.signature)?;
+
+            let envelope_bytes = signed_data.envelope.abi_encode();
+            let envelope_hash = eip191_hash_message(keccak256(&envelope_bytes));
+
+            let signer_address = signature.recover_address_from_prehash(&envelope_hash)?;
+
+            if service_address != signer_address {
+                return Err(anyhow::anyhow!(
+                    "Signature does not match service address: {} != {}",
+                    service_address,
+                    signer_address
+                ));
+            }
         }
     }
 

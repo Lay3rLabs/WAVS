@@ -97,6 +97,13 @@ impl Submission for MockSubmission {
     fn remove_service(&self, _service_id: ServiceID) -> Result<(), SubmissionError> {
         Ok(())
     }
+
+    fn get_service_key(
+        &self,
+        _service_id: ServiceID,
+    ) -> Result<wavs_types::SigningKeyResponse, SubmissionError> {
+        Err(SubmissionError::MissingMnemonic)
+    }
 }
 
 pub fn mock_event_id() -> EventId {

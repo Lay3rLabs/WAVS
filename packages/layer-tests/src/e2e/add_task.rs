@@ -3,7 +3,9 @@ use std::time::Duration;
 use alloy::providers::ext::AnvilApi;
 use anyhow::{bail, Context, Result};
 use wavs_cli::context::CliContext;
-use wavs_types::{ChainName, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
+use wavs_types::{
+    ChainName, Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID,
+};
 
 use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
@@ -147,7 +149,8 @@ pub async fn add_task(
 #[derive(Debug, Clone)]
 pub struct SignedData {
     pub data: Vec<u8>,
-    pub _signature: Vec<u8>,
+    pub envelope: Envelope,
+    pub signature: Vec<u8>,
 }
 
 pub async fn wait_for_task_to_land(
@@ -174,9 +177,15 @@ pub async fn wait_for_task_to_land(
                 true => {
                     let data = submit_client.trigger_data(trigger_id).await?;
 
-                    let _signature = submit_client.trigger_signature(trigger_id).await?;
+                    let envelope = submit_client.trigger_envelope(trigger_id).await?;
 
-                    return anyhow::Ok(SignedData { data, _signature });
+                    let signature = submit_client.trigger_signature(trigger_id).await?;
+
+                    return anyhow::Ok(SignedData {
+                        data,
+                        signature,
+                        envelope,
+                    });
                 }
                 false => {
                     tracing::debug!(
