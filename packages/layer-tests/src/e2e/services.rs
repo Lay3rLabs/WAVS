@@ -1,4 +1,10 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, LazyLock,
+    },
+};
 
 use crate::{
     e2e::digests::DigestName,
@@ -16,7 +22,7 @@ use super::{
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
 use alloy::sol_types::SolEvent;
-use utils::{context::AppContext, filesystem::workspace_path};
+use utils::{context::AppContext, eth_client::EthSigningClient, filesystem::workspace_path};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
     command::{
@@ -52,23 +58,6 @@ impl Services {
 
             tracing::info!("chain names: {:?}", chain_names);
 
-            let mut eth_service_managers = BTreeMap::default();
-            // hrmf, "nonce too low" errors, gotta go sequentially...
-
-            for chain in chain_names
-                .eth
-                .iter()
-                .chain(chain_names.eth_aggregator.iter())
-            {
-                let eth_client = clients.cli_ctx.get_eth_client(chain).unwrap();
-
-                let service_manager = SimpleServiceManager::deploy(eth_client.provider.clone())
-                    .await
-                    .unwrap();
-
-                eth_service_managers.insert(chain.clone(), *service_manager.address());
-            }
-
             let all_services = configs
                 .matrix
                 .eth
@@ -81,18 +70,10 @@ impl Services {
             let mut lookup = BTreeMap::default();
             let mut cosmos_code_ids = BTreeMap::default();
 
-            // nonce errors here too, gotta go sequentially :/
             for service_kind in all_services {
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
-                        deploy_service_raw(
-                            service_kind,
-                            clients,
-                            digests,
-                            &chain_names,
-                            &eth_service_managers,
-                        )
-                        .await
+                        deploy_service_raw(service_kind, clients, digests, &chain_names).await
                     }
                     _ => {
                         deploy_service_simple(
@@ -102,7 +83,6 @@ impl Services {
                             digests,
                             &chain_names,
                             &mut cosmos_code_ids,
-                            &eth_service_managers,
                         )
                         .await
                     }
@@ -141,7 +121,6 @@ async fn deploy_service_simple(
     digests: &Digests,
     chain_names: &ChainNames,
     cosmos_code_ids: &mut BTreeMap<ChainName, u64>,
-    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
 ) -> Service {
     let digest_name = Vec::<DigestName>::from(service)[0];
     let digest = digests.lookup.get(&digest_name).unwrap().clone();
@@ -188,17 +167,19 @@ async fn deploy_service_simple(
 
     let trigger_address = match trigger {
         CliTriggerKind::EthContractEvent => {
-            let client = clients
+            let eth_client = clients
                 .cli_ctx
-                .get_eth_client(trigger_chain.as_ref().unwrap())
-                .unwrap();
+                .new_eth_client(trigger_chain.as_ref().unwrap(), bump_client_count(), true)
+                .await
+                .unwrap()
+                .clone();
 
             tracing::info!("Deploying new eth trigger contract");
             Some(
-                SimpleTrigger::deploy(client.provider)
+                SimpleTrigger::deploy_builder(eth_client.provider)
+                    .deploy()
                     .await
                     .unwrap()
-                    .address()
                     .to_string(),
             )
         }
@@ -253,18 +234,36 @@ async fn deploy_service_simple(
         CliSubmitKind::None => None,
     };
 
+    let sm_chain_name = match submit_chain.clone() {
+        None => chain_names.eth[0].clone(),
+        Some(chain_name) => chain_name,
+    };
+    let client = clients
+        .cli_ctx
+        .new_eth_client(&sm_chain_name, bump_client_count(), true)
+        .await
+        .unwrap();
+
+    let service_manager_address = SimpleServiceManager::deploy_builder(client.provider.clone())
+        .deploy()
+        .await
+        .unwrap();
+
     let submit_address = match submit {
         CliSubmitKind::EthServiceHandler => {
             let submit_chain = submit_chain.as_ref().unwrap();
-            let client = clients.cli_ctx.get_eth_client(submit_chain).unwrap();
-            let service_manager_address = *eth_service_managers.get(submit_chain).unwrap();
+            let client = clients
+                .cli_ctx
+                .new_eth_client(submit_chain, bump_client_count(), true)
+                .await
+                .unwrap();
 
             tracing::info!("Deploying new eth submit contract");
             Some(
-                SimpleSubmit::deploy(client.provider.clone(), service_manager_address)
+                SimpleSubmit::deploy_builder(client.provider.clone(), service_manager_address)
+                    .deploy()
                     .await
                     .unwrap()
-                    .address()
                     .to_string(),
             )
         }
@@ -294,6 +293,10 @@ async fn deploy_service_simple(
             submit,
             submit_chain,
             service_config: None,
+            manager: ServiceManager::Ethereum {
+                chain_name: sm_chain_name,
+                address: service_manager_address,
+            },
         },
     )
     .await
@@ -307,7 +310,6 @@ async fn deploy_service_raw(
     clients: &Clients,
     digests: &Digests,
     chain_names: &ChainNames,
-    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
 ) -> Service {
     if !matches!(service_kind, AnyService::Eth(EthService::MultiWorkflow)) {
         panic!("unexpected service kind: {:?}", service_kind);
@@ -337,8 +339,21 @@ async fn deploy_service_raw(
         },
     };
 
-    let submit1 = deploy_submit_raw(clients, chain_names, eth_service_managers).await;
-    let submit2 = deploy_submit_raw(clients, chain_names, eth_service_managers).await;
+    let sm_chain_name = chain_names.eth[0].clone();
+
+    let client = clients
+        .cli_ctx
+        .new_eth_client(&sm_chain_name, bump_client_count(), true)
+        .await
+        .unwrap();
+
+    let service_manager_address = SimpleServiceManager::deploy_builder(client.provider.clone())
+        .deploy()
+        .await
+        .unwrap();
+
+    let submit1 = deploy_submit_raw(&client, sm_chain_name.clone(), service_manager_address).await;
+    let submit2 = deploy_submit_raw(&client, sm_chain_name.clone(), service_manager_address).await;
 
     let workflow_id1 = WorkflowID::new("workflow1").unwrap();
     let workflow_id2 = WorkflowID::new("workflow2").unwrap();
@@ -366,8 +381,6 @@ async fn deploy_service_raw(
 
     let workflows = BTreeMap::from([(workflow_id1, workflow1), (workflow_id2, workflow2)]);
 
-    let service_manager_address = *eth_service_managers.get(&chain_names.eth[0]).unwrap();
-
     let service = Service {
         id: ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap(),
         name: "".to_string(),
@@ -376,7 +389,7 @@ async fn deploy_service_raw(
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
         manager: ServiceManager::Ethereum {
-            chain_name: chain_names.eth[0].clone(),
+            chain_name: sm_chain_name,
             address: service_manager_address,
         },
     };
@@ -395,7 +408,12 @@ async fn deploy_service_raw(
 
 async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trigger {
     let chain_name = chain_names.eth[0].clone();
-    let eth_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
+    let eth_client = clients
+        .cli_ctx
+        .new_eth_client(&chain_name, bump_client_count(), true)
+        .await
+        .unwrap()
+        .clone();
     let event_hash = *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
 
     let address = SimpleEthTriggerClient::deploy(eth_client.provider.clone())
@@ -410,22 +428,19 @@ async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trig
 }
 
 async fn deploy_submit_raw(
-    clients: &Clients,
-    chain_names: &ChainNames,
-    eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
+    eth_client: &EthSigningClient,
+    chain_name: ChainName,
+    service_manager_address: alloy::primitives::Address,
 ) -> Submit {
-    let chain_name = chain_names.eth[0].clone();
-    let eth_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
-
-    let service_manager_address = *eth_service_managers.get(&chain_name).unwrap();
-
-    let simple_submit = SimpleSubmit::deploy(eth_client.provider.clone(), service_manager_address)
-        .await
-        .unwrap();
+    let address =
+        SimpleSubmit::deploy_builder(eth_client.provider.clone(), service_manager_address)
+            .deploy()
+            .await
+            .unwrap();
 
     Submit::EthereumContract(EthereumContractSubmission {
         chain_name,
-        address: *simple_submit.address(),
+        address,
         max_gas: None,
     })
 }
@@ -435,4 +450,10 @@ struct ChainNames {
     eth: Vec<ChainName>,
     eth_aggregator: Vec<ChainName>,
     cosmos: Vec<ChainName>,
+}
+
+static CLIENT_COUNT: LazyLock<Arc<AtomicU32>> = LazyLock::new(|| Arc::new(AtomicU32::new(0)));
+
+pub fn bump_client_count() -> u32 {
+    CLIENT_COUNT.fetch_add(1, Ordering::SeqCst)
 }

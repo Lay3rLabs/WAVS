@@ -13,6 +13,7 @@ use wavs_cli::{
     context::CliContext,
     util::ComponentInput,
 };
+use wavs_types::ServiceManager;
 
 #[tokio::main]
 async fn main() {
@@ -73,6 +74,10 @@ async fn main() {
                     submit,
                     submit_chain,
                     service_config,
+                    manager: ServiceManager::Ethereum {
+                        chain_name: "deprecate".parse().unwrap(),
+                        address: alloy::primitives::Address::ZERO,
+                    },
                 },
             )
             .await

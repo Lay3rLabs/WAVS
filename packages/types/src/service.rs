@@ -61,19 +61,10 @@ impl Service {
         source: ComponentSource,
         submit: Submit,
         config: Option<ServiceConfig>,
+        manager: ServiceManager,
     ) -> Self {
         let component_id = ComponentID::default();
         let workflow_id = WorkflowID::default();
-
-        let manager = ServiceManager::Ethereum {
-            chain_name: match &submit {
-                Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) => {
-                    chain_name.clone()
-                }
-                _ => panic!("ServiceManager::Ethereum requires an EthereumContractSubmission"),
-            },
-            address: alloy::primitives::Address::ZERO,
-        };
 
         let workflow = Workflow {
             trigger,

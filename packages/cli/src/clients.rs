@@ -6,7 +6,7 @@ use utils::{
 };
 use wavs_types::{
     AddServiceRequest, AllowedHostPermission, ComponentSource, Digest, Permissions, Service,
-    ServiceConfig, ServiceID, Submit, Trigger, UploadComponentResponse,
+    ServiceConfig, ServiceID, ServiceManager, Submit, Trigger, UploadComponentResponse,
 };
 
 use crate::config::Config;
@@ -81,6 +81,7 @@ impl HttpClient {
         submit: Submit,
         source: ComponentSource,
         config: ServiceConfig,
+        manager: ServiceManager,
     ) -> Result<Service> {
         let mut service = Service::new_simple(
             ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?,
@@ -89,6 +90,7 @@ impl HttpClient {
             source,
             submit,
             Some(config),
+            manager,
         );
 
         for component in service.components.values_mut() {

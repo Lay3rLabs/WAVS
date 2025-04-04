@@ -10,6 +10,8 @@ use crate::{
     example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient, TriggerId},
 };
 
+use super::services::bump_client_count;
+
 pub async fn add_task(
     ctx: &CliContext,
     service_id: String,
@@ -47,7 +49,12 @@ pub async fn add_task(
             address,
             event_hash: _,
         } => {
-            let client = SimpleEthTriggerClient::new(ctx.get_eth_client(&chain_name)?, address);
+            let eth_client = ctx
+                .new_eth_client(&chain_name, bump_client_count(), true)
+                .await
+                .unwrap()
+                .clone();
+            let client = SimpleEthTriggerClient::new(eth_client, address);
             (
                 false,
                 client
@@ -158,7 +165,11 @@ pub async fn wait_for_task_to_land(
     result_timeout: Duration,
     is_trigger_time_based: bool,
 ) -> Result<SignedData> {
-    let client = ctx.get_eth_client(chain_name)?;
+    let client = ctx
+        .new_eth_client(chain_name, bump_client_count(), true)
+        .await
+        .unwrap()
+        .clone();
     let provider = client.provider.clone();
 
     let submit_client = SimpleEthSubmitClient::new(client, address);

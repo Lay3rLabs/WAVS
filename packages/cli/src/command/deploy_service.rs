@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use layer_climb::prelude::ConfigAddressExt;
 use wavs_types::{
     ByteArray, ChainName, ComponentSource, EthereumContractSubmission, Service, ServiceConfig,
-    Submit, Trigger,
+    ServiceManager, Submit, Trigger,
 };
 
 use crate::{
@@ -46,6 +46,7 @@ pub struct DeployServiceArgs {
     pub submit: CliSubmitKind,
     pub submit_chain: Option<ChainName>,
     pub service_config: Option<ServiceConfig>,
+    pub manager: ServiceManager,
 }
 
 impl DeployService {
@@ -60,6 +61,7 @@ impl DeployService {
             submit,
             submit_chain,
             service_config,
+            manager,
         } = args.clone();
 
         let trigger: Trigger = match trigger {
@@ -161,6 +163,7 @@ impl DeployService {
                 submit.clone(),
                 component,
                 service_config.clone(),
+                manager,
             )
             .await?;
 

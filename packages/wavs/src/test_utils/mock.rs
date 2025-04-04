@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use tower::Service as _;
 use wavs_types::{
     AddServiceRequest, ComponentSource, DeleteServicesRequest, ListServicesResponse, Service,
-    ServiceID, Submit,
+    ServiceID, ServiceManager, Submit,
 };
 
 pub struct MockE2ETestRunner {
@@ -119,6 +119,10 @@ impl MockE2ETestRunner {
             source,
             submit,
             None,
+            ServiceManager::Ethereum {
+                chain_name: "eth".try_into().unwrap(),
+                address: rand_address_eth(),
+            },
         );
 
         let body = serde_json::to_string(&AddServiceRequest { service }).unwrap();
