@@ -1,4 +1,10 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, LazyLock,
+    },
+};
 
 use crate::{
     e2e::digests::DigestName,
@@ -16,7 +22,7 @@ use super::{
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
 use alloy::{primitives::Address, providers::Provider, sol_types::SolEvent};
-use utils::{context::AppContext, filesystem::workspace_path};
+use utils::{context::AppContext, eth_client::EthSigningClient, filesystem::workspace_path};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
     command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
@@ -61,7 +67,6 @@ impl Services {
             let mut lookup = BTreeMap::default();
             let mut cosmos_code_ids = BTreeMap::default();
 
-            // nonce errors here too, gotta go sequentially :/
             for service_kind in all_services {
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
@@ -477,7 +482,7 @@ async fn deploy_service_raw(
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
         manager: ServiceManager::Ethereum {
-            chain_name: chain_names.eth[0].clone(),
+            chain_name: sm_chain_name,
             address: service_manager_address,
         },
     };
@@ -496,7 +501,12 @@ async fn deploy_service_raw(
 
 async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trigger {
     let chain_name = chain_names.eth[0].clone();
-    let eth_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
+    let eth_client = clients
+        .cli_ctx
+        .new_eth_client(&chain_name, bump_client_count(), true)
+        .await
+        .unwrap()
+        .clone();
     let event_hash = *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
 
     let address = SimpleEthTriggerClient::deploy(eth_client.provider)
@@ -546,4 +556,10 @@ struct ChainNames {
     eth: Vec<ChainName>,
     eth_aggregator: Vec<ChainName>,
     cosmos: Vec<ChainName>,
+}
+
+static CLIENT_COUNT: LazyLock<Arc<AtomicU32>> = LazyLock::new(|| Arc::new(AtomicU32::new(0)));
+
+pub fn bump_client_count() -> u32 {
+    CLIENT_COUNT.fetch_add(1, Ordering::SeqCst)
 }

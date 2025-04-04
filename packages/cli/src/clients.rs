@@ -5,8 +5,9 @@ use utils::{
     eth_client::{EthClientBuilder, EthSigningClient},
 };
 use wavs_types::{
-    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
-    UploadComponentResponse,
+    AddServiceRequest, AllowedHostPermission, ComponentSource, Digest,
+    IWavsServiceManager::IWavsServiceManagerInstance, Permissions, Service, ServiceConfig,
+    ServiceID, ServiceManager, Submit, Trigger, UploadComponentResponse,
 };
 
 use crate::config::Config;

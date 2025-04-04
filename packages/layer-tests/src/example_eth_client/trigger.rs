@@ -38,18 +38,7 @@ impl SimpleEthTriggerClient {
     }
 
     pub async fn deploy(provider: SigningProvider) -> Result<Address> {
-        let tx_hash = SimpleTrigger::deploy_builder(provider.clone())
-            .send()
-            .await?
-            .watch()
-            .await?;
-
-        Ok(provider
-            .get_transaction_receipt(tx_hash)
-            .await?
-            .expect("Transaction receipt not found")
-            .contract_address
-            .expect("Contract address not found in transaction receipt"))
+        Ok(SimpleTrigger::deploy_builder(provider).deploy().await?)
     }
 
     // just a static helper to simulate the data that would be emitted from the contract

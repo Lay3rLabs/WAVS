@@ -6,7 +6,10 @@ use tower::Service;
 use wavs::{
     config::Config,
     submission::mock::mock_eigen_submit,
-    test_utils::http::{map_response, TestHttpApp},
+    test_utils::{
+        address::rand_address_eth,
+        http::{map_response, TestHttpApp},
+    },
     triggers::mock::mock_eth_event_trigger,
 };
 use wavs_types::{ComponentSource, Digest, ServiceID, UploadComponentResponse};
@@ -81,6 +84,10 @@ async fn http_save_service() {
         ComponentSource::Digest(Digest::new(&[1, 2, 3])),
         mock_eigen_submit(),
         None,
+        wavs_types::ServiceManager::Ethereum {
+            chain_name: "eth".try_into().unwrap(),
+            address: rand_address_eth(),
+        },
     );
 
     let body = Body::from(serde_json::to_vec(&service).unwrap());

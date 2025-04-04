@@ -127,6 +127,10 @@ impl MockE2ETestRunner {
             source,
             submit,
             None,
+            ServiceManager::Ethereum {
+                chain_name: "eth".try_into().unwrap(),
+                address: rand_address_eth(),
+            },
         );
 
         self.dispatcher.add_service_direct(service).await.unwrap();

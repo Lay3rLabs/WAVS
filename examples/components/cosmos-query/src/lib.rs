@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use example_helpers::bindings::world::{host, Guest, TriggerAction};
+use example_helpers::bindings::world::{host, Guest, TriggerAction, WasmResponse};
 use example_helpers::{
     export_layer_trigger_world,
     trigger::{decode_trigger_event, encode_trigger_output},
@@ -11,7 +11,7 @@ use wstd::runtime::block_on;
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<Vec<u8>>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<WasmResponse>, String> {
         block_on(async move {
             let (trigger_id, req) = decode_trigger_event(trigger_action.data)?;
 

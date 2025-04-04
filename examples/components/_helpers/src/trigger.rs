@@ -1,6 +1,6 @@
 // Helpers to work with "trigger id" flows - which our example components do
 use crate::bindings::compat::{
-    TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent,
+    TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent, WasmResponse,
 };
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
@@ -28,12 +28,15 @@ pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)>
     }
 }
 
-pub fn encode_trigger_output(trigger_id: u64, output: impl AsRef<[u8]>) -> Vec<u8> {
-    DataWithId {
-        triggerId: trigger_id,
-        data: output.as_ref().to_vec().into(),
+pub fn encode_trigger_output(trigger_id: u64, output: impl AsRef<[u8]>) -> WasmResponse {
+    WasmResponse {
+        payload: DataWithId {
+            triggerId: trigger_id,
+            data: output.as_ref().to_vec().into(),
+        }
+        .abi_encode(),
+        ordering: None,
     }
-    .abi_encode()
 }
 
 // extension traits for Cosmos and Ethereum queriers to add Trigger support

@@ -12,6 +12,7 @@ use wavs_cli::{
     context::CliContext,
     util::ComponentInput,
 };
+use wavs_types::ServiceManager;
 
 #[tokio::main]
 async fn main() {

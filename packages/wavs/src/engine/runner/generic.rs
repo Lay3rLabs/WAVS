@@ -1,3 +1,4 @@
+use alloy::primitives::FixedBytes;
 use tokio::sync::mpsc;
 use wavs_types::{Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction};
 
@@ -58,7 +59,7 @@ pub trait EngineRunner: Send + Sync {
 
         let trigger_config = action.config.clone();
 
-        let wasi_result = self.engine().execute(
+        let wasm_response = self.engine().execute(
             &execution_component,
             workflow.fuel_limit,
             action.clone(),
@@ -67,20 +68,21 @@ pub trait EngineRunner: Send + Sync {
 
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
-        if let Some(wasi_result) = wasi_result {
+        if let Some(wasm_response) = wasm_response {
             let service_id = trigger_config.service_id.clone();
             let workflow_id = trigger_config.workflow_id.clone();
 
             let msg = ChainMessage {
                 packet_route: PacketRoute::new_trigger_config(&trigger_config),
                 envelope: Envelope {
-                    payload: wasi_result.into(),
+                    payload: wasm_response.payload.into(),
                     eventId: EventId::try_from(&action)
                         .map_err(EngineError::EncodeEventId)?
                         .into(),
-                    ordering: EventOrder::try_from(&action)
-                        .map_err(EngineError::EncodeEventOrder)?
-                        .into(),
+                    ordering: match wasm_response.ordering {
+                        Some(ordering) => EventOrder::new_u64(ordering).into(),
+                        None => FixedBytes::default(),
+                    },
                 },
                 submit: workflow.submit.clone(),
             };

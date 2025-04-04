@@ -3,7 +3,7 @@ use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, En
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
     AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, Trigger, TriggerAction,
-    TriggerConfig, TriggerData, WorkflowID,
+    TriggerConfig, TriggerData, WasmResponse, WorkflowID,
 };
 
 use crate::{
@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub struct ExecComponent {
-    pub output_bytes: Option<Vec<u8>>,
+    pub wasm_response: Option<WasmResponse>,
     pub fuel_used: u64,
 }
 
@@ -20,17 +20,23 @@ impl std::fmt::Display for ExecComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Fuel used: \n{}", self.fuel_used)?;
 
-        match &self.output_bytes {
-            Some(bytes) => {
+        match &self.wasm_response {
+            Some(wasm_response) => {
                 write!(
                     f,
                     "\n\nResult (hex encoded): \n{}",
-                    const_hex::encode(bytes)
+                    const_hex::encode(&wasm_response.payload)
                 )?;
 
-                if let Ok(s) = std::str::from_utf8(bytes) {
+                if let Ok(s) = std::str::from_utf8(&wasm_response.payload) {
                     write!(f, "\n\nResult (utf8): \n{}", s)?;
                 }
+
+                write!(
+                    f,
+                    "\n\nOrdering: \n{}",
+                    wasm_response.ordering.unwrap_or_default()
+                )?;
             }
             None => write!(f, "\n\nResult: None")?,
         }
@@ -95,12 +101,12 @@ impl ExecComponent {
         .build()?;
 
         let initial_fuel = instance_deps.store.get_fuel()?;
-        let response = wavs_engine::execute(&mut instance_deps, trigger).await?;
+        let wasm_response = wavs_engine::execute(&mut instance_deps, trigger).await?;
 
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 
         Ok(ExecComponent {
-            output_bytes: response,
+            wasm_response,
             fuel_used,
         })
     }
@@ -152,7 +158,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes.unwrap(), b"hello world");
+        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Same idea but hex-encoded with prefix
@@ -165,7 +171,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes.unwrap(), b"hello world");
+        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Do not hex-decode without the prefix
@@ -178,7 +184,10 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes.unwrap(), b"68656C6C6F20776F726C64");
+        assert_eq!(
+            result.wasm_response.unwrap().payload,
+            b"68656C6C6F20776F726C64"
+        );
         assert!(result.fuel_used > 0);
 
         // And filepath
@@ -195,7 +204,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.output_bytes.unwrap(), b"hello world");
+        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
         assert!(result.fuel_used > 0);
     }
 }
