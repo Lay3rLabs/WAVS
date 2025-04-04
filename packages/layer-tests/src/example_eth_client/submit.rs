@@ -80,9 +80,9 @@ impl SimpleEthSubmitClient {
             .map(|x| x.envelope)?;
 
         Ok(Envelope {
-            eventId: envelope.eventId.into(),
-            ordering: envelope.ordering.into(),
-            payload: envelope.payload.into(),
+            eventId: envelope.eventId,
+            ordering: envelope.ordering,
+            payload: envelope.payload,
         })
     }
 

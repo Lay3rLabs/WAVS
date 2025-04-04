@@ -288,6 +288,12 @@ impl Submission for CoreSubmission {
         .await
         .map_err(SubmissionError::Ethereum)?;
 
+        tracing::info!(
+            "Created new eth client for service {} -> {}",
+            service.id,
+            client.address()
+        );
+
         self.eth_signing_clients
             .write()
             .unwrap()

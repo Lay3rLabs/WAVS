@@ -255,13 +255,13 @@ async fn verify_signed_data(
             },
 
             EthService::CosmosQuery => {
-                let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                let resp: CosmosQueryResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
 
             EthService::Permissions => {
-                let resp: PermissionsResponse = serde_json::from_slice(&data).unwrap();
+                let resp: PermissionsResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
@@ -274,13 +274,13 @@ async fn verify_signed_data(
             CosmosService::Square => Some(SquareResponse { y: 9 }.to_vec()),
 
             CosmosService::Permissions => {
-                let resp: PermissionsResponse = serde_json::from_slice(&data).unwrap();
+                let resp: PermissionsResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
 
             CosmosService::CosmosQuery => {
-                let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                let resp: CosmosQueryResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
@@ -324,7 +324,8 @@ async fn verify_signed_data(
 
             if service_address != signer_address {
                 return Err(anyhow::anyhow!(
-                    "Signature does not match service address: {} != {}",
+                    "Signature does not match service {} address: {} != {}",
+                    service.id,
                     service_address,
                     signer_address
                 ));
