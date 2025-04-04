@@ -12,7 +12,6 @@ use wavs_cli::{
     context::CliContext,
     util::ComponentInput,
 };
-use wavs_types::ServiceManager;
 
 #[tokio::main]
 async fn main() {
@@ -36,7 +35,7 @@ async fn main() {
 
     match command {
         Command::DeployServiceRaw { service, args: _ } => {
-            let res = DeployServiceRaw::run(&ctx, DeployServiceRawArgs { service })
+            let res = DeployServiceRaw::run(&ctx, 0, DeployServiceRawArgs { service })
                 .await
                 .unwrap();
 

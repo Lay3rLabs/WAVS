@@ -1,16 +1,15 @@
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
-    config::{AnyChainConfig, CosmosChainConfig, EthereumChainConfig},
+    config::{CosmosChainConfig, EthereumChainConfig},
     eth_client::{EthClientBuilder, EthSigningClient},
 };
 use wavs_types::{
-    AddServiceRequest, AllowedHostPermission, ComponentSource, Digest,
-    IWavsServiceManager::IWavsServiceManagerInstance, Permissions, Service, ServiceConfig,
-    ServiceID, ServiceManager, Submit, Trigger, UploadComponentResponse,
+    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
+    UploadComponentResponse,
 };
 
-use crate::config::Config;
+use crate::{config::Config, context::CliContext};
 
 pub async fn get_eth_client(
     config: &Config,
@@ -76,7 +75,12 @@ impl HttpClient {
         Ok(response.digest.into())
     }
 
-    pub async fn create_service_raw(&self, config: &Config, service: Service) -> Result<()> {
+    pub async fn create_service_raw(
+        &self,
+        ctx: &CliContext,
+        index: u32,
+        service: Service,
+    ) -> Result<()> {
         let body = serde_json::to_string(&service)?;
 
         self.inner
@@ -90,23 +94,9 @@ impl HttpClient {
         let service_uri = format!("{}/service/{}", self.endpoint, service.id);
         tracing::info!("Service URI: {}", service_uri);
 
-        // Get the chain config and ensure it's an Ethereum config
-        let any_chain_config = config
-            .chains
-            .get_chain(service.manager.chain_name())?
-            .ok_or_else(|| anyhow::anyhow!("Could not get chain config"))?;
-
-        // Extract the Ethereum config from the enum
-        let eth_chain_config = match any_chain_config {
-            AnyChainConfig::Eth(eth_config) => eth_config,
-            AnyChainConfig::Cosmos(_) => {
-                return Err(anyhow::anyhow!(
-                    "Expected Ethereum chain config, got Cosmos"
-                ));
-            }
-        };
-
-        let client = get_eth_client(config, eth_chain_config).await?;
+        let client = ctx
+            .new_eth_client(service.manager.chain_name(), index, true)
+            .await?;
         let contract = IWavsServiceManagerInstance::new(
             service.manager.eth_address_unchecked(),
             client.provider,

@@ -21,8 +21,8 @@ use super::{
     matrix::{AnyService, CosmosService, CrossChainService, EthService},
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
-use alloy::{primitives::Address, providers::Provider, sol_types::SolEvent};
-use utils::{context::AppContext, eth_client::EthSigningClient, filesystem::workspace_path};
+use alloy::{primitives::Address, sol_types::SolEvent};
+use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::{
     args::{CliSubmitKind, CliTriggerKind},
     command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
@@ -93,6 +93,7 @@ impl Services {
 
                     DeployServiceRaw::run(
                         &clients.cli_ctx,
+                        bump_client_count(),
                         DeployServiceRawArgs {
                             service: additional_service.clone(),
                         },
@@ -167,24 +168,18 @@ async fn deploy_service_simple(
     let actual_trigger = match trigger {
         CliTriggerKind::EthContractEvent => {
             if let Some(chain_name) = &trigger_chain {
-                let client = clients.cli_ctx.get_eth_client(chain_name).unwrap();
+                let client = clients
+                    .cli_ctx
+                    .new_eth_client(chain_name, bump_client_count(), true)
+                    .await
+                    .unwrap()
+                    .clone();
 
                 tracing::info!("Deploying new eth trigger contract");
-                let tx_hash = SimpleTrigger::deploy_builder(client.provider.clone())
-                    .send()
+                let address = *SimpleTrigger::deploy(client.provider)
                     .await
                     .unwrap()
-                    .watch()
-                    .await
-                    .unwrap();
-                let address = client
-                    .provider
-                    .get_transaction_receipt(tx_hash)
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .contract_address
-                    .unwrap();
+                    .address();
 
                 let event_hash =
                     *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
@@ -259,7 +254,7 @@ async fn deploy_service_simple(
             }
         }
         CliTriggerKind::CronInterval => Trigger::Cron {
-            schedule: "* * * * * *".to_string(),
+            schedule: "*/15 * * * * *".to_string(),
             start_time: None,
             end_time: None,
         },
@@ -273,50 +268,33 @@ async fn deploy_service_simple(
     let service_manager_address = {
         let eth_client = clients
             .cli_ctx
-            .get_eth_client(&service_manager_chain)
-            .unwrap();
+            .new_eth_client(&service_manager_chain, bump_client_count(), true)
+            .await
+            .unwrap()
+            .clone();
 
-        let tx_hash = SimpleServiceManager::deploy_builder(eth_client.provider.clone())
-            .send()
+        *SimpleServiceManager::deploy(eth_client.provider)
             .await
             .unwrap()
-            .watch()
-            .await
-            .unwrap();
-        eth_client
-            .provider
-            .get_transaction_receipt(tx_hash)
-            .await
-            .unwrap()
-            .unwrap()
-            .contract_address
-            .unwrap()
+            .address()
     };
 
     // Create the actual submit based on the submit kind and chain
     let actual_submit = match submit {
         CliSubmitKind::EthServiceHandler => {
             if let Some(chain) = &submit_chain {
-                let client = clients.cli_ctx.get_eth_client(chain).unwrap();
-
-                tracing::info!("Deploying new eth submit contract");
-                let tx_hash =
-                    SimpleSubmit::deploy_builder(client.provider.clone(), service_manager_address)
-                        .send()
-                        .await
-                        .unwrap()
-                        .watch()
-                        .await
-                        .unwrap();
-
-                let address = client
-                    .provider
-                    .get_transaction_receipt(tx_hash)
+                let client = clients
+                    .cli_ctx
+                    .new_eth_client(chain, bump_client_count(), true)
                     .await
                     .unwrap()
+                    .clone();
+
+                tracing::info!("Deploying new eth submit contract");
+                let address = *SimpleSubmit::deploy(client.provider, service_manager_address)
+                    .await
                     .unwrap()
-                    .contract_address
-                    .unwrap();
+                    .address();
 
                 Submit::EthereumContract(EthereumContractSubmission {
                     chain_name: chain.clone(),
@@ -380,6 +358,7 @@ async fn deploy_service_simple(
     // Deploy using DeployServiceRaw instead of DeployService
     DeployServiceRaw::run(
         &clients.cli_ctx,
+        bump_client_count(),
         DeployServiceRawArgs {
             service: service.clone(),
         },
@@ -426,23 +405,17 @@ async fn deploy_service_raw(
 
     let chain_name = chain_names.eth[0].clone();
     let service_manager_address = {
-        let eth_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap();
+        let eth_client = clients
+            .cli_ctx
+            .new_eth_client(&chain_name, bump_client_count(), true)
+            .await
+            .unwrap()
+            .clone();
 
-        let tx_hash = SimpleServiceManager::deploy_builder(eth_client.provider.clone())
-            .send()
+        *SimpleServiceManager::deploy(eth_client.provider)
             .await
             .unwrap()
-            .watch()
-            .await
-            .unwrap();
-        eth_client
-            .provider
-            .get_transaction_receipt(tx_hash)
-            .await
-            .unwrap()
-            .unwrap()
-            .contract_address
-            .unwrap()
+            .address()
     };
 
     let submit1 = deploy_submit_raw(clients, &chain_name, service_manager_address).await;
@@ -482,13 +455,14 @@ async fn deploy_service_raw(
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
         manager: ServiceManager::Ethereum {
-            chain_name: sm_chain_name,
+            chain_name,
             address: service_manager_address,
         },
     };
 
     DeployServiceRaw::run(
         &clients.cli_ctx,
+        bump_client_count(),
         DeployServiceRawArgs {
             service: service.clone(),
         },
@@ -525,24 +499,17 @@ async fn deploy_submit_raw(
     chain_name: &ChainName,
     service_manager_address: Address,
 ) -> Submit {
-    let eth_client = clients.cli_ctx.get_eth_client(chain_name).unwrap().clone();
-
-    let tx_hash =
-        SimpleSubmit::deploy_builder(eth_client.provider.clone(), service_manager_address)
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-    let address = eth_client
-        .provider
-        .get_transaction_receipt(tx_hash)
+    let eth_client = clients
+        .cli_ctx
+        .new_eth_client(chain_name, bump_client_count(), true)
         .await
         .unwrap()
+        .clone();
+
+    let address = *SimpleSubmit::deploy(eth_client.provider, service_manager_address)
+        .await
         .unwrap()
-        .contract_address
-        .unwrap();
+        .address();
 
     Submit::EthereumContract(EthereumContractSubmission {
         chain_name: chain_name.clone(),

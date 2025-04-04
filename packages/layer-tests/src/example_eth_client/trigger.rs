@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use alloy::{primitives::Address, providers::Provider, sol_types::SolValue};
+use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use utils::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};
@@ -38,7 +38,7 @@ impl SimpleEthTriggerClient {
     }
 
     pub async fn deploy(provider: SigningProvider) -> Result<Address> {
-        Ok(SimpleTrigger::deploy_builder(provider).deploy().await?)
+        Ok(*SimpleTrigger::deploy(provider).await?.address())
     }
 
     // just a static helper to simulate the data that would be emitted from the contract
