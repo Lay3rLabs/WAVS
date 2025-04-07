@@ -32,7 +32,8 @@ use wavs_types::{
 
 #[derive(Default)]
 pub struct Services {
-    pub lookup: BTreeMap<AnyService, Vec<Service>>,
+    // second service is for multi-trigger tests only
+    pub lookup: BTreeMap<AnyService, (Service, Option<Service>)>,
 }
 
 impl Services {
@@ -109,11 +110,23 @@ impl Services {
                 };
 
                 if service_kind == AnyService::Eth(EthService::MultiTrigger) {
+                    // it's a bit ugly but it works, just clone the original service and replace:
+                    // 1. the service id (so it's a new service, from the perspective of WAVS)
+                    // 2. the workflow submission
+                    //
+                    // ultimately this means the trigger from the original service
+                    // should cause this service to submit too - albeit to a different service handler
                     let mut additional_service = service.clone();
 
                     additional_service.id =
                         ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
+                    for (_, workflow) in additional_service.workflows.iter_mut() {
+                        workflow.submit =
+                            deploy_submit_raw(clients, &chain_names, &eth_service_managers).await;
+                    }
+
+                    // now we've patched it - just call the CLI command directly
                     DeployServiceRaw::run(
                         &clients.cli_ctx,
                         DeployServiceRawArgs {
@@ -123,9 +136,9 @@ impl Services {
                     .await
                     .unwrap();
 
-                    lookup.insert(service_kind, vec![service, additional_service]);
+                    lookup.insert(service_kind, (service, Some(additional_service)));
                 } else {
-                    lookup.insert(service_kind, vec![service]);
+                    lookup.insert(service_kind, (service, None));
                 }
             }
 
