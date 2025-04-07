@@ -18,15 +18,12 @@ use super::{
     clients::Clients,
     config::Configs,
     digests::Digests,
-    matrix::{AnyService, CosmosService, CrossChainService, EthService},
+    matrix::{AnyService, CosmosService, EthService},
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
 use alloy::{primitives::Address, sol_types::SolEvent};
 use utils::{context::AppContext, filesystem::workspace_path};
-use wavs_cli::{
-    args::{CliSubmitKind, CliTriggerKind},
-    command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
-};
+use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource,
     EthereumContractSubmission, Permissions, Service, ServiceConfig, ServiceID, ServiceManager,
@@ -123,141 +120,110 @@ async fn deploy_service_simple(
     let digest_name = Vec::<DigestName>::from(service_kind)[0];
     let digest = digests.lookup.get(&digest_name).unwrap().clone();
 
-    let trigger = match service_kind {
-        AnyService::Eth(EthService::BlockInterval) => CliTriggerKind::EthBlockInterval,
-        AnyService::Eth(EthService::CronInterval) => CliTriggerKind::CronInterval,
-        AnyService::Eth(_) => CliTriggerKind::EthContractEvent,
-        AnyService::Cosmos(CosmosService::CronInterval) => CliTriggerKind::CronInterval,
-        AnyService::Cosmos(CosmosService::BlockInterval) => CliTriggerKind::CosmosBlockInterval,
-        AnyService::Cosmos(_) => CliTriggerKind::CosmosContractEvent,
-        AnyService::CrossChain(service) => match service {
-            CrossChainService::CosmosToEthEchoData => CliTriggerKind::CosmosContractEvent,
-        },
+    // Determine trigger chain directly based on service_kind
+    let trigger_chain = match service_kind {
+        AnyService::Eth(EthService::EchoDataAggregator) => {
+            Some(chain_names.eth_aggregator[0].clone())
+        }
+        AnyService::Eth(EthService::EchoDataSecondaryChain) => Some(chain_names.eth[1].clone()),
+        AnyService::Eth(_) => Some(chain_names.eth[0].clone()),
+        AnyService::Cosmos(_) => Some(chain_names.cosmos[0].clone()),
+        AnyService::CrossChain(_) => Some(chain_names.cosmos[0].clone()),
     };
 
-    let trigger_chain = match trigger {
-        CliTriggerKind::EthContractEvent => match service_kind {
-            AnyService::Eth(EthService::EchoDataAggregator) => {
-                Some(chain_names.eth_aggregator[0].clone())
-            }
-            AnyService::Eth(EthService::EchoDataSecondaryChain) => Some(chain_names.eth[1].clone()),
-            _ => Some(chain_names.eth[0].clone()),
-        },
-        CliTriggerKind::CosmosContractEvent => Some(chain_names.cosmos[0].clone()),
-        CliTriggerKind::EthBlockInterval => Some(chain_names.eth[0].clone()),
-        CliTriggerKind::CosmosBlockInterval => Some(chain_names.cosmos[0].clone()),
-        CliTriggerKind::CronInterval => None,
-    };
-
-    let submit = match service_kind {
-        _ => CliSubmitKind::EthServiceHandler,
-    };
-
-    let submit_chain = match submit {
-        CliSubmitKind::EthServiceHandler => match trigger {
-            CliTriggerKind::EthContractEvent => trigger_chain.clone(), // not strictly necessary, just easier to reason about same-chain
-            CliTriggerKind::CosmosContractEvent => Some(chain_names.eth[0].clone()), // always eth for now
-            CliTriggerKind::EthBlockInterval => trigger_chain.clone(),
-            CliTriggerKind::CosmosBlockInterval => Some(chain_names.eth[0].clone()), // always eth for now as above
-            CliTriggerKind::CronInterval => Some(chain_names.eth[0].clone()),
-        },
-        CliSubmitKind::None => None,
-    };
-
-    // Create the actual trigger based on the trigger kind
-    let actual_trigger = match trigger {
-        CliTriggerKind::EthContractEvent => {
-            if let Some(chain_name) = &trigger_chain {
-                let client = clients
-                    .cli_ctx
-                    .new_eth_client(chain_name, bump_client_count(), true)
-                    .await
-                    .unwrap()
-                    .clone();
-
-                tracing::info!("Deploying new eth trigger contract");
-                let address = *SimpleTrigger::deploy(client.provider)
-                    .await
-                    .unwrap()
-                    .address();
-
-                let event_hash =
-                    *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
-
-                Trigger::EthContractEvent {
-                    chain_name: chain_name.clone(),
-                    address,
-                    event_hash: ByteArray::new(event_hash),
-                }
-            } else {
-                panic!("Chain name required for EthContractEvent");
+    // Create the actual trigger based on the service_kind
+    let actual_trigger = match service_kind {
+        AnyService::Eth(EthService::BlockInterval) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks: std::num::NonZeroU32::new(1).unwrap(),
             }
         }
-        CliTriggerKind::CosmosContractEvent => {
-            if let Some(chain_name) = &trigger_chain {
-                let client = clients.cli_ctx.get_cosmos_client(chain_name).unwrap();
-
-                let code_id = match cosmos_code_ids.get(chain_name).cloned() {
-                    Some(code_id) => code_id,
-                    None => {
-                        let path_to_wasm = workspace_path()
-                            .join("examples")
-                            .join("build")
-                            .join("contracts")
-                            .join("simple_example.wasm");
-
-                        let wasm_byte_code = std::fs::read(path_to_wasm).unwrap();
-
-                        let (code_id, _) = client
-                            .contract_upload_file(wasm_byte_code, None)
-                            .await
-                            .unwrap();
-
-                        cosmos_code_ids.insert(chain_name.clone(), code_id);
-
-                        code_id
-                    }
-                };
-
-                let contract_address = SimpleCosmosTriggerClient::new_code_id(client, code_id)
-                    .await
-                    .unwrap()
-                    .contract_address;
-
-                Trigger::CosmosContractEvent {
-                    chain_name: chain_name.clone(),
-                    address: contract_address,
-                    event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
-                }
-            } else {
-                panic!("Chain name required for CosmosContractEvent");
-            }
-        }
-        CliTriggerKind::EthBlockInterval => {
-            if let Some(chain_name) = &trigger_chain {
-                Trigger::BlockInterval {
-                    chain_name: chain_name.clone(),
-                    n_blocks: std::num::NonZeroU32::new(1).unwrap(),
-                }
-            } else {
-                panic!("Chain name required for EthBlockInterval");
-            }
-        }
-        CliTriggerKind::CosmosBlockInterval => {
-            if let Some(chain_name) = &trigger_chain {
-                Trigger::BlockInterval {
-                    chain_name: chain_name.clone(),
-                    n_blocks: std::num::NonZeroU32::new(1).unwrap(),
-                }
-            } else {
-                panic!("Chain name required for CosmosBlockInterval");
-            }
-        }
-        CliTriggerKind::CronInterval => Trigger::Cron {
+        AnyService::Eth(EthService::CronInterval) => Trigger::Cron {
             schedule: "*/15 * * * * *".to_string(),
             start_time: None,
             end_time: None,
         },
+        AnyService::Eth(_) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            let client = clients
+                .cli_ctx
+                .new_eth_client(&chain_name, bump_client_count(), true)
+                .await
+                .unwrap()
+                .clone();
+
+            tracing::info!("Deploying new eth trigger contract");
+            let address = *SimpleTrigger::deploy(client.provider)
+                .await
+                .unwrap()
+                .address();
+
+            let event_hash =
+                *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
+
+            Trigger::EthContractEvent {
+                chain_name,
+                address,
+                event_hash: ByteArray::new(event_hash),
+            }
+        }
+        AnyService::Cosmos(CosmosService::CronInterval) => Trigger::Cron {
+            schedule: "*/15 * * * * *".to_string(),
+            start_time: None,
+            end_time: None,
+        },
+        AnyService::Cosmos(CosmosService::BlockInterval) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+            }
+        }
+        AnyService::Cosmos(_) | AnyService::CrossChain(_) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            let client = clients.cli_ctx.get_cosmos_client(&chain_name).unwrap();
+
+            let code_id = match cosmos_code_ids.get(&chain_name).cloned() {
+                Some(code_id) => code_id,
+                None => {
+                    let path_to_wasm = workspace_path()
+                        .join("examples")
+                        .join("build")
+                        .join("contracts")
+                        .join("simple_example.wasm");
+
+                    let wasm_byte_code = std::fs::read(path_to_wasm).unwrap();
+
+                    let (code_id, _) = client
+                        .contract_upload_file(wasm_byte_code, None)
+                        .await
+                        .unwrap();
+
+                    cosmos_code_ids.insert(chain_name.clone(), code_id);
+
+                    code_id
+                }
+            };
+
+            let contract_address = SimpleCosmosTriggerClient::new_code_id(client, code_id)
+                .await
+                .unwrap()
+                .contract_address;
+
+            Trigger::CosmosContractEvent {
+                chain_name,
+                address: contract_address,
+                event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
+            }
+        }
+    };
+
+    // Determine the submit chain
+    let submit_chain = match service_kind {
+        AnyService::Eth(_) => trigger_chain.clone(),
+        AnyService::Cosmos(_) | AnyService::CrossChain(_) => Some(chain_names.eth[0].clone()),
     };
 
     // Get service manager address from the submit chain
@@ -279,34 +245,28 @@ async fn deploy_service_simple(
             .address()
     };
 
-    // Create the actual submit based on the submit kind and chain
-    let actual_submit = match submit {
-        CliSubmitKind::EthServiceHandler => {
-            if let Some(chain) = &submit_chain {
-                let client = clients
-                    .cli_ctx
-                    .new_eth_client(chain, bump_client_count(), true)
-                    .await
-                    .unwrap()
-                    .clone();
+    // Create the actual submit
+    let actual_submit = if let Some(chain) = &submit_chain {
+        let client = clients
+            .cli_ctx
+            .new_eth_client(chain, bump_client_count(), true)
+            .await
+            .unwrap()
+            .clone();
 
-                tracing::info!("Deploying new eth submit contract");
-                let address = *SimpleSubmit::deploy(client.provider, service_manager_address)
-                    .await
-                    .unwrap()
-                    .address();
+        tracing::info!("Deploying new eth submit contract");
+        let address = *SimpleSubmit::deploy(client.provider, service_manager_address)
+            .await
+            .unwrap()
+            .address();
 
-                Submit::EthereumContract(EthereumContractSubmission {
-                    chain_name: chain.clone(),
-                    address,
-                    max_gas: None,
-                })
-            } else {
-                // Should not happen with EthServiceHandler, but just in case
-                Submit::None
-            }
-        }
-        CliSubmitKind::None => Submit::None,
+        Submit::EthereumContract(EthereumContractSubmission {
+            chain_name: chain.clone(),
+            address,
+            max_gas: None,
+        })
+    } else {
+        Submit::None
     };
 
     // Create Component

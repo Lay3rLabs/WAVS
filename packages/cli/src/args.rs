@@ -248,45 +248,6 @@ fn parse_service_input(s: &str) -> Result<Service, String> {
 }
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
-pub enum CliTriggerKind {
-    EthContractEvent,
-    CosmosContractEvent,
-    EthBlockInterval,
-    CosmosBlockInterval,
-    CronInterval,
-}
-
-impl std::fmt::Display for CliTriggerKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EthContractEvent => write!(f, "eth-contract-event"),
-            Self::CosmosContractEvent => write!(f, "cosmos-contract-event"),
-            Self::EthBlockInterval => write!(f, "eth-block-interval"),
-            Self::CosmosBlockInterval => write!(f, "cosmos-block-interval"),
-            Self::CronInterval => write!(f, "cron-interval"),
-        }
-    }
-}
-
-impl std::str::FromStr for CliTriggerKind {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "eth-contract-event" => Ok(Self::EthContractEvent),
-            "cosmos-contract-event" => Ok(Self::CosmosContractEvent),
-            _ => Err(format!("unknown trigger kind: {}", s)),
-        }
-    }
-}
-
-impl From<CliTriggerKind> for clap::builder::OsStr {
-    fn from(trigger: CliTriggerKind) -> clap::builder::OsStr {
-        trigger.to_string().into()
-    }
-}
-
-#[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum CliSubmitKind {
     EthServiceHandler,
     None,
