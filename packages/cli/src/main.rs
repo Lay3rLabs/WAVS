@@ -35,7 +35,12 @@ async fn main() {
 
     match command {
         Command::DeployServiceRaw { service, args: _ } => {
-            let res = DeployServiceRaw::run(&ctx, 0, DeployServiceRawArgs { service })
+            let provider = ctx
+                .get_eth_client(service.manager.chain_name())
+                .unwrap()
+                .provider;
+
+            let res = DeployServiceRaw::run(&ctx, provider, DeployServiceRawArgs { service })
                 .await
                 .unwrap();
 
