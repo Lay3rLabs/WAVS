@@ -2,20 +2,28 @@ use anyhow::{anyhow, bail};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EthereumContractSubmission, Packet, SignerAddress,
+    Aggregator, EthereumContractSubmission, Packet, SigningProvider,
 };
+use SimpleServiceManager::SimpleServiceManagerInstance;
 
 use crate::http::{
     error::AnyError,
     state::{HttpState, PacketQueue},
 };
 
+alloy::sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    SimpleServiceManager,
+    "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
+);
+
 #[axum::debug_handler]
 pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
 ) -> impl IntoResponse {
-    match inner(state, req.packet).await {
+    match process_packet(state, req.packet).await {
         Ok(resp) => Json(resp).into_response(),
         Err(e) => {
             tracing::error!("{:?}", e);
@@ -24,7 +32,7 @@ pub async fn handle_packet(
     }
 }
 
-async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResponse> {
+async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResponse> {
     let event_id = packet.event_id();
 
     let mut queue = match state.get_packet_queue(&event_id)? {
@@ -34,15 +42,32 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
         PacketQueue::Alive(queue) => queue,
     };
 
-    // TODO - query operator set from ServiceManager contract
-    // it may be some struct, using a Vec as a placeholder for now
-    let operator_set = Vec::new();
-
-    validate_packet(&packet, &queue, &operator_set)?;
-
     let envelope = packet.envelope.clone();
     let block_height = packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
     let route = packet.route.clone();
+
+    // TODO - query operator set from ServiceManager contract
+    // it may be some struct, using a Vec as a placeholder for now
+
+    let service = state.get_service(&route)?;
+    let aggregator = service.workflows[&route.workflow_id]
+        .aggregator
+        .as_ref()
+        .ok_or(anyhow!(
+            "No aggregator configured for workflow {} on service {}",
+            route.workflow_id,
+            route.service_id
+        ))?;
+
+    match aggregator {
+        Aggregator::Ethereum(EthereumContractSubmission { chain_name, .. }) => {
+            let client = state.get_eth_client(chain_name).await?;
+            let service_manager =
+                SimpleServiceManager::new(service.manager.eth_address_unchecked(), client.provider);
+
+            validate_eth_packet(service_manager, &packet, &queue).await?;
+        }
+    };
 
     queue.push(packet);
 
@@ -54,22 +79,13 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
     // we don't care about count, we care about the power of the signers
     // right now this is just hardcoded for demo purposes
     if count >= 3 {
-        let service = state.get_service(&route)?;
-
         let Aggregator::Ethereum(EthereumContractSubmission {
             chain_name,
             address,
             max_gas,
-        }) = service.workflows[&route.workflow_id]
-            .aggregator
-            .clone()
-            .ok_or(anyhow!(
-                "No aggregator configured for workflow {} on service {}",
-                route.workflow_id,
-                route.service_id
-            ))?;
+        }) = aggregator;
 
-        let client = state.get_eth_client(&chain_name).await?;
+        let client = state.get_eth_client(chain_name).await?;
         let signer_and_signatures = queue
             .drain(..)
             .map(|packet| (packet.signer, packet.signature))
@@ -79,8 +95,8 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
                 envelope,
                 signer_and_signatures,
                 block_height,
-                address,
-                max_gas,
+                *address,
+                *max_gas,
             )
             .await?;
 
@@ -95,14 +111,23 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
     }
 }
 
-fn validate_packet(
+async fn validate_eth_packet(
+    service_manager: SimpleServiceManagerInstance<(), SigningProvider>,
     packet: &Packet,
     queue: &[Packet],
-    _operator_set: &[SignerAddress], /* TODO: placeholder */
 ) -> anyhow::Result<()> {
     // TODO
     // 1. ensure that the signature is valid
-    // 2. ensure that the signer is in the operator set
+
+    if !service_manager
+        .getOperatorRegistered(packet.signer.eth_unchecked())
+        .call()
+        .await?
+        ._0
+    {
+        bail!("Operator is not registered");
+    }
+
     match queue.first() {
         None => {}
         Some(last_packet) => {
