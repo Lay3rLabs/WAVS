@@ -2,18 +2,19 @@ use std::time::Duration;
 
 use alloy::providers::ext::AnvilApi;
 use anyhow::{bail, Context, Result};
-use wavs_cli::context::CliContext;
-use wavs_types::{ChainName, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
+use wavs_types::{
+    ChainName, Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID,
+};
 
 use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient, TriggerId},
 };
 
-use super::services::bump_client_count;
+use super::clients::Clients;
 
 pub async fn add_task(
-    ctx: &CliContext,
+    clients: &Clients,
     service_id: String,
     workflow_id: Option<String>,
     input: Option<Vec<u8>>,
@@ -25,7 +26,7 @@ pub async fn add_task(
         None => WorkflowID::default(),
     };
 
-    let deployment = ctx.deployment.lock().unwrap().clone();
+    let deployment = clients.cli_ctx.deployment.lock().unwrap().clone();
 
     let service = deployment
         .services
@@ -49,11 +50,7 @@ pub async fn add_task(
             address,
             event_hash: _,
         } => {
-            let eth_client = ctx
-                .new_eth_client(&chain_name, bump_client_count(), true)
-                .await
-                .unwrap()
-                .clone();
+            let eth_client = clients.get_eth_client(&chain_name).await;
             let client = SimpleEthTriggerClient::new(eth_client, address);
             (
                 false,
@@ -67,8 +64,10 @@ pub async fn add_task(
             address,
             event_type: _,
         } => {
-            let client =
-                SimpleCosmosTriggerClient::new(ctx.get_cosmos_client(&chain_name)?, address);
+            let client = SimpleCosmosTriggerClient::new(
+                clients.cli_ctx.get_cosmos_client(&chain_name)?,
+                address,
+            );
             let trigger_id = client
                 .add_trigger(input.expect("on-chain triggers require input data"))
                 .await?;
@@ -108,7 +107,7 @@ pub async fn add_task(
                 trigger_id,
                 Some(
                     wait_for_task_to_land(
-                        ctx,
+                        clients,
                         &chain_name,
                         address,
                         trigger_id,
@@ -136,7 +135,7 @@ pub async fn add_task(
                 trigger_id,
                 Some(
                     wait_for_task_to_land(
-                        ctx,
+                        clients,
                         service.manager.chain_name(),
                         service.manager.eth_address_unchecked(),
                         trigger_id,
@@ -154,25 +153,22 @@ pub async fn add_task(
 #[derive(Debug, Clone)]
 pub struct SignedData {
     pub data: Vec<u8>,
-    pub _signature: Vec<u8>,
+    pub envelope: Envelope,
+    pub signature: Vec<u8>,
 }
 
 pub async fn wait_for_task_to_land(
-    ctx: &CliContext,
+    clients: &Clients,
     chain_name: &ChainName,
     address: alloy::primitives::Address,
     trigger_id: TriggerId,
     result_timeout: Duration,
     is_trigger_time_based: bool,
 ) -> Result<SignedData> {
-    let client = ctx
-        .new_eth_client(chain_name, bump_client_count(), true)
-        .await
-        .unwrap()
-        .clone();
-    let provider = client.provider.clone();
+    let eth_client = clients.get_eth_client(chain_name).await;
+    let provider = eth_client.provider.clone();
 
-    let submit_client = SimpleEthSubmitClient::new(client, address);
+    let submit_client = SimpleEthSubmitClient::new(eth_client, address);
 
     tokio::time::timeout(result_timeout, async move {
         loop {
@@ -185,9 +181,15 @@ pub async fn wait_for_task_to_land(
                 true => {
                     let data = submit_client.trigger_data(trigger_id).await?;
 
-                    let _signature = submit_client.trigger_signature(trigger_id).await?;
+                    let envelope = submit_client.trigger_envelope(trigger_id).await?;
 
-                    return anyhow::Ok(SignedData { data, _signature });
+                    let signature = submit_client.trigger_signature(trigger_id).await?;
+
+                    return anyhow::Ok(SignedData {
+                        data,
+                        signature,
+                        envelope,
+                    });
                 }
                 false => {
                     tracing::debug!(

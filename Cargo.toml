@@ -42,6 +42,7 @@ rayon = "1.5.1"
 ctrlc = "3.4.5"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.88"
+deadpool = "0.12.2"
 
 # fs
 tempfile = "3.13.0"

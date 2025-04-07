@@ -12,7 +12,10 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
-use wavs_types::{ChainName, Digest, IDError, Service, ServiceID, TriggerAction, TriggerConfig};
+use wavs_types::{
+    ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
+    TriggerConfig,
+};
 
 use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
@@ -302,6 +305,11 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
             })?;
 
         Ok(res)
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse, Self::Error> {
+        Ok(self.submission.get_service_key(service_id)?)
     }
 }
 

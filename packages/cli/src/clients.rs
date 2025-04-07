@@ -1,3 +1,4 @@
+use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
@@ -6,10 +7,10 @@ use utils::{
 };
 use wavs_types::{
     AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
-    UploadComponentResponse,
+    ServiceID, SigningKeyResponse, UploadComponentResponse,
 };
 
-use crate::{config::Config, context::CliContext};
+use crate::config::Config;
 
 pub async fn get_eth_client(
     config: &Config,
@@ -75,10 +76,9 @@ impl HttpClient {
         Ok(response.digest.into())
     }
 
-    pub async fn create_service_raw(
+    pub async fn create_service_raw<T: Provider>(
         &self,
-        ctx: &CliContext,
-        index: u32,
+        provider: T,
         service: Service,
     ) -> Result<()> {
         let body = serde_json::to_string(&service)?;
@@ -92,15 +92,9 @@ impl HttpClient {
             .error_for_status()?;
 
         let service_uri = format!("{}/service/{}", self.endpoint, service.id);
-        tracing::info!("Service URI: {}", service_uri);
 
-        let client = ctx
-            .new_eth_client(service.manager.chain_name(), index, true)
-            .await?;
-        let contract = IWavsServiceManagerInstance::new(
-            service.manager.eth_address_unchecked(),
-            client.provider,
-        );
+        let contract =
+            IWavsServiceManagerInstance::new(service.manager.eth_address_unchecked(), provider);
         contract
             .setServiceURI(service_uri)
             .send()
@@ -122,5 +116,15 @@ impl HttpClient {
             .error_for_status()?;
 
         Ok(())
+    }
+
+    pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
+        self.inner
+            .get(format!("{}/service-key/{service_id}", self.endpoint))
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.into())
     }
 }

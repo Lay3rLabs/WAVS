@@ -42,6 +42,9 @@ pub trait DispatchManager: Send + Sync {
     /// TODO: pagination
     fn list_component_digests(&self) -> Result<Vec<Digest>, Self::Error>;
 
+    fn get_service_key(&self, id: ServiceID)
+        -> Result<wavs_types::SigningKeyResponse, Self::Error>;
+
     // TODO: this would be nicer so we can just pass in a range
     // but then we run into problems with storing DispatchManager as a trait object
     // fn list_services<'a>(&self, bounds: impl RangeBounds<&'a str>) -> Result<Vec<Service>, Self::Error>;

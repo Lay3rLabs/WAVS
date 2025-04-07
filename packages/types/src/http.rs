@@ -10,6 +10,13 @@ use std::{fmt, ops::Deref, str::FromStr};
 use wasm_pkg_common::package::{PackageRef, Version};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum SigningKeyResponse {
+    /// from alloy's SigningKey.to_bytes()
+    Secp256k1(Vec<u8>),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddServiceRequest {
     pub chain_name: ChainName,
     pub address: Address,

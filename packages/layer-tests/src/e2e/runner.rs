@@ -1,10 +1,15 @@
 use std::path::PathBuf;
 
+use alloy::{
+    primitives::{eip191_hash_message, keccak256},
+    signers::k256::ecdsa::SigningKey,
+    sol_types::SolValue,
+};
 use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use utils::context::AppContext;
-use wavs_types::{ChainName, EthereumContractSubmission, Service, Submit};
+use wavs_types::{ChainName, EthereumContractSubmission, Service, SigningKeyResponse, Submit};
 
 use crate::e2e::add_task::{add_task, wait_for_task_to_land};
 
@@ -19,7 +24,8 @@ use super::{
 pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: Services) {
     // nonce errors, gotta run sequentially :(
     ctx.rt.block_on(async move {
-        let mut all: Vec<(AnyService, Vec<Service>)> = services.lookup.into_iter().collect();
+        let mut all: Vec<(AnyService, (Service, Option<Service>))> =
+            services.lookup.into_iter().collect();
         all.sort_by(|(a, _), (b, _)| match (a, b) {
             // Ethereum should come first, then cross-chain, then cosmos
             // to ensure that we move ethereum blocks forward
@@ -30,10 +36,8 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
             _ => std::cmp::Ordering::Equal,
         });
 
-        for (name, services) in all {
-            test_service(name, services, &configs, &clients)
-                .await
-                .unwrap();
+        for (name, (service, multi_trigger_service)) in all {
+            test_service(name, service, multi_trigger_service, &configs, &clients).await;
             tracing::info!("Service {:?} passed", name);
         }
     });
@@ -41,14 +45,33 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
 
 async fn test_service(
     name: AnyService,
-    services: Vec<Service>,
+    service: Service,
+    multi_trigger_service: Option<Service>,
     configs: &Configs,
     clients: &Clients,
-) -> Result<()> {
-    let service = services.first().unwrap();
+) {
     let service_id = service.id.to_string();
 
     tracing::info!("Testing service: {:?}", name);
+
+    if let Some(multi_trigger_service) = &multi_trigger_service {
+        // sanity checks for multi-trigger, to surface errors earlier
+        // since mistakes here lead to hard-to-catch race conditions
+        assert_eq!(name, AnyService::Eth(EthService::MultiTrigger));
+        assert!(multi_trigger_service.workflows.len() == 1);
+        assert!(service.workflows.len() == 1);
+
+        let workflow = service.workflows.values().next().unwrap();
+        let multi_trigger_workflow = multi_trigger_service.workflows.values().next().unwrap();
+
+        // the trigger should be the same
+        assert_eq!(multi_trigger_workflow.trigger, workflow.trigger);
+        // but the submission should be different
+        assert_ne!(multi_trigger_workflow.submit, workflow.submit);
+        // if/when https://github.com/Lay3rLabs/WAVS/pull/502 lands (or any PR that has a distinct service manager per service)
+        // then the service manager should be different too
+        // assert_ne!(multi_trigger_service.manager, service.manager);
+    }
 
     let n_workflows = service.workflows.len();
 
@@ -65,86 +88,79 @@ async fn test_service(
             let is_final = task_number == n_tasks;
 
             let (trigger_id, signed_data) = add_task(
-                &clients.cli_ctx,
+                clients,
                 service_id.clone(),
                 Some(workflow_id.to_string()),
-                get_input_for_service(name, service, configs, workflow_index),
+                get_input_for_service(name, &service, configs, workflow_index),
                 if is_final {
                     Some(std::time::Duration::from_secs(30))
                 } else {
                     None
                 },
             )
-            .await?;
+            .await
+            .unwrap();
 
             if is_final {
-                let signed_data = signed_data.context("no signed data returned")?;
-                verify_signed_data(name, signed_data, service, configs, workflow_index)?;
-            }
+                let signed_data = signed_data.context("no signed data returned").unwrap();
+                verify_signed_data(
+                    clients,
+                    name,
+                    signed_data,
+                    &service,
+                    configs,
+                    workflow_index,
+                )
+                .await
+                .unwrap();
 
-            if services.len() > 1 {
-                // sanity check that all our services are for the same trigger
-                for additional_service in &services[1..] {
-                    tracing::info!("Testing Additional service for same trigger...");
-                    assert_eq!(
-                        additional_service
-                            .workflows
-                            .values()
-                            .map(|w| w.trigger.clone())
-                            .collect::<Vec<_>>(),
-                        service
-                            .workflows
-                            .values()
-                            .map(|w| w.trigger.clone())
-                            .collect::<Vec<_>>(),
-                    );
+                if let Some(multi_trigger_service) = &multi_trigger_service {
+                    let multi_trigger_workflow =
+                        multi_trigger_service.workflows.values().next().unwrap();
 
-                    let service = clients
-                        .cli_ctx
-                        .deployment
-                        .lock()
-                        .unwrap()
-                        .services
-                        .get(&additional_service.id)
-                        .unwrap()
-                        .clone();
-
-                    let workflow = service.workflows.get(workflow_id).unwrap().clone();
-
-                    let chain_and_addr = match workflow.submit {
-                        Submit::None => None,
+                    // we already triggered - now we just wait for it to land at the expected address
+                    let (chain_name, address) = match &multi_trigger_workflow.submit {
+                        Submit::None => {
+                            panic!("no submission in multi-trigger service");
+                        }
                         Submit::EthereumContract(EthereumContractSubmission {
                             chain_name,
                             address,
                             ..
-                        }) => Some((chain_name, address)),
-                        Submit::Aggregator { url: _ } => Some((
-                            service.manager.chain_name().clone(),
-                            service.manager.eth_address_unchecked(),
-                        )),
+                        }) => (chain_name.clone(), *address),
+                        Submit::Aggregator { url: _ } => (
+                            multi_trigger_service.manager.chain_name().clone(),
+                            multi_trigger_service.manager.eth_address_unchecked(),
+                        ),
                     };
 
-                    if let Some((chain_name, address)) = chain_and_addr {
-                        let signed_data = wait_for_task_to_land(
-                            &clients.cli_ctx,
-                            &chain_name,
-                            address,
-                            trigger_id,
-                            std::time::Duration::from_secs(10),
-                            // we control the tests and *only* use on-chain triggers
-                            // for multi-service tests
-                            false,
-                        )
-                        .await?;
+                    let signed_data = wait_for_task_to_land(
+                        clients,
+                        &chain_name,
+                        address, // this is a different address than the original service submission
+                        trigger_id,
+                        std::time::Duration::from_secs(10),
+                        // we control the tests and *only* use on-chain triggers
+                        // for multi-service tests
+                        false,
+                    )
+                    .await
+                    .unwrap();
 
-                        verify_signed_data(name, signed_data, &service, configs, workflow_index)?;
-                    }
+                    verify_signed_data(
+                        clients,
+                        name,
+                        signed_data,
+                        multi_trigger_service,
+                        configs,
+                        0,
+                    )
+                    .await
+                    .unwrap();
                 }
             }
         }
     }
-
-    Ok(())
 }
 
 fn get_input_for_service(
@@ -208,14 +224,15 @@ fn get_input_for_service(
     }
 }
 
-fn verify_signed_data(
+async fn verify_signed_data(
+    clients: &Clients,
     name: AnyService,
     signed_data: SignedData,
     service: &Service,
     configs: &Configs,
     workflow_index: usize,
 ) -> Result<()> {
-    let data = signed_data.data;
+    let data = &signed_data.data;
 
     let input_req = || {
         get_input_for_service(name, service, configs, workflow_index)
@@ -240,13 +257,13 @@ fn verify_signed_data(
             },
 
             EthService::CosmosQuery => {
-                let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                let resp: CosmosQueryResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
 
             EthService::Permissions => {
-                let resp: PermissionsResponse = serde_json::from_slice(&data).unwrap();
+                let resp: PermissionsResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
@@ -259,13 +276,13 @@ fn verify_signed_data(
             CosmosService::Square => Some(SquareResponse { y: 9 }.to_vec()),
 
             CosmosService::Permissions => {
-                let resp: PermissionsResponse = serde_json::from_slice(&data).unwrap();
+                let resp: PermissionsResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
 
             CosmosService::CosmosQuery => {
-                let resp: CosmosQueryResponse = serde_json::from_slice(&data).unwrap();
+                let resp: CosmosQueryResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
@@ -280,10 +297,41 @@ fn verify_signed_data(
     // in some cases we just verify that we could deserialize the data
     // in others, we know what we expect exactly, make sure we got it
     if let Some(expected_data) = expected_data {
-        assert_eq!(data, expected_data);
+        assert_eq!(*data, expected_data);
 
-        if let Ok(msg) = String::from_utf8(data) {
+        if let Ok(msg) = String::from_utf8(data.clone()) {
             tracing::info!("Response: {}", msg);
+        }
+    }
+
+    let signing_key = clients
+        .http_client
+        .get_service_key(service.id.clone())
+        .await?;
+
+    // TODO - re-use stuff from https://github.com/Lay3rLabs/WAVS/pull/496 when it lands
+
+    match signing_key {
+        SigningKeyResponse::Secp256k1(bytes) => {
+            let private_key = SigningKey::from_slice(&bytes)?;
+            let service_address = alloy::primitives::Address::from_private_key(&private_key);
+
+            let signature =
+                alloy::primitives::PrimitiveSignature::from_raw(&signed_data.signature)?;
+
+            let envelope_bytes = signed_data.envelope.abi_encode();
+            let envelope_hash = eip191_hash_message(keccak256(&envelope_bytes));
+
+            let signer_address = signature.recover_address_from_prehash(&envelope_hash)?;
+
+            if service_address != signer_address {
+                return Err(anyhow::anyhow!(
+                    "Signature does not match service {} address: {} != {}",
+                    service.id,
+                    service_address,
+                    signer_address
+                ));
+            }
         }
     }
 
