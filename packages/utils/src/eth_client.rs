@@ -1,4 +1,5 @@
 pub mod contracts;
+pub mod pool;
 pub mod signing;
 
 use std::sync::Arc;
