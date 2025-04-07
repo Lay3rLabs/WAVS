@@ -89,11 +89,14 @@ impl Services {
                     additional_service.id =
                         ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap();
 
+                    let service_manager_address =
+                        deploy_service_manager(clients, service.manager.chain_name()).await;
+
                     for (_, workflow) in additional_service.workflows.iter_mut() {
-                        workflow.submit = deploy_submit_raw(
+                        workflow.submit = deploy_submit(
                             clients,
                             service.manager.chain_name(),
-                            service.manager.eth_address_unchecked(),
+                            service_manager_address,
                         )
                         .await;
                     }
@@ -182,7 +185,7 @@ async fn deploy_service_simple(
             }
         }
         AnyService::Cosmos(CosmosService::CronInterval) => Trigger::Cron {
-            schedule: "*/15 * * * * *".to_string(),
+            schedule: "*/10 * * * * *".to_string(),
             start_time: None,
             end_time: None,
         },
@@ -243,14 +246,7 @@ async fn deploy_service_simple(
         Some(chain) => chain.clone(),
         None => chain_names.eth[0].clone(),
     };
-    let service_manager_address = {
-        let eth_client = clients.get_eth_client(&service_manager_chain).await;
-
-        *SimpleServiceManager::deploy(eth_client.provider.clone())
-            .await
-            .unwrap()
-            .address()
-    };
+    let service_manager_address = deploy_service_manager(clients, &service_manager_chain).await;
 
     // Create the actual submit
     let submit = if let Some(chain) = &submit_chain {
@@ -345,8 +341,8 @@ async fn deploy_service_raw(
         panic!("unexpected service kind: {:?}", service_kind);
     }
 
-    let trigger1 = deploy_trigger_raw(clients, chain_names).await;
-    let trigger2 = deploy_trigger_raw(clients, chain_names).await;
+    let trigger1 = deploy_trigger(clients, chain_names).await;
+    let trigger2 = deploy_trigger(clients, chain_names).await;
 
     let component_id1 = ComponentID::new("component1").unwrap();
     let component_id2 = ComponentID::new("component2").unwrap();
@@ -370,17 +366,10 @@ async fn deploy_service_raw(
     };
 
     let chain_name = chain_names.eth[0].clone();
-    let service_manager_address = {
-        let eth_client = clients.get_eth_client(&chain_name).await;
+    let service_manager_address = deploy_service_manager(clients, &chain_name).await;
 
-        *SimpleServiceManager::deploy(eth_client.provider.clone())
-            .await
-            .unwrap()
-            .address()
-    };
-
-    let submit1 = deploy_submit_raw(clients, &chain_name, service_manager_address).await;
-    let submit2 = deploy_submit_raw(clients, &chain_name, service_manager_address).await;
+    let submit1 = deploy_submit(clients, &chain_name, service_manager_address).await;
+    let submit2 = deploy_submit(clients, &chain_name, service_manager_address).await;
 
     let workflow_id1 = WorkflowID::new("workflow1").unwrap();
     let workflow_id2 = WorkflowID::new("workflow2").unwrap();
@@ -438,7 +427,7 @@ async fn deploy_service_raw(
     service
 }
 
-async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trigger {
+async fn deploy_trigger(clients: &Clients, chain_names: &ChainNames) -> Trigger {
     let chain_name = chain_names.eth[0].clone();
     let client = clients.get_eth_client(&chain_name).await;
     let event_hash = *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
@@ -454,7 +443,7 @@ async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trig
     }
 }
 
-async fn deploy_submit_raw(
+async fn deploy_submit(
     clients: &Clients,
     chain_name: &ChainName,
     service_manager_address: Address,
@@ -471,6 +460,15 @@ async fn deploy_submit_raw(
         address,
         max_gas: None,
     })
+}
+
+async fn deploy_service_manager(clients: &Clients, chain_name: &ChainName) -> Address {
+    let eth_client = clients.get_eth_client(chain_name).await;
+
+    *SimpleServiceManager::deploy(eth_client.provider.clone())
+        .await
+        .unwrap()
+        .address()
 }
 
 #[derive(Debug, Default)]
