@@ -19,6 +19,11 @@ pub trait Submission: Send + Sync {
     async fn add_service(&self, service: &Service) -> Result<(), SubmissionError>;
 
     fn remove_service(&self, service_id: ServiceID) -> Result<(), SubmissionError>;
+
+    fn get_service_key(
+        &self,
+        service_id: ServiceID,
+    ) -> Result<wavs_types::SigningKeyResponse, SubmissionError>;
 }
 
 /// The data returned from a trigger action

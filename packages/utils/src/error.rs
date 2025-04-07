@@ -19,6 +19,9 @@ pub enum EthClientError {
 
     #[error("Unable to sign: {0:#?}")]
     Signing(anyhow::Error),
+
+    #[error("Unable to estimate gas: {0:#?}")]
+    GasEstimation(anyhow::Error),
 }
 
 #[derive(Debug, Error)]

@@ -1,7 +1,7 @@
 # Run all the tests
 all = true
-# isolated = "eth-echo-data"
-# isolated = "cosmos-block-interval"
+# isolated = "eth-multi-trigger"
+# isolated = "eth-permissions"
 # registry = true
 
 # Run just one test (cannot be enabled at the same time as all)
@@ -18,6 +18,7 @@ all = true
 # permissions = true
 # square = true
 # multi-workflow = true
+# multi-trigger= true
 # block-interval = true
 
 # [matrix.cosmos]

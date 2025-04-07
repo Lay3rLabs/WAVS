@@ -1,6 +1,7 @@
 use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::Result;
-use utils::eth_client::EthSigningClient;
+use deadpool::managed::Object;
+use wavs_types::Envelope;
 
 use super::{
     example_submit::DataWithId,
@@ -8,15 +9,17 @@ use super::{
     trigger::TriggerId,
 };
 
-#[derive(Clone)]
 pub struct SimpleEthSubmitClient {
-    pub eth: EthSigningClient,
+    pub eth: Object<utils::eth_client::pool::SigningClientPoolManager>,
     pub contract_address: Address,
     pub contract: SimpleSubmitT,
 }
 
 impl SimpleEthSubmitClient {
-    pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
+    pub fn new(
+        eth: Object<utils::eth_client::pool::SigningClientPoolManager>,
+        contract_address: Address,
+    ) -> Self {
         let contract = SimpleSubmit::new(contract_address, eth.provider.clone());
 
         Self {
@@ -64,6 +67,25 @@ impl SimpleEthSubmitClient {
             .await
             .map(|x| x.data.to_vec())
             .map_err(|e| e.into())
+    }
+
+    pub async fn trigger_envelope(&self, trigger_id: TriggerId) -> Result<Envelope> {
+        if !self.trigger_validated(trigger_id).await {
+            return Err(anyhow::anyhow!("trigger not validated"));
+        }
+
+        let envelope = self
+            .contract
+            .getEnvelope(*trigger_id)
+            .call()
+            .await
+            .map(|x| x.envelope)?;
+
+        Ok(Envelope {
+            eventId: envelope.eventId,
+            ordering: envelope.ordering,
+            payload: envelope.payload,
+        })
     }
 
     pub async fn trigger_signature(&self, trigger_id: TriggerId) -> Result<Vec<u8>> {

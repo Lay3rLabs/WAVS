@@ -9,6 +9,13 @@ use serde::{
 
 use crate::digest::Digest;
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum SigningKeyResponse {
+    /// from alloy's SigningKey.to_bytes()
+    Secp256k1(Vec<u8>),
+}
+
 use super::{Permissions, Service, ServiceID, ServiceStatus, Trigger};
 use wasm_pkg_common::package::{PackageRef, Version};
 #[derive(Serialize, Deserialize, Clone, Debug)]

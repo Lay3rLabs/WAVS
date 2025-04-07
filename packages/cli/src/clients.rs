@@ -6,7 +6,7 @@ use utils::{
 };
 use wavs_types::{
     AddServiceRequest, AllowedHostPermission, ComponentSource, Digest, Permissions, Service,
-    ServiceConfig, ServiceID, Submit, Trigger, UploadComponentResponse,
+    ServiceConfig, ServiceID, SigningKeyResponse, Submit, Trigger, UploadComponentResponse,
 };
 
 use crate::config::Config;
@@ -132,5 +132,15 @@ impl HttpClient {
             .error_for_status()?;
 
         Ok(())
+    }
+
+    pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
+        self.inner
+            .get(format!("{}/service-key/{service_id}", self.endpoint))
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.into())
     }
 }

@@ -16,7 +16,9 @@ use super::{
     handlers::{
         handle_add_service, handle_config, handle_delete_service, handle_info,
         handle_list_services, handle_not_found, handle_upload_service,
-        service::{get::handle_get_service, save::handle_save_service},
+        service::{
+            get::handle_get_service, key::handle_get_service_key, save::handle_save_service,
+        },
     },
     state::HttpState,
 };
@@ -66,6 +68,7 @@ pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
         .route("/service/{service_id}", get(handle_get_service))
+        .route("/service-key/{service_id}", get(handle_get_service_key))
         .route("/save-service", post(handle_save_service))
         .route("/app", get(handle_list_services))
         .route("/app", post(handle_add_service))
