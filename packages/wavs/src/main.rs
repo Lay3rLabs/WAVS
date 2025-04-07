@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use opentelemetry::{
-    global,
-    trace::{Span, Tracer, TracerProvider as _},
-};
+use opentelemetry::{global, trace::TracerProvider as _};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
     resource::Resource,
@@ -38,11 +35,7 @@ fn setup_tracing(collector: &str, config: &Config) -> SdkTracerProvider {
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
     let subscriber = tracing_subscriber::Registry::default()
-        .with(
-            /*tracing_subscriber::EnvFilter::from_default_env()
-            .add_directive("trace".parse().unwrap()), */
-            config.tracing_env_filter().unwrap(),
-        )
+        .with(config.tracing_env_filter().unwrap())
         .with(telemetry);
 
     tracing::subscriber::set_global_default(subscriber)
@@ -58,28 +51,20 @@ async fn main() {
     let config: Config = ConfigBuilder::new(args).build().unwrap();
 
     // setup tracing
-    // if let Some(collector) = config.jaeger.as_ref() {
-    let tracer_provider = setup_tracing("http://localhost:4317", &config);
-    // } else {
-    //     tracing_subscriber::registry()
-    //         .with(
-    //             tracing_subscriber::fmt::layer()
-    //                 .without_time()
-    //                 .with_target(false),
-    //         )
-    //         .with(config.tracing_env_filter().unwrap())
-    //         .try_init()
-    //         .unwrap();
-    // }
-
-    let tracer = tracer_provider.tracer("wavs-tracer");
-    let root_span = tracing::span!(tracing::Level::INFO, "root-span");
-    let _guard = root_span.enter(); // Enter the root span
-
-    tracer.in_span("child_span_test", |cx| {
-        tracing::info!("This is a trace log inside the span");
-    });
-    tracing::info!("This is a trace log outside the span");
+    let tracer_provider = if let Some(collector) = config.jaeger.as_ref() {
+        Some(setup_tracing(collector, &config))
+    } else {
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .without_time()
+                    .with_target(false),
+            )
+            .with(config.tracing_env_filter().unwrap())
+            .try_init()
+            .unwrap();
+        None
+    };
 
     let ctx = AppContext::new();
 
@@ -87,7 +72,9 @@ async fn main() {
     let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone).unwrap());
 
     wavs::run_server(ctx, config, dispatcher);
-    tracer_provider
-        .shutdown()
-        .expect("TracerProvider should shutdown successfully")
+    if let Some(tracer) = tracer_provider {
+        tracer
+            .shutdown()
+            .expect("TracerProvider should shutdown successfully")
+    }
 }
