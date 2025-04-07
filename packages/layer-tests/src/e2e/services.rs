@@ -132,7 +132,7 @@ async fn deploy_service_simple(
     };
 
     // Create the actual trigger based on the service_kind
-    let actual_trigger = match service_kind {
+    let trigger = match service_kind {
         AnyService::Eth(EthService::BlockInterval) => {
             let chain_name = trigger_chain.as_ref().unwrap().clone();
             Trigger::BlockInterval {
@@ -246,7 +246,7 @@ async fn deploy_service_simple(
     };
 
     // Create the actual submit
-    let actual_submit = if let Some(chain) = &submit_chain {
+    let submit = if let Some(chain) = &submit_chain {
         let client = clients
             .cli_ctx
             .new_eth_client(chain, bump_client_count(), true)
@@ -283,9 +283,9 @@ async fn deploy_service_simple(
 
     // Create Workflow
     let workflow = Workflow {
-        trigger: actual_trigger,
+        trigger,
         component: component_id.clone(),
-        submit: actual_submit,
+        submit,
         fuel_limit: None,
         aggregator: None,
     };
