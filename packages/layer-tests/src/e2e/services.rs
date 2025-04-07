@@ -61,9 +61,9 @@ impl Services {
                 .iter()
                 .chain(chain_names.eth_aggregator.iter())
             {
-                let eth_client = clients.cli_ctx.get_eth_client(chain).unwrap();
+                let client = clients.get_eth_client(chain).await;
 
-                let service_manager = SimpleServiceManager::deploy(eth_client.provider.clone())
+                let service_manager = SimpleServiceManager::deploy(client.provider.clone())
                     .await
                     .unwrap();
 
@@ -202,13 +202,12 @@ async fn deploy_service_simple(
     let trigger_address = match trigger {
         CliTriggerKind::EthContractEvent => {
             let client = clients
-                .cli_ctx
                 .get_eth_client(trigger_chain.as_ref().unwrap())
-                .unwrap();
+                .await;
 
             tracing::info!("Deploying new eth trigger contract");
             Some(
-                SimpleTrigger::deploy(client.provider)
+                SimpleTrigger::deploy(client.provider.clone())
                     .await
                     .unwrap()
                     .address()
@@ -269,7 +268,8 @@ async fn deploy_service_simple(
     let submit_address = match submit {
         CliSubmitKind::EthServiceHandler => {
             let submit_chain = submit_chain.as_ref().unwrap();
-            let client = clients.cli_ctx.get_eth_client(submit_chain).unwrap();
+
+            let client = clients.get_eth_client(submit_chain).await;
             let service_manager_address = *eth_service_managers.get(submit_chain).unwrap();
 
             tracing::info!("Deploying new eth submit contract");
@@ -408,10 +408,10 @@ async fn deploy_service_raw(
 
 async fn deploy_trigger_raw(clients: &Clients, chain_names: &ChainNames) -> Trigger {
     let chain_name = chain_names.eth[0].clone();
-    let eth_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
+    let client = clients.get_eth_client(&chain_name).await;
     let event_hash = *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
 
-    let address = SimpleEthTriggerClient::deploy(eth_client.provider.clone())
+    let address = SimpleEthTriggerClient::deploy(client.provider.clone())
         .await
         .unwrap();
 
@@ -428,11 +428,11 @@ async fn deploy_submit_raw(
     eth_service_managers: &BTreeMap<ChainName, alloy::primitives::Address>,
 ) -> Submit {
     let chain_name = chain_names.eth[0].clone();
-    let eth_client = clients.cli_ctx.get_eth_client(&chain_name).unwrap().clone();
+    let client = clients.get_eth_client(&chain_name).await;
 
     let service_manager_address = *eth_service_managers.get(&chain_name).unwrap();
 
-    let simple_submit = SimpleSubmit::deploy(eth_client.provider.clone(), service_manager_address)
+    let simple_submit = SimpleSubmit::deploy(client.provider.clone(), service_manager_address)
         .await
         .unwrap();
 

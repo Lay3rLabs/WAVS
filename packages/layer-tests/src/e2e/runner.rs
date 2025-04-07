@@ -88,7 +88,7 @@ async fn test_service(
             let is_final = task_number == n_tasks;
 
             let (trigger_id, signed_data) = add_task(
-                &clients.cli_ctx,
+                clients,
                 service_id.clone(),
                 Some(workflow_id.to_string()),
                 get_input_for_service(name, &service, configs, workflow_index),
@@ -135,7 +135,7 @@ async fn test_service(
                     };
 
                     let signed_data = wait_for_task_to_land(
-                        &clients.cli_ctx,
+                        clients,
                         &chain_name,
                         address, // this is a different address than the original service submission
                         trigger_id,

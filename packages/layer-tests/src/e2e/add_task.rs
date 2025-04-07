@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use alloy::providers::ext::AnvilApi;
 use anyhow::{bail, Context, Result};
-use wavs_cli::context::CliContext;
 use wavs_types::{
     ChainName, Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID,
 };
@@ -12,8 +11,10 @@ use crate::{
     example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient, TriggerId},
 };
 
+use super::clients::Clients;
+
 pub async fn add_task(
-    ctx: &CliContext,
+    clients: &Clients,
     service_id: String,
     workflow_id: Option<String>,
     input: Option<Vec<u8>>,
@@ -25,7 +26,7 @@ pub async fn add_task(
         None => WorkflowID::default(),
     };
 
-    let deployment = ctx.deployment.lock().unwrap().clone();
+    let deployment = clients.cli_ctx.deployment.lock().unwrap().clone();
 
     let service = deployment
         .services
@@ -49,7 +50,8 @@ pub async fn add_task(
             address,
             event_hash: _,
         } => {
-            let client = SimpleEthTriggerClient::new(ctx.get_eth_client(&chain_name)?, address);
+            let eth_client = clients.get_eth_client(&chain_name).await;
+            let client = SimpleEthTriggerClient::new(eth_client, address);
             (
                 false,
                 client
@@ -62,8 +64,10 @@ pub async fn add_task(
             address,
             event_type: _,
         } => {
-            let client =
-                SimpleCosmosTriggerClient::new(ctx.get_cosmos_client(&chain_name)?, address);
+            let client = SimpleCosmosTriggerClient::new(
+                clients.cli_ctx.get_cosmos_client(&chain_name)?,
+                address,
+            );
             let trigger_id = client
                 .add_trigger(input.expect("on-chain triggers require input data"))
                 .await?;
@@ -103,7 +107,7 @@ pub async fn add_task(
                 trigger_id,
                 Some(
                     wait_for_task_to_land(
-                        ctx,
+                        clients,
                         &chain_name,
                         address,
                         trigger_id,
@@ -131,7 +135,7 @@ pub async fn add_task(
                 trigger_id,
                 Some(
                     wait_for_task_to_land(
-                        ctx,
+                        clients,
                         service.manager.chain_name(),
                         service.manager.eth_address_unchecked(),
                         trigger_id,
@@ -154,17 +158,17 @@ pub struct SignedData {
 }
 
 pub async fn wait_for_task_to_land(
-    ctx: &CliContext,
+    clients: &Clients,
     chain_name: &ChainName,
     address: alloy::primitives::Address,
     trigger_id: TriggerId,
     result_timeout: Duration,
     is_trigger_time_based: bool,
 ) -> Result<SignedData> {
-    let client = ctx.get_eth_client(chain_name)?;
-    let provider = client.provider.clone();
+    let eth_client = clients.get_eth_client(chain_name).await;
+    let provider = eth_client.provider.clone();
 
-    let submit_client = SimpleEthSubmitClient::new(client, address);
+    let submit_client = SimpleEthSubmitClient::new(eth_client, address);
 
     tokio::time::timeout(result_timeout, async move {
         loop {

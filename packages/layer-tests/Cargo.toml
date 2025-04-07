@@ -32,4 +32,5 @@ futures = { workspace = true }
 cosmwasm-std = { workspace = true }
 alloy = { workspace = true }
 uuid = {workspace = true}
+deadpool = {workspace = true}
 derive-enum-all-values = "=0.1.0"
