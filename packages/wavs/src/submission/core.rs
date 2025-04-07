@@ -19,7 +19,7 @@ use utils::{
 };
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainName, Envelope, EthereumContractSubmission, Packet, PacketRoute, ServiceID, SignerAddress,
+    ChainName, Envelope, EthereumContractSubmission, Packet, PacketRoute, ServiceID,
     SigningKeyResponse, Submit,
 };
 
