@@ -45,6 +45,8 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
     let envelope = packet.envelope.clone();
     let block_height = packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
     let route = packet.route.clone();
+    let mut total_weight = U256::ZERO;
+    let mut threshold = U256::ZERO;
 
     // TODO - query operator set from ServiceManager contract
     // it may be some struct, using a Vec as a placeholder for now
@@ -68,6 +70,26 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             let service_manager =
                 SimpleServiceManager::new(service.manager.eth_address_unchecked(), client.provider);
             let weight = service_manager.getOperatorWeight(signer).call().await?._0;
+            total_weight = weight;
+
+            // Sum up weights
+            for packet in queue.iter() {
+                let weight = service_manager
+                    .getOperatorWeight(packet.signer)
+                    .call()
+                    .await?
+                    ._0;
+                total_weight = weight
+                    .checked_add(total_weight)
+                    .ok_or(anyhow!("Total weight calculation overflowed"))?;
+            }
+
+            // Get the threshold
+            threshold = service_manager
+                .getLastCheckpointThresholdWeight()
+                .call()
+                .await?
+                ._0;
 
             validate_packet(packet, &queue, signer, weight)?
         }
@@ -82,7 +104,7 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
     // we need to calculate the power of the signers so far, and see if it meets the quorum power
     // we don't care about count, we care about the power of the signers
     // right now this is just hardcoded for demo purposes
-    if count >= 3 {
+    if total_weight >= threshold {
         let Aggregator::Ethereum(EthereumContractSubmission {
             chain_name,
             address,

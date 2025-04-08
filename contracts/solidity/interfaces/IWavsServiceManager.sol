@@ -35,4 +35,9 @@ interface IWavsServiceManager {
     function getOperatorWeight(
         address operator
     ) external view returns (uint256);
+
+    /**
+     * @return The threshold weight
+     */
+    function getLastCheckpointThresholdWeight() external view returns (uint256);
 }
