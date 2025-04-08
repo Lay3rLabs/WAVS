@@ -45,8 +45,8 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
     let envelope = packet.envelope.clone();
     let block_height = packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
     let route = packet.route.clone();
-    let mut total_weight = U256::ZERO;
-    let mut threshold = U256::ZERO;
+    let mut total_weight;
+    let threshold;
 
     // TODO - query operator set from ServiceManager contract
     // it may be some struct, using a Vec as a placeholder for now
