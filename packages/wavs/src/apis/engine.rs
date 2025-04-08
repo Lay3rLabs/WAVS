@@ -4,8 +4,8 @@ use thiserror::Error;
 use utils::storage::CAStorageError;
 
 use wavs_types::{
-    ComponentID, ComponentSource, Digest, Permissions, ServiceConfig, ServiceID, TriggerAction,
-    WasmResponse, WorkflowID,
+    ComponentSource, Digest, Permissions, ServiceConfig, ServiceID, TriggerAction, WasmResponse,
+    WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -86,9 +86,6 @@ pub enum EngineError {
 
     #[error("Unknown Workflow {0} / {1}")]
     UnknownWorkflow(ServiceID, WorkflowID),
-
-    #[error("Unknown Component {0}")]
-    UnknownComponent(ComponentID),
 
     #[error("No wasm found for digest {0}")]
     UnknownDigest(Digest),

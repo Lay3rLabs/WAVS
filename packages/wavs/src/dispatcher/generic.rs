@@ -160,10 +160,10 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
             return Err(DispatcherError::ServiceRegistered(service.id));
         }
 
-        for component in service.components.values() {
+        for workflow in service.workflows.values() {
             self.engine
                 .engine()
-                .store_component_from_source(&component.source)
+                .store_component_from_source(&workflow.component.source)
                 .await?;
         }
 

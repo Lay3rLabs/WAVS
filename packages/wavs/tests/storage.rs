@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use utils::storage::db::{RedbStorage, Table, JSON};
 use wavs::{test_utils::address::rand_address_eth, triggers::mock::mock_eth_event_trigger};
 use wavs_types::{
-    Component, ComponentID, ComponentSource, Digest, Service, ServiceConfig, ServiceID,
-    ServiceManager, ServiceStatus, Submit, Workflow, WorkflowID,
+    Component, ComponentSource, Digest, Service, ServiceConfig, ServiceID, ServiceManager,
+    ServiceStatus, Submit, Workflow, WorkflowID,
 };
 
 use redb::ReadableTable;
@@ -64,26 +64,13 @@ fn db_service_store() {
 
     let service_id = ServiceID::new("service-id-1").unwrap();
 
-    let components: BTreeMap<ComponentID, Component> = [
-        (
-            ComponentID::new("component-id-1").unwrap(),
-            Component::new(ComponentSource::Digest(Digest::new(b"digest-1"))),
-        ),
-        (
-            ComponentID::new("component-id-2").unwrap(),
-            Component::new(ComponentSource::Digest(Digest::new(b"digest-2"))),
-        ),
-    ]
-    .into();
-
     let workflows: BTreeMap<WorkflowID, Workflow> = [
         (
             WorkflowID::new("workflow-id-1").unwrap(),
             Workflow {
                 trigger: mock_eth_event_trigger(),
-                component: ComponentID::new("component-id-1").unwrap(),
+                component: Component::new(ComponentSource::Digest(Digest::new(b"digest-1"))),
                 submit: Submit::None,
-                fuel_limit: None,
                 aggregator: None,
             },
         ),
@@ -91,9 +78,8 @@ fn db_service_store() {
             WorkflowID::new("workflow-id-2").unwrap(),
             Workflow {
                 trigger: mock_eth_event_trigger(),
-                component: ComponentID::new("component-id-2").unwrap(),
+                component: Component::new(ComponentSource::Digest(Digest::new(b"digest-2"))),
                 submit: Submit::None,
-                fuel_limit: None,
                 aggregator: None,
             },
         ),
@@ -103,7 +89,6 @@ fn db_service_store() {
     let service = Service {
         id: service_id.clone(),
         name: service_id.to_string(),
-        components,
         workflows,
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
