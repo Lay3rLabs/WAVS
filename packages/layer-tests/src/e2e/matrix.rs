@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use derive_enum_all_values::AllValues;
 
-use super::digests::DigestName;
+use super::components::ComponentName;
 
 #[derive(Clone, Debug, Default)]
 pub struct TestMatrix {
@@ -91,47 +91,47 @@ impl TestMatrix {
     }
 }
 
-impl From<EthService> for Vec<DigestName> {
+impl From<EthService> for Vec<ComponentName> {
     fn from(service: EthService) -> Self {
         match service {
-            EthService::ChainTriggerLookup => vec![DigestName::ChainTriggerLookup],
-            EthService::CosmosQuery => vec![DigestName::CosmosQuery],
-            EthService::EchoData => vec![DigestName::EchoData],
-            EthService::Permissions => vec![DigestName::Permissions],
-            EthService::Square => vec![DigestName::Square],
-            EthService::EchoDataSecondaryChain => vec![DigestName::EchoData],
-            EthService::EchoDataAggregator => vec![DigestName::EchoData],
-            EthService::MultiWorkflow => vec![DigestName::Square, DigestName::EchoData],
-            EthService::MultiTrigger => vec![DigestName::EchoData],
-            EthService::BlockInterval => vec![DigestName::EchoBlockInterval],
-            EthService::CronInterval => vec![DigestName::EchoCronInterval],
+            EthService::ChainTriggerLookup => vec![ComponentName::ChainTriggerLookup],
+            EthService::CosmosQuery => vec![ComponentName::CosmosQuery],
+            EthService::EchoData => vec![ComponentName::EchoData],
+            EthService::Permissions => vec![ComponentName::Permissions],
+            EthService::Square => vec![ComponentName::Square],
+            EthService::EchoDataSecondaryChain => vec![ComponentName::EchoData],
+            EthService::EchoDataAggregator => vec![ComponentName::EchoData],
+            EthService::MultiWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
+            EthService::MultiTrigger => vec![ComponentName::EchoData],
+            EthService::BlockInterval => vec![ComponentName::EchoBlockInterval],
+            EthService::CronInterval => vec![ComponentName::EchoCronInterval],
         }
     }
 }
 
-impl From<CosmosService> for Vec<DigestName> {
+impl From<CosmosService> for Vec<ComponentName> {
     fn from(service: CosmosService) -> Self {
         vec![match service {
-            CosmosService::ChainTriggerLookup => DigestName::ChainTriggerLookup,
-            CosmosService::CosmosQuery => DigestName::CosmosQuery,
-            CosmosService::EchoData => DigestName::EchoData,
-            CosmosService::Permissions => DigestName::Permissions,
-            CosmosService::Square => DigestName::Square,
-            CosmosService::BlockInterval => DigestName::EchoBlockInterval,
-            CosmosService::CronInterval => DigestName::EchoCronInterval,
+            CosmosService::ChainTriggerLookup => ComponentName::ChainTriggerLookup,
+            CosmosService::CosmosQuery => ComponentName::CosmosQuery,
+            CosmosService::EchoData => ComponentName::EchoData,
+            CosmosService::Permissions => ComponentName::Permissions,
+            CosmosService::Square => ComponentName::Square,
+            CosmosService::BlockInterval => ComponentName::EchoBlockInterval,
+            CosmosService::CronInterval => ComponentName::EchoCronInterval,
         }]
     }
 }
 
-impl From<CrossChainService> for Vec<DigestName> {
+impl From<CrossChainService> for Vec<ComponentName> {
     fn from(service: CrossChainService) -> Self {
         match service {
-            CrossChainService::CosmosToEthEchoData => vec![DigestName::EchoData],
+            CrossChainService::CosmosToEthEchoData => vec![ComponentName::EchoData],
         }
     }
 }
 
-impl From<AnyService> for Vec<DigestName> {
+impl From<AnyService> for Vec<ComponentName> {
     fn from(service: AnyService) -> Self {
         match service {
             AnyService::Eth(service) => service.into(),
