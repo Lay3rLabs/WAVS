@@ -30,10 +30,9 @@ interface IWavsServiceManager {
     function setServiceURI(string calldata _serviceURI) external;
 
     /**
-     * @return The operator weight at block height
+     * @return The operator weight
      */
-    function getOperatorWeightAtBlock(
-        address operator,
-        uint32 blockNumber
+    function getOperatorWeight(
+        address operator
     ) external view returns (uint256);
 }
