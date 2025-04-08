@@ -19,7 +19,7 @@ use alloy::{primitives::Address, sol_types::SolEvent};
 use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource,
+    AllowedHostPermission, ByteArray, ChainName, Component, 
     EthereumContractSubmission, Permissions, Service, ServiceConfig, ServiceID, ServiceManager,
     ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
@@ -280,7 +280,7 @@ async fn deploy_service_simple(
     // Create Component
     let workflow_id = WorkflowID::new("default").unwrap();
 
-    let mut component = Component::new(ComponentSource::Digest(digest));
+    let mut component = Component::new(component_source);
     component.permissions = Permissions {
         allowed_http_hosts: AllowedHostPermission::All,
         file_system: true,
@@ -349,33 +349,31 @@ async fn deploy_service_raw(
     let trigger1 = deploy_trigger(clients, chain_names).await;
     let trigger2 = deploy_trigger(clients, chain_names).await;
 
-    let component_id1 = ComponentID::new("component1").unwrap();
-    let component_id2 = ComponentID::new("component2").unwrap();
-
     let component_names = Vec::<ComponentName>::from(service_kind);
 
-    let component1 = Component {
-        source: component_sources
+    let mut component1 = Component::new(
+        component_sources
             .lookup
             .get(&component_names[0])
             .unwrap()
-            .clone(),
-        permissions: Permissions {
-            allowed_http_hosts: AllowedHostPermission::All,
-            file_system: true,
-        },
+            .clone()
+    );
+
+    component1.permissions = Permissions {
+        allowed_http_hosts: AllowedHostPermission::All,
+        file_system: true,
     };
 
-    let component2 = Component {
-        source: component_sources
-            .lookup
-            .get(&component_names[1])
-            .unwrap()
-            .clone(),
-        permissions: Permissions {
-            allowed_http_hosts: AllowedHostPermission::All,
-            file_system: true,
-        },
+    let mut component2 = Component::new(component_sources
+        .lookup
+        .get(&component_names[1])
+        .unwrap()
+        .clone()
+    );
+    
+    component2.permissions = Permissions {
+        allowed_http_hosts: AllowedHostPermission::All,
+        file_system: true,
     };
 
     let chain_name = chain_names.eth[0].clone();
