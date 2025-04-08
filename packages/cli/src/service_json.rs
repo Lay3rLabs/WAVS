@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Component, EthereumContractSubmission, ServiceConfig, ServiceID, ServiceStatus, Submit,
-    Timestamp, Trigger, WorkflowID,
+    Component, EthereumContractSubmission, ServiceConfig, ServiceID, ServiceManager, ServiceStatus,
+    Submit, Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -14,6 +14,7 @@ pub struct ServiceJson {
     pub workflows: BTreeMap<WorkflowID, WorkflowJson>,
     pub status: ServiceStatus,
     pub config: ServiceConfig,
+    pub manager: ServiceManagerJson,
 }
 
 impl ServiceJson {
@@ -35,7 +36,7 @@ impl ServiceJson {
 
             // Check if trigger is unset
             match &workflow.trigger {
-                TriggerJson::Json(Json::Unset) => {
+                TriggerJson::Json(_) => {
                     errors.push(format!("Workflow '{}' has an unset trigger", workflow_id));
                 }
                 TriggerJson::Trigger(trigger) => {
@@ -99,7 +100,7 @@ impl ServiceJson {
 
             // Check if submit is unset
             match &workflow.submit {
-                SubmitJson::Json(Json::Unset) => {
+                SubmitJson::Json(_) => {
                     errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
                 }
                 SubmitJson::Submit(submit) => {
@@ -134,8 +135,13 @@ impl ServiceJson {
                         Submit::None => {
                             // None submit type is always valid
                         }
-                        Submit::Aggregator { url: _ } => {
-                            // TODO - validate aggregator url ?
+                        Submit::Aggregator { url } => {
+                            if reqwest::Url::parse(url).is_err() {
+                                errors.push(format!(
+                                    "Workflow '{}' has an invalid URL: {}",
+                                    workflow_id, url
+                                ))
+                            }
                         }
                     }
                 }
@@ -150,6 +156,10 @@ impl ServiceJson {
                     ));
                 }
             }
+        }
+
+        if matches!(&self.manager, ServiceManagerJson::Json(_)) {
+            errors.push("Service has an unset service manager".to_owned());
         }
 
         errors
@@ -209,6 +219,19 @@ pub enum SubmitJson {
 impl Default for SubmitJson {
     fn default() -> Self {
         SubmitJson::Json(Json::Unset)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", untagged)]
+pub enum ServiceManagerJson {
+    Manager(ServiceManager),
+    Json(Json),
+}
+
+impl Default for ServiceManagerJson {
+    fn default() -> Self {
+        ServiceManagerJson::Json(Json::Unset)
     }
 }
 

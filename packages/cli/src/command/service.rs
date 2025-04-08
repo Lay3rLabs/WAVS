@@ -15,14 +15,19 @@ use std::{
 use uuid::Uuid;
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
-    EthereumContractSubmission, Permissions, ServiceConfig, ServiceID, ServiceStatus, Submit,
-    Trigger, WorkflowID,
+    EthereumContractSubmission, Permissions, ServiceConfig, ServiceID, ServiceManager,
+    ServiceStatus, Submit, Trigger, WorkflowID,
 };
 
 use crate::{
-    args::{ComponentCommand, ServiceCommand, SubmitCommand, TriggerCommand, WorkflowCommand},
+    args::{
+        ComponentCommand, ManagerCommand, ServiceCommand, SubmitCommand, TriggerCommand,
+        WorkflowCommand,
+    },
     context::CliContext,
-    service_json::{ComponentJson, ServiceJson, SubmitJson, TriggerJson, WorkflowJson},
+    service_json::{
+        ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson, TriggerJson, WorkflowJson,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -108,6 +113,15 @@ pub async fn handle_service_command(
                 max_gas,
             } => {
                 let result = set_ethereum_submit(&file, workflow_id, address, chain_name, max_gas)?;
+                display_result(ctx, result, &file, json)?;
+            }
+        },
+        ServiceCommand::Manager { command } => match command {
+            ManagerCommand::SetEthereum {
+                chain_name,
+                address,
+            } => {
+                let result = set_ethereum_manager(&file, address, chain_name)?;
                 display_result(ctx, result, &file, json)?;
             }
         },
@@ -346,6 +360,26 @@ impl std::fmt::Display for WorkflowSubmitResult {
     }
 }
 
+/// Result of setting the Ethereum manager
+#[derive(Debug, Clone)]
+pub struct EthereumManagerResult {
+    /// The ethereum chain name
+    pub chain_name: ChainName,
+    /// The ethereum address
+    pub address: alloy::primitives::Address,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for EthereumManagerResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Ethereum manager set successfully!")?;
+        writeln!(f, "  Address:      {}", self.address)?;
+        writeln!(f, "  Chain:        {}", self.chain_name)?;
+        writeln!(f, "  Updated:      {}", self.file_path.display())
+    }
+}
+
 /// Result of service validation
 #[derive(Debug, Clone)]
 pub struct ServiceValidationResult {
@@ -461,6 +495,7 @@ pub fn init_service(
         workflows: BTreeMap::new(),
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
+        manager: ServiceManagerJson::default(),
     };
 
     // Convert service to JSON
@@ -774,6 +809,32 @@ pub fn set_ethereum_submit(
     })
 }
 
+/// Set an Ethereum manager for the service
+pub fn set_ethereum_manager(
+    file_path: &Path,
+    address_str: String,
+    chain_name: ChainName,
+) -> Result<EthereumManagerResult> {
+    // Parse the Ethereum address
+    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
+
+    modify_service_file(file_path, |mut service| {
+        service.manager = ServiceManagerJson::Manager(ServiceManager::Ethereum {
+            chain_name: chain_name.clone(),
+            address,
+        });
+
+        Ok((
+            service,
+            EthereumManagerResult {
+                chain_name,
+                address,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
 /// Validate a service JSON file
 pub async fn validate_service(
     file_path: &Path,
@@ -843,6 +904,19 @@ pub async fn validate_service(
             }
         }
 
+        let service_manager = if let ServiceManagerJson::Manager(service_manager) = &service.manager
+        {
+            match service_manager {
+                ServiceManager::Ethereum { chain_name, .. } => {
+                    chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
+                }
+            }
+
+            Some(service_manager)
+        } else {
+            None
+        };
+
         // Build maps of clients for chains actually used
         let mut cosmos_clients = HashMap::new();
         let mut eth_providers = HashMap::new();
@@ -869,6 +943,7 @@ pub async fn validate_service(
                 service.id.as_ref(),
                 triggers,
                 submits,
+                service_manager,
                 &eth_providers,
                 &cosmos_clients,
                 &mut errors,
@@ -977,6 +1052,7 @@ pub async fn validate_contracts_exist(
     service_id: &str,
     triggers: Vec<(&WorkflowID, &Trigger)>,
     submits: Vec<(&WorkflowID, &Submit)>,
+    service_manager: Option<&ServiceManager>,
     eth_providers: &HashMap<ChainName, RootProvider>,
     cosmos_clients: &HashMap<ChainName, CosmosQueryClient>,
     errors: &mut Vec<String>,
@@ -1105,6 +1181,42 @@ pub async fn validate_contracts_exist(
                 // TODO - anything to validate here?
             }
         }
+    }
+
+    if let Some(service_manager) = service_manager {
+        match service_manager {
+            ServiceManager::Ethereum {
+                chain_name,
+                address,
+            } => {
+                if let Some(provider) = eth_providers.get(chain_name) {
+                    let key = (address.to_string(), chain_name.to_string());
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        checked_eth_contracts.entry(key)
+                    {
+                        let context = format!("Service {} manager", service_id);
+                        match check_ethereum_contract_exists(address, provider, errors, &context)
+                            .await
+                        {
+                            Ok(exists) => {
+                                e.insert(exists);
+                            }
+                            Err(err) => {
+                                errors.push(format!(
+                                    "Error checking Ethereum contract for service manager: {}",
+                                    err
+                                ));
+                            }
+                        }
+                    }
+                } else {
+                    errors.push(format!(
+                        "Cannot check service manager contract - no provider configured for chain {}",
+                        chain_name
+                    ));
+                }
+            }
+        };
     }
 
     Ok(())
@@ -1960,6 +2072,7 @@ mod tests {
             workflows,
             status: ServiceStatus::Active,
             config: ServiceConfig::default(),
+            manager: ServiceManagerJson::default(),
         };
 
         // Write the service to a file

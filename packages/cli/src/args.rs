@@ -108,6 +108,11 @@ pub enum ServiceCommand {
         #[clap(subcommand)]
         command: SubmitCommand,
     },
+    /// Operations on service manager
+    Manager {
+        #[clap(subcommand)]
+        command: ManagerCommand,
+    },
     /// Validates the service JSON
     Validate {},
 }
@@ -168,6 +173,15 @@ pub enum WorkflowCommand {
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
+pub enum ManagerCommand {
+    /// Sets an ethereum service manager
+    SetEthereum {
+        chain_name: ChainName,
+        address: String,
+    },
+}
+
+#[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum TriggerCommand {
     /// Set a Cosmos contract event trigger for a workflow
     SetCosmos {
@@ -212,8 +226,6 @@ pub enum TriggerCommand {
 pub enum SubmitCommand {
     /// Set an Ethereum submit for a workflow
     SetEthereum {
-        /// The ID of the workflow to update
-        #[clap(long)]
         workflow_id: WorkflowID,
 
         /// The hexadecimal Ethereum address (e.g., "0x1234...")
