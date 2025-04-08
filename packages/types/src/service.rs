@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ByteArray, ComponentSource, Timestamp};
 
-use super::{ChainName, ComponentID, ServiceID, WorkflowID};
+use super::{ChainName, ServiceID, WorkflowID};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -16,9 +16,6 @@ pub struct Service {
 
     /// This is any utf-8 string, for human-readable display.
     pub name: String,
-
-    /// We supoort multiple components in one service with unique service-scoped IDs.
-    pub components: BTreeMap<ComponentID, Component>,
 
     /// We support multiple workflows in one service with unique service-scoped IDs.
     pub workflows: BTreeMap<WorkflowID, Workflow>,
@@ -61,41 +58,28 @@ impl Service {
         source: ComponentSource,
         submit: Submit,
         config: Option<ServiceConfig>,
+        manager: ServiceManager,
     ) -> Self {
-        let component_id = ComponentID::default();
         let workflow_id = WorkflowID::default();
-
-        let manager = ServiceManager::Ethereum {
-            chain_name: match &submit {
-                Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) => {
-                    chain_name.clone()
-                }
-                _ => panic!("ServiceManager::Ethereum requires an EthereumContractSubmission"),
-            },
-            address: alloy::primitives::Address::ZERO,
-        };
 
         let workflow = Workflow {
             trigger,
-            component: component_id,
+            component: Component {
+                source,
+                permissions: Permissions::default(),
+                fuel_limit: None,
+                max_exec_seconds: None,
+                config: vec![],
+            },
             submit,
-            fuel_limit: None,
             aggregator: None,
         };
-
-        let component = Component {
-            source,
-            permissions: Permissions::default(),
-        };
-
-        let components = BTreeMap::from([(workflow.component.clone(), component)]);
 
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
 
         Self {
             name: name.unwrap_or_else(|| id.to_string()),
             id,
-            components,
             workflows,
             status: ServiceStatus::Active,
             config: config.unwrap_or_default(),
@@ -108,9 +92,21 @@ impl Service {
 #[serde(rename_all = "snake_case")]
 pub struct Component {
     pub source: ComponentSource,
+
     // What permissions this component has.
     // These are currently not enforced, you can pass in Default::default() for now
     pub permissions: Permissions,
+
+    /// The maximum amount of compute metering to allow for a single component execution
+    /// If not supplied, will be `Workflow::DEFAULT_FUEL_LIMIT`
+    pub fuel_limit: Option<u64>,
+
+    /// The maximum amount of time to allow for a single component execution, in seconds
+    /// If not supplied, default will be `Workflow::DEFAULT_EXEC_SECONDS`
+    pub max_exec_seconds: Option<u64>,
+
+    /// Key-value pairs that are accessible in the components via host bindings.
+    pub config: Vec<(String, String)>,
 }
 
 // FIXME: happy for a better name.
@@ -118,22 +114,23 @@ pub struct Component {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct Workflow {
+    /// The trigger that fires this workflow
     pub trigger: Trigger,
-    /// A reference to which component to run with this data - for now, always "default"
-    /// FIXME: should move fuel_limit here
-    pub component: ComponentID,
+
+    /// The component to run when the trigger fires
+    pub component: Component,
+
     /// How to submit the result of the component.
     pub submit: Submit,
-    /// The maximum amount of compute metering to allow for a single component execution
-    /// If not supplied, will be `Workflow::DEFAULT_FUEL_LIMIT`
-    // FIXME: (same as above) move this into the component section
-    pub fuel_limit: Option<u64>,
 
+    /// If submit is `Submit::Aggregator`, this is
+    /// the required data for the aggregator to submit this workflow
     pub aggregator: Option<Aggregator>,
 }
 
 impl Workflow {
     pub const DEFAULT_FUEL_LIMIT: u64 = 100_000_000;
+    pub const DEFAULT_EXEC_SECONDS: u64 = 30;
 }
 
 // The TriggerManager reacts to these triggers
@@ -350,6 +347,9 @@ mod test_ext {
             Self {
                 source,
                 permissions: Default::default(),
+                fuel_limit: None,
+                max_exec_seconds: None,
+                config: vec![],
             }
         }
     }

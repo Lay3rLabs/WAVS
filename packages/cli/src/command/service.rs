@@ -14,7 +14,7 @@ use std::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource, Digest,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
     EthereumContractSubmission, Permissions, ServiceConfig, ServiceID, ServiceStatus, Submit,
     Trigger, WorkflowID,
 };
@@ -22,7 +22,7 @@ use wavs_types::{
 use crate::{
     args::{ComponentCommand, ServiceCommand, SubmitCommand, TriggerCommand, WorkflowCommand},
     context::CliContext,
-    service_json::{ServiceJson, SubmitJson, TriggerJson, WorkflowJson},
+    service_json::{ComponentJson, ServiceJson, SubmitJson, TriggerJson, WorkflowJson},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -62,12 +62,8 @@ pub async fn handle_service_command(
             }
         },
         ServiceCommand::Workflow { command } => match command {
-            WorkflowCommand::Add {
-                id,
-                component_id,
-                fuel_limit,
-            } => {
-                let result = add_workflow(&file, id, component_id, fuel_limit)?;
+            WorkflowCommand::Add { id } => {
+                let result = add_workflow(&file, id)?;
                 display_result(ctx, result, &file, json)?;
             }
             WorkflowCommand::Delete { id } => {
@@ -174,8 +170,6 @@ impl std::fmt::Display for ServiceInitResult {
 /// Result of adding a component
 #[derive(Debug, Clone)]
 pub struct ComponentAddResult {
-    /// The component id
-    pub component_id: ComponentID,
     /// The component digest
     pub digest: Digest,
     /// The file path where the updated service JSON was saved
@@ -185,7 +179,6 @@ pub struct ComponentAddResult {
 impl std::fmt::Display for ComponentAddResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Component added successfully!")?;
-        writeln!(f, "  Component ID: {}", self.component_id)?;
         writeln!(f, "  Digest:       {}", self.digest)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
     }
@@ -228,8 +221,6 @@ impl std::fmt::Display for WorkflowDeleteResult {
 /// Result of deleting a component
 #[derive(Debug, Clone)]
 pub struct ComponentDeleteResult {
-    /// The component id that was deleted
-    pub component_id: ComponentID,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -237,7 +228,6 @@ pub struct ComponentDeleteResult {
 impl std::fmt::Display for ComponentDeleteResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Component deleted successfully!")?;
-        writeln!(f, "  Component ID: {}", self.component_id)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
     }
 }
@@ -412,8 +402,6 @@ where
 /// Result of updating component permissions
 #[derive(Debug, Clone)]
 pub struct ComponentPermissionsResult {
-    /// The component id that was edited
-    pub component_id: ComponentID,
     /// The updated permissions
     pub permissions: Permissions,
     /// The file path where the updated service JSON was saved
@@ -423,7 +411,6 @@ pub struct ComponentPermissionsResult {
 impl std::fmt::Display for ComponentPermissionsResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Component permissions updated successfully!")?;
-        writeln!(f, "  Component ID: {}", self.component_id)?;
 
         // Display HTTP permissions
         match &self.permissions.allowed_http_hosts {
@@ -471,7 +458,6 @@ pub fn init_service(
     let service = ServiceJson {
         id,
         name,
-        components: BTreeMap::new(),
         workflows: BTreeMap::new(),
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
@@ -497,32 +483,27 @@ pub fn init_service(
     })
 }
 
-/// Add a component to a service
+/// Set the component on a workflow
 pub fn add_component(
     file_path: &Path,
-    id: Option<ComponentID>,
+    workflow_id: WorkflowID,
     digest: Digest,
 ) -> Result<ComponentAddResult> {
     modify_service_file(file_path, |mut service| {
-        // Generate component ID if not provided
-        let component_id = match id {
-            Some(id) => id,
-            None => ComponentID::new(Uuid::now_v7().as_hyphenated().to_string())?,
-        };
-
         // Create a new component entry
-        let component = Component {
-            source: ComponentSource::Digest(digest.clone()),
-            permissions: Permissions::default(),
-        };
+        let component = Component::new(ComponentSource::Digest(digest.clone()));
+        let component = ComponentJson::new(component);
 
         // Add the component to the service
-        service.components.insert(component_id.clone(), component);
+        service
+            .workflows
+            .get_mut(&workflow_id)
+            .context(format!("No workflow id {workflow_id}"))?
+            .component = component;
 
         Ok((
             service,
             ComponentAddResult {
-                component_id,
                 digest,
                 file_path: file_path.to_path_buf(),
             },
@@ -533,24 +514,18 @@ pub fn add_component(
 /// Delete a component from a service
 pub fn delete_component(
     file_path: &Path,
-    component_id: ComponentID,
+    workflow_id: WorkflowID,
 ) -> Result<ComponentDeleteResult> {
     modify_service_file(file_path, |mut service| {
-        // Check if the component exists
-        if !service.components.contains_key(&component_id) {
-            return Err(anyhow::anyhow!(
-                "Component with ID '{}' not found in service",
-                component_id
-            ));
-        }
-
-        // Remove the component
-        service.components.remove(&component_id);
+        service
+            .workflows
+            .get_mut(&workflow_id)
+            .context(format!("No workflow id {workflow_id}"))?
+            .component = ComponentJson::new_unset();
 
         Ok((
             service,
             ComponentDeleteResult {
-                component_id,
                 file_path: file_path.to_path_buf(),
             },
         ))
@@ -558,37 +533,24 @@ pub fn delete_component(
 }
 
 /// Add a workflow to a service
-pub fn add_workflow(
-    file_path: &Path,
-    id: Option<WorkflowID>,
-    component_id: ComponentID,
-    fuel_limit: Option<u64>,
-) -> Result<WorkflowAddResult> {
+pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<WorkflowAddResult> {
     modify_service_file(file_path, |mut service| {
-        // Check if the component exists
-        if !service.components.contains_key(&component_id) {
-            return Err(anyhow::anyhow!(
-                "Component with ID '{}' not found in service",
-                component_id
-            ));
-        }
-
         // Generate workflow ID if not provided
         let workflow_id = match id {
             Some(id) => id,
             None => WorkflowID::new(Uuid::now_v7().as_hyphenated().to_string())?,
         };
 
-        // Create default trigger and submit
+        // Create default trigger, component, and submit
         let trigger = TriggerJson::default();
+        let component = ComponentJson::default();
         let submit = SubmitJson::default();
 
         // Create a new workflow entry
         let workflow = WorkflowJson {
             trigger,
-            component: component_id,
+            component,
             submit,
-            fuel_limit,
         };
 
         // Add the workflow to the service
@@ -720,15 +682,23 @@ pub fn set_ethereum_trigger(
 /// Update component permissions
 pub fn update_component_permissions(
     file_path: &Path,
-    component_id: ComponentID,
+    workflow_id: WorkflowID,
     http_hosts: Option<Vec<String>>,
     file_system: Option<bool>,
 ) -> Result<ComponentPermissionsResult> {
     modify_service_file(file_path, |mut service| {
         // Check if the component exists
-        let component = service.components.get_mut(&component_id).ok_or_else(|| {
-            anyhow::anyhow!("Component with ID '{}' not found in service", component_id)
-        })?;
+        let component = service
+            .workflows
+            .get_mut(&workflow_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+            })?
+            .component
+            .as_component_mut()
+            .ok_or_else(|| {
+                anyhow::anyhow!("Workflow with ID '{}' has unset component", workflow_id)
+            })?;
 
         // Update HTTP permissions if specified
         if let Some(mut hosts) = http_hosts {
@@ -762,7 +732,6 @@ pub fn update_component_permissions(
         Ok((
             service,
             ComponentPermissionsResult {
-                component_id,
                 permissions: updated_permissions,
                 file_path: file_path.to_path_buf(),
             },
@@ -1290,46 +1259,48 @@ mod tests {
         assert_eq!(init_result.service.name, "Test Service");
         assert_eq!(init_result.file_path, file_path);
 
+        // Need to have a valid workflow before we can work on its component
+        let workflow_id = WorkflowID::new("workflow-1").unwrap();
+        add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
+
         // Test adding first component using Digest source
-        let component_id = ComponentID::new("component-123").unwrap();
         let add_result =
-            add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
+            add_component(&file_path, workflow_id.clone(), test_digest.clone()).unwrap();
 
         // Verify add result
-        assert_eq!(add_result.component_id, component_id);
         assert_eq!(add_result.digest, test_digest);
         assert_eq!(add_result.file_path, file_path);
 
         // Verify the file was modified by adding the component
         let service_after_add: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        assert!(service_after_add.components.contains_key(&component_id));
-        assert_eq!(service_after_add.components.len(), 1);
+        assert!(service_after_add
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .is_set());
 
         // Test adding second component with Digest source
-        let second_component_id = ComponentID::new("component-456").unwrap();
-        let second_add_result = add_component(
-            &file_path,
-            Some(second_component_id.clone()),
-            test_digest.clone(),
-        )
-        .unwrap();
+        let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
+        add_workflow(&file_path, Some(workflow_id_2.clone())).unwrap();
+
+        let second_add_result =
+            add_component(&file_path, workflow_id_2.clone(), test_digest.clone()).unwrap();
 
         // Verify second add result
-        assert_eq!(second_add_result.component_id, second_component_id);
         assert_eq!(second_add_result.digest, test_digest);
 
         // Test updating permissions - allow all HTTP hosts
         let permissions_result = update_component_permissions(
             &file_path,
-            component_id.clone(),
+            workflow_id.clone(),
             Some(vec!["*".to_string()]),
             Some(true),
         )
         .unwrap();
 
         // Verify permissions result
-        assert_eq!(permissions_result.component_id, component_id);
         assert!(permissions_result.permissions.file_system);
         assert!(matches!(
             permissions_result.permissions.allowed_http_hosts,
@@ -1340,8 +1311,11 @@ mod tests {
         let service_after_permissions: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let updated_component = service_after_permissions
-            .components
-            .get(&component_id)
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .as_component()
             .unwrap();
         assert!(updated_component.permissions.file_system);
         assert!(matches!(
@@ -1353,14 +1327,13 @@ mod tests {
         let specific_hosts = vec!["example.com".to_string(), "api.example.com".to_string()];
         let specific_hosts_result = update_component_permissions(
             &file_path,
-            second_component_id.clone(),
+            workflow_id_2.clone(),
             Some(specific_hosts.clone()),
             None,
         )
         .unwrap();
 
         // Verify specific hosts result
-        assert_eq!(specific_hosts_result.component_id, second_component_id);
         if let AllowedHostPermission::Only(hosts) =
             &specific_hosts_result.permissions.allowed_http_hosts
         {
@@ -1375,9 +1348,13 @@ mod tests {
         let service_after_specific: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let specific_component = service_after_specific
-            .components
-            .get(&second_component_id)
+            .workflows
+            .get(&workflow_id_2)
+            .unwrap()
+            .component
+            .as_component()
             .unwrap();
+
         if let AllowedHostPermission::Only(hosts) =
             &specific_component.permissions.allowed_http_hosts
         {
@@ -1390,11 +1367,10 @@ mod tests {
 
         // Test updating to no HTTP hosts
         let no_hosts_result =
-            update_component_permissions(&file_path, component_id.clone(), Some(vec![]), None)
+            update_component_permissions(&file_path, workflow_id.clone(), Some(vec![]), None)
                 .unwrap();
 
         // Verify no hosts result
-        assert_eq!(no_hosts_result.component_id, component_id);
         assert!(matches!(
             no_hosts_result.permissions.allowed_http_hosts,
             AllowedHostPermission::None
@@ -1404,16 +1380,20 @@ mod tests {
         let service_after_no_hosts: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         let no_hosts_component = service_after_no_hosts
-            .components
-            .get(&component_id)
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .as_component()
             .unwrap();
+
         assert!(matches!(
             no_hosts_component.permissions.allowed_http_hosts,
             AllowedHostPermission::None
         ));
 
         // Test error handling for permissions update with non-existent component
-        let non_existent_id = ComponentID::new("does-not-exist").unwrap();
+        let non_existent_id = WorkflowID::new("does-not-exist").unwrap();
         let error_permissions = update_component_permissions(
             &file_path,
             non_existent_id.clone(),
@@ -1428,38 +1408,53 @@ mod tests {
         assert!(permissions_error.contains("not found"));
 
         // Test adding third component with Digest source
-        let third_component_id = ComponentID::new("component-789").unwrap();
-        let third_add_result = add_component(
-            &file_path,
-            Some(third_component_id.clone()),
-            test_digest.clone(),
-        )
-        .unwrap();
+        // Need to have a valid workflow before we can work on its component
+        let workflow_id_3 = WorkflowID::new("workflow-3").unwrap();
+        add_workflow(&file_path, Some(workflow_id_3.clone())).unwrap();
+
+        let third_add_result =
+            add_component(&file_path, workflow_id_3.clone(), test_digest.clone()).unwrap();
 
         // Verify third add result
-        assert_eq!(third_add_result.component_id, third_component_id);
         assert_eq!(third_add_result.digest, test_digest);
 
         // Verify the third component was added
         let service_after_third_add: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(service_after_third_add
-            .components
-            .contains_key(&third_component_id));
-        assert_eq!(service_after_third_add.components.len(), 3); // All three components
+            .workflows
+            .get(&workflow_id_3)
+            .unwrap()
+            .component
+            .is_set());
 
         // Test deleting a component
-        let delete_result = delete_component(&file_path, component_id.clone()).unwrap();
+        let delete_result = delete_component(&file_path, workflow_id.clone()).unwrap();
 
         // Verify delete result
-        assert_eq!(delete_result.component_id, component_id);
         assert_eq!(delete_result.file_path, file_path);
 
         // Verify the file was modified by deleting the component
         let service_after_delete: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        assert!(!service_after_delete.components.contains_key(&component_id));
-        assert_eq!(service_after_delete.components.len(), 2); // One removed, two remaining
+        assert!(service_after_delete
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .is_unset());
+        assert!(service_after_delete
+            .workflows
+            .get(&workflow_id_2)
+            .unwrap()
+            .component
+            .is_set());
+        assert!(service_after_delete
+            .workflows
+            .get(&workflow_id_3)
+            .unwrap()
+            .component
+            .is_set());
 
         // Test error handling for non-existent component
         let error_result = delete_component(&file_path, non_existent_id.clone());
@@ -1468,7 +1463,8 @@ mod tests {
         assert!(error_result.is_err());
         let error_msg = error_result.unwrap_err().to_string();
         assert!(error_msg.contains(&non_existent_id.to_string()));
-        assert!(error_msg.contains("not found"));
+        println!("{}", error_msg);
+        assert!(error_msg.contains("No workflow id"));
     }
 
     #[test]
@@ -1476,11 +1472,6 @@ mod tests {
         // Create a temporary directory and file
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("workflow_operations_test.json");
-
-        // Create a test digest
-        let test_digest =
-            Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-                .unwrap();
 
         // Initialize a service
         let service_id = ServiceID::new("test-service-id").unwrap();
@@ -1491,19 +1482,9 @@ mod tests {
         )
         .unwrap();
 
-        // Add a component to use in workflows
-        let component_id = ComponentID::new("component-123").unwrap();
-        add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
-
         // Test adding a workflow with specific ID
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
-        let add_result = add_workflow(
-            &file_path,
-            Some(workflow_id.clone()),
-            component_id.clone(),
-            Some(1000),
-        )
-        .unwrap();
+        let add_result = add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
         // Verify add result
         assert_eq!(add_result.workflow_id, workflow_id);
@@ -1517,8 +1498,6 @@ mod tests {
 
         // Verify workflow properties - need to handle TriggerJson and SubmitJson wrappers
         let added_workflow = service_after_add.workflows.get(&workflow_id).unwrap();
-        assert_eq!(added_workflow.component, component_id);
-        assert_eq!(added_workflow.fuel_limit, Some(1000));
 
         // Check trigger type with pattern matching for TriggerJson
         if let TriggerJson::Json(json) = &added_workflow.trigger {
@@ -1526,6 +1505,9 @@ mod tests {
         } else {
             panic!("Expected Json::Unset");
         }
+
+        // Check component type
+        assert!(added_workflow.component.is_unset());
 
         // Check submit type with pattern matching for SubmitJson
         if let SubmitJson::Json(json) = &added_workflow.submit {
@@ -1535,7 +1517,7 @@ mod tests {
         }
 
         // Test adding a workflow with autogenerated ID
-        let auto_id_result = add_workflow(&file_path, None, component_id.clone(), None).unwrap();
+        let auto_id_result = add_workflow(&file_path, None).unwrap();
         let auto_workflow_id = auto_id_result.workflow_id;
 
         // Verify the auto-generated workflow was added
@@ -1543,16 +1525,6 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
         assert!(service_after_auto.workflows.contains_key(&auto_workflow_id));
         assert_eq!(service_after_auto.workflows.len(), 2); // Two workflows now
-
-        // Test error when adding workflow with non-existent component
-        let non_existent_component = ComponentID::new("does-not-exist").unwrap();
-        let component_error = add_workflow(&file_path, None, non_existent_component.clone(), None);
-
-        // Verify error for non-existent component
-        assert!(component_error.is_err());
-        let component_error_msg = component_error.unwrap_err().to_string();
-        assert!(component_error_msg.contains(&non_existent_component.to_string()));
-        assert!(component_error_msg.contains("not found"));
 
         // Test deleting a workflow
         let delete_result = delete_workflow(&file_path, workflow_id.clone()).unwrap();
@@ -1584,11 +1556,6 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("workflow_trigger_test.json");
 
-        // Create a test digest
-        let test_digest =
-            Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-                .unwrap();
-
         // Initialize a service
         let service_id = ServiceID::new("test-service-id").unwrap();
         init_service(
@@ -1598,19 +1565,9 @@ mod tests {
         )
         .unwrap();
 
-        // Add a component to use in workflows
-        let component_id = ComponentID::new("component-123").unwrap();
-        add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
-
         // Add a workflow
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
-        add_workflow(
-            &file_path,
-            Some(workflow_id.clone()),
-            component_id.clone(),
-            Some(1000),
-        )
-        .unwrap();
+        add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
         // Initial workflow should have manual trigger (default when created)
         let service_initial: ServiceJson =
@@ -1821,11 +1778,6 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("workflow_submit_test.json");
 
-        // Create a test digest
-        let test_digest =
-            Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-                .unwrap();
-
         // Initialize a service
         let service_id = ServiceID::new("test-service-id").unwrap();
         init_service(
@@ -1835,19 +1787,9 @@ mod tests {
         )
         .unwrap();
 
-        // Add a component to use in workflows
-        let component_id = ComponentID::new("component-123").unwrap();
-        add_component(&file_path, Some(component_id.clone()), test_digest.clone()).unwrap();
-
         // Add a workflow
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
-        add_workflow(
-            &file_path,
-            Some(workflow_id.clone()),
-            component_id.clone(),
-            Some(1000),
-        )
-        .unwrap();
+        add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
         // Initial workflow should have None submit (default when created)
         let service_initial: ServiceJson =
@@ -1972,7 +1914,6 @@ mod tests {
 
         // Create a valid service configuration
         let service_id = ServiceID::new("test-service-id").unwrap();
-        let component_id = ComponentID::new("component-123").unwrap();
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
         let ethereum_chain = ChainName::from_str("ethereum-mainnet").unwrap();
         let ethereum_address = alloy::primitives::Address::parse_checksummed(
@@ -1985,10 +1926,7 @@ mod tests {
         let test_digest =
             Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
                 .unwrap();
-        let component = Component {
-            source: ComponentSource::Digest(test_digest.clone()),
-            permissions: Permissions::default(),
-        };
+        let component = Component::new(ComponentSource::Digest(test_digest.clone()));
 
         // Create a valid trigger for the workflow
         let trigger = Trigger::EthContractEvent {
@@ -2007,14 +1945,11 @@ mod tests {
         // Create workflow with the trigger and submit
         let workflow = WorkflowJson {
             trigger: TriggerJson::Trigger(trigger.clone()),
-            component: component_id.clone(),
+            component: ComponentJson::Component(component.clone()),
             submit: SubmitJson::Submit(submit.clone()),
-            fuel_limit: Some(1000),
         };
 
         // Create a valid service
-        let mut components = BTreeMap::new();
-        components.insert(component_id.clone(), component);
 
         let mut workflows = BTreeMap::new();
         workflows.insert(workflow_id.clone(), workflow);
@@ -2022,7 +1957,6 @@ mod tests {
         let service = ServiceJson {
             id: service_id.clone(),
             name: "Test Service".to_string(),
-            components,
             workflows,
             status: ServiceStatus::Active,
             config: ServiceConfig::default(),
@@ -2049,12 +1983,10 @@ mod tests {
         let mut invalid_service = service.clone();
 
         // Create a new workflow that references a non-existent component
-        let non_existent_component_id = ComponentID::new("does-not-exist").unwrap();
         let invalid_workflow = WorkflowJson {
             trigger: TriggerJson::Trigger(trigger.clone()),
-            component: non_existent_component_id.clone(),
+            component: ComponentJson::new_unset(),
             submit: SubmitJson::Submit(submit.clone()),
-            fuel_limit: Some(1000),
         };
 
         let invalid_workflow_id = WorkflowID::new("invalid-workflow").unwrap();
@@ -2080,8 +2012,7 @@ mod tests {
         );
         let component_error = invalid_result.errors.iter().any(|error| {
             error.contains(&invalid_workflow_id.to_string())
-                && error.contains(&non_existent_component_id.to_string())
-                && error.contains("non-existent component")
+                && error.contains("has an unset component")
         });
         assert!(
             component_error,
@@ -2092,11 +2023,12 @@ mod tests {
         let mut zero_fuel_service = service.clone();
 
         // Modify the workflow to have a zero fuel limit
+        let mut component_zero_fuel = component.clone();
+        component_zero_fuel.fuel_limit = Some(0);
         let zero_fuel_workflow = WorkflowJson {
             trigger: TriggerJson::Trigger(trigger),
-            component: component_id.clone(),
+            component: ComponentJson::Component(component_zero_fuel),
             submit: SubmitJson::Submit(submit),
-            fuel_limit: Some(0), // Invalid - zero fuel limit
         };
 
         zero_fuel_service.workflows.clear();

@@ -19,7 +19,7 @@ use utils::{
 };
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainName, Envelope, EthereumContractSubmission, Packet, PacketRoute, ServiceID, SignerAddress,
+    ChainName, Envelope, EthereumContractSubmission, Packet, PacketRoute, ServiceID,
     SigningKeyResponse, Submit,
 };
 
@@ -98,14 +98,11 @@ impl CoreSubmission {
             .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
             - 1;
 
-        let signer = eth_client.address();
-
         let signature = eth_client.sign_envelope(&envelope).await?;
 
         Ok(Packet {
             route,
             envelope,
-            signer: SignerAddress::Ethereum(signer),
             signature,
             block_height,
         })
@@ -140,12 +137,10 @@ impl CoreSubmission {
             );
         }
 
-        let signer_and_signatures = vec![(packet.signer, packet.signature)];
-
         let _tx_receipt = eth_client
             .send_envelope_signatures(
                 packet.envelope,
-                signer_and_signatures,
+                vec![packet.signature],
                 packet.block_height,
                 address,
                 max_gas,

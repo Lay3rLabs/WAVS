@@ -5,15 +5,21 @@ use std::{
 };
 
 use crate::{
-    args::{CliArgs, CliSubmitKind},
+    args::CliArgs,
     clients::{get_cosmos_client, get_eth_client},
     config::Config,
     deploy::CommandDeployResult,
 };
-use alloy::providers::Provider;
+use alloy::{
+    network::TransactionBuilder, primitives::utils::parse_ether, providers::Provider,
+    rpc::types::TransactionRequest,
+};
 use anyhow::{Context, Result};
 use layer_climb::signing::SigningClient;
-use utils::{config::AnyChainConfig, eth_client::EthSigningClient};
+use utils::{
+    config::{AnyChainConfig, EthereumChainConfig},
+    eth_client::{EthClientBuilder, EthSigningClient},
+};
 use wavs_types::{ChainName, EthereumContractSubmission, Submit, Trigger};
 
 use crate::{args::Command, deploy::Deployment};
@@ -46,24 +52,6 @@ impl CliContext {
         };
 
         match command {
-            Command::DeployService {
-                trigger_chain,
-                submit_chain,
-                submit,
-                ..
-            } => {
-                if let Some(chain) = trigger_chain {
-                    chains.insert(chain.clone());
-                }
-
-                // only add the submit chain if we'll actually use it
-                match (submit_chain, submit) {
-                    (_, CliSubmitKind::None) | (None, _) => {}
-                    (Some(chain), _) => {
-                        chains.insert(chain.clone());
-                    }
-                }
-            }
             Command::DeployServiceRaw { service, .. } => {
                 for workflow in service.workflows.values() {
                     match &workflow.trigger {
@@ -159,6 +147,44 @@ impl CliContext {
             AnyClient::Eth(client) => Ok(client.clone()),
             _ => Err(anyhow::anyhow!("expected eth client")),
         }
+    }
+
+    pub async fn new_eth_client(
+        &self,
+        chain_name: &ChainName,
+        index: u32,
+        fund: bool,
+    ) -> Result<EthSigningClient> {
+        let chain_config = self
+            .config
+            .chains
+            .get_chain(chain_name)?
+            .context(format!("chain {chain_name} not found"))?;
+
+        let client_config = EthereumChainConfig::try_from(chain_config)?.to_client_config(
+            Some(index),
+            self.config.eth_mnemonic.clone(),
+            None,
+        );
+
+        let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
+
+        if fund {
+            let funder = self.get_eth_client(chain_name)?;
+
+            let tx = TransactionRequest::default()
+                .with_from(funder.address())
+                .with_to(eth_client.address())
+                .with_value(parse_ether("100").unwrap());
+            funder
+                .provider
+                .send_transaction(tx)
+                .await?
+                .get_receipt()
+                .await?;
+        }
+
+        Ok(eth_client)
     }
 
     pub fn get_cosmos_client(&self, chain_name: &ChainName) -> Result<SigningClient> {

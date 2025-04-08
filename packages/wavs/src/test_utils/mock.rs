@@ -19,9 +19,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tower::Service as _;
+use utils::config::ChainConfigs;
 use wavs_types::{
-    AddServiceRequest, ComponentSource, DeleteServicesRequest, ListServicesResponse, Service,
-    ServiceID, Submit,
+    ComponentSource, DeleteServicesRequest, ListServicesResponse, Service, ServiceID, Submit,
 };
 
 pub struct MockE2ETestRunner {
@@ -38,8 +38,16 @@ impl MockE2ETestRunner {
         let engine = SingleEngineRunner::new(MockEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
-        let dispatcher =
-            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
+        let dispatcher = Arc::new(
+            Dispatcher::new(
+                trigger_manager,
+                engine,
+                submission,
+                ChainConfigs::default(),
+                storage_path,
+            )
+            .unwrap(),
+        );
 
         // start up the dispatcher in its own thread, before creating any data (similar to how we do it in main)
         std::thread::spawn({
@@ -119,27 +127,13 @@ impl MockE2ETestRunner {
             source,
             submit,
             None,
+            ServiceManager::Ethereum {
+                chain_name: "eth".try_into().unwrap(),
+                address: rand_address_eth(),
+            },
         );
 
-        let body = serde_json::to_string(&AddServiceRequest { service }).unwrap();
-
-        let req = Request::builder()
-            .method(Method::POST)
-            .header("Content-Type", "application/json")
-            .uri("/app")
-            .body(body)
-            .unwrap();
-
-        let response = self
-            .http_app
-            .clone()
-            .http_router()
-            .await
-            .call(req)
-            .await
-            .unwrap();
-
-        assert!(response.status().is_success());
+        self.dispatcher.add_service_direct(service).await.unwrap();
     }
 
     pub async fn delete_services(&self, service_ids: Vec<ServiceID>) {

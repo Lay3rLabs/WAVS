@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::body::Body;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
+use utils::config::ChainConfigs;
 
 use crate::{
     apis::{submission::Submission, trigger::TriggerManager},
@@ -30,8 +31,16 @@ impl TestHttpApp {
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
 
-        let dispatcher =
-            Arc::new(Dispatcher::new(trigger_manager, engine, submission, storage_path).unwrap());
+        let dispatcher = Arc::new(
+            Dispatcher::new(
+                trigger_manager,
+                engine,
+                submission,
+                ChainConfigs::default(),
+                storage_path,
+            )
+            .unwrap(),
+        );
 
         Self::new_with_dispatcher(dispatcher).await
     }

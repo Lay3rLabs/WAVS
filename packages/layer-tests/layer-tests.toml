@@ -1,5 +1,6 @@
 # Run all the tests
 all = true
+# isolated = "eth-echo-data"
 # isolated = "eth-multi-trigger"
 # isolated = "eth-permissions"
 # registry = true

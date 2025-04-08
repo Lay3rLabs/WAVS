@@ -228,7 +228,7 @@ impl ConfigFilePath {
 
 // TODO - impl a custom Deserialize that ensures at *load-time* that keys are unique
 // currently we only get that guarantee when we call `get_chain()`
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
     pub cosmos: BTreeMap<ChainName, CosmosChainConfig>,

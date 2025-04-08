@@ -2,7 +2,8 @@ use std::ops::Bound;
 
 use crate::AppContext;
 use async_trait::async_trait;
-use wavs_types::{Digest, Service, ServiceID};
+use layer_climb::prelude::Address;
+use wavs_types::{ChainName, Digest, Service, ServiceID};
 
 /// This is the highest-level container for the system.
 /// The http server can hold this in state and interact with the "management interface".
@@ -24,7 +25,11 @@ pub trait DispatchManager: Send + Sync {
     /// Used excluslively by the `upload` endpoint
     fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, Self::Error>;
 
-    async fn add_service(&self, service: Service) -> Result<(), Self::Error>;
+    async fn add_service(&self, chain_name: ChainName, address: Address)
+        -> Result<(), Self::Error>;
+
+    #[cfg(feature = "mock")]
+    async fn add_service_direct(&self, service: Service) -> Result<(), Self::Error>;
 
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error>;
 

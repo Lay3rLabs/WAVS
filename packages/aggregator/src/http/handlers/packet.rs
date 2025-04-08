@@ -1,5 +1,5 @@
-use alloy::primitives::U256;
-use anyhow::{anyhow, bail};
+use alloy::primitives::{Address, U256};
+use anyhow::{anyhow, bail, ensure};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -8,7 +8,7 @@ use wavs_types::{
 
 use crate::http::{
     error::AnyError,
-    state::{HttpState, PacketQueue},
+    state::{HttpState, PacketQueue, QueuedPacket},
 };
 
 alloy::sol!(
@@ -59,18 +59,21 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             route.service_id
         ))?;
 
-    match aggregator {
+    let packet = match aggregator {
         Aggregator::Ethereum(EthereumContractSubmission { chain_name, .. }) => {
+            // this implicitly validates that the signature is valid
+            let signer = packet.signature.eth_signer_address(&packet.envelope)?;
+
             let client = state.get_eth_client(chain_name).await?;
             let service_manager =
                 SimpleServiceManager::new(service.manager.eth_address_unchecked(), client.provider);
             let weight = service_manager
-                .getOperatorWeightAtBlock(packet.signer.eth_unchecked(), block_height.try_into()?)
+                .getOperatorWeightAtBlock(signer, block_height.try_into()?)
                 .call()
                 .await?
                 ._0;
 
-            validate_packet(weight, &packet, &queue).await?;
+            validate_packet(packet, &queue, signer, weight)?
         }
     };
 
@@ -91,18 +94,13 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
         }) = aggregator;
 
         let client = state.get_eth_client(chain_name).await?;
-        let signer_and_signatures = queue
+        let signatures = queue
             .drain(..)
-            .map(|packet| (packet.signer, packet.signature))
+            .map(|queued| queued.packet.signature)
             .collect();
+
         let tx_receipt = client
-            .send_envelope_signatures(
-                envelope,
-                signer_and_signatures,
-                block_height,
-                *address,
-                *max_gas,
-            )
+            .send_envelope_signatures(envelope, signatures, block_height, *address, *max_gas)
             .await?;
 
         state.save_packet_queue(&event_id, PacketQueue::Burned)?;
@@ -116,27 +114,19 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
     }
 }
 
-async fn validate_packet(
+fn validate_packet(
+    packet: Packet,
+    queue: &[QueuedPacket],
+    signer: Address,
     operator_weight: U256,
-    packet: &Packet,
-    queue: &[Packet],
-) -> anyhow::Result<()> {
-    // TODO
-    // 1. ensure that the signature is valid
-
-    if operator_weight.is_zero() {
-        bail!("Operator is not registered");
-    }
-
+) -> anyhow::Result<QueuedPacket> {
     match queue.first() {
         None => {}
-        Some(last_packet) => {
+        Some(prev) => {
             // check if the packet is the same as the last one
-            if packet.envelope != last_packet.envelope {
+            if packet.envelope != prev.packet.envelope {
                 bail!("Unexpected envelope difference!");
             }
-
-            // TODO: ensure that the signer is not already in the queue
 
             // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
             // if packet.block_height != last_packet.block_height {
@@ -145,5 +135,105 @@ async fn validate_packet(
         }
     }
 
-    Ok(())
+    for queued_packet in queue {
+        if signer == queued_packet.signer {
+            bail!("Signer {} already in queue", signer);
+        }
+    }
+
+    ensure!(!operator_weight.is_zero(), "Operator is not registered");
+
+    // TODO: ensure that the signer is in the operator set
+
+    Ok(QueuedPacket {
+        packet,
+        signer,
+        weight: operator_weight,
+    })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use alloy::{
+        primitives::{Bytes, FixedBytes},
+        signers::{
+            k256::ecdsa::SigningKey,
+            local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
+            SignerSync,
+        },
+    };
+    use wavs_types::{Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute};
+
+    #[test]
+    fn packet_validation() {
+        let mut queue = Vec::new();
+
+        let signer_1 = mock_signer();
+        let signer_2 = mock_signer();
+        let envelope_1 = mock_envelope([1, 2, 3]);
+        let envelope_2 = mock_envelope([4, 5, 6]);
+
+        let packet = mock_packet(&signer_1, &envelope_1);
+
+        let derived_signer_1_address = packet
+            .signature
+            .eth_signer_address(&packet.envelope)
+            .unwrap();
+        assert_eq!(derived_signer_1_address, signer_1.address());
+
+        // empty queue is okay
+        let queued = validate_packet(packet, &queue, signer_1.address(), U256::ONE).unwrap();
+        // got the expected signer address
+        assert_eq!(queued.signer, signer_1.address());
+
+        queue.push(queued);
+
+        // "fails" (expectedly) because the signer is the same
+        let packet = mock_packet(&signer_1, &envelope_1);
+        validate_packet(packet, &queue, signer_1.address(), U256::ONE).unwrap_err();
+
+        // "fails" (expectedly) because the envelope is different
+        let packet = mock_packet(&signer_2, &envelope_2);
+        validate_packet(packet, &queue, signer_2.address(), U256::ONE).unwrap_err();
+
+        // "fails" (expectedly) because the operator is not registered (0 weight)
+        let packet = mock_packet(&signer_2, &envelope_1);
+        validate_packet(packet.clone(), &queue, signer_2.address(), U256::ZERO).unwrap_err();
+
+        // passes because the signer is different but envelope is the same
+        let queued = validate_packet(packet, &queue, signer_2.address(), U256::ONE).unwrap();
+        // got the expected signer address
+        assert_eq!(queued.signer, signer_2.address());
+        queue.push(queued);
+    }
+
+    fn mock_packet(signer: &LocalSigner<SigningKey>, envelope: &Envelope) -> Packet {
+        let signature = signer.sign_hash_sync(&envelope.eip191_hash()).unwrap();
+
+        Packet {
+            envelope: envelope.clone(),
+            block_height: 1,
+            route: PacketRoute {
+                service_id: "service".parse().unwrap(),
+                workflow_id: "workflow".parse().unwrap(),
+            },
+            signature: EnvelopeSignature::Secp256k1(signature),
+        }
+    }
+
+    fn mock_signer() -> LocalSigner<SigningKey> {
+        MnemonicBuilder::<English>::default()
+            .word_count(24)
+            .build_random()
+            .unwrap()
+    }
+
+    fn mock_envelope(payload: impl Into<Bytes>) -> Envelope {
+        Envelope {
+            payload: payload.into(),
+            eventId: FixedBytes([0; 20]),
+            ordering: FixedBytes([0; 12]),
+        }
+    }
 }
