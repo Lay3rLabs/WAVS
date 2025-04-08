@@ -154,6 +154,37 @@ pub enum ComponentCommand {
         #[clap(long)]
         file_system: Option<bool>,
     },
+    /// Manage the fuel limit of a component
+    FuelLimit {
+        /// The ID of the workflow to edit
+        #[clap(long)]
+        id: WorkflowID,
+
+        /// Fuel limit value (omit to use default)
+        #[clap(long)]
+        limit: Option<u64>,
+    },
+    /// Set maximum execution time for a component
+    MaxExecTime {
+        /// The ID of the workflow to edit
+        #[clap(long)]
+        id: WorkflowID,
+
+        /// Maximum execution time in seconds (omit to use default)
+        #[clap(long)]
+        seconds: Option<u64>,
+    },
+    /// Manage the component config (KV)
+    Config {
+        /// The ID of the workflow to edit
+        #[clap(long)]
+        id: WorkflowID,
+
+        /// Configuration key-value pairs in format 'key=value'
+        /// Omit to clear all config values
+        #[clap(long, value_delimiter = ',')]
+        values: Option<Vec<String>>,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]

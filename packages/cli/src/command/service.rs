@@ -65,6 +65,18 @@ pub async fn handle_service_command(
                 let result = update_component_permissions(&file, id, http_hosts, file_system)?;
                 display_result(ctx, result, &file, json)?;
             }
+            ComponentCommand::FuelLimit { id, limit } => {
+                let result = update_component_fuel_limit(&file, id, limit)?;
+                display_result(ctx, result, &file, json)?;
+            }
+            ComponentCommand::Config { id, values } => {
+                let result = update_component_config(&file, id, values)?;
+                display_result(ctx, result, &file, json)?;
+            }
+            ComponentCommand::MaxExecTime { id, seconds } => {
+                let result = update_component_max_exec_time(&file, id, seconds)?;
+                display_result(ctx, result, &file, json)?;
+            }
         },
         ServiceCommand::Workflow { command } => match command {
             WorkflowCommand::Add { id } => {
@@ -433,6 +445,70 @@ where
     Ok(result)
 }
 
+/// Result of updating a component's fuel limit
+#[derive(Debug, Clone)]
+pub struct ComponentFuelLimitResult {
+    /// The updated fuel limit
+    pub fuel_limit: Option<u64>,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentFuelLimitResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component fuel limit updated successfully!")?;
+        match self.fuel_limit {
+            Some(limit) => writeln!(f, "  Fuel Limit:   {}", limit)?,
+            None => writeln!(f, "  Fuel Limit:   No limit (removed)")?,
+        }
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+/// Result of updating a component's configuration
+#[derive(Debug, Clone)]
+pub struct ComponentConfigResult {
+    /// The updated configuration
+    pub config: Vec<(String, String)>,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentConfigResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component configuration updated successfully!")?;
+        if self.config.is_empty() {
+            writeln!(f, "  Config:      No configuration items")?;
+        } else {
+            writeln!(f, "  Config:")?;
+            for (key, value) in &self.config {
+                writeln!(f, "    {} => {}", key, value)?;
+            }
+        }
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+/// Result of updating a component's maximum execution time
+#[derive(Debug, Clone)]
+pub struct ComponentMaxExecResult {
+    /// The updated maximum execution time in seconds
+    pub max_exec_seconds: Option<u64>,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentMaxExecResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component maximum execution time updated successfully!")?;
+        match self.max_exec_seconds {
+            Some(seconds) => writeln!(f, "  Max Execution Time: {} seconds", seconds)?,
+            None => writeln!(f, "  Max Execution Time: Default (no explicit limit)")?,
+        }
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
 /// Result of updating component permissions
 #[derive(Debug, Clone)]
 pub struct ComponentPermissionsResult {
@@ -768,6 +844,135 @@ pub fn update_component_permissions(
             service,
             ComponentPermissionsResult {
                 permissions: updated_permissions,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Update a component's fuel limit
+pub fn update_component_fuel_limit(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    fuel_limit: Option<u64>,
+) -> Result<ComponentFuelLimitResult> {
+    modify_service_file(file_path, |mut service| {
+        // Check if the component exists
+        let component = service
+            .workflows
+            .get_mut(&workflow_id)
+            .context(format!("No workflow id {workflow_id}"))?
+            .component
+            .as_component_mut()
+            .context(format!(
+                "Workflow with ID '{}' has unset component",
+                workflow_id
+            ))?;
+
+        // Update the fuel limit
+        component.fuel_limit = fuel_limit;
+
+        Ok((
+            service,
+            ComponentFuelLimitResult {
+                fuel_limit,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Update a component's configuration
+pub fn update_component_config(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    values: Option<Vec<String>>,
+) -> Result<ComponentConfigResult> {
+    modify_service_file(file_path, |mut service| {
+        // First find the workflow and get a reference to it
+        let workflow = service
+            .workflows
+            .get_mut(&workflow_id)
+            .context(format!("No workflow id {workflow_id}"))?;
+
+        // Now get a reference to the component
+        let component = workflow.component.as_component_mut().context(format!(
+            "Workflow with ID '{}' has unset component",
+            workflow_id
+        ))?;
+
+        if let Some(values) = values {
+            // If values provided, parse config values from 'key=value' format
+            let mut config_pairs = Vec::new();
+
+            for value in values {
+                match value.split_once('=') {
+                    Some((key, value)) => {
+                        // Trim whitespace and validate
+                        let key = key.trim().to_string();
+                        let value = value.trim().to_string();
+
+                        if key.is_empty() {
+                            return Err(anyhow::anyhow!("Empty key in config value: '{}'", value));
+                        }
+
+                        config_pairs.push((key, value));
+                    }
+                    None => {
+                        return Err(anyhow::anyhow!(
+                            "Invalid config format: '{}'. Expected 'key=value'",
+                            value
+                        ));
+                    }
+                }
+            }
+
+            // Replace existing config with new values
+            component.config = config_pairs;
+        } else {
+            // If no values provided, clear all config
+            component.config.clear();
+        }
+
+        // Clone the updated config for the result
+        let updated_config = component.config.clone();
+
+        Ok((
+            service,
+            ComponentConfigResult {
+                config: updated_config,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Update a component's maximum execution time
+pub fn update_component_max_exec_time(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    max_exec_seconds: Option<u64>,
+) -> Result<ComponentMaxExecResult> {
+    modify_service_file(file_path, |mut service| {
+        // First find the workflow and get a reference to it
+        let workflow = service
+            .workflows
+            .get_mut(&workflow_id)
+            .context(format!("No workflow id {workflow_id}"))?;
+
+        // Now get a reference to the component
+        let component = workflow.component.as_component_mut().context(format!(
+            "Workflow with ID '{}' has unset component",
+            workflow_id
+        ))?;
+
+        // Update the maximum execution time
+        component.max_exec_seconds = max_exec_seconds;
+
+        Ok((
+            service,
+            ComponentMaxExecResult {
+                max_exec_seconds,
                 file_path: file_path.to_path_buf(),
             },
         ))
@@ -1540,6 +1745,173 @@ mod tests {
             .component
             .is_set());
 
+        // Test setting a specific fuel limit
+        let fuel_limit = 50000u64;
+        let fuel_limit_result =
+            update_component_fuel_limit(&file_path, workflow_id.clone(), Some(fuel_limit)).unwrap();
+
+        // Verify fuel limit result
+        assert_eq!(fuel_limit_result.fuel_limit, Some(fuel_limit));
+        assert_eq!(fuel_limit_result.file_path, file_path);
+
+        // Verify the service was updated with the fuel limit
+        let service_after_fuel_limit: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let component_with_fuel_limit = service_after_fuel_limit
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .as_component()
+            .unwrap();
+        assert_eq!(component_with_fuel_limit.fuel_limit, Some(fuel_limit));
+
+        // Test removing a fuel limit (setting to None)
+        let no_fuel_limit_result =
+            update_component_fuel_limit(&file_path, workflow_id.clone(), None).unwrap();
+
+        // Verify no fuel limit result
+        assert_eq!(no_fuel_limit_result.fuel_limit, None);
+        assert_eq!(no_fuel_limit_result.file_path, file_path);
+
+        // Verify the service was updated with no fuel limit
+        let service_after_no_fuel: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let component_with_no_fuel = service_after_no_fuel
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .as_component()
+            .unwrap();
+        assert_eq!(component_with_no_fuel.fuel_limit, None);
+
+        // Test adding configuration values
+        let config_values = vec![
+            "api_key=123456".to_string(),
+            "timeout=30".to_string(),
+            "debug=true".to_string(),
+        ];
+        let config_result =
+            update_component_config(&file_path, workflow_id.clone(), Some(config_values.clone()))
+                .unwrap();
+
+        // Verify config result
+        assert_eq!(config_result.config.len(), 3);
+        assert!(config_result
+            .config
+            .iter()
+            .any(|(k, v)| k == "api_key" && v == "123456"));
+        assert!(config_result
+            .config
+            .iter()
+            .any(|(k, v)| k == "timeout" && v == "30"));
+        assert!(config_result
+            .config
+            .iter()
+            .any(|(k, v)| k == "debug" && v == "true"));
+        assert_eq!(config_result.file_path, file_path);
+
+        // Verify the service was updated with the config
+        let service_after_config: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let component_with_config = service_after_config
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .as_component()
+            .unwrap();
+        assert_eq!(component_with_config.config.len(), 3);
+        assert!(component_with_config
+            .config
+            .iter()
+            .any(|(k, v)| k == "api_key" && v == "123456"));
+        assert!(component_with_config
+            .config
+            .iter()
+            .any(|(k, v)| k == "timeout" && v == "30"));
+        assert!(component_with_config
+            .config
+            .iter()
+            .any(|(k, v)| k == "debug" && v == "true"));
+
+        // Test clearing configuration (set to None)
+        let clear_config_result =
+            update_component_config(&file_path, workflow_id.clone(), None).unwrap();
+
+        // Verify clear config result
+        assert_eq!(clear_config_result.config.len(), 0);
+        assert_eq!(clear_config_result.file_path, file_path);
+
+        // Verify the service was updated with empty config
+        let service_after_clear_config: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let component_with_clear_config = service_after_clear_config
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .as_component()
+            .unwrap();
+        assert_eq!(component_with_clear_config.config.len(), 0);
+
+        // Test with invalid config format
+        let invalid_config = vec!["invalid_format".to_string()];
+        let invalid_config_result =
+            update_component_config(&file_path, workflow_id.clone(), Some(invalid_config));
+
+        // Verify it returns an error for invalid format
+        assert!(invalid_config_result.is_err());
+        let error_msg = invalid_config_result.unwrap_err().to_string();
+        assert!(error_msg.contains("Invalid config format"));
+        assert!(error_msg.contains("Expected 'key=value'"));
+
+        // Test setting a specific max execution time
+        let max_exec_time = 120u64;
+        let max_exec_result =
+            update_component_max_exec_time(&file_path, workflow_id_2.clone(), Some(max_exec_time))
+                .unwrap();
+
+        // Verify max exec time result
+        assert_eq!(max_exec_result.max_exec_seconds, Some(max_exec_time));
+        assert_eq!(max_exec_result.file_path, file_path);
+
+        // Verify the service was updated with max exec time
+        let service_after_max_exec: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let component_with_max_exec = service_after_max_exec
+            .workflows
+            .get(&workflow_id_2)
+            .unwrap()
+            .component
+            .as_component()
+            .unwrap();
+        assert_eq!(
+            component_with_max_exec.max_exec_seconds,
+            Some(max_exec_time)
+        );
+
+        // Test removing max exec time (setting to None)
+        let no_max_exec_result =
+            update_component_max_exec_time(&file_path, workflow_id_2.clone(), None).unwrap();
+
+        // Verify no max exec time result
+        assert_eq!(no_max_exec_result.max_exec_seconds, None);
+        assert_eq!(no_max_exec_result.file_path, file_path);
+
+        // Verify the service was updated with no max exec time
+        let service_after_no_max_exec: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let component_with_no_max_exec = service_after_no_max_exec
+            .workflows
+            .get(&workflow_id_2)
+            .unwrap()
+            .component
+            .as_component()
+            .unwrap();
+        assert_eq!(component_with_no_max_exec.max_exec_seconds, None);
+
         // Test deleting a component
         let delete_result = delete_component(&file_path, workflow_id.clone()).unwrap();
 
@@ -1575,7 +1947,6 @@ mod tests {
         assert!(error_result.is_err());
         let error_msg = error_result.unwrap_err().to_string();
         assert!(error_msg.contains(&non_existent_id.to_string()));
-        println!("{}", error_msg);
         assert!(error_msg.contains("No workflow id"));
     }
 
