@@ -26,9 +26,10 @@ contract SimpleServiceManager is IWavsServiceManager {
         emit ServiceURIUpdated(_serviceURI);
     }
 
-    function getOperatorRegistered(
-        address /* operator */
-    ) external pure override returns (bool) {
-        return true;
+    function getOperatorWeightAtBlock(
+        address /* operator */,
+        uint32 /* blockNumber */
+    ) external pure override returns (uint256) {
+        return 1; // hard-coded at 1 for demo purposes
     }
 }

@@ -1,10 +1,10 @@
+use alloy::primitives::U256;
 use anyhow::{anyhow, bail};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EthereumContractSubmission, Packet, SigningProvider,
+    Aggregator, EthereumContractSubmission, Packet,
 };
-use SimpleServiceManager::SimpleServiceManagerInstance;
 
 use crate::http::{
     error::AnyError,
@@ -64,8 +64,13 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             let client = state.get_eth_client(chain_name).await?;
             let service_manager =
                 SimpleServiceManager::new(service.manager.eth_address_unchecked(), client.provider);
+            let weight = service_manager
+                .getOperatorWeightAtBlock(packet.signer.eth_unchecked(), block_height.try_into()?)
+                .call()
+                .await?
+                ._0;
 
-            validate_eth_packet(service_manager, &packet, &queue).await?;
+            validate_packet(weight, &packet, &queue).await?;
         }
     };
 
@@ -111,20 +116,15 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
     }
 }
 
-async fn validate_eth_packet(
-    service_manager: SimpleServiceManagerInstance<(), SigningProvider>,
+async fn validate_packet(
+    operator_weight: U256,
     packet: &Packet,
     queue: &[Packet],
 ) -> anyhow::Result<()> {
     // TODO
     // 1. ensure that the signature is valid
 
-    if !service_manager
-        .getOperatorRegistered(packet.signer.eth_unchecked())
-        .call()
-        .await?
-        ._0
-    {
+    if operator_weight.is_zero() {
         bail!("Operator is not registered");
     }
 
