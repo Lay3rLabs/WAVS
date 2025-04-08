@@ -1,6 +1,9 @@
 pub use crate::solidity_types::Envelope;
 use crate::{ServiceID, TriggerAction, TriggerConfig, WorkflowID};
-use alloy::primitives::FixedBytes;
+use alloy::{
+    primitives::{eip191_hash_message, keccak256, FixedBytes},
+    sol_types::SolValue,
+};
 use ripemd::Ripemd160;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -10,24 +13,42 @@ use sha2::Digest;
 pub struct Packet {
     pub route: PacketRoute,
     pub envelope: Envelope,
-    // TODO - should this be pubkey or address?
-    // it is used to check against operator set, so it's determined on the solidity side
-    pub signer: SignerAddress,
-    pub signature: Vec<u8>,
+    pub signature: EnvelopeSignature,
     pub block_height: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum SignerAddress {
-    Ethereum(alloy::primitives::Address),
-    Cosmos(layer_climb_address::Address),
+pub trait EnvelopeExt {
+    fn eip191_hash(&self) -> FixedBytes<32>;
 }
 
-impl SignerAddress {
-    pub fn eth_unchecked(&self) -> alloy::primitives::Address {
+impl EnvelopeExt for Envelope {
+    fn eip191_hash(&self) -> FixedBytes<32> {
+        let envelope_bytes = self.abi_encode();
+        eip191_hash_message(keccak256(&envelope_bytes))
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum EnvelopeSignature {
+    Secp256k1(alloy::primitives::PrimitiveSignature),
+}
+
+impl EnvelopeSignature {
+    pub fn eth_signer_address(
+        &self,
+        envelope: &Envelope,
+    ) -> anyhow::Result<alloy::primitives::Address> {
         match self {
-            Self::Ethereum(addr) => *addr,
-            _ => panic!("Expected signer address to be ethereum!"),
+            EnvelopeSignature::Secp256k1(sig) => sig
+                .recover_address_from_prehash(&envelope.eip191_hash())
+                .map_err(|e| e.into()),
+        }
+    }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        match self {
+            EnvelopeSignature::Secp256k1(sig) => sig.into(),
         }
     }
 }
