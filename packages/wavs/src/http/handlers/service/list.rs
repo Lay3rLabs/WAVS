@@ -21,7 +21,8 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
     // for backwards compatibility, we do some funky things here
     // it will be nicer in 0.3
     for service in services_list {
-        for component in service.components.values() {
+        for workflow in service.workflows.values() {
+            let component = &workflow.component;
             services.push(ListServiceResponse {
                 source: component.source.clone(),
                 permissions: component.permissions.clone(),

@@ -41,12 +41,7 @@ pub trait EngineRunner: Send + Sync {
                 )
             })?;
 
-        let component = service
-            .components
-            .get(&workflow.component)
-            .ok_or_else(|| EngineError::UnknownComponent(workflow.component.clone()))?;
-
-        let digest = match &component.source {
+        let digest = match &workflow.component.source {
             wavs_types::ComponentSource::Download { digest, .. } => digest,
             wavs_types::ComponentSource::Registry { registry } => &registry.digest,
             wavs_types::ComponentSource::Digest(digest) => digest,
@@ -54,14 +49,14 @@ pub trait EngineRunner: Send + Sync {
 
         let execution_component = ExecutionComponent {
             wasm: digest.clone(),
-            permissions: component.permissions.clone(),
+            permissions: workflow.component.permissions.clone(),
         };
 
         let trigger_config = action.config.clone();
 
         let wasm_response = self.engine().execute(
             &execution_component,
-            workflow.fuel_limit,
+            workflow.component.fuel_limit,
             action.clone(),
             &service.config,
         )?;

@@ -19,7 +19,7 @@ use alloy::{primitives::Address, sol_types::SolEvent};
 use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource,
     EthereumContractSubmission, Permissions, Service, ServiceConfig, ServiceID, ServiceManager,
     ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
@@ -268,23 +268,19 @@ async fn deploy_service_simple(
     };
 
     // Create Component
-    let component_id = ComponentID::new("default").unwrap();
     let workflow_id = WorkflowID::new("default").unwrap();
 
-    let component = Component {
-        source: ComponentSource::Digest(digest),
-        permissions: Permissions {
-            allowed_http_hosts: AllowedHostPermission::All,
-            file_system: true,
-        },
+    let mut component = Component::new(ComponentSource::Digest(digest));
+    component.permissions = Permissions {
+        allowed_http_hosts: AllowedHostPermission::All,
+        file_system: true,
     };
 
     // Create Workflow
     let workflow = Workflow {
         trigger,
-        component: component_id.clone(),
+        component,
         submit,
-        fuel_limit: None,
         aggregator: None,
     };
 
@@ -292,7 +288,6 @@ async fn deploy_service_simple(
     let service = Service {
         id: ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap(),
         name: format!("{:?}", service_kind),
-        components: BTreeMap::from([(component_id, component)]),
         workflows: BTreeMap::from([(workflow_id, workflow)]),
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),
@@ -344,25 +339,22 @@ async fn deploy_service_raw(
     let trigger1 = deploy_trigger(clients, chain_names).await;
     let trigger2 = deploy_trigger(clients, chain_names).await;
 
-    let component_id1 = ComponentID::new("component1").unwrap();
-    let component_id2 = ComponentID::new("component2").unwrap();
-
     let digest_names = Vec::<DigestName>::from(service_kind);
 
-    let component1 = Component {
-        source: ComponentSource::Digest(digests.lookup.get(&digest_names[0]).unwrap().clone()),
-        permissions: Permissions {
-            allowed_http_hosts: AllowedHostPermission::All,
-            file_system: true,
-        },
+    let mut component1 = Component::new(ComponentSource::Digest(
+        digests.lookup.get(&digest_names[0]).unwrap().clone(),
+    ));
+    component1.permissions = Permissions {
+        allowed_http_hosts: AllowedHostPermission::All,
+        file_system: true,
     };
 
-    let component2 = Component {
-        source: ComponentSource::Digest(digests.lookup.get(&digest_names[1]).unwrap().clone()),
-        permissions: Permissions {
-            allowed_http_hosts: AllowedHostPermission::All,
-            file_system: true,
-        },
+    let mut component2 = Component::new(ComponentSource::Digest(
+        digests.lookup.get(&digest_names[1]).unwrap().clone(),
+    ));
+    component2.permissions = Permissions {
+        allowed_http_hosts: AllowedHostPermission::All,
+        file_system: true,
     };
 
     let chain_name = chain_names.eth[0].clone();
@@ -376,31 +368,23 @@ async fn deploy_service_raw(
 
     let workflow1 = Workflow {
         trigger: trigger1,
-        component: component_id1,
+        component: component1,
         submit: submit1,
-        fuel_limit: None,
         aggregator: None,
     };
 
     let workflow2 = Workflow {
         trigger: trigger2,
-        component: component_id2,
+        component: component2,
         submit: submit2,
-        fuel_limit: None,
         aggregator: None,
     };
-
-    let components = BTreeMap::from([
-        (workflow1.component.clone(), component1),
-        (workflow2.component.clone(), component2),
-    ]);
 
     let workflows = BTreeMap::from([(workflow_id1, workflow1), (workflow_id2, workflow2)]);
 
     let service = Service {
         id: ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string()).unwrap(),
         name: "".to_string(),
-        components,
         workflows,
         status: ServiceStatus::Active,
         config: ServiceConfig::default(),

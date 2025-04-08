@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Component, ComponentID, EthereumContractSubmission, ServiceConfig, ServiceID, ServiceStatus,
-    Submit, Timestamp, Trigger, WorkflowID,
+    Component, EthereumContractSubmission, ServiceConfig, ServiceID, ServiceStatus, Submit,
+    Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -11,7 +11,6 @@ use wavs_types::{
 pub struct ServiceJson {
     pub id: ServiceID,
     pub name: String,
-    pub components: BTreeMap<ComponentID, Component>,
     pub workflows: BTreeMap<WorkflowID, WorkflowJson>,
     pub status: ServiceStatus,
     pub config: ServiceConfig,
@@ -29,12 +28,9 @@ impl ServiceJson {
         }
 
         for (workflow_id, workflow) in &self.workflows {
-            // Check if the component exists
-            if !self.components.contains_key(&workflow.component) {
-                errors.push(format!(
-                    "Workflow '{}' references non-existent component '{}'",
-                    workflow_id, workflow.component
-                ));
+            // Check if component is unset
+            if workflow.component.is_unset() {
+                errors.push(format!("Workflow '{}' has an unset component", workflow_id));
             }
 
             // Check if trigger is unset
@@ -146,7 +142,7 @@ impl ServiceJson {
             }
 
             // Validate fuel limit
-            if let Some(limit) = workflow.fuel_limit {
+            if let Some(limit) = workflow.component.as_component().and_then(|c| c.fuel_limit) {
                 if limit == 0 {
                     errors.push(format!(
                         "Workflow '{}' has a fuel limit of zero, which will prevent execution",
@@ -186,9 +182,8 @@ pub fn validate_cron_config(
 #[serde(rename_all = "snake_case")]
 pub struct WorkflowJson {
     pub trigger: TriggerJson,
-    pub component: ComponentID,
+    pub component: ComponentJson,
     pub submit: SubmitJson,
-    pub fuel_limit: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -221,4 +216,50 @@ impl Default for SubmitJson {
 #[serde(rename_all = "snake_case")]
 pub enum Json {
     Unset,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", untagged)]
+#[allow(clippy::large_enum_variant)]
+pub enum ComponentJson {
+    Component(Component),
+    Json(Json),
+}
+
+impl ComponentJson {
+    pub fn new(component: Component) -> Self {
+        ComponentJson::Component(component)
+    }
+
+    pub fn new_unset() -> Self {
+        ComponentJson::Json(Json::Unset)
+    }
+
+    pub fn is_unset(&self) -> bool {
+        matches!(self, ComponentJson::Json(Json::Unset))
+    }
+
+    pub fn is_set(&self) -> bool {
+        matches!(self, ComponentJson::Component(_))
+    }
+
+    pub fn as_component(&self) -> Option<&Component> {
+        match self {
+            ComponentJson::Component(component) => Some(component),
+            ComponentJson::Json(Json::Unset) => None,
+        }
+    }
+
+    pub fn as_component_mut(&mut self) -> Option<&mut Component> {
+        match self {
+            ComponentJson::Component(component) => Some(component),
+            ComponentJson::Json(Json::Unset) => None,
+        }
+    }
+}
+
+impl Default for ComponentJson {
+    fn default() -> Self {
+        ComponentJson::Json(Json::Unset)
+    }
 }

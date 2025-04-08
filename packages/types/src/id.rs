@@ -88,9 +88,6 @@ macro_rules! new_id_type {
 }
 
 new_id_type!(ServiceID);
-// ComponentID is an identifier *within* a service. It is not unique across services
-// For identifying a component system-wide, the Digest is used instead
-new_id_type!(ComponentID);
 new_id_type!(WorkflowID);
 // Distinct from a ChainConfig's ChainID - this is the *name* used within WAVS
 // It's allowed for multiple chains to have the same ChainID, but ChainName is unique
@@ -102,14 +99,6 @@ impl FromStr for ServiceID {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ServiceID::new(s.to_string())
-    }
-}
-
-impl FromStr for ComponentID {
-    type Err = IDError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ComponentID::new(s.to_string())
     }
 }
 
@@ -132,12 +121,6 @@ impl FromStr for ChainName {
 impl Default for WorkflowID {
     fn default() -> Self {
         WorkflowID::new("default").unwrap()
-    }
-}
-
-impl Default for ComponentID {
-    fn default() -> Self {
-        ComponentID::new("default").unwrap()
     }
 }
 
