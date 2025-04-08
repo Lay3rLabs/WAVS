@@ -19,9 +19,9 @@ use alloy::{primitives::Address, sol_types::SolEvent};
 use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource,
-    EthereumContractSubmission, Permissions, Service, ServiceConfig, ServiceID, ServiceManager,
-    ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    AllowedHostPermission, ByteArray, ChainName, Component, EthereumContractSubmission,
+    Permissions, Service, ServiceConfig, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger,
+    Workflow, WorkflowID,
 };
 
 #[derive(Default)]
@@ -349,14 +349,14 @@ async fn deploy_service_raw(
     let trigger1 = deploy_trigger(clients, chain_names).await;
     let trigger2 = deploy_trigger(clients, chain_names).await;
 
-    let digest_names = Vec::<DigestName>::from(service_kind);
+    let component_names = Vec::<ComponentName>::from(service_kind);
 
     let mut component1 = Component::new(
         component_sources
             .lookup
             .get(&component_names[0])
             .unwrap()
-            .clone()
+            .clone(),
     );
 
     component1.permissions = Permissions {
@@ -369,7 +369,7 @@ async fn deploy_service_raw(
             .lookup
             .get(&component_names[1])
             .unwrap()
-            .clone()
+            .clone(),
     );
 
     component2.permissions = Permissions {
