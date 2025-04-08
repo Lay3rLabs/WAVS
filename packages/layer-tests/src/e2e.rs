@@ -1,14 +1,14 @@
 mod add_task;
 mod clients;
+mod components;
 mod config;
-mod digests;
 mod handles;
 pub mod matrix;
 mod runner;
 mod services;
 
+use components::ComponentSources;
 use config::Configs;
-use digests::Digests;
 use handles::AppHandles;
 use services::Services;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -38,9 +38,9 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let clients = clients::Clients::new(ctx.clone(), &configs);
 
-    let digests = Digests::new(ctx.clone(), &configs, &clients.http_client);
+    let component_sources = ComponentSources::new(ctx.clone(), &configs, &clients.http_client);
 
-    let services = Services::new(ctx.clone(), &configs, &clients, &digests);
+    let services = Services::new(ctx.clone(), &configs, &clients, &component_sources);
 
     runner::run_tests(ctx.clone(), configs, clients, services);
 

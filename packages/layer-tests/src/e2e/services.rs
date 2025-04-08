@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    e2e::digests::DigestName,
+    e2e::components::ComponentName,
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_eth_client::{
         example_service_manager::SimpleServiceManager, example_trigger::SimpleTrigger,
@@ -10,8 +10,8 @@ use crate::{
 
 use super::{
     clients::Clients,
+    components::ComponentSources,
     config::Configs,
-    digests::Digests,
     matrix::{AnyService, CosmosService, EthService},
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
@@ -19,7 +19,7 @@ use alloy::{primitives::Address, sol_types::SolEvent};
 use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID, ComponentSource,
+    AllowedHostPermission, ByteArray, ChainName, Component, ComponentID,
     EthereumContractSubmission, Permissions, Service, ServiceConfig, ServiceID, ServiceManager,
     ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
@@ -31,7 +31,12 @@ pub struct Services {
 }
 
 impl Services {
-    pub fn new(ctx: AppContext, configs: &Configs, clients: &Clients, digests: &Digests) -> Self {
+    pub fn new(
+        ctx: AppContext,
+        configs: &Configs,
+        clients: &Clients,
+        component_sources: &ComponentSources,
+    ) -> Self {
         ctx.rt.block_on(async move {
             let mut chain_names = ChainNames::default();
 
@@ -62,14 +67,15 @@ impl Services {
             for service_kind in all_services {
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
-                        deploy_service_raw(service_kind, clients, digests, &chain_names).await
+                        deploy_service_raw(service_kind, clients, component_sources, &chain_names)
+                            .await
                     }
                     _ => {
                         deploy_service_simple(
                             service_kind,
                             configs,
                             clients,
-                            digests,
+                            component_sources,
                             &chain_names,
                             &mut cosmos_code_ids,
                         )
@@ -131,12 +137,16 @@ async fn deploy_service_simple(
     service_kind: AnyService,
     _configs: &Configs,
     clients: &Clients,
-    digests: &Digests,
+    component_sources: &ComponentSources,
     chain_names: &ChainNames,
     cosmos_code_ids: &mut BTreeMap<ChainName, u64>,
 ) -> Service {
-    let digest_name = Vec::<DigestName>::from(service_kind)[0];
-    let digest = digests.lookup.get(&digest_name).unwrap().clone();
+    let component_name = Vec::<ComponentName>::from(service_kind)[0];
+    let component_source = component_sources
+        .lookup
+        .get(&component_name)
+        .unwrap()
+        .clone();
 
     // Determine trigger chain directly based on service_kind
     let trigger_chain = match service_kind {
@@ -272,7 +282,7 @@ async fn deploy_service_simple(
     let workflow_id = WorkflowID::new("default").unwrap();
 
     let component = Component {
-        source: ComponentSource::Digest(digest),
+        source: component_source,
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
@@ -334,7 +344,7 @@ async fn deploy_service_simple(
 async fn deploy_service_raw(
     service_kind: AnyService,
     clients: &Clients,
-    digests: &Digests,
+    component_sources: &ComponentSources,
     chain_names: &ChainNames,
 ) -> Service {
     if !matches!(service_kind, AnyService::Eth(EthService::MultiWorkflow)) {
@@ -347,10 +357,14 @@ async fn deploy_service_raw(
     let component_id1 = ComponentID::new("component1").unwrap();
     let component_id2 = ComponentID::new("component2").unwrap();
 
-    let digest_names = Vec::<DigestName>::from(service_kind);
+    let component_names = Vec::<ComponentName>::from(service_kind);
 
     let component1 = Component {
-        source: ComponentSource::Digest(digests.lookup.get(&digest_names[0]).unwrap().clone()),
+        source: component_sources
+            .lookup
+            .get(&component_names[0])
+            .unwrap()
+            .clone(),
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
@@ -358,7 +372,11 @@ async fn deploy_service_raw(
     };
 
     let component2 = Component {
-        source: ComponentSource::Digest(digests.lookup.get(&digest_names[1]).unwrap().clone()),
+        source: component_sources
+            .lookup
+            .get(&component_names[1])
+            .unwrap()
+            .clone(),
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
