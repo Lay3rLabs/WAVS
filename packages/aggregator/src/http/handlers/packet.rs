@@ -67,11 +67,7 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             let client = state.get_eth_client(chain_name).await?;
             let service_manager =
                 SimpleServiceManager::new(service.manager.eth_address_unchecked(), client.provider);
-            let weight = service_manager
-                .getOperatorWeightAtBlock(signer, block_height.try_into()?)
-                .call()
-                .await?
-                ._0;
+            let weight = service_manager.getOperatorWeight(signer).call().await?._0;
 
             validate_packet(packet, &queue, signer, weight)?
         }
@@ -145,11 +141,7 @@ fn validate_packet(
 
     // TODO: ensure that the signer is in the operator set
 
-    Ok(QueuedPacket {
-        packet,
-        signer,
-        weight: operator_weight,
-    })
+    Ok(QueuedPacket { packet, signer })
 }
 
 #[cfg(test)]
