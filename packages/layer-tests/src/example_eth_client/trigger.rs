@@ -38,8 +38,7 @@ impl SimpleEthTriggerClient {
     }
 
     pub async fn deploy(provider: SigningProvider) -> Result<Address> {
-        let contract = SimpleTrigger::deploy(provider).await?;
-        Ok(*contract.address())
+        Ok(*SimpleTrigger::deploy(provider).await?.address())
     }
 
     // just a static helper to simulate the data that would be emitted from the contract

@@ -1,3 +1,4 @@
+#![cfg(feature = "mock")]
 // these are like the real e2e but with only mocks
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected

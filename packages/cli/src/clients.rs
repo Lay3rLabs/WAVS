@@ -1,3 +1,4 @@
+use alloy::providers::Provider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
@@ -5,8 +6,8 @@ use utils::{
     eth_client::{EthClientBuilder, EthSigningClient},
 };
 use wavs_types::{
-    AddServiceRequest, AllowedHostPermission, ComponentSource, Digest, Permissions, Service,
-    ServiceConfig, ServiceID, SigningKeyResponse, Submit, Trigger, UploadComponentResponse,
+    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
+    ServiceID, SigningKeyResponse, UploadComponentResponse,
 };
 
 use crate::config::Config;
@@ -75,35 +76,11 @@ impl HttpClient {
         Ok(response.digest.into())
     }
 
-    pub async fn create_service_simple(
+    pub async fn create_service_raw<T: Provider>(
         &self,
-        trigger: Trigger,
-        submit: Submit,
-        source: ComponentSource,
-        config: ServiceConfig,
-    ) -> Result<Service> {
-        let mut service = Service::new_simple(
-            ServiceID::new(uuid::Uuid::now_v7().as_simple().to_string())?,
-            None,
-            trigger,
-            source,
-            submit,
-            Some(config),
-        );
-
-        for component in service.components.values_mut() {
-            component.permissions = Permissions {
-                allowed_http_hosts: AllowedHostPermission::All,
-                file_system: true,
-            }
-        }
-
-        self.create_service_raw(service.clone()).await?;
-
-        Ok(service)
-    }
-
-    pub async fn create_service_raw(&self, service: Service) -> Result<()> {
+        provider: T,
+        service: Service,
+    ) -> Result<()> {
         let body = serde_json::to_string(&service)?;
 
         self.inner
@@ -115,13 +92,20 @@ impl HttpClient {
             .error_for_status()?;
 
         let service_uri = format!("{}/service/{}", self.endpoint, service.id);
-        tracing::info!("Service URI: {}", service_uri);
 
-        // TODO - deprecate this old add-service endpoint, instead
-        // broadcast the service uri to the nodes by way of the service manager metadata
-        // but for now, we'll support both until all the dust settles
+        let contract =
+            IWavsServiceManagerInstance::new(service.manager.eth_address_unchecked(), provider);
+        contract
+            .setServiceURI(service_uri)
+            .send()
+            .await?
+            .watch()
+            .await?;
 
-        let body = serde_json::to_string(&AddServiceRequest { service })?;
+        let body: String = serde_json::to_string(&AddServiceRequest {
+            chain_name: service.manager.chain_name().clone(),
+            address: Address::Eth(service.manager.eth_address_unchecked().into()),
+        })?;
 
         self.inner
             .post(format!("{}/app", self.endpoint))

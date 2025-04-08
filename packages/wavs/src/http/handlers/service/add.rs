@@ -16,9 +16,12 @@ pub async fn handle_add_service(
 }
 
 async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResult<()> {
-    let AddServiceRequest { service } = req;
+    let AddServiceRequest {
+        chain_name,
+        address,
+    } = req;
 
-    state.dispatcher.add_service(service).await?;
+    state.dispatcher.add_service(chain_name, address).await?;
 
     Ok(())
 }
