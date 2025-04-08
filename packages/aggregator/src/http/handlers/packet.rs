@@ -2,12 +2,12 @@ use anyhow::{anyhow, bail};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EthereumContractSubmission, Packet, SignerAddress,
+    Aggregator, EthereumContractSubmission, Packet,
 };
 
 use crate::http::{
     error::AnyError,
-    state::{HttpState, PacketQueue},
+    state::{HttpState, PacketQueue, QueuedPacket},
 };
 
 #[axum::debug_handler]
@@ -38,13 +38,13 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
     // it may be some struct, using a Vec as a placeholder for now
     let operator_set = Vec::new();
 
-    validate_packet(&packet, &queue, &operator_set)?;
+    let queued = validate_packet(packet, &queue, &operator_set)?;
 
-    let envelope = packet.envelope.clone();
-    let block_height = packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
-    let route = packet.route.clone();
+    let envelope = queued.packet.envelope.clone();
+    let block_height = queued.packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
+    let route = queued.packet.route.clone();
 
-    queue.push(packet);
+    queue.push(queued);
 
     let count = queue.len();
 
@@ -70,18 +70,13 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
             ))?;
 
         let client = state.get_eth_client(&chain_name).await?;
-        let signer_and_signatures = queue
+        let signatures = queue
             .drain(..)
-            .map(|packet| (packet.signer, packet.signature))
+            .map(|queued| queued.packet.signature)
             .collect();
+
         let tx_receipt = client
-            .send_envelope_signatures(
-                envelope,
-                signer_and_signatures,
-                block_height,
-                address,
-                max_gas,
-            )
+            .send_envelope_signatures(envelope, signatures, block_height, address, max_gas)
             .await?;
 
         state.save_packet_queue(&event_id, PacketQueue::Burned)?;
@@ -96,22 +91,17 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
 }
 
 fn validate_packet(
-    packet: &Packet,
-    queue: &[Packet],
-    _operator_set: &[SignerAddress], /* TODO: placeholder */
-) -> anyhow::Result<()> {
-    // TODO
-    // 1. ensure that the signature is valid
-    // 2. ensure that the signer is in the operator set
+    packet: Packet,
+    queue: &[QueuedPacket],
+    _operator_set: &[alloy::primitives::Address], /* TODO: placeholder */
+) -> anyhow::Result<QueuedPacket> {
     match queue.first() {
         None => {}
-        Some(last_packet) => {
+        Some(prev) => {
             // check if the packet is the same as the last one
-            if packet.envelope != last_packet.envelope {
+            if packet.envelope != prev.packet.envelope {
                 bail!("Unexpected envelope difference!");
             }
-
-            // TODO: ensure that the signer is not already in the queue
 
             // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
             // if packet.block_height != last_packet.block_height {
@@ -120,5 +110,93 @@ fn validate_packet(
         }
     }
 
-    Ok(())
+    // this implicitly validates that the signature is valid
+    let signer = packet.signature.eth_signer_address(&packet.envelope)?;
+
+    for queued_packet in queue {
+        if signer == queued_packet.signer {
+            bail!("Signer {} already in queue", signer);
+        }
+    }
+
+    // TODO: ensure that the signer is in the operator set
+
+    Ok(QueuedPacket { packet, signer })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use alloy::{
+        primitives::{Bytes, FixedBytes},
+        signers::{
+            k256::ecdsa::SigningKey,
+            local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
+            SignerSync,
+        },
+    };
+    use wavs_types::{Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute};
+
+    #[test]
+    fn packet_validation() {
+        let mut queue = Vec::new();
+
+        let signer_1 = mock_signer();
+        let signer_2 = mock_signer();
+        let envelope_1 = mock_envelope([1, 2, 3]);
+        let envelope_2 = mock_envelope([4, 5, 6]);
+
+        let packet = mock_packet(&signer_1, &envelope_1);
+
+        // empty queue is okay
+        let queued = validate_packet(packet, &queue, &[]).unwrap();
+        // got the expected signer address
+        assert_eq!(queued.signer, signer_1.address());
+
+        queue.push(queued);
+
+        // "fails" (expectedly) because the signer is the same
+        let packet = mock_packet(&signer_1, &envelope_1);
+        validate_packet(packet, &queue, &[]).unwrap_err();
+
+        // "fails" (expectedly) because the envelope is different
+        let packet = mock_packet(&signer_2, &envelope_2);
+        validate_packet(packet, &queue, &[]).unwrap_err();
+
+        // passes because the signer is different but envelope is the same
+        let packet = mock_packet(&signer_2, &envelope_1);
+        let queued = validate_packet(packet, &queue, &[]).unwrap();
+        // got the expected signer address
+        assert_eq!(queued.signer, signer_2.address());
+        queue.push(queued);
+    }
+
+    fn mock_packet(signer: &LocalSigner<SigningKey>, envelope: &Envelope) -> Packet {
+        let signature = signer.sign_hash_sync(&envelope.eip191_hash()).unwrap();
+
+        Packet {
+            envelope: envelope.clone(),
+            block_height: 1,
+            route: PacketRoute {
+                service_id: "service".parse().unwrap(),
+                workflow_id: "workflow".parse().unwrap(),
+            },
+            signature: EnvelopeSignature::Secp256k1(signature),
+        }
+    }
+
+    fn mock_signer() -> LocalSigner<SigningKey> {
+        MnemonicBuilder::<English>::default()
+            .word_count(24)
+            .build_random()
+            .unwrap()
+    }
+
+    fn mock_envelope(payload: impl Into<Bytes>) -> Envelope {
+        Envelope {
+            payload: payload.into(),
+            eventId: FixedBytes([0; 20]),
+            ordering: FixedBytes([0; 12]),
+        }
+    }
 }
