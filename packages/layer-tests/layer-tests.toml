@@ -3,7 +3,7 @@ all = true
 # isolated = "eth-echo-data"
 # isolated = "eth-multi-trigger"
 # isolated = "eth-permissions"
-registry = true
+# registry = true
 
 # Run just one test (cannot be enabled at the same time as all)
 
