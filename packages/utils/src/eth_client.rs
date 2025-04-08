@@ -5,11 +5,12 @@ pub mod signing;
 use std::sync::Arc;
 
 use alloy::{
+    hex,
     network::EthereumWallet,
     primitives::Address,
     providers::ProviderBuilder,
     signers::{
-        k256::ecdsa::SigningKey,
+        k256::{ecdsa::SigningKey, SecretKey},
         local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
     },
 };
@@ -131,10 +132,16 @@ impl EthClientBuilder {
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
 
-        let signer = MnemonicBuilder::<English>::default()
-            .phrase(mnemonic)
-            .index(self.config.hd_index.unwrap_or(0))?
-            .build()?;
+        let signer: LocalSigner<SigningKey> = if mnemonic.starts_with("0x") {
+            let private_key = hex::decode(&mnemonic[2..])?;
+            let secret_key = SecretKey::from_slice(&private_key)?;
+            LocalSigner::from_signing_key(secret_key.into())
+        } else {
+            MnemonicBuilder::<English>::default()
+                .phrase(mnemonic)
+                .index(self.config.hd_index.unwrap_or(0))?
+                .build()?
+        };
 
         let wallet: EthereumWallet = signer.clone().into();
 
