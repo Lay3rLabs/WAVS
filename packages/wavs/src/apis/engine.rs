@@ -7,6 +7,8 @@ use wavs_types::{
 };
 
 pub trait Engine: Send + Sync {
+    fn start(&self) -> Result<(), EngineError>;
+
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
     fn store_component_from_source(
         &self,
@@ -29,6 +31,10 @@ pub trait Engine: Send + Sync {
 }
 
 impl<E: Engine> Engine for std::sync::Arc<E> {
+    fn start(&self) -> Result<(), EngineError> {
+        self.as_ref().start()
+    }
+
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         self.as_ref().store_component_bytes(bytecode)
     }

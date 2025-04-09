@@ -92,8 +92,8 @@ pub struct Component {
     pub fuel_limit: Option<u64>,
 
     /// The maximum amount of time to allow for a single component execution, in seconds
-    /// If not supplied, default will be `Workflow::DEFAULT_EXEC_SECONDS`
-    pub max_exec_seconds: Option<u64>,
+    /// If not supplied, default will be `Workflow::DEFAULT_TIME_LIMIT_SECONDS`
+    pub time_limit_seconds: Option<u64>,
 
     /// Key-value pairs that are accessible in the components via host bindings.
     pub config: BTreeMap<String, String>,
@@ -157,7 +157,7 @@ pub struct Workflow {
 
 impl Workflow {
     pub const DEFAULT_FUEL_LIMIT: u64 = 100_000_000;
-    pub const DEFAULT_EXEC_SECONDS: u64 = 30;
+    pub const DEFAULT_TIME_LIMIT_SECONDS: u64 = 10;
 }
 
 // The TriggerManager reacts to these triggers
@@ -362,7 +362,7 @@ mod test_ext {
                 source,
                 permissions: Default::default(),
                 fuel_limit: None,
-                max_exec_seconds: None,
+                time_limit_seconds: None,
                 config: BTreeMap::new(),
                 env_keys: vec![],
             }

@@ -24,6 +24,7 @@ pub struct InstanceDeps {
     pub store: Store<HostComponent>,
     pub component: wasmtime::component::Component,
     pub linker: Linker<HostComponent>,
+    pub time_limit_seconds: u64,
 }
 
 impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
@@ -88,6 +89,11 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             .fuel_limit
             .unwrap_or(Workflow::DEFAULT_FUEL_LIMIT);
 
+        let time_limit_seconds = workflow
+            .component
+            .time_limit_seconds
+            .unwrap_or(Workflow::DEFAULT_TIME_LIMIT_SECONDS);
+
         let ctx = builder.build();
 
         // create host (what is this actually? some state needed for the linker?)
@@ -106,10 +112,16 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         store.set_fuel(fuel_limit).map_err(EngineError::Store)?;
 
+        // This time limit kills things from _within_ the Wasm instance
+        // and is not the same as the time limit from the host side, which still needs to be imposed
+        // see https://github.com/bytecodealliance/wasmtime-go/issues/233#issuecomment-2356238658
+        store.set_epoch_deadline(time_limit_seconds);
+
         Ok(InstanceDeps {
             store,
             component,
             linker,
+            time_limit_seconds,
         })
     }
 }

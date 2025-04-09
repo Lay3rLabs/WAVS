@@ -8910,6 +8910,7 @@ dependencies = [
  "anyhow",
  "layer-climb",
  "thiserror 2.0.12",
+ "tokio",
  "utils",
  "wasmtime",
  "wasmtime-wasi",

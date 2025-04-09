@@ -17,6 +17,11 @@ impl IdentityEngine {
 
 impl Engine for IdentityEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    fn start(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         Ok(Digest::new(bytecode))
     }

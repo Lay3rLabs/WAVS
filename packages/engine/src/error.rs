@@ -23,4 +23,7 @@ pub enum EngineError {
 
     #[error("Max fuel consumed by WasmEngine for service: {0}, workflow: {1}")]
     OutOfFuel(ServiceID, WorkflowID),
+
+    #[error("Time limit exceeded by WasmEngine for service: {0}, workflow: {1}")]
+    OutOfTime(ServiceID, WorkflowID),
 }

@@ -2,6 +2,7 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
+use std::time::Duration;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::wkg::WkgClient;
@@ -39,6 +40,7 @@ impl<S: CAStorage> WasmEngine<S> {
         config.wasm_component_model(true);
         config.async_support(true);
         config.consume_fuel(true);
+        config.epoch_interruption(true);
         let wasm_engine = WTEngine::new(&config).unwrap();
 
         let lru_size = NonZeroUsize::new(lru_size).unwrap();
@@ -61,6 +63,19 @@ impl<S: CAStorage> WasmEngine<S> {
 }
 
 impl<S: CAStorage> Engine for WasmEngine<S> {
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    fn start(&self) -> Result<(), EngineError> {
+        let engine = self.wasm_engine.clone();
+
+        // just run forever, ticking forward till the end of time (or however long this node is up)
+        std::thread::spawn(move || loop {
+            engine.increment_epoch();
+            std::thread::sleep(Duration::from_secs(1));
+        });
+
+        Ok(())
+    }
+
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
@@ -487,5 +502,132 @@ mod tests {
 
         // Directory should still not exist
         assert!(!nonexistent_dir.exists());
+    }
+
+    #[test]
+    fn execute_with_low_time_limit() {
+        let storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
+
+        engine.start().unwrap();
+
+        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let mut workflow = Workflow {
+            trigger: Trigger::Manual,
+            component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
+            submit: Submit::None,
+            aggregator: None,
+        };
+
+        // first, check that it works with enough time and async sleep
+        workflow.component.time_limit_seconds = Some(10);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "1".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "async".to_string());
+
+        engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap();
+
+        // now same thing but sync sleep
+        workflow.component.time_limit_seconds = Some(10);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "1".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "sync".to_string());
+
+        engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap();
+
+        // next, check that it "fails" expectedly with async sleep
+        workflow.component.time_limit_seconds = Some(1);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "10".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "async".to_string());
+
+        let err = engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            EngineError::Engine(wavs_engine::EngineError::OutOfTime(_, _))
+        ));
+
+        // and same thing with sync sleep
+        workflow.component.time_limit_seconds = Some(1);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "10".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "sync".to_string());
+
+        let err = engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            EngineError::Engine(wavs_engine::EngineError::OutOfTime(_, _))
+        ));
     }
 }
