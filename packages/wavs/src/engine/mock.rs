@@ -68,6 +68,11 @@ impl MockEngine {
 
 impl Engine for MockEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    fn start(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         let digest = Digest::new(bytecode);
         self.digests.write().unwrap().insert(digest.clone());
