@@ -31,11 +31,15 @@ impl super::world::host::Host for HostComponent {
             .map(|config| config.into())
     }
 
+    fn config_var(&mut self, key: String) -> Option<String> {
+        self.workflow.component.config.get(&key).cloned()
+    }
+
     fn log(&mut self, level: LogLevel, message: String) {
         (self.inner_log)(
             &self.service_id,
             &self.workflow_id,
-            &self.digest,
+            self.workflow.component.source.digest(),
             level,
             message,
         );

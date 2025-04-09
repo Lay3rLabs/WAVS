@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use utils::storage::db::{RedbStorage, Table, JSON};
 use wavs::{test_utils::address::rand_address_eth, triggers::mock::mock_eth_event_trigger};
 use wavs_types::{
-    Component, ComponentSource, Digest, Service, ServiceConfig, ServiceID, ServiceManager,
-    ServiceStatus, Submit, Workflow, WorkflowID,
+    Component, ComponentSource, Digest, Service, ServiceID, ServiceManager, ServiceStatus, Submit,
+    Workflow, WorkflowID,
 };
 
 use redb::ReadableTable;
@@ -91,7 +91,6 @@ fn db_service_store() {
         name: service_id.to_string(),
         workflows,
         status: ServiceStatus::Active,
-        config: ServiceConfig::default(),
         manager: ServiceManager::Ethereum {
             chain_name: "eth".parse().unwrap(),
             address: rand_address_eth(),

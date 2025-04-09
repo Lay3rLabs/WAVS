@@ -1,17 +1,17 @@
 use utils::config::ChainConfigs;
 use wasmtime_wasi::{WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs_types::{Digest, ServiceID, WorkflowID};
+use wavs_types::{Digest, ServiceID, Workflow, WorkflowID};
 
 use crate::bindings::world::host::LogLevel;
 
 // TODO: revisit this an understand it.
 // Copied blindly from old code
 pub struct HostComponent {
-    pub chain_configs: ChainConfigs,
-    pub service_id: ServiceID,
+    pub workflow: Workflow,
     pub workflow_id: WorkflowID,
-    pub digest: Digest,
+    pub service_id: ServiceID,
+    pub chain_configs: ChainConfigs,
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,

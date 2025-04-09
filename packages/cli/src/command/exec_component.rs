@@ -2,8 +2,8 @@ use anyhow::Result;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, Digest, Permissions, ServiceConfig, ServiceID, Trigger, TriggerAction,
-    TriggerConfig, TriggerData, WasmResponse, WorkflowID,
+    AllowedHostPermission, ComponentSource, Digest, Permissions, ServiceID, Submit, Trigger,
+    TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,
 };
 
 use crate::{
@@ -48,7 +48,6 @@ impl std::fmt::Display for ExecComponent {
 pub struct ExecComponentArgs {
     pub component_path: String,
     pub input: ComponentInput,
-    pub service_config: Option<ServiceConfig>,
     pub fuel_limit: Option<u64>,
 }
 
@@ -58,7 +57,6 @@ impl ExecComponent {
         ExecComponentArgs {
             component_path,
             input,
-            service_config,
             fuel_limit,
         }: ExecComponentArgs,
     ) -> Result<Self> {
@@ -71,9 +69,7 @@ impl ExecComponent {
 
         let engine = WTEngine::new(&config)?;
 
-        let service_config = service_config.unwrap_or_default();
-
-        let trigger = TriggerAction {
+        let trigger_action = TriggerAction {
             config: TriggerConfig {
                 service_id: ServiceID::new("service-1")?,
                 workflow_id: WorkflowID::default(),
@@ -82,26 +78,36 @@ impl ExecComponent {
             data: TriggerData::Raw(input.decode()?),
         };
 
+        let mut workflow = Workflow {
+            trigger: trigger_action.config.trigger.clone(),
+            component: wavs_types::Component::new(ComponentSource::Digest(Digest::new(
+                &wasm_bytes,
+            ))),
+            submit: Submit::None,
+            aggregator: None,
+        };
+
+        workflow.component.permissions = Permissions {
+            allowed_http_hosts: AllowedHostPermission::All,
+            file_system: true,
+        };
+
+        workflow.component.fuel_limit = fuel_limit;
+
         let mut instance_deps = InstanceDepsBuilder {
-            service_id: trigger.config.service_id.clone(),
-            workflow_id: trigger.config.workflow_id.clone(),
-            digest: Digest::new(&wasm_bytes),
+            workflow,
+            service_id: trigger_action.config.service_id.clone(),
+            workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
             engine: &engine,
-            permissions: &Permissions {
-                allowed_http_hosts: AllowedHostPermission::All,
-                file_system: true,
-            },
             data_dir: tempfile::tempdir()?.into_path(),
-            service_config: &service_config,
             chain_configs: &cli_config.chains,
             log: log_wasi,
-            fuel_limit,
         }
         .build()?;
 
         let initial_fuel = instance_deps.store.get_fuel()?;
-        let wasm_response = wavs_engine::execute(&mut instance_deps, trigger).await?;
+        let wasm_response = wavs_engine::execute(&mut instance_deps, trigger_action).await?;
 
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 
@@ -152,7 +158,6 @@ mod test {
         let args = ExecComponentArgs {
             component_path: component_path.clone(),
             input: ComponentInput::new("hello world".to_string()),
-            service_config: None,
             fuel_limit: None,
         };
 
@@ -165,7 +170,6 @@ mod test {
         let args = ExecComponentArgs {
             component_path: component_path.clone(),
             input: ComponentInput::new("0x68656C6C6F20776F726C64".to_string()),
-            service_config: None,
             fuel_limit: None,
         };
 
@@ -178,7 +182,6 @@ mod test {
         let args = ExecComponentArgs {
             component_path: component_path.clone(),
             input: ComponentInput::new("68656C6C6F20776F726C64".to_string()),
-            service_config: None,
             fuel_limit: None,
         };
 
@@ -198,7 +201,6 @@ mod test {
         let args = ExecComponentArgs {
             component_path: component_path.clone(),
             input: ComponentInput::new(format!("@{}", file.path().to_string_lossy())),
-            service_config: None,
             fuel_limit: None,
         };
 
