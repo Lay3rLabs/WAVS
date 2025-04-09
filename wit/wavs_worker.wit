@@ -149,6 +149,8 @@ world layer-trigger-world {
     get-eth-chain-config: func(chain-name: string) -> option<eth-chain-config>;
     get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
 
+    config-var: func(key: string) -> option<string>;
+
     log: func(level: log-level, message: string);
   }
 

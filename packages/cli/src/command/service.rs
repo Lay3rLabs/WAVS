@@ -15,8 +15,8 @@ use std::{
 use uuid::Uuid;
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
-    EthereumContractSubmission, Permissions, ServiceConfig, ServiceID, ServiceManager,
-    ServiceStatus, Submit, Trigger, WorkflowID,
+    EthereumContractSubmission, Permissions, ServiceID, ServiceManager, ServiceStatus, Submit,
+    Trigger, WorkflowID,
 };
 
 use crate::{
@@ -65,7 +65,7 @@ pub async fn handle_service_command(
                 let result = update_component_permissions(&file, id, http_hosts, file_system)?;
                 display_result(ctx, result, &file, json)?;
             }
-            ComponentCommand::FuelLimit { id, limit } => {
+            ComponentCommand::FuelLimit { id, fuel: limit } => {
                 let result = update_component_fuel_limit(&file, id, limit)?;
                 display_result(ctx, result, &file, json)?;
             }
@@ -73,8 +73,8 @@ pub async fn handle_service_command(
                 let result = update_component_config(&file, id, values)?;
                 display_result(ctx, result, &file, json)?;
             }
-            ComponentCommand::MaxExecTime { id, seconds } => {
-                let result = update_component_max_exec_time(&file, id, seconds)?;
+            ComponentCommand::TimeLimit { id, seconds } => {
+                let result = update_component_time_limit_seconds(&file, id, seconds)?;
                 display_result(ctx, result, &file, json)?;
             }
         },
@@ -469,7 +469,7 @@ impl std::fmt::Display for ComponentFuelLimitResult {
 #[derive(Debug, Clone)]
 pub struct ComponentConfigResult {
     /// The updated configuration
-    pub config: Vec<(String, String)>,
+    pub config: BTreeMap<String, String>,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -570,7 +570,6 @@ pub fn init_service(
         name,
         workflows: BTreeMap::new(),
         status: ServiceStatus::Active,
-        config: ServiceConfig::default(),
         manager: ServiceManagerJson::default(),
     };
 
@@ -903,7 +902,7 @@ pub fn update_component_config(
 
         if let Some(values) = values {
             // If values provided, parse config values from 'key=value' format
-            let mut config_pairs = Vec::new();
+            let mut config_pairs = BTreeMap::new();
 
             for value in values {
                 match value.split_once('=') {
@@ -916,7 +915,7 @@ pub fn update_component_config(
                             return Err(anyhow::anyhow!("Empty key in config value: '{}'", value));
                         }
 
-                        config_pairs.push((key, value));
+                        config_pairs.insert(key, value);
                     }
                     None => {
                         return Err(anyhow::anyhow!(
@@ -948,10 +947,10 @@ pub fn update_component_config(
 }
 
 /// Update a component's maximum execution time
-pub fn update_component_max_exec_time(
+pub fn update_component_time_limit_seconds(
     file_path: &Path,
     workflow_id: WorkflowID,
-    max_exec_seconds: Option<u64>,
+    seconds: Option<u64>,
 ) -> Result<ComponentMaxExecResult> {
     modify_service_file(file_path, |mut service| {
         // First find the workflow and get a reference to it
@@ -967,12 +966,12 @@ pub fn update_component_max_exec_time(
         ))?;
 
         // Update the maximum execution time
-        component.max_exec_seconds = max_exec_seconds;
+        component.time_limit_seconds = seconds;
 
         Ok((
             service,
             ComponentMaxExecResult {
-                max_exec_seconds,
+                max_exec_seconds: seconds,
                 file_path: file_path.to_path_buf(),
             },
         ))
@@ -1869,9 +1868,12 @@ mod tests {
 
         // Test setting a specific max execution time
         let max_exec_time = 120u64;
-        let max_exec_result =
-            update_component_max_exec_time(&file_path, workflow_id_2.clone(), Some(max_exec_time))
-                .unwrap();
+        let max_exec_result = update_component_time_limit_seconds(
+            &file_path,
+            workflow_id_2.clone(),
+            Some(max_exec_time),
+        )
+        .unwrap();
 
         // Verify max exec time result
         assert_eq!(max_exec_result.max_exec_seconds, Some(max_exec_time));
@@ -1888,13 +1890,13 @@ mod tests {
             .as_component()
             .unwrap();
         assert_eq!(
-            component_with_max_exec.max_exec_seconds,
+            component_with_max_exec.time_limit_seconds,
             Some(max_exec_time)
         );
 
         // Test removing max exec time (setting to None)
         let no_max_exec_result =
-            update_component_max_exec_time(&file_path, workflow_id_2.clone(), None).unwrap();
+            update_component_time_limit_seconds(&file_path, workflow_id_2.clone(), None).unwrap();
 
         // Verify no max exec time result
         assert_eq!(no_max_exec_result.max_exec_seconds, None);
@@ -1910,7 +1912,7 @@ mod tests {
             .component
             .as_component()
             .unwrap();
-        assert_eq!(component_with_no_max_exec.max_exec_seconds, None);
+        assert_eq!(component_with_no_max_exec.time_limit_seconds, None);
 
         // Test deleting a component
         let delete_result = delete_component(&file_path, workflow_id.clone()).unwrap();
@@ -2432,6 +2434,12 @@ mod tests {
             submit: SubmitJson::Submit(submit.clone()),
         };
 
+        // Create service manager
+        let manager = ServiceManagerJson::Manager(ServiceManager::Ethereum {
+            chain_name: ethereum_chain.clone(),
+            address: ethereum_address,
+        });
+
         // Create a valid service
 
         let mut workflows = BTreeMap::new();
@@ -2442,8 +2450,7 @@ mod tests {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
-            config: ServiceConfig::default(),
-            manager: ServiceManagerJson::default(),
+            manager,
         };
 
         // Write the service to a file

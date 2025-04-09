@@ -1,7 +1,7 @@
 [package]
 name = "layer-tests"
-version = "0.3.0"
 description = "Layer end-to-end tests"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 rust-version.workspace = true

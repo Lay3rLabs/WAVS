@@ -29,7 +29,7 @@ pub struct CoreSubmission {
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
-    eth_sending_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
+    eth_sending_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
     eth_mnemonic: String,
     eth_mnemonic_hd_index_count: Arc<AtomicU32>,
 }
@@ -49,32 +49,6 @@ impl CoreSubmission {
                 .ok_or(SubmissionError::MissingMnemonic)?,
             eth_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
         })
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn maybe_tap_eth_faucet(
-        &self,
-        chain_name: ChainName,
-        client: &EthSigningClient,
-    ) -> Result<(), SubmissionError> {
-        let chain_config = self
-            .chain_configs
-            .get(&chain_name)
-            .ok_or(SubmissionError::MissingEthereumChain)?;
-        let chain_config: EthereumChainConfig = chain_config
-            .clone()
-            .try_into()
-            .map_err(|_| SubmissionError::MissingEthereumChain)?;
-
-        let _faucet_url = match chain_config.faucet_endpoint.clone() {
-            Some(url) => url,
-            None => {
-                tracing::debug!("No faucet configured, skipping");
-                return Ok(());
-            }
-        };
-
-        todo!()
     }
 
     async fn make_packet(
@@ -120,7 +94,8 @@ impl CoreSubmission {
             address,
         } = submission;
 
-        let eth_client = {
+        // this frees up the sync lock so new clients can be added at runtime
+        let eth_client_mutex = {
             let lock = self.eth_sending_clients.read().unwrap();
             lock.get(&chain_name)
                 .ok_or(SubmissionError::MissingEthereumSendingClient(
@@ -129,15 +104,10 @@ impl CoreSubmission {
                 .clone()
         };
 
-        if let Err(err) = self.maybe_tap_eth_faucet(chain_name, &eth_client).await {
-            tracing::error!(
-                "Failed to tap faucet for client {}: {:?}",
-                eth_client.address(),
-                err
-            );
-        }
-
-        let _tx_receipt = eth_client
+        // however we want to keep an async lock until this transaction is finished
+        let _tx_receipt = eth_client_mutex
+            .lock()
+            .await
             .send_envelope_signatures(
                 packet.envelope,
                 vec![packet.signature],
@@ -323,10 +293,10 @@ impl Submission for CoreSubmission {
                     .await
                     .map_err(SubmissionError::Ethereum)?;
 
-                    self.eth_sending_clients
-                        .write()
-                        .unwrap()
-                        .insert(chain_name.clone(), client);
+                    self.eth_sending_clients.write().unwrap().insert(
+                        chain_name.clone(),
+                        Arc::new(tokio::sync::Mutex::new(client)),
+                    );
                 }
             }
         }

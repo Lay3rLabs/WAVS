@@ -2,6 +2,7 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
+use std::time::Duration;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::wkg::WkgClient;
@@ -10,12 +11,10 @@ use wasmtime_wasi::{WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_engine::InstanceDepsBuilder;
 use wavs_types::{
-    ComponentSource, Digest, ServiceConfig, ServiceID, TriggerAction, WasmResponse, WorkflowID,
+    ComponentSource, Digest, ServiceID, TriggerAction, WasmResponse, Workflow, WorkflowID,
 };
 
 use utils::storage::{CAStorage, CAStorageError};
-
-use crate::apis::engine::ExecutionComponent;
 
 use super::{Engine, EngineError};
 
@@ -41,6 +40,7 @@ impl<S: CAStorage> WasmEngine<S> {
         config.wasm_component_model(true);
         config.async_support(true);
         config.consume_fuel(true);
+        config.epoch_interruption(true);
         let wasm_engine = WTEngine::new(&config).unwrap();
 
         let lru_size = NonZeroUsize::new(lru_size).unwrap();
@@ -63,6 +63,19 @@ impl<S: CAStorage> WasmEngine<S> {
 }
 
 impl<S: CAStorage> Engine for WasmEngine<S> {
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    fn start(&self) -> Result<(), EngineError> {
+        let engine = self.wasm_engine.clone();
+
+        // just run forever, ticking forward till the end of time (or however long this node is up)
+        std::thread::spawn(move || loop {
+            engine.increment_epoch();
+            std::thread::sleep(Duration::from_secs(1));
+        });
+
+        Ok(())
+    }
+
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
@@ -122,12 +135,9 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        wasi: &ExecutionComponent,
-        fuel_limit: Option<u64>,
-        trigger: TriggerAction,
-        service_config: &ServiceConfig,
+        workflow: Workflow,
+        trigger_action: TriggerAction,
     ) -> Result<Option<WasmResponse>, EngineError> {
-        let digest = wasi.wasm.clone();
         fn log(
             service_id: &ServiceID,
             workflow_id: &WorkflowID,
@@ -161,10 +171,13 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 }
             }
         }
+
+        let digest = workflow.component.source.digest().clone();
+
         let mut instance_deps = InstanceDepsBuilder {
-            service_id: trigger.config.service_id.clone(),
-            workflow_id: trigger.config.workflow_id.clone(),
-            digest: digest.clone(),
+            workflow,
+            service_id: trigger_action.config.service_id.clone(),
+            workflow_id: trigger_action.config.workflow_id.clone(),
             component: match self.memory_cache.write().unwrap().get(&digest) {
                 Some(cm) => cm.clone(),
                 None => {
@@ -173,17 +186,16 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 }
             },
             engine: &self.wasm_engine,
-            permissions: &wasi.permissions,
-            data_dir: self.app_data_dir.join(trigger.config.service_id.as_ref()),
-            fuel_limit,
-            service_config,
+            data_dir: self
+                .app_data_dir
+                .join(trigger_action.config.service_id.as_ref()),
             chain_configs: &self.chain_configs,
             log,
         }
         .build()?;
 
         self.block_on_run(async move {
-            wavs_engine::execute(&mut instance_deps, trigger)
+            wavs_engine::execute(&mut instance_deps, trigger_action)
                 .await
                 .map_err(|e| e.into())
         })
@@ -253,9 +265,11 @@ impl WasiHttpView for HostComponent {
 #[cfg(test)]
 mod tests {
     use utils::storage::memory::MemoryStorage;
-    use wavs_types::{Permissions, ServiceID, Trigger, TriggerConfig, TriggerData, WorkflowID};
+    use wavs_types::{
+        ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, WorkflowID,
+    };
 
-    use crate::engine::mock::mock_chain_configs;
+    use crate::{engine::mock::mock_chain_configs, test_utils::address::rand_event_eth};
 
     use super::*;
 
@@ -305,16 +319,21 @@ mod tests {
 
         // store square digest
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
-        let execution_component = ExecutionComponent {
-            wasm: digest,
-            permissions: Permissions::default(),
+        let workflow = Workflow {
+            trigger: Trigger::eth_contract_event(
+                crate::test_utils::address::rand_address_eth(),
+                ChainName::new("eth").unwrap(),
+                rand_event_eth(),
+            ),
+            component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
+            submit: Submit::None,
+            aggregator: None,
         };
 
         // execute it and get bytes back
         let result = engine
             .execute(
-                &execution_component,
-                None,
+                workflow,
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -323,7 +342,6 @@ mod tests {
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
                 },
-                &ServiceConfig::default(),
             )
             .unwrap();
 
@@ -340,29 +358,28 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
-        let execution_component = ExecutionComponent {
-            wasm: digest,
-            permissions: Permissions::default(),
+        let mut workflow = Workflow {
+            trigger: Trigger::Manual,
+            component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
+            submit: Submit::None,
+            aggregator: None,
         };
-        let service_config = ServiceConfig {
-            host_envs: vec!["WAVS_ENV_TEST".to_string()],
-            kv: vec![("foo".to_string(), "bar".to_string())],
-        };
+
+        workflow.component.env_keys = vec!["WAVS_ENV_TEST".to_string()];
+        workflow.component.config = [("foo".to_string(), "bar".to_string())].into();
 
         // verify service config kv is accessible
         let result = engine
             .execute(
-                &execution_component,
-                None,
+                workflow.clone(),
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
-                    data: TriggerData::new_raw(br#"envvar:foo"#),
+                    data: TriggerData::new_raw(br#"configvar:foo"#),
                 },
-                &service_config,
             )
             .unwrap();
 
@@ -371,8 +388,7 @@ mod tests {
         // verify whitelisted host env var is accessible
         let result = engine
             .execute(
-                &execution_component,
-                None,
+                workflow.clone(),
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -381,7 +397,6 @@ mod tests {
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
                 },
-                &service_config,
             )
             .unwrap();
 
@@ -390,8 +405,7 @@ mod tests {
         // verify the non-enabled env var is not accessible
         let result = engine
             .execute(
-                &execution_component,
-                None,
+                workflow.clone(),
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -400,7 +414,6 @@ mod tests {
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
                 },
-                &service_config,
             )
             .unwrap_err();
 
@@ -419,17 +432,19 @@ mod tests {
 
         // store square digest
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
-        let execution_component = ExecutionComponent {
-            wasm: digest,
-            permissions: Permissions::default(),
+        let mut workflow = Workflow {
+            trigger: Trigger::Manual,
+            component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
+            submit: Submit::None,
+            aggregator: None,
         };
-        let service_config = ServiceConfig::default();
+
+        workflow.component.fuel_limit = Some(low_fuel_limit);
 
         // execute it and get the error
         let err = engine
             .execute(
-                &execution_component,
-                Some(low_fuel_limit),
+                workflow.clone(),
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: ServiceID::new("foobar").unwrap(),
@@ -438,7 +453,6 @@ mod tests {
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
                 },
-                &service_config,
             )
             .unwrap_err();
 
@@ -488,5 +502,132 @@ mod tests {
 
         // Directory should still not exist
         assert!(!nonexistent_dir.exists());
+    }
+
+    #[test]
+    fn execute_with_low_time_limit() {
+        let storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
+
+        engine.start().unwrap();
+
+        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let mut workflow = Workflow {
+            trigger: Trigger::Manual,
+            component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
+            submit: Submit::None,
+            aggregator: None,
+        };
+
+        // first, check that it works with enough time and async sleep
+        workflow.component.time_limit_seconds = Some(10);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "1".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "async".to_string());
+
+        engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap();
+
+        // now same thing but sync sleep
+        workflow.component.time_limit_seconds = Some(10);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "1".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "sync".to_string());
+
+        engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap();
+
+        // next, check that it "fails" expectedly with async sleep
+        workflow.component.time_limit_seconds = Some(1);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "10".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "async".to_string());
+
+        let err = engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            EngineError::Engine(wavs_engine::EngineError::OutOfTime(_, _))
+        ));
+
+        // and same thing with sync sleep
+        workflow.component.time_limit_seconds = Some(1);
+        workflow
+            .component
+            .config
+            .insert("sleep-seconds".to_string(), "10".to_string());
+        workflow
+            .component
+            .config
+            .insert("sleep-kind".to_string(), "sync".to_string());
+
+        let err = engine
+            .execute(
+                workflow.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: ServiceID::new("foobar").unwrap(),
+                        workflow_id: WorkflowID::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"hello world"#),
+                },
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            EngineError::Engine(wavs_engine::EngineError::OutOfTime(_, _))
+        ));
     }
 }

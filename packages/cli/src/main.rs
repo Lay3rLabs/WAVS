@@ -59,7 +59,6 @@ async fn main() {
         Command::Exec {
             component,
             input,
-            service_config,
             fuel_limit,
             args: _,
         } => {
@@ -67,7 +66,6 @@ async fn main() {
                 &ctx.config,
                 ExecComponentArgs {
                     component_path: component,
-                    service_config,
                     input: ComponentInput::new(input),
                     fuel_limit,
                 },

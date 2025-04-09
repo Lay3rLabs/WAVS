@@ -1,11 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::apis::engine::ExecutionComponent;
 use crate::triggers::mock::get_mock_trigger_data;
 use tracing::instrument;
 use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
-use wavs_types::{Digest, ServiceConfig, TriggerAction, WasmResponse};
+use wavs_types::{Digest, TriggerAction, WasmResponse, Workflow};
 
 use super::{Engine, EngineError};
 
@@ -69,6 +68,11 @@ impl MockEngine {
 
 impl Engine for MockEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    fn start(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         let digest = Digest::new(bytecode);
         self.digests.write().unwrap().insert(digest.clone());
@@ -99,16 +103,17 @@ impl Engine for MockEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        component: &ExecutionComponent,
-        _fuel_limit: Option<u64>,
+        workflow: Workflow,
         trigger: TriggerAction,
-        _service_config: &ServiceConfig,
     ) -> Result<Option<WasmResponse>, EngineError> {
         // FIXME: error if it wasn't stored before as well?
         let store = self.functions.read().unwrap();
-        let fx = store
-            .get(&component.wasm)
-            .ok_or(EngineError::UnknownDigest(component.wasm.clone()))?;
+        let fx =
+            store
+                .get(workflow.component.source.digest())
+                .ok_or(EngineError::UnknownDigest(
+                    workflow.component.source.digest().clone(),
+                ))?;
         let payload = fx.execute(get_mock_trigger_data(&trigger.data))?;
 
         Ok(payload.map(|payload| WasmResponse {
@@ -124,9 +129,11 @@ pub trait Function: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test {
-    use wavs_types::{ChainName, Permissions, TriggerConfig, TriggerData};
+    use wavs_types::{
+        ChainName, Component, ComponentSource, Submit, Trigger, TriggerConfig, TriggerData,
+    };
 
-    use crate::{apis::engine::ExecutionComponent, test_utils::address::rand_event_eth};
+    use crate::test_utils::address::rand_event_eth;
 
     use super::*;
 
@@ -170,76 +177,79 @@ mod test {
         engine.register(&d2, FixedResult(r2.clone()));
 
         // d1 call gets r1
-        let c1 = ExecutionComponent {
-            wasm: d1,
-            permissions: Permissions::default(),
+        let c1 = Workflow {
+            trigger: Trigger::eth_contract_event(
+                crate::test_utils::address::rand_address_eth(),
+                ChainName::new("eth").unwrap(),
+                rand_event_eth(),
+            ),
+            component: Component::new(ComponentSource::Digest(d1.clone())),
+            submit: Submit::None,
+            aggregator: None,
         };
         let res = engine
             .execute(
-                &c1,
-                None,
+                c1.clone(),
                 TriggerAction {
-                    config: TriggerConfig::eth_contract_event(
-                        "321",
-                        "default",
-                        crate::test_utils::address::rand_address_eth(),
-                        ChainName::new("eth").unwrap(),
-                        rand_event_eth(),
-                    )
-                    .unwrap(),
+                    config: TriggerConfig {
+                        service_id: "321".parse().unwrap(),
+                        workflow_id: "default".parse().unwrap(),
+                        trigger: c1.trigger.clone(),
+                    },
                     data: TriggerData::new_raw(b"123"),
                 },
-                &ServiceConfig::default(),
             )
             .unwrap();
         assert_eq!(res.unwrap().payload, r1);
 
         // d2 call gets r2
-        let c2 = ExecutionComponent {
-            wasm: d2,
-            permissions: Permissions::default(),
+        let c2 = Workflow {
+            trigger: Trigger::eth_contract_event(
+                crate::test_utils::address::rand_address_eth(),
+                ChainName::new("eth").unwrap(),
+                rand_event_eth(),
+            ),
+            component: Component::new(ComponentSource::Digest(d2.clone())),
+            submit: Submit::None,
+            aggregator: None,
         };
         let res = engine
             .execute(
-                &c2,
-                None,
+                c2.clone(),
                 TriggerAction {
-                    config: TriggerConfig::eth_contract_event(
-                        "321",
-                        "default",
-                        crate::test_utils::address::rand_address_eth(),
-                        ChainName::new("eth").unwrap(),
-                        rand_event_eth(),
-                    )
-                    .unwrap(),
+                    config: TriggerConfig {
+                        service_id: "321".parse().unwrap(),
+                        workflow_id: "default".parse().unwrap(),
+                        trigger: c2.trigger.clone(),
+                    },
                     data: TriggerData::new_raw(b"123"),
                 },
-                &ServiceConfig::default(),
             )
             .unwrap();
         assert_eq!(res.unwrap().payload, r2);
 
         // d3 call returns missing error
-        let c3 = ExecutionComponent {
-            wasm: d3,
-            permissions: Permissions::default(),
+        let c3 = Workflow {
+            trigger: Trigger::eth_contract_event(
+                crate::test_utils::address::rand_address_eth(),
+                ChainName::new("eth").unwrap(),
+                rand_event_eth(),
+            ),
+            component: Component::new(ComponentSource::Digest(d3.clone())),
+            submit: Submit::None,
+            aggregator: None,
         };
         let err = engine
             .execute(
-                &c3,
-                None,
+                c3.clone(),
                 TriggerAction {
-                    config: TriggerConfig::eth_contract_event(
-                        "321",
-                        "default",
-                        crate::test_utils::address::rand_address_eth(),
-                        ChainName::new("eth").unwrap(),
-                        rand_event_eth(),
-                    )
-                    .unwrap(),
+                    config: TriggerConfig {
+                        service_id: "321".parse().unwrap(),
+                        workflow_id: "default".parse().unwrap(),
+                        trigger: c3.trigger.clone(),
+                    },
                     data: TriggerData::new_raw(b"123"),
                 },
-                &ServiceConfig::default(),
             )
             .unwrap_err();
         assert!(matches!(err, EngineError::UnknownDigest(_)));

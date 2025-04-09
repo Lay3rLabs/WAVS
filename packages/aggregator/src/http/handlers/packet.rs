@@ -1,4 +1,5 @@
-use anyhow::{anyhow, bail};
+use alloy::primitives::{Address, U256};
+use anyhow::{anyhow, bail, ensure};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -10,12 +11,19 @@ use crate::http::{
     state::{HttpState, PacketQueue, QueuedPacket},
 };
 
+alloy::sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    SimpleServiceManager,
+    "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
+);
+
 #[axum::debug_handler]
 pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
 ) -> impl IntoResponse {
-    match inner(state, req.packet).await {
+    match process_packet(state, req.packet).await {
         Ok(resp) => Json(resp).into_response(),
         Err(e) => {
             tracing::error!("{:?}", e);
@@ -24,7 +32,7 @@ pub async fn handle_packet(
     }
 }
 
-async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResponse> {
+async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResponse> {
     let event_id = packet.event_id();
 
     let mut queue = match state.get_packet_queue(&event_id)? {
@@ -34,17 +42,63 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
         PacketQueue::Alive(queue) => queue,
     };
 
+    let envelope = packet.envelope.clone();
+    let block_height = packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
+    let route = packet.route.clone();
+    let mut total_weight;
+    let threshold;
+
     // TODO - query operator set from ServiceManager contract
     // it may be some struct, using a Vec as a placeholder for now
-    let operator_set = Vec::new();
 
-    let queued = validate_packet(packet, &queue, &operator_set)?;
+    let service = state.get_service(&route)?;
+    let aggregator = service.workflows[&route.workflow_id]
+        .aggregator
+        .as_ref()
+        .ok_or(anyhow!(
+            "No aggregator configured for workflow {} on service {}",
+            route.workflow_id,
+            route.service_id
+        ))?;
 
-    let envelope = queued.packet.envelope.clone();
-    let block_height = queued.packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
-    let route = queued.packet.route.clone();
+    let packet = match aggregator {
+        Aggregator::Ethereum(EthereumContractSubmission { chain_name, .. }) => {
+            // this implicitly validates that the signature is valid
+            let signer = packet.signature.eth_signer_address(&packet.envelope)?;
 
-    queue.push(queued);
+            let client = state.get_eth_client(chain_name).await?;
+            let client = client.lock().await;
+            let service_manager = SimpleServiceManager::new(
+                service.manager.eth_address_unchecked(),
+                client.provider.clone(),
+            );
+            let weight = service_manager.getOperatorWeight(signer).call().await?._0;
+            total_weight = weight;
+
+            // Sum up weights
+            for packet in queue.iter() {
+                let weight = service_manager
+                    .getOperatorWeight(packet.signer)
+                    .call()
+                    .await?
+                    ._0;
+                total_weight = weight
+                    .checked_add(total_weight)
+                    .ok_or(anyhow!("Total weight calculation overflowed"))?;
+            }
+
+            // Get the threshold
+            threshold = service_manager
+                .getLastCheckpointThresholdWeight()
+                .call()
+                .await?
+                ._0;
+
+            validate_packet(packet, &queue, signer, weight)?
+        }
+    };
+
+    queue.push(packet);
 
     let count = queue.len();
 
@@ -53,30 +107,23 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
     // we need to calculate the power of the signers so far, and see if it meets the quorum power
     // we don't care about count, we care about the power of the signers
     // right now this is just hardcoded for demo purposes
-    if count >= 3 {
-        let service = state.get_service(&route)?;
-
+    if total_weight >= threshold {
         let Aggregator::Ethereum(EthereumContractSubmission {
             chain_name,
             address,
             max_gas,
-        }) = service.workflows[&route.workflow_id]
-            .aggregator
-            .clone()
-            .ok_or(anyhow!(
-                "No aggregator configured for workflow {} on service {}",
-                route.workflow_id,
-                route.service_id
-            ))?;
+        }) = aggregator;
 
-        let client = state.get_eth_client(&chain_name).await?;
+        let client = state.get_eth_client(chain_name).await?;
         let signatures = queue
             .drain(..)
             .map(|queued| queued.packet.signature)
             .collect();
 
         let tx_receipt = client
-            .send_envelope_signatures(envelope, signatures, block_height, address, max_gas)
+            .lock()
+            .await
+            .send_envelope_signatures(envelope, signatures, block_height, *address, *max_gas)
             .await?;
 
         state.save_packet_queue(&event_id, PacketQueue::Burned)?;
@@ -93,7 +140,8 @@ async fn inner(state: HttpState, packet: Packet) -> anyhow::Result<AddPacketResp
 fn validate_packet(
     packet: Packet,
     queue: &[QueuedPacket],
-    _operator_set: &[alloy::primitives::Address], /* TODO: placeholder */
+    signer: Address,
+    operator_weight: U256,
 ) -> anyhow::Result<QueuedPacket> {
     match queue.first() {
         None => {}
@@ -110,14 +158,13 @@ fn validate_packet(
         }
     }
 
-    // this implicitly validates that the signature is valid
-    let signer = packet.signature.eth_signer_address(&packet.envelope)?;
-
     for queued_packet in queue {
         if signer == queued_packet.signer {
             bail!("Signer {} already in queue", signer);
         }
     }
+
+    ensure!(!operator_weight.is_zero(), "Operator is not registered");
 
     // TODO: ensure that the signer is in the operator set
 
@@ -148,8 +195,14 @@ mod test {
 
         let packet = mock_packet(&signer_1, &envelope_1);
 
+        let derived_signer_1_address = packet
+            .signature
+            .eth_signer_address(&packet.envelope)
+            .unwrap();
+        assert_eq!(derived_signer_1_address, signer_1.address());
+
         // empty queue is okay
-        let queued = validate_packet(packet, &queue, &[]).unwrap();
+        let queued = validate_packet(packet, &queue, signer_1.address(), U256::ONE).unwrap();
         // got the expected signer address
         assert_eq!(queued.signer, signer_1.address());
 
@@ -157,15 +210,18 @@ mod test {
 
         // "fails" (expectedly) because the signer is the same
         let packet = mock_packet(&signer_1, &envelope_1);
-        validate_packet(packet, &queue, &[]).unwrap_err();
+        validate_packet(packet, &queue, signer_1.address(), U256::ONE).unwrap_err();
 
         // "fails" (expectedly) because the envelope is different
         let packet = mock_packet(&signer_2, &envelope_2);
-        validate_packet(packet, &queue, &[]).unwrap_err();
+        validate_packet(packet, &queue, signer_2.address(), U256::ONE).unwrap_err();
+
+        // "fails" (expectedly) because the operator is not registered (0 weight)
+        let packet = mock_packet(&signer_2, &envelope_1);
+        validate_packet(packet.clone(), &queue, signer_2.address(), U256::ZERO).unwrap_err();
 
         // passes because the signer is different but envelope is the same
-        let packet = mock_packet(&signer_2, &envelope_1);
-        let queued = validate_packet(packet, &queue, &[]).unwrap();
+        let queued = validate_packet(packet, &queue, signer_2.address(), U256::ONE).unwrap();
         // got the expected signer address
         assert_eq!(queued.signer, signer_2.address());
         queue.push(queued);

@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Component, EthereumContractSubmission, ServiceConfig, ServiceID, ServiceManager, ServiceStatus,
-    Submit, Timestamp, Trigger, WorkflowID,
+    Component, EthereumContractSubmission, ServiceID, ServiceManager, ServiceStatus, Submit,
+    Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -13,7 +13,6 @@ pub struct ServiceJson {
     pub name: String,
     pub workflows: BTreeMap<WorkflowID, WorkflowJson>,
     pub status: ServiceStatus,
-    pub config: ServiceConfig,
     pub manager: ServiceManagerJson,
 }
 

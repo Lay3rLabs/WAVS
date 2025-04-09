@@ -38,7 +38,7 @@ pub struct QueuedPacket {
 pub struct HttpState {
     pub config: Config,
     storage: Arc<RedbStorage>,
-    eth_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
+    eth_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
@@ -54,7 +54,10 @@ impl HttpState {
         })
     }
 
-    pub async fn get_eth_client(&self, chain_name: &ChainName) -> anyhow::Result<EthSigningClient> {
+    pub async fn get_eth_client(
+        &self,
+        chain_name: &ChainName,
+    ) -> anyhow::Result<Arc<tokio::sync::Mutex<EthSigningClient>>> {
         {
             let lock = self.eth_clients.read().unwrap();
 
@@ -63,7 +66,9 @@ impl HttpState {
             }
         }
 
-        let eth_client = self.config.signing_client(chain_name).await?;
+        let eth_client = Arc::new(tokio::sync::Mutex::new(
+            self.config.signing_client(chain_name).await?,
+        ));
 
         self.eth_clients
             .write()
