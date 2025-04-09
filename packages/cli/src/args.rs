@@ -96,6 +96,9 @@ pub enum ServiceCommand {
     },
     /// Operations on workflow submits
     Submit {
+        #[clap(long)]
+        workflow_id: WorkflowID,
+
         #[clap(subcommand)]
         command: SubmitCommand,
     },
@@ -236,8 +239,6 @@ pub enum TriggerCommand {
 pub enum SubmitCommand {
     /// Set an Ethereum submit for a workflow
     SetEthereum {
-        workflow_id: WorkflowID,
-
         /// The hexadecimal Ethereum address (e.g., "0x1234...")
         #[clap(long)]
         address: String,
@@ -249,6 +250,12 @@ pub enum SubmitCommand {
         /// The maximum gas to use for the submission (optional)
         #[clap(long)]
         max_gas: Option<u64>,
+    },
+    /// Set an aggregator submit for a workflow
+    SetAggregator {
+        /// The URL of the aggregator
+        #[clap(long)]
+        url: String,
     },
 }
 

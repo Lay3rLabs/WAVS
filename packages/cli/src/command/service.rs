@@ -117,14 +117,20 @@ pub async fn handle_service_command(
                 display_result(ctx, result, &file, json)?;
             }
         },
-        ServiceCommand::Submit { command } => match command {
+        ServiceCommand::Submit {
+            workflow_id,
+            command,
+        } => match command {
             SubmitCommand::SetEthereum {
-                workflow_id,
                 address,
                 chain_name,
                 max_gas,
             } => {
                 let result = set_ethereum_submit(&file, workflow_id, address, chain_name, max_gas)?;
+                display_result(ctx, result, &file, json)?;
+            }
+            SubmitCommand::SetAggregator { url } => {
+                let result = set_aggregator_submit(&file, workflow_id, url)?;
                 display_result(ctx, result, &file, json)?;
             }
         },
@@ -1049,6 +1055,36 @@ pub fn set_ethereum_submit(
             chain_name,
             max_gas,
         });
+        workflow.submit = SubmitJson::Submit(submit.clone());
+
+        Ok((
+            service,
+            WorkflowSubmitResult {
+                workflow_id,
+                submit,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Set an Aggregator submit for a workflow
+pub fn set_aggregator_submit(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    url: String,
+) -> Result<WorkflowSubmitResult> {
+    // Validate the URL format
+    let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
+
+    modify_service_file(file_path, |mut service| {
+        // Check if the workflow exists
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        // Update the submit
+        let submit = Submit::Aggregator { url };
         workflow.submit = SubmitJson::Submit(submit.clone());
 
         Ok((
@@ -2464,6 +2500,47 @@ mod tests {
         assert!(invalid_eth_result.is_err());
         let invalid_address_error = invalid_eth_result.unwrap_err().to_string();
         assert!(invalid_address_error.contains("invalid"));
+
+        // Test setting Aggregator submit
+        let aggregator_url = "https://api.example.com/aggregator".to_string();
+
+        let aggregator_result =
+            set_aggregator_submit(&file_path, workflow_id.clone(), aggregator_url.clone()).unwrap();
+
+        // Verify aggregator submit result
+        assert_eq!(aggregator_result.workflow_id, workflow_id);
+        if let Submit::Aggregator { url } = &aggregator_result.submit {
+            assert_eq!(url, &aggregator_url);
+        } else {
+            panic!("Expected Aggregator submit");
+        }
+
+        // Verify the service was updated with aggregator submit
+        let service_after_aggregator: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let aggregator_workflow = service_after_aggregator
+            .workflows
+            .get(&workflow_id)
+            .unwrap();
+
+        // Handle SubmitJson wrapper
+        if let SubmitJson::Submit(submit) = &aggregator_workflow.submit {
+            if let Submit::Aggregator { url } = submit {
+                assert_eq!(url, &aggregator_url);
+            } else {
+                panic!("Expected Aggregator submit in service");
+            }
+        } else {
+            panic!("Expected SubmitJson::Submit");
+        }
+
+        // Test error handling for invalid URL
+        let invalid_url = "not-a-valid-url".to_string();
+        let invalid_url_result =
+            set_aggregator_submit(&file_path, workflow_id.clone(), invalid_url);
+        assert!(invalid_url_result.is_err());
+        let invalid_url_error = invalid_url_result.unwrap_err().to_string();
+        assert!(invalid_url_error.contains("Invalid URL format"));
     }
 
     #[tokio::test]
