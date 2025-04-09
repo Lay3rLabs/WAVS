@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 example-helpers = { workspace = true }
+wstd = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
