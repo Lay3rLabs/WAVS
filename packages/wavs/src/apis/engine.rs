@@ -1,23 +1,14 @@
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use utils::storage::CAStorageError;
 
 use wavs_types::{
-    ComponentSource, Digest, Permissions, ServiceConfig, ServiceID, TriggerAction, WasmResponse,
-    WorkflowID,
+    ComponentSource, Digest, ServiceID, TriggerAction, WasmResponse, Workflow, WorkflowID,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub struct ExecutionComponent {
-    pub wasm: Digest,
-    // What permissions this component has.
-    // These are currently not enforced, you can pass in Default::default() for now
-    pub permissions: Permissions,
-}
-
 pub trait Engine: Send + Sync {
+    fn start(&self) -> Result<(), EngineError>;
+
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;
     fn store_component_from_source(
         &self,
@@ -30,10 +21,8 @@ pub trait Engine: Send + Sync {
     /// This will execute a component that implements one of our supported interfaces
     fn execute(
         &self,
-        component: &ExecutionComponent,
-        fuel_limit: Option<u64>,
-        trigger: TriggerAction,
-        service_config: &ServiceConfig,
+        workflow: Workflow,
+        trigger_action: TriggerAction,
     ) -> Result<Option<WasmResponse>, EngineError>;
 
     /// Removes the storage for a service
@@ -42,6 +31,10 @@ pub trait Engine: Send + Sync {
 }
 
 impl<E: Engine> Engine for std::sync::Arc<E> {
+    fn start(&self) -> Result<(), EngineError> {
+        self.as_ref().start()
+    }
+
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         self.as_ref().store_component_bytes(bytecode)
     }
@@ -59,13 +52,10 @@ impl<E: Engine> Engine for std::sync::Arc<E> {
 
     fn execute(
         &self,
-        component: &ExecutionComponent,
-        fuel_limit: Option<u64>,
-        trigger: TriggerAction,
-        service_config: &ServiceConfig,
+        workflow: Workflow,
+        trigger_action: TriggerAction,
     ) -> Result<Option<WasmResponse>, EngineError> {
-        self.as_ref()
-            .execute(component, fuel_limit, trigger, service_config)
+        self.as_ref().execute(workflow, trigger_action)
     }
 
     fn remove_storage(&self, service_id: &ServiceID) {

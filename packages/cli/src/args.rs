@@ -6,7 +6,7 @@ use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
 };
-use wavs_types::{ChainName, Digest, Service, ServiceConfig, ServiceID, WorkflowID};
+use wavs_types::{ChainName, Digest, Service, ServiceID, WorkflowID};
 
 use crate::config::Config;
 
@@ -51,10 +51,6 @@ pub enum Command {
         /// Otherwise will be treated as raw string bytes
         #[clap(long)]
         input: String,
-
-        /// Optional service config
-        #[clap(long, value_parser = |json: &str| serde_json::from_str::<ServiceConfig>(json).map_err(|e| format!("Failed to parse JSON: {}", e)))]
-        service_config: Option<ServiceConfig>,
 
         /// Optional fuel limit for component execution
         #[clap(long)]

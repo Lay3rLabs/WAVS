@@ -1,13 +1,12 @@
 pub mod aggregator;
 use super::{Permissions, ServiceID, ServiceStatus, Trigger};
-use crate::{digest::Digest, ChainName};
+use crate::{digest::Digest, ChainName, ComponentSource};
 use layer_climb_address::Address;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{fmt, ops::Deref, str::FromStr};
-use wasm_pkg_common::package::{PackageRef, Version};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -47,28 +46,6 @@ pub struct UploadComponentResponse {
     pub digest: ShaDigest,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Registry {
-    pub digest: Digest,
-    /// Optional domain to use for a registry (such as ghcr.io)
-    /// if default of wa.dev (or whatever wavs uses in the future)
-    /// is not desired by user
-    pub domain: Option<String>,
-    /// Optional semver value, if absent then latest is used
-    pub version: Option<Version>,
-    /// Package identifier of form <namespace>:<packagename>
-    pub package: PackageRef,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ComponentSource {
-    /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
-    Download { url: String, digest: Digest },
-    /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
-    Registry { registry: Registry },
-    /// An already deployed component
-    Digest(Digest),
-}
 #[derive(Clone, PartialEq, Eq)]
 pub struct ShaDigest(Digest);
 

@@ -15,8 +15,7 @@ use std::{
 use uuid::Uuid;
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
-    EthereumContractSubmission, Permissions, ServiceConfig, ServiceID, ServiceStatus, Submit,
-    Trigger, WorkflowID,
+    EthereumContractSubmission, Permissions, ServiceID, ServiceStatus, Submit, Trigger, WorkflowID,
 };
 
 use crate::{
@@ -460,7 +459,6 @@ pub fn init_service(
         name,
         workflows: BTreeMap::new(),
         status: ServiceStatus::Active,
-        config: ServiceConfig::default(),
     };
 
     // Convert service to JSON
@@ -1959,7 +1957,6 @@ mod tests {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
-            config: ServiceConfig::default(),
         };
 
         // Write the service to a file

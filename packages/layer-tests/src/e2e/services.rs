@@ -20,8 +20,8 @@ use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EthereumContractSubmission,
-    Permissions, Service, ServiceConfig, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger,
-    Workflow, WorkflowID,
+    Permissions, Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow,
+    WorkflowID,
 };
 
 #[derive(Default)]
@@ -300,7 +300,6 @@ async fn deploy_service_simple(
         name: format!("{:?}", service_kind),
         workflows: BTreeMap::from([(workflow_id, workflow)]),
         status: ServiceStatus::Active,
-        config: ServiceConfig::default(),
         manager: ServiceManager::Ethereum {
             chain_name: service_manager_chain,
             address: service_manager_address,
@@ -407,7 +406,6 @@ async fn deploy_service_raw(
         name: "".to_string(),
         workflows,
         status: ServiceStatus::Active,
-        config: ServiceConfig::default(),
         manager: ServiceManager::Ethereum {
             chain_name,
             address: service_manager_address,

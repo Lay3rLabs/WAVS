@@ -1,10 +1,10 @@
-use std::collections::BTreeMap;
-use std::num::NonZeroU32;
-
 use alloy::primitives::LogData;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::num::NonZeroU32;
+use wasm_pkg_common::package::{PackageRef, Version};
 
-use crate::{ByteArray, ComponentSource, Timestamp};
+use crate::{ByteArray, Digest, Timestamp};
 
 use super::{ChainName, ServiceID, WorkflowID};
 
@@ -21,8 +21,6 @@ pub struct Service {
     pub workflows: BTreeMap<WorkflowID, Workflow>,
 
     pub status: ServiceStatus,
-
-    pub config: ServiceConfig,
 
     pub manager: ServiceManager,
 }
@@ -57,20 +55,13 @@ impl Service {
         trigger: Trigger,
         source: ComponentSource,
         submit: Submit,
-        config: Option<ServiceConfig>,
         manager: ServiceManager,
     ) -> Self {
         let workflow_id = WorkflowID::default();
 
         let workflow = Workflow {
             trigger,
-            component: Component {
-                source,
-                permissions: Permissions::default(),
-                fuel_limit: None,
-                max_exec_seconds: None,
-                config: vec![],
-            },
+            component: Component::new(source),
             submit,
             aggregator: None,
         };
@@ -82,7 +73,6 @@ impl Service {
             id,
             workflows,
             status: ServiceStatus::Active,
-            config: config.unwrap_or_default(),
             manager,
         }
     }
@@ -102,11 +92,48 @@ pub struct Component {
     pub fuel_limit: Option<u64>,
 
     /// The maximum amount of time to allow for a single component execution, in seconds
-    /// If not supplied, default will be `Workflow::DEFAULT_EXEC_SECONDS`
-    pub max_exec_seconds: Option<u64>,
+    /// If not supplied, default will be `Workflow::DEFAULT_TIME_LIMIT_SECONDS`
+    pub time_limit_seconds: Option<u64>,
 
     /// Key-value pairs that are accessible in the components via host bindings.
-    pub config: Vec<(String, String)>,
+    pub config: BTreeMap<String, String>,
+
+    /// External env variable keys to be read from the system host on execute (i.e. API keys).
+    /// Must be prefixed with `WAVS_ENV_`.
+    pub env_keys: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ComponentSource {
+    /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
+    Download { url: String, digest: Digest },
+    /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
+    Registry { registry: Registry },
+    /// An already deployed component
+    Digest(Digest),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Registry {
+    pub digest: Digest,
+    /// Optional domain to use for a registry (such as ghcr.io)
+    /// if default of wa.dev (or whatever wavs uses in the future)
+    /// is not desired by user
+    pub domain: Option<String>,
+    /// Optional semver value, if absent then latest is used
+    pub version: Option<Version>,
+    /// Package identifier of form <namespace>:<packagename>
+    pub package: PackageRef,
+}
+
+impl ComponentSource {
+    pub fn digest(&self) -> &Digest {
+        match self {
+            ComponentSource::Download { digest, .. } => digest,
+            ComponentSource::Registry { registry } => &registry.digest,
+            ComponentSource::Digest(digest) => digest,
+        }
+    }
 }
 
 // FIXME: happy for a better name.
@@ -130,7 +157,7 @@ pub struct Workflow {
 
 impl Workflow {
     pub const DEFAULT_FUEL_LIMIT: u64 = 100_000_000;
-    pub const DEFAULT_EXEC_SECONDS: u64 = 30;
+    pub const DEFAULT_TIME_LIMIT_SECONDS: u64 = 10;
 }
 
 // The TriggerManager reacts to these triggers
@@ -272,19 +299,6 @@ impl EthereumContractSubmission {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct ServiceConfig {
-    /// External env variable keys to be read from the system host on execute (i.e. API keys).
-    /// Must be prefixed with `WAVS_ENV_`.
-    pub host_envs: Vec<String>,
-    /// Configuration key-value pairs that are accessible in the components environment.
-    /// These config values are public and viewable by anyone.
-    /// Components read the values with `std::env::var`, case sensitive & no prefix required.
-    /// Values here are viewable by anyone. Use host_envs to set private values.
-    pub kv: Vec<(String, String)>,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {
@@ -324,7 +338,7 @@ pub struct WasmResponse {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
-    use std::num::NonZeroU32;
+    use std::{collections::BTreeMap, num::NonZeroU32};
 
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
@@ -348,8 +362,9 @@ mod test_ext {
                 source,
                 permissions: Default::default(),
                 fuel_limit: None,
-                max_exec_seconds: None,
-                config: vec![],
+                time_limit_seconds: None,
+                config: BTreeMap::new(),
+                env_keys: vec![],
             }
         }
     }
