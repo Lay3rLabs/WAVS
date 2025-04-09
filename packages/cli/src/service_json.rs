@@ -6,6 +6,8 @@ use wavs_types::{
     Timestamp, Trigger, WorkflowID,
 };
 
+pub const ENV_PREFIX: &str = "WAVS_ENV_";
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct ServiceJson {
@@ -31,6 +33,53 @@ impl ServiceJson {
             // Check if component is unset
             if workflow.component.is_unset() {
                 errors.push(format!("Workflow '{}' has an unset component", workflow_id));
+            } else {
+                let component = workflow
+                    .component
+                    .as_component()
+                    .expect("Component is unset and not validated beforehand");
+
+                // Validate fuel limit
+                if let Some(limit) = component.fuel_limit {
+                    if limit == 0 {
+                        errors.push(format!(
+                            "Workflow '{}' has a fuel limit of zero, which will prevent execution",
+                            workflow_id
+                        ));
+                    }
+                }
+
+                // Validate no duplicates in config
+                let mut config_keys = std::collections::HashSet::new();
+                for key in component.config.keys() {
+                    if !config_keys.insert(key) {
+                        errors.push(format!(
+                            "Workflow '{}' has duplicate config key: {}",
+                            workflow_id, key
+                        ));
+                    }
+                }
+
+                // Validate env_keys have the correct prefix
+                for key in &component.env_keys {
+                    if !key.starts_with(ENV_PREFIX) {
+                        errors.push(format!(
+                "Workflow '{}' has environment variable '{}' that doesn't start with '{}'",
+                workflow_id, key, ENV_PREFIX
+            ));
+                    }
+                }
+
+                // Check for duplicate env_keys
+                let mut env_keys_set = std::collections::HashSet::new();
+                for key in &component.env_keys {
+                    if !env_keys_set.insert(key) {
+                        errors.push(format!(
+                            "Workflow '{}' has duplicate environment variable: {}",
+                            workflow_id, key
+                        ));
+                    }
+                }
             }
 
             // Check if trigger is unset
@@ -143,16 +192,6 @@ impl ServiceJson {
                             }
                         }
                     }
-                }
-            }
-
-            // Validate fuel limit
-            if let Some(limit) = workflow.component.as_component().and_then(|c| c.fuel_limit) {
-                if limit == 0 {
-                    errors.push(format!(
-                        "Workflow '{}' has a fuel limit of zero, which will prevent execution",
-                        workflow_id
-                    ));
                 }
             }
         }

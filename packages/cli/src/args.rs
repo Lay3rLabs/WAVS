@@ -150,6 +150,12 @@ pub enum ComponentCommand {
         #[clap(long, value_delimiter = ',')]
         values: Option<Vec<String>>,
     },
+    /// Manage the workflow component env
+    Env {
+        /// Env values staring with 'WAVS_ENV'
+        #[clap(long, value_delimiter = ',')]
+        values: Option<Vec<String>>,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]

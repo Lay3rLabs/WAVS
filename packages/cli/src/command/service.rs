@@ -27,6 +27,7 @@ use crate::{
     context::CliContext,
     service_json::{
         ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson, TriggerJson, WorkflowJson,
+        ENV_PREFIX,
     },
 };
 
@@ -79,6 +80,10 @@ pub async fn handle_service_command(
                 }
                 ComponentCommand::TimeLimit { seconds } => {
                     let result = update_component_time_limit_seconds(&file, id, seconds)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                ComponentCommand::Env { values } => {
+                    let result = update_component_env_keys(&file, id, values)?;
                     display_result(ctx, result, &file, json)?;
                 }
             },
@@ -205,6 +210,30 @@ impl std::fmt::Display for ComponentAddResult {
     }
 }
 
+/// Result of updating a component's environment variables
+#[derive(Debug, Clone)]
+pub struct ComponentEnvKeysResult {
+    /// The updated environment variable keys
+    pub env_keys: Vec<String>,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentEnvKeysResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component environment variables updated successfully!")?;
+        if self.env_keys.is_empty() {
+            writeln!(f, "  Env Keys:    No environment variables")?;
+        } else {
+            writeln!(f, "  Env Keys:")?;
+            for key in &self.env_keys {
+                writeln!(f, "    {}", key)?;
+            }
+        }
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
 /// Result of adding a workflow
 #[derive(Debug, Clone)]
 pub struct WorkflowAddResult {
@@ -236,20 +265,6 @@ impl std::fmt::Display for WorkflowDeleteResult {
         writeln!(f, "Workflow deleted successfully!")?;
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
         writeln!(f, "  Updated:     {}", self.file_path.display())
-    }
-}
-
-/// Result of deleting a component
-#[derive(Debug, Clone)]
-pub struct ComponentDeleteResult {
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for ComponentDeleteResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component deleted successfully!")?;
-        writeln!(f, "  Updated:      {}", self.file_path.display())
     }
 }
 
@@ -952,6 +967,66 @@ pub fn update_component_time_limit_seconds(
     })
 }
 
+/// Update a component's environment variable keys
+pub fn update_component_env_keys(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    values: Option<Vec<String>>,
+) -> Result<ComponentEnvKeysResult> {
+    modify_service_file(file_path, |mut service| {
+        // First find the workflow and get a reference to it
+        let workflow = service
+            .workflows
+            .get_mut(&workflow_id)
+            .context(format!("No workflow id {workflow_id}"))?;
+
+        // Now get a reference to the component
+        let component = workflow.component.as_component_mut().context(format!(
+            "Workflow with ID '{}' has unset component",
+            workflow_id
+        ))?;
+
+        if let Some(values) = values {
+            // Validate each environment variable to ensure it has the required prefix
+            let mut validated_env_keys = Vec::new();
+            for key in values {
+                let key = key.trim().to_string();
+
+                if key.is_empty() {
+                    continue; // Skip empty keys
+                }
+
+                if !key.starts_with(ENV_PREFIX) {
+                    return Err(anyhow::anyhow!(
+                        "Environment variable '{}' must start with '{}'",
+                        key,
+                        ENV_PREFIX
+                    ));
+                }
+
+                validated_env_keys.push(key);
+            }
+
+            // Replace existing env keys with new values
+            component.env_keys = validated_env_keys;
+        } else {
+            // If no values provided, clear all env keys
+            component.env_keys.clear();
+        }
+
+        // Clone the updated env keys for the result
+        let updated_env_keys = component.env_keys.clone();
+
+        Ok((
+            service,
+            ComponentEnvKeysResult {
+                env_keys: updated_env_keys,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
 pub fn set_ethereum_submit(
     file_path: &Path,
     workflow_id: WorkflowID,
@@ -1525,7 +1600,7 @@ mod tests {
     }
 
     #[test]
-    fn test_component_operations() {
+    fn test_workflow_component_operations() {
         // Create a temporary directory and file
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("component_operations_test.json");
@@ -1839,6 +1914,69 @@ mod tests {
         let error_msg = invalid_config_result.unwrap_err().to_string();
         assert!(error_msg.contains("Invalid config format"));
         assert!(error_msg.contains("Expected 'key=value'"));
+
+        // Test adding environment variables
+        let env_keys = vec![
+            "WAVS_ENV_API_KEY".to_string(),
+            "WAVS_ENV_SECRET_TOKEN".to_string(),
+            "WAVS_ENV_DATABASE_URL".to_string(),
+        ];
+
+        let env_result =
+            update_component_env_keys(&file_path, workflow_id.clone(), Some(env_keys.clone()))
+                .unwrap();
+
+        // Verify env result
+        assert_eq!(env_result.env_keys.len(), 3);
+        assert!(env_result
+            .env_keys
+            .contains(&"WAVS_ENV_API_KEY".to_string()));
+        assert!(env_result
+            .env_keys
+            .contains(&"WAVS_ENV_SECRET_TOKEN".to_string()));
+        assert!(env_result
+            .env_keys
+            .contains(&"WAVS_ENV_DATABASE_URL".to_string()));
+
+        // Verify the service was updated with env keys
+        let service_after_env: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let component_with_env = service_after_env
+            .workflows
+            .get(&workflow_id)
+            .unwrap()
+            .component
+            .as_component()
+            .unwrap();
+
+        assert_eq!(component_with_env.env_keys.len(), 3);
+        assert!(component_with_env
+            .env_keys
+            .contains(&"WAVS_ENV_API_KEY".to_string()));
+        assert!(component_with_env
+            .env_keys
+            .contains(&"WAVS_ENV_SECRET_TOKEN".to_string()));
+        assert!(component_with_env
+            .env_keys
+            .contains(&"WAVS_ENV_DATABASE_URL".to_string()));
+
+        // Test validation of env keys
+        let invalid_env_keys = vec!["WAVS_ENV_VALID".to_string(), "INVALID_PREFIX".to_string()];
+
+        let invalid_result =
+            update_component_env_keys(&file_path, workflow_id.clone(), Some(invalid_env_keys));
+
+        // Verify it returns an error for invalid prefix
+        assert!(invalid_result.is_err());
+        let error_msg = invalid_result.unwrap_err().to_string();
+        assert!(error_msg.contains("must start with 'WAVS_ENV_'"));
+
+        // Test clearing env keys
+        let clear_env_result =
+            update_component_env_keys(&file_path, workflow_id.clone(), None).unwrap();
+
+        // Verify clear result
+        assert_eq!(clear_env_result.env_keys.len(), 0);
 
         // Test setting a specific max execution time
         let max_exec_time = 120u64;
