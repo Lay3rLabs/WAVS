@@ -1,10 +1,10 @@
-use std::collections::BTreeMap;
-use std::num::NonZeroU32;
-
 use alloy::primitives::LogData;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::num::NonZeroU32;
+use wasm_pkg_common::package::{PackageRef, Version};
 
-use crate::{ByteArray, ComponentSource, Timestamp};
+use crate::{ByteArray, Digest, Timestamp};
 
 use super::{ChainName, ServiceID, WorkflowID};
 
@@ -101,6 +101,39 @@ pub struct Component {
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
     pub env_keys: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ComponentSource {
+    /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
+    Download { url: String, digest: Digest },
+    /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
+    Registry { registry: Registry },
+    /// An already deployed component
+    Digest(Digest),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Registry {
+    pub digest: Digest,
+    /// Optional domain to use for a registry (such as ghcr.io)
+    /// if default of wa.dev (or whatever wavs uses in the future)
+    /// is not desired by user
+    pub domain: Option<String>,
+    /// Optional semver value, if absent then latest is used
+    pub version: Option<Version>,
+    /// Package identifier of form <namespace>:<packagename>
+    pub package: PackageRef,
+}
+
+impl ComponentSource {
+    pub fn digest(&self) -> &Digest {
+        match self {
+            ComponentSource::Download { digest, .. } => digest,
+            ComponentSource::Registry { registry } => &registry.digest,
+            ComponentSource::Digest(digest) => digest,
+        }
+    }
 }
 
 // FIXME: happy for a better name.
