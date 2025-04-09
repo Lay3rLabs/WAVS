@@ -83,7 +83,6 @@ async fn http_save_service() {
         mock_eth_event_trigger(),
         ComponentSource::Digest(Digest::new(&[1, 2, 3])),
         mock_eigen_submit(),
-        None,
         wavs_types::ServiceManager::Ethereum {
             chain_name: "eth".try_into().unwrap(),
             address: rand_address_eth(),

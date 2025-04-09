@@ -1,7 +1,7 @@
 use tracing::instrument;
-use wavs_types::{Digest, ServiceConfig, TriggerAction, WasmResponse};
+use wavs_types::{Digest, TriggerAction, WasmResponse, Workflow};
 
-use crate::apis::engine::{Engine, EngineError, ExecutionComponent};
+use crate::apis::engine::{Engine, EngineError};
 use crate::triggers::mock::get_mock_trigger_data;
 
 /// Simply returns the request as the result.
@@ -45,10 +45,8 @@ impl Engine for IdentityEngine {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     fn execute(
         &self,
-        _component: &ExecutionComponent,
-        _fuel_limit: Option<u64>,
+        _workflow: Workflow,
         trigger: TriggerAction,
-        _service_config: &ServiceConfig,
     ) -> Result<Option<WasmResponse>, EngineError> {
         Ok(Some(WasmResponse {
             payload: get_mock_trigger_data(&trigger.data),
@@ -59,7 +57,7 @@ impl Engine for IdentityEngine {
 
 #[cfg(test)]
 mod test {
-    use wavs_types::{Permissions, TriggerData};
+    use wavs_types::{ComponentSource, Submit, TriggerData};
 
     use crate::triggers::mock::mock_eth_event_trigger_config;
 
@@ -79,19 +77,22 @@ mod test {
 
         // execute returns self
         let request = b"this is only a test".to_vec();
-        let execution_component = ExecutionComponent {
-            wasm: d1,
-            permissions: Permissions::default(),
+
+        let trigger_config = mock_eth_event_trigger_config("foobar", "baz");
+
+        let workflow = Workflow {
+            trigger: trigger_config.trigger.clone(),
+            component: wavs_types::Component::new(ComponentSource::Digest(d1.clone())),
+            submit: Submit::None,
+            aggregator: None,
         };
         let result = engine
             .execute(
-                &execution_component,
-                None,
+                workflow,
                 TriggerAction {
-                    config: mock_eth_event_trigger_config("foobar", "baz"),
+                    config: trigger_config,
                     data: TriggerData::new_raw(request.clone()),
                 },
-                &ServiceConfig::default(),
             )
             .unwrap();
         assert_eq!(request, result.unwrap().payload);

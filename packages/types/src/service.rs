@@ -22,8 +22,6 @@ pub struct Service {
 
     pub status: ServiceStatus,
 
-    pub config: ServiceConfig,
-
     pub manager: ServiceManager,
 }
 
@@ -57,20 +55,13 @@ impl Service {
         trigger: Trigger,
         source: ComponentSource,
         submit: Submit,
-        config: Option<ServiceConfig>,
         manager: ServiceManager,
     ) -> Self {
         let workflow_id = WorkflowID::default();
 
         let workflow = Workflow {
             trigger,
-            component: Component {
-                source,
-                permissions: Permissions::default(),
-                fuel_limit: None,
-                max_exec_seconds: None,
-                config: vec![],
-            },
+            component: Component::new(source),
             submit,
             aggregator: None,
         };
@@ -82,7 +73,6 @@ impl Service {
             id,
             workflows,
             status: ServiceStatus::Active,
-            config: config.unwrap_or_default(),
             manager,
         }
     }
@@ -106,7 +96,11 @@ pub struct Component {
     pub max_exec_seconds: Option<u64>,
 
     /// Key-value pairs that are accessible in the components via host bindings.
-    pub config: Vec<(String, String)>,
+    pub config: BTreeMap<String, String>,
+
+    /// External env variable keys to be read from the system host on execute (i.e. API keys).
+    /// Must be prefixed with `WAVS_ENV_`.
+    pub env_keys: Vec<String>,
 }
 
 // FIXME: happy for a better name.
@@ -272,19 +266,6 @@ impl EthereumContractSubmission {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct ServiceConfig {
-    /// External env variable keys to be read from the system host on execute (i.e. API keys).
-    /// Must be prefixed with `WAVS_ENV_`.
-    pub host_envs: Vec<String>,
-    /// Configuration key-value pairs that are accessible in the components environment.
-    /// These config values are public and viewable by anyone.
-    /// Components read the values with `std::env::var`, case sensitive & no prefix required.
-    /// Values here are viewable by anyone. Use host_envs to set private values.
-    pub kv: Vec<(String, String)>,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {
@@ -324,7 +305,7 @@ pub struct WasmResponse {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
-    use std::num::NonZeroU32;
+    use std::{collections::BTreeMap, num::NonZeroU32};
 
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
@@ -349,7 +330,8 @@ mod test_ext {
                 permissions: Default::default(),
                 fuel_limit: None,
                 max_exec_seconds: None,
-                config: vec![],
+                config: BTreeMap::new(),
+                env_keys: vec![],
             }
         }
     }

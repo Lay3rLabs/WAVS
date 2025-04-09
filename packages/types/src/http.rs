@@ -69,6 +69,17 @@ pub enum ComponentSource {
     /// An already deployed component
     Digest(Digest),
 }
+
+impl ComponentSource {
+    pub fn digest(&self) -> &Digest {
+        match self {
+            ComponentSource::Download { digest, .. } => digest,
+            ComponentSource::Registry { registry } => &registry.digest,
+            ComponentSource::Digest(digest) => digest,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct ShaDigest(Digest);
 

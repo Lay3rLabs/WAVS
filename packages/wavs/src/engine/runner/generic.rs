@@ -2,7 +2,6 @@ use alloy::primitives::FixedBytes;
 use tokio::sync::mpsc;
 use wavs_types::{Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction};
 
-use crate::apis::engine::ExecutionComponent;
 use crate::apis::submission::ChainMessage;
 use crate::engine::{Engine, EngineError};
 use crate::AppContext;
@@ -30,7 +29,7 @@ pub trait EngineRunner: Send + Sync {
         service: Service,
         result_sender: mpsc::Sender<ChainMessage>,
     ) -> Result<(), EngineError> {
-        // look up the proper workflow
+        // early-exit if we can't get the workflow
         let workflow = service
             .workflows
             .get(&action.config.workflow_id)
@@ -41,25 +40,9 @@ pub trait EngineRunner: Send + Sync {
                 )
             })?;
 
-        let digest = match &workflow.component.source {
-            wavs_types::ComponentSource::Download { digest, .. } => digest,
-            wavs_types::ComponentSource::Registry { registry } => &registry.digest,
-            wavs_types::ComponentSource::Digest(digest) => digest,
-        };
-
-        let execution_component = ExecutionComponent {
-            wasm: digest.clone(),
-            permissions: workflow.component.permissions.clone(),
-        };
-
         let trigger_config = action.config.clone();
 
-        let wasm_response = self.engine().execute(
-            &execution_component,
-            workflow.component.fuel_limit,
-            action.clone(),
-            &service.config,
-        )?;
+        let wasm_response = self.engine().execute(workflow.clone(), action.clone())?;
 
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
