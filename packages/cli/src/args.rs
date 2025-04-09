@@ -158,10 +158,10 @@ pub enum ComponentCommand {
 
         /// Fuel limit value (omit to use default)
         #[clap(long)]
-        limit: Option<u64>,
+        fuel: Option<u64>,
     },
     /// Set maximum execution time for a component
-    MaxExecTime {
+    TimeLimit {
         /// The ID of the workflow to edit
         #[clap(long)]
         id: WorkflowID,
