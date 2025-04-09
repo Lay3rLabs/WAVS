@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{arg, Parser, Subcommand, ValueEnum};
+use clap::{arg, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
@@ -265,39 +265,6 @@ fn parse_service_input(s: &str) -> Result<Service, String> {
         Ok(serde_json::from_str(&json).map_err(|e| e.to_string())?)
     } else {
         Ok(serde_json::from_str(s).map_err(|e| e.to_string())?)
-    }
-}
-
-#[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
-pub enum CliSubmitKind {
-    EthServiceHandler,
-    None,
-}
-
-impl std::fmt::Display for CliSubmitKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EthServiceHandler => write!(f, "eth-service-handler"),
-            Self::None => write!(f, "none"),
-        }
-    }
-}
-
-impl std::str::FromStr for CliSubmitKind {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "eth-service-handler" => Ok(Self::EthServiceHandler),
-            "none" => Ok(Self::None),
-            _ => Err(format!("unknown submit kind: {}", s)),
-        }
-    }
-}
-
-impl From<CliSubmitKind> for clap::builder::OsStr {
-    fn from(submit: CliSubmitKind) -> clap::builder::OsStr {
-        submit.to_string().into()
     }
 }
 
