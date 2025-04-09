@@ -84,11 +84,6 @@ pub enum ServiceCommand {
         #[clap(long)]
         id: Option<ServiceID>,
     },
-    /// Component management commands
-    Component {
-        #[clap(subcommand)]
-        command: ComponentCommand,
-    },
     /// Workflow management commands
     Workflow {
         #[clap(subcommand)]
@@ -116,28 +111,14 @@ pub enum ServiceCommand {
 /// Commands for managing components
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum ComponentCommand {
-    /// Add a component to a service
-    Add {
-        /// The ID of the workflow
-        #[clap(long)]
-        id: WorkflowID,
-
+    /// Set the component for a workflow
+    Set {
         /// Digest of an existing component
         #[clap(short, long)]
         digest: Digest,
     },
-    /// Delete a component from a service
-    Delete {
-        /// The ID of the workflow
-        #[clap(long)]
-        id: WorkflowID,
-    },
-    /// Manage permissions of a component
+    /// Manage permissions of a workflow component
     Permissions {
-        /// The ID of the workflow to edit
-        #[clap(long)]
-        id: WorkflowID,
-
         /// HTTP hosts allowed for access:
         /// Use --http-hosts '' to disallow all hosts
         /// Use --http-hosts '*' to allow all hosts
@@ -150,32 +131,20 @@ pub enum ComponentCommand {
         #[clap(long)]
         file_system: Option<bool>,
     },
-    /// Manage the fuel limit of a component
+    /// Manage the fuel limit of a workflow component
     FuelLimit {
-        /// The ID of the workflow to edit
-        #[clap(long)]
-        id: WorkflowID,
-
         /// Fuel limit value (omit to use default)
         #[clap(long)]
         fuel: Option<u64>,
     },
-    /// Set maximum execution time for a component
+    /// Set maximum execution time for a workflow component
     TimeLimit {
-        /// The ID of the workflow to edit
-        #[clap(long)]
-        id: WorkflowID,
-
         /// Maximum execution time in seconds (omit to use default)
         #[clap(long)]
         seconds: Option<u64>,
     },
-    /// Manage the component config (KV)
+    /// Manage the workflow component config (KV)
     Config {
-        /// The ID of the workflow to edit
-        #[clap(long)]
-        id: WorkflowID,
-
         /// Configuration key-value pairs in format 'key=value'
         /// Omit to clear all config values
         #[clap(long, value_delimiter = ',')]
@@ -196,6 +165,14 @@ pub enum WorkflowCommand {
         /// The ID of the workflow to delete
         #[clap(long)]
         id: WorkflowID,
+    },
+    /// Component management commands
+    Component {
+        /// The ID of the workflow to edit
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: ComponentCommand,
     },
 }
 

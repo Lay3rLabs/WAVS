@@ -48,36 +48,6 @@ pub async fn handle_service_command(
             let result = init_service(&file, name, id)?;
             display_result(ctx, result, &file, json)?;
         }
-        ServiceCommand::Component { command } => match command {
-            ComponentCommand::Add { id, digest } => {
-                let result = add_component(&file, id, digest)?;
-                display_result(ctx, result, &file, json)?;
-            }
-            ComponentCommand::Delete { id } => {
-                let result = delete_component(&file, id)?;
-                display_result(ctx, result, &file, json)?;
-            }
-            ComponentCommand::Permissions {
-                id,
-                http_hosts,
-                file_system,
-            } => {
-                let result = update_component_permissions(&file, id, http_hosts, file_system)?;
-                display_result(ctx, result, &file, json)?;
-            }
-            ComponentCommand::FuelLimit { id, fuel: limit } => {
-                let result = update_component_fuel_limit(&file, id, limit)?;
-                display_result(ctx, result, &file, json)?;
-            }
-            ComponentCommand::Config { id, values } => {
-                let result = update_component_config(&file, id, values)?;
-                display_result(ctx, result, &file, json)?;
-            }
-            ComponentCommand::TimeLimit { id, seconds } => {
-                let result = update_component_time_limit_seconds(&file, id, seconds)?;
-                display_result(ctx, result, &file, json)?;
-            }
-        },
         ServiceCommand::Workflow { command } => match command {
             WorkflowCommand::Add { id } => {
                 let result = add_workflow(&file, id)?;
@@ -87,6 +57,31 @@ pub async fn handle_service_command(
                 let result = delete_workflow(&file, id)?;
                 display_result(ctx, result, &file, json)?;
             }
+            WorkflowCommand::Component { id, command } => match command {
+                ComponentCommand::Set { digest } => {
+                    let result = add_component(&file, id, digest)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                ComponentCommand::Permissions {
+                    http_hosts,
+                    file_system,
+                } => {
+                    let result = update_component_permissions(&file, id, http_hosts, file_system)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                ComponentCommand::FuelLimit { fuel } => {
+                    let result = update_component_fuel_limit(&file, id, fuel)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                ComponentCommand::Config { values } => {
+                    let result = update_component_config(&file, id, values)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                ComponentCommand::TimeLimit { seconds } => {
+                    let result = update_component_time_limit_seconds(&file, id, seconds)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+            },
         },
         ServiceCommand::Trigger { command } => match command {
             TriggerCommand::SetCosmos {
@@ -615,27 +610,6 @@ pub fn add_component(
             service,
             ComponentAddResult {
                 digest,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
-/// Delete a component from a service
-pub fn delete_component(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-) -> Result<ComponentDeleteResult> {
-    modify_service_file(file_path, |mut service| {
-        service
-            .workflows
-            .get_mut(&workflow_id)
-            .context(format!("No workflow id {workflow_id}"))?
-            .component = ComponentJson::new_unset();
-
-        Ok((
-            service,
-            ComponentDeleteResult {
                 file_path: file_path.to_path_buf(),
             },
         ))
@@ -1913,43 +1887,6 @@ mod tests {
             .as_component()
             .unwrap();
         assert_eq!(component_with_no_max_exec.time_limit_seconds, None);
-
-        // Test deleting a component
-        let delete_result = delete_component(&file_path, workflow_id.clone()).unwrap();
-
-        // Verify delete result
-        assert_eq!(delete_result.file_path, file_path);
-
-        // Verify the file was modified by deleting the component
-        let service_after_delete: ServiceJson =
-            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        assert!(service_after_delete
-            .workflows
-            .get(&workflow_id)
-            .unwrap()
-            .component
-            .is_unset());
-        assert!(service_after_delete
-            .workflows
-            .get(&workflow_id_2)
-            .unwrap()
-            .component
-            .is_set());
-        assert!(service_after_delete
-            .workflows
-            .get(&workflow_id_3)
-            .unwrap()
-            .component
-            .is_set());
-
-        // Test error handling for non-existent component
-        let error_result = delete_component(&file_path, non_existent_id.clone());
-
-        // Verify it returns an error with appropriate message
-        assert!(error_result.is_err());
-        let error_msg = error_result.unwrap_err().to_string();
-        assert!(error_msg.contains(&non_existent_id.to_string()));
-        assert!(error_msg.contains("No workflow id"));
     }
 
     #[test]
