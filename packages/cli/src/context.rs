@@ -175,7 +175,7 @@ impl CliContext {
             let tx = TransactionRequest::default()
                 .with_from(funder.address())
                 .with_to(eth_client.address())
-                .with_value(parse_ether("100").unwrap());
+                .with_value(parse_ether("1").unwrap());
             funder
                 .provider
                 .send_transaction(tx)

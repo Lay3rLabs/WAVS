@@ -3,10 +3,15 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
+use deadpool::managed::Pool;
 use serde::{Deserialize, Serialize};
 use utils::{
-    eth_client::EthSigningClient,
+    config::EthereumChainConfig,
+    eth_client::{
+        pool::{BalanceMaintainer, SigningClientPoolManager},
+        EthClientBuilder, EthSigningClient,
+    },
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
@@ -38,7 +43,13 @@ pub struct QueuedPacket {
 pub struct HttpState {
     pub config: Config,
     storage: Arc<RedbStorage>,
-    eth_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
+    eth_clients: Arc<RwLock<HashMap<ChainName, EthClient>>>,
+}
+
+#[derive(Clone)]
+pub enum EthClient {
+    TokioMutex(Arc<tokio::sync::Mutex<EthSigningClient>>),
+    Pool(Pool<SigningClientPoolManager>),
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
@@ -54,10 +65,7 @@ impl HttpState {
         })
     }
 
-    pub async fn get_eth_client(
-        &self,
-        chain_name: &ChainName,
-    ) -> anyhow::Result<Arc<tokio::sync::Mutex<EthSigningClient>>> {
+    pub async fn get_eth_client(&self, chain_name: &ChainName) -> anyhow::Result<EthClient> {
         {
             let lock = self.eth_clients.read().unwrap();
 
@@ -66,9 +74,43 @@ impl HttpState {
             }
         }
 
-        let eth_client = Arc::new(tokio::sync::Mutex::new(
-            self.config.signing_client(chain_name).await?,
-        ));
+        let chain_config = self
+            .config
+            .chains
+            .get_chain(chain_name)?
+            .context(format!("chain not found for {}", chain_name))?;
+
+        let chain_config = EthereumChainConfig::try_from(chain_config)?;
+        let client_config = chain_config.to_client_config(None, self.config.mnemonic.clone(), None);
+
+        let eth_client = EthClientBuilder::new(client_config)
+            .build_signing()
+            .await
+            .unwrap();
+
+        let eth_client = match &self.config.submission_pool_config {
+            Some(pool_config) => {
+                let pool = Pool::builder(SigningClientPoolManager::new(
+                    eth_client,
+                    self.config.mnemonic.clone().context("Missing mnemonic")?,
+                    chain_config,
+                    Some(pool_config.initial_wei),
+                    Some(BalanceMaintainer::new(
+                        pool_config.threshhold_wei,
+                        pool_config.topup_wei,
+                    )),
+                ))
+                .max_size(pool_config.size as usize)
+                .build()
+                .unwrap();
+
+                EthClient::Pool(pool)
+            }
+            None => {
+                let eth_client = Arc::new(tokio::sync::Mutex::new(eth_client));
+                EthClient::TokioMutex(eth_client)
+            }
+        };
 
         self.eth_clients
             .write()

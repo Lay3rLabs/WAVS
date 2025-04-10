@@ -1,8 +1,19 @@
-use alloy::{network::TransactionBuilder, node_bindings::Anvil, primitives::{utils::parse_ether, Address, U256}, providers::Provider, rpc::types::TransactionRequest};
+use alloy::{
+    network::TransactionBuilder,
+    node_bindings::Anvil,
+    primitives::{utils::parse_ether, Address, U256},
+    providers::Provider,
+    rpc::types::TransactionRequest,
+};
 use deadpool::managed::Pool;
 use futures::StreamExt;
 use utils::{
-    config::EthereumChainConfig, eth_client::{pool::{BalanceMaintainer, SigningClientPoolManager}, EthClientBuilder, EthClientConfig, EthSigningClient}, init_tracing_tests
+    config::EthereumChainConfig,
+    eth_client::{
+        pool::{BalanceMaintainer, SigningClientPoolManager},
+        EthClientBuilder, EthClientConfig, EthSigningClient,
+    },
+    init_tracing_tests,
 };
 
 #[tokio::test]
@@ -45,23 +56,23 @@ async fn signing_pool_basic() {
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),
         http_endpoint: Some(anvil.endpoint().to_string()),
         aggregator_endpoint: None,
-        faucet_endpoint: None
+        faucet_endpoint: None,
     };
 
-    let mnemonic = Some(
-        "test test test test test test test test test test test junk"
-            .to_string(),
-    );
+    let mnemonic = Some("test test test test test test test test test test test junk".to_string());
 
     let funder = EthClientBuilder::new(chain_config.to_client_config(None, mnemonic, None))
-        .build_signing().await.unwrap();
+        .build_signing()
+        .await
+        .unwrap();
 
     let manager = SigningClientPoolManager::new(
         funder,
-        "planet crucial snake reflect peace prison digital unit shaft garbage rent define".to_string(),
+        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
+            .to_string(),
         chain_config.clone(),
         Some(parse_ether("100").unwrap()),
-        None
+        None,
     );
 
     let eth_client_pool: Pool<SigningClientPoolManager> =
@@ -70,7 +81,9 @@ async fn signing_pool_basic() {
     let client = eth_client_pool.get().await.unwrap();
 
     // some other random address to receive funds
-    let rando = "0xEf04d5A2D13A792D9D5907c6f1bbc4baE9484069".parse().unwrap();
+    let rando = "0xEf04d5A2D13A792D9D5907c6f1bbc4baE9484069"
+        .parse()
+        .unwrap();
 
     // make sure our client has the expected balance
     assert!(balance_approx_eq(&client, parse_ether("100").unwrap()).await);
@@ -104,27 +117,27 @@ async fn signing_pool_balance_maintainer() {
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),
         http_endpoint: Some(anvil.endpoint().to_string()),
         aggregator_endpoint: None,
-        faucet_endpoint: None
+        faucet_endpoint: None,
     };
 
-    let mnemonic = Some(
-        "test test test test test test test test test test test junk"
-            .to_string(),
-    );
+    let mnemonic = Some("test test test test test test test test test test test junk".to_string());
 
     let funder = EthClientBuilder::new(chain_config.to_client_config(None, mnemonic, None))
-        .build_signing().await.unwrap();
+        .build_signing()
+        .await
+        .unwrap();
 
     let top_up_amount = parse_ether("30").unwrap();
 
     let manager = SigningClientPoolManager::new(
         funder,
-        "planet crucial snake reflect peace prison digital unit shaft garbage rent define".to_string(),
+        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
+            .to_string(),
         chain_config.clone(),
         Some(parse_ether("100").unwrap()),
         Some(BalanceMaintainer::new(
             parse_ether("25").unwrap(),
-            top_up_amount
+            top_up_amount,
         )),
     );
 
@@ -132,17 +145,16 @@ async fn signing_pool_balance_maintainer() {
         Pool::builder(manager).max_size(16).build().unwrap();
 
     // just get the address we'll be working with
-    let client_address = {
-        eth_client_pool.get().await.unwrap().address()
-    };
+    let client_address = { eth_client_pool.get().await.unwrap().address() };
 
     // some other random address to receive funds
-    let rando = "0xEf04d5A2D13A792D9D5907c6f1bbc4baE9484069".parse().unwrap();
+    let rando = "0xEf04d5A2D13A792D9D5907c6f1bbc4baE9484069"
+        .parse()
+        .unwrap();
 
     {
         let client = eth_client_pool.get().await.unwrap();
         assert_eq!(client.address(), client_address);
-
 
         // make sure our client has the expected balance
         assert!(balance_approx_eq(&client, parse_ether("100").unwrap()).await);
@@ -155,7 +167,6 @@ async fn signing_pool_balance_maintainer() {
     }
 
     {
-
         // get the client again
         let client = eth_client_pool.get().await.unwrap();
         assert_eq!(client.address(), client_address);
@@ -175,30 +186,32 @@ async fn signing_pool_balance_maintainer() {
         let client = eth_client_pool.get().await.unwrap();
         assert_eq!(client.address(), client_address);
 
-        // now the client is topped up 
+        // now the client is topped up
         assert!(balance_approx_eq(&client, top_up_amount).await);
         // sanity check
         assert_eq!(top_up_amount, parse_ether("30").unwrap());
     }
-
 }
 
-
 async fn transfer(from: &EthSigningClient, to: Address, wei: U256) {
-    println!("spending {wei} wei from {} to {to}", from.address());
-
     let tx = TransactionRequest::default()
         .with_from(from.address())
         .with_to(to)
         .with_value(wei);
 
     // Send the transaction and listen for the transaction to be included.
-    from.provider.send_transaction(tx).await.unwrap().watch().await.unwrap();
+    from.provider
+        .send_transaction(tx)
+        .await
+        .unwrap()
+        .watch()
+        .await
+        .unwrap();
 }
 
 // check if the balance is equal, with a bit of allowance for gas or whatever
 async fn balance_approx_eq(client: &EthSigningClient, expected_balance: U256) -> bool {
-    let current_balance = balance(client).await; 
+    let current_balance = balance(client).await;
 
     let diff = if current_balance > expected_balance {
         current_balance - expected_balance

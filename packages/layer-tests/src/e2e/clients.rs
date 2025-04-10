@@ -37,6 +37,9 @@ impl Clients {
             .await
             .unwrap();
 
+            // fund all the eth clients
+            configs.mnemonics.fund(&configs.chains).await;
+
             let cli_ctx = wavs_cli::context::CliContext::new_chains(
                 configs.cli_args.clone(),
                 configs.chains.all_chain_names(),
@@ -56,8 +59,8 @@ impl Clients {
                     funder,
                     cli_ctx.config.eth_mnemonic.clone().unwrap(),
                     chain_config.clone(),
-                    Some(parse_ether("100").unwrap()),
-                    None
+                    Some(parse_ether("1").unwrap()),
+                    None,
                 );
 
                 let eth_client_pool: Pool<SigningClientPoolManager> =

@@ -11,11 +11,15 @@ use crate::{
 use alloy::providers::Provider;
 use anyhow::anyhow;
 use async_trait::async_trait;
+use deadpool::managed::Pool;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    config::{AnyChainConfig, EthereumChainConfig},
-    eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
+    config::{AnyChainConfig, EthereumChainConfig, SigningPoolConfig},
+    eth_client::{
+        pool::{BalanceMaintainer, SigningClientPoolManager},
+        EthClientBuilder, EthClientTransport, EthSigningClient,
+    },
 };
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -30,6 +34,8 @@ pub struct CoreSubmission {
     // created on-demand from chain_name and hd_index
     eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
     eth_sending_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
+    eth_sending_pools: Arc<RwLock<HashMap<ChainName, Pool<SigningClientPoolManager>>>>,
+    eth_pool_config: Option<SigningPoolConfig>,
     eth_mnemonic: String,
     eth_mnemonic_hd_index_count: Arc<AtomicU32>,
 }
@@ -43,6 +49,8 @@ impl CoreSubmission {
             http_client: reqwest::Client::new(),
             eth_signing_clients: Arc::new(RwLock::new(HashMap::new())),
             eth_sending_clients: Arc::new(RwLock::new(HashMap::new())),
+            eth_sending_pools: Arc::new(RwLock::new(HashMap::new())),
+            eth_pool_config: config.submission_pool_config.clone(),
             eth_mnemonic: config
                 .submission_mnemonic
                 .clone()
@@ -94,29 +102,57 @@ impl CoreSubmission {
             address,
         } = submission;
 
-        // this frees up the sync lock so new clients can be added at runtime
-        let eth_client_mutex = {
-            let lock = self.eth_sending_clients.read().unwrap();
-            lock.get(&chain_name)
-                .ok_or(SubmissionError::MissingEthereumSendingClient(
-                    chain_name.clone(),
-                ))?
-                .clone()
-        };
-
-        // however we want to keep an async lock until this transaction is finished
-        let _tx_receipt = eth_client_mutex
-            .lock()
-            .await
-            .send_envelope_signatures(
-                packet.envelope,
-                vec![packet.signature],
-                packet.block_height,
-                address,
-                max_gas,
-            )
-            .await
-            .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
+        if self.eth_pool_config.is_some() {
+            // free up the mutex to add more pools
+            let pool = {
+                self.eth_sending_pools
+                    .read()
+                    .unwrap()
+                    .get(&chain_name)
+                    .ok_or(SubmissionError::MissingEthereumSendingClient(
+                        chain_name.clone(),
+                    ))?
+                    .clone()
+            };
+            let client = pool
+                .get()
+                .await
+                .map_err(|err| SubmissionError::InternalPoolError(err.to_string()))?;
+            let _tx_receipt = client
+                .send_envelope_signatures(
+                    packet.envelope,
+                    vec![packet.signature],
+                    packet.block_height,
+                    address,
+                    max_gas,
+                )
+                .await
+                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
+        } else {
+            // free up the mutex to add more clients
+            let client = {
+                self.eth_sending_clients
+                    .read()
+                    .unwrap()
+                    .get(&chain_name)
+                    .ok_or(SubmissionError::MissingEthereumSendingClient(
+                        chain_name.clone(),
+                    ))?
+                    .clone()
+            };
+            let _tx_receipt = client
+                .lock()
+                .await
+                .send_envelope_signatures(
+                    packet.envelope,
+                    vec![packet.signature],
+                    packet.block_height,
+                    address,
+                    max_gas,
+                )
+                .await
+                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
+        }
 
         Ok(())
     }
@@ -293,10 +329,34 @@ impl Submission for CoreSubmission {
                     .await
                     .map_err(SubmissionError::Ethereum)?;
 
-                    self.eth_sending_clients.write().unwrap().insert(
-                        chain_name.clone(),
-                        Arc::new(tokio::sync::Mutex::new(client)),
-                    );
+                    match &self.eth_pool_config {
+                        None => {
+                            self.eth_sending_clients.write().unwrap().insert(
+                                chain_name.clone(),
+                                Arc::new(tokio::sync::Mutex::new(client.clone())),
+                            );
+                        }
+                        Some(pool_config) => {
+                            let pool = Pool::builder(SigningClientPoolManager::new(
+                                client,
+                                self.eth_mnemonic.clone(),
+                                config.clone(),
+                                Some(pool_config.initial_wei),
+                                Some(BalanceMaintainer::new(
+                                    pool_config.threshhold_wei,
+                                    pool_config.topup_wei,
+                                )),
+                            ))
+                            .max_size(pool_config.size as usize)
+                            .build()
+                            .unwrap();
+
+                            self.eth_sending_pools
+                                .write()
+                                .unwrap()
+                                .insert(chain_name.clone(), pool);
+                        }
+                    }
                 }
             }
         }

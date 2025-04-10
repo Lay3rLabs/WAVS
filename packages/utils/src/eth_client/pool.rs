@@ -9,6 +9,7 @@ use alloy::{
 };
 use anyhow::Result;
 use deadpool::managed::{Manager, Metrics, RecycleResult};
+use serde::{Deserialize, Serialize};
 
 use super::{EthClientBuilder, EthSigningClient};
 
@@ -35,7 +36,7 @@ pub struct SigningClientPoolManager {
     balance_maintainer: Option<BalanceMaintainer>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BalanceMaintainer {
     pub threshhold: U256,
     pub top_up_amount: U256,
@@ -64,7 +65,7 @@ impl SigningClientPoolManager {
             derivation_index: AtomicU32::new(1),
             initial_client_wei,
             funder: tokio::sync::Mutex::new(funder),
-            balance_maintainer
+            balance_maintainer,
         }
     }
 
@@ -98,10 +99,7 @@ impl SigningClientPoolManager {
         Ok(tx_hash)
     }
 
-    async fn maintain_balance(
-        &self,
-        client: &EthSigningClient,
-    ) -> Result<()> {
+    async fn maintain_balance(&self, client: &EthSigningClient) -> Result<()> {
         if let Some(balance_maintainer) = &self.balance_maintainer {
             let balance = client.provider.get_balance(client.address()).await?;
 
