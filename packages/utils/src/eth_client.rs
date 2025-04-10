@@ -132,8 +132,8 @@ impl EthClientBuilder {
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
 
-        let signer: LocalSigner<SigningKey> = if mnemonic.starts_with("0x") {
-            let private_key = hex::decode(&mnemonic[2..])?;
+        let signer: LocalSigner<SigningKey> = if let Some(stripped) = mnemonic.strip_prefix("0x") {
+            let private_key = hex::decode(stripped)?;
             let secret_key = SecretKey::from_slice(&private_key)?;
             LocalSigner::from_signing_key(secret_key.into())
         } else {
