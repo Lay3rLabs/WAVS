@@ -501,17 +501,17 @@ impl std::fmt::Display for ComponentConfigResult {
 
 /// Result of updating a component's maximum execution time
 #[derive(Debug, Clone)]
-pub struct ComponentMaxExecResult {
+pub struct ComponentTimeLimitResult {
     /// The updated maximum execution time in seconds
-    pub max_exec_seconds: Option<u64>,
+    pub time_limit_seconds: Option<u64>,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
 
-impl std::fmt::Display for ComponentMaxExecResult {
+impl std::fmt::Display for ComponentTimeLimitResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Component maximum execution time updated successfully!")?;
-        match self.max_exec_seconds {
+        match self.time_limit_seconds {
             Some(seconds) => writeln!(f, "  Max Execution Time: {} seconds", seconds)?,
             None => writeln!(f, "  Max Execution Time: Default (no explicit limit)")?,
         }
@@ -940,7 +940,7 @@ pub fn update_component_time_limit_seconds(
     file_path: &Path,
     workflow_id: WorkflowID,
     seconds: Option<u64>,
-) -> Result<ComponentMaxExecResult> {
+) -> Result<ComponentTimeLimitResult> {
     modify_service_file(file_path, |mut service| {
         // First find the workflow and get a reference to it
         let workflow = service
@@ -959,8 +959,8 @@ pub fn update_component_time_limit_seconds(
 
         Ok((
             service,
-            ComponentMaxExecResult {
-                max_exec_seconds: seconds,
+            ComponentTimeLimitResult {
+                time_limit_seconds: seconds,
                 file_path: file_path.to_path_buf(),
             },
         ))
@@ -2018,7 +2018,7 @@ mod tests {
         .unwrap();
 
         // Verify max exec time result
-        assert_eq!(max_exec_result.max_exec_seconds, Some(max_exec_time));
+        assert_eq!(max_exec_result.time_limit_seconds, Some(max_exec_time));
         assert_eq!(max_exec_result.file_path, file_path);
 
         // Verify the service was updated with max exec time
@@ -2041,7 +2041,7 @@ mod tests {
             update_component_time_limit_seconds(&file_path, workflow_id_2.clone(), None).unwrap();
 
         // Verify no max exec time result
-        assert_eq!(no_max_exec_result.max_exec_seconds, None);
+        assert_eq!(no_max_exec_result.time_limit_seconds, None);
         assert_eq!(no_max_exec_result.file_path, file_path);
 
         // Verify the service was updated with no max exec time
