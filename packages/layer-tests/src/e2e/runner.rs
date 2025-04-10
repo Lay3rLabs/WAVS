@@ -8,6 +8,7 @@ use alloy::{
 use anyhow::{Context, Result};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
+use tokio::time::Instant;
 use utils::context::AppContext;
 use wavs_types::{ChainName, EthereumContractSubmission, Service, SigningKeyResponse, Submit};
 
@@ -37,8 +38,14 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
         });
 
         for (name, (service, multi_trigger_service)) in all {
+            tracing::info!("Testing service: {:?}", name);
+            let start_time = Instant::now();
             test_service(name, service, multi_trigger_service, &configs, &clients).await;
-            tracing::info!("Service {:?} passed", name);
+            tracing::info!(
+                "Service {:?} passed (ran for {}ms)",
+                name,
+                start_time.elapsed().as_millis()
+            );
         }
     });
 }
@@ -51,8 +58,6 @@ async fn test_service(
     clients: &Clients,
 ) {
     let service_id = service.id.to_string();
-
-    tracing::info!("Testing service: {:?}", name);
 
     if let Some(multi_trigger_service) = &multi_trigger_service {
         // sanity checks for multi-trigger, to surface errors earlier
