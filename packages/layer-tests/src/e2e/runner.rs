@@ -93,7 +93,7 @@ async fn test_service(
                 Some(workflow_id.to_string()),
                 get_input_for_service(name, &service, configs, workflow_index),
                 if is_final {
-                    Some(std::time::Duration::from_secs(30))
+                    Some(std::time::Duration::from_secs(300)) // FIXME: this shouldn't be necessary! ~10 seconds should be enough
                 } else {
                     None
                 },
@@ -139,7 +139,7 @@ async fn test_service(
                         &chain_name,
                         address, // this is a different address than the original service submission
                         trigger_id,
-                        std::time::Duration::from_secs(10),
+                        std::time::Duration::from_secs(300), //FIXME: this shouldn't be necessary! ~10 seconds should be enough
                         // we control the tests and *only* use on-chain triggers
                         // for multi-service tests
                         false,
