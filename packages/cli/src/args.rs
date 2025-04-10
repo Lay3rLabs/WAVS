@@ -89,19 +89,6 @@ pub enum ServiceCommand {
         #[clap(subcommand)]
         command: WorkflowCommand,
     },
-    /// Operations on workflow triggers
-    Trigger {
-        #[clap(subcommand)]
-        command: TriggerCommand,
-    },
-    /// Operations on workflow submits
-    Submit {
-        #[clap(long)]
-        workflow_id: WorkflowID,
-
-        #[clap(subcommand)]
-        command: SubmitCommand,
-    },
     /// Operations on service manager
     Manager {
         #[clap(subcommand)]
@@ -183,6 +170,20 @@ pub enum WorkflowCommand {
         #[clap(subcommand)]
         command: ComponentCommand,
     },
+    /// Operations on workflow triggers
+    Trigger {
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: TriggerCommand,
+    },
+    /// Operations on workflow submits
+    Submit {
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: SubmitCommand,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
@@ -198,10 +199,6 @@ pub enum ManagerCommand {
 pub enum TriggerCommand {
     /// Set a Cosmos contract event trigger for a workflow
     SetCosmos {
-        /// The ID of the workflow to update
-        #[clap(long)]
-        workflow_id: WorkflowID,
-
         /// The bech32 contract address (e.g., "cosmos1...")
         #[clap(long)]
         address: String,
@@ -217,10 +214,6 @@ pub enum TriggerCommand {
 
     /// Set an Ethereum contract event trigger for a workflow
     SetEthereum {
-        /// The ID of the workflow to update
-        #[clap(long)]
-        workflow_id: WorkflowID,
-
         /// The hexadecimal Ethereum address (e.g., "0x1234...")
         #[clap(long)]
         address: String,

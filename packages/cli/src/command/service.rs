@@ -87,52 +87,46 @@ pub async fn handle_service_command(
                     display_result(ctx, result, &file, json)?;
                 }
             },
-        },
-        ServiceCommand::Trigger { command } => match command {
-            TriggerCommand::SetCosmos {
-                workflow_id,
-                address,
-                chain_name,
-                event_type,
-            } => {
-                let query_client = ctx.get_cosmos_client(&chain_name)?.querier;
-                let result = set_cosmos_trigger(
-                    query_client,
-                    &file,
-                    workflow_id,
+            WorkflowCommand::Submit { id, command } => match command {
+                SubmitCommand::SetEthereum {
+                    address,
+                    chain_name,
+                    max_gas,
+                } => {
+                    let result = set_ethereum_submit(&file, id, address, chain_name, max_gas)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                SubmitCommand::SetAggregator { url } => {
+                    let result = set_aggregator_submit(&file, id, url)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+            },
+            WorkflowCommand::Trigger { id, command } => match command {
+                TriggerCommand::SetCosmos {
                     address,
                     chain_name,
                     event_type,
-                )?;
-                display_result(ctx, result, &file, json)?;
-            }
-            TriggerCommand::SetEthereum {
-                workflow_id,
-                address,
-                chain_name,
-                event_hash,
-            } => {
-                let result =
-                    set_ethereum_trigger(&file, workflow_id, address, chain_name, event_hash)?;
-                display_result(ctx, result, &file, json)?;
-            }
-        },
-        ServiceCommand::Submit {
-            workflow_id,
-            command,
-        } => match command {
-            SubmitCommand::SetEthereum {
-                address,
-                chain_name,
-                max_gas,
-            } => {
-                let result = set_ethereum_submit(&file, workflow_id, address, chain_name, max_gas)?;
-                display_result(ctx, result, &file, json)?;
-            }
-            SubmitCommand::SetAggregator { url } => {
-                let result = set_aggregator_submit(&file, workflow_id, url)?;
-                display_result(ctx, result, &file, json)?;
-            }
+                } => {
+                    let query_client = ctx.get_cosmos_client(&chain_name)?.querier;
+                    let result = set_cosmos_trigger(
+                        query_client,
+                        &file,
+                        id,
+                        address,
+                        chain_name,
+                        event_type,
+                    )?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                TriggerCommand::SetEthereum {
+                    address,
+                    chain_name,
+                    event_hash,
+                } => {
+                    let result = set_ethereum_trigger(&file, id, address, chain_name, event_hash)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+            },
         },
         ServiceCommand::Manager { command } => match command {
             ManagerCommand::SetEthereum {
