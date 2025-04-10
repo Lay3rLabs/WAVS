@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Component, EthereumContractSubmission, ServiceID, ServiceManager, ServiceStatus, Submit,
-    Timestamp, Trigger, WorkflowID,
+    Aggregator, Component, EthereumContractSubmission, ServiceID, ServiceManager, ServiceStatus,
+    Submit, Timestamp, Trigger, WorkflowID,
 };
 
 pub const ENV_PREFIX: &str = "WAVS_ENV_";
@@ -168,9 +168,19 @@ impl ServiceJson {
                                     ));
                                 }
                             }
+
+                            if workflow.aggregator.is_some() {
+                                errors.push(format!("Workflow '{}' submits with eth contract, but it has an aggregator defined", workflow_id));
+                            }
                         }
                         Submit::None => {
                             // None submit type is always valid
+                            if workflow.aggregator.is_some() {
+                                errors.push(format!(
+                                    "Workflow '{}' has no submit, but it has an aggregator defined",
+                                    workflow_id
+                                ));
+                            }
                         }
                         Submit::Aggregator { url } => {
                             if reqwest::Url::parse(url).is_err() {
@@ -178,6 +188,25 @@ impl ServiceJson {
                                     "Workflow '{}' has an invalid URL: {}",
                                     workflow_id, url
                                 ))
+                            }
+
+                            if workflow.aggregator.is_none() {
+                                errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
+                            }
+                        }
+                    }
+                }
+            }
+            // Check if max_gas is reasonable if specified
+            if let Some(aggregator) = &workflow.aggregator {
+                match aggregator {
+                    Aggregator::Ethereum(ethereum_contract_submission) => {
+                        if let Some(max_gas) = ethereum_contract_submission.max_gas {
+                            if max_gas == 0 {
+                                errors.push(format!(
+                                    "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
+                                    workflow_id
+                                ));
                             }
                         }
                     }
@@ -221,6 +250,9 @@ pub struct WorkflowJson {
     pub trigger: TriggerJson,
     pub component: ComponentJson,
     pub submit: SubmitJson,
+    /// If submit is `Submit::Aggregator`, this is
+    /// the required data for the aggregator to submit this workflow
+    pub aggregator: Option<Aggregator>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

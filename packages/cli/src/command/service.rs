@@ -14,7 +14,7 @@ use std::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
+    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
     EthereumContractSubmission, Permissions, ServiceID, ServiceManager, ServiceStatus, Submit,
     Trigger, WorkflowID,
 };
@@ -96,8 +96,14 @@ pub async fn handle_service_command(
                     let result = set_ethereum_submit(&file, id, address, chain_name, max_gas)?;
                     display_result(ctx, result, &file, json)?;
                 }
-                SubmitCommand::SetAggregator { url } => {
-                    let result = set_aggregator_submit(&file, id, url)?;
+                SubmitCommand::SetAggregator {
+                    url,
+                    chain_name,
+                    address,
+                    max_gas,
+                } => {
+                    let result =
+                        set_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
                     display_result(ctx, result, &file, json)?;
                 }
             },
@@ -650,6 +656,7 @@ pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<Workflow
             trigger,
             component,
             submit,
+            aggregator: None,
         };
 
         // Add the workflow to the service
@@ -1051,6 +1058,9 @@ pub fn set_ethereum_submit(
         });
         workflow.submit = SubmitJson::Submit(submit.clone());
 
+        // Reset the workflow aggregator
+        workflow.aggregator = None;
+
         Ok((
             service,
             WorkflowSubmitResult {
@@ -1067,9 +1077,15 @@ pub fn set_aggregator_submit(
     file_path: &Path,
     workflow_id: WorkflowID,
     url: String,
+    chain_name: ChainName,
+    address_str: String,
+    max_gas: Option<u64>,
 ) -> Result<WorkflowSubmitResult> {
     // Validate the URL format
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
+
+    // Parse the Ethereum address
+    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
@@ -1080,6 +1096,13 @@ pub fn set_aggregator_submit(
         // Update the submit
         let submit = Submit::Aggregator { url };
         workflow.submit = SubmitJson::Submit(submit.clone());
+
+        // Set the workflow aggregator
+        workflow.aggregator = Some(Aggregator::Ethereum(EthereumContractSubmission {
+            chain_name,
+            address,
+            max_gas,
+        }));
 
         Ok((
             service,
@@ -1184,6 +1207,17 @@ pub async fn validate_service(
 
                 // Collect submit for contract existence check
                 submits.push((workflow_id, submit));
+            }
+
+            if let Some(aggregator) = &workflow.aggregator {
+                match aggregator {
+                    Aggregator::Ethereum(ethereum_contract_submission) => {
+                        chains_to_validate.insert((
+                            ethereum_contract_submission.chain_name.clone(),
+                            ChainType::Ethereum,
+                        ));
+                    }
+                };
             }
         }
 
@@ -2498,8 +2532,15 @@ mod tests {
         // Test setting Aggregator submit
         let aggregator_url = "https://api.example.com/aggregator".to_string();
 
-        let aggregator_result =
-            set_aggregator_submit(&file_path, workflow_id.clone(), aggregator_url.clone()).unwrap();
+        let aggregator_result = set_aggregator_submit(
+            &file_path,
+            workflow_id.clone(),
+            aggregator_url.clone(),
+            eth_chain.clone(),
+            eth_address.clone(),
+            None,
+        )
+        .unwrap();
 
         // Verify aggregator submit result
         assert_eq!(aggregator_result.workflow_id, workflow_id);
@@ -2530,8 +2571,14 @@ mod tests {
 
         // Test error handling for invalid URL
         let invalid_url = "not-a-valid-url".to_string();
-        let invalid_url_result =
-            set_aggregator_submit(&file_path, workflow_id.clone(), invalid_url);
+        let invalid_url_result = set_aggregator_submit(
+            &file_path,
+            workflow_id.clone(),
+            invalid_url,
+            eth_chain,
+            eth_address,
+            None,
+        );
         assert!(invalid_url_result.is_err());
         let invalid_url_error = invalid_url_result.unwrap_err().to_string();
         assert!(invalid_url_error.contains("Invalid URL format"));
@@ -2541,9 +2588,8 @@ mod tests {
     async fn test_service_validation() {
         // Create a temporary directory for test files
         let temp_dir = tempdir().unwrap();
-        let file_path = temp_dir.path().join("test_service.json");
 
-        // Create a valid service configuration
+        // Create common test objects
         let service_id = ServiceID::new("test-service-id").unwrap();
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
         let ethereum_chain = ChainName::from_str("ethereum-mainnet").unwrap();
@@ -2559,26 +2605,18 @@ mod tests {
                 .unwrap();
         let component = Component::new(ComponentSource::Digest(test_digest.clone()));
 
-        // Create a valid trigger for the workflow
+        // Create a valid trigger and submit for the workflow
         let trigger = Trigger::EthContractEvent {
             address: ethereum_address,
             chain_name: ethereum_chain.clone(),
             event_hash: wavs_types::ByteArray::new([1u8; 32]),
         };
 
-        // Create a valid submit for the workflow
         let submit = Submit::EthereumContract(EthereumContractSubmission {
             address: ethereum_address,
             chain_name: ethereum_chain.clone(),
             max_gas: Some(1000000u64),
         });
-
-        // Create workflow with the trigger and submit
-        let workflow = WorkflowJson {
-            trigger: TriggerJson::Trigger(trigger.clone()),
-            component: ComponentJson::Component(component.clone()),
-            submit: SubmitJson::Submit(submit.clone()),
-        };
 
         // Create service manager
         let manager = ServiceManagerJson::Manager(ServiceManager::Ethereum {
@@ -2586,136 +2624,555 @@ mod tests {
             address: ethereum_address,
         });
 
-        // Create a valid service
+        // Test valid service
+        {
+            let mut workflows = BTreeMap::new();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
 
-        let mut workflows = BTreeMap::new();
-        workflows.insert(workflow_id.clone(), workflow);
+            let valid_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
 
-        let service = ServiceJson {
-            id: service_id.clone(),
-            name: "Test Service".to_string(),
-            workflows,
-            status: ServiceStatus::Active,
-            manager,
-        };
+            let file_path = temp_dir.path().join("valid_service.json");
+            let service_json = serde_json::to_string_pretty(&valid_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
 
-        // Write the service to a file
-        let service_json = serde_json::to_string_pretty(&service).unwrap();
-        let mut file = File::create(&file_path).unwrap();
-        file.write_all(service_json.as_bytes()).unwrap();
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert_eq!(
+                result.errors.len(),
+                0,
+                "Valid service should have no validation errors"
+            );
+        }
 
-        // Validate the service - this should pass with no errors since we've created a valid service
-        // Note: Using None for ctx since we can't easily mock connection to blockchain
-        let result = validate_service(&file_path, None).await.unwrap();
+        // Test unset component
+        {
+            let mut workflows = BTreeMap::new();
+            // Add original workflow
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
 
-        // Check that validation succeeds
-        assert_eq!(
-            result.errors.len(),
-            0,
-            "Valid service should have no validation errors"
-        );
-        assert_eq!(result.service_id, service_id.to_string());
+            // Add invalid workflow with unset component
+            let invalid_workflow_id = WorkflowID::new("invalid-workflow").unwrap();
+            workflows.insert(
+                invalid_workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::new_unset(),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
 
-        // Create an invalid service with missing component reference
-        let mut invalid_service = service.clone();
+            let invalid_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
 
-        // Create a new workflow that references a non-existent component
-        let invalid_workflow = WorkflowJson {
-            trigger: TriggerJson::Trigger(trigger.clone()),
-            component: ComponentJson::new_unset(),
-            submit: SubmitJson::Submit(submit.clone()),
-        };
+            let file_path = temp_dir.path().join("unset_component.json");
+            let service_json = serde_json::to_string_pretty(&invalid_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
 
-        let invalid_workflow_id = WorkflowID::new("invalid-workflow").unwrap();
-        invalid_service
-            .workflows
-            .insert(invalid_workflow_id.clone(), invalid_workflow);
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Service with unset component should have errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains(&invalid_workflow_id.to_string())
+                        && error.contains("has an unset component")),
+                "Validation should catch missing component reference"
+            );
+        }
 
-        // Write the invalid service to a file
-        let invalid_service_path = temp_dir.path().join("invalid_service.json");
-        let invalid_service_json = serde_json::to_string_pretty(&invalid_service).unwrap();
-        let mut invalid_file = File::create(&invalid_service_path).unwrap();
-        invalid_file
-            .write_all(invalid_service_json.as_bytes())
-            .unwrap();
+        // Test zero fuel limit
+        {
+            let mut workflows = BTreeMap::new();
+            let mut zero_fuel_component = component.clone();
+            zero_fuel_component.fuel_limit = Some(0);
 
-        // Validate the service - this should fail with component reference error
-        let invalid_result = validate_service(&invalid_service_path, None).await.unwrap();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(zero_fuel_component),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
 
-        // Check that validation fails with appropriate error
-        assert!(
-            !invalid_result.errors.is_empty(),
-            "Invalid service should have validation errors"
-        );
-        let component_error = invalid_result.errors.iter().any(|error| {
-            error.contains(&invalid_workflow_id.to_string())
-                && error.contains("has an unset component")
-        });
-        assert!(
-            component_error,
-            "Validation should catch missing component reference"
-        );
+            let zero_fuel_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
 
-        // Create an invalid service with zero fuel limit
-        let mut zero_fuel_service = service.clone();
+            let file_path = temp_dir.path().join("zero_fuel_service.json");
+            let service_json = serde_json::to_string_pretty(&zero_fuel_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
 
-        // Modify the workflow to have a zero fuel limit
-        let mut component_zero_fuel = component.clone();
-        component_zero_fuel.fuel_limit = Some(0);
-        let zero_fuel_workflow = WorkflowJson {
-            trigger: TriggerJson::Trigger(trigger),
-            component: ComponentJson::Component(component_zero_fuel),
-            submit: SubmitJson::Submit(submit),
-        };
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Zero fuel service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains(&workflow_id.to_string())
+                        && error.contains("fuel limit of zero")),
+                "Validation should catch zero fuel limit"
+            );
+        }
 
-        zero_fuel_service.workflows.clear();
-        zero_fuel_service
-            .workflows
-            .insert(workflow_id.clone(), zero_fuel_workflow);
+        // Test empty service name
+        {
+            let mut workflows = BTreeMap::new();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
 
-        // Write the zero fuel service to a file
-        let zero_fuel_path = temp_dir.path().join("zero_fuel_service.json");
-        let zero_fuel_json = serde_json::to_string_pretty(&zero_fuel_service).unwrap();
-        let mut zero_fuel_file = File::create(&zero_fuel_path).unwrap();
-        zero_fuel_file.write_all(zero_fuel_json.as_bytes()).unwrap();
+            let empty_name_service = ServiceJson {
+                id: service_id.clone(),
+                name: "".to_string(), // Empty name
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
 
-        // Validate the service - this should fail with fuel limit error
-        let zero_fuel_result = validate_service(&zero_fuel_path, None).await.unwrap();
+            let file_path = temp_dir.path().join("empty_name_service.json");
+            let service_json = serde_json::to_string_pretty(&empty_name_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
 
-        // Check that validation fails with appropriate error
-        assert!(
-            !zero_fuel_result.errors.is_empty(),
-            "Zero fuel service should have validation errors"
-        );
-        let fuel_error = zero_fuel_result.errors.iter().any(|error| {
-            error.contains(&workflow_id.to_string()) && error.contains("fuel limit of zero")
-        });
-        assert!(fuel_error, "Validation should catch zero fuel limit");
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Empty name service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("Service name cannot be empty")),
+                "Validation should catch empty service name"
+            );
+        }
 
-        // Create a service with empty name
-        let mut empty_name_service = service.clone();
-        empty_name_service.name = "".to_string(); // Invalid - empty name
+        // Test invalid environment variable prefix
+        {
+            let mut workflows = BTreeMap::new();
+            let mut env_component = component.clone();
+            env_component.env_keys = vec!["INVALID_PREFIX_KEY".to_string()];
 
-        // Write the empty name service to a file
-        let empty_name_path = temp_dir.path().join("empty_name_service.json");
-        let empty_name_json = serde_json::to_string_pretty(&empty_name_service).unwrap();
-        let mut empty_name_file = File::create(&empty_name_path).unwrap();
-        empty_name_file
-            .write_all(empty_name_json.as_bytes())
-            .unwrap();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(env_component),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
 
-        // Validate the service - this should fail with name error
-        let empty_name_result = validate_service(&empty_name_path, None).await.unwrap();
+            let invalid_env_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
 
-        // Check that validation fails with appropriate error
-        assert!(
-            !empty_name_result.errors.is_empty(),
-            "Empty name service should have validation errors"
-        );
-        let name_error = empty_name_result
-            .errors
-            .iter()
-            .any(|error| error.contains("Service name cannot be empty"));
-        assert!(name_error, "Validation should catch empty service name");
+            let file_path = temp_dir.path().join("invalid_env_prefix.json");
+            let service_json = serde_json::to_string_pretty(&invalid_env_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Invalid env prefix service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("doesn't start with 'WAVS_ENV_'")),
+                "Validation should catch invalid environment variable prefix"
+            );
+        }
+
+        // Test duplicate environment variables
+        {
+            let mut workflows = BTreeMap::new();
+            let mut env_component = component.clone();
+            env_component.env_keys = vec![
+                format!("{}KEY1", ENV_PREFIX),
+                format!("{}KEY1", ENV_PREFIX), // Duplicate
+            ];
+
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(env_component),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
+
+            let duplicate_env_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
+
+            let file_path = temp_dir.path().join("duplicate_env_vars.json");
+            let service_json = serde_json::to_string_pretty(&duplicate_env_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Duplicate env vars service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("duplicate environment variable")),
+                "Validation should catch duplicate environment variables"
+            );
+        }
+
+        // Test unset trigger
+        {
+            let mut workflows = BTreeMap::new();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Json(Json::Unset),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
+
+            let unset_trigger_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
+
+            let file_path = temp_dir.path().join("unset_trigger.json");
+            let service_json = serde_json::to_string_pretty(&unset_trigger_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Unset trigger service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("has an unset trigger")),
+                "Validation should catch unset trigger"
+            );
+        }
+
+        // Test zero max_gas in submit
+        {
+            let mut workflows = BTreeMap::new();
+            let zero_gas_submit = Submit::EthereumContract(EthereumContractSubmission {
+                address: ethereum_address,
+                chain_name: ethereum_chain.clone(),
+                max_gas: Some(0u64), // Zero gas
+            });
+
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(zero_gas_submit),
+                    aggregator: None,
+                },
+            );
+
+            let zero_gas_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
+
+            let file_path = temp_dir.path().join("zero_max_gas.json");
+            let service_json = serde_json::to_string_pretty(&zero_gas_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Zero max_gas service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("max_gas of zero")),
+                "Validation should catch zero max_gas"
+            );
+        }
+
+        // Test unset submit
+        {
+            let mut workflows = BTreeMap::new();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Json(Json::Unset),
+                    aggregator: None,
+                },
+            );
+
+            let unset_submit_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
+
+            let file_path = temp_dir.path().join("unset_submit.json");
+            let service_json = serde_json::to_string_pretty(&unset_submit_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Unset submit service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("has an unset submit")),
+                "Validation should catch unset submit"
+            );
+        }
+
+        // Test invalid URL in Aggregator submit
+        {
+            let mut workflows = BTreeMap::new();
+            let aggregator = Some(Aggregator::Ethereum(EthereumContractSubmission {
+                address: ethereum_address,
+                chain_name: ethereum_chain.clone(),
+                max_gas: Some(1000000u64),
+            }));
+
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(Submit::Aggregator {
+                        url: "not-a-valid-url".to_string(),
+                    }),
+                    aggregator,
+                },
+            );
+
+            let invalid_url_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
+
+            let file_path = temp_dir.path().join("invalid_url.json");
+            let service_json = serde_json::to_string_pretty(&invalid_url_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Invalid URL service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("invalid URL")),
+                "Validation should catch invalid URL in Aggregator submit"
+            );
+        }
+
+        // Test unset service manager
+        {
+            let mut workflows = BTreeMap::new();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(submit.clone()),
+                    aggregator: None,
+                },
+            );
+
+            let unset_manager_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: ServiceManagerJson::Json(Json::Unset),
+            };
+
+            let file_path = temp_dir.path().join("unset_manager.json");
+            let service_json = serde_json::to_string_pretty(&unset_manager_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "Unset manager service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("unset service manager")),
+                "Validation should catch unset service manager"
+            );
+        }
+
+        // Test submit with aggregator but no aggregator defined
+        {
+            let mut workflows = BTreeMap::new();
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(Submit::Aggregator {
+                        url: "https://example.com".to_string(),
+                    }),
+                    aggregator: None, // No aggregator defined
+                },
+            );
+
+            let no_aggregator_service = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
+
+            let file_path = temp_dir.path().join("no_aggregator.json");
+            let service_json = serde_json::to_string_pretty(&no_aggregator_service).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "No aggregator service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error
+                        .contains("submits with aggregator, but no aggregator is defined")),
+                "Validation should catch submit with aggregator but no aggregator defined"
+            );
+        }
+
+        // Test no submit but aggregator defined
+        {
+            let mut workflows = BTreeMap::new();
+            let aggregator = Some(Aggregator::Ethereum(EthereumContractSubmission {
+                address: ethereum_address,
+                chain_name: ethereum_chain.clone(),
+                max_gas: Some(1000000u64),
+            }));
+
+            workflows.insert(
+                workflow_id.clone(),
+                WorkflowJson {
+                    trigger: TriggerJson::Trigger(trigger.clone()),
+                    component: ComponentJson::Component(component.clone()),
+                    submit: SubmitJson::Submit(Submit::None),
+                    aggregator,
+                },
+            );
+
+            let none_submit_with_aggregator = ServiceJson {
+                id: service_id.clone(),
+                name: "Test Service".to_string(),
+                workflows,
+                status: ServiceStatus::Active,
+                manager: manager.clone(),
+            };
+
+            let file_path = temp_dir.path().join("none_submit_with_aggregator.json");
+            let service_json = serde_json::to_string_pretty(&none_submit_with_aggregator).unwrap();
+            std::fs::write(&file_path, service_json).unwrap();
+
+            let result = validate_service(&file_path, None).await.unwrap();
+            assert!(
+                !result.errors.is_empty(),
+                "None submit with aggregator service should have validation errors"
+            );
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|error| error.contains("has no submit, but it has an aggregator defined")),
+                "Validation should catch no submit but aggregator defined"
+            );
+        }
     }
 }

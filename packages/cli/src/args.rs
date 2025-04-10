@@ -249,6 +249,18 @@ pub enum SubmitCommand {
         /// The URL of the aggregator
         #[clap(long)]
         url: String,
+
+        /// The hexadecimal Ethereum address (e.g., "0x1234...")
+        #[clap(long)]
+        address: String,
+
+        /// The chain name (e.g., "ethereum-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The maximum gas to use for the submission (optional)
+        #[clap(long)]
+        max_gas: Option<u64>,
     },
 }
 

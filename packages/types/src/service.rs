@@ -279,7 +279,7 @@ pub struct EthereumContractSubmission {
     pub chain_name: ChainName,
     /// Should be an IWavsServiceHandler contract
     pub address: alloy::primitives::Address,
-    /// max gas for the submnission
+    /// max gas for the submission
     /// with an aggregator, that will be for all the signed envelopes combined
     /// without an aggregator, it's just the single signed envelope
     pub max_gas: Option<u64>,
