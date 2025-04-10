@@ -32,6 +32,22 @@ pub struct SigningClientPoolManager {
     initial_client_wei: Option<U256>,
     derivation_index: AtomicU32,
     funder: tokio::sync::Mutex<EthSigningClient>,
+    balance_maintainer: Option<BalanceMaintainer>,
+}
+
+#[derive(Clone, Debug)]
+pub struct BalanceMaintainer {
+    pub threshhold: U256,
+    pub top_up_amount: U256,
+}
+
+impl BalanceMaintainer {
+    pub fn new(threshhold: U256, top_up_amount: U256) -> Self {
+        Self {
+            threshhold,
+            top_up_amount,
+        }
+    }
 }
 
 impl SigningClientPoolManager {
@@ -40,6 +56,7 @@ impl SigningClientPoolManager {
         mnemonic: String,
         chain_config: EthereumChainConfig,
         initial_client_wei: Option<U256>,
+        balance_maintainer: Option<BalanceMaintainer>,
     ) -> Self {
         Self {
             mnemonic,
@@ -47,6 +64,7 @@ impl SigningClientPoolManager {
             derivation_index: AtomicU32::new(1),
             initial_client_wei,
             funder: tokio::sync::Mutex::new(funder),
+            balance_maintainer
         }
     }
 
@@ -79,6 +97,22 @@ impl SigningClientPoolManager {
 
         Ok(tx_hash)
     }
+
+    async fn maintain_balance(
+        &self,
+        client: &EthSigningClient,
+    ) -> Result<()> {
+        if let Some(balance_maintainer) = &self.balance_maintainer {
+            let balance = client.provider.get_balance(client.address()).await?;
+
+            if balance < balance_maintainer.threshhold {
+                let amount = balance_maintainer.top_up_amount - balance;
+                self.fund(client.address(), amount).await?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Manager for SigningClientPoolManager {
@@ -105,6 +139,9 @@ impl Manager for SigningClientPoolManager {
             client.address(),
             metrics.recycle_count
         );
+
+        self.maintain_balance(client).await?;
+
         Ok(())
     }
 }

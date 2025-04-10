@@ -57,6 +57,7 @@ impl Clients {
                     cli_ctx.config.eth_mnemonic.clone().unwrap(),
                     chain_config.clone(),
                     Some(parse_ether("100").unwrap()),
+                    None
                 );
 
                 let eth_client_pool: Pool<SigningClientPoolManager> =
