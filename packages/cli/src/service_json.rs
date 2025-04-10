@@ -2,9 +2,11 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Component, EthereumContractSubmission, ServiceID, ServiceStatus, Submit, Timestamp, Trigger,
-    WorkflowID,
+    Aggregator, Component, EthereumContractSubmission, ServiceID, ServiceManager, ServiceStatus,
+    Submit, Timestamp, Trigger, WorkflowID,
 };
+
+pub const ENV_PREFIX: &str = "WAVS_ENV_";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -13,6 +15,7 @@ pub struct ServiceJson {
     pub name: String,
     pub workflows: BTreeMap<WorkflowID, WorkflowJson>,
     pub status: ServiceStatus,
+    pub manager: ServiceManagerJson,
 }
 
 impl ServiceJson {
@@ -30,11 +33,47 @@ impl ServiceJson {
             // Check if component is unset
             if workflow.component.is_unset() {
                 errors.push(format!("Workflow '{}' has an unset component", workflow_id));
+            } else {
+                let component = workflow
+                    .component
+                    .as_component()
+                    .expect("Component is unset and not validated beforehand");
+
+                // Validate fuel limit
+                if let Some(limit) = component.fuel_limit {
+                    if limit == 0 {
+                        errors.push(format!(
+                            "Workflow '{}' has a fuel limit of zero, which will prevent execution",
+                            workflow_id
+                        ));
+                    }
+                }
+
+                // Validate env_keys have the correct prefix
+                for key in &component.env_keys {
+                    if !key.starts_with(ENV_PREFIX) {
+                        errors.push(format!(
+                "Workflow '{}' has environment variable '{}' that doesn't start with '{}'",
+                workflow_id, key, ENV_PREFIX
+            ));
+                    }
+                }
+
+                // Check for duplicate env_keys
+                let mut env_keys_set = std::collections::HashSet::new();
+                for key in &component.env_keys {
+                    if !env_keys_set.insert(key) {
+                        errors.push(format!(
+                            "Workflow '{}' has duplicate environment variable: {}",
+                            workflow_id, key
+                        ));
+                    }
+                }
             }
 
             // Check if trigger is unset
             match &workflow.trigger {
-                TriggerJson::Json(Json::Unset) => {
+                TriggerJson::Json(_) => {
                     errors.push(format!("Workflow '{}' has an unset trigger", workflow_id));
                 }
                 TriggerJson::Trigger(trigger) => {
@@ -98,7 +137,7 @@ impl ServiceJson {
 
             // Check if submit is unset
             match &workflow.submit {
-                SubmitJson::Json(Json::Unset) => {
+                SubmitJson::Json(_) => {
                     errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
                 }
                 SubmitJson::Submit(submit) => {
@@ -129,26 +168,54 @@ impl ServiceJson {
                                     ));
                                 }
                             }
+
+                            if workflow.aggregator.is_some() {
+                                errors.push(format!("Workflow '{}' submits with eth contract, but it has an aggregator defined", workflow_id));
+                            }
                         }
                         Submit::None => {
                             // None submit type is always valid
+                            if workflow.aggregator.is_some() {
+                                errors.push(format!(
+                                    "Workflow '{}' has no submit, but it has an aggregator defined",
+                                    workflow_id
+                                ));
+                            }
                         }
-                        Submit::Aggregator { url: _ } => {
-                            // TODO - validate aggregator url ?
+                        Submit::Aggregator { url } => {
+                            if reqwest::Url::parse(url).is_err() {
+                                errors.push(format!(
+                                    "Workflow '{}' has an invalid URL: {}",
+                                    workflow_id, url
+                                ))
+                            }
+
+                            if workflow.aggregator.is_none() {
+                                errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
+                            }
                         }
                     }
                 }
             }
-
-            // Validate fuel limit
-            if let Some(limit) = workflow.component.as_component().and_then(|c| c.fuel_limit) {
-                if limit == 0 {
-                    errors.push(format!(
-                        "Workflow '{}' has a fuel limit of zero, which will prevent execution",
-                        workflow_id
-                    ));
+            // Check if max_gas is reasonable if specified
+            if let Some(aggregator) = &workflow.aggregator {
+                match aggregator {
+                    Aggregator::Ethereum(ethereum_contract_submission) => {
+                        if let Some(max_gas) = ethereum_contract_submission.max_gas {
+                            if max_gas == 0 {
+                                errors.push(format!(
+                                    "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
+                                    workflow_id
+                                ));
+                            }
+                        }
+                    }
                 }
             }
+        }
+
+        if matches!(&self.manager, ServiceManagerJson::Json(_)) {
+            errors.push("Service has an unset service manager".to_owned());
         }
 
         errors
@@ -183,6 +250,9 @@ pub struct WorkflowJson {
     pub trigger: TriggerJson,
     pub component: ComponentJson,
     pub submit: SubmitJson,
+    /// If submit is `Submit::Aggregator`, this is
+    /// the required data for the aggregator to submit this workflow
+    pub aggregator: Option<Aggregator>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -208,6 +278,19 @@ pub enum SubmitJson {
 impl Default for SubmitJson {
     fn default() -> Self {
         SubmitJson::Json(Json::Unset)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", untagged)]
+pub enum ServiceManagerJson {
+    Manager(ServiceManager),
+    Json(Json),
+}
+
+impl Default for ServiceManagerJson {
+    fn default() -> Self {
+        ServiceManagerJson::Json(Json::Unset)
     }
 }
 

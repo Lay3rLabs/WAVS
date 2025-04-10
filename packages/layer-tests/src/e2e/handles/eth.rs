@@ -16,7 +16,7 @@ impl EthereumInstance {
             .as_ref()
             .unwrap_or_else(|| chain_config.ws_endpoint.as_ref().unwrap())
             .split(':')
-            .last()
+            .next_back()
             .unwrap()
             .parse::<u16>()
             .unwrap();

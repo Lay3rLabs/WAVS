@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{arg, Parser, Subcommand, ValueEnum};
+use clap::{arg, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
@@ -84,25 +84,15 @@ pub enum ServiceCommand {
         #[clap(long)]
         id: Option<ServiceID>,
     },
-    /// Component management commands
-    Component {
-        #[clap(subcommand)]
-        command: ComponentCommand,
-    },
     /// Workflow management commands
     Workflow {
         #[clap(subcommand)]
         command: WorkflowCommand,
     },
-    /// Operations on workflow triggers
-    Trigger {
+    /// Operations on service manager
+    Manager {
         #[clap(subcommand)]
-        command: TriggerCommand,
-    },
-    /// Operations on workflow submits
-    Submit {
-        #[clap(subcommand)]
-        command: SubmitCommand,
+        command: ManagerCommand,
     },
     /// Validates the service JSON
     Validate {},
@@ -111,28 +101,14 @@ pub enum ServiceCommand {
 /// Commands for managing components
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum ComponentCommand {
-    /// Add a component to a service
-    Add {
-        /// The ID of the workflow
-        #[clap(long)]
-        id: WorkflowID,
-
+    /// Set the component for a workflow
+    Set {
         /// Digest of an existing component
         #[clap(short, long)]
         digest: Digest,
     },
-    /// Delete a component from a service
-    Delete {
-        /// The ID of the workflow
-        #[clap(long)]
-        id: WorkflowID,
-    },
-    /// Manage permissions of a component
+    /// Manage permissions of a workflow component
     Permissions {
-        /// The ID of the workflow to edit
-        #[clap(long)]
-        id: WorkflowID,
-
         /// HTTP hosts allowed for access:
         /// Use --http-hosts '' to disallow all hosts
         /// Use --http-hosts '*' to allow all hosts
@@ -144,6 +120,31 @@ pub enum ComponentCommand {
         /// Enable file system access
         #[clap(long)]
         file_system: Option<bool>,
+    },
+    /// Manage the fuel limit of a workflow component
+    FuelLimit {
+        /// Fuel limit value (omit to use default)
+        #[clap(long)]
+        fuel: Option<u64>,
+    },
+    /// Set maximum execution time for a workflow component
+    TimeLimit {
+        /// Maximum execution time in seconds (omit to use default)
+        #[clap(long)]
+        seconds: Option<u64>,
+    },
+    /// Manage the workflow component config (KV)
+    Config {
+        /// Configuration key-value pairs in format 'key=value'
+        /// Omit to clear all config values
+        #[clap(long, value_delimiter = ',')]
+        values: Option<Vec<String>>,
+    },
+    /// Manage the workflow component env
+    Env {
+        /// Env values staring with 'WAVS_ENV'
+        #[clap(long, value_delimiter = ',')]
+        values: Option<Vec<String>>,
     },
 }
 
@@ -161,16 +162,43 @@ pub enum WorkflowCommand {
         #[clap(long)]
         id: WorkflowID,
     },
+    /// Component management commands
+    Component {
+        /// The ID of the workflow to edit
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: ComponentCommand,
+    },
+    /// Operations on workflow triggers
+    Trigger {
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: TriggerCommand,
+    },
+    /// Operations on workflow submits
+    Submit {
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: SubmitCommand,
+    },
+}
+
+#[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
+pub enum ManagerCommand {
+    /// Sets an ethereum service manager
+    SetEthereum {
+        chain_name: ChainName,
+        address: String,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum TriggerCommand {
     /// Set a Cosmos contract event trigger for a workflow
     SetCosmos {
-        /// The ID of the workflow to update
-        #[clap(long)]
-        workflow_id: WorkflowID,
-
         /// The bech32 contract address (e.g., "cosmos1...")
         #[clap(long)]
         address: String,
@@ -186,10 +214,6 @@ pub enum TriggerCommand {
 
     /// Set an Ethereum contract event trigger for a workflow
     SetEthereum {
-        /// The ID of the workflow to update
-        #[clap(long)]
-        workflow_id: WorkflowID,
-
         /// The hexadecimal Ethereum address (e.g., "0x1234...")
         #[clap(long)]
         address: String,
@@ -208,9 +232,23 @@ pub enum TriggerCommand {
 pub enum SubmitCommand {
     /// Set an Ethereum submit for a workflow
     SetEthereum {
-        /// The ID of the workflow to update
+        /// The hexadecimal Ethereum address (e.g., "0x1234...")
         #[clap(long)]
-        workflow_id: WorkflowID,
+        address: String,
+
+        /// The chain name (e.g., "ethereum-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The maximum gas to use for the submission (optional)
+        #[clap(long)]
+        max_gas: Option<u64>,
+    },
+    /// Set an aggregator submit for a workflow
+    SetAggregator {
+        /// The URL of the aggregator
+        #[clap(long)]
+        url: String,
 
         /// The hexadecimal Ethereum address (e.g., "0x1234...")
         #[clap(long)]
@@ -232,39 +270,6 @@ fn parse_service_input(s: &str) -> Result<Service, String> {
         Ok(serde_json::from_str(&json).map_err(|e| e.to_string())?)
     } else {
         Ok(serde_json::from_str(s).map_err(|e| e.to_string())?)
-    }
-}
-
-#[derive(Debug, Parser, Clone, Serialize, Deserialize, ValueEnum)]
-pub enum CliSubmitKind {
-    EthServiceHandler,
-    None,
-}
-
-impl std::fmt::Display for CliSubmitKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EthServiceHandler => write!(f, "eth-service-handler"),
-            Self::None => write!(f, "none"),
-        }
-    }
-}
-
-impl std::str::FromStr for CliSubmitKind {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "eth-service-handler" => Ok(Self::EthServiceHandler),
-            "none" => Ok(Self::None),
-            _ => Err(format!("unknown submit kind: {}", s)),
-        }
-    }
-}
-
-impl From<CliSubmitKind> for clap::builder::OsStr {
-    fn from(submit: CliSubmitKind) -> clap::builder::OsStr {
-        submit.to_string().into()
     }
 }
 
