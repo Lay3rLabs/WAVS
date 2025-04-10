@@ -49,17 +49,6 @@ impl ServiceJson {
                     }
                 }
 
-                // Validate no duplicates in config
-                let mut config_keys = std::collections::HashSet::new();
-                for key in component.config.keys() {
-                    if !config_keys.insert(key) {
-                        errors.push(format!(
-                            "Workflow '{}' has duplicate config key: {}",
-                            workflow_id, key
-                        ));
-                    }
-                }
-
                 // Validate env_keys have the correct prefix
                 for key in &component.env_keys {
                     if !key.starts_with(ENV_PREFIX) {
