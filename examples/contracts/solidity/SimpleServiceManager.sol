@@ -40,4 +40,8 @@ contract SimpleServiceManager is IWavsServiceManager {
     {
         return 3; // hard-coded at 3 for demo purposes
     }
+
+    function getLastCheckpointTotalWeight() external pure override returns (uint256) {
+        return 5; // hard-coded at 5 for demo purposes
+    }
 }
