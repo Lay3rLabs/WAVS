@@ -46,26 +46,9 @@ async fn client_stream_blocks() {
 }
 
 #[tokio::test]
-async fn signing_pool_basic_same_key() {
-    let client_key = "test test test test test test test test test test test junk".to_string();
-
+async fn signing_pool_single() {
     init_tracing_tests();
-    inner_signing_pool_basic(None, client_key).await;
-}
 
-#[tokio::test]
-async fn signing_pool_basic_different_key() {
-    let funder_key =
-        Some("test test test test test test test test test test test junk".to_string());
-    let client_key =
-        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
-            .to_string();
-
-    init_tracing_tests();
-    inner_signing_pool_basic(funder_key, client_key).await;
-}
-
-async fn inner_signing_pool_basic(funder_key: Option<String>, client_key: String) {
     let anvil = Anvil::new().spawn();
 
     let chain_config = EthereumChainConfig {
@@ -76,12 +59,84 @@ async fn inner_signing_pool_basic(funder_key: Option<String>, client_key: String
         faucet_endpoint: None,
     };
 
+    let anvil_key = "test test test test test test test test test test test junk".to_string();
+    let client_key =
+        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
+            .to_string();
+
+    let anvil_client =
+        EthClientBuilder::new(chain_config.to_client_config(None, Some(anvil_key), None))
+            .build_signing(true)
+            .await
+            .unwrap();
+
+    let client =
+        EthClientBuilder::new(chain_config.to_client_config(None, Some(client_key.clone()), None))
+            .build_signing(true)
+            .await
+            .unwrap();
+
+    transfer(&anvil_client, client.address(), parse_ether("100").unwrap()).await;
+
+    inner_signing_pool_basic(chain_config, None, client_key, Some(0)).await;
+}
+
+#[tokio::test]
+async fn signing_pool_basic_same_key() {
+    init_tracing_tests();
+
+    let client_key = "test test test test test test test test test test test junk".to_string();
+
+    let anvil = Anvil::new().spawn();
+
+    let chain_config = EthereumChainConfig {
+        chain_id: anvil.chain_id().to_string(),
+        ws_endpoint: Some(anvil.ws_endpoint().to_string()),
+        http_endpoint: Some(anvil.endpoint().to_string()),
+        aggregator_endpoint: None,
+        faucet_endpoint: None,
+    };
+    inner_signing_pool_basic(chain_config, None, client_key, None).await;
+}
+
+#[tokio::test]
+async fn signing_pool_basic_different_key() {
+    init_tracing_tests();
+
+    let funder_key =
+        Some("test test test test test test test test test test test junk".to_string());
+    let client_key =
+        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
+            .to_string();
+
+    let anvil = Anvil::new().spawn();
+
+    let chain_config = EthereumChainConfig {
+        chain_id: anvil.chain_id().to_string(),
+        ws_endpoint: Some(anvil.ws_endpoint().to_string()),
+        http_endpoint: Some(anvil.endpoint().to_string()),
+        aggregator_endpoint: None,
+        faucet_endpoint: None,
+    };
+    inner_signing_pool_basic(chain_config, funder_key, client_key, None).await;
+}
+
+async fn inner_signing_pool_basic(
+    chain_config: EthereumChainConfig,
+    funder_key: Option<String>,
+    client_key: String,
+    max_size: Option<usize>,
+) {
     let mut builder =
         EthSigningClientPoolBuilder::new(funder_key.clone(), client_key, chain_config.clone())
             .with_initial_client_wei(parse_ether("100").unwrap());
 
     if funder_key.is_none() {
         builder = builder.with_start_index(100);
+    }
+
+    if let Some(max_size) = max_size {
+        builder = builder.with_max_size(max_size);
     }
 
     let eth_client_pool = builder.build().await.unwrap();
@@ -105,14 +160,17 @@ async fn inner_signing_pool_basic(funder_key: Option<String>, client_key: String
     // get another client
     let new_client = eth_client_pool.get().await.unwrap();
 
-    // should be different from our previous client
-    assert_ne!(new_client.address(), client.address());
-
     // make sure our client still has the expected balance
     assert_balance_approx_eq(&client, parse_ether("75").unwrap()).await;
 
-    // new client has fresh balance
-    assert_balance_approx_eq(&new_client, parse_ether("100").unwrap()).await;
+    // logic here branches based on whether we're really pooling or not
+    if max_size.map(|m| m > 0).unwrap_or(true) {
+        assert_ne!(new_client.address(), client.address());
+        // new client has fresh balance
+        assert_balance_approx_eq(&new_client, parse_ether("100").unwrap()).await;
+    } else {
+        assert_eq!(new_client.address(), client.address());
+    }
 }
 
 #[tokio::test]
