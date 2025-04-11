@@ -88,7 +88,7 @@ impl HttpState {
         .with_balance_maintainer(BalanceMaintainer::new(
             pool_config.threshhold_wei,
             pool_config.topup_wei,
-        )?)
+        ))
         .build()
         .await?;
 

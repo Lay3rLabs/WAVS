@@ -119,15 +119,6 @@ impl EthSigningClientPoolBuilder {
             start_index,
         } = self;
 
-        // If balance_maintainer exists, validate that top_up_amount > 0
-        if let Some(maintainer) = &balance_maintainer {
-            if maintainer.top_up_amount.is_zero() {
-                return Err(anyhow::anyhow!(
-                    "Balance maintainer top_up_amount must be greater than zero"
-                ));
-            }
-        }
-
         let funder_config = chain_config.to_client_config(
             None,
             Some(funder_mnemonic_or_key.unwrap_or_else(|| client_mnemonic.clone())),
@@ -141,6 +132,10 @@ impl EthSigningClientPoolBuilder {
         let max_size = max_size.unwrap_or(16);
 
         let pool = if max_size > 0 {
+            if let Some(maintainer) = &balance_maintainer {
+                maintainer.validate()?;
+            }
+
             let manager = EthSigningClientPoolManager::new(
                 label,
                 funder.clone(),
@@ -218,7 +213,19 @@ pub struct BalanceMaintainer {
 }
 
 impl BalanceMaintainer {
-    pub fn new(threshhold: U256, top_up_amount: U256) -> Result<Self> {
+    pub fn new(threshhold: U256, top_up_amount: U256) -> Self {
+        Self {
+            threshhold,
+            top_up_amount,
+        }
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        let Self {
+            threshhold,
+            top_up_amount,
+        } = self;
+
         // Ensure top_up_amount is greater than threshhold
         if top_up_amount <= threshhold {
             return Err(anyhow::anyhow!(
@@ -228,10 +235,13 @@ impl BalanceMaintainer {
             ));
         }
 
-        Ok(Self {
-            threshhold,
-            top_up_amount,
-        })
+        if top_up_amount.is_zero() {
+            return Err(anyhow::anyhow!(
+                "Balance maintainer top_up_amount must be greater than zero"
+            ));
+        }
+
+        Ok(())
     }
 }
 

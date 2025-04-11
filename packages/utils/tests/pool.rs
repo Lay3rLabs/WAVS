@@ -195,9 +195,10 @@ async fn signing_pool_balance_maintainer() {
         chain_config.clone(),
     )
     .with_initial_client_wei(parse_ether("100").unwrap())
-    .with_balance_maintainer(
-        BalanceMaintainer::new(parse_ether("25").unwrap(), top_up_amount).unwrap(),
-    )
+    .with_balance_maintainer(BalanceMaintainer::new(
+        parse_ether("25").unwrap(),
+        top_up_amount,
+    ))
     .build()
     .await
     .unwrap();

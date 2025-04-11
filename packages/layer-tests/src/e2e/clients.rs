@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 
-use alloy::primitives::utils::parse_ether;
 use utils::context::AppContext;
 use utils::eth_client::pool::{
     EthSigningClientFromPool, EthSigningClientPool, EthSigningClientPoolBuilder,
@@ -60,8 +59,9 @@ impl Clients {
                     chain_config.clone(),
                 )
                 .with_label(format!("TestCli-{}", chain_name))
-                .with_max_size(100) // turning it off for now
-                .with_initial_client_wei(parse_ether(".1").unwrap())
+                .with_max_size(0) // turning it off for now
+                //.with_max_size(100) // turning it off for now
+                //.with_initial_client_wei(parse_ether(".1").unwrap())
                 .build()
                 .await
                 .unwrap();

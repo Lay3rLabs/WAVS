@@ -1,4 +1,4 @@
-use alloy::primitives::{utils::parse_ether, U256};
+use alloy::primitives::U256;
 use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
@@ -418,13 +418,13 @@ pub struct SigningPoolConfig {
 
 impl Default for SigningPoolConfig {
     fn default() -> Self {
-        //Self::single()
-        Self {
-            size: 16,
-            initial_wei: parse_ether("1").unwrap(),
-            threshhold_wei: parse_ether(".01").unwrap(),
-            topup_wei: parse_ether("1").unwrap(),
-        }
+        Self::single()
+        // Self {
+        //     size: 16,
+        //     initial_wei: parse_ether("1").unwrap(),
+        //     threshhold_wei: parse_ether(".01").unwrap(),
+        //     topup_wei: parse_ether("1").unwrap(),
+        // }
     }
 }
 

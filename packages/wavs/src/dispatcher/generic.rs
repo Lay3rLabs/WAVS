@@ -368,7 +368,10 @@ async fn add_service_to_managers(
     triggers: &impl TriggerManager,
     submissions: &impl Submission,
 ) -> Result<(), DispatcherError> {
-    submissions.add_service(&service).await?;
+    if let Err(err) = submissions.add_service(&service).await {
+        tracing::error!("Error adding service to submission manager: {:?}", err);
+        return Err(err.into());
+    }
 
     for (id, workflow) in service.workflows {
         let trigger = TriggerConfig {

@@ -292,10 +292,10 @@ impl Submission for CoreSubmission {
                     .with_label(format!("Wavs-Submission-{}", chain_name))
                     .with_max_size(pool_config.size as usize)
                     .with_initial_client_wei(pool_config.initial_wei)
-                    .with_balance_maintainer(
-                        BalanceMaintainer::new(pool_config.threshhold_wei, pool_config.topup_wei)
-                            .map_err(SubmissionError::InternalPoolError)?,
-                    )
+                    .with_balance_maintainer(BalanceMaintainer::new(
+                        pool_config.threshhold_wei,
+                        pool_config.topup_wei,
+                    ))
                     .build()
                     .await
                     .map_err(SubmissionError::InternalPoolError)?;
