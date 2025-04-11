@@ -4,7 +4,7 @@ use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySig
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use utils::{
-    config::{ChainConfigs, ConfigExt, SigningPoolConfig},
+    config::{ChainConfigs, ConfigExt},
     error::EthClientError,
 };
 
@@ -38,9 +38,6 @@ pub struct Config {
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
 
-    /// eth submission client pool config
-    pub submission_pool_config: SigningPoolConfig,
-
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
 }
@@ -61,7 +58,6 @@ impl Default for Config {
                 cosmos: Default::default(),
                 eth: Default::default(),
             },
-            submission_pool_config: SigningPoolConfig::default(),
         }
     }
 }

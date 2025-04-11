@@ -1,5 +1,4 @@
 pub mod contracts;
-pub mod pool;
 pub mod signing;
 
 use alloy::{
@@ -50,8 +49,11 @@ pub struct EthSigningClient {
     /// since the signer in `EthereumWallet` implements only `TxSigner`
     /// and there is not a direct way convert it into `Signer`
     pub signer: Arc<LocalSigner<SigningKey>>,
-    // if the client is configured with `use_fast_nonce_manager`, this will be set
-    pub nonce_manager: Option<FastNonceManager>,
+
+    /// If a transaction does not have `max_gas` set, then it will estimate
+    /// however the actual gas needed fluctuates, so we can pad it with a multiplier
+    /// by default this is 1.25
+    pub gas_estimate_multiplier: f32,
 }
 
 impl std::fmt::Debug for EthSigningClient {
@@ -78,6 +80,8 @@ pub struct EthClientConfig {
     pub hd_index: Option<u32>,
     /// Preferred transport
     pub transport: Option<EthClientTransport>,
+    // if not set, will be 1.25
+    pub gas_estimate_multiplier: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -130,7 +134,7 @@ impl EthClientBuilder {
         })
     }
 
-    pub async fn build_signing(mut self, use_fast_nonce_manager: bool) -> Result<EthSigningClient> {
+    pub async fn build_signing(mut self) -> Result<EthSigningClient> {
         let mnemonic = self
             .config
             .mnemonic
@@ -157,42 +161,36 @@ impl EthClientBuilder {
 
         let endpoint = self.endpoint()?;
 
-        let nonce_manager = if use_fast_nonce_manager {
-            let query_provider = ProviderBuilder::new().on_builtin(&endpoint).await?;
-            let first_nonce = query_provider
-                .get_transaction_count(signer.address())
-                .await?;
+        let query_provider = ProviderBuilder::new().on_builtin(&endpoint).await?;
+        let first_nonce = query_provider
+            .get_transaction_count(signer.address())
+            .await?;
 
-            Some(FastNonceManager::new(Some(signer.address()), first_nonce))
-        } else {
-            None
-        };
+        let nonce_manager = FastNonceManager::new(Some(signer.address()), first_nonce);
 
-        let provider = match nonce_manager.clone() {
-            Some(nonce_manager) => DynProvider::new(
-                ProviderBuilder::default()
-                    .with_nonce_management(nonce_manager)
-                    .filler(GasFiller)
-                    .filler(BlobGasFiller)
-                    .filler(ChainIdFiller::new(None))
-                    .wallet(wallet.clone())
-                    .on_builtin(&endpoint)
-                    .await?,
-            ),
-            None => DynProvider::new(
-                ProviderBuilder::new()
-                    .wallet(wallet.clone())
-                    .on_builtin(&endpoint)
-                    .await?,
-            ),
-        };
+        let provider = DynProvider::new(
+            ProviderBuilder::default()
+                .with_nonce_management(nonce_manager)
+                .filler(GasFiller)
+                .filler(BlobGasFiller)
+                .filler(ChainIdFiller::new(None))
+                .wallet(wallet.clone())
+                .on_builtin(&endpoint)
+                .await?,
+        );
+
+        // default
+        // let provider = DynProvder::new(ProviderBuilder::new()
+        //         .wallet(wallet.clone())
+        //         .on_builtin(&endpoint)
+        //         .await?);
 
         Ok(EthSigningClient {
+            gas_estimate_multiplier: self.config.gas_estimate_multiplier.unwrap_or(1.25),
             config: self.config,
             provider,
             wallet: Arc::new(wallet),
             signer: Arc::new(signer),
-            nonce_manager,
         })
     }
 }

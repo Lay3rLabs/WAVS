@@ -49,10 +49,11 @@ async fn client_sign_message() {
         ),
         hd_index: None,
         transport: None,
+        gas_estimate_multiplier: None,
     };
 
     let builder = EthClientBuilder::new(config);
-    let client = builder.build_signing(true).await.unwrap();
+    let client = builder.build_signing().await.unwrap();
 
     let message = b"hello world";
 

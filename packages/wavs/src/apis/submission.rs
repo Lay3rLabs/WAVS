@@ -78,6 +78,4 @@ pub enum SubmissionError {
     MissingEthereumSigningClient(ServiceID),
     #[error("missing ethereum signing client for chain {0}")]
     MissingEthereumSendingClient(ChainName),
-    #[error("signing pool: {0}")]
-    InternalPoolError(anyhow::Error),
 }

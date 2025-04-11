@@ -1,4 +1,3 @@
-use alloy::primitives::U256;
 use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
@@ -361,6 +360,7 @@ impl EthereumChainConfig {
             transport,
             hd_index,
             mnemonic,
+            gas_estimate_multiplier: None,
         }
     }
 }
@@ -397,45 +397,6 @@ impl TryFrom<ChainConfig> for CosmosChainConfig {
             gas_denom: config.gas_denom,
             faucet_endpoint: None,
         })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SigningPoolConfig {
-    /// the maximum number of clients handed out, before blocking on their return to the pool
-    /// default is 16
-    pub size: u32,
-    /// the amount sent from the funder (hd index 0) to each client on creation
-    /// default is 1 ether
-    pub initial_wei: U256,
-    /// the amount that will trigger a top-up as clients are recycled and their balance drops below this
-    /// default is .01 ether
-    pub threshhold_wei: U256,
-    /// the topup target to maintain as client balances drop below the threshhold
-    /// default is 1 ether
-    pub topup_wei: U256,
-}
-
-impl Default for SigningPoolConfig {
-    fn default() -> Self {
-        Self::single()
-        // Self {
-        //     size: 16,
-        //     initial_wei: parse_ether("1").unwrap(),
-        //     threshhold_wei: parse_ether(".01").unwrap(),
-        //     topup_wei: parse_ether("1").unwrap(),
-        // }
-    }
-}
-
-impl SigningPoolConfig {
-    pub fn single() -> Self {
-        Self {
-            size: 0,
-            initial_wei: U256::ZERO,
-            threshhold_wei: U256::ZERO,
-            topup_wei: U256::ZERO,
-        }
     }
 }
 

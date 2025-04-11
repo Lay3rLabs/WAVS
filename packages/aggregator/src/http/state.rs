@@ -7,7 +7,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
     config::EthereumChainConfig,
-    eth_client::pool::{BalanceMaintainer, EthSigningClientPool, EthSigningClientPoolBuilder},
+    eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
@@ -39,28 +39,25 @@ pub struct QueuedPacket {
 pub struct HttpState {
     pub config: Config,
     storage: Arc<RedbStorage>,
-    eth_client_pools: Arc<RwLock<HashMap<ChainName, EthSigningClientPool>>>,
+    eth_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
-        let eth_client_pools = Arc::new(RwLock::new(HashMap::new()));
+        let eth_clients = Arc::new(RwLock::new(HashMap::new()));
 
         Ok(Self {
             config,
             storage,
-            eth_client_pools,
+            eth_clients,
         })
     }
 
-    pub async fn get_eth_client_pool(
-        &self,
-        chain_name: &ChainName,
-    ) -> anyhow::Result<EthSigningClientPool> {
+    pub async fn get_eth_client(&self, chain_name: &ChainName) -> anyhow::Result<EthSigningClient> {
         {
-            let lock = self.eth_client_pools.read().unwrap();
+            let lock = self.eth_clients.read().unwrap();
 
             if let Some(client) = lock.get(chain_name) {
                 return Ok(client.clone());
@@ -75,29 +72,20 @@ impl HttpState {
 
         let chain_config = EthereumChainConfig::try_from(chain_config)?;
 
-        let pool_config = &self.config.submission_pool_config;
-
-        let pool = EthSigningClientPoolBuilder::new(
+        let sending_client = EthClientBuilder::new(chain_config.to_client_config(
             None,
-            self.config.mnemonic.clone().context("Missing mnemonic")?,
-            chain_config,
-        )
-        .with_label(format!("Aggregator-{}", chain_name))
-        .with_max_size(pool_config.size as usize)
-        .with_initial_client_wei(pool_config.initial_wei)
-        .with_balance_maintainer(BalanceMaintainer::new(
-            pool_config.threshhold_wei,
-            pool_config.topup_wei,
+            self.config.mnemonic.clone(),
+            Some(EthClientTransport::Http),
         ))
-        .build()
+        .build_signing()
         .await?;
 
-        self.eth_client_pools
+        self.eth_clients
             .write()
             .unwrap()
-            .insert(chain_name.clone(), pool.clone());
+            .insert(chain_name.clone(), sending_client.clone());
 
-        Ok(pool)
+        Ok(sending_client)
     }
 
     pub fn get_packet_queue(&self, event_id: &EventId) -> anyhow::Result<PacketQueue> {

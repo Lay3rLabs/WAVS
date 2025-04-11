@@ -66,10 +66,7 @@ impl CliContext {
         let client_config =
             chain_config.to_client_config(None, self.config.eth_mnemonic.clone(), None);
 
-        // for the CLI, let's not mess with nonce management
-        let eth_client = EthClientBuilder::new(client_config)
-            .build_signing(false)
-            .await?;
+        let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
 
         Ok(eth_client)
     }

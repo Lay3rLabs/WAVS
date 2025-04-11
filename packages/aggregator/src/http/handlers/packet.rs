@@ -66,14 +66,10 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             // this implicitly validates that the signature is valid
             let signer = packet.signature.eth_signer_address(&packet.envelope)?;
 
-            let pool = state.get_eth_client_pool(chain_name).await?;
+            let client = state.get_eth_client(chain_name).await?;
             let service_manager = SimpleServiceManager::new(
                 service.manager.eth_address_unchecked(),
-                pool.get()
-                    .await
-                    .map_err(|e| anyhow!("signing pool error: {e:?}"))?
-                    .provider
-                    .clone(),
+                client.provider.clone(),
             );
             let weight = service_manager.getOperatorWeight(signer).call().await?._0;
             total_weight = weight;
@@ -122,16 +118,13 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             max_gas,
         }) = aggregator;
 
-        let pool = state.get_eth_client_pool(chain_name).await?;
+        let client = state.get_eth_client(chain_name).await?;
         let signatures = queue
             .drain(..)
             .map(|queued| queued.packet.signature)
             .collect();
 
-        let tx_receipt = pool
-            .get()
-            .await
-            .map_err(|e| anyhow!("signing pool error: {e:?}"))?
+        let tx_receipt = client
             .send_envelope_signatures(envelope, signatures, block_height, *address, *max_gas)
             .await?;
 

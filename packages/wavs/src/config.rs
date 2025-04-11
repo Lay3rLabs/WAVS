@@ -3,7 +3,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
 };
-use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt, SigningPoolConfig};
+use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
 use wavs_types::ChainName;
 
 /// The fully parsed and validated config struct we use in the application
@@ -42,9 +42,6 @@ pub struct Config {
 
     /// The mnemonic to use for submitting transactions on Ethereum chains
     pub submission_mnemonic: Option<String>,
-
-    /// Configuration for the eth submission clients
-    pub submission_pool_config: SigningPoolConfig,
 
     /// The mnemonic to use for submitting transactions on Cosmos chains
     pub cosmos_submission_mnemonic: Option<String>,
@@ -85,7 +82,6 @@ impl Default for Config {
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
             registry_domain: None,
-            submission_pool_config: SigningPoolConfig::default(),
         }
     }
 }

@@ -14,11 +14,8 @@ use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    config::{AnyChainConfig, EthereumChainConfig, SigningPoolConfig},
-    eth_client::{
-        pool::{BalanceMaintainer, EthSigningClientPool, EthSigningClientPoolBuilder},
-        EthClientBuilder, EthClientTransport, EthSigningClient,
-    },
+    config::{AnyChainConfig, EthereumChainConfig},
+    eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
 };
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -32,8 +29,7 @@ pub struct CoreSubmission {
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
-    eth_sending_pools: Arc<RwLock<HashMap<ChainName, EthSigningClientPool>>>,
-    eth_pool_config: SigningPoolConfig,
+    eth_sending_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
     eth_mnemonic: String,
     eth_mnemonic_hd_index_count: Arc<AtomicU32>,
 }
@@ -46,8 +42,7 @@ impl CoreSubmission {
             chain_configs: config.chains.clone().into(),
             http_client: reqwest::Client::new(),
             eth_signing_clients: Arc::new(RwLock::new(HashMap::new())),
-            eth_sending_pools: Arc::new(RwLock::new(HashMap::new())),
-            eth_pool_config: config.submission_pool_config.clone(),
+            eth_sending_clients: Arc::new(RwLock::new(HashMap::new())),
             eth_mnemonic: config
                 .submission_mnemonic
                 .clone()
@@ -74,8 +69,7 @@ impl CoreSubmission {
             .provider
             .get_block_number()
             .await
-            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
-            - 1;
+            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?;
 
         let signature = eth_client.sign_envelope(&envelope).await?;
 
@@ -99,9 +93,9 @@ impl CoreSubmission {
             address,
         } = submission;
 
-        // free up the mutex to add more pools
-        let pool = {
-            self.eth_sending_pools
+        // free up the mutex to add more clients
+        let client = {
+            self.eth_sending_clients
                 .read()
                 .unwrap()
                 .get(&chain_name)
@@ -110,10 +104,6 @@ impl CoreSubmission {
                 ))?
                 .clone()
         };
-        let client = pool
-            .get()
-            .await
-            .map_err(SubmissionError::InternalPoolError)?;
 
         let _tx_receipt = client
             .send_envelope_signatures(
@@ -213,9 +203,14 @@ impl Submission for CoreSubmission {
 
                             match submit {
                                 Submit::EthereumContract(submission) => {
-                                    if let Err(e) = _self.submit_to_ethereum(submission, packet).await {
-                                        tracing::error!("{:?}", e);
-                                    }
+                                    let _self = _self.clone();
+                                    tokio::spawn(
+                                        async move {
+                                            if let Err(e) = _self.submit_to_ethereum(submission, packet).await {
+                                                tracing::error!("{:?}", e);
+                                            }
+                                        }
+                                    );
                                 },
                                 Submit::Aggregator{url} => {
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
@@ -257,7 +252,7 @@ impl Submission for CoreSubmission {
             Some(self.eth_mnemonic.clone()),
             Some(EthClientTransport::Http),
         ))
-        .build_signing(true)
+        .build_signing()
         .await
         .map_err(SubmissionError::Ethereum)?;
 
@@ -277,33 +272,24 @@ impl Submission for CoreSubmission {
                 &workflow.submit
             {
                 if !self
-                    .eth_sending_pools
+                    .eth_sending_clients
                     .read()
                     .unwrap()
                     .contains_key(chain_name)
                 {
-                    let pool_config = &self.eth_pool_config;
-
-                    let pool = EthSigningClientPoolBuilder::new(
+                    let sending_client = EthClientBuilder::new(chain_config.to_client_config(
                         None,
-                        self.eth_mnemonic.clone(),
-                        chain_config.clone(),
-                    )
-                    .with_label(format!("Wavs-Submission-{}", chain_name))
-                    .with_max_size(pool_config.size as usize)
-                    .with_initial_client_wei(pool_config.initial_wei)
-                    .with_balance_maintainer(BalanceMaintainer::new(
-                        pool_config.threshhold_wei,
-                        pool_config.topup_wei,
+                        Some(self.eth_mnemonic.clone()),
+                        Some(EthClientTransport::Http),
                     ))
-                    .build()
+                    .build_signing()
                     .await
-                    .map_err(SubmissionError::InternalPoolError)?;
+                    .map_err(SubmissionError::Ethereum)?;
 
-                    self.eth_sending_pools
+                    self.eth_sending_clients
                         .write()
                         .unwrap()
-                        .insert(chain_name.clone(), pool);
+                        .insert(chain_name.clone(), sending_client);
                 }
             }
         }

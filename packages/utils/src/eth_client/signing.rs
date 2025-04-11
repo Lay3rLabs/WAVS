@@ -49,12 +49,18 @@ impl EthSigningClient {
         };
 
         let gas = match max_gas {
-            None => self
-                .service_handler(service_handler)
-                .handleSignedEnvelope(envelope.clone(), signature_data.clone())
-                .estimate_gas()
-                .await
-                .map_err(|e| EthClientError::TransactionWithoutReceipt(e.into()))?,
+            None => {
+                let gas_estimate = self
+                    .service_handler(service_handler)
+                    .handleSignedEnvelope(envelope.clone(), signature_data.clone())
+                    .estimate_gas()
+                    .await
+                    .map_err(|e| EthClientError::TransactionWithoutReceipt(e.into()))?;
+
+                // pad it with a multiplier to account for gas fluctuations
+                ((gas_estimate as f32) * self.gas_estimate_multiplier) as u64
+            }
+
             Some(gas) => {
                 // EIP-1559 has a default 30m gas limit per block without override. Else:
                 // 'a intrinsic gas too high -- tx.gas_limit > env.block.gas_limit' is thrown
