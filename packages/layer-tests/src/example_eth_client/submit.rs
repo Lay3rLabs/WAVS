@@ -1,6 +1,6 @@
 use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::Result;
-use utils::eth_client::pool::EthSigningClientFromPool;
+use utils::eth_client::EthSigningClient;
 use wavs_types::Envelope;
 
 use super::{
@@ -10,13 +10,13 @@ use super::{
 };
 
 pub struct SimpleEthSubmitClient {
-    pub eth: EthSigningClientFromPool,
+    pub eth: EthSigningClient,
     pub contract_address: Address,
     pub contract: SimpleSubmitT,
 }
 
 impl SimpleEthSubmitClient {
-    pub fn new(eth: EthSigningClientFromPool, contract_address: Address) -> Self {
+    pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
         let contract = SimpleSubmit::new(contract_address, eth.provider.clone());
 
         Self {

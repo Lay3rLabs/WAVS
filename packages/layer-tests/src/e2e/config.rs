@@ -61,7 +61,7 @@ impl TestMnemonics {
                 Some(anvil_mnemonic),
                 None,
             ))
-            .build_signing(false)
+            .build_signing()
             .await
             .unwrap();
 
