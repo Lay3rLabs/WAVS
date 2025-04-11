@@ -4,12 +4,11 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use deadpool::managed::Pool;
 use serde::{Deserialize, Serialize};
 use utils::{
     config::EthereumChainConfig,
     eth_client::{
-        pool::{BalanceMaintainer, SigningClientPoolManager},
+        pool::{BalanceMaintainer, EthSigningClientPool, EthSigningClientPoolBuilder},
         EthClientBuilder, EthSigningClient,
     },
     storage::db::{DBError, RedbStorage, Table, JSON},
@@ -49,7 +48,7 @@ pub struct HttpState {
 #[derive(Clone)]
 pub enum EthClient {
     TokioMutex(Arc<tokio::sync::Mutex<EthSigningClient>>),
-    Pool(Pool<SigningClientPoolManager>),
+    Pool(EthSigningClientPool),
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
@@ -90,19 +89,18 @@ impl HttpState {
 
         let eth_client = match &self.config.submission_pool_config {
             Some(pool_config) => {
-                let pool = Pool::builder(SigningClientPoolManager::new(
+                let pool = EthSigningClientPoolBuilder::new(
                     eth_client,
                     self.config.mnemonic.clone().context("Missing mnemonic")?,
                     chain_config,
-                    Some(pool_config.initial_wei),
-                    Some(BalanceMaintainer::new(
-                        pool_config.threshhold_wei,
-                        pool_config.topup_wei,
-                    )?),
+                )
+                .with_max_size(pool_config.size as usize)
+                .with_initial_client_wei(pool_config.initial_wei)
+                .with_balance_maintainer(BalanceMaintainer::new(
+                    pool_config.threshhold_wei,
+                    pool_config.topup_wei,
                 )?)
-                .max_size(pool_config.size as usize)
-                .build()
-                .unwrap();
+                .build()?;
 
                 EthClient::Pool(pool)
             }

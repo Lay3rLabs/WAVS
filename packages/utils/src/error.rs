@@ -8,6 +8,9 @@ pub enum EthClientError {
     #[error("Missing mnemonic")]
     MissingMnemonic,
 
+    #[error("HD index must be zero when using a private key (use mnemonic instead)")]
+    DerivationWithPrivateKey,
+
     #[error("Contract not deployed {0}")]
     ContractNotDeployed(alloy::primitives::Address),
 

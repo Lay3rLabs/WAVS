@@ -26,6 +26,5 @@ alloy = { workspace = true }
 utils = { workspace = true }
 tempfile = { workspace = true }
 redb = { workspace = true }
-deadpool = { workspace = true }
 
 [dev-dependencies]

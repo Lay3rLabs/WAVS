@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 
 use alloy::primitives::utils::parse_ether;
-use deadpool::managed::Pool;
 use utils::context::AppContext;
-use utils::eth_client::pool::SigningClientPoolManager;
+use utils::eth_client::pool::{
+    EthSigningClientFromPool, EthSigningClientPool, EthSigningClientPoolBuilder,
+};
 use wavs_cli::clients::HttpClient;
 use wavs_types::ChainName;
 
@@ -14,7 +15,7 @@ use super::config::Configs;
 pub struct Clients {
     pub http_client: HttpClient,
     pub cli_ctx: Arc<wavs_cli::context::CliContext>,
-    pub eth_client_pools: Arc<HashMap<ChainName, Pool<SigningClientPoolManager>>>,
+    pub eth_client_pools: Arc<HashMap<ChainName, EthSigningClientPool>>,
 }
 
 impl Clients {
@@ -55,18 +56,16 @@ impl Clients {
             for (chain_name, chain_config) in &configs.chains.eth {
                 let funder = cli_ctx.get_eth_client(chain_name).unwrap();
 
-                let manager = SigningClientPoolManager::new(
+                let pool = EthSigningClientPoolBuilder::new(
                     funder,
                     cli_ctx.config.eth_mnemonic.clone().unwrap(),
                     chain_config.clone(),
-                    Some(parse_ether("1").unwrap()),
-                    None,
-                ).unwrap();
+                )
+                .with_initial_client_wei(parse_ether("1").unwrap())
+                .build()
+                .unwrap();
 
-                let eth_client_pool: Pool<SigningClientPoolManager> =
-                    Pool::builder(manager).max_size(16).build().unwrap();
-
-                eth_client_pools.insert(chain_name.clone(), eth_client_pool);
+                eth_client_pools.insert(chain_name.clone(), pool);
             }
 
             Self {
@@ -78,10 +77,7 @@ impl Clients {
     }
 
     // returns a deadpool managed EthSigningClient
-    pub async fn get_eth_client(
-        &self,
-        chain_name: &ChainName,
-    ) -> deadpool::managed::Object<utils::eth_client::pool::SigningClientPoolManager> {
+    pub async fn get_eth_client(&self, chain_name: &ChainName) -> EthSigningClientFromPool {
         self.eth_client_pools
             .get(chain_name)
             .unwrap()

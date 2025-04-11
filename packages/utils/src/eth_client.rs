@@ -132,14 +132,19 @@ impl EthClientBuilder {
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
 
+        let hd_index = self.config.hd_index.unwrap_or(0);
+
         let signer: LocalSigner<SigningKey> = if let Some(stripped) = mnemonic.strip_prefix("0x") {
+            if hd_index > 0 {
+                return Err(EthClientError::DerivationWithPrivateKey.into());
+            }
             let private_key = hex::decode(stripped)?;
             let secret_key = SecretKey::from_slice(&private_key)?;
             LocalSigner::from_signing_key(secret_key.into())
         } else {
             MnemonicBuilder::<English>::default()
                 .phrase(mnemonic)
-                .index(self.config.hd_index.unwrap_or(0))?
+                .index(hd_index)?
                 .build()?
         };
 

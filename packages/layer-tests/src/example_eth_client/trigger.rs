@@ -2,9 +2,8 @@ use std::ops::Deref;
 
 use alloy::{primitives::Address, sol_types::SolValue};
 use anyhow::{Context, Result};
-use deadpool::managed::Object;
 use serde::{Deserialize, Serialize};
-use utils::{alloy_helpers::SolidityEventFinder, eth_client::pool::SigningClientPoolManager};
+use utils::{alloy_helpers::SolidityEventFinder, eth_client::pool::EthSigningClientFromPool};
 use wavs_types::SigningProvider;
 
 use super::{
@@ -16,13 +15,13 @@ use super::{
 };
 
 pub struct SimpleEthTriggerClient {
-    pub eth: Object<SigningClientPoolManager>,
+    pub eth: EthSigningClientFromPool,
     pub contract_address: Address,
     pub contract: SimpleTriggerT,
 }
 
 impl SimpleEthTriggerClient {
-    pub fn new(eth: Object<SigningClientPoolManager>, contract_address: Address) -> Self {
+    pub fn new(eth: EthSigningClientFromPool, contract_address: Address) -> Self {
         let contract = SimpleTrigger::new(contract_address, eth.provider.clone());
 
         Self {
@@ -32,7 +31,7 @@ impl SimpleEthTriggerClient {
         }
     }
 
-    pub async fn new_deploy(eth: Object<SigningClientPoolManager>) -> Result<Self> {
+    pub async fn new_deploy(eth: EthSigningClientFromPool) -> Result<Self> {
         let contract_address = Self::deploy(eth.provider.clone()).await?;
         Ok(Self::new(eth, contract_address))
     }

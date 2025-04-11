@@ -5,12 +5,11 @@ use alloy::{
     providers::Provider,
     rpc::types::TransactionRequest,
 };
-use deadpool::managed::Pool;
 use futures::StreamExt;
 use utils::{
     config::EthereumChainConfig,
     eth_client::{
-        pool::{BalanceMaintainer, SigningClientPoolManager},
+        pool::{BalanceMaintainer, EthSigningClientPoolBuilder},
         EthClientBuilder, EthClientConfig, EthSigningClient,
     },
     init_tracing_tests,
@@ -66,18 +65,15 @@ async fn signing_pool_basic() {
         .await
         .unwrap();
 
-    let manager = SigningClientPoolManager::new(
+    let eth_client_pool = EthSigningClientPoolBuilder::new(
         funder,
         "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
             .to_string(),
         chain_config.clone(),
-        Some(parse_ether("100").unwrap()),
-        None,
     )
+    .with_initial_client_wei(parse_ether("100").unwrap())
+    .build()
     .unwrap();
-
-    let eth_client_pool: Pool<SigningClientPoolManager> =
-        Pool::builder(manager).max_size(16).build().unwrap();
 
     let client = eth_client_pool.get().await.unwrap();
 
@@ -130,18 +126,18 @@ async fn signing_pool_balance_maintainer() {
 
     let top_up_amount = parse_ether("30").unwrap();
 
-    let manager = SigningClientPoolManager::new(
+    let eth_client_pool = EthSigningClientPoolBuilder::new(
         funder,
         "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
             .to_string(),
         chain_config.clone(),
-        Some(parse_ether("100").unwrap()),
-        Some(BalanceMaintainer::new(parse_ether("25").unwrap(), top_up_amount).unwrap()),
     )
+    .with_initial_client_wei(parse_ether("100").unwrap())
+    .with_balance_maintainer(
+        BalanceMaintainer::new(parse_ether("25").unwrap(), top_up_amount).unwrap(),
+    )
+    .build()
     .unwrap();
-
-    let eth_client_pool: Pool<SigningClientPoolManager> =
-        Pool::builder(manager).max_size(16).build().unwrap();
 
     // just get the address we'll be working with
     let client_address = { eth_client_pool.get().await.unwrap().address() };

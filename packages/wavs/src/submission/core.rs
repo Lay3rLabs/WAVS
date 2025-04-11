@@ -11,13 +11,12 @@ use crate::{
 use alloy::providers::Provider;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use deadpool::managed::Pool;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, EthereumChainConfig, SigningPoolConfig},
     eth_client::{
-        pool::{BalanceMaintainer, SigningClientPoolManager},
+        pool::{BalanceMaintainer, EthSigningClientPool, EthSigningClientPoolBuilder},
         EthClientBuilder, EthClientTransport, EthSigningClient,
     },
 };
@@ -34,7 +33,7 @@ pub struct CoreSubmission {
     // created on-demand from chain_name and hd_index
     eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
     eth_sending_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
-    eth_sending_pools: Arc<RwLock<HashMap<ChainName, Pool<SigningClientPoolManager>>>>,
+    eth_sending_pools: Arc<RwLock<HashMap<ChainName, EthSigningClientPool>>>,
     eth_pool_config: Option<SigningPoolConfig>,
     eth_mnemonic: String,
     eth_mnemonic_hd_index_count: Arc<AtomicU32>,
@@ -117,7 +116,8 @@ impl CoreSubmission {
             let client = pool
                 .get()
                 .await
-                .map_err(|err| SubmissionError::InternalPoolError(err.to_string()))?;
+                .map_err(SubmissionError::InternalPoolError)?;
+
             let _tx_receipt = client
                 .send_envelope_signatures(
                     packet.envelope,
@@ -337,27 +337,22 @@ impl Submission for CoreSubmission {
                             );
                         }
                         Some(pool_config) => {
-                            let pool = Pool::builder(
-                                SigningClientPoolManager::new(
-                                    client,
-                                    self.eth_mnemonic.clone(),
-                                    config.clone(),
-                                    Some(pool_config.initial_wei),
-                                    Some(
-                                        BalanceMaintainer::new(
-                                            pool_config.threshhold_wei,
-                                            pool_config.topup_wei,
-                                        )
-                                        .map_err(|e| {
-                                            SubmissionError::InternalPoolError(e.to_string())
-                                        })?,
-                                    ),
-                                )
-                                .map_err(|e| SubmissionError::InternalPoolError(e.to_string()))?,
+                            let pool = EthSigningClientPoolBuilder::new(
+                                client,
+                                self.eth_mnemonic.clone(),
+                                config.clone(),
                             )
-                            .max_size(pool_config.size as usize)
+                            .with_max_size(pool_config.size as usize)
+                            .with_initial_client_wei(pool_config.initial_wei)
+                            .with_balance_maintainer(
+                                BalanceMaintainer::new(
+                                    pool_config.threshhold_wei,
+                                    pool_config.topup_wei,
+                                )
+                                .map_err(SubmissionError::InternalPoolError)?,
+                            )
                             .build()
-                            .unwrap();
+                            .map_err(SubmissionError::InternalPoolError)?;
 
                             self.eth_sending_pools
                                 .write()
