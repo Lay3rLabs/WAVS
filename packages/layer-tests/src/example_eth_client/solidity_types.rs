@@ -1,6 +1,6 @@
+use alloy::providers::DynProvider;
 use example_submit::SimpleSubmit::SimpleSubmitInstance;
 use example_trigger::SimpleTrigger::SimpleTriggerInstance;
-use wavs_types::SigningProvider;
 
 pub mod example_trigger {
     use alloy::sol;
@@ -48,6 +48,6 @@ pub mod example_service_manager {
     );
 }
 
-pub type SimpleTriggerT = SimpleTriggerInstance<(), SigningProvider>;
-pub type SimpleSubmitT = SimpleSubmitInstance<(), SigningProvider>;
-pub type SimpleServiceManagerT = SimpleSubmitInstance<(), SigningProvider>;
+pub type SimpleTriggerT = SimpleTriggerInstance<(), DynProvider>;
+pub type SimpleSubmitT = SimpleSubmitInstance<(), DynProvider>;
+pub type SimpleServiceManagerT = SimpleSubmitInstance<(), DynProvider>;

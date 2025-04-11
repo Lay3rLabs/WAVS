@@ -30,52 +30,19 @@ pub use service_manager::IWavsServiceManager;
 
 #[cfg(feature = "solidity-rpc")]
 mod rpc {
-    pub type QueryProvider = FillProvider<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        RootProvider,
-        Ethereum,
-    >;
-    pub type SigningProvider = FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider,
-        Ethereum,
-    >;
-
-    use alloy::providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-            WalletFiller,
-        },
-        network::{Ethereum, EthereumWallet},
-        Identity, RootProvider,
-    };
+    use alloy::providers::DynProvider;
 
     pub type IWavsServiceHandlerSigningT =
-        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<
-            (),
-            SigningProvider,
-        >;
+        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), DynProvider>;
 
     pub type IWavsServiceHandlerQueryT =
-        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), QueryProvider>;
+        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), DynProvider>;
 
     pub type IWavsServiceManagerSigningT =
-        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<
-            (),
-            SigningProvider,
-        >;
+        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), DynProvider>;
 
     pub type IWavsServiceManagerQueryT =
-        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), QueryProvider>;
+        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), DynProvider>;
 }
 
 #[cfg(feature = "solidity-rpc")]

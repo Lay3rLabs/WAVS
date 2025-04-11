@@ -2,28 +2,31 @@ pub mod contracts;
 pub mod pool;
 pub mod signing;
 
-use std::sync::Arc;
-
 use alloy::{
     hex,
-    network::EthereumWallet,
+    network::{EthereumWallet, Network},
     primitives::Address,
-    providers::ProviderBuilder,
+    providers::{
+        fillers::{BlobGasFiller, ChainIdFiller, GasFiller, NonceManager},
+        DynProvider, Provider, ProviderBuilder,
+    },
     signers::{
         k256::{ecdsa::SigningKey, SecretKey},
         local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
     },
+    transports::{TransportErrorKind, TransportResult},
 };
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use wavs_types::{QueryProvider, SigningProvider};
+use std::sync::{atomic::AtomicU64, Arc};
 
 use crate::error::EthClientError;
 
 #[derive(Clone)]
 pub struct EthQueryClient {
     pub config: EthClientConfig,
-    pub provider: QueryProvider,
+    pub provider: DynProvider,
 }
 
 impl std::fmt::Debug for EthQueryClient {
@@ -38,7 +41,7 @@ impl std::fmt::Debug for EthQueryClient {
 #[derive(Clone)]
 pub struct EthSigningClient {
     pub config: EthClientConfig,
-    pub provider: SigningProvider,
+    pub provider: DynProvider,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
     pub wallet: Arc<EthereumWallet>,
@@ -121,7 +124,7 @@ impl EthClientBuilder {
 
         Ok(EthQueryClient {
             config: self.config,
-            provider: ProviderBuilder::new().on_builtin(&endpoint).await?,
+            provider: DynProvider::new(ProviderBuilder::new().on_builtin(&endpoint).await?),
         })
     }
 
@@ -152,18 +155,77 @@ impl EthClientBuilder {
 
         let endpoint = self.endpoint()?;
 
-        let provider = ProviderBuilder::new()
-            // need to bump alloy: .with_cached_nonce_management()
+        let query_provider = ProviderBuilder::new().on_builtin(&endpoint).await?;
+        let first_nonce = query_provider
+            .get_transaction_count(signer.address())
+            .await?;
+
+        let provider = ProviderBuilder::default()
+            .with_nonce_management(FastNonceManager::new(signer.address(), first_nonce))
+            //these are the recommended fillers from Ethereum::recommended_fillers()
+            // but without the nonce filler, so we can replace it
+            .filler(GasFiller)
+            .filler(BlobGasFiller)
+            .filler(ChainIdFiller::new(None))
             .wallet(wallet.clone())
             .on_builtin(&endpoint)
             .await?;
 
         Ok(EthSigningClient {
             config: self.config,
-            provider,
+            provider: DynProvider::new(provider),
             wallet: Arc::new(wallet),
             signer: Arc::new(signer),
         })
+    }
+}
+
+// a better alternative to the built-in CachedNonceManager
+// Benefits:
+//
+// 1. Lock-free
+// We can do this because we don't need an additional address lookup
+// and we can just use an atomic counter instead of a Mutex around u64 (odd that they do this btw)
+//
+// 2. No contention on first transaction
+//
+// Since we control when we create the provider to begin with, we don't need to wait for the
+// first transaction to get the starting nonce. This prevents a race condition on creation
+#[derive(Debug, Clone)]
+struct FastNonceManager {
+    address: Address,
+    counter: Arc<AtomicU64>,
+}
+
+impl FastNonceManager {
+    pub fn new(address: Address, first_nonce: u64) -> Self {
+        Self {
+            address,
+            counter: Arc::new(AtomicU64::new(first_nonce)),
+        }
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+impl NonceManager for FastNonceManager {
+    async fn get_next_nonce<P, N>(&self, _provider: &P, address: Address) -> TransportResult<u64>
+    where
+        P: Provider<N>,
+        N: Network,
+    {
+        if address != self.address {
+            return Err(TransportErrorKind::custom_str(&format!(
+                "nonce manager address mismatch: expected {}, got {}",
+                self.address, address
+            )));
+        }
+
+        let nonce = self
+            .counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        Ok(nonce)
     }
 }
 

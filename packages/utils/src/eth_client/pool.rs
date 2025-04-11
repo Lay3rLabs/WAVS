@@ -13,6 +13,12 @@ use serde::{Deserialize, Serialize};
 
 use super::{EthClientBuilder, EthSigningClient};
 
+// This solves the nonce problems with an easy-to-use and efficient pool mechanism
+// See some discussion of the problem here: https://ethereum.stackexchange.com/questions/39790/concurrency-patterns-for-account-nonce
+//
+// In a nutshell, the solution here is to take approach #1 (multiple clients) for each client
+// while manually managing the nonce of the single funder wallet
+//
 // This will create a pool of signing clients, created on the fly as needed
 // each client uses derivation path with an index starting at 1 and incrementing on creation
 //
@@ -106,8 +112,6 @@ impl EthSigningClientPoolBuilder {
         );
 
         let funder = EthClientBuilder::new(funder_config).build_signing().await?;
-
-        //let funder = Arc::new(tokio::sync::Mutex::new(funder));
 
         let manager = EthSigningClientPoolManager::new(
             funder.clone(),

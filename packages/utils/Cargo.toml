@@ -32,6 +32,7 @@ dotenvy = { workspace = true }
 shellexpand = { workspace = true }
 cfg-if = { workspace = true }
 deadpool = { workspace = true }
+async-trait = { workspace = true }
 alloy = { workspace = true }
 # alloy-primitives = { workspace = true }
 # alloy-sol-macro = { workspace = true }

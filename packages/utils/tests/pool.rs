@@ -47,9 +47,7 @@ async fn client_stream_blocks() {
 
 #[tokio::test]
 async fn signing_pool_basic_same_key() {
-    let client_key =
-        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
-            .to_string();
+    let client_key = "test test test test test test test test test test test junk".to_string();
 
     init_tracing_tests();
     inner_signing_pool_basic(None, client_key).await;
