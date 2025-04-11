@@ -33,7 +33,7 @@ pub struct CoreSubmission {
     // created on-demand from chain_name and hd_index
     eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
     eth_sending_pools: Arc<RwLock<HashMap<ChainName, EthSigningClientPool>>>,
-    eth_pool_config: Option<SigningPoolConfig>,
+    eth_pool_config: SigningPoolConfig,
     eth_mnemonic: String,
     eth_mnemonic_hd_index_count: Arc<AtomicU32>,
 }
@@ -282,10 +282,7 @@ impl Submission for CoreSubmission {
                     .unwrap()
                     .contains_key(chain_name)
                 {
-                    let pool_config = match self.eth_pool_config.clone() {
-                        Some(pool_config) => pool_config,
-                        None => SigningPoolConfig::single(),
-                    };
+                    let pool_config = &self.eth_pool_config;
 
                     let pool = EthSigningClientPoolBuilder::new(
                         None,

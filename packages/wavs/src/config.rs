@@ -43,11 +43,8 @@ pub struct Config {
     /// The mnemonic to use for submitting transactions on Ethereum chains
     pub submission_mnemonic: Option<String>,
 
-    /// If set, the submission will use a signing-client pool
-    /// default is `Some(SigningPoolConfig::default())`
-    ///
-    /// If not set, then submissions will use a single client per-chain, which may create bottlenecks
-    pub submission_pool_config: Option<SigningPoolConfig>,
+    /// Configuration for the eth submission clients
+    pub submission_pool_config: SigningPoolConfig,
 
     /// The mnemonic to use for submitting transactions on Cosmos chains
     pub cosmos_submission_mnemonic: Option<String>,
@@ -88,7 +85,7 @@ impl Default for Config {
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
             registry_domain: None,
-            submission_pool_config: Some(SigningPoolConfig::default()),
+            submission_pool_config: SigningPoolConfig::default(),
         }
     }
 }

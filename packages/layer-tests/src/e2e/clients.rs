@@ -60,7 +60,8 @@ impl Clients {
                     chain_config.clone(),
                 )
                 .with_label(format!("TestCli-{}", chain_name))
-                .with_initial_client_wei(parse_ether("1").unwrap())
+                .with_max_size(100) // turning it off for now
+                .with_initial_client_wei(parse_ether(".1").unwrap())
                 .build()
                 .await
                 .unwrap();

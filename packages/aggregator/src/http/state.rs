@@ -6,7 +6,7 @@ use std::{
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
-    config::{EthereumChainConfig, SigningPoolConfig},
+    config::EthereumChainConfig,
     eth_client::pool::{BalanceMaintainer, EthSigningClientPool, EthSigningClientPoolBuilder},
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
@@ -75,10 +75,7 @@ impl HttpState {
 
         let chain_config = EthereumChainConfig::try_from(chain_config)?;
 
-        let pool_config = match self.config.submission_pool_config.clone() {
-            Some(pool_config) => pool_config,
-            None => SigningPoolConfig::single(),
-        };
+        let pool_config = &self.config.submission_pool_config;
 
         let pool = EthSigningClientPoolBuilder::new(
             None,

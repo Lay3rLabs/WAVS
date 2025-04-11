@@ -38,11 +38,8 @@ pub struct Config {
     /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub mnemonic: Option<String>,
 
-    /// If set, the submission will use a signing-client pool
-    /// default is `Some(SigningPoolConfig::default())`
-    ///
-    /// If not set, then submissions will use a single client per-chain, which may create bottlenecks
-    pub submission_pool_config: Option<SigningPoolConfig>,
+    /// eth submission client pool config
+    pub submission_pool_config: SigningPoolConfig,
 
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
@@ -64,7 +61,7 @@ impl Default for Config {
                 cosmos: Default::default(),
                 eth: Default::default(),
             },
-            submission_pool_config: Some(SigningPoolConfig::default()),
+            submission_pool_config: SigningPoolConfig::default(),
         }
     }
 }

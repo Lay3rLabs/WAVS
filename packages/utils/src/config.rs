@@ -418,6 +418,7 @@ pub struct SigningPoolConfig {
 
 impl Default for SigningPoolConfig {
     fn default() -> Self {
+        //Self::single()
         Self {
             size: 16,
             initial_wei: parse_ether("1").unwrap(),
