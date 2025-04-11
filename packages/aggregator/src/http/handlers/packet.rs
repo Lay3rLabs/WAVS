@@ -108,6 +108,9 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
     // we don't care about count, we care about the power of the signers
     // right now this is just hardcoded for demo purposes
     if total_weight >= threshold {
+        if threshold.is_zero() {
+            tracing::warn!("you are using threshold of 0 in your AVS quorum, best to only do this for testing");
+        }
         let Aggregator::Ethereum(EthereumContractSubmission {
             chain_name,
             address,
