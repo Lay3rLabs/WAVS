@@ -73,7 +73,8 @@ async fn signing_pool_basic() {
         chain_config.clone(),
         Some(parse_ether("100").unwrap()),
         None,
-    );
+    )
+    .unwrap();
 
     let eth_client_pool: Pool<SigningClientPoolManager> =
         Pool::builder(manager).max_size(16).build().unwrap();
@@ -135,11 +136,9 @@ async fn signing_pool_balance_maintainer() {
             .to_string(),
         chain_config.clone(),
         Some(parse_ether("100").unwrap()),
-        Some(BalanceMaintainer::new(
-            parse_ether("25").unwrap(),
-            top_up_amount,
-        )),
-    );
+        Some(BalanceMaintainer::new(parse_ether("25").unwrap(), top_up_amount).unwrap()),
+    )
+    .unwrap();
 
     let eth_client_pool: Pool<SigningClientPoolManager> =
         Pool::builder(manager).max_size(16).build().unwrap();

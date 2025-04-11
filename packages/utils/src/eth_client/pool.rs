@@ -38,16 +38,25 @@ pub struct SigningClientPoolManager {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BalanceMaintainer {
-    pub threshhold: U256,
-    pub top_up_amount: U256,
+    threshhold: U256,
+    top_up_amount: U256,
 }
 
 impl BalanceMaintainer {
-    pub fn new(threshhold: U256, top_up_amount: U256) -> Self {
-        Self {
+    pub fn new(threshhold: U256, top_up_amount: U256) -> Result<Self> {
+        // Ensure top_up_amount is greater than threshhold
+        if top_up_amount <= threshhold {
+            return Err(anyhow::anyhow!(
+                "Balance maintainer top_up_amount ({}) must be greater than threshhold ({})",
+                top_up_amount,
+                threshhold
+            ));
+        }
+
+        Ok(Self {
             threshhold,
             top_up_amount,
-        }
+        })
     }
 }
 
@@ -58,15 +67,24 @@ impl SigningClientPoolManager {
         chain_config: EthereumChainConfig,
         initial_client_wei: Option<U256>,
         balance_maintainer: Option<BalanceMaintainer>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        // If balance_maintainer exists, validate that top_up_amount > 0
+        if let Some(maintainer) = &balance_maintainer {
+            if maintainer.top_up_amount.is_zero() {
+                return Err(anyhow::anyhow!(
+                    "Balance maintainer top_up_amount must be greater than zero"
+                ));
+            }
+        }
+
+        Ok(Self {
             mnemonic,
             chain_config,
             derivation_index: AtomicU32::new(1),
             initial_client_wei,
             funder: tokio::sync::Mutex::new(funder),
             balance_maintainer,
-        }
+        })
     }
 
     async fn create_client(&self) -> Result<EthSigningClient> {
@@ -104,6 +122,7 @@ impl SigningClientPoolManager {
             let balance = client.provider.get_balance(client.address()).await?;
 
             if balance < balance_maintainer.threshhold {
+                // Balance maintainer was already validated at creation, so we know top_up_amount > balance
                 let amount = balance_maintainer.top_up_amount - balance;
                 self.fund(client.address(), amount).await?;
             }

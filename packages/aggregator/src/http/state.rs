@@ -98,8 +98,8 @@ impl HttpState {
                     Some(BalanceMaintainer::new(
                         pool_config.threshhold_wei,
                         pool_config.topup_wei,
-                    )),
-                ))
+                    )?),
+                )?)
                 .max_size(pool_config.size as usize)
                 .build()
                 .unwrap();

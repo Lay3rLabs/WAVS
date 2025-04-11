@@ -61,7 +61,7 @@ impl Clients {
                     chain_config.clone(),
                     Some(parse_ether("1").unwrap()),
                     None,
-                );
+                ).unwrap();
 
                 let eth_client_pool: Pool<SigningClientPoolManager> =
                     Pool::builder(manager).max_size(16).build().unwrap();

@@ -337,16 +337,24 @@ impl Submission for CoreSubmission {
                             );
                         }
                         Some(pool_config) => {
-                            let pool = Pool::builder(SigningClientPoolManager::new(
-                                client,
-                                self.eth_mnemonic.clone(),
-                                config.clone(),
-                                Some(pool_config.initial_wei),
-                                Some(BalanceMaintainer::new(
-                                    pool_config.threshhold_wei,
-                                    pool_config.topup_wei,
-                                )),
-                            ))
+                            let pool = Pool::builder(
+                                SigningClientPoolManager::new(
+                                    client,
+                                    self.eth_mnemonic.clone(),
+                                    config.clone(),
+                                    Some(pool_config.initial_wei),
+                                    Some(
+                                        BalanceMaintainer::new(
+                                            pool_config.threshhold_wei,
+                                            pool_config.topup_wei,
+                                        )
+                                        .map_err(|e| {
+                                            SubmissionError::InternalPoolError(e.to_string())
+                                        })?,
+                                    ),
+                                )
+                                .map_err(|e| SubmissionError::InternalPoolError(e.to_string()))?,
+                            )
                             .max_size(pool_config.size as usize)
                             .build()
                             .unwrap();
