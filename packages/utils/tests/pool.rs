@@ -46,8 +46,28 @@ async fn client_stream_blocks() {
 }
 
 #[tokio::test]
-async fn signing_pool_basic() {
+async fn signing_pool_basic_same_key() {
+    let client_key =
+        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
+            .to_string();
+
     init_tracing_tests();
+    inner_signing_pool_basic(None, client_key).await;
+}
+
+#[tokio::test]
+async fn signing_pool_basic_different_key() {
+    let funder_key =
+        Some("test test test test test test test test test test test junk".to_string());
+    let client_key =
+        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
+            .to_string();
+
+    init_tracing_tests();
+    inner_signing_pool_basic(funder_key, client_key).await;
+}
+
+async fn inner_signing_pool_basic(funder_key: Option<String>, client_key: String) {
     let anvil = Anvil::new().spawn();
 
     let chain_config = EthereumChainConfig {
@@ -58,22 +78,12 @@ async fn signing_pool_basic() {
         faucet_endpoint: None,
     };
 
-    let mnemonic = Some("test test test test test test test test test test test junk".to_string());
-
-    let funder = EthClientBuilder::new(chain_config.to_client_config(None, mnemonic, None))
-        .build_signing()
-        .await
-        .unwrap();
-
-    let eth_client_pool = EthSigningClientPoolBuilder::new(
-        funder,
-        "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
-            .to_string(),
-        chain_config.clone(),
-    )
-    .with_initial_client_wei(parse_ether("100").unwrap())
-    .build()
-    .unwrap();
+    let eth_client_pool =
+        EthSigningClientPoolBuilder::new(funder_key, client_key, chain_config.clone())
+            .with_initial_client_wei(parse_ether("100").unwrap())
+            .build()
+            .await
+            .unwrap();
 
     let client = eth_client_pool.get().await.unwrap();
 
@@ -117,17 +127,10 @@ async fn signing_pool_balance_maintainer() {
         faucet_endpoint: None,
     };
 
-    let mnemonic = Some("test test test test test test test test test test test junk".to_string());
-
-    let funder = EthClientBuilder::new(chain_config.to_client_config(None, mnemonic, None))
-        .build_signing()
-        .await
-        .unwrap();
-
     let top_up_amount = parse_ether("30").unwrap();
 
     let eth_client_pool = EthSigningClientPoolBuilder::new(
-        funder,
+        Some("test test test test test test test test test test test junk".to_string()),
         "planet crucial snake reflect peace prison digital unit shaft garbage rent define"
             .to_string(),
         chain_config.clone(),
@@ -137,6 +140,7 @@ async fn signing_pool_balance_maintainer() {
         BalanceMaintainer::new(parse_ether("25").unwrap(), top_up_amount).unwrap(),
     )
     .build()
+    .await
     .unwrap();
 
     // just get the address we'll be working with

@@ -153,6 +153,7 @@ impl EthClientBuilder {
         let endpoint = self.endpoint()?;
 
         let provider = ProviderBuilder::new()
+            // need to bump alloy: .with_cached_nonce_management()
             .wallet(wallet.clone())
             .on_builtin(&endpoint)
             .await?;

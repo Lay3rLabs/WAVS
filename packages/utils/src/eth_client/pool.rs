@@ -1,7 +1,4 @@
-use std::{
-    ops::Deref,
-    sync::{atomic::AtomicU32, Arc},
-};
+use std::{ops::Deref, sync::atomic::AtomicU32};
 
 use crate::config::EthereumChainConfig;
 use alloy::{
@@ -20,19 +17,15 @@ use super::{EthClientBuilder, EthSigningClient};
 // each client uses derivation path with an index starting at 1 and incrementing on creation
 //
 // when clients are first created in the pool, they are optionally funded `initial_client_wei` by the funder
-// and this is kept behind a tokio mutex so this operation is only ever one-at-a-time
-//
-// however this is a one-time operation, so make sure the amount is large enough to cover the use-cases
-// or call `fund` manually to top up the clients (which will have the same property of only one-at-a-time)
+// and as clients are recycled, their balance is also optionally maintained  (see `BalanceMaintainer`)
 //
 // to use the pool effectively, make sure you aren't using the same clients here anywhere else
-// (including the funder)
 //
-// See deadpool docs for more details on how to use this pool
-
 // In order to prevent misuse of the pool, we only expose wrapper types
 // this also makes it a bit easier to use since they don't need to import deadpool
 pub struct EthSigningClientFromPool(Object<EthSigningClientPoolManager>);
+
+type EthFundingClient = EthSigningClient;
 
 impl Deref for EthSigningClientFromPool {
     type Target = EthSigningClient;
@@ -43,8 +36,12 @@ impl Deref for EthSigningClientFromPool {
 }
 
 pub struct EthSigningClientPoolBuilder {
-    pub funder: EthSigningClient,
-    pub mnemonic: String,
+    // This can be:
+    // - a mnemonic
+    // - a private key
+    // - None, which will use index 0 of client_mnemonic (clients always start at 1)
+    pub funder_mnemonic_or_key: Option<String>,
+    pub client_mnemonic: String, // must be a mnemonic
     pub chain_config: EthereumChainConfig,
     // default is 16
     pub max_size: Option<usize>,
@@ -56,13 +53,13 @@ pub struct EthSigningClientPoolBuilder {
 
 impl EthSigningClientPoolBuilder {
     pub fn new(
-        funder: EthSigningClient,
-        mnemonic: String,
+        funder_mnemonic_or_key: Option<String>,
+        client_mnemonic: String,
         chain_config: EthereumChainConfig,
     ) -> Self {
         Self {
-            funder,
-            mnemonic,
+            funder_mnemonic_or_key,
+            client_mnemonic,
             chain_config,
             max_size: None,
             initial_client_wei: None,
@@ -83,10 +80,10 @@ impl EthSigningClientPoolBuilder {
         self
     }
 
-    pub fn build(self) -> Result<EthSigningClientPool> {
+    pub async fn build(self) -> Result<EthSigningClientPool> {
         let Self {
-            funder,
-            mnemonic,
+            funder_mnemonic_or_key,
+            client_mnemonic,
             chain_config,
             max_size,
             initial_client_wei,
@@ -102,11 +99,19 @@ impl EthSigningClientPoolBuilder {
             }
         }
 
-        let funder = Arc::new(tokio::sync::Mutex::new(funder));
+        let funder_config = chain_config.to_client_config(
+            None,
+            Some(funder_mnemonic_or_key.unwrap_or_else(|| client_mnemonic.clone())),
+            None,
+        );
+
+        let funder = EthClientBuilder::new(funder_config).build_signing().await?;
+
+        //let funder = Arc::new(tokio::sync::Mutex::new(funder));
 
         let manager = EthSigningClientPoolManager::new(
             funder.clone(),
-            mnemonic,
+            client_mnemonic,
             chain_config,
             initial_client_wei,
         )?;
@@ -127,7 +132,7 @@ impl EthSigningClientPoolBuilder {
 #[derive(Clone)]
 pub struct EthSigningClientPool {
     inner: Pool<EthSigningClientPoolManager>,
-    funder: Arc<tokio::sync::Mutex<EthSigningClient>>,
+    funder: EthFundingClient,
     balance_maintainer: Option<BalanceMaintainer>,
 }
 
@@ -142,6 +147,7 @@ impl EthSigningClientPool {
             if balance < balance_maintainer.threshhold {
                 // Balance maintainer was already validated at creation, so we know top_up_amount > balance
                 let amount = balance_maintainer.top_up_amount - balance;
+                //fund(&*self.funder.lock().await, client.address(), amount).await?;
                 fund(&self.funder, client.address(), amount).await?;
             }
         }
@@ -155,7 +161,7 @@ struct EthSigningClientPoolManager {
     chain_config: EthereumChainConfig,
     initial_client_wei: Option<U256>,
     derivation_index: AtomicU32,
-    funder: Arc<tokio::sync::Mutex<EthSigningClient>>,
+    funder: EthFundingClient,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -184,7 +190,7 @@ impl BalanceMaintainer {
 
 impl EthSigningClientPoolManager {
     pub fn new(
-        funder: Arc<tokio::sync::Mutex<EthSigningClient>>,
+        funder: EthFundingClient,
         mnemonic: String,
         chain_config: EthereumChainConfig,
         initial_client_wei: Option<U256>,
@@ -207,9 +213,13 @@ impl EthSigningClientPoolManager {
             self.chain_config
                 .to_client_config(Some(index), Some(self.mnemonic.clone()), None);
 
-        let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
+        let client = EthClientBuilder::new(client_config).build_signing().await?;
 
-        Ok(eth_client)
+        if let Some(amount) = self.initial_client_wei {
+            fund(&self.funder, client.address(), amount).await?;
+        }
+
+        Ok(client)
     }
 }
 
@@ -218,13 +228,7 @@ impl Manager for EthSigningClientPoolManager {
     type Error = anyhow::Error;
 
     async fn create(&self) -> Result<EthSigningClient> {
-        let client = self.create_client().await?;
-
-        if let Some(wei) = self.initial_client_wei {
-            fund(&self.funder, client.address(), wei).await?;
-        }
-
-        Ok(client)
+        self.create_client().await
     }
 
     async fn recycle(
@@ -245,12 +249,10 @@ impl Manager for EthSigningClientPoolManager {
 // sends wei to the address from the funder
 // returns the transaction hash
 async fn fund(
-    funder: &Arc<tokio::sync::Mutex<EthSigningClient>>,
+    funder: &EthSigningClient,
     address: alloy::primitives::Address,
     wei: U256,
 ) -> Result<FixedBytes<32>> {
-    let funder = funder.lock().await;
-
     let tx = TransactionRequest::default()
         .with_from(funder.address())
         .with_to(address)

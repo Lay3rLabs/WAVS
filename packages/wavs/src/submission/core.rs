@@ -320,25 +320,25 @@ impl Submission for CoreSubmission {
                         .try_into()
                         .map_err(|_| SubmissionError::MissingEthereumChain)?;
 
-                    let client = EthClientBuilder::new(config.to_client_config(
-                        None,
-                        Some(self.eth_mnemonic.clone()),
-                        Some(EthClientTransport::Http),
-                    ))
-                    .build_signing()
-                    .await
-                    .map_err(SubmissionError::Ethereum)?;
-
                     match &self.eth_pool_config {
                         None => {
+                            let client = EthClientBuilder::new(config.to_client_config(
+                                None,
+                                Some(self.eth_mnemonic.clone()),
+                                Some(EthClientTransport::Http),
+                            ))
+                            .build_signing()
+                            .await
+                            .map_err(SubmissionError::Ethereum)?;
+
                             self.eth_sending_clients.write().unwrap().insert(
                                 chain_name.clone(),
-                                Arc::new(tokio::sync::Mutex::new(client.clone())),
+                                Arc::new(tokio::sync::Mutex::new(client)),
                             );
                         }
                         Some(pool_config) => {
                             let pool = EthSigningClientPoolBuilder::new(
-                                client,
+                                None,
                                 self.eth_mnemonic.clone(),
                                 config.clone(),
                             )
@@ -352,6 +352,7 @@ impl Submission for CoreSubmission {
                                 .map_err(SubmissionError::InternalPoolError)?,
                             )
                             .build()
+                            .await
                             .map_err(SubmissionError::InternalPoolError)?;
 
                             self.eth_sending_pools

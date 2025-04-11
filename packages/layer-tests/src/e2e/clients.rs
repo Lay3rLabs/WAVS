@@ -54,15 +54,14 @@ impl Clients {
 
             // Create a pool for each Ethereum chain
             for (chain_name, chain_config) in &configs.chains.eth {
-                let funder = cli_ctx.get_eth_client(chain_name).unwrap();
-
                 let pool = EthSigningClientPoolBuilder::new(
-                    funder,
+                    None,
                     cli_ctx.config.eth_mnemonic.clone().unwrap(),
                     chain_config.clone(),
                 )
                 .with_initial_client_wei(parse_ether("1").unwrap())
                 .build()
+                .await
                 .unwrap();
 
                 eth_client_pools.insert(chain_name.clone(), pool);

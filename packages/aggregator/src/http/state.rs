@@ -80,17 +80,11 @@ impl HttpState {
             .context(format!("chain not found for {}", chain_name))?;
 
         let chain_config = EthereumChainConfig::try_from(chain_config)?;
-        let client_config = chain_config.to_client_config(None, self.config.mnemonic.clone(), None);
-
-        let eth_client = EthClientBuilder::new(client_config)
-            .build_signing()
-            .await
-            .unwrap();
 
         let eth_client = match &self.config.submission_pool_config {
             Some(pool_config) => {
                 let pool = EthSigningClientPoolBuilder::new(
-                    eth_client,
+                    None,
                     self.config.mnemonic.clone().context("Missing mnemonic")?,
                     chain_config,
                 )
@@ -100,11 +94,19 @@ impl HttpState {
                     pool_config.threshhold_wei,
                     pool_config.topup_wei,
                 )?)
-                .build()?;
+                .build()
+                .await?;
 
                 EthClient::Pool(pool)
             }
             None => {
+                let client_config =
+                    chain_config.to_client_config(None, self.config.mnemonic.clone(), None);
+
+                let eth_client = EthClientBuilder::new(client_config)
+                    .build_signing()
+                    .await
+                    .unwrap();
                 let eth_client = Arc::new(tokio::sync::Mutex::new(eth_client));
                 EthClient::TokioMutex(eth_client)
             }
