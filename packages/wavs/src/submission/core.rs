@@ -32,7 +32,6 @@ pub struct CoreSubmission {
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
-    eth_sending_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
     eth_sending_pools: Arc<RwLock<HashMap<ChainName, EthSigningClientPool>>>,
     eth_pool_config: Option<SigningPoolConfig>,
     eth_mnemonic: String,
@@ -47,7 +46,6 @@ impl CoreSubmission {
             chain_configs: config.chains.clone().into(),
             http_client: reqwest::Client::new(),
             eth_signing_clients: Arc::new(RwLock::new(HashMap::new())),
-            eth_sending_clients: Arc::new(RwLock::new(HashMap::new())),
             eth_sending_pools: Arc::new(RwLock::new(HashMap::new())),
             eth_pool_config: config.submission_pool_config.clone(),
             eth_mnemonic: config
@@ -101,58 +99,32 @@ impl CoreSubmission {
             address,
         } = submission;
 
-        if self.eth_pool_config.is_some() {
-            // free up the mutex to add more pools
-            let pool = {
-                self.eth_sending_pools
-                    .read()
-                    .unwrap()
-                    .get(&chain_name)
-                    .ok_or(SubmissionError::MissingEthereumSendingClient(
-                        chain_name.clone(),
-                    ))?
-                    .clone()
-            };
-            let client = pool
-                .get()
-                .await
-                .map_err(SubmissionError::InternalPoolError)?;
+        // free up the mutex to add more pools
+        let pool = {
+            self.eth_sending_pools
+                .read()
+                .unwrap()
+                .get(&chain_name)
+                .ok_or(SubmissionError::MissingEthereumSendingClient(
+                    chain_name.clone(),
+                ))?
+                .clone()
+        };
+        let client = pool
+            .get()
+            .await
+            .map_err(SubmissionError::InternalPoolError)?;
 
-            let _tx_receipt = client
-                .send_envelope_signatures(
-                    packet.envelope,
-                    vec![packet.signature],
-                    packet.block_height,
-                    address,
-                    max_gas,
-                )
-                .await
-                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
-        } else {
-            // free up the mutex to add more clients
-            let client = {
-                self.eth_sending_clients
-                    .read()
-                    .unwrap()
-                    .get(&chain_name)
-                    .ok_or(SubmissionError::MissingEthereumSendingClient(
-                        chain_name.clone(),
-                    ))?
-                    .clone()
-            };
-            let _tx_receipt = client
-                .lock()
-                .await
-                .send_envelope_signatures(
-                    packet.envelope,
-                    vec![packet.signature],
-                    packet.block_height,
-                    address,
-                    max_gas,
-                )
-                .await
-                .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
-        }
+        let _tx_receipt = client
+            .send_envelope_signatures(
+                packet.envelope,
+                vec![packet.signature],
+                packet.block_height,
+                address,
+                max_gas,
+            )
+            .await
+            .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
 
         Ok(())
     }
@@ -270,97 +242,71 @@ impl Submission for CoreSubmission {
             .eth_mnemonic_hd_index_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let config = self
+        let chain_config = self
             .chain_configs
             .get(service.manager.chain_name())
             .ok_or(SubmissionError::MissingEthereumChain)?;
 
-        let config: EthereumChainConfig = config
+        let chain_config: EthereumChainConfig = chain_config
             .clone()
             .try_into()
             .map_err(|_| SubmissionError::MissingEthereumChain)?;
 
-        let client = EthClientBuilder::new(config.to_client_config(
+        let signing_client = EthClientBuilder::new(chain_config.to_client_config(
             Some(hd_index),
             Some(self.eth_mnemonic.clone()),
             Some(EthClientTransport::Http),
         ))
-        .build_signing()
+        .build_signing(true)
         .await
         .map_err(SubmissionError::Ethereum)?;
 
         tracing::info!(
-            "Created new eth client for service {} -> {}",
+            "Created new signing client for service {} -> {}",
             service.id,
-            client.address()
+            signing_client.address()
         );
 
         self.eth_signing_clients
             .write()
             .unwrap()
-            .insert(service.id.clone(), client);
+            .insert(service.id.clone(), signing_client);
 
         for workflow in service.workflows.values() {
             if let Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) =
                 &workflow.submit
             {
                 if !self
-                    .eth_sending_clients
+                    .eth_sending_pools
                     .read()
                     .unwrap()
                     .contains_key(chain_name)
                 {
-                    let config = self
-                        .chain_configs
-                        .get(chain_name)
-                        .ok_or(SubmissionError::MissingEthereumChain)?;
+                    let pool_config = match self.eth_pool_config.clone() {
+                        Some(pool_config) => pool_config,
+                        None => SigningPoolConfig::single(),
+                    };
 
-                    let config: EthereumChainConfig = config
-                        .clone()
-                        .try_into()
-                        .map_err(|_| SubmissionError::MissingEthereumChain)?;
+                    let pool = EthSigningClientPoolBuilder::new(
+                        None,
+                        self.eth_mnemonic.clone(),
+                        chain_config.clone(),
+                    )
+                    .with_label(format!("Wavs-Submission-{}", chain_name))
+                    .with_max_size(pool_config.size as usize)
+                    .with_initial_client_wei(pool_config.initial_wei)
+                    .with_balance_maintainer(
+                        BalanceMaintainer::new(pool_config.threshhold_wei, pool_config.topup_wei)
+                            .map_err(SubmissionError::InternalPoolError)?,
+                    )
+                    .build()
+                    .await
+                    .map_err(SubmissionError::InternalPoolError)?;
 
-                    match &self.eth_pool_config {
-                        None => {
-                            let client = EthClientBuilder::new(config.to_client_config(
-                                None,
-                                Some(self.eth_mnemonic.clone()),
-                                Some(EthClientTransport::Http),
-                            ))
-                            .build_signing()
-                            .await
-                            .map_err(SubmissionError::Ethereum)?;
-
-                            self.eth_sending_clients.write().unwrap().insert(
-                                chain_name.clone(),
-                                Arc::new(tokio::sync::Mutex::new(client)),
-                            );
-                        }
-                        Some(pool_config) => {
-                            let pool = EthSigningClientPoolBuilder::new(
-                                None,
-                                self.eth_mnemonic.clone(),
-                                config.clone(),
-                            )
-                            .with_max_size(pool_config.size as usize)
-                            .with_initial_client_wei(pool_config.initial_wei)
-                            .with_balance_maintainer(
-                                BalanceMaintainer::new(
-                                    pool_config.threshhold_wei,
-                                    pool_config.topup_wei,
-                                )
-                                .map_err(SubmissionError::InternalPoolError)?,
-                            )
-                            .build()
-                            .await
-                            .map_err(SubmissionError::InternalPoolError)?;
-
-                            self.eth_sending_pools
-                                .write()
-                                .unwrap()
-                                .insert(chain_name.clone(), pool);
-                        }
-                    }
+                    self.eth_sending_pools
+                        .write()
+                        .unwrap()
+                        .insert(chain_name.clone(), pool);
                 }
             }
         }

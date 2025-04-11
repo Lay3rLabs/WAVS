@@ -113,7 +113,7 @@ pub async fn handle_service_command(
                     chain_name,
                     event_type,
                 } => {
-                    let query_client = ctx.get_cosmos_client(&chain_name)?.querier;
+                    let query_client = ctx.new_cosmos_client(&chain_name).await?.querier;
                     let result = set_cosmos_trigger(
                         query_client,
                         &file,
@@ -1173,7 +1173,7 @@ pub async fn validate_service(
                         chains_to_validate.insert((chain_name.clone(), ChainType::Cosmos));
 
                         // Cosmos-specific validation with client
-                        if let Ok(client) = ctx.get_cosmos_client(chain_name) {
+                        if let Ok(client) = ctx.new_cosmos_client(chain_name).await {
                             validate_workflow_trigger(
                                 workflow_id,
                                 trigger,
@@ -1242,12 +1242,12 @@ pub async fn validate_service(
         for (chain_name, chain_type) in chains_to_validate.iter() {
             match chain_type {
                 ChainType::Cosmos => {
-                    if let Ok(client) = ctx.get_cosmos_client(chain_name) {
+                    if let Ok(client) = ctx.new_cosmos_client(chain_name).await {
                         cosmos_clients.insert(chain_name.clone(), client.querier);
                     }
                 }
                 ChainType::Ethereum => {
-                    if let Ok(client) = ctx.get_eth_client(chain_name) {
+                    if let Ok(client) = ctx.new_eth_client(chain_name).await {
                         eth_providers.insert(chain_name.clone(), client.provider.root().clone());
                     }
                 }

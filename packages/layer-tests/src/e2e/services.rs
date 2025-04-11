@@ -208,7 +208,7 @@ async fn deploy_service_simple(
         }
         AnyService::Cosmos(_) | AnyService::CrossChain(_) => {
             let chain_name = trigger_chain.as_ref().unwrap().clone();
-            let client = clients.cli_ctx.get_cosmos_client(&chain_name).unwrap();
+            let client = clients.get_cosmos_client(&chain_name);
 
             let code_id = match cosmos_code_ids.get(&chain_name).cloned() {
                 Some(code_id) => code_id,

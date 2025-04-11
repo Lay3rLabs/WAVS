@@ -8,7 +8,7 @@ use wavs_types::{
 
 use crate::http::{
     error::AnyError,
-    state::{EthClient, HttpState, PacketQueue, QueuedPacket},
+    state::{HttpState, PacketQueue, QueuedPacket},
 };
 
 alloy::sol!(
@@ -66,21 +66,15 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             // this implicitly validates that the signature is valid
             let signer = packet.signature.eth_signer_address(&packet.envelope)?;
 
-            let client = state.get_eth_client(chain_name).await?;
-            let service_manager = match client {
-                EthClient::TokioMutex(client) => SimpleServiceManager::new(
-                    service.manager.eth_address_unchecked(),
-                    client.lock().await.provider.clone(),
-                ),
-                EthClient::Pool(pool) => SimpleServiceManager::new(
-                    service.manager.eth_address_unchecked(),
-                    pool.get()
-                        .await
-                        .map_err(|e| anyhow!("signing pool error: {e:?}"))?
-                        .provider
-                        .clone(),
-                ),
-            };
+            let pool = state.get_eth_client_pool(chain_name).await?;
+            let service_manager = SimpleServiceManager::new(
+                service.manager.eth_address_unchecked(),
+                pool.get()
+                    .await
+                    .map_err(|e| anyhow!("signing pool error: {e:?}"))?
+                    .provider
+                    .clone(),
+            );
             let weight = service_manager.getOperatorWeight(signer).call().await?._0;
             total_weight = weight;
 
@@ -128,40 +122,18 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             max_gas,
         }) = aggregator;
 
-        let client = state.get_eth_client(chain_name).await?;
+        let pool = state.get_eth_client_pool(chain_name).await?;
         let signatures = queue
             .drain(..)
             .map(|queued| queued.packet.signature)
             .collect();
 
-        let tx_receipt = match client {
-            EthClient::TokioMutex(client) => {
-                client
-                    .lock()
-                    .await
-                    .send_envelope_signatures(
-                        envelope,
-                        signatures,
-                        block_height,
-                        *address,
-                        *max_gas,
-                    )
-                    .await?
-            }
-            EthClient::Pool(pool) => {
-                pool.get()
-                    .await
-                    .map_err(|e| anyhow!("signing pool error: {e:?}"))?
-                    .send_envelope_signatures(
-                        envelope,
-                        signatures,
-                        block_height,
-                        *address,
-                        *max_gas,
-                    )
-                    .await?
-            }
-        };
+        let tx_receipt = pool
+            .get()
+            .await
+            .map_err(|e| anyhow!("signing pool error: {e:?}"))?
+            .send_envelope_signatures(envelope, signatures, block_height, *address, *max_gas)
+            .await?;
 
         state.save_packet_queue(&event_id, PacketQueue::Burned)?;
         Ok(AddPacketResponse::Sent {

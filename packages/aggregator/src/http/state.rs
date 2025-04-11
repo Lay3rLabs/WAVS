@@ -6,11 +6,8 @@ use std::{
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
-    config::EthereumChainConfig,
-    eth_client::{
-        pool::{BalanceMaintainer, EthSigningClientPool, EthSigningClientPoolBuilder},
-        EthClientBuilder, EthSigningClient,
-    },
+    config::{EthereumChainConfig, SigningPoolConfig},
+    eth_client::pool::{BalanceMaintainer, EthSigningClientPool, EthSigningClientPoolBuilder},
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
@@ -42,31 +39,28 @@ pub struct QueuedPacket {
 pub struct HttpState {
     pub config: Config,
     storage: Arc<RedbStorage>,
-    eth_clients: Arc<RwLock<HashMap<ChainName, EthClient>>>,
-}
-
-#[derive(Clone)]
-pub enum EthClient {
-    TokioMutex(Arc<tokio::sync::Mutex<EthSigningClient>>),
-    Pool(EthSigningClientPool),
+    eth_client_pools: Arc<RwLock<HashMap<ChainName, EthSigningClientPool>>>,
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
-        let eth_clients = Arc::new(RwLock::new(HashMap::new()));
+        let eth_client_pools = Arc::new(RwLock::new(HashMap::new()));
 
         Ok(Self {
             config,
             storage,
-            eth_clients,
+            eth_client_pools,
         })
     }
 
-    pub async fn get_eth_client(&self, chain_name: &ChainName) -> anyhow::Result<EthClient> {
+    pub async fn get_eth_client_pool(
+        &self,
+        chain_name: &ChainName,
+    ) -> anyhow::Result<EthSigningClientPool> {
         {
-            let lock = self.eth_clients.read().unwrap();
+            let lock = self.eth_client_pools.read().unwrap();
 
             if let Some(client) = lock.get(chain_name) {
                 return Ok(client.clone());
@@ -81,43 +75,32 @@ impl HttpState {
 
         let chain_config = EthereumChainConfig::try_from(chain_config)?;
 
-        let eth_client = match &self.config.submission_pool_config {
-            Some(pool_config) => {
-                let pool = EthSigningClientPoolBuilder::new(
-                    None,
-                    self.config.mnemonic.clone().context("Missing mnemonic")?,
-                    chain_config,
-                )
-                .with_max_size(pool_config.size as usize)
-                .with_initial_client_wei(pool_config.initial_wei)
-                .with_balance_maintainer(BalanceMaintainer::new(
-                    pool_config.threshhold_wei,
-                    pool_config.topup_wei,
-                )?)
-                .build()
-                .await?;
-
-                EthClient::Pool(pool)
-            }
-            None => {
-                let client_config =
-                    chain_config.to_client_config(None, self.config.mnemonic.clone(), None);
-
-                let eth_client = EthClientBuilder::new(client_config)
-                    .build_signing()
-                    .await
-                    .unwrap();
-                let eth_client = Arc::new(tokio::sync::Mutex::new(eth_client));
-                EthClient::TokioMutex(eth_client)
-            }
+        let pool_config = match self.config.submission_pool_config.clone() {
+            Some(pool_config) => pool_config,
+            None => SigningPoolConfig::single(),
         };
 
-        self.eth_clients
+        let pool = EthSigningClientPoolBuilder::new(
+            None,
+            self.config.mnemonic.clone().context("Missing mnemonic")?,
+            chain_config,
+        )
+        .with_label(format!("Aggregator-{}", chain_name))
+        .with_max_size(pool_config.size as usize)
+        .with_initial_client_wei(pool_config.initial_wei)
+        .with_balance_maintainer(BalanceMaintainer::new(
+            pool_config.threshhold_wei,
+            pool_config.topup_wei,
+        )?)
+        .build()
+        .await?;
+
+        self.eth_client_pools
             .write()
             .unwrap()
-            .insert(chain_name.clone(), eth_client.clone());
+            .insert(chain_name.clone(), pool.clone());
 
-        Ok(eth_client)
+        Ok(pool)
     }
 
     pub fn get_packet_queue(&self, event_id: &EventId) -> anyhow::Result<PacketQueue> {

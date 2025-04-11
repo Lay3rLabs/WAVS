@@ -427,6 +427,17 @@ impl Default for SigningPoolConfig {
     }
 }
 
+impl SigningPoolConfig {
+    pub fn single() -> Self {
+        Self {
+            size: 0,
+            initial_wei: U256::ZERO,
+            threshhold_wei: U256::ZERO,
+            topup_wei: U256::ZERO,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::{path::PathBuf, sync::LazyLock};

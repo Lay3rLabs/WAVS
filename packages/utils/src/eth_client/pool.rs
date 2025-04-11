@@ -29,15 +29,19 @@ use super::{EthClientBuilder, EthSigningClient};
 //
 // In order to prevent misuse of the pool, we only expose wrapper types
 // this also makes it a bit easier to use since they don't need to import deadpool
-pub struct EthSigningClientFromPool(Object<EthSigningClientPoolManager>);
-
-type EthFundingClient = EthSigningClient;
+pub enum EthSigningClientFromPool {
+    Pooled(Object<EthSigningClientPoolManager>),
+    Single(EthSigningClient),
+}
 
 impl Deref for EthSigningClientFromPool {
     type Target = EthSigningClient;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        match self {
+            EthSigningClientFromPool::Pooled(client) => client,
+            EthSigningClientFromPool::Single(client) => client,
+        }
     }
 }
 
@@ -55,6 +59,11 @@ pub struct EthSigningClientPoolBuilder {
     pub initial_client_wei: Option<U256>,
     // not required
     pub balance_maintainer: Option<BalanceMaintainer>,
+    // index to start for derivations
+    // will default to 1
+    pub start_index: Option<u32>,
+    // to help with debugging
+    pub label: Option<String>,
 }
 
 impl EthSigningClientPoolBuilder {
@@ -70,6 +79,8 @@ impl EthSigningClientPoolBuilder {
             max_size: None,
             initial_client_wei: None,
             balance_maintainer: None,
+            start_index: None,
+            label: None,
         }
     }
 
@@ -86,14 +97,26 @@ impl EthSigningClientPoolBuilder {
         self
     }
 
+    pub fn with_start_index(mut self, start_index: u32) -> Self {
+        self.start_index = Some(start_index);
+        self
+    }
+
+    pub fn with_label(mut self, label: String) -> Self {
+        self.label = Some(label);
+        self
+    }
+
     pub async fn build(self) -> Result<EthSigningClientPool> {
         let Self {
+            label,
             funder_mnemonic_or_key,
             client_mnemonic,
             chain_config,
             max_size,
             initial_client_wei,
             balance_maintainer,
+            start_index,
         } = self;
 
         // If balance_maintainer exists, validate that top_up_amount > 0
@@ -111,19 +134,31 @@ impl EthSigningClientPoolBuilder {
             None,
         );
 
-        let funder = EthClientBuilder::new(funder_config).build_signing().await?;
+        let funder = EthClientBuilder::new(funder_config)
+            .build_signing(true)
+            .await?;
 
-        let manager = EthSigningClientPoolManager::new(
-            funder.clone(),
-            client_mnemonic,
-            chain_config,
-            initial_client_wei,
-        )?;
+        let max_size = max_size.unwrap_or(16);
 
-        let pool = Pool::builder(manager)
-            .max_size(max_size.unwrap_or(16))
-            .build()
-            .context("Failed to create signing client pool")?;
+        let pool = if max_size > 0 {
+            let manager = EthSigningClientPoolManager::new(
+                label,
+                funder.clone(),
+                client_mnemonic,
+                chain_config,
+                initial_client_wei,
+                start_index.unwrap_or(1),
+            )?;
+
+            let pool = Pool::builder(manager)
+                .max_size(max_size)
+                .build()
+                .context("Failed to create signing client pool")?;
+
+            Some(pool)
+        } else {
+            None
+        };
 
         Ok(EthSigningClientPool {
             inner: pool,
@@ -135,37 +170,45 @@ impl EthSigningClientPoolBuilder {
 
 #[derive(Clone)]
 pub struct EthSigningClientPool {
-    inner: Pool<EthSigningClientPoolManager>,
-    funder: EthFundingClient,
+    funder: EthSigningClient,
+    inner: Option<Pool<EthSigningClientPoolManager>>,
     balance_maintainer: Option<BalanceMaintainer>,
 }
 
 impl EthSigningClientPool {
     pub async fn get(&self) -> Result<EthSigningClientFromPool> {
-        let client = self.inner.get().await.map_err(|e| anyhow!("{e:?}"))?;
+        match &self.inner {
+            Some(inner) => {
+                let client = inner.get().await.map_err(|e| anyhow!("{e:?}"))?;
 
-        // If balance maintainer is set, check and maintain balance
-        if let Some(balance_maintainer) = &self.balance_maintainer {
-            let balance = client.provider.get_balance(client.address()).await?;
+                // If balance maintainer is set, check and maintain balance
+                if let Some(balance_maintainer) = &self.balance_maintainer {
+                    let balance = client.provider.get_balance(client.address()).await?;
 
-            if balance < balance_maintainer.threshhold {
-                // Balance maintainer was already validated at creation, so we know top_up_amount > balance
-                let amount = balance_maintainer.top_up_amount - balance;
-                //fund(&*self.funder.lock().await, client.address(), amount).await?;
-                fund(&self.funder, client.address(), amount).await?;
+                    if balance < balance_maintainer.threshhold {
+                        // Balance maintainer was already validated at creation, so we know top_up_amount > balance
+                        let amount = balance_maintainer.top_up_amount - balance;
+                        fund(&self.funder, client.address(), amount).await?;
+                    }
+                }
+
+                Ok(EthSigningClientFromPool::Pooled(client))
+            }
+            None => {
+                // If no pool is set, return the funder directly
+                Ok(EthSigningClientFromPool::Single(self.funder.clone()))
             }
         }
-
-        Ok(EthSigningClientFromPool(client))
     }
 }
 
-struct EthSigningClientPoolManager {
+pub struct EthSigningClientPoolManager {
+    label: Option<String>,
     mnemonic: String,
     chain_config: EthereumChainConfig,
     initial_client_wei: Option<U256>,
     derivation_index: AtomicU32,
-    funder: EthFundingClient,
+    funder: EthSigningClient,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -194,16 +237,24 @@ impl BalanceMaintainer {
 
 impl EthSigningClientPoolManager {
     pub fn new(
-        funder: EthFundingClient,
+        label: Option<String>,
+        funder: EthSigningClient,
         mnemonic: String,
         chain_config: EthereumChainConfig,
         initial_client_wei: Option<U256>,
+        start_index: u32,
     ) -> Result<Self> {
+        tracing::info!(
+            "Creating EthSigningClientPoolManager {}",
+            label.as_deref().unwrap_or_default()
+        );
+
         Ok(Self {
+            label,
             funder,
             mnemonic,
             chain_config,
-            derivation_index: AtomicU32::new(1),
+            derivation_index: AtomicU32::new(start_index),
             initial_client_wei,
         })
     }
@@ -217,10 +268,29 @@ impl EthSigningClientPoolManager {
             self.chain_config
                 .to_client_config(Some(index), Some(self.mnemonic.clone()), None);
 
-        let client = EthClientBuilder::new(client_config).build_signing().await?;
+        let client = EthClientBuilder::new(client_config)
+            .build_signing(true)
+            .await?;
 
         if let Some(amount) = self.initial_client_wei {
-            fund(&self.funder, client.address(), amount).await?;
+            match fund(&self.funder, client.address(), amount).await {
+                Ok(_) => tracing::info!(
+                    "[{}] Funded new client {} from wallet {} with {}",
+                    self.label.as_deref().unwrap_or_default(),
+                    client.address(),
+                    self.funder.address(),
+                    amount
+                ),
+                Err(e) => {
+                    tracing::error!(
+                        "[{}] Failed to fund client {} from wallet {}: {e:?}",
+                        self.label.as_deref().unwrap_or_default(),
+                        client.address(),
+                        self.funder.address()
+                    );
+                    return Err(anyhow!("Failed to fund client"));
+                }
+            }
         }
 
         Ok(client)

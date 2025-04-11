@@ -76,12 +76,15 @@ async fn inner_signing_pool_basic(funder_key: Option<String>, client_key: String
         faucet_endpoint: None,
     };
 
-    let eth_client_pool =
-        EthSigningClientPoolBuilder::new(funder_key, client_key, chain_config.clone())
-            .with_initial_client_wei(parse_ether("100").unwrap())
-            .build()
-            .await
-            .unwrap();
+    let mut builder =
+        EthSigningClientPoolBuilder::new(funder_key.clone(), client_key, chain_config.clone())
+            .with_initial_client_wei(parse_ether("100").unwrap());
+
+    if funder_key.is_none() {
+        builder = builder.with_start_index(100);
+    }
+
+    let eth_client_pool = builder.build().await.unwrap();
 
     let client = eth_client_pool.get().await.unwrap();
 
@@ -91,13 +94,13 @@ async fn inner_signing_pool_basic(funder_key: Option<String>, client_key: String
         .unwrap();
 
     // make sure our client has the expected balance
-    assert!(balance_approx_eq(&client, parse_ether("100").unwrap()).await);
+    assert_balance_approx_eq(&client, parse_ether("100").unwrap()).await;
 
     // spend some ether
     transfer(&client, rando, parse_ether("25").unwrap()).await;
 
     // make sure our client has the expected balance
-    assert!(balance_approx_eq(&client, parse_ether("75").unwrap()).await);
+    assert_balance_approx_eq(&client, parse_ether("75").unwrap()).await;
 
     // get another client
     let new_client = eth_client_pool.get().await.unwrap();
@@ -106,10 +109,10 @@ async fn inner_signing_pool_basic(funder_key: Option<String>, client_key: String
     assert_ne!(new_client.address(), client.address());
 
     // make sure our client still has the expected balance
-    assert!(balance_approx_eq(&client, parse_ether("75").unwrap()).await);
+    assert_balance_approx_eq(&client, parse_ether("75").unwrap()).await;
 
     // new client has fresh balance
-    assert!(balance_approx_eq(&new_client, parse_ether("100").unwrap()).await);
+    assert_balance_approx_eq(&new_client, parse_ether("100").unwrap()).await;
 }
 
 #[tokio::test]
@@ -154,13 +157,13 @@ async fn signing_pool_balance_maintainer() {
         assert_eq!(client.address(), client_address);
 
         // make sure our client has the expected balance
-        assert!(balance_approx_eq(&client, parse_ether("100").unwrap()).await);
+        assert_balance_approx_eq(&client, parse_ether("100").unwrap()).await;
 
         // spend some ether
         transfer(&client, rando, parse_ether("25").unwrap()).await;
 
         // make sure our client has the expected balance
-        assert!(balance_approx_eq(&client, parse_ether("75").unwrap()).await);
+        assert_balance_approx_eq(&client, parse_ether("75").unwrap()).await;
     }
 
     {
@@ -169,13 +172,13 @@ async fn signing_pool_balance_maintainer() {
         assert_eq!(client.address(), client_address);
 
         // make sure our client has the expected balance (has not been topped up yet)
-        assert!(balance_approx_eq(&client, parse_ether("75").unwrap()).await);
+        assert_balance_approx_eq(&client, parse_ether("75").unwrap()).await;
 
         // spend more ether, past the threshhold
         transfer(&client, rando, parse_ether("60").unwrap()).await;
 
         // make sure our client has the expected balance (has not been topped up yet)
-        assert!(balance_approx_eq(&client, parse_ether("15").unwrap()).await);
+        assert_balance_approx_eq(&client, parse_ether("15").unwrap()).await;
     }
 
     {
@@ -184,7 +187,7 @@ async fn signing_pool_balance_maintainer() {
         assert_eq!(client.address(), client_address);
 
         // now the client is topped up
-        assert!(balance_approx_eq(&client, top_up_amount).await);
+        assert_balance_approx_eq(&client, top_up_amount).await;
         // sanity check
         assert_eq!(top_up_amount, parse_ether("30").unwrap());
     }
@@ -207,7 +210,7 @@ async fn transfer(from: &EthSigningClient, to: Address, wei: U256) {
 }
 
 // check if the balance is equal, with a bit of allowance for gas or whatever
-async fn balance_approx_eq(client: &EthSigningClient, expected_balance: U256) -> bool {
+async fn assert_balance_approx_eq(client: &EthSigningClient, expected_balance: U256) {
     let current_balance = balance(client).await;
 
     let diff = if current_balance > expected_balance {
@@ -218,7 +221,12 @@ async fn balance_approx_eq(client: &EthSigningClient, expected_balance: U256) ->
 
     let allowed_diff = parse_ether("0.001").unwrap();
 
-    diff < allowed_diff
+    if diff > allowed_diff {
+        panic!(
+            "Balance mismatch: expected {}, got {} (diff: {})",
+            expected_balance, current_balance, diff
+        );
+    }
 }
 
 async fn balance(client: &EthSigningClient) -> U256 {

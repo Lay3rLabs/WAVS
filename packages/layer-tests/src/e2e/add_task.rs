@@ -64,10 +64,8 @@ pub async fn add_task(
             address,
             event_type: _,
         } => {
-            let client = SimpleCosmosTriggerClient::new(
-                clients.cli_ctx.get_cosmos_client(&chain_name)?,
-                address,
-            );
+            let client =
+                SimpleCosmosTriggerClient::new(clients.get_cosmos_client(&chain_name), address);
             let trigger_id = client
                 .add_trigger(input.expect("on-chain triggers require input data"))
                 .await?;

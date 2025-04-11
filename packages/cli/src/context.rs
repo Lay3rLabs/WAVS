@@ -1,26 +1,14 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    sync::Mutex,
-};
+use std::{fmt::Display, sync::Mutex};
 
-use crate::{
-    args::CliArgs,
-    clients::{get_cosmos_client, get_eth_client},
-    config::Config,
-    deploy::CommandDeployResult,
-};
-use alloy::{
-    network::TransactionBuilder, primitives::utils::parse_ether, providers::Provider,
-    rpc::types::TransactionRequest,
-};
+use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
+use alloy::providers::Provider;
 use anyhow::{Context, Result};
-use layer_climb::signing::SigningClient;
+use layer_climb::prelude::*;
 use utils::{
-    config::{AnyChainConfig, EthereumChainConfig},
+    config::AnyChainConfig,
     eth_client::{EthClientBuilder, EthSigningClient},
 };
-use wavs_types::{ChainName, EthereumContractSubmission, Submit, Trigger};
+use wavs_types::ChainName;
 
 use crate::{args::Command, deploy::Deployment};
 
@@ -30,12 +18,6 @@ pub struct CliContext {
     pub save_deployment: bool,
     pub quiet_results: bool,
     pub json: bool,
-    _clients: HashMap<ChainName, AnyClient>,
-}
-
-enum AnyClient {
-    Eth(EthSigningClient),
-    Cosmos(SigningClient),
 }
 
 impl CliContext {
@@ -44,57 +26,16 @@ impl CliContext {
         config: Config,
         deployment: Option<Deployment>,
     ) -> Result<Self> {
-        let mut chains: HashSet<ChainName> = HashSet::new();
-
         let deployment = match deployment {
             None => Deployment::load(&config, command.args().json.unwrap_or_default())?,
             Some(deployment) => deployment,
         };
 
-        match command {
-            Command::DeployServiceRaw { service, .. } => {
-                for workflow in service.workflows.values() {
-                    match &workflow.trigger {
-                        Trigger::EthContractEvent { chain_name, .. } => {
-                            chains.insert(chain_name.clone());
-                        }
-                        Trigger::CosmosContractEvent { chain_name, .. } => {
-                            chains.insert(chain_name.clone());
-                        }
-                        Trigger::BlockInterval { chain_name, .. } => {
-                            chains.insert(chain_name.clone());
-                        }
-                        Trigger::Cron { .. } | Trigger::Manual => {}
-                    }
-
-                    match &workflow.submit {
-                        Submit::EthereumContract(EthereumContractSubmission {
-                            chain_name, ..
-                        }) => {
-                            chains.insert(chain_name.clone());
-                        }
-                        Submit::Aggregator { .. } => {}
-                        Submit::None => {}
-                    }
-                }
-            }
-            Command::UploadComponent { .. } => {}
-            Command::Exec { .. } => {}
-            Command::Service { .. } => {}
-        }
-
-        Self::new_chains(
-            command.args(),
-            chains.into_iter().collect(),
-            config,
-            Some(deployment),
-        )
-        .await
+        Self::new_deployment(command.args(), config, Some(deployment)).await
     }
 
-    pub async fn new_chains(
+    pub async fn new_deployment(
         args: CliArgs,
-        chains: Vec<ChainName>,
         config: Config,
         deployment: Option<Deployment>,
     ) -> Result<Self> {
@@ -104,98 +45,54 @@ impl CliContext {
             Some(deployment) => deployment,
         };
 
-        let mut clients = HashMap::new();
-
-        for chain_name in chains {
-            let chain = config
-                .chains
-                .get_chain(&chain_name)?
-                .context(format!("chain {chain_name} not found"))?;
-
-            match chain {
-                AnyChainConfig::Eth(eth_chain_config) => {
-                    clients.insert(
-                        chain_name,
-                        AnyClient::Eth(get_eth_client(&config, eth_chain_config).await?),
-                    );
-                }
-                AnyChainConfig::Cosmos(cosmos_chain_config) => {
-                    clients.insert(
-                        chain_name,
-                        AnyClient::Cosmos(get_cosmos_client(&config, cosmos_chain_config).await?),
-                    );
-                }
-            }
-        }
-
         Ok(Self {
             config,
             deployment: Mutex::new(deployment),
             save_deployment: args.save_deployment.unwrap_or(true),
             quiet_results: args.quiet_results.unwrap_or_default(),
             json,
-            _clients: clients,
         })
     }
 
-    pub fn get_eth_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
-        match self
-            ._clients
-            .get(chain_name)
-            .context(format!("chain {chain_name} not found"))?
-        {
-            AnyClient::Eth(client) => Ok(client.clone()),
-            _ => Err(anyhow::anyhow!("expected eth client")),
-        }
-    }
-
-    pub async fn new_eth_client(
-        &self,
-        chain_name: &ChainName,
-        index: u32,
-        fund: bool,
-    ) -> Result<EthSigningClient> {
+    pub async fn new_eth_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
         let chain_config = self
             .config
             .chains
-            .get_chain(chain_name)?
-            .context(format!("chain {chain_name} not found"))?;
+            .eth
+            .get(chain_name)
+            .context(format!("chain {chain_name} not found"))?
+            .clone();
 
-        let client_config = EthereumChainConfig::try_from(chain_config)?.to_client_config(
-            Some(index),
-            self.config.eth_mnemonic.clone(),
-            None,
-        );
+        let client_config =
+            chain_config.to_client_config(None, self.config.eth_mnemonic.clone(), None);
 
-        let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
-
-        if fund {
-            let funder = self.get_eth_client(chain_name)?;
-
-            let tx = TransactionRequest::default()
-                .with_from(funder.address())
-                .with_to(eth_client.address())
-                .with_value(parse_ether("1").unwrap());
-            funder
-                .provider
-                .send_transaction(tx)
-                .await?
-                .get_receipt()
-                .await?;
-        }
+        // for the CLI, let's not mess with nonce management
+        let eth_client = EthClientBuilder::new(client_config)
+            .build_signing(false)
+            .await?;
 
         Ok(eth_client)
     }
 
-    pub fn get_cosmos_client(&self, chain_name: &ChainName) -> Result<SigningClient> {
-        match self
-            ._clients
+    pub async fn new_cosmos_client(&self, chain_name: &ChainName) -> Result<SigningClient> {
+        let chain_config = self
+            .config
+            .chains
+            .cosmos
             .get(chain_name)
             .context(format!("chain {chain_name} not found"))?
-        {
-            AnyClient::Cosmos(client) => Ok(client.clone()),
-            _ => Err(anyhow::anyhow!("expected cosmos client")),
-        }
+            .clone();
+
+        let key_signer = KeySigner::new_mnemonic_str(
+            self.config
+                .cosmos_mnemonic
+                .as_ref()
+                .context("missing mnemonic")?,
+            None,
+        )?;
+
+        let climb_chain_config: ChainConfig = chain_config.into();
+        SigningClient::new(climb_chain_config, key_signer, None).await
     }
 
     pub async fn address_exists_on_chain(
@@ -205,19 +102,34 @@ impl CliContext {
     ) -> Result<bool> {
         Ok(
             match self
-                ._clients
-                .get(chain_name)
+                .config
+                .chains
+                .get_chain(chain_name)
+                .ok()
+                .flatten()
                 .context(format!("chain {chain_name} not found"))?
             {
-                AnyClient::Eth(client) => {
+                AnyChainConfig::Eth(_) => {
                     let address = address.try_into()?;
 
-                    match client.provider.get_code_at(address).await {
+                    match self
+                        .new_eth_client(chain_name)
+                        .await?
+                        .provider
+                        .get_code_at(address)
+                        .await
+                    {
                         Ok(addr) => **addr != alloy::primitives::Address::ZERO,
                         Err(_) => false,
                     }
                 }
-                AnyClient::Cosmos(client) => client.querier.contract_info(&address).await.is_ok(),
+                AnyChainConfig::Cosmos(_) => self
+                    .new_cosmos_client(chain_name)
+                    .await?
+                    .querier
+                    .contract_info(&address)
+                    .await
+                    .is_ok(),
             },
         )
     }

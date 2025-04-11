@@ -50,6 +50,8 @@ pub struct EthSigningClient {
     /// since the signer in `EthereumWallet` implements only `TxSigner`
     /// and there is not a direct way convert it into `Signer`
     pub signer: Arc<LocalSigner<SigningKey>>,
+    // if the client is configured with `use_fast_nonce_manager`, this will be set
+    pub nonce_manager: Option<FastNonceManager>,
 }
 
 impl std::fmt::Debug for EthSigningClient {
@@ -128,7 +130,7 @@ impl EthClientBuilder {
         })
     }
 
-    pub async fn build_signing(mut self) -> Result<EthSigningClient> {
+    pub async fn build_signing(mut self, use_fast_nonce_manager: bool) -> Result<EthSigningClient> {
         let mnemonic = self
             .config
             .mnemonic
@@ -155,27 +157,42 @@ impl EthClientBuilder {
 
         let endpoint = self.endpoint()?;
 
-        let query_provider = ProviderBuilder::new().on_builtin(&endpoint).await?;
-        let first_nonce = query_provider
-            .get_transaction_count(signer.address())
-            .await?;
+        let nonce_manager = if use_fast_nonce_manager {
+            let query_provider = ProviderBuilder::new().on_builtin(&endpoint).await?;
+            let first_nonce = query_provider
+                .get_transaction_count(signer.address())
+                .await?;
 
-        let provider = ProviderBuilder::default()
-            .with_nonce_management(FastNonceManager::new(signer.address(), first_nonce))
-            //these are the recommended fillers from Ethereum::recommended_fillers()
-            // but without the nonce filler, so we can replace it
-            .filler(GasFiller)
-            .filler(BlobGasFiller)
-            .filler(ChainIdFiller::new(None))
-            .wallet(wallet.clone())
-            .on_builtin(&endpoint)
-            .await?;
+            Some(FastNonceManager::new(Some(signer.address()), first_nonce))
+        } else {
+            None
+        };
+
+        let provider = match nonce_manager.clone() {
+            Some(nonce_manager) => DynProvider::new(
+                ProviderBuilder::default()
+                    .with_nonce_management(nonce_manager)
+                    .filler(GasFiller)
+                    .filler(BlobGasFiller)
+                    .filler(ChainIdFiller::new(None))
+                    .wallet(wallet.clone())
+                    .on_builtin(&endpoint)
+                    .await?,
+            ),
+            None => DynProvider::new(
+                ProviderBuilder::new()
+                    .wallet(wallet.clone())
+                    .on_builtin(&endpoint)
+                    .await?,
+            ),
+        };
 
         Ok(EthSigningClient {
             config: self.config,
-            provider: DynProvider::new(provider),
+            provider,
             wallet: Arc::new(wallet),
             signer: Arc::new(signer),
+            nonce_manager,
         })
     }
 }
@@ -191,14 +208,16 @@ impl EthClientBuilder {
 //
 // Since we control when we create the provider to begin with, we don't need to wait for the
 // first transaction to get the starting nonce. This prevents a race condition on creation
+//
 #[derive(Debug, Clone)]
-struct FastNonceManager {
-    address: Address,
+pub struct FastNonceManager {
+    // If set, will check the address against this
+    address: Option<Address>,
     counter: Arc<AtomicU64>,
 }
 
 impl FastNonceManager {
-    pub fn new(address: Address, first_nonce: u64) -> Self {
+    pub fn new(address: Option<Address>, first_nonce: u64) -> Self {
         Self {
             address,
             counter: Arc::new(AtomicU64::new(first_nonce)),
@@ -214,18 +233,18 @@ impl NonceManager for FastNonceManager {
         P: Provider<N>,
         N: Network,
     {
-        if address != self.address {
-            return Err(TransportErrorKind::custom_str(&format!(
-                "nonce manager address mismatch: expected {}, got {}",
-                self.address, address
-            )));
+        if let Some(check_address) = self.address {
+            if check_address != address {
+                return Err(TransportErrorKind::custom_str(&format!(
+                    "nonce manager address mismatch: expected {}, got {}",
+                    check_address, address
+                )));
+            }
         }
 
-        let nonce = self
+        Ok(self
             .counter
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        Ok(nonce)
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst))
     }
 }
 

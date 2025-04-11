@@ -52,7 +52,7 @@ async fn client_sign_message() {
     };
 
     let builder = EthClientBuilder::new(config);
-    let client = builder.build_signing().await.unwrap();
+    let client = builder.build_signing(true).await.unwrap();
 
     let message = b"hello world";
 
