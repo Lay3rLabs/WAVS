@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     e2e::components::ComponentName,
@@ -15,7 +18,8 @@ use super::{
     matrix::{AnyService, CosmosService, EthService},
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
-use alloy::{primitives::Address, sol_types::SolEvent};
+use alloy::{primitives::Address, providers::ext::AnvilApi, sol_types::SolEvent};
+use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
 use wavs_types::{
@@ -37,34 +41,82 @@ impl Services {
         clients: &Clients,
         component_sources: &ComponentSources,
     ) -> Self {
-        ctx.rt.block_on(async move {
-            let mut chain_names = ChainNames::default();
+        let mut chain_names = ChainNames::default();
 
-            for (chain_name, chain) in configs.chains.eth.iter() {
-                if chain.aggregator_endpoint.is_some() {
-                    chain_names.eth_aggregator.push(chain_name.clone());
-                } else {
-                    chain_names.eth.push(chain_name.clone());
-                }
+        for (chain_name, chain) in configs.chains.eth.iter() {
+            if chain.aggregator_endpoint.is_some() {
+                chain_names.eth_aggregator.push(chain_name.clone());
+            } else {
+                chain_names.eth.push(chain_name.clone());
             }
+        }
 
-            chain_names.cosmos = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
+        chain_names.cosmos = configs.chains.cosmos.keys().cloned().collect::<Vec<_>>();
 
-            tracing::info!("chain names: {:?}", chain_names);
+        tracing::info!("chain names: {:?}", chain_names);
 
-            let all_services = configs
-                .matrix
-                .eth
-                .iter()
-                .map(|s| (*s).into())
-                .chain(configs.matrix.cosmos.iter().map(|s| (*s).into()))
-                .chain(configs.matrix.cross_chain.iter().map(|s| (*s).into()))
-                .collect::<Vec<AnyService>>();
+        // the ethereum bytecode is all bundled in via sol macro
+        // but for cosmos, we need to read it in.
+        // lets keep the heavy io out of async tasks
+        // and predeploy the code_ids so they're ready
+        let cosmos_code_id = if configs.matrix.cosmos_regular_chain_enabled() {
+            let cosmos_bytecode = std::fs::read(
+                workspace_path()
+                    .join("examples")
+                    .join("build")
+                    .join("contracts")
+                    .join("simple_example.wasm"),
+            )
+            .unwrap();
 
-            let mut lookup = BTreeMap::default();
-            let mut cosmos_code_ids = BTreeMap::default();
+            let chain_name = chain_names.cosmos[0].clone();
+            let client = clients.get_cosmos_client(&chain_name);
 
-            for service_kind in all_services {
+            tracing::info!("Deploying new cosmos trigger contract");
+
+            tracing::info!(
+                "Uploading cosmos wasm byte code ({} bytes) to chain {}",
+                cosmos_bytecode.len(),
+                chain_name
+            );
+
+            let (code_id, _) = ctx.rt.block_on({
+                let cosmos_bytecode = cosmos_bytecode.clone();
+                async move {
+                    client
+                        .contract_upload_file(cosmos_bytecode, None)
+                        .await
+                        .unwrap()
+                }
+            });
+
+            tracing::info!("Uploaded wasm byte code to chain {}", chain_name,);
+
+            Some(code_id)
+        } else {
+            None
+        };
+
+        let all_services = configs
+            .matrix
+            .eth
+            .iter()
+            .map(|s| (*s).into())
+            .chain(configs.matrix.cosmos.iter().map(|s| (*s).into()))
+            .chain(configs.matrix.cross_chain.iter().map(|s| (*s).into()))
+            .collect::<Vec<AnyService>>();
+
+        let lookup = Arc::new(Mutex::new(BTreeMap::default()));
+
+        let mut serial_futures = Vec::new();
+        let mut concurrent_futures = FuturesUnordered::new();
+
+        for service_kind in all_services {
+            let lookup = lookup.clone();
+            let cosmos_code_id = cosmos_code_id.clone();
+            let chain_names = chain_names.clone();
+
+            let fut = async move {
                 let service = match service_kind {
                     AnyService::Eth(EthService::MultiWorkflow) => {
                         deploy_service_raw(service_kind, clients, component_sources, &chain_names)
@@ -77,11 +129,20 @@ impl Services {
                             clients,
                             component_sources,
                             &chain_names,
-                            &mut cosmos_code_ids,
+                            cosmos_code_id.clone(),
                         )
                         .await
                     }
                 };
+
+                clients
+                    .get_eth_client(service.manager.chain_name())
+                    .provider
+                    .evm_mine(None)
+                    .await
+                    .unwrap();
+
+                tracing::info!("[{:?}] Deployed service: {}", service_kind, service.id);
 
                 if service_kind == AnyService::Eth(EthService::MultiTrigger) {
                     // it's a bit ugly but it works, just clone the original service and replace:
@@ -112,7 +173,6 @@ impl Services {
                         &clients.cli_ctx,
                         clients
                             .get_eth_client(service.manager.chain_name())
-                            .await
                             .provider
                             .clone(),
                         DeployServiceRawArgs {
@@ -122,14 +182,44 @@ impl Services {
                     .await
                     .unwrap();
 
-                    lookup.insert(service_kind, (service, Some(additional_service)));
+                    tracing::info!(
+                        "[{:?}] Deployed service #2: {}",
+                        service_kind,
+                        additional_service.id
+                    );
+
+                    lookup
+                        .lock()
+                        .unwrap()
+                        .insert(service_kind, (service, Some(additional_service)));
                 } else {
-                    lookup.insert(service_kind, (service, None));
+                    lookup.lock().unwrap().insert(service_kind, (service, None));
                 }
+            };
+
+            if service_kind.concurrent() {
+                concurrent_futures.push(fut);
+            } else {
+                serial_futures.push(fut);
+            }
+        }
+
+        ctx.rt.block_on(async move {
+            tracing::info!("\n\n Deploying serial services...");
+            for fut in serial_futures {
+                fut.await;
             }
 
-            Self { lookup }
-        })
+            tracing::info!("\n\n Deploying concurrent services...");
+            while let Some(_) = concurrent_futures.next().await {}
+        });
+
+        let lookup = {
+            let lock = lookup.lock().unwrap();
+            lock.clone()
+        };
+
+        Self { lookup }
     }
 }
 
@@ -139,7 +229,7 @@ async fn deploy_service_simple(
     clients: &Clients,
     component_sources: &ComponentSources,
     chain_names: &ChainNames,
-    cosmos_code_ids: &mut BTreeMap<ChainName, u64>,
+    cosmos_code_id: Option<u64>,
 ) -> Service {
     let component_name = Vec::<ComponentName>::from(service_kind)[0];
     let component_source = component_sources
@@ -169,17 +259,15 @@ async fn deploy_service_simple(
             }
         }
         AnyService::Eth(EthService::CronInterval) => Trigger::Cron {
-            schedule: "*/15 * * * * *".to_string(),
+            schedule: "*/1 * * * * *".to_string(),
             start_time: None,
             end_time: None,
         },
         AnyService::Eth(_) => {
             let chain_name = trigger_chain.as_ref().unwrap().clone();
-            let client = clients
-                .get_eth_client(trigger_chain.as_ref().unwrap())
-                .await;
+            let client = clients.get_eth_client(trigger_chain.as_ref().unwrap());
 
-            tracing::info!("Deploying new eth trigger contract");
+            tracing::info!("[{:?}] Deploying new eth trigger contract", service_kind);
             let address = *SimpleTrigger::deploy(client.provider.clone())
                 .await
                 .unwrap()
@@ -207,35 +295,27 @@ async fn deploy_service_simple(
             }
         }
         AnyService::Cosmos(_) | AnyService::CrossChain(_) => {
+            let code_id = cosmos_code_id.unwrap();
+
+            tracing::info!(
+                "[{:?}] Deploying new cosmos trigger contract (code id: {})",
+                service_kind,
+                code_id
+            );
+
             let chain_name = trigger_chain.as_ref().unwrap().clone();
             let client = clients.get_cosmos_client(&chain_name);
-
-            let code_id = match cosmos_code_ids.get(&chain_name).cloned() {
-                Some(code_id) => code_id,
-                None => {
-                    let path_to_wasm = workspace_path()
-                        .join("examples")
-                        .join("build")
-                        .join("contracts")
-                        .join("simple_example.wasm");
-
-                    let wasm_byte_code = std::fs::read(path_to_wasm).unwrap();
-
-                    let (code_id, _) = client
-                        .contract_upload_file(wasm_byte_code, None)
-                        .await
-                        .unwrap();
-
-                    cosmos_code_ids.insert(chain_name.clone(), code_id);
-
-                    code_id
-                }
-            };
 
             let contract_address = SimpleCosmosTriggerClient::new_code_id(client, code_id)
                 .await
                 .unwrap()
                 .contract_address;
+
+            tracing::info!(
+                "[{:?}] Deployed new cosmos trigger contract (address: {})",
+                service_kind,
+                contract_address
+            );
 
             Trigger::CosmosContractEvent {
                 chain_name,
@@ -260,13 +340,19 @@ async fn deploy_service_simple(
 
     // Create the actual submit
     let submit = if let Some(chain) = &submit_chain {
-        let client = clients.get_eth_client(chain).await;
+        let client = clients.get_eth_client(chain);
 
-        tracing::info!("Deploying new eth submit contract");
+        tracing::info!("[{:?}] Deploying new eth submit contract", service_kind);
         let address = *SimpleSubmit::deploy(client.provider.clone(), service_manager_address)
             .await
             .unwrap()
             .address();
+
+        tracing::info!(
+            "[{:?}] Deployed new eth submit contract: {}",
+            service_kind,
+            address
+        );
 
         Submit::EthereumContract(EthereumContractSubmission {
             chain_name: chain.clone(),
@@ -318,13 +404,11 @@ async fn deploy_service_simple(
     );
 
     // Deploy using DeployServiceRaw instead of DeployService
+
+    let submit_client = clients.get_eth_client(service.manager.chain_name());
     DeployServiceRaw::run(
         &clients.cli_ctx,
-        clients
-            .get_eth_client(service.manager.chain_name())
-            .await
-            .provider
-            .clone(),
+        submit_client.provider.clone(),
         DeployServiceRawArgs {
             service: service.clone(),
         },
@@ -416,7 +500,6 @@ async fn deploy_service_raw(
         &clients.cli_ctx,
         clients
             .get_eth_client(service.manager.chain_name())
-            .await
             .provider
             .clone(),
         DeployServiceRawArgs {
@@ -431,7 +514,7 @@ async fn deploy_service_raw(
 
 async fn deploy_trigger(clients: &Clients, chain_names: &ChainNames) -> Trigger {
     let chain_name = chain_names.eth[0].clone();
-    let client = clients.get_eth_client(&chain_name).await;
+    let client = clients.get_eth_client(&chain_name);
     let event_hash = *crate::example_eth_client::example_trigger::NewTrigger::SIGNATURE_HASH;
 
     let address = SimpleEthTriggerClient::deploy(client.provider.clone())
@@ -450,7 +533,7 @@ async fn deploy_submit(
     chain_name: &ChainName,
     service_manager_address: Address,
 ) -> Submit {
-    let eth_client = clients.get_eth_client(chain_name).await;
+    let eth_client = clients.get_eth_client(chain_name);
 
     let address = *SimpleSubmit::deploy(eth_client.provider.clone(), service_manager_address)
         .await
@@ -465,7 +548,7 @@ async fn deploy_submit(
 }
 
 async fn deploy_service_manager(clients: &Clients, chain_name: &ChainName) -> Address {
-    let eth_client = clients.get_eth_client(chain_name).await;
+    let eth_client = clients.get_eth_client(chain_name);
 
     *SimpleServiceManager::deploy(eth_client.provider.clone())
         .await
@@ -473,7 +556,7 @@ async fn deploy_service_manager(clients: &Clients, chain_name: &ChainName) -> Ad
         .address()
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct ChainNames {
     eth: Vec<ChainName>,
     eth_aggregator: Vec<ChainName>,

@@ -1,11 +1,13 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use alloy::{
     primitives::{eip191_hash_message, keccak256},
+    providers::Provider,
     signers::k256::ecdsa::SigningKey,
     sol_types::SolValue,
 };
 use anyhow::{Context, Result};
+use futures::{stream::FuturesUnordered, StreamExt};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
@@ -23,21 +25,18 @@ use super::{
 };
 
 pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: Services) {
-    // nonce errors, gotta run sequentially :(
-    ctx.rt.block_on(async move {
-        let mut all: Vec<(AnyService, (Service, Option<Service>))> =
-            services.lookup.into_iter().collect();
-        all.sort_by(|(a, _), (b, _)| match (a, b) {
-            // Ethereum should come first, then cross-chain, then cosmos
-            // to ensure that we move ethereum blocks forward
-            (AnyService::Eth(_), _) => std::cmp::Ordering::Less,
-            (_, AnyService::Eth(_)) => std::cmp::Ordering::Greater,
-            (AnyService::CrossChain(_), _) => std::cmp::Ordering::Less,
-            (_, AnyService::CrossChain(_)) => std::cmp::Ordering::Greater,
-            _ => std::cmp::Ordering::Equal,
-        });
+    let all: Vec<(AnyService, (Service, Option<Service>))> = services.lookup.into_iter().collect();
 
-        for (name, (service, multi_trigger_service)) in all {
+    let configs = Arc::new(configs);
+    let clients = Arc::new(clients);
+
+    let mut serial_futures = Vec::new();
+    let mut concurrent_futures = FuturesUnordered::new();
+
+    for (name, (service, multi_trigger_service)) in all {
+        let configs = configs.clone();
+        let clients = clients.clone();
+        let fut = async move {
             tracing::info!("Testing service: {:?}", name);
             let start_time = Instant::now();
             test_service(name, service, multi_trigger_service, &configs, &clients).await;
@@ -46,7 +45,23 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
                 name,
                 start_time.elapsed().as_millis()
             );
+        };
+
+        if name.concurrent() {
+            concurrent_futures.push(fut);
+        } else {
+            serial_futures.push(fut);
         }
+    }
+
+    ctx.rt.block_on(async move {
+        tracing::info!("\n\n Running serial tests...");
+        for fut in serial_futures {
+            fut.await;
+        }
+
+        tracing::info!("\n\n Running concurrent tests...");
+        while let Some(_) = concurrent_futures.next().await {}
     });
 }
 
@@ -89,6 +104,9 @@ async fn test_service(
             Submit::None => 1,
         };
 
+        let submit_client = clients.get_eth_client(service.manager.chain_name());
+        let submit_start_block = submit_client.provider.get_block_number().await.unwrap();
+
         for task_number in 1..=n_tasks {
             let is_final = task_number == n_tasks;
 
@@ -97,11 +115,9 @@ async fn test_service(
                 service_id.clone(),
                 Some(workflow_id.to_string()),
                 get_input_for_service(name, &service, configs, workflow_index),
-                if is_final {
-                    Some(std::time::Duration::from_secs(300)) // FIXME: this shouldn't be necessary! ~10 seconds should be enough
-                } else {
-                    None
-                },
+                submit_client.clone(),
+                submit_start_block,
+                is_final,
             )
             .await
             .unwrap();
@@ -124,30 +140,25 @@ async fn test_service(
                         multi_trigger_service.workflows.values().next().unwrap();
 
                     // we already triggered - now we just wait for it to land at the expected address
-                    let (chain_name, address) = match &multi_trigger_workflow.submit {
+                    let address = match &multi_trigger_workflow.submit {
                         Submit::None => {
                             panic!("no submission in multi-trigger service");
                         }
                         Submit::EthereumContract(EthereumContractSubmission {
-                            chain_name,
-                            address,
-                            ..
-                        }) => (chain_name.clone(), *address),
-                        Submit::Aggregator { url: _ } => (
-                            multi_trigger_service.manager.chain_name().clone(),
-                            multi_trigger_service.manager.eth_address_unchecked(),
-                        ),
+                            address, ..
+                        }) => *address,
+                        Submit::Aggregator { .. } => {
+                            multi_trigger_service.manager.eth_address_unchecked()
+                        }
                     };
 
+                    // we control the tests and *only* use on-chain triggers
+                    // for multi-service tests
                     let signed_data = wait_for_task_to_land(
-                        clients,
-                        &chain_name,
+                        submit_client.clone(),
                         address, // this is a different address than the original service submission
                         trigger_id,
-                        std::time::Duration::from_secs(300), //FIXME: this shouldn't be necessary! ~10 seconds should be enough
-                        // we control the tests and *only* use on-chain triggers
-                        // for multi-service tests
-                        false,
+                        submit_start_block,
                     )
                     .await
                     .unwrap();

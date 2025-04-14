@@ -49,6 +49,19 @@ pub enum AnyService {
     CrossChain(CrossChainService),
 }
 
+impl AnyService {
+    pub fn concurrent(&self) -> bool {
+        // don't allow concurrency for cosmos
+        // everything else should be fine
+        match self {
+            AnyService::Cosmos(_)
+            | AnyService::CrossChain(_)
+            | AnyService::Eth(EthService::CosmosQuery) => false,
+            _ => true,
+        }
+    }
+}
+
 impl From<EthService> for AnyService {
     fn from(service: EthService) -> Self {
         AnyService::Eth(service)

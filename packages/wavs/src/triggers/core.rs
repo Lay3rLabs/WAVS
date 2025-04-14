@@ -422,14 +422,12 @@ impl CoreTriggerManager {
         if let Some(triggers) = triggers_by_block_interval_lock.get_mut(&chain_name) {
             // Since we don't remove the trigger data when the trigger config is removed,
             // for efficiency we want to do it here.
-            let mut trigger_index = 0;
-            while trigger_index < triggers.len() {
-                let (countdown, lookup_id) = &mut triggers[trigger_index];
-                // if the trigger config is missing, remove the data
-                if !trigger_configs_lock.contains_key(lookup_id) {
-                    triggers.remove(trigger_index);
-                    continue;
-                }
+
+            triggers.retain(|(_, lookup_id)| trigger_configs_lock.contains_key(lookup_id));
+
+            // now we can iterate again on the active triggers
+            for (countdown, lookup_id) in triggers.iter_mut() {
+                // decrement the countdown
                 *countdown -= 1;
 
                 if *countdown == 0 {
@@ -447,7 +445,6 @@ impl CoreTriggerManager {
                         }
                     }
                 }
-                trigger_index += 1;
             }
         }
 

@@ -49,7 +49,7 @@ impl Clients {
 
             let mut eth_clients = HashMap::new();
 
-            // Create a pool for each Ethereum chain
+            // Create a client for each Ethereum chain
             for (chain_name, chain_config) in &configs.chains.eth {
                 let client = EthClientBuilder::new(chain_config.to_client_config(
                     None,
@@ -80,12 +80,10 @@ impl Clients {
         })
     }
 
-    // returns a deadpool managed EthSigningClient
-    pub async fn get_eth_client(&self, chain_name: &ChainName) -> EthSigningClient {
+    pub fn get_eth_client(&self, chain_name: &ChainName) -> EthSigningClient {
         self.eth_clients.get(chain_name).cloned().unwrap()
     }
 
-    // for now, just returns a cosmos client with a simple cache
     pub fn get_cosmos_client(&self, chain_name: &ChainName) -> layer_climb::prelude::SigningClient {
         self.cosmos_clients.get(chain_name).cloned().unwrap()
     }

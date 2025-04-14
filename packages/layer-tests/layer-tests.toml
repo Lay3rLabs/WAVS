@@ -12,23 +12,24 @@ all = true
 
 # [matrix.eth]
 # echo-data = true
+# square = true
+# cron-interval = true
+# block-interval = true
 # chain-trigger-lookup = true
 # echo-data-secondary-chain = true
 # echo-data-aggregator = true
 # permissions = true
-# square = true
 # multi-workflow = true
 # multi-trigger= true
 # cosmos-query = true
-# block-interval = true
 
 # [matrix.cosmos]
+# block-interval = true
 # chain-trigger-lookup = true
 # cosmos-query = true
 # echo-data = true
 # permissions = true
 # square = true
-# block-interval = true
 
 
 # [matrix.crosschain]
