@@ -113,7 +113,6 @@ impl Services {
 
         for service_kind in all_services {
             let lookup = lookup.clone();
-            let cosmos_code_id = cosmos_code_id.clone();
             let chain_names = chain_names.clone();
 
             let fut = async move {
@@ -129,7 +128,7 @@ impl Services {
                             clients,
                             component_sources,
                             &chain_names,
-                            cosmos_code_id.clone(),
+                            cosmos_code_id,
                         )
                         .await
                     }
@@ -211,7 +210,7 @@ impl Services {
             }
 
             tracing::info!("\n\n Deploying concurrent services...");
-            while let Some(_) = concurrent_futures.next().await {}
+            while (concurrent_futures.next().await).is_some() {}
         });
 
         let lookup = {

@@ -61,7 +61,7 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
         }
 
         tracing::info!("\n\n Running concurrent tests...");
-        while let Some(_) = concurrent_futures.next().await {}
+        while (concurrent_futures.next().await).is_some() {}
     });
 }
 
