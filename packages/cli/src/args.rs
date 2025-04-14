@@ -6,6 +6,7 @@ use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
 };
+use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{ChainName, Digest, Service, ServiceID, WorkflowID};
 
 use crate::config::Config;
@@ -101,11 +102,25 @@ pub enum ServiceCommand {
 /// Commands for managing components
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum ComponentCommand {
-    /// Set the component for a workflow
-    Set {
-        /// Digest of an existing component
-        #[clap(short, long)]
+    /// Set a component using a digest
+    SetSourceDigest {
+        /// The digest of the component to set
+        #[clap(long)]
         digest: Digest,
+    },
+    /// Set a component using a registry package reference
+    SetSourceRegistry {
+        /// Optional domain for the registry (omit for default)
+        #[clap(long)]
+        domain: Option<String>,
+
+        /// The package reference (e.g., "namespace/name@version")
+        #[clap(long)]
+        package: PackageRef,
+
+        /// Optional version to use (omit for latest)
+        #[clap(long)]
+        version: Option<Version>,
     },
     /// Manage permissions of a workflow component
     Permissions {

@@ -1,6 +1,6 @@
 use alloy::primitives::LogData;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroU32;
 use wasm_pkg_common::package::{PackageRef, Version};
 
@@ -100,7 +100,7 @@ pub struct Component {
 
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
-    pub env_keys: Vec<String>,
+    pub env_keys: HashSet<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -338,7 +338,10 @@ pub struct WasmResponse {
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
-    use std::{collections::BTreeMap, num::NonZeroU32};
+    use std::{
+        collections::{BTreeMap, HashSet},
+        num::NonZeroU32,
+    };
 
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
@@ -364,7 +367,7 @@ mod test_ext {
                 fuel_limit: None,
                 time_limit_seconds: None,
                 config: BTreeMap::new(),
-                env_keys: vec![],
+                env_keys: HashSet::new(),
             }
         }
     }

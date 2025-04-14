@@ -12,11 +12,13 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use utils::wkg::WkgClient;
 use uuid::Uuid;
+use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
-    EthereumContractSubmission, Permissions, ServiceID, ServiceManager, ServiceStatus, Submit,
-    Trigger, WorkflowID,
+    EthereumContractSubmission, Permissions, Registry, ServiceID, ServiceManager, ServiceStatus,
+    Submit, Trigger, WorkflowID,
 };
 
 use crate::{
@@ -59,8 +61,24 @@ pub async fn handle_service_command(
                 display_result(ctx, result, &file, json)?;
             }
             WorkflowCommand::Component { id, command } => match command {
-                ComponentCommand::Set { digest } => {
-                    let result = add_component(&file, id, digest)?;
+                ComponentCommand::SetSourceDigest { digest } => {
+                    let result = set_component_source_digest(&file, id, digest)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                ComponentCommand::SetSourceRegistry {
+                    domain,
+                    package,
+                    version,
+                } => {
+                    let result = set_component_source_registry(
+                        ctx.config.registry_domain.clone(),
+                        &file,
+                        id,
+                        domain,
+                        package,
+                        version,
+                    )
+                    .await?;
                     display_result(ctx, result, &file, json)?;
                 }
                 ComponentCommand::Permissions {
@@ -199,18 +217,44 @@ impl std::fmt::Display for ServiceInitResult {
     }
 }
 
-/// Result of adding a component
+/// Result of setting a component's source to a digest
 #[derive(Debug, Clone)]
-pub struct ComponentAddResult {
+pub struct ComponentSourceDigestResult {
     /// The component digest
     pub digest: Digest,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
 
-impl std::fmt::Display for ComponentAddResult {
+impl std::fmt::Display for ComponentSourceDigestResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component added successfully!")?;
+        writeln!(f, "Component source set to digest successfully!")?;
+        writeln!(f, "  Digest:       {}", self.digest)?;
+        writeln!(f, "  Updated:      {}", self.file_path.display())
+    }
+}
+
+/// Result of setting a component's source to a registry
+#[derive(Debug, Clone)]
+pub struct ComponentSourceRegistryResult {
+    /// The domain
+    pub domain: String,
+    /// The package reference
+    pub package: PackageRef,
+    /// The component digest (retrieved from registry)
+    pub digest: Digest,
+    /// The version
+    pub version: Version,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for ComponentSourceRegistryResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Component source set to registry package successfully!")?;
+        writeln!(f, "  Domain:       {}", self.domain)?;
+        writeln!(f, "  Package:      {}", self.package)?;
+        writeln!(f, "  Version:      {}", self.version)?;
         writeln!(f, "  Digest:       {}", self.digest)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
     }
@@ -220,7 +264,7 @@ impl std::fmt::Display for ComponentAddResult {
 #[derive(Debug, Clone)]
 pub struct ComponentEnvKeysResult {
     /// The updated environment variable keys
-    pub env_keys: Vec<String>,
+    pub env_keys: HashSet<String>,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -609,12 +653,12 @@ pub fn init_service(
     })
 }
 
-/// Set the component on a workflow
-pub fn add_component(
+/// Set the component source to a digest
+pub fn set_component_source_digest(
     file_path: &Path,
     workflow_id: WorkflowID,
     digest: Digest,
-) -> Result<ComponentAddResult> {
+) -> Result<ComponentSourceDigestResult> {
     modify_service_file(file_path, |mut service| {
         // Create a new component entry
         let component = Component::new(ComponentSource::Digest(digest.clone()));
@@ -629,7 +673,61 @@ pub fn add_component(
 
         Ok((
             service,
-            ComponentAddResult {
+            ComponentSourceDigestResult {
+                digest,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Set the component source to a registry package
+pub async fn set_component_source_registry(
+    default_domain: Option<String>,
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    domain: Option<String>,
+    package: PackageRef,
+    version: Option<Version>,
+) -> Result<ComponentSourceRegistryResult> {
+    let resolved_domain = domain.clone().unwrap_or(default_domain.unwrap());
+
+    // Create a WkgClient using the registry domain
+    let wkg_client = WkgClient::new(resolved_domain.clone())?;
+
+    // Get the digest from the registry
+    let (digest, resolved_version) = wkg_client
+        .get_digest(domain.clone(), &package, version.as_ref())
+        .await?;
+
+    modify_service_file(file_path, |mut service| {
+        // Get the workflow
+        let workflow = service
+            .workflows
+            .get_mut(&workflow_id)
+            .context(format!("No workflow id {workflow_id}"))?;
+
+        // Create the Registry struct
+        let registry = Registry {
+            digest: digest.clone(),
+            domain: domain.clone(),
+            version,
+            package: package.clone(),
+        };
+
+        // Create the component source
+        let source = ComponentSource::Registry { registry };
+
+        // Set the component in the workflow
+        let component = Component::new(source);
+        workflow.component = ComponentJson::Component(component);
+
+        Ok((
+            service,
+            ComponentSourceRegistryResult {
+                domain: resolved_domain,
+                package,
+                version: resolved_version,
                 digest,
                 file_path: file_path.to_path_buf(),
             },
@@ -995,7 +1093,7 @@ pub fn update_component_env_keys(
 
         if let Some(values) = values {
             // Validate each environment variable to ensure it has the required prefix
-            let mut validated_env_keys = Vec::new();
+            let mut validated_env_keys = HashSet::new();
             for key in values {
                 let key = key.trim().to_string();
 
@@ -1011,7 +1109,7 @@ pub fn update_component_env_keys(
                     ));
                 }
 
-                validated_env_keys.push(key);
+                validated_env_keys.insert(key);
             }
 
             // Replace existing env keys with new values
@@ -1694,7 +1792,8 @@ mod tests {
 
         // Test adding first component using Digest source
         let add_result =
-            add_component(&file_path, workflow_id.clone(), test_digest.clone()).unwrap();
+            set_component_source_digest(&file_path, workflow_id.clone(), test_digest.clone())
+                .unwrap();
 
         // Verify add result
         assert_eq!(add_result.digest, test_digest);
@@ -1715,7 +1814,8 @@ mod tests {
         add_workflow(&file_path, Some(workflow_id_2.clone())).unwrap();
 
         let second_add_result =
-            add_component(&file_path, workflow_id_2.clone(), test_digest.clone()).unwrap();
+            set_component_source_digest(&file_path, workflow_id_2.clone(), test_digest.clone())
+                .unwrap();
 
         // Verify second add result
         assert_eq!(second_add_result.digest, test_digest);
@@ -1842,7 +1942,8 @@ mod tests {
         add_workflow(&file_path, Some(workflow_id_3.clone())).unwrap();
 
         let third_add_result =
-            add_component(&file_path, workflow_id_3.clone(), test_digest.clone()).unwrap();
+            set_component_source_digest(&file_path, workflow_id_3.clone(), test_digest.clone())
+                .unwrap();
 
         // Verify third add result
         assert_eq!(third_add_result.digest, test_digest);
@@ -1992,15 +2093,9 @@ mod tests {
 
         // Verify env result
         assert_eq!(env_result.env_keys.len(), 3);
-        assert!(env_result
-            .env_keys
-            .contains(&"WAVS_ENV_API_KEY".to_string()));
-        assert!(env_result
-            .env_keys
-            .contains(&"WAVS_ENV_SECRET_TOKEN".to_string()));
-        assert!(env_result
-            .env_keys
-            .contains(&"WAVS_ENV_DATABASE_URL".to_string()));
+        assert!(env_result.env_keys.contains("WAVS_ENV_API_KEY"));
+        assert!(env_result.env_keys.contains("WAVS_ENV_SECRET_TOKEN"));
+        assert!(env_result.env_keys.contains("WAVS_ENV_DATABASE_URL"));
 
         // Verify the service was updated with env keys
         let service_after_env: ServiceJson =
@@ -2014,15 +2109,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(component_with_env.env_keys.len(), 3);
+        assert!(component_with_env.env_keys.contains("WAVS_ENV_API_KEY"));
         assert!(component_with_env
             .env_keys
-            .contains(&"WAVS_ENV_API_KEY".to_string()));
+            .contains("WAVS_ENV_SECRET_TOKEN"));
         assert!(component_with_env
             .env_keys
-            .contains(&"WAVS_ENV_SECRET_TOKEN".to_string()));
-        assert!(component_with_env
-            .env_keys
-            .contains(&"WAVS_ENV_DATABASE_URL".to_string()));
+            .contains("WAVS_ENV_DATABASE_URL"));
 
         // Test validation of env keys
         let invalid_env_keys = vec!["WAVS_ENV_VALID".to_string(), "INVALID_PREFIX".to_string()];
@@ -2796,7 +2889,7 @@ mod tests {
         {
             let mut workflows = BTreeMap::new();
             let mut env_component = component.clone();
-            env_component.env_keys = vec!["INVALID_PREFIX_KEY".to_string()];
+            env_component.env_keys = ["INVALID_PREFIX_KEY".to_string()].into_iter().collect();
 
             workflows.insert(
                 workflow_id.clone(),
@@ -2831,51 +2924,6 @@ mod tests {
                     .iter()
                     .any(|error| error.contains("doesn't start with 'WAVS_ENV_'")),
                 "Validation should catch invalid environment variable prefix"
-            );
-        }
-
-        // Test duplicate environment variables
-        {
-            let mut workflows = BTreeMap::new();
-            let mut env_component = component.clone();
-            env_component.env_keys = vec![
-                format!("{}KEY1", ENV_PREFIX),
-                format!("{}KEY1", ENV_PREFIX), // Duplicate
-            ];
-
-            workflows.insert(
-                workflow_id.clone(),
-                WorkflowJson {
-                    trigger: TriggerJson::Trigger(trigger.clone()),
-                    component: ComponentJson::Component(env_component),
-                    submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
-                },
-            );
-
-            let duplicate_env_service = ServiceJson {
-                id: service_id.clone(),
-                name: "Test Service".to_string(),
-                workflows,
-                status: ServiceStatus::Active,
-                manager: manager.clone(),
-            };
-
-            let file_path = temp_dir.path().join("duplicate_env_vars.json");
-            let service_json = serde_json::to_string_pretty(&duplicate_env_service).unwrap();
-            std::fs::write(&file_path, service_json).unwrap();
-
-            let result = validate_service(&file_path, None).await.unwrap();
-            assert!(
-                !result.errors.is_empty(),
-                "Duplicate env vars service should have validation errors"
-            );
-            assert!(
-                result
-                    .errors
-                    .iter()
-                    .any(|error| error.contains("duplicate environment variable")),
-                "Validation should catch duplicate environment variables"
             );
         }
 
@@ -3173,6 +3221,87 @@ mod tests {
                     .any(|error| error.contains("has no submit, but it has an aggregator defined")),
                 "Validation should catch no submit but aggregator defined"
             );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_set_component_source_registry() {
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("component_registry_test.json");
+
+        // Initialize a service
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        init_service(
+            &file_path,
+            "Test Service".to_string(),
+            Some(service_id.clone()),
+        )
+        .unwrap();
+
+        // Add a workflow
+        let workflow_id = WorkflowID::new("workflow-123").unwrap();
+        add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
+
+        // Test setting a component source to a registry
+        let package = PackageRef::try_from("wavs-tests:square".to_string()).unwrap();
+
+        // Use wa.dev as the registry domain (WAVS default)
+        let registry_domain = "wa.dev".to_string();
+
+        // Call the function to set the component source
+        let result = set_component_source_registry(
+            Some(registry_domain.clone()),
+            &file_path,
+            workflow_id.clone(),
+            None, // Use default domain
+            package.clone(),
+            None, // Use latest version
+        )
+        .await;
+
+        // Verify the operation was successful
+        assert!(
+            result.is_ok(),
+            "Failed to set component source: {:?}",
+            result.err()
+        );
+
+        let result = result.unwrap();
+
+        // Basic validation of the result
+        assert_eq!(result.package, package);
+        assert_eq!(result.domain, registry_domain);
+        assert!(
+            !result.digest.to_string().is_empty(),
+            "Digest should not be empty"
+        );
+
+        // Verify the service was updated with the registry source
+        let service_json = std::fs::read_to_string(&file_path).unwrap();
+        let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+
+        let workflow = service.workflows.get(&workflow_id).unwrap();
+
+        if let ComponentJson::Component(component) = &workflow.component {
+            if let ComponentSource::Registry { registry } = &component.source {
+                assert_eq!(registry.package, package);
+                assert!(
+                    !registry.digest.to_string().is_empty(),
+                    "Digest in registry should not be empty"
+                );
+                assert_eq!(
+                    registry.digest, result.digest,
+                    "Digest in service file should match result digest"
+                );
+                // We used defaults here
+                assert!(registry.version.is_none());
+                assert!(registry.domain.is_none());
+            } else {
+                panic!("Expected Registry component source");
+            }
+        } else {
+            panic!("Expected Component");
         }
     }
 }
