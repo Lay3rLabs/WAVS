@@ -70,9 +70,15 @@ pub async fn handle_service_command(
                     package,
                     version,
                 } => {
-                    let result =
-                        set_component_source_registry(ctx, &file, id, domain, package, version)
-                            .await?;
+                    let result = set_component_source_registry(
+                        ctx.config.registry_domain.clone(),
+                        &file,
+                        id,
+                        domain,
+                        package,
+                        version,
+                    )
+                    .await?;
                     display_result(ctx, result, &file, json)?;
                 }
                 ComponentCommand::Permissions {
@@ -677,16 +683,14 @@ pub fn set_component_source_digest(
 
 /// Set the component source to a registry package
 pub async fn set_component_source_registry(
-    ctx: &CliContext,
+    default_domain: Option<String>,
     file_path: &Path,
     workflow_id: WorkflowID,
     domain: Option<String>,
     package: PackageRef,
     version: Option<Version>,
 ) -> Result<ComponentSourceRegistryResult> {
-    let resolved_domain = domain
-        .clone()
-        .unwrap_or(ctx.config.registry_domain.clone().unwrap());
+    let resolved_domain = domain.clone().unwrap_or(default_domain.unwrap());
 
     // Create a WkgClient using the registry domain
     let wkg_client = WkgClient::new(resolved_domain.clone())?;
@@ -3270,6 +3274,87 @@ mod tests {
                     .any(|error| error.contains("has no submit, but it has an aggregator defined")),
                 "Validation should catch no submit but aggregator defined"
             );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_set_component_source_registry() {
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("component_registry_test.json");
+
+        // Initialize a service
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        init_service(
+            &file_path,
+            "Test Service".to_string(),
+            Some(service_id.clone()),
+        )
+        .unwrap();
+
+        // Add a workflow
+        let workflow_id = WorkflowID::new("workflow-123").unwrap();
+        add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
+
+        // Test setting a component source to a registry
+        let package = PackageRef::try_from("wavs-tests:square".to_string()).unwrap();
+
+        // Use wa.dev as the registry domain (WAVS default)
+        let registry_domain = "wa.dev".to_string();
+
+        // Call the function to set the component source
+        let result = set_component_source_registry(
+            Some(registry_domain.clone()),
+            &file_path,
+            workflow_id.clone(),
+            None, // Use default domain
+            package.clone(),
+            None, // Use latest version
+        )
+        .await;
+
+        // Verify the operation was successful
+        assert!(
+            result.is_ok(),
+            "Failed to set component source: {:?}",
+            result.err()
+        );
+
+        let result = result.unwrap();
+
+        // Basic validation of the result
+        assert_eq!(result.package, package);
+        assert_eq!(result.domain, registry_domain);
+        assert!(
+            !result.digest.to_string().is_empty(),
+            "Digest should not be empty"
+        );
+
+        // Verify the service was updated with the registry source
+        let service_json = std::fs::read_to_string(&file_path).unwrap();
+        let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+
+        let workflow = service.workflows.get(&workflow_id).unwrap();
+
+        if let ComponentJson::Component(component) = &workflow.component {
+            if let ComponentSource::Registry { registry } = &component.source {
+                assert_eq!(registry.package, package);
+                assert!(
+                    !registry.digest.to_string().is_empty(),
+                    "Digest in registry should not be empty"
+                );
+                assert_eq!(
+                    registry.digest, result.digest,
+                    "Digest in service file should match result digest"
+                );
+                // We used defaults here
+                assert!(registry.version.is_none());
+                assert!(registry.domain.is_none());
+            } else {
+                panic!("Expected Registry component source");
+            }
+        } else {
+            panic!("Expected Component");
         }
     }
 }
