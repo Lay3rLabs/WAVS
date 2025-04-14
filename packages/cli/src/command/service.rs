@@ -264,7 +264,7 @@ impl std::fmt::Display for ComponentSourceRegistryResult {
 #[derive(Debug, Clone)]
 pub struct ComponentEnvKeysResult {
     /// The updated environment variable keys
-    pub env_keys: Vec<String>,
+    pub env_keys: HashSet<String>,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -1093,7 +1093,7 @@ pub fn update_component_env_keys(
 
         if let Some(values) = values {
             // Validate each environment variable to ensure it has the required prefix
-            let mut validated_env_keys = Vec::new();
+            let mut validated_env_keys = HashSet::new();
             for key in values {
                 let key = key.trim().to_string();
 
@@ -1109,7 +1109,7 @@ pub fn update_component_env_keys(
                     ));
                 }
 
-                validated_env_keys.push(key);
+                validated_env_keys.insert(key);
             }
 
             // Replace existing env keys with new values
@@ -2093,15 +2093,9 @@ mod tests {
 
         // Verify env result
         assert_eq!(env_result.env_keys.len(), 3);
-        assert!(env_result
-            .env_keys
-            .contains(&"WAVS_ENV_API_KEY".to_string()));
-        assert!(env_result
-            .env_keys
-            .contains(&"WAVS_ENV_SECRET_TOKEN".to_string()));
-        assert!(env_result
-            .env_keys
-            .contains(&"WAVS_ENV_DATABASE_URL".to_string()));
+        assert!(env_result.env_keys.contains("WAVS_ENV_API_KEY"));
+        assert!(env_result.env_keys.contains("WAVS_ENV_SECRET_TOKEN"));
+        assert!(env_result.env_keys.contains("WAVS_ENV_DATABASE_URL"));
 
         // Verify the service was updated with env keys
         let service_after_env: ServiceJson =
@@ -2115,15 +2109,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(component_with_env.env_keys.len(), 3);
+        assert!(component_with_env.env_keys.contains("WAVS_ENV_API_KEY"));
         assert!(component_with_env
             .env_keys
-            .contains(&"WAVS_ENV_API_KEY".to_string()));
+            .contains("WAVS_ENV_SECRET_TOKEN"));
         assert!(component_with_env
             .env_keys
-            .contains(&"WAVS_ENV_SECRET_TOKEN".to_string()));
-        assert!(component_with_env
-            .env_keys
-            .contains(&"WAVS_ENV_DATABASE_URL".to_string()));
+            .contains("WAVS_ENV_DATABASE_URL"));
 
         // Test validation of env keys
         let invalid_env_keys = vec!["WAVS_ENV_VALID".to_string(), "INVALID_PREFIX".to_string()];
@@ -2897,7 +2889,7 @@ mod tests {
         {
             let mut workflows = BTreeMap::new();
             let mut env_component = component.clone();
-            env_component.env_keys = vec!["INVALID_PREFIX_KEY".to_string()];
+            env_component.env_keys = ["INVALID_PREFIX_KEY".to_string()].into_iter().collect();
 
             workflows.insert(
                 workflow_id.clone(),
@@ -2932,51 +2924,6 @@ mod tests {
                     .iter()
                     .any(|error| error.contains("doesn't start with 'WAVS_ENV_'")),
                 "Validation should catch invalid environment variable prefix"
-            );
-        }
-
-        // Test duplicate environment variables
-        {
-            let mut workflows = BTreeMap::new();
-            let mut env_component = component.clone();
-            env_component.env_keys = vec![
-                format!("{}KEY1", ENV_PREFIX),
-                format!("{}KEY1", ENV_PREFIX), // Duplicate
-            ];
-
-            workflows.insert(
-                workflow_id.clone(),
-                WorkflowJson {
-                    trigger: TriggerJson::Trigger(trigger.clone()),
-                    component: ComponentJson::Component(env_component),
-                    submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
-                },
-            );
-
-            let duplicate_env_service = ServiceJson {
-                id: service_id.clone(),
-                name: "Test Service".to_string(),
-                workflows,
-                status: ServiceStatus::Active,
-                manager: manager.clone(),
-            };
-
-            let file_path = temp_dir.path().join("duplicate_env_vars.json");
-            let service_json = serde_json::to_string_pretty(&duplicate_env_service).unwrap();
-            std::fs::write(&file_path, service_json).unwrap();
-
-            let result = validate_service(&file_path, None).await.unwrap();
-            assert!(
-                !result.errors.is_empty(),
-                "Duplicate env vars service should have validation errors"
-            );
-            assert!(
-                result
-                    .errors
-                    .iter()
-                    .any(|error| error.contains("duplicate environment variable")),
-                "Validation should catch duplicate environment variables"
             );
         }
 

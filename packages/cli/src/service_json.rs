@@ -58,17 +58,6 @@ impl ServiceJson {
             ));
                     }
                 }
-
-                // Check for duplicate env_keys
-                let mut env_keys_set = std::collections::HashSet::new();
-                for key in &component.env_keys {
-                    if !env_keys_set.insert(key) {
-                        errors.push(format!(
-                            "Workflow '{}' has duplicate environment variable: {}",
-                            workflow_id, key
-                        ));
-                    }
-                }
             }
 
             // Check if trigger is unset
