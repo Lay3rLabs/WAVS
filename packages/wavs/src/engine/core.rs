@@ -365,7 +365,7 @@ mod tests {
             aggregator: None,
         };
 
-        workflow.component.env_keys = vec!["WAVS_ENV_TEST".to_string()];
+        workflow.component.env_keys = ["WAVS_ENV_TEST".to_string()].into_iter().collect();
         workflow.component.config = [("foo".to_string(), "bar".to_string())].into();
 
         // verify service config kv is accessible
