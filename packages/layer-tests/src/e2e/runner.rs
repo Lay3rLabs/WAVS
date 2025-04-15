@@ -1,11 +1,9 @@
 use std::{path::PathBuf, sync::Arc};
 
-use alloy::{
-    primitives::{eip191_hash_message, keccak256},
-    providers::Provider,
-    signers::k256::ecdsa::SigningKey,
-    sol_types::SolValue,
-};
+use alloy_primitives::{eip191_hash_message, keccak256};
+use alloy_provider::Provider;
+use alloy_signers::k256::ecdsa::SigningKey;
+use alloy_sol_types::SolValue;
 use anyhow::{Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
 use layer_climb::prelude::Address;
@@ -330,10 +328,9 @@ async fn verify_signed_data(
     match signing_key {
         SigningKeyResponse::Secp256k1(bytes) => {
             let private_key = SigningKey::from_slice(&bytes)?;
-            let service_address = alloy::primitives::Address::from_private_key(&private_key);
+            let service_address = alloy_primitives::Address::from_private_key(&private_key);
 
-            let signature =
-                alloy::primitives::PrimitiveSignature::from_raw(&signed_data.signature)?;
+            let signature = alloy_primitives::PrimitiveSignature::from_raw(&signed_data.signature)?;
 
             let envelope_bytes = signed_data.envelope.abi_encode();
             let envelope_hash = eip191_hash_message(keccak256(&envelope_bytes));

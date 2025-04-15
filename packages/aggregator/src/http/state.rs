@@ -32,7 +32,7 @@ pub enum PacketQueue {
 pub struct QueuedPacket {
     pub packet: Packet,
     // so we don't need to recalculate it every time
-    pub signer: alloy::primitives::Address,
+    pub signer: alloy_primitives::Address,
 }
 
 #[derive(Clone)]

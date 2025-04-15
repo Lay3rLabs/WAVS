@@ -1,4 +1,6 @@
-use alloy::{primitives::Address, rpc::types::TransactionReceipt, signers::Signer};
+use alloy_primitives::Address;
+use alloy_rpc_types_eth::TransactionReceipt;
+use alloy_signer::Signer;
 use wavs_types::{Envelope, EnvelopeExt, EnvelopeSignature, SignatureData};
 
 use crate::error::EthClientError;
@@ -89,14 +91,9 @@ impl EthSigningClient {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy::{
-        primitives::FixedBytes,
-        signers::{
-            k256::ecdsa::SigningKey,
-            local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
-            SignerSync,
-        },
-    };
+    use alloy_primitives::FixedBytes;
+    use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
+    use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
     use wavs_types::Envelope;
 
     #[test]

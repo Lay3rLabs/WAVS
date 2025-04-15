@@ -83,7 +83,7 @@ impl ServiceJson {
                             event_hash,
                         } => {
                             // Validate Ethereum address format
-                            if let Err(err) = alloy::primitives::Address::parse_checksummed(
+                            if let Err(err) = alloy_primitives::Address::parse_checksummed(
                                 address.to_string(),
                                 None,
                             ) {
@@ -138,7 +138,7 @@ impl ServiceJson {
                             chain_name: _,
                         }) => {
                             // Validate Ethereum address format
-                            if let Err(err) = alloy::primitives::Address::parse_checksummed(
+                            if let Err(err) = alloy_primitives::Address::parse_checksummed(
                                 address.to_string(),
                                 None,
                             ) {

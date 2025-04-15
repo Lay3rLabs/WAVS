@@ -1,7 +1,7 @@
 use std::{fmt::Display, sync::Mutex};
 
 use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
-use alloy::providers::Provider;
+use alloy_provider::Provider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
@@ -116,7 +116,7 @@ impl CliContext {
                         .get_code_at(address)
                         .await
                     {
-                        Ok(addr) => **addr != alloy::primitives::Address::ZERO,
+                        Ok(addr) => **addr != alloy_primitives::Address::ZERO,
                         Err(_) => false,
                     }
                 }

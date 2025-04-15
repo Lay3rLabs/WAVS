@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use alloy::providers::{ext::AnvilApi, Provider};
+use alloy_providers::{ext::AnvilApi, Provider};
 use anyhow::{bail, Context, Result};
 use utils::eth_client::EthSigningClient;
 use wavs_types::{Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
@@ -142,7 +142,7 @@ pub struct SignedData {
 
 pub async fn wait_for_task_to_land(
     eth_submit_client: EthSigningClient,
-    address: alloy::primitives::Address,
+    address: alloy_primitives::Address,
     trigger_id: TriggerId,
     submit_start_block: u64,
 ) -> Result<SignedData> {

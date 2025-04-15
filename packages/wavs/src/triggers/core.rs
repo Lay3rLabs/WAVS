@@ -3,10 +3,8 @@ use crate::{
     config::Config,
     AppContext,
 };
-use alloy::{
-    providers::Provider,
-    rpc::types::{Filter, Log},
-};
+use alloy_provider::Provider;
+use alloy_rpc_types_eth::{Filter, Log};
 use anyhow::{Context, Result};
 use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
@@ -42,7 +40,7 @@ struct LookupMaps {
         Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
     /// lookup id by (chain id, contract event address, event hash)
     pub triggers_by_eth_contract_event: Arc<
-        RwLock<HashMap<(ChainName, alloy::primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
+        RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
     /// lookup by chain_name -> n_blocks
     pub triggers_by_block_interval: Arc<RwLock<HashMap<ChainName, Vec<(u32, LookupId)>>>>,
@@ -663,7 +661,7 @@ impl TriggerManager for CoreTriggerManager {
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
     triggers_by_eth_contract_address: &mut HashMap<
-        (ChainName, alloy::primitives::Address, ByteArray<32>),
+        (ChainName, alloy_primitives::Address, ByteArray<32>),
         HashSet<LookupId>,
     >,
     triggers_by_cosmos_contract_address: &mut HashMap<

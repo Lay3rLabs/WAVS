@@ -1,9 +1,7 @@
 pub use crate::solidity_types::Envelope;
 use crate::{ServiceID, TriggerAction, TriggerConfig, WorkflowID};
-use alloy::{
-    primitives::{eip191_hash_message, keccak256, FixedBytes},
-    sol_types::SolValue,
-};
+use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes};
+use alloy_sol_types::SolValue;
 use ripemd::Ripemd160;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -31,14 +29,14 @@ impl EnvelopeExt for Envelope {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum EnvelopeSignature {
-    Secp256k1(alloy::primitives::PrimitiveSignature),
+    Secp256k1(alloy_primitives::Signature),
 }
 
 impl EnvelopeSignature {
     pub fn eth_signer_address(
         &self,
         envelope: &Envelope,
-    ) -> anyhow::Result<alloy::primitives::Address> {
+    ) -> anyhow::Result<alloy_primitives::Address> {
         match self {
             EnvelopeSignature::Secp256k1(sig) => sig
                 .recover_address_from_prehash(&envelope.eip191_hash())

@@ -50,26 +50,21 @@ walkdir = "2.5.0"
 wildmatch = "2.4.0"
 
 # Ethereum-specific dependencies
-# TODO - just use the individual crates everywhere, delete alloy, keep it consistent
-alloy = { version = "0.11.0", features = [
-  "full",
-  "signer-mnemonic",
-  "node-bindings",
-] }
-alloy-json-abi = "0.8.21"
-alloy-json-rpc = "0.11.0"
-alloy-primitives = { version = "0.8.20", features = ["serde"] }
-alloy-provider = "0.11.0"
-alloy-rpc-client = "0.11.0"
-alloy-sol-types = "0.8.20"
-alloy-sol-macro = "0.8.25"
-alloy-transport = "0.11.0"
-alloy-transport-http = "0.11.0"
-alloy-contract = "0.12.6"
-alloy-signer = "0.11.0"
-alloy-signer-local = { version = "0.11.0", features = ["mnemonic"] }
-alloy-network = "0.11.0"
-alloy-rpc-types-eth = "0.12.6"
+alloy-node-bindings = "0.14.0"
+alloy-json-abi = "1.0.0"
+alloy-json-rpc = "0.14.0"
+alloy-primitives = { version = "1.0.0", features = ["serde"] }
+alloy-provider = "0.14.0"
+alloy-rpc-client = "0.14.0"
+alloy-sol-types = "1.0.0"
+alloy-sol-macro = "1.0.0"
+alloy-transport = "0.14.0"
+alloy-transport-http = "0.14.0"
+alloy-contract = "0.14.0"
+alloy-signer = "0.14.0"
+alloy-signer-local = { version = "0.14.0", features = ["mnemonic"] }
+alloy-network = "0.14.0"
+alloy-rpc-types-eth = "0.14.0"
 layer-climb = "0.3.7"
 layer-climb-address = "0.3.7"
 layer-climb-cli = "0.3.7"
@@ -100,7 +95,7 @@ wit-bindgen-rt = { version = "0.39.0", features = ["bitflags", "async"] }
 criterion = "0.5.1"
 
 # serialization
-bincode = {version = "2.0.1", features = ["serde"]}
+bincode = { version = "2.0.1", features = ["serde"] }
 serde = { version = "1.0.211", features = ["derive"] }
 serde_json = "1.0.127"
 figment = { version = "0.10.19", features = ["toml", "env"] }

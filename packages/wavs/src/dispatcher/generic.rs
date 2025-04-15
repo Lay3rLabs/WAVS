@@ -1,4 +1,4 @@
-use alloy::providers::ProviderBuilder;
+use alloy_provider::ProviderBuilder;
 use anyhow::Result;
 use async_trait::async_trait;
 use layer_climb::prelude::Address;
@@ -345,7 +345,7 @@ async fn query_service_from_address(
 
             let contract = IWavsServiceManagerInstance::new(address.try_into()?, provider);
 
-            let service_uri = contract.getServiceURI().call().await?._0;
+            let service_uri = contract.getServiceURI().call().await?;
 
             // Fetch the service JSON from the URI
             let response = reqwest::get(&service_uri).await?;
@@ -421,7 +421,7 @@ pub enum DispatcherError {
     RegistryCachePath(#[from] anyhow::Error),
 
     #[error("Alloy contract error: {0}")]
-    AlloyContract(#[from] alloy::contract::Error),
+    AlloyContract(#[from] alloy_contract::Error),
 
     #[error("Reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),

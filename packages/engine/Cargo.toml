@@ -18,5 +18,5 @@ wasmtime-wasi-http = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 layer-climb = { workspace = true }
-alloy = { workspace = true }
+alloy-primitives = { workspace = true }
 tokio = { workspace = true }

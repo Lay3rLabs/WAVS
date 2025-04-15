@@ -1,7 +1,5 @@
 mod service_manager {
-    use alloy::sol;
-
-    sol!(
+    alloy_sol_macro::sol!(
         #[allow(missing_docs)]
         #[cfg(feature = "solidity-rpc")]
         #[sol(rpc)]
@@ -11,9 +9,7 @@ mod service_manager {
 }
 
 mod service_handler {
-    use alloy::sol;
-
-    sol!(
+    alloy_sol_macro::sol!(
         #[allow(missing_docs)]
         #[cfg(feature = "solidity-rpc")]
         #[sol(rpc)]
@@ -30,19 +26,19 @@ pub use service_manager::IWavsServiceManager;
 
 #[cfg(feature = "solidity-rpc")]
 mod rpc {
-    use alloy::providers::DynProvider;
+    use alloy_provider::DynProvider;
 
     pub type IWavsServiceHandlerSigningT =
-        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), DynProvider>;
+        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<DynProvider>;
 
     pub type IWavsServiceHandlerQueryT =
-        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<(), DynProvider>;
+        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<DynProvider>;
 
     pub type IWavsServiceManagerSigningT =
-        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), DynProvider>;
+        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<DynProvider>;
 
     pub type IWavsServiceManagerQueryT =
-        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<(), DynProvider>;
+        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<DynProvider>;
 }
 
 #[cfg(feature = "solidity-rpc")]

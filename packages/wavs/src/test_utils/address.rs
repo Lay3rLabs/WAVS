@@ -1,10 +1,10 @@
-use alloy::signers::local::{coins_bip39::English, MnemonicBuilder};
+use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use bip39::Mnemonic;
 use layer_climb::prelude::*;
 use rand::prelude::*;
 use wavs_types::ByteArray;
 
-pub fn rand_address_eth() -> alloy::primitives::Address {
+pub fn rand_address_eth() -> alloy_primitives::Address {
     let mut rng = rand::rng();
 
     let entropy: [u8; 32] = rng.random();

@@ -1,6 +1,8 @@
 use std::ops::Deref;
 
-use alloy::{primitives::Address, providers::DynProvider, sol_types::SolValue};
+use alloy_primitives::Address;
+use alloy_provider::DynProvider;
+use alloy_sol_types::SolValue;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use utils::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
+use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use utils::{

@@ -1,4 +1,5 @@
-use alloy::{primitives::Address, sol_types::SolValue};
+use alloy_primitives::Address;
+use alloy_sol_types::SolValue;
 use anyhow::Result;
 use utils::eth_client::EthSigningClient;
 use wavs_types::Envelope;

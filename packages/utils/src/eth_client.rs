@@ -1,20 +1,15 @@
 pub mod contracts;
 pub mod signing;
 
-use alloy::{
-    hex,
-    network::{EthereumWallet, Network},
-    primitives::Address,
-    providers::{
-        fillers::{BlobGasFiller, ChainIdFiller, GasFiller, NonceManager},
-        DynProvider, Provider, ProviderBuilder,
-    },
-    signers::{
-        k256::{ecdsa::SigningKey, SecretKey},
-        local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
-    },
-    transports::{TransportErrorKind, TransportResult},
+use alloy_network::{EthereumWallet, Network};
+use alloy_primitives::{hex, Address};
+use alloy_provider::{
+    fillers::{BlobGasFiller, ChainIdFiller, GasFiller, NonceManager},
+    DynProvider, Provider, ProviderBuilder,
 };
+use alloy_signer::k256::{ecdsa::SigningKey, SecretKey};
+use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
+use alloy_transport::{TransportErrorKind, TransportResult};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -130,7 +125,7 @@ impl EthClientBuilder {
 
         Ok(EthQueryClient {
             config: self.config,
-            provider: DynProvider::new(ProviderBuilder::new().on_builtin(&endpoint).await?),
+            provider: DynProvider::new(ProviderBuilder::new().connect(&endpoint).await?),
         })
     }
 
@@ -161,7 +156,7 @@ impl EthClientBuilder {
 
         let endpoint = self.endpoint()?;
 
-        let query_provider = ProviderBuilder::new().on_builtin(&endpoint).await?;
+        let query_provider = ProviderBuilder::new().connect(&endpoint).await?;
         let first_nonce = query_provider
             .get_transaction_count(signer.address())
             .await?;
@@ -175,7 +170,7 @@ impl EthClientBuilder {
                 .filler(BlobGasFiller)
                 .filler(ChainIdFiller::new(None))
                 .wallet(wallet.clone())
-                .on_builtin(&endpoint)
+                .connect(&endpoint)
                 .await?,
         );
 

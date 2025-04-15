@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     AppContext,
 };
-use alloy::providers::Provider;
+use alloy_provider::Provider;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use tokio::sync::mpsc;

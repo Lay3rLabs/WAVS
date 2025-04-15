@@ -18,7 +18,9 @@ use super::{
     matrix::{AnyService, CosmosService, EthService},
 };
 use crate::example_eth_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
-use alloy::{primitives::Address, providers::ext::AnvilApi, sol_types::SolEvent};
+use alloy_primitives::Address;
+use alloy_provider::ext::AnvilApi;
+use alloy_sol_types::SolEvent;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
 use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
