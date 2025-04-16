@@ -1,9 +1,9 @@
-use alloy_providers::DynProvider;
+use alloy_provider::DynProvider;
 use example_submit::SimpleSubmit::SimpleSubmitInstance;
 use example_trigger::SimpleTrigger::SimpleTriggerInstance;
 
 pub mod example_trigger {
-    use alloy_sol;
+    use alloy_sol_types::sol;
     pub use SimpleTrigger::NewTrigger;
 
     sol!(
@@ -15,7 +15,7 @@ pub mod example_trigger {
 }
 
 pub mod example_submit {
-    use alloy_sol;
+    use alloy_sol_types::sol;
     pub use interface::ISimpleSubmit::DataWithId;
 
     sol!(
@@ -26,7 +26,7 @@ pub mod example_submit {
     );
 
     mod interface {
-        use alloy_sol;
+        use alloy_sol_types::sol;
 
         sol!(
             #[allow(missing_docs)]
@@ -38,7 +38,7 @@ pub mod example_submit {
 }
 
 pub mod example_service_manager {
-    use alloy_sol;
+    use alloy_sol_types::sol;
 
     sol!(
         #[allow(missing_docs)]
@@ -48,6 +48,6 @@ pub mod example_service_manager {
     );
 }
 
-pub type SimpleTriggerT = SimpleTriggerInstance<(), DynProvider>;
-pub type SimpleSubmitT = SimpleSubmitInstance<(), DynProvider>;
-pub type SimpleServiceManagerT = SimpleSubmitInstance<(), DynProvider>;
+pub type SimpleTriggerT = SimpleTriggerInstance<DynProvider>;
+pub type SimpleSubmitT = SimpleSubmitInstance<DynProvider>;
+pub type SimpleServiceManagerT = SimpleSubmitInstance<DynProvider>;

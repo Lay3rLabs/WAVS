@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use alloy_providers::{ext::AnvilApi, Provider};
+use alloy_provider::{ext::AnvilApi, Provider};
 use anyhow::{bail, Context, Result};
 use utils::eth_client::EthSigningClient;
 use wavs_types::{Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};

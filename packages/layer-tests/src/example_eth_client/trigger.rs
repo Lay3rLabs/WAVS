@@ -66,7 +66,7 @@ impl SimpleEthTriggerClient {
             .solidity_event()
             .context("Not found new task creation event")?;
 
-        let trigger_info = TriggerInfo::abi_decode(&event._0, false)?;
+        let trigger_info = TriggerInfo::abi_decode(&event._0)?;
 
         Ok(TriggerId::new(trigger_info.triggerId))
     }
@@ -79,7 +79,6 @@ impl SimpleEthTriggerClient {
             .call()
             .await
             .context("Failed to get trigger")?
-            ._0
             .data
             .to_vec())
     }

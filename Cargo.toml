@@ -54,7 +54,7 @@ alloy-node-bindings = "0.14.0"
 alloy-json-abi = "1.0.0"
 alloy-json-rpc = "0.14.0"
 alloy-primitives = { version = "1.0.0", features = ["serde"] }
-alloy-provider = "0.14.0"
+alloy-provider = {version = "0.14.0", features = ["anvil-node"] }
 alloy-rpc-client = "0.14.0"
 alloy-sol-types = "1.0.0"
 alloy-sol-macro = "1.0.0"

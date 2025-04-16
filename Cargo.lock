@@ -348,9 +348,11 @@ dependencies = [
  "alloy-json-rpc",
  "alloy-network",
  "alloy-network-primitives",
+ "alloy-node-bindings",
  "alloy-primitives",
  "alloy-pubsub",
  "alloy-rpc-client",
+ "alloy-rpc-types-anvil",
  "alloy-rpc-types-eth",
  "alloy-signer",
  "alloy-sol-types",
@@ -443,6 +445,18 @@ dependencies = [
  "tracing-futures",
  "url",
  "wasmtimer",
+]
+
+[[package]]
+name = "alloy-rpc-types-anvil"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c349f7339476f13e23308111dfeb67d136c11e7b2a6b1d162f6a124ad4ffb9b"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rpc-types-eth",
+ "alloy-serde",
+ "serde",
 ]
 
 [[package]]
@@ -4307,10 +4321,12 @@ dependencies = [
 name = "layer-tests"
 version = "0.4.0-alpha.2"
 dependencies = [
+ "alloy-contract",
  "alloy-network",
  "alloy-primitives",
  "alloy-provider",
  "alloy-rpc-types-eth",
+ "alloy-signer",
  "alloy-signer-local",
  "alloy-sol-types",
  "anyhow",
