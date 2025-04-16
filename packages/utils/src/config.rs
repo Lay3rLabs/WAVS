@@ -351,20 +351,20 @@ impl EthereumChainConfig {
     pub fn to_client_config(
         &self,
         hd_index: Option<u32>,
-        mnemonic: Option<String>,
+        credential: Option<String>,
         transport: Option<EthClientTransport>,
     ) -> EthClientConfig {
         EthClientConfig {
             ws_endpoint: self.ws_endpoint.clone(),
             http_endpoint: self.http_endpoint.clone(),
             // if we are building a signing client, default to http transport
-            transport: match (transport, mnemonic.is_some()) {
+            transport: match (transport, credential.is_some()) {
                 (Some(transport), _) => Some(transport),
                 (None, true) => Some(EthClientTransport::Http),
                 _ => None,
             },
             hd_index,
-            mnemonic,
+            credential,
             gas_estimate_multiplier: None,
         }
     }

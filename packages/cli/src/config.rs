@@ -26,8 +26,8 @@ pub struct Config {
     /// The mnemonic to use for submitting transactions on cosmos chains (usually None, set via env var)
     pub cosmos_mnemonic: Option<String>,
 
-    /// The mnemonic to use for submitting transactions on ethereum chains (usually None, set via env var)
-    pub eth_mnemonic: Option<String>,
+    /// The credential to use for submitting transactions on ethereum chains (mnemonic or private key)
+    pub eth_credential: Option<String>,
 
     pub registry_domain: Option<String>,
 }
@@ -57,7 +57,7 @@ impl Default for Config {
                 eth: BTreeMap::new(),
             },
             cosmos_mnemonic: None,
-            eth_mnemonic: None,
+            eth_credential: None,
             registry_domain: None,
         }
     }

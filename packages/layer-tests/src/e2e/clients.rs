@@ -53,7 +53,7 @@ impl Clients {
             for (chain_name, chain_config) in &configs.chains.eth {
                 let client = EthClientBuilder::new(chain_config.to_client_config(
                     None,
-                    cli_ctx.config.eth_mnemonic.clone(),
+                    cli_ctx.config.eth_credential.clone(),
                     Some(EthClientTransport::Http),
                 ))
                 .build_signing()

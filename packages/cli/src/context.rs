@@ -64,7 +64,7 @@ impl CliContext {
             .clone();
 
         let client_config =
-            chain_config.to_client_config(None, self.config.eth_mnemonic.clone(), None);
+            chain_config.to_client_config(None, self.config.eth_credential.clone(), None);
 
         let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
 
