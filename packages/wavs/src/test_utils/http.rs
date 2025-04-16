@@ -12,6 +12,7 @@ use crate::{
         identity::IdentityEngine,
         runner::{EngineRunner, SingleEngineRunner},
     },
+    metrics::Metrics,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerVec,
 };
@@ -53,10 +54,17 @@ impl TestHttpApp {
     {
         let inner = TestApp::new().await;
 
-        let http_router =
-            crate::http::server::make_router(inner.config.as_ref().clone(), dispatcher, true)
-                .await
-                .unwrap();
+        let meter = opentelemetry::global::meter("wavs_test_metrics");
+        let metrics = Metrics::setup_metrics(&meter);
+
+        let http_router = crate::http::server::make_router(
+            inner.config.as_ref().clone(),
+            dispatcher,
+            true,
+            metrics,
+        )
+        .await
+        .unwrap();
 
         Self {
             inner,

@@ -44,7 +44,10 @@ fn main() {
     let config_clone = config.clone();
     let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone).unwrap());
 
-    wavs::run_server(ctx, config, dispatcher);
+    let meter = global::meter("wavs_metrics");
+    let metrics = Metrics::setup_metrics(&meter);
+
+    wavs::run_server(ctx, config, dispatcher, metrics);
     if let Some(tracer) = tracer_provider {
         tracer
             .shutdown()
