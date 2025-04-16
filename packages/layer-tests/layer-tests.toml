@@ -1,5 +1,5 @@
 # Run all the tests
-# all = true
+all = true
 # isolated = "eth-echo-data"
 # isolated = "eth-multi-trigger"
 # isolated = "eth-permissions"
@@ -10,8 +10,8 @@
 # See matrix.rs for all the available options
 # You can run groups of tests like:
 
-[matrix.eth]
-echo-data = true
+# [matrix.eth]
+# echo-data = true
 # square = true
 # cron-interval = true
 # block-interval = true
