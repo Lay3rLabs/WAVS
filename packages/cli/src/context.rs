@@ -54,7 +54,7 @@ impl CliContext {
         })
     }
 
-    pub async fn new_eth_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
+    pub(crate) async fn new_eth_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
         let chain_config = self
             .config
             .chains
