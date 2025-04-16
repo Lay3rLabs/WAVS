@@ -71,11 +71,7 @@ impl SimpleEthSubmitClient {
             return Err(anyhow::anyhow!("trigger not validated"));
         }
 
-        let envelope = self
-            .contract
-            .getEnvelope(*trigger_id)
-            .call()
-            .await?;
+        let envelope = self.contract.getEnvelope(*trigger_id).call().await?;
 
         Ok(Envelope {
             eventId: envelope.eventId,

@@ -79,7 +79,7 @@ pub struct EthClientConfig {
     pub gas_estimate_multiplier: Option<f32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
 pub enum EthClientTransport {
     WebSocket,
     Http,
@@ -130,6 +130,9 @@ impl EthClientBuilder {
     }
 
     pub async fn build_signing(mut self) -> Result<EthSigningClient> {
+        if self.preferred_transport() != EthClientTransport::Http {
+            tracing::warn!("signing clients should probably prefer http transport");
+        }
         let mnemonic = self
             .config
             .mnemonic
