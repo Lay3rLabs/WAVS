@@ -1,4 +1,4 @@
-use alloy::primitives::FixedBytes;
+use alloy_primitives::FixedBytes;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;

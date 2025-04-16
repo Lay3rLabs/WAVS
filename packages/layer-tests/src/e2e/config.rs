@@ -1,10 +1,8 @@
-use alloy::{
-    network::TransactionBuilder,
-    primitives::utils::parse_ether,
-    providers::Provider,
-    rpc::types::TransactionRequest,
-    signers::local::{coins_bip39::English, MnemonicBuilder},
-};
+use alloy_network::TransactionBuilder;
+use alloy_primitives::utils::parse_ether;
+use alloy_provider::Provider;
+use alloy_rpc_types_eth::TransactionRequest;
+use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
     config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
     eth_client::EthClientBuilder,

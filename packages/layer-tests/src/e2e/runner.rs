@@ -1,12 +1,10 @@
 use std::{path::PathBuf, sync::Arc};
 
-use alloy::{
-    primitives::{eip191_hash_message, keccak256},
-    providers::Provider,
-    signers::k256::ecdsa::SigningKey,
-    sol_types::SolValue,
-};
-use anyhow::{Context, Result};
+use alloy_primitives::{eip191_hash_message, keccak256};
+use alloy_provider::Provider;
+use alloy_signer::{k256::ecdsa::SigningKey, Signature};
+use alloy_sol_types::SolValue;
+use anyhow::Context;
 use futures::{stream::FuturesUnordered, StreamExt};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
@@ -132,8 +130,7 @@ async fn test_service(
                     configs,
                     workflow_index,
                 )
-                .await
-                .unwrap();
+                .await;
 
                 if let Some(multi_trigger_service) = &multi_trigger_service {
                     let multi_trigger_workflow =
@@ -160,8 +157,7 @@ async fn test_service(
                         trigger_id,
                         submit_start_block,
                     )
-                    .await
-                    .unwrap();
+                    .await;
 
                     verify_signed_data(
                         clients,
@@ -171,8 +167,7 @@ async fn test_service(
                         configs,
                         0,
                     )
-                    .await
-                    .unwrap();
+                    .await;
                 }
             }
         }
@@ -247,7 +242,7 @@ async fn verify_signed_data(
     service: &Service,
     configs: &Configs,
     workflow_index: usize,
-) -> Result<()> {
+) {
     let data = &signed_data.data;
 
     let input_req = || {
@@ -323,35 +318,33 @@ async fn verify_signed_data(
     let signing_key = clients
         .http_client
         .get_service_key(service.id.clone())
-        .await?;
+        .await
+        .unwrap();
 
     // TODO - re-use stuff from https://github.com/Lay3rLabs/WAVS/pull/496 when it lands
 
     match signing_key {
         SigningKeyResponse::Secp256k1(bytes) => {
-            let private_key = SigningKey::from_slice(&bytes)?;
-            let service_address = alloy::primitives::Address::from_private_key(&private_key);
+            let private_key = SigningKey::from_slice(&bytes).unwrap();
+            let service_address = alloy_primitives::Address::from_private_key(&private_key);
 
-            let signature =
-                alloy::primitives::PrimitiveSignature::from_raw(&signed_data.signature)?;
+            let signature = Signature::from_raw(&signed_data.signature).unwrap();
 
             let envelope_bytes = signed_data.envelope.abi_encode();
             let envelope_hash = eip191_hash_message(keccak256(&envelope_bytes));
 
-            let signer_address = signature.recover_address_from_prehash(&envelope_hash)?;
+            let signer_address = signature
+                .recover_address_from_prehash(&envelope_hash)
+                .unwrap();
 
             if service_address != signer_address {
-                return Err(anyhow::anyhow!(
+                panic!(
                     "Signature does not match service {} address: {} != {}",
-                    service.id,
-                    service_address,
-                    signer_address
-                ));
+                    service.id, service_address, signer_address
+                );
             }
         }
     }
-
-    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug)]

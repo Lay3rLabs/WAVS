@@ -1,4 +1,4 @@
-use alloy::primitives::Address;
+use alloy_primitives::Address;
 use wavs_types::{
     IWavsServiceHandler, IWavsServiceHandlerQueryT, IWavsServiceHandlerSigningT,
     IWavsServiceManager, IWavsServiceManagerQueryT, IWavsServiceManagerSigningT,

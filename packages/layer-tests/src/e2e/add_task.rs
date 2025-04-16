@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use alloy::providers::{ext::AnvilApi, Provider};
+use alloy_provider::{ext::AnvilApi, Provider};
 use anyhow::{bail, Context, Result};
 use utils::eth_client::EthSigningClient;
 use wavs_types::{Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
@@ -102,7 +102,7 @@ pub async fn add_task(
                 trigger_id,
                 Some(
                     wait_for_task_to_land(submit_client, address, trigger_id, submit_start_block)
-                        .await?,
+                        .await,
                 ),
             ))
         }
@@ -125,7 +125,7 @@ pub async fn add_task(
                         trigger_id,
                         submit_start_block,
                     )
-                    .await?,
+                    .await,
                 ),
             ))
         }
@@ -142,30 +142,30 @@ pub struct SignedData {
 
 pub async fn wait_for_task_to_land(
     eth_submit_client: EthSigningClient,
-    address: alloy::primitives::Address,
+    address: alloy_primitives::Address,
     trigger_id: TriggerId,
     submit_start_block: u64,
-) -> Result<SignedData> {
+) -> SignedData {
     let submit_client = SimpleEthSubmitClient::new(eth_submit_client, address);
 
     tokio::time::timeout(Duration::from_secs(5), async move {
         loop {
-            if submit_client.eth.provider.get_block_number().await? == submit_start_block {
-                submit_client.eth.provider.evm_mine(None).await?;
+            if submit_client.eth.provider.get_block_number().await.unwrap() == submit_start_block {
+                submit_client.eth.provider.evm_mine(None).await.unwrap();
             }
             match submit_client.trigger_validated(trigger_id).await {
                 true => {
-                    let data = submit_client.trigger_data(trigger_id).await?;
+                    let data = submit_client.trigger_data(trigger_id).await.unwrap();
 
-                    let envelope = submit_client.trigger_envelope(trigger_id).await?;
+                    let envelope = submit_client.trigger_envelope(trigger_id).await.unwrap();
 
-                    let signature = submit_client.trigger_signature(trigger_id).await?;
+                    let signature = submit_client.trigger_signature(trigger_id).await.unwrap();
 
-                    return anyhow::Ok(SignedData {
+                    return SignedData {
                         data,
                         signature,
                         envelope,
-                    });
+                    };
                 }
                 false => {
                     tracing::debug!("Waiting for task response on trigger {}", trigger_id,);
@@ -176,5 +176,6 @@ pub async fn wait_for_task_to_land(
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     })
-    .await?
+    .await
+    .unwrap()
 }

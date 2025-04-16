@@ -1,5 +1,5 @@
-use alloy::providers::{Provider, RootProvider};
 use alloy_json_abi::Event;
+use alloy_provider::{Provider, RootProvider};
 use anyhow::{Context as _, Result};
 use layer_climb::{
     prelude::{Address, ConfigAddressExt as _},
@@ -438,7 +438,7 @@ pub struct EthereumManagerResult {
     /// The ethereum chain name
     pub chain_name: ChainName,
     /// The ethereum address
-    pub address: alloy::primitives::Address,
+    pub address: alloy_primitives::Address,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -840,7 +840,7 @@ pub fn set_ethereum_trigger(
     event_hash_str: String,
 ) -> Result<WorkflowTriggerResult> {
     // Parse the Ethereum address
-    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
+    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     // Order the match cases from most explicit to event parsing:
     // 1. 0x-prefixed hex string
@@ -1140,7 +1140,7 @@ pub fn set_ethereum_submit(
     max_gas: Option<u64>,
 ) -> Result<WorkflowSubmitResult> {
     // Parse the Ethereum address
-    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
+    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
@@ -1183,7 +1183,7 @@ pub fn set_aggregator_submit(
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
 
     // Parse the Ethereum address
-    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
+    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
@@ -1220,7 +1220,7 @@ pub fn set_ethereum_manager(
     chain_name: ChainName,
 ) -> Result<EthereumManagerResult> {
     // Parse the Ethereum address
-    let address = alloy::primitives::Address::parse_checksummed(address_str, None)?;
+    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
         service.manager = ServiceManagerJson::Manager(ServiceManager::Ethereum {
@@ -1639,7 +1639,7 @@ pub async fn validate_contracts_exist(
 
 /// Check if an Ethereum contract exists at the specified address
 async fn check_ethereum_contract_exists(
-    address: &alloy::primitives::Address,
+    address: &alloy_primitives::Address,
     provider: &RootProvider,
     errors: &mut Vec<String>,
     context: &str,
@@ -1699,7 +1699,7 @@ mod tests {
     use crate::service_json::Json;
 
     use super::*;
-    use alloy::hex;
+    use alloy_primitives::hex;
     use layer_climb::prelude::{ChainConfig, ChainId};
     use layer_climb::querier::QueryClient as CosmosQueryClient;
     use tempfile::tempdir;
@@ -2686,7 +2686,7 @@ mod tests {
         let service_id = ServiceID::new("test-service-id").unwrap();
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
         let ethereum_chain = ChainName::from_str("ethereum-mainnet").unwrap();
-        let ethereum_address = alloy::primitives::Address::parse_checksummed(
+        let ethereum_address = alloy_primitives::Address::parse_checksummed(
             "0x00000000219ab540356cBB839Cbe05303d7705Fa",
             None,
         )

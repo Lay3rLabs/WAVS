@@ -1,4 +1,4 @@
-use alloy::providers::Provider;
+use alloy_provider::Provider;
 use anyhow::Result;
 use layer_climb::prelude::*;
 use wavs_types::{

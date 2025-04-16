@@ -1,4 +1,5 @@
-use alloy::{primitives::Address, sol_types::SolValue};
+use alloy_primitives::Address;
+use alloy_sol_types::SolValue;
 use anyhow::Result;
 use utils::eth_client::EthSigningClient;
 use wavs_types::Envelope;
@@ -37,7 +38,7 @@ impl SimpleEthSubmitClient {
 
     // just a static helper to help with tests
     pub fn decode_data_with_id_bytes(bytes: &[u8]) -> Result<(TriggerId, Vec<u8>)> {
-        let data_with_id = DataWithId::abi_decode(bytes, false)?;
+        let data_with_id = DataWithId::abi_decode(bytes)?;
         Ok((
             TriggerId::new(data_with_id.triggerId),
             data_with_id.data.to_vec(),
@@ -50,7 +51,6 @@ impl SimpleEthSubmitClient {
             .isValidTriggerId(*trigger_id)
             .call()
             .await
-            .map(|x| x._0)
             .unwrap_or_default()
     }
 
@@ -62,7 +62,7 @@ impl SimpleEthSubmitClient {
             .getData(*trigger_id)
             .call()
             .await
-            .map(|x| x.data.to_vec())
+            .map(|data| data.to_vec())
             .map_err(|e| e.into())
     }
 
@@ -71,12 +71,7 @@ impl SimpleEthSubmitClient {
             return Err(anyhow::anyhow!("trigger not validated"));
         }
 
-        let envelope = self
-            .contract
-            .getEnvelope(*trigger_id)
-            .call()
-            .await
-            .map(|x| x.envelope)?;
+        let envelope = self.contract.getEnvelope(*trigger_id).call().await?;
 
         Ok(Envelope {
             eventId: envelope.eventId,
@@ -94,7 +89,7 @@ impl SimpleEthSubmitClient {
             .getSignature(*trigger_id)
             .call()
             .await
-            .map(|x| x.signatureData.signatures[0].to_vec())
+            .map(|signature_data| signature_data.signatures[0].to_vec())
             .map_err(|e| e.into())
     }
 }
