@@ -52,6 +52,7 @@ pub struct Config {
     pub registry_domain: Option<String>,
 
     /// Jaeger collector to send trace data
+    pub jaeger: Option<String>,
 }
 
 impl ConfigExt for Config {
