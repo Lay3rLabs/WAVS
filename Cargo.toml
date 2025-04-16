@@ -38,6 +38,7 @@ utoipa-swagger-ui = { version = "9.0.1", features = ["axum"] }
 
 # error handling and logging
 anyhow = "1.0.98"
+axum-tracing-opentelemetry = "0.28.0"
 opentelemetry = { version = "0.28.0", default-features = false, features = ["trace"] }
 opentelemetry-jaeger-propagator = "0.28.0"
 opentelemetry-otlp = { version = "0.28.0", default-features = false, features = ["trace", "grpc-tonic"] }
