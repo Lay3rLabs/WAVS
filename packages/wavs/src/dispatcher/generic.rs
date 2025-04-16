@@ -313,7 +313,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     }
 }
 
-#[instrument(level = "debug")]
 async fn query_service_from_address(
     chain_name: ChainName,
     address: Address,
@@ -364,7 +363,6 @@ async fn query_service_from_address(
 }
 
 // called at init and when a new service is added
-#[instrument(level = "debug")]
 async fn add_service_to_managers(
     service: Service,
     triggers: &impl TriggerManager,
