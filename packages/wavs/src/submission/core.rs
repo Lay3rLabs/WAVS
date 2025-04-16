@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     AppContext,
 };
-use alloy::providers::Provider;
+use alloy_provider::Provider;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
@@ -29,7 +29,7 @@ pub struct CoreSubmission {
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
-    eth_sending_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
+    eth_sending_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
     eth_mnemonic: String,
     eth_mnemonic_hd_index_count: Arc<AtomicU32>,
 }
@@ -69,8 +69,7 @@ impl CoreSubmission {
             .provider
             .get_block_number()
             .await
-            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?
-            - 1;
+            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?;
 
         let signature = eth_client.sign_envelope(&envelope).await?;
 
@@ -94,20 +93,19 @@ impl CoreSubmission {
             address,
         } = submission;
 
-        // this frees up the sync lock so new clients can be added at runtime
-        let eth_client_mutex = {
-            let lock = self.eth_sending_clients.read().unwrap();
-            lock.get(&chain_name)
+        // free up the mutex to add more clients
+        let client = {
+            self.eth_sending_clients
+                .read()
+                .unwrap()
+                .get(&chain_name)
                 .ok_or(SubmissionError::MissingEthereumSendingClient(
                     chain_name.clone(),
                 ))?
                 .clone()
         };
 
-        // however we want to keep an async lock until this transaction is finished
-        let _tx_receipt = eth_client_mutex
-            .lock()
-            .await
+        let _tx_receipt = client
             .send_envelope_signatures(
                 packet.envelope,
                 vec![packet.signature],
@@ -205,9 +203,14 @@ impl Submission for CoreSubmission {
 
                             match submit {
                                 Submit::EthereumContract(submission) => {
-                                    if let Err(e) = _self.submit_to_ethereum(submission, packet).await {
-                                        tracing::error!("{:?}", e);
-                                    }
+                                    let _self = _self.clone();
+                                    tokio::spawn(
+                                        async move {
+                                            if let Err(e) = _self.submit_to_ethereum(submission, packet).await {
+                                                tracing::error!("{:?}", e);
+                                            }
+                                        }
+                                    );
                                 },
                                 Submit::Aggregator{url} => {
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
@@ -234,17 +237,17 @@ impl Submission for CoreSubmission {
             .eth_mnemonic_hd_index_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let config = self
+        let chain_config = self
             .chain_configs
             .get(service.manager.chain_name())
             .ok_or(SubmissionError::MissingEthereumChain)?;
 
-        let config: EthereumChainConfig = config
+        let chain_config: EthereumChainConfig = chain_config
             .clone()
             .try_into()
             .map_err(|_| SubmissionError::MissingEthereumChain)?;
 
-        let client = EthClientBuilder::new(config.to_client_config(
+        let signing_client = EthClientBuilder::new(chain_config.to_client_config(
             Some(hd_index),
             Some(self.eth_mnemonic.clone()),
             Some(EthClientTransport::Http),
@@ -254,15 +257,15 @@ impl Submission for CoreSubmission {
         .map_err(SubmissionError::Ethereum)?;
 
         tracing::info!(
-            "Created new eth client for service {} -> {}",
+            "Created new signing client for service {} -> {}",
             service.id,
-            client.address()
+            signing_client.address()
         );
 
         self.eth_signing_clients
             .write()
             .unwrap()
-            .insert(service.id.clone(), client);
+            .insert(service.id.clone(), signing_client);
 
         for workflow in service.workflows.values() {
             if let Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) =
@@ -274,17 +277,7 @@ impl Submission for CoreSubmission {
                     .unwrap()
                     .contains_key(chain_name)
                 {
-                    let config = self
-                        .chain_configs
-                        .get(chain_name)
-                        .ok_or(SubmissionError::MissingEthereumChain)?;
-
-                    let config: EthereumChainConfig = config
-                        .clone()
-                        .try_into()
-                        .map_err(|_| SubmissionError::MissingEthereumChain)?;
-
-                    let client = EthClientBuilder::new(config.to_client_config(
+                    let sending_client = EthClientBuilder::new(chain_config.to_client_config(
                         None,
                         Some(self.eth_mnemonic.clone()),
                         Some(EthClientTransport::Http),
@@ -293,10 +286,10 @@ impl Submission for CoreSubmission {
                     .await
                     .map_err(SubmissionError::Ethereum)?;
 
-                    self.eth_sending_clients.write().unwrap().insert(
-                        chain_name.clone(),
-                        Arc::new(tokio::sync::Mutex::new(client)),
-                    );
+                    self.eth_sending_clients
+                        .write()
+                        .unwrap()
+                        .insert(chain_name.clone(), sending_client);
                 }
             }
         }

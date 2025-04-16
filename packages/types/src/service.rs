@@ -1,4 +1,4 @@
-use alloy::primitives::LogData;
+use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroU32;
@@ -30,7 +30,7 @@ pub struct Service {
 pub enum ServiceManager {
     Ethereum {
         chain_name: ChainName,
-        address: alloy::primitives::Address,
+        address: alloy_primitives::Address,
     },
 }
 
@@ -41,7 +41,7 @@ impl ServiceManager {
         }
     }
 
-    pub fn eth_address_unchecked(&self) -> alloy::primitives::Address {
+    pub fn eth_address_unchecked(&self) -> alloy_primitives::Address {
         match self {
             ServiceManager::Ethereum { address, .. } => *address,
         }
@@ -157,7 +157,7 @@ pub struct Workflow {
 
 impl Workflow {
     pub const DEFAULT_FUEL_LIMIT: u64 = 100_000_000;
-    pub const DEFAULT_TIME_LIMIT_SECONDS: u64 = 10;
+    pub const DEFAULT_TIME_LIMIT_SECONDS: u64 = 30;
 }
 
 // The TriggerManager reacts to these triggers
@@ -171,7 +171,7 @@ pub enum Trigger {
         event_type: String,
     },
     EthContractEvent {
-        address: alloy::primitives::Address,
+        address: alloy_primitives::Address,
         chain_name: ChainName,
         event_hash: ByteArray<32>,
     },
@@ -206,7 +206,7 @@ pub enum TriggerData {
     },
     EthContractEvent {
         /// The address of the contract that emitted the event
-        contract_address: alloy::primitives::Address,
+        contract_address: alloy_primitives::Address,
         /// The name of the chain where the event was emitted
         chain_name: ChainName,
         /// The raw event log
@@ -278,7 +278,7 @@ pub enum Aggregator {
 pub struct EthereumContractSubmission {
     pub chain_name: ChainName,
     /// Should be an IWavsServiceHandler contract
-    pub address: alloy::primitives::Address,
+    pub address: alloy_primitives::Address,
     /// max gas for the submission
     /// with an aggregator, that will be for all the signed envelopes combined
     /// without an aggregator, it's just the single signed envelope
@@ -288,7 +288,7 @@ pub struct EthereumContractSubmission {
 impl EthereumContractSubmission {
     pub fn new(
         chain_name: ChainName,
-        address: alloy::primitives::Address,
+        address: alloy_primitives::Address,
         max_gas: Option<u64>,
     ) -> Self {
         Self {
@@ -350,7 +350,7 @@ mod test_ext {
     impl Submit {
         pub fn eth_contract(
             chain_name: ChainName,
-            address: alloy::primitives::Address,
+            address: alloy_primitives::Address,
             max_gas: Option<u64>,
         ) -> Submit {
             Submit::EthereumContract(EthereumContractSubmission::new(
@@ -385,7 +385,7 @@ mod test_ext {
             }
         }
         pub fn eth_contract_event(
-            address: alloy::primitives::Address,
+            address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Self {
@@ -415,7 +415,7 @@ mod test_ext {
         pub fn eth_contract_event(
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-            contract_address: alloy::primitives::Address,
+            contract_address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Result<Self, IDError> {

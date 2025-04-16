@@ -1,10 +1,9 @@
 use std::time::Duration;
 
-use alloy::providers::ext::AnvilApi;
+use alloy_provider::{ext::AnvilApi, Provider};
 use anyhow::{bail, Context, Result};
-use wavs_types::{
-    ChainName, Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID,
-};
+use utils::eth_client::EthSigningClient;
+use wavs_types::{Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
 
 use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
@@ -18,7 +17,9 @@ pub async fn add_task(
     service_id: String,
     workflow_id: Option<String>,
     input: Option<Vec<u8>>,
-    result_timeout: Option<Duration>,
+    submit_client: EthSigningClient,
+    submit_start_block: u64,
+    task_should_land_on_chain: bool,
 ) -> Result<(TriggerId, Option<SignedData>)> {
     let service_id = ServiceID::new(service_id)?;
     let workflow_id = match workflow_id {
@@ -44,34 +45,31 @@ pub async fn add_task(
         }
     };
 
-    let (is_trigger_time_based, trigger_id) = match workflow.trigger {
+    let trigger_id = match workflow.trigger {
         Trigger::EthContractEvent {
             chain_name,
             address,
             event_hash: _,
         } => {
-            let eth_client = clients.get_eth_client(&chain_name).await;
+            let eth_client = clients.get_eth_client(&chain_name);
             let client = SimpleEthTriggerClient::new(eth_client, address);
-            (
-                false,
-                client
-                    .add_trigger(input.expect("on-chain triggers require input data"))
-                    .await?,
-            )
+
+            client
+                .add_trigger(input.expect("on-chain triggers require input data"))
+                .await?
         }
         Trigger::CosmosContractEvent {
             chain_name,
             address,
             event_type: _,
         } => {
-            let client = SimpleCosmosTriggerClient::new(
-                clients.cli_ctx.get_cosmos_client(&chain_name)?,
-                address,
-            );
+            let client =
+                SimpleCosmosTriggerClient::new(clients.get_cosmos_client(&chain_name), address);
             let trigger_id = client
                 .add_trigger(input.expect("on-chain triggers require input data"))
                 .await?;
-            (false, TriggerId::new(trigger_id.u64()))
+
+            TriggerId::new(trigger_id.u64())
         }
         Trigger::BlockInterval {
             chain_name: _,
@@ -79,9 +77,9 @@ pub async fn add_task(
             ..
         } => {
             // Hardcoded id since the current flow expects it to come from the event
-            (true, TriggerId::new(1337))
+            TriggerId::new(1337)
         }
-        Trigger::Cron { .. } => (true, TriggerId::new(1338)),
+        Trigger::Cron { .. } => TriggerId::new(1338),
         Trigger::Manual => unimplemented!(),
     };
 
@@ -91,58 +89,43 @@ pub async fn add_task(
             address,
             max_gas: _,
         }) => {
-            let result_timeout = match result_timeout {
-                Some(timeout) => timeout,
-                None => {
-                    tracing::info!(
-                        "Not waiting for task response on trigger {}, chain {}",
-                        trigger_id,
-                        chain_name
-                    );
-                    return Ok((trigger_id, None));
-                }
-            };
+            if !task_should_land_on_chain {
+                tracing::info!(
+                    "Not waiting for task response on trigger {}, chain {}",
+                    trigger_id,
+                    chain_name
+                );
+                return Ok((trigger_id, None));
+            }
 
             Ok((
                 trigger_id,
                 Some(
-                    wait_for_task_to_land(
-                        clients,
-                        &chain_name,
-                        address,
-                        trigger_id,
-                        result_timeout,
-                        is_trigger_time_based,
-                    )
-                    .await?,
+                    wait_for_task_to_land(submit_client, address, trigger_id, submit_start_block)
+                        .await,
                 ),
             ))
         }
         Submit::Aggregator { url } => {
-            let result_timeout = match result_timeout {
-                Some(timeout) => timeout,
-                None => {
-                    tracing::info!(
-                        "Not waiting for task response on trigger {}, chain {}",
-                        trigger_id,
-                        url
-                    );
-                    return Ok((trigger_id, None));
-                }
-            };
+            if !task_should_land_on_chain {
+                tracing::info!(
+                    "Not waiting for task response on trigger {}, chain {}",
+                    trigger_id,
+                    url
+                );
+                return Ok((trigger_id, None));
+            }
 
             Ok((
                 trigger_id,
                 Some(
                     wait_for_task_to_land(
-                        clients,
-                        service.manager.chain_name(),
+                        submit_client,
                         service.manager.eth_address_unchecked(),
                         trigger_id,
-                        result_timeout,
-                        is_trigger_time_based,
+                        submit_start_block,
                     )
-                    .await?,
+                    .await,
                 ),
             ))
         }
@@ -158,50 +141,41 @@ pub struct SignedData {
 }
 
 pub async fn wait_for_task_to_land(
-    clients: &Clients,
-    chain_name: &ChainName,
-    address: alloy::primitives::Address,
+    eth_submit_client: EthSigningClient,
+    address: alloy_primitives::Address,
     trigger_id: TriggerId,
-    result_timeout: Duration,
-    is_trigger_time_based: bool,
-) -> Result<SignedData> {
-    let eth_client = clients.get_eth_client(chain_name).await;
-    let provider = eth_client.provider.clone();
+    submit_start_block: u64,
+) -> SignedData {
+    let submit_client = SimpleEthSubmitClient::new(eth_submit_client, address);
 
-    let submit_client = SimpleEthSubmitClient::new(eth_client, address);
-
-    tokio::time::timeout(result_timeout, async move {
+    tokio::time::timeout(Duration::from_secs(5), async move {
         loop {
-            if is_trigger_time_based {
-                // if the trigger is time based we need to manually tell anvil
-                // to move the block forward
-                provider.evm_mine(None).await?;
+            if submit_client.eth.provider.get_block_number().await.unwrap() == submit_start_block {
+                submit_client.eth.provider.evm_mine(None).await.unwrap();
             }
             match submit_client.trigger_validated(trigger_id).await {
                 true => {
-                    let data = submit_client.trigger_data(trigger_id).await?;
+                    let data = submit_client.trigger_data(trigger_id).await.unwrap();
 
-                    let envelope = submit_client.trigger_envelope(trigger_id).await?;
+                    let envelope = submit_client.trigger_envelope(trigger_id).await.unwrap();
 
-                    let signature = submit_client.trigger_signature(trigger_id).await?;
+                    let signature = submit_client.trigger_signature(trigger_id).await.unwrap();
 
-                    return anyhow::Ok(SignedData {
+                    return SignedData {
                         data,
                         signature,
                         envelope,
-                    });
+                    };
                 }
                 false => {
-                    tracing::debug!(
-                        "Waiting for task response on trigger {}, chain {}",
-                        trigger_id,
-                        chain_name
-                    );
+                    tracing::debug!("Waiting for task response on trigger {}", trigger_id,);
                 }
             }
+
             // still open, waiting...
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     })
-    .await?
+    .await
+    .unwrap()
 }

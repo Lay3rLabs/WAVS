@@ -1,29 +1,26 @@
 pub mod contracts;
-pub mod pool;
 pub mod signing;
 
-use std::sync::Arc;
-
-use alloy::{
-    hex,
-    network::EthereumWallet,
-    primitives::Address,
-    providers::ProviderBuilder,
-    signers::{
-        k256::{ecdsa::SigningKey, SecretKey},
-        local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
-    },
+use alloy_network::{EthereumWallet, Network};
+use alloy_primitives::{hex, Address};
+use alloy_provider::{
+    fillers::{BlobGasFiller, ChainIdFiller, GasFiller, NonceManager},
+    DynProvider, Provider, ProviderBuilder,
 };
+use alloy_signer::k256::{ecdsa::SigningKey, SecretKey};
+use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
+use alloy_transport::{TransportErrorKind, TransportResult};
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use wavs_types::{QueryProvider, SigningProvider};
+use std::sync::{atomic::AtomicU64, Arc};
 
 use crate::error::EthClientError;
 
 #[derive(Clone)]
 pub struct EthQueryClient {
     pub config: EthClientConfig,
-    pub provider: QueryProvider,
+    pub provider: DynProvider,
 }
 
 impl std::fmt::Debug for EthQueryClient {
@@ -38,7 +35,7 @@ impl std::fmt::Debug for EthQueryClient {
 #[derive(Clone)]
 pub struct EthSigningClient {
     pub config: EthClientConfig,
-    pub provider: SigningProvider,
+    pub provider: DynProvider,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
     pub wallet: Arc<EthereumWallet>,
@@ -47,6 +44,11 @@ pub struct EthSigningClient {
     /// since the signer in `EthereumWallet` implements only `TxSigner`
     /// and there is not a direct way convert it into `Signer`
     pub signer: Arc<LocalSigner<SigningKey>>,
+
+    /// If a transaction does not have `max_gas` set, then it will estimate
+    /// however the actual gas needed fluctuates, so we can pad it with a multiplier
+    /// by default this is 1.25
+    pub gas_estimate_multiplier: f32,
 }
 
 impl std::fmt::Debug for EthSigningClient {
@@ -73,9 +75,11 @@ pub struct EthClientConfig {
     pub hd_index: Option<u32>,
     /// Preferred transport
     pub transport: Option<EthClientTransport>,
+    // if not set, will be 1.25
+    pub gas_estimate_multiplier: Option<f32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
 pub enum EthClientTransport {
     WebSocket,
     Http,
@@ -121,25 +125,33 @@ impl EthClientBuilder {
 
         Ok(EthQueryClient {
             config: self.config,
-            provider: ProviderBuilder::new().on_builtin(&endpoint).await?,
+            provider: DynProvider::new(ProviderBuilder::new().connect(&endpoint).await?),
         })
     }
 
     pub async fn build_signing(mut self) -> Result<EthSigningClient> {
+        if self.preferred_transport() != EthClientTransport::Http {
+            tracing::warn!("signing clients should probably prefer http transport");
+        }
         let mnemonic = self
             .config
             .mnemonic
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
 
+        let hd_index = self.config.hd_index.unwrap_or(0);
+
         let signer: LocalSigner<SigningKey> = if let Some(stripped) = mnemonic.strip_prefix("0x") {
+            if hd_index > 0 {
+                return Err(EthClientError::DerivationWithPrivateKey.into());
+            }
             let private_key = hex::decode(stripped)?;
             let secret_key = SecretKey::from_slice(&private_key)?;
             LocalSigner::from_signing_key(secret_key.into())
         } else {
             MnemonicBuilder::<English>::default()
                 .phrase(mnemonic)
-                .index(self.config.hd_index.unwrap_or(0))?
+                .index(hd_index)?
                 .build()?
         };
 
@@ -147,17 +159,88 @@ impl EthClientBuilder {
 
         let endpoint = self.endpoint()?;
 
-        let provider = ProviderBuilder::new()
-            .wallet(wallet.clone())
-            .on_builtin(&endpoint)
+        let query_provider = ProviderBuilder::new().connect(&endpoint).await?;
+        let first_nonce = query_provider
+            .get_transaction_count(signer.address())
             .await?;
 
+        let nonce_manager = FastNonceManager::new(Some(signer.address()), first_nonce);
+
+        let provider = DynProvider::new(
+            ProviderBuilder::default()
+                .with_nonce_management(nonce_manager)
+                .filler(GasFiller)
+                .filler(BlobGasFiller)
+                .filler(ChainIdFiller::new(None))
+                .wallet(wallet.clone())
+                .connect(&endpoint)
+                .await?,
+        );
+
+        // default
+        // let provider = DynProvder::new(ProviderBuilder::new()
+        //         .wallet(wallet.clone())
+        //         .on_builtin(&endpoint)
+        //         .await?);
+
         Ok(EthSigningClient {
+            gas_estimate_multiplier: self.config.gas_estimate_multiplier.unwrap_or(1.25),
             config: self.config,
             provider,
             wallet: Arc::new(wallet),
             signer: Arc::new(signer),
         })
+    }
+}
+
+// a better alternative to the built-in CachedNonceManager
+// Benefits:
+//
+// 1. Lock-free
+// We can do this because we don't need an additional address lookup
+// and we can just use an atomic counter instead of a Mutex around u64 (odd that they do this btw)
+//
+// 2. No contention on first transaction
+//
+// Since we control when we create the provider to begin with, we don't need to wait for the
+// first transaction to get the starting nonce. This prevents a race condition on creation
+//
+#[derive(Debug, Clone)]
+pub struct FastNonceManager {
+    // If set, will check the address against this
+    address: Option<Address>,
+    counter: Arc<AtomicU64>,
+}
+
+impl FastNonceManager {
+    pub fn new(address: Option<Address>, first_nonce: u64) -> Self {
+        Self {
+            address,
+            counter: Arc::new(AtomicU64::new(first_nonce)),
+        }
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+impl NonceManager for FastNonceManager {
+    async fn get_next_nonce<P, N>(&self, _provider: &P, address: Address) -> TransportResult<u64>
+    where
+        P: Provider<N>,
+        N: Network,
+    {
+        if let Some(check_address) = self.address {
+            if check_address != address {
+                return Err(TransportErrorKind::custom_str(&format!(
+                    "nonce manager address mismatch: expected {}, got {}",
+                    check_address, address
+                )));
+            }
+        }
+
+        Ok(self
+            .counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst))
     }
 }
 

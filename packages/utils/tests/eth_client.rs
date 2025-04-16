@@ -1,4 +1,6 @@
-use alloy::{node_bindings::Anvil, providers::Provider, signers::Signer};
+use alloy_node_bindings::Anvil;
+use alloy_provider::Provider;
+use alloy_signer::Signer;
 use futures::StreamExt;
 use utils::{
     eth_client::{EthClientBuilder, EthClientConfig},
@@ -49,6 +51,7 @@ async fn client_sign_message() {
         ),
         hd_index: None,
         transport: None,
+        gas_estimate_multiplier: None,
     };
 
     let builder = EthClientBuilder::new(config);

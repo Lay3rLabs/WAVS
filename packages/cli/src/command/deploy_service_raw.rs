@@ -1,5 +1,5 @@
 use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResult};
-use alloy::providers::Provider;
+use alloy_provider::Provider;
 use anyhow::Result;
 use wavs_types::Service;
 

@@ -3,10 +3,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
-    eth_client::EthSigningClient,
+    config::EthereumChainConfig,
+    eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
@@ -31,14 +32,14 @@ pub enum PacketQueue {
 pub struct QueuedPacket {
     pub packet: Packet,
     // so we don't need to recalculate it every time
-    pub signer: alloy::primitives::Address,
+    pub signer: alloy_primitives::Address,
 }
 
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
     storage: Arc<RedbStorage>,
-    eth_clients: Arc<RwLock<HashMap<ChainName, Arc<tokio::sync::Mutex<EthSigningClient>>>>>,
+    eth_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
@@ -54,10 +55,7 @@ impl HttpState {
         })
     }
 
-    pub async fn get_eth_client(
-        &self,
-        chain_name: &ChainName,
-    ) -> anyhow::Result<Arc<tokio::sync::Mutex<EthSigningClient>>> {
+    pub async fn get_eth_client(&self, chain_name: &ChainName) -> anyhow::Result<EthSigningClient> {
         {
             let lock = self.eth_clients.read().unwrap();
 
@@ -66,16 +64,28 @@ impl HttpState {
             }
         }
 
-        let eth_client = Arc::new(tokio::sync::Mutex::new(
-            self.config.signing_client(chain_name).await?,
-        ));
+        let chain_config = self
+            .config
+            .chains
+            .get_chain(chain_name)?
+            .context(format!("chain not found for {}", chain_name))?;
+
+        let chain_config = EthereumChainConfig::try_from(chain_config)?;
+
+        let sending_client = EthClientBuilder::new(chain_config.to_client_config(
+            None,
+            self.config.mnemonic.clone(),
+            Some(EthClientTransport::Http),
+        ))
+        .build_signing()
+        .await?;
 
         self.eth_clients
             .write()
             .unwrap()
-            .insert(chain_name.clone(), eth_client.clone());
+            .insert(chain_name.clone(), sending_client.clone());
 
-        Ok(eth_client)
+        Ok(sending_client)
     }
 
     pub fn get_packet_queue(&self, event_id: &EventId) -> anyhow::Result<PacketQueue> {

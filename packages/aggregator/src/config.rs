@@ -1,14 +1,12 @@
 use std::path::PathBuf;
 
-use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-use anyhow::{Context, Result};
+use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use utils::{
-    config::{ChainConfigs, ConfigExt, EthereumChainConfig},
+    config::{ChainConfigs, ConfigExt},
     error::EthClientError,
-    eth_client::{EthClientBuilder, EthSigningClient},
 };
-use wavs_types::ChainName;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -65,23 +63,6 @@ impl Default for Config {
 }
 
 impl Config {
-    pub async fn signing_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
-        let chain_config = self
-            .chains
-            .get_chain(chain_name)?
-            .context(format!("chain not found for {}", chain_name))?;
-
-        let chain_config = EthereumChainConfig::try_from(chain_config)?;
-        let client_config = chain_config.to_client_config(None, self.mnemonic.clone(), None);
-
-        let eth_client = EthClientBuilder::new(client_config)
-            .build_signing()
-            .await
-            .unwrap();
-
-        Ok(eth_client)
-    }
-
     pub fn signer(&self) -> Result<PrivateKeySigner> {
         let mnemonic = self
             .mnemonic

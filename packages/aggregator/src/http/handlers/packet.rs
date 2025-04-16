@@ -1,4 +1,4 @@
-use alloy::primitives::{Address, U256};
+use alloy_primitives::{Address, U256};
 use anyhow::{anyhow, bail, ensure};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
@@ -11,7 +11,7 @@ use crate::http::{
     state::{HttpState, PacketQueue, QueuedPacket},
 };
 
-alloy::sol!(
+alloy_sol_macro::sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     SimpleServiceManager,
@@ -67,12 +67,11 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             let signer = packet.signature.eth_signer_address(&packet.envelope)?;
 
             let client = state.get_eth_client(chain_name).await?;
-            let client = client.lock().await;
             let service_manager = SimpleServiceManager::new(
                 service.manager.eth_address_unchecked(),
                 client.provider.clone(),
             );
-            let weight = service_manager.getOperatorWeight(signer).call().await?._0;
+            let weight = service_manager.getOperatorWeight(signer).call().await?;
             total_weight = weight;
 
             // Sum up weights
@@ -80,8 +79,7 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
                 let weight = service_manager
                     .getOperatorWeight(packet.signer)
                     .call()
-                    .await?
-                    ._0;
+                    .await?;
                 total_weight = weight
                     .checked_add(total_weight)
                     .ok_or(anyhow!("Total weight calculation overflowed"))?;
@@ -91,8 +89,7 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             threshold = service_manager
                 .getLastCheckpointThresholdWeight()
                 .call()
-                .await?
-                ._0;
+                .await?;
 
             validate_packet(packet, &queue, signer, weight)?
         }
@@ -126,8 +123,6 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             .collect();
 
         let tx_receipt = client
-            .lock()
-            .await
             .send_envelope_signatures(envelope, signatures, block_height, *address, *max_gas)
             .await?;
 
@@ -179,14 +174,9 @@ fn validate_packet(
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy::{
-        primitives::{Bytes, FixedBytes},
-        signers::{
-            k256::ecdsa::SigningKey,
-            local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
-            SignerSync,
-        },
-    };
+    use alloy_primitives::{Bytes, FixedBytes};
+    use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
+    use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
     use wavs_types::{Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute};
 
     #[test]

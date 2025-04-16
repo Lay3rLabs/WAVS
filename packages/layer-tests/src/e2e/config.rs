@@ -1,5 +1,11 @@
+use alloy_network::TransactionBuilder;
+use alloy_primitives::utils::parse_ether;
+use alloy_provider::Provider;
+use alloy_rpc_types_eth::TransactionRequest;
+use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
     config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
+    eth_client::EthClientBuilder,
     filesystem::workspace_path,
 };
 use wavs_types::ChainName;
@@ -17,6 +23,70 @@ pub struct Configs {
     pub cli_args: wavs_cli::args::CliArgs,
     pub aggregator: Option<wavs_aggregator::config::Config>,
     pub chains: ChainConfigs,
+    pub mnemonics: TestMnemonics,
+}
+
+#[derive(Clone, Debug)]
+pub struct TestMnemonics {
+    pub cli: String,
+    pub wavs: String,
+    pub aggregator: String,
+}
+
+impl TestMnemonics {
+    pub fn new() -> Self {
+        // just some random mnemonics so they don't conflict with binaries, we'll fund it from the anvil wallet upon creation
+        Self {
+            // 0x63A513A1c878283BC1fF829d6938f45D714E22A1
+            cli: "replace course few short practice end crawl element rather strong text fit"
+                .to_string(),
+            // 0x55a8F5cac28c2dA45aFA89c46e47CC4A445570AE
+            wavs: "aspect mushroom fly cousin hobby body need dose blind siren shoe annual"
+                .to_string(),
+            // 0xB1Ebb71428FF42F529708B5Afd2BA6Ad3432f38d
+            aggregator:
+                "brain medal write network foam renew muscle mirror rather daring bike uniform"
+                    .to_string(),
+        }
+    }
+
+    pub async fn fund(&self, chain_configs: &ChainConfigs) {
+        for chain_config in chain_configs.eth.values() {
+            let anvil_mnemonic =
+                "test test test test test test test test test test test junk".to_string();
+            let anvil_client = EthClientBuilder::new(chain_config.to_client_config(
+                None,
+                Some(anvil_mnemonic),
+                None,
+            ))
+            .build_signing()
+            .await
+            .unwrap();
+
+            for mnemonic in [&self.cli, &self.wavs, &self.aggregator] {
+                let dest_addr = MnemonicBuilder::<English>::default()
+                    .phrase(mnemonic)
+                    .build()
+                    .unwrap()
+                    .address();
+
+                let amount = parse_ether("100").unwrap();
+                let tx = TransactionRequest::default()
+                    .with_from(anvil_client.address())
+                    .with_to(dest_addr)
+                    .with_value(amount);
+
+                anvil_client
+                    .provider
+                    .send_transaction(tx)
+                    .await
+                    .unwrap()
+                    .watch()
+                    .await
+                    .unwrap();
+            }
+        }
+    }
 }
 
 impl From<TestConfig> for Configs {
@@ -24,6 +94,8 @@ impl From<TestConfig> for Configs {
         let matrix = test_config
             .matrix
             .into_validated(test_config.all, test_config.isolated.as_deref());
+
+        let mnemonics = TestMnemonics::new();
 
         let mut chain_configs = ChainConfigs::default();
 
@@ -101,6 +173,7 @@ impl From<TestConfig> for Configs {
             home: Some(workspace_path().join("packages").join("wavs")),
             // deliberately point to a non-existing file
             dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
+
             ..Default::default()
         })
         .build()
@@ -109,6 +182,7 @@ impl From<TestConfig> for Configs {
         wavs_config.active_trigger_chains = chain_configs.all_chain_names();
 
         wavs_config.chains = chain_configs.clone();
+        wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
 
         let aggregator_config = if matrix.eth_aggregator_chain_enabled() {
             let mut aggregator_config: wavs_aggregator::config::Config =
@@ -123,6 +197,7 @@ impl From<TestConfig> for Configs {
                 .unwrap();
 
             aggregator_config.chains = chain_configs.clone();
+            aggregator_config.mnemonic = Some(mnemonics.aggregator.clone());
 
             Some(aggregator_config)
         } else {
@@ -141,6 +216,8 @@ impl From<TestConfig> for Configs {
             ConfigBuilder::new(cli_args.clone()).build().unwrap();
 
         cli_config.chains = chain_configs.clone();
+        // some random mnemonic
+        cli_config.eth_mnemonic = Some(mnemonics.cli.clone());
 
         // Sanity check
 
@@ -164,6 +241,7 @@ impl From<TestConfig> for Configs {
             aggregator: aggregator_config,
             wavs: wavs_config,
             chains: chain_configs,
+            mnemonics,
         }
     }
 }

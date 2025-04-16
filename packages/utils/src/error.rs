@@ -1,4 +1,4 @@
-use alloy::rpc::types::TransactionReceipt;
+use alloy_rpc_types_eth::TransactionReceipt;
 use thiserror::Error;
 
 use wavs_types::ChainName;
@@ -8,8 +8,11 @@ pub enum EthClientError {
     #[error("Missing mnemonic")]
     MissingMnemonic,
 
+    #[error("HD index must be zero when using a private key (use mnemonic instead)")]
+    DerivationWithPrivateKey,
+
     #[error("Contract not deployed {0}")]
-    ContractNotDeployed(alloy::primitives::Address),
+    ContractNotDeployed(alloy_primitives::Address),
 
     #[error("No Transaction Receipt: {0}")]
     TransactionWithoutReceipt(anyhow::Error),

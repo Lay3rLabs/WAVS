@@ -184,8 +184,8 @@ impl TryFrom<layer_climb::prelude::Address> for component::EthAddress {
     }
 }
 
-impl From<alloy::primitives::Address> for component::EthAddress {
-    fn from(address: alloy::primitives::Address) -> Self {
+impl From<alloy_primitives::Address> for component::EthAddress {
+    fn from(address: alloy_primitives::Address) -> Self {
         Self {
             raw_bytes: address.to_vec(),
         }

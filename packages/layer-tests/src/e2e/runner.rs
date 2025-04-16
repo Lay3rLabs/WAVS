@@ -1,13 +1,14 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
-use alloy::{
-    primitives::{eip191_hash_message, keccak256},
-    signers::k256::ecdsa::SigningKey,
-    sol_types::SolValue,
-};
-use anyhow::{Context, Result};
+use alloy_primitives::{eip191_hash_message, keccak256};
+use alloy_provider::Provider;
+use alloy_signer::{k256::ecdsa::SigningKey, Signature};
+use alloy_sol_types::SolValue;
+use anyhow::Context;
+use futures::{stream::FuturesUnordered, StreamExt};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
+use tokio::time::Instant;
 use utils::context::AppContext;
 use wavs_types::{ChainName, EthereumContractSubmission, Service, SigningKeyResponse, Submit};
 
@@ -22,24 +23,43 @@ use super::{
 };
 
 pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: Services) {
-    // nonce errors, gotta run sequentially :(
-    ctx.rt.block_on(async move {
-        let mut all: Vec<(AnyService, (Service, Option<Service>))> =
-            services.lookup.into_iter().collect();
-        all.sort_by(|(a, _), (b, _)| match (a, b) {
-            // Ethereum should come first, then cross-chain, then cosmos
-            // to ensure that we move ethereum blocks forward
-            (AnyService::Eth(_), _) => std::cmp::Ordering::Less,
-            (_, AnyService::Eth(_)) => std::cmp::Ordering::Greater,
-            (AnyService::CrossChain(_), _) => std::cmp::Ordering::Less,
-            (_, AnyService::CrossChain(_)) => std::cmp::Ordering::Greater,
-            _ => std::cmp::Ordering::Equal,
-        });
+    let all: Vec<(AnyService, (Service, Option<Service>))> = services.lookup.into_iter().collect();
 
-        for (name, (service, multi_trigger_service)) in all {
+    let configs = Arc::new(configs);
+    let clients = Arc::new(clients);
+
+    let mut serial_futures = Vec::new();
+    let mut concurrent_futures = FuturesUnordered::new();
+
+    for (name, (service, multi_trigger_service)) in all {
+        let configs = configs.clone();
+        let clients = clients.clone();
+        let fut = async move {
+            tracing::info!("Testing service: {:?}", name);
+            let start_time = Instant::now();
             test_service(name, service, multi_trigger_service, &configs, &clients).await;
-            tracing::info!("Service {:?} passed", name);
+            tracing::info!(
+                "Service {:?} passed (ran for {}ms)",
+                name,
+                start_time.elapsed().as_millis()
+            );
+        };
+
+        if name.concurrent() {
+            concurrent_futures.push(fut);
+        } else {
+            serial_futures.push(fut);
         }
+    }
+
+    ctx.rt.block_on(async move {
+        tracing::info!("\n\n Running serial tests...");
+        for fut in serial_futures {
+            fut.await;
+        }
+
+        tracing::info!("\n\n Running concurrent tests...");
+        while (concurrent_futures.next().await).is_some() {}
     });
 }
 
@@ -51,8 +71,6 @@ async fn test_service(
     clients: &Clients,
 ) {
     let service_id = service.id.to_string();
-
-    tracing::info!("Testing service: {:?}", name);
 
     if let Some(multi_trigger_service) = &multi_trigger_service {
         // sanity checks for multi-trigger, to surface errors earlier
@@ -84,6 +102,9 @@ async fn test_service(
             Submit::None => 1,
         };
 
+        let submit_client = clients.get_eth_client(service.manager.chain_name());
+        let submit_start_block = submit_client.provider.get_block_number().await.unwrap();
+
         for task_number in 1..=n_tasks {
             let is_final = task_number == n_tasks;
 
@@ -92,11 +113,9 @@ async fn test_service(
                 service_id.clone(),
                 Some(workflow_id.to_string()),
                 get_input_for_service(name, &service, configs, workflow_index),
-                if is_final {
-                    Some(std::time::Duration::from_secs(30))
-                } else {
-                    None
-                },
+                submit_client.clone(),
+                submit_start_block,
+                is_final,
             )
             .await
             .unwrap();
@@ -111,41 +130,34 @@ async fn test_service(
                     configs,
                     workflow_index,
                 )
-                .await
-                .unwrap();
+                .await;
 
                 if let Some(multi_trigger_service) = &multi_trigger_service {
                     let multi_trigger_workflow =
                         multi_trigger_service.workflows.values().next().unwrap();
 
                     // we already triggered - now we just wait for it to land at the expected address
-                    let (chain_name, address) = match &multi_trigger_workflow.submit {
+                    let address = match &multi_trigger_workflow.submit {
                         Submit::None => {
                             panic!("no submission in multi-trigger service");
                         }
                         Submit::EthereumContract(EthereumContractSubmission {
-                            chain_name,
-                            address,
-                            ..
-                        }) => (chain_name.clone(), *address),
-                        Submit::Aggregator { url: _ } => (
-                            multi_trigger_service.manager.chain_name().clone(),
-                            multi_trigger_service.manager.eth_address_unchecked(),
-                        ),
+                            address, ..
+                        }) => *address,
+                        Submit::Aggregator { .. } => {
+                            multi_trigger_service.manager.eth_address_unchecked()
+                        }
                     };
 
+                    // we control the tests and *only* use on-chain triggers
+                    // for multi-service tests
                     let signed_data = wait_for_task_to_land(
-                        clients,
-                        &chain_name,
+                        submit_client.clone(),
                         address, // this is a different address than the original service submission
                         trigger_id,
-                        std::time::Duration::from_secs(10),
-                        // we control the tests and *only* use on-chain triggers
-                        // for multi-service tests
-                        false,
+                        submit_start_block,
                     )
-                    .await
-                    .unwrap();
+                    .await;
 
                     verify_signed_data(
                         clients,
@@ -155,8 +167,7 @@ async fn test_service(
                         configs,
                         0,
                     )
-                    .await
-                    .unwrap();
+                    .await;
                 }
             }
         }
@@ -231,7 +242,7 @@ async fn verify_signed_data(
     service: &Service,
     configs: &Configs,
     workflow_index: usize,
-) -> Result<()> {
+) {
     let data = &signed_data.data;
 
     let input_req = || {
@@ -307,35 +318,33 @@ async fn verify_signed_data(
     let signing_key = clients
         .http_client
         .get_service_key(service.id.clone())
-        .await?;
+        .await
+        .unwrap();
 
     // TODO - re-use stuff from https://github.com/Lay3rLabs/WAVS/pull/496 when it lands
 
     match signing_key {
         SigningKeyResponse::Secp256k1(bytes) => {
-            let private_key = SigningKey::from_slice(&bytes)?;
-            let service_address = alloy::primitives::Address::from_private_key(&private_key);
+            let private_key = SigningKey::from_slice(&bytes).unwrap();
+            let service_address = alloy_primitives::Address::from_private_key(&private_key);
 
-            let signature =
-                alloy::primitives::PrimitiveSignature::from_raw(&signed_data.signature)?;
+            let signature = Signature::from_raw(&signed_data.signature).unwrap();
 
             let envelope_bytes = signed_data.envelope.abi_encode();
             let envelope_hash = eip191_hash_message(keccak256(&envelope_bytes));
 
-            let signer_address = signature.recover_address_from_prehash(&envelope_hash)?;
+            let signer_address = signature
+                .recover_address_from_prehash(&envelope_hash)
+                .unwrap();
 
             if service_address != signer_address {
-                return Err(anyhow::anyhow!(
+                panic!(
                     "Signature does not match service {} address: {} != {}",
-                    service.id,
-                    service_address,
-                    signer_address
-                ));
+                    service.id, service_address, signer_address
+                );
             }
         }
     }
-
-    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug)]

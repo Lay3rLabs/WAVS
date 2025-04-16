@@ -1,4 +1,4 @@
-use alloy::primitives::FixedBytes;
+use alloy_primitives::FixedBytes;
 use tokio::sync::mpsc;
 use wavs_types::{Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction};
 

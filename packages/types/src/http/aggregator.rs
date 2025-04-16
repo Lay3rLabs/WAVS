@@ -1,4 +1,4 @@
-use alloy::rpc::types::TransactionReceipt;
+use alloy_rpc_types_eth::TransactionReceipt;
 use serde::{Deserialize, Serialize};
 
 use crate::{Packet, Service};

@@ -3,10 +3,8 @@ use crate::{
     config::Config,
     AppContext,
 };
-use alloy::{
-    providers::Provider,
-    rpc::types::{Filter, Log},
-};
+use alloy_provider::Provider;
+use alloy_rpc_types_eth::{Filter, Log};
 use anyhow::{Context, Result};
 use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
@@ -42,7 +40,7 @@ struct LookupMaps {
         Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
     /// lookup id by (chain id, contract event address, event hash)
     pub triggers_by_eth_contract_event: Arc<
-        RwLock<HashMap<(ChainName, alloy::primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
+        RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
     /// lookup by chain_name -> n_blocks
     pub triggers_by_block_interval: Arc<RwLock<HashMap<ChainName, Vec<(u32, LookupId)>>>>,
@@ -422,14 +420,12 @@ impl CoreTriggerManager {
         if let Some(triggers) = triggers_by_block_interval_lock.get_mut(&chain_name) {
             // Since we don't remove the trigger data when the trigger config is removed,
             // for efficiency we want to do it here.
-            let mut trigger_index = 0;
-            while trigger_index < triggers.len() {
-                let (countdown, lookup_id) = &mut triggers[trigger_index];
-                // if the trigger config is missing, remove the data
-                if !trigger_configs_lock.contains_key(lookup_id) {
-                    triggers.remove(trigger_index);
-                    continue;
-                }
+
+            triggers.retain(|(_, lookup_id)| trigger_configs_lock.contains_key(lookup_id));
+
+            // now we can iterate again on the active triggers
+            for (countdown, lookup_id) in triggers.iter_mut() {
+                // decrement the countdown
                 *countdown -= 1;
 
                 if *countdown == 0 {
@@ -447,7 +443,6 @@ impl CoreTriggerManager {
                         }
                     }
                 }
-                trigger_index += 1;
             }
         }
 
@@ -666,7 +661,7 @@ impl TriggerManager for CoreTriggerManager {
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
     triggers_by_eth_contract_address: &mut HashMap<
-        (ChainName, alloy::primitives::Address, ByteArray<32>),
+        (ChainName, alloy_primitives::Address, ByteArray<32>),
         HashSet<LookupId>,
     >,
     triggers_by_cosmos_contract_address: &mut HashMap<

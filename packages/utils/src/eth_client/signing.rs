@@ -1,4 +1,6 @@
-use alloy::{primitives::Address, rpc::types::TransactionReceipt, signers::Signer};
+use alloy_primitives::Address;
+use alloy_rpc_types_eth::TransactionReceipt;
+use alloy_signer::Signer;
 use wavs_types::{Envelope, EnvelopeExt, EnvelopeSignature, SignatureData};
 
 use crate::error::EthClientError;
@@ -49,12 +51,18 @@ impl EthSigningClient {
         };
 
         let gas = match max_gas {
-            None => self
-                .service_handler(service_handler)
-                .handleSignedEnvelope(envelope.clone(), signature_data.clone())
-                .estimate_gas()
-                .await
-                .map_err(|e| EthClientError::TransactionWithoutReceipt(e.into()))?,
+            None => {
+                let gas_estimate = self
+                    .service_handler(service_handler)
+                    .handleSignedEnvelope(envelope.clone(), signature_data.clone())
+                    .estimate_gas()
+                    .await
+                    .map_err(|e| EthClientError::TransactionWithoutReceipt(e.into()))?;
+
+                // pad it with a multiplier to account for gas fluctuations
+                ((gas_estimate as f32) * self.gas_estimate_multiplier) as u64
+            }
+
             Some(gas) => {
                 // EIP-1559 has a default 30m gas limit per block without override. Else:
                 // 'a intrinsic gas too high -- tx.gas_limit > env.block.gas_limit' is thrown
@@ -83,14 +91,9 @@ impl EthSigningClient {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy::{
-        primitives::FixedBytes,
-        signers::{
-            k256::ecdsa::SigningKey,
-            local::{coins_bip39::English, LocalSigner, MnemonicBuilder},
-            SignerSync,
-        },
-    };
+    use alloy_primitives::FixedBytes;
+    use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
+    use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
     use wavs_types::Envelope;
 
     #[test]

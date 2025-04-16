@@ -1,11 +1,11 @@
 use std::ops::Deref;
 
-use alloy::{primitives::Address, sol_types::SolValue};
+use alloy_primitives::Address;
+use alloy_provider::DynProvider;
+use alloy_sol_types::SolValue;
 use anyhow::{Context, Result};
-use deadpool::managed::Object;
 use serde::{Deserialize, Serialize};
-use utils::{alloy_helpers::SolidityEventFinder, eth_client::pool::SigningClientPoolManager};
-use wavs_types::SigningProvider;
+use utils::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};
 
 use super::{
     example_trigger::ISimpleTrigger::TriggerInfo,
@@ -16,13 +16,13 @@ use super::{
 };
 
 pub struct SimpleEthTriggerClient {
-    pub eth: Object<SigningClientPoolManager>,
+    pub eth: EthSigningClient,
     pub contract_address: Address,
     pub contract: SimpleTriggerT,
 }
 
 impl SimpleEthTriggerClient {
-    pub fn new(eth: Object<SigningClientPoolManager>, contract_address: Address) -> Self {
+    pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
         let contract = SimpleTrigger::new(contract_address, eth.provider.clone());
 
         Self {
@@ -32,12 +32,12 @@ impl SimpleEthTriggerClient {
         }
     }
 
-    pub async fn new_deploy(eth: Object<SigningClientPoolManager>) -> Result<Self> {
+    pub async fn new_deploy(eth: EthSigningClient) -> Result<Self> {
         let contract_address = Self::deploy(eth.provider.clone()).await?;
         Ok(Self::new(eth, contract_address))
     }
 
-    pub async fn deploy(provider: SigningProvider) -> Result<Address> {
+    pub async fn deploy(provider: DynProvider) -> Result<Address> {
         Ok(*SimpleTrigger::deploy(provider).await?.address())
     }
 
@@ -66,7 +66,7 @@ impl SimpleEthTriggerClient {
             .solidity_event()
             .context("Not found new task creation event")?;
 
-        let trigger_info = TriggerInfo::abi_decode(&event._0, false)?;
+        let trigger_info = TriggerInfo::abi_decode(&event._0)?;
 
         Ok(TriggerId::new(trigger_info.triggerId))
     }
@@ -79,7 +79,6 @@ impl SimpleEthTriggerClient {
             .call()
             .await
             .context("Failed to get trigger")?
-            ._0
             .data
             .to_vec())
     }
