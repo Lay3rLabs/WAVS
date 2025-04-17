@@ -36,6 +36,7 @@ fn setup_tracing(collector: &str, config: &Config) -> SdkTracerProvider {
 
     let subscriber = tracing_subscriber::Registry::default()
         .with(config.tracing_env_filter().unwrap())
+        .with(tracing_subscriber::fmt::layer()) // console logging layer
         .with(telemetry);
 
     tracing::subscriber::set_global_default(subscriber)
