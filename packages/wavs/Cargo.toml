@@ -50,6 +50,7 @@ alloy-contract = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-signer-local = { workspace = true }
+alloy-signer = { workspace = true }
 alloy-provider = { workspace = true }
 wasm-pkg-client = { workspace = true }
 wasm-pkg-common = { workspace = true }

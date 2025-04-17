@@ -28,6 +28,7 @@ alloy-signer-local = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-macro = { workspace = true }
 alloy-sol-types = { workspace = true }
+alloy-provider = { workspace = true }
 utils = { workspace = true }
 tempfile = { workspace = true }
 redb = { workspace = true }

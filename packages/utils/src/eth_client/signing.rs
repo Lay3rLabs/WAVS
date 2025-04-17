@@ -1,26 +1,35 @@
 use alloy_primitives::Address;
 use alloy_rpc_types_eth::TransactionReceipt;
-use alloy_signer::Signer;
-use wavs_types::{Envelope, EnvelopeExt, EnvelopeSignature, SignatureData};
+use alloy_signer::k256::SecretKey;
+use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
+use wavs_types::{Envelope, EnvelopeSignature, SignatureData};
 
 use crate::error::EthClientError;
 
 use super::EthSigningClient;
 
-impl EthSigningClient {
-    pub async fn sign_envelope(
-        &self,
-        envelope: &Envelope,
-    ) -> Result<EnvelopeSignature, EthClientError> {
-        let sig = self
-            .signer
-            .sign_hash(&envelope.eip191_hash())
-            .await
-            .map_err(|e| EthClientError::Signing(e.into()))?;
+pub fn make_signer(credentials: &str, hd_index: Option<u32>) -> super::Result<PrivateKeySigner> {
+    let hd_index = hd_index.unwrap_or_default();
 
-        Ok(EnvelopeSignature::Secp256k1(sig))
+    match credentials.strip_prefix("0x") {
+        Some(stripped) => {
+            // if the string begins with `0x`, it is a private key
+            // and so we can't derive additional keys from it
+            if hd_index > 0 {
+                return Err(EthClientError::DerivationWithPrivateKey.into());
+            }
+            let private_key = const_hex::decode(stripped)?;
+            let secret_key = SecretKey::from_slice(&private_key)?;
+            Ok(PrivateKeySigner::from_signing_key(secret_key.into()))
+        }
+        None => Ok(MnemonicBuilder::<English>::default()
+            .phrase(credentials)
+            .index(hd_index)?
+            .build()?),
     }
+}
 
+impl EthSigningClient {
     pub async fn send_envelope_signatures(
         &self,
         envelope: Envelope,
@@ -90,28 +99,24 @@ impl EthSigningClient {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use alloy_primitives::FixedBytes;
-    use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
-    use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
-    use wavs_types::Envelope;
+    use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
+    use wavs_types::{Envelope, EnvelopeExt};
 
-    #[test]
-    fn signature_validation() {
+    #[tokio::test]
+    async fn signature_validation() {
         let signer = mock_signer();
         let envelope = mock_envelope();
 
-        let signature = signer.sign_hash_sync(&envelope.eip191_hash()).unwrap();
+        let signature = envelope.sign(&signer).await.unwrap();
 
         assert_eq!(
-            signature
-                .recover_address_from_prehash(&envelope.eip191_hash())
-                .unwrap(),
+            signature.eth_signer_address(&envelope).unwrap(),
             signer.address()
         );
     }
 
-    fn mock_signer() -> LocalSigner<SigningKey> {
+    fn mock_signer() -> PrivateKeySigner {
         MnemonicBuilder::<English>::default()
             .word_count(24)
             .build_random()

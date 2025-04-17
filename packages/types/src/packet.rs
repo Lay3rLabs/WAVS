@@ -1,7 +1,10 @@
 pub use crate::solidity_types::Envelope;
 use crate::{ServiceID, TriggerAction, TriggerConfig, WorkflowID};
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes};
+use alloy_signer::Signer;
+use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::SolValue;
+use async_trait::async_trait;
 use ripemd::Ripemd160;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -12,11 +15,19 @@ pub struct Packet {
     pub route: PacketRoute,
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,
-    pub block_height: u64,
 }
 
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait EnvelopeExt {
     fn eip191_hash(&self) -> FixedBytes<32>;
+
+    async fn sign(&self, signer: &PrivateKeySigner) -> alloy_signer::Result<EnvelopeSignature> {
+        signer
+            .sign_hash(&self.eip191_hash())
+            .await
+            .map(EnvelopeSignature::Secp256k1)
+    }
 }
 
 impl EnvelopeExt for Envelope {

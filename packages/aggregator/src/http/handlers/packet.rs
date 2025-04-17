@@ -1,4 +1,5 @@
 use alloy_primitives::{Address, U256};
+use alloy_provider::Provider;
 use anyhow::{anyhow, bail, ensure};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
@@ -43,7 +44,6 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
     };
 
     let envelope = packet.envelope.clone();
-    let block_height = packet.block_height; // See https://github.com/Lay3rLabs/wavs-middleware/issues/54
     let route = packet.route.clone();
     let mut total_weight;
     let threshold;
@@ -121,6 +121,8 @@ async fn process_packet(state: HttpState, packet: Packet) -> anyhow::Result<AddP
             .drain(..)
             .map(|queued| queued.packet.signature)
             .collect();
+
+        let block_height = client.provider.get_block_number().await?;
 
         let tx_receipt = client
             .send_envelope_signatures(envelope, signatures, block_height, *address, *max_gas)
@@ -227,7 +229,6 @@ mod test {
 
         Packet {
             envelope: envelope.clone(),
-            block_height: 1,
             route: PacketRoute {
                 service_id: "service".parse().unwrap(),
                 workflow_id: "workflow".parse().unwrap(),
