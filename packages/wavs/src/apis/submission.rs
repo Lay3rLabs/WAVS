@@ -56,6 +56,8 @@ pub enum SubmissionError {
     Ethereum(anyhow::Error),
     #[error("missing ethereum chain")]
     MissingEthereumChain,
+    #[error("chain is not an ethereum chain")]
+    NotEthereumChain,
     #[error("cross-chain submissions are not supported yet")]
     NoCrossChainSubmissions,
     #[error("missing aggregator endpoint")]

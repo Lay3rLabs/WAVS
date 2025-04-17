@@ -269,7 +269,7 @@ impl Submission for CoreSubmission {
                         .ok_or(SubmissionError::MissingEthereumChain)?
                         .clone()
                         .try_into()
-                        .map_err(|_| SubmissionError::MissingEthereumChain)?;
+                        .map_err(|_| SubmissionError::NotEthereumChain)?;
 
                     let sending_client = EthClientBuilder::new(chain_config.to_client_config(
                         None,
