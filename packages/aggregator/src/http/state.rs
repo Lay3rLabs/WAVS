@@ -74,7 +74,7 @@ impl HttpState {
 
         let sending_client = EthClientBuilder::new(chain_config.to_client_config(
             None,
-            self.config.mnemonic.clone(),
+            self.config.credential.clone(),
             Some(EthClientTransport::Http),
         ))
         .build_signing()
