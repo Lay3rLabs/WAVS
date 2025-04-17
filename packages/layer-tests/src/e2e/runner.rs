@@ -1,16 +1,17 @@
 use std::{path::PathBuf, sync::Arc};
 
-use alloy_primitives::{eip191_hash_message, keccak256};
 use alloy_provider::Provider;
 use alloy_signer::{k256::ecdsa::SigningKey, Signature};
-use alloy_sol_types::SolValue;
+use alloy_signer_local::PrivateKeySigner;
 use anyhow::Context;
 use futures::{stream::FuturesUnordered, StreamExt};
 use layer_climb::prelude::Address;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use utils::context::AppContext;
-use wavs_types::{ChainName, EthereumContractSubmission, Service, SigningKeyResponse, Submit};
+use wavs_types::{
+    ChainName, EnvelopeSignature, EthereumContractSubmission, Service, SigningKeyResponse, Submit,
+};
 
 use crate::e2e::add_task::{add_task, wait_for_task_to_land};
 
@@ -315,32 +316,28 @@ async fn verify_signed_data(
         }
     }
 
-    let signing_key = clients
+    let service_signing_key = clients
         .http_client
         .get_service_key(service.id.clone())
         .await
         .unwrap();
 
-    // TODO - re-use stuff from https://github.com/Lay3rLabs/WAVS/pull/496 when it lands
+    match service_signing_key {
+        SigningKeyResponse::Secp256k1(service_signing_key_bytes) => {
+            let service_private_key = SigningKey::from_slice(&service_signing_key_bytes).unwrap();
+            let service_signer = PrivateKeySigner::from_signing_key(service_private_key);
+            let service_address = service_signer.address();
 
-    match signing_key {
-        SigningKeyResponse::Secp256k1(bytes) => {
-            let private_key = SigningKey::from_slice(&bytes).unwrap();
-            let service_address = alloy_primitives::Address::from_private_key(&private_key);
-
-            let signature = Signature::from_raw(&signed_data.signature).unwrap();
-
-            let envelope_bytes = signed_data.envelope.abi_encode();
-            let envelope_hash = eip191_hash_message(keccak256(&envelope_bytes));
-
-            let signer_address = signature
-                .recover_address_from_prehash(&envelope_hash)
+            let envelope_signature =
+                EnvelopeSignature::Secp256k1(Signature::from_raw(&signed_data.signature).unwrap());
+            let envelope_address = envelope_signature
+                .eth_signer_address(&signed_data.envelope)
                 .unwrap();
 
-            if service_address != signer_address {
+            if service_address != envelope_address {
                 panic!(
-                    "Signature does not match service {} address: {} != {}",
-                    service.id, service_address, signer_address
+                    "Signature does not match service {} address: {} (via service) != {} (via signature)",
+                    service.id, service_address, envelope_address
                 );
             }
         }

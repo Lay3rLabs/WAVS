@@ -57,7 +57,7 @@ alloy-primitives = { version = "1.0.0", features = ["serde"] }
 alloy-provider = {version = "0.14.0", features = ["anvil-node", "ws"] }
 alloy-rpc-client = {version = "0.14.0", features = ["ws"]}
 alloy-sol-types = "1.0.0"
-alloy-sol-macro = "1.0.0"
+alloy-sol-macro = {version = "1.0.0", features = ["json"]}
 alloy-transport = "0.14.0"
 alloy-transport-http = "0.14.0"
 alloy-contract = "0.14.0"
@@ -115,7 +115,7 @@ lru = "0.13.0"
 
 # time
 chrono = "0.4.38"
-cron = "0.15.0"
+cron = {version = "0.15.0", features = ["serde"]}
 uuid = { version = "1.11.0", features = ["v7", "serde"] }
 
 # utilis

@@ -15,7 +15,7 @@ solidity-rpc = []
 
 [dependencies]
 anyhow = { workspace = true }
-cron = { workspace = true, features = ["serde"] }
+cron = { workspace = true}
 chrono = { workspace = true }
 serde = { workspace = true }
 wasm-pkg-client = { workspace = true }
@@ -30,8 +30,10 @@ bincode = { workspace = true }
 ripemd = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-sol-macro = { workspace = true, features = ["json"] }
+alloy-sol-macro = { workspace = true }
 alloy-sol-types = { workspace = true }
-
+alloy-signer-local ={ workspace = true }
 alloy-provider = { workspace = true }
 alloy-contract = { workspace = true }
+alloy-signer = { workspace = true }
+async-trait = { workspace = true }

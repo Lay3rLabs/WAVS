@@ -68,14 +68,16 @@ pub enum SubmissionError {
     ExpectedEthAddress(String),
     #[error("expected eth message")]
     ExpectedEthMessage,
-    #[error("failed to sign payload")]
-    FailedToSignPayload,
+    #[error("failed to sign envelope: {0:?}")]
+    FailedToSignEnvelope(alloy_signer::Error),
     #[error("failed to submit to eth directly: {0}")]
     FailedToSubmitEthDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
     FailedToSubmitCosmos(anyhow::Error),
-    #[error("missing ethereum signing client for service {0}")]
-    MissingEthereumSigningClient(ServiceID),
+    #[error("missing ethereum signer for service {0}")]
+    MissingEthereumSigner(ServiceID),
+    #[error("failed to create signer for service {0}: {1:?}")]
+    FailedToCreateEthereumSigner(ServiceID, anyhow::Error),
     #[error("missing ethereum signing client for chain {0}")]
     MissingEthereumSendingClient(ChainName),
 }

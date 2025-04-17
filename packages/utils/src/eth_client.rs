@@ -2,17 +2,17 @@ pub mod contracts;
 pub mod signing;
 
 use alloy_network::{EthereumWallet, Network};
-use alloy_primitives::{hex, Address};
+use alloy_primitives::Address;
 use alloy_provider::{
     fillers::{BlobGasFiller, ChainIdFiller, GasFiller, NonceManager},
     DynProvider, Provider, ProviderBuilder,
 };
-use alloy_signer::k256::{ecdsa::SigningKey, SecretKey};
-use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
+use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::{TransportErrorKind, TransportResult};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use signing::make_signer;
 use std::sync::{atomic::AtomicU64, Arc};
 
 use crate::error::EthClientError;
@@ -43,7 +43,7 @@ pub struct EthSigningClient {
     /// due to type system limitations, we need to store it separately
     /// since the signer in `EthereumWallet` implements only `TxSigner`
     /// and there is not a direct way convert it into `Signer`
-    pub signer: Arc<LocalSigner<SigningKey>>,
+    pub signer: Arc<PrivateKeySigner>,
 
     /// If a transaction does not have `max_gas` set, then it will estimate
     /// however the actual gas needed fluctuates, so we can pad it with a multiplier
@@ -133,27 +133,14 @@ impl EthClientBuilder {
         if self.preferred_transport() != EthClientTransport::Http {
             tracing::warn!("signing clients should probably prefer http transport");
         }
-        let mnemonic = self
+
+        let credentials = self
             .config
             .credential
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
 
-        let hd_index = self.config.hd_index.unwrap_or(0);
-
-        let signer: LocalSigner<SigningKey> = if let Some(stripped) = mnemonic.strip_prefix("0x") {
-            if hd_index > 0 {
-                return Err(EthClientError::DerivationWithPrivateKey.into());
-            }
-            let private_key = hex::decode(stripped)?;
-            let secret_key = SecretKey::from_slice(&private_key)?;
-            LocalSigner::from_signing_key(secret_key.into())
-        } else {
-            MnemonicBuilder::<English>::default()
-                .phrase(mnemonic)
-                .index(hd_index)?
-                .build()?
-        };
+        let signer = make_signer(&credentials, self.config.hd_index)?;
 
         let wallet: EthereumWallet = signer.clone().into();
 

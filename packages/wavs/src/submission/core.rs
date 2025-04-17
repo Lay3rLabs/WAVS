@@ -9,17 +9,17 @@ use crate::{
     AppContext,
 };
 use alloy_provider::Provider;
-use anyhow::anyhow;
+use alloy_signer_local::PrivateKeySigner;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, EthereumChainConfig},
-    eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
+    eth_client::{signing::make_signer, EthClientBuilder, EthClientTransport, EthSigningClient},
 };
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainName, Envelope, EthereumContractSubmission, Packet, PacketRoute, ServiceID,
+    ChainName, Envelope, EnvelopeExt, EthereumContractSubmission, Packet, PacketRoute, ServiceID,
     SigningKeyResponse, Submit,
 };
 
@@ -28,7 +28,7 @@ pub struct CoreSubmission {
     chain_configs: BTreeMap<ChainName, AnyChainConfig>,
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
-    eth_signing_clients: Arc<RwLock<HashMap<ServiceID, EthSigningClient>>>,
+    eth_signers: Arc<RwLock<HashMap<ServiceID, PrivateKeySigner>>>,
     eth_sending_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
     eth_mnemonic: String,
     eth_mnemonic_hd_index_count: Arc<AtomicU32>,
@@ -41,7 +41,7 @@ impl CoreSubmission {
         Ok(Self {
             chain_configs: config.chains.clone().into(),
             http_client: reqwest::Client::new(),
-            eth_signing_clients: Arc::new(RwLock::new(HashMap::new())),
+            eth_signers: Arc::new(RwLock::new(HashMap::new())),
             eth_sending_clients: Arc::new(RwLock::new(HashMap::new())),
             eth_mnemonic: config
                 .submission_mnemonic
@@ -56,28 +56,24 @@ impl CoreSubmission {
         route: PacketRoute,
         envelope: Envelope,
     ) -> Result<Packet, SubmissionError> {
-        let eth_client = {
-            let lock = self.eth_signing_clients.read().unwrap();
+        let eth_signer = {
+            let lock = self.eth_signers.read().unwrap();
             lock.get(&route.service_id)
-                .ok_or(SubmissionError::MissingEthereumSigningClient(
+                .ok_or(SubmissionError::MissingEthereumSigner(
                     route.service_id.clone(),
                 ))?
                 .clone()
         };
 
-        let block_height = eth_client
-            .provider
-            .get_block_number()
+        let signature = envelope
+            .sign(&eth_signer)
             .await
-            .map_err(|e| SubmissionError::Ethereum(anyhow!("{}", e)))?;
-
-        let signature = eth_client.sign_envelope(&envelope).await?;
+            .map_err(SubmissionError::FailedToSignEnvelope)?;
 
         Ok(Packet {
             route,
             envelope,
             signature,
-            block_height,
         })
     }
 
@@ -105,11 +101,17 @@ impl CoreSubmission {
                 .clone()
         };
 
+        let block_height = client
+            .provider
+            .get_block_number()
+            .await
+            .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
+
         let _tx_receipt = client
             .send_envelope_signatures(
                 packet.envelope,
                 vec![packet.signature],
-                packet.block_height,
+                block_height,
                 address,
                 max_gas,
             )
@@ -237,35 +239,19 @@ impl Submission for CoreSubmission {
             .eth_mnemonic_hd_index_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let chain_config = self
-            .chain_configs
-            .get(service.manager.chain_name())
-            .ok_or(SubmissionError::MissingEthereumChain)?;
-
-        let chain_config: EthereumChainConfig = chain_config
-            .clone()
-            .try_into()
-            .map_err(|_| SubmissionError::MissingEthereumChain)?;
-
-        let signing_client = EthClientBuilder::new(chain_config.to_client_config(
-            Some(hd_index),
-            Some(self.eth_mnemonic.clone()),
-            Some(EthClientTransport::Http),
-        ))
-        .build_signing()
-        .await
-        .map_err(SubmissionError::Ethereum)?;
+        let signer = make_signer(&self.eth_mnemonic, Some(hd_index))
+            .map_err(|e| SubmissionError::FailedToCreateEthereumSigner(service.id.clone(), e))?;
 
         tracing::info!(
             "Created new signing client for service {} -> {}",
             service.id,
-            signing_client.address()
+            signer.address()
         );
 
-        self.eth_signing_clients
+        self.eth_signers
             .write()
             .unwrap()
-            .insert(service.id.clone(), signing_client);
+            .insert(service.id.clone(), signer);
 
         for workflow in service.workflows.values() {
             if let Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) =
@@ -277,6 +263,14 @@ impl Submission for CoreSubmission {
                     .unwrap()
                     .contains_key(chain_name)
                 {
+                    let chain_config: EthereumChainConfig = self
+                        .chain_configs
+                        .get(service.manager.chain_name())
+                        .ok_or(SubmissionError::MissingEthereumChain)?
+                        .clone()
+                        .try_into()
+                        .map_err(|_| SubmissionError::MissingEthereumChain)?;
+
                     let sending_client = EthClientBuilder::new(chain_config.to_client_config(
                         None,
                         Some(self.eth_mnemonic.clone()),
@@ -307,13 +301,13 @@ impl Submission for CoreSubmission {
         &self,
         service_id: ServiceID,
     ) -> Result<SigningKeyResponse, SubmissionError> {
-        self.eth_signing_clients
+        self.eth_signers
             .read()
             .unwrap()
             .get(&service_id)
             .ok_or(SubmissionError::MissingMnemonic)
-            .map(|client| {
-                let key_bytes = client.signer.credential().to_bytes().to_vec();
+            .map(|signer| {
+                let key_bytes = signer.credential().to_bytes().to_vec();
 
                 SigningKeyResponse::Secp256k1(key_bytes)
             })
