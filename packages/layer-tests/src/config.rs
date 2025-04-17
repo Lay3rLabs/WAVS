@@ -23,8 +23,6 @@ pub struct TestConfig {
 }
 
 impl ConfigExt for TestConfig {
-    const FILENAME: &'static str = "layer-tests.toml";
-
     fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
         f(&mut self._data_dir);
     }

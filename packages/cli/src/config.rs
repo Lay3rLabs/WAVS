@@ -33,8 +33,6 @@ pub struct Config {
 }
 
 impl ConfigExt for Config {
-    const FILENAME: &'static str = "cli.toml";
-
     fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
         f(&mut self.data);
     }

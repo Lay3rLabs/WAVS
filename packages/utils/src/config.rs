@@ -21,6 +21,9 @@ pub trait CliEnvExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
     // e.g. "WAVS"
     const ENV_VAR_PREFIX: &'static str;
 
+    // The section identifier in the TOML file, e.g. "wavs", "cli", "aggregator"
+    const TOML_IDENTIFIER: &'static str;
+
     // an optional argument to specify the home directory
     // if not supplied, config will try a series of fallbacks
     fn home_dir(&self) -> Option<PathBuf>;
@@ -47,7 +50,7 @@ pub trait CliEnvExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
 
 pub trait ConfigExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
     // e.g. "wavs.toml"
-    const FILENAME: &'static str;
+    const FILENAME: &'static str = "config.toml";
 
     // the data directory, which is the root of the data storage
     fn with_data_dir(&mut self, f: fn(&mut PathBuf));
@@ -109,14 +112,20 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
                 cli_env_args.home_dir()
             ))?;
 
-        // lastly, our final config, which can have more complex types with easier TOML-like syntax
-        // but is overriden by the cli/env args if they exist
-        // and also fills in defaults for required values at the end
-        let mut config: CONFIG = Figment::new()
-            .merge(figment::providers::Toml::file(filepath))
-            .merge(figment::providers::Serialized::defaults(cli_env_args))
+        // Build the figment with proper layer ordering
+        let figment = Figment::new()
+            // First, apply default values as the lowest priority
             .join(figment::providers::Serialized::defaults(CONFIG::default()))
-            .extract()?;
+            // Apply the whole TOML file (this will get global values)
+            .merge(figment::providers::Toml::file(&filepath))
+            // Apply the process-specific section as a profile
+            // This creates a higher-priority layer with values from that section
+            .merge(figment::providers::Toml::file(&filepath).profile(ARG::TOML_IDENTIFIER))
+            // Finally, apply CLI/env args as highest priority
+            .merge(figment::providers::Serialized::defaults(cli_env_args));
+
+        // Extract the config
+        let mut config: CONFIG = figment.extract()?;
 
         config.with_data_dir(|data_dir| {
             *data_dir = shellexpand::tilde(&data_dir.to_string_lossy())
@@ -178,17 +187,26 @@ impl ConfigFilePath {
             dirs.push(dir);
         }
 
+        // Check the workspace directory (parent of the crate directory)
+        if let Ok(dir) = std::env::current_dir() {
+            if let Some(packages_dir) = dir.parent() {
+                if let Some(workspace_dir) = packages_dir.parent() {
+                    dirs.push(workspace_dir.to_path_buf());
+                }
+            }
+        }
+
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
-        // in this case, to not pollute the home directory, it looks for ~/.{dirname}/{filename} (e.g. ~/.wavs/wavs.toml)
+        // in this case, to not pollute the home directory, it looks for ~/.{dirname}/{filename} (e.g. ~/.wavs/config.toml)
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(format!(".{}", DIRNAME))) {
             dirs.push(dir);
         }
 
-        // checks the `wavs/wavs.toml` file in the system config directory
+        // checks the `wavs/config.toml` file in the system config directory
         // this will vary, but the final path with then be something like:
-        // Linux: ~/.config/wavs/wavs.toml
-        // macOS: ~/Library/Application Support/wavs/wavs.toml
-        // Windows: C:\Users\MyUserName\AppData\Roaming\wavs\wavs.toml
+        // Linux: ~/.config/wavs/config.toml
+        // macOS: ~/Library/Application Support/wavs/config.toml
+        // Windows: C:\Users\MyUserName\AppData\Roaming\wavs\config.toml
         if let Some(dir) = dirs::config_dir().map(|dir| dir.join(DIRNAME)) {
             dirs.push(dir);
         }
@@ -196,7 +214,7 @@ impl ConfigFilePath {
         // On linux, this may already be added via config_dir above
         // but on macOS and windows, and maybe unix-like environments (msys, wsl, etc)
         // it's helpful to add it explicitly
-        // the final path here typically becomes something like ~/.config/wavs/wavs.toml
+        // the final path here typically becomes something like ~/.config/wavs/config.toml
         if let Some(dir) = std::env::var("XDG_CONFIG_HOME")
             .ok()
             .map(PathBuf::from)
@@ -209,12 +227,12 @@ impl ConfigFilePath {
         // but on systems like Windows, it's helpful to add it explicitly
         // since the system may place the config dir in AppData/Roaming
         // but we want to check the user's home dir first
-        // this will definitively become something like ~/.config/wavs/wavs.toml
+        // this will definitively become something like ~/.config/wavs/config.toml
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(".config").join(DIRNAME)) {
             dirs.push(dir);
         }
 
-        // Lastly, try /etc/wavs/wavs.toml
+        // Lastly, try /etc/wavs/config.toml
         dirs.push(PathBuf::from("/etc").join(DIRNAME));
 
         // now we have a list of directories to check, we need to add the filename to each
@@ -441,8 +459,6 @@ mod test {
     }
 
     impl ConfigExt for TestConfig {
-        const FILENAME: &'static str = "wavs.toml";
-
         fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
             f(&mut self.data);
         }
@@ -491,6 +507,7 @@ mod test {
 
     impl CliEnvExt for TestCliEnv {
         const ENV_VAR_PREFIX: &'static str = "WAVS";
+        const TOML_IDENTIFIER: &'static str = "test";
 
         fn home_dir(&self) -> Option<PathBuf> {
             self.home.clone()
