@@ -343,10 +343,11 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<PathBuf>,
 
-    /// eth mnemonic (usually leave this as None and override in env)
+    /// Ethereum credential for signing transactions (can be a mnemonic or private key)
+    /// Usually leave this as None and override in env
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub eth_mnemonic: Option<String>,
+    pub eth_credential: Option<String>,
 
     /// cosmos mnemonic (usually leave this as None and override in env)
     #[arg(long)]

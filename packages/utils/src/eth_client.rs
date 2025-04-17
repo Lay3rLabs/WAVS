@@ -71,7 +71,7 @@ impl EthSigningClient {
 pub struct EthClientConfig {
     pub ws_endpoint: Option<String>,
     pub http_endpoint: Option<String>,
-    pub mnemonic: Option<String>,
+    pub credential: Option<String>,
     pub hd_index: Option<u32>,
     /// Preferred transport
     pub transport: Option<EthClientTransport>,
@@ -135,7 +135,7 @@ impl EthClientBuilder {
         }
         let mnemonic = self
             .config
-            .mnemonic
+            .credential
             .take()
             .ok_or(EthClientError::MissingMnemonic)?;
 

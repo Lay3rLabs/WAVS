@@ -217,7 +217,7 @@ impl From<TestConfig> for Configs {
 
         cli_config.chains = chain_configs.clone();
         // some random mnemonic
-        cli_config.eth_mnemonic = Some(mnemonics.cli.clone());
+        cli_config.eth_credential = Some(mnemonics.cli.clone());
 
         // Sanity check
 
