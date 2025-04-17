@@ -4,7 +4,7 @@ use crate::bindings::compat::{
 };
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use example_submit::DataWithId;
 use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,7 @@ pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)>
         TriggerData::EthContractEvent(TriggerDataEthContractEvent { log, .. }) => {
             let event: NewTrigger = decode_event_log_data!(log)?;
 
-            let trigger_info = TriggerInfo::abi_decode(&event._0, false)?;
+            let trigger_info = TriggerInfo::abi_decode(&event._0)?;
             Ok((trigger_info.triggerId, trigger_info.data.to_vec()))
         }
         _ => Err(anyhow::anyhow!("Unsupported trigger data type")),
@@ -89,15 +89,17 @@ impl ChainQuerierExt for RootProvider {
         address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>> {
-        let contract = SimpleTrigger::new(address.try_into()?, self);
+        let address = match address {
+            layer_climb::prelude::Address::Cosmos { .. } => {
+                return Err(anyhow!("Cosmos address not supported"))
+            }
+            layer_climb::prelude::Address::Eth(addr_eth) => {
+                alloy_primitives::Address::new(addr_eth.as_bytes())
+            }
+        };
+        let contract = SimpleTrigger::new(address, self);
 
-        Ok(contract
-            .getTrigger(trigger_id)
-            .call()
-            .await?
-            ._0
-            .data
-            .to_vec())
+        Ok(contract.getTrigger(trigger_id).call().await?.data.to_vec())
     }
 }
 
@@ -115,11 +117,12 @@ mod example_trigger {
 }
 
 mod example_submit {
-    use alloy_sol_macro::sol;
+    use alloy_sol_types::sol;
     pub use ISimpleSubmit::DataWithId;
 
     sol!(
         #[allow(missing_docs)]
+        #[sol(rpc)]
         ISimpleSubmit,
         "../../contracts/solidity/abi/ISimpleSubmit.sol/ISimpleSubmit.json"
     );
