@@ -21,7 +21,8 @@ use serde::{Deserialize, Serialize};
 use tower::Service as _;
 use utils::config::ChainConfigs;
 use wavs_types::{
-    ComponentSource, DeleteServicesRequest, ListServicesResponse, Service, ServiceID, Submit,
+    ComponentSource, DeleteServicesRequest, ListServicesResponse, Service, ServiceID,
+    ServiceManager, Submit,
 };
 
 pub struct MockE2ETestRunner {
@@ -126,7 +127,6 @@ impl MockE2ETestRunner {
             trigger,
             source,
             submit,
-            None,
             ServiceManager::Ethereum {
                 chain_name: "eth".try_into().unwrap(),
                 address: rand_address_eth(),
