@@ -16,7 +16,7 @@ pub mod example_trigger {
 
 pub mod example_submit {
     use alloy_sol_types::sol;
-    pub use interface::ISimpleSubmit::DataWithId;
+    pub use interface::ISimpleSubmit::SignedData;
 
     sol!(
         #[allow(missing_docs)]

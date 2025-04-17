@@ -3,11 +3,14 @@ use std::time::Duration;
 use alloy_provider::{ext::AnvilApi, Provider};
 use anyhow::{bail, Context, Result};
 use utils::eth_client::EthSigningClient;
-use wavs_types::{Envelope, EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
+use wavs_types::{EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
 
 use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
-    example_eth_client::{SimpleEthSubmitClient, SimpleEthTriggerClient, TriggerId},
+    example_eth_client::{
+        example_submit::ISimpleSubmit::SignedData, SimpleEthSubmitClient, SimpleEthTriggerClient,
+        TriggerId,
+    },
 };
 
 use super::clients::Clients;
@@ -133,13 +136,6 @@ pub async fn add_task(
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct SignedData {
-    pub data: Vec<u8>,
-    pub envelope: Envelope,
-    pub signature: Vec<u8>,
-}
-
 pub async fn wait_for_task_to_land(
     eth_submit_client: EthSigningClient,
     address: alloy_primitives::Address,
@@ -155,17 +151,7 @@ pub async fn wait_for_task_to_land(
             }
             match submit_client.trigger_validated(trigger_id).await {
                 true => {
-                    let data = submit_client.trigger_data(trigger_id).await.unwrap();
-
-                    let envelope = submit_client.trigger_envelope(trigger_id).await.unwrap();
-
-                    let signature = submit_client.trigger_signature(trigger_id).await.unwrap();
-
-                    return SignedData {
-                        data,
-                        signature,
-                        envelope,
-                    };
+                    return submit_client.signed_data(trigger_id).await.unwrap();
                 }
                 false => {
                     tracing::debug!("Waiting for task response on trigger {}", trigger_id,);

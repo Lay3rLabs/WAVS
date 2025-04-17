@@ -10,13 +10,16 @@ use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use utils::context::AppContext;
 use wavs_types::{
-    ChainName, EnvelopeSignature, EthereumContractSubmission, Service, SigningKeyResponse, Submit,
+    ChainName, Envelope, EnvelopeExt, EnvelopeSignature, EthereumContractSubmission, Service,
+    SigningKeyResponse, Submit,
 };
 
-use crate::e2e::add_task::{add_task, wait_for_task_to_land};
+use crate::{
+    e2e::add_task::{add_task, wait_for_task_to_land},
+    example_eth_client::example_submit::ISimpleSubmit::SignedData,
+};
 
 use super::{
-    add_task::SignedData,
     clients::Clients,
     config::Configs,
     matrix::{AnyService, CosmosService, CrossChainService, EthService},
@@ -311,7 +314,7 @@ async fn verify_signed_data(
     if let Some(expected_data) = expected_data {
         assert_eq!(*data, expected_data);
 
-        if let Ok(msg) = String::from_utf8(data.clone()) {
+        if let Ok(msg) = String::from_utf8(data.clone().to_vec()) {
             tracing::info!("Response: {}", msg);
         }
     }
@@ -328,16 +331,25 @@ async fn verify_signed_data(
             let service_signer = PrivateKeySigner::from_signing_key(service_private_key);
             let service_address = service_signer.address();
 
-            let envelope_signature =
-                EnvelopeSignature::Secp256k1(Signature::from_raw(&signed_data.signature).unwrap());
-            let envelope_address = envelope_signature
-                .eth_signer_address(&signed_data.envelope)
-                .unwrap();
+            let envelope_signature = EnvelopeSignature::Secp256k1(
+                Signature::from_raw(&signed_data.signatureData.signatures[0]).unwrap(),
+            );
+            // "same" type
+            let envelope = Envelope {
+                eventId: signed_data.envelope.eventId,
+                ordering: signed_data.envelope.ordering,
+                payload: signed_data.envelope.payload,
+            };
+            let envelope_address = envelope_signature.eth_signer_address(&envelope).unwrap();
 
             if service_address != envelope_address {
                 panic!(
-                    "Signature does not match service {} address: {} (via service) != {} (via signature)",
-                    service.id, service_address, envelope_address
+                    "Signature does not match service {} service address: {} signature address: {} signature bytes: {} envelope hash: {}",
+                    service.id,
+                    service_address,
+                    envelope_address,
+                    const_hex::encode(envelope_signature.as_bytes()),
+                    const_hex::encode(envelope.eip191_hash())
                 );
             }
         }

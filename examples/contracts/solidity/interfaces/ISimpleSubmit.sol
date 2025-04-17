@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity ^0.8.0;
 
 import {ISimpleTrigger} from "./ISimpleTrigger.sol";
+import {IWavsServiceHandler} from "../../../../contracts/solidity/interfaces/IWavsServiceHandler.sol";
 
 interface ISimpleSubmit {
     struct DataWithId {
@@ -9,6 +10,11 @@ interface ISimpleSubmit {
         bytes data;
     }
 
-    // just to make alloy see the DataWithId struct
-    function getDataWithId(ISimpleTrigger.TriggerId triggerId) external view returns (DataWithId memory);
+    struct SignedData {
+        bytes data;
+        IWavsServiceHandler.SignatureData signatureData;
+        IWavsServiceHandler.Envelope envelope;
+    }
+
+    function getSignedData(ISimpleTrigger.TriggerId triggerId) external view returns (SignedData memory);
 }

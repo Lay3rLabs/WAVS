@@ -55,9 +55,9 @@ impl EnvelopeSignature {
         }
     }
 
-    pub fn into_vec(self) -> Vec<u8> {
+    pub fn as_bytes(&self) -> [u8; 65] {
         match self {
-            EnvelopeSignature::Secp256k1(sig) => sig.into(),
+            EnvelopeSignature::Secp256k1(sig) => sig.as_bytes(),
         }
     }
 }
