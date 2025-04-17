@@ -13,6 +13,8 @@ pub fn make_signer(credentials: &str, hd_index: Option<u32>) -> super::Result<Pr
 
     match credentials.strip_prefix("0x") {
         Some(stripped) => {
+            // if the string begins with `0x`, it is a private key
+            // and so we can't derive additional keys from it
             if hd_index > 0 {
                 return Err(EthClientError::DerivationWithPrivateKey.into());
             }
