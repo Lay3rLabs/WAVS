@@ -6,13 +6,11 @@ import {IWavsServiceManager} from "../../../contracts/solidity/interfaces/IWavsS
 import {ISimpleTrigger} from "./interfaces/ISimpleTrigger.sol";
 import {ISimpleSubmit} from "./interfaces/ISimpleSubmit.sol";
 
-contract SimpleSubmit is IWavsServiceHandler {
+contract SimpleSubmit is IWavsServiceHandler, ISimpleSubmit {
     IWavsServiceManager private _serviceManager;
 
     mapping(ISimpleTrigger.TriggerId => bool) validTriggers;
-    mapping(ISimpleTrigger.TriggerId => bytes) datas;
-    mapping(ISimpleTrigger.TriggerId => IWavsServiceHandler.SignatureData) signatures;
-    mapping(ISimpleTrigger.TriggerId => IWavsServiceHandler.Envelope) envelopes;
+    mapping(ISimpleTrigger.TriggerId => ISimpleSubmit.SignedData) signedDatas;
 
     constructor(IWavsServiceManager serviceManager) {
         _serviceManager = serviceManager;
@@ -23,9 +21,12 @@ contract SimpleSubmit is IWavsServiceHandler {
 
         ISimpleSubmit.DataWithId memory dataWithId = abi.decode(envelope.payload, (ISimpleSubmit.DataWithId));
 
-        signatures[dataWithId.triggerId] = signatureData;
-        datas[dataWithId.triggerId] = dataWithId.data;
-        envelopes[dataWithId.triggerId] = envelope;
+        signedDatas[dataWithId.triggerId] = ISimpleSubmit.SignedData({
+            data: dataWithId.data,
+            signatureData: signatureData,
+            envelope: envelope
+        });
+
         validTriggers[dataWithId.triggerId] = true;
     }
 
@@ -33,15 +34,7 @@ contract SimpleSubmit is IWavsServiceHandler {
         return validTriggers[triggerId];
     }
 
-    function getSignature(ISimpleTrigger.TriggerId triggerId) external view returns (IWavsServiceHandler.SignatureData memory signatureData) {
-        signatureData = signatures[triggerId];
-    }
-
-    function getData(ISimpleTrigger.TriggerId triggerId) external view returns (bytes memory data) {
-        data = datas[triggerId];
-    }
-
-    function getEnvelope(ISimpleTrigger.TriggerId triggerId) external view returns (IWavsServiceHandler.Envelope memory envelope) {
-        envelope = envelopes[triggerId];
+    function getSignedData(ISimpleTrigger.TriggerId triggerId) external view returns (ISimpleSubmit.SignedData memory signedData) {
+        signedData = signedDatas[triggerId];
     }
 }

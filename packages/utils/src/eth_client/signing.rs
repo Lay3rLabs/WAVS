@@ -54,7 +54,7 @@ impl EthSigningClient {
             operators,
             signatures: signatures
                 .into_iter()
-                .map(|s| s.into_vec().into())
+                .map(|s| s.as_bytes().into())
                 .collect(),
             referenceBlock: block_height as u32,
         };
