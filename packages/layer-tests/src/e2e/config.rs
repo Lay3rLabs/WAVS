@@ -197,7 +197,7 @@ impl From<TestConfig> for Configs {
                 .unwrap();
 
             aggregator_config.chains = chain_configs.clone();
-            aggregator_config.mnemonic = Some(mnemonics.aggregator.clone());
+            aggregator_config.credential = Some(mnemonics.aggregator.clone());
 
             Some(aggregator_config)
         } else {

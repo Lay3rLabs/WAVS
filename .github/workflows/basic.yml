@@ -53,7 +53,7 @@ jobs:
         run: echo "WAVS_CLI_ETH_CREDENTIAL=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
 
       - name: Set env
-        run: echo "WAVS_AGGREGATOR_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
+        run: echo "WAVS_AGGREGATOR_CREDENTIAL=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
 
       - name: Set env
         run: echo "WAVS_COSMOS_SUBMISSION_MNEMONIC=\"reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff\"" >> $GITHUB_ENV

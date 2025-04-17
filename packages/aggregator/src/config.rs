@@ -35,8 +35,8 @@ pub struct Config {
     /// All the available chains
     pub chains: ChainConfigs,
 
-    /// Mnemonic of the signer (usually leave this as None in config file and cli args, rather override in env)
-    pub mnemonic: Option<String>,
+    /// Mnemonic or private key of the signer (usually leave this as None in config file and cli args, rather override in env)
+    pub credential: Option<String>,
 
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
@@ -52,7 +52,7 @@ impl Default for Config {
             host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/aggregator"),
             cors_allowed_origins: Vec::new(),
-            mnemonic: None,
+            credential: None,
             hd_index: None,
             chains: ChainConfigs {
                 cosmos: Default::default(),
@@ -65,7 +65,7 @@ impl Default for Config {
 impl Config {
     pub fn signer(&self) -> Result<PrivateKeySigner> {
         let mnemonic = self
-            .mnemonic
+            .credential
             .clone()
             .ok_or(EthClientError::MissingMnemonic)?;
         let signer = MnemonicBuilder::<English>::default()
