@@ -187,10 +187,10 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         }
 
         // Store components
-        for component in service.components.values() {
+        for workflow in service.workflows.values() {
             self.engine
                 .engine()
-                .store_component_from_source(&component.source)
+                .store_component_from_source(&workflow.component.source)
                 .await?;
         }
 
@@ -462,8 +462,8 @@ mod tests {
         },
     };
     use wavs_types::{
-        ChainName, Component, ComponentID, ComponentSource, Envelope, PacketRoute, ServiceConfig,
-        ServiceID, ServiceManager, ServiceStatus, Submit, TriggerData, Workflow, WorkflowID,
+        ChainName, Component, ComponentSource, Envelope, PacketRoute, ServiceID, ServiceManager,
+        ServiceStatus, Submit, TriggerData, Workflow, WorkflowID,
     };
 
     use super::*;
@@ -494,28 +494,20 @@ mod tests {
 
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
-        let component_id = ComponentID::new("component1").unwrap();
         let service_manager_addr = rand_address_eth();
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
-            components: [(
-                component_id.clone(),
-                Component::new(ComponentSource::Digest(digest)),
-            )]
-            .into(),
-            config: ServiceConfig::default(),
             workflows: [(
                 action.config.workflow_id.clone(),
                 Workflow {
-                    component: component_id.clone(),
+                    component: Component::new(ComponentSource::Digest(digest)),
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
                         service_manager_addr,
                         None,
                     ),
-                    fuel_limit: None,
                     aggregator: None,
                 },
             )]
@@ -609,29 +601,20 @@ mod tests {
             .register(&digest.clone(), BigSquare);
 
         // Register a service to handle this action
-        let component_id = ComponentID::new("component1").unwrap();
-
         let service_manager_addr = rand_address_eth();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
-            components: [(
-                component_id.clone(),
-                Component::new(ComponentSource::Digest(digest)),
-            )]
-            .into(),
-            config: ServiceConfig::default(),
             workflows: [(
                 workflow_id.clone(),
                 Workflow {
-                    component: component_id.clone(),
+                    component: Component::new(ComponentSource::Digest(digest)),
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
                         rand_address_eth(),
                         None,
                     ),
-                    fuel_limit: None,
                     aggregator: None,
                 },
             )]
@@ -718,28 +701,20 @@ mod tests {
             .register(&digest.clone(), BigSquare);
 
         // Register a service to handle this action
-        let component_id = ComponentID::new("component1").unwrap();
         let service_manager_addr = rand_address_eth();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
-            components: [(
-                component_id.clone(),
-                Component::new(ComponentSource::Digest(digest)),
-            )]
-            .into(),
-            config: ServiceConfig::default(),
             workflows: [(
                 workflow_id.clone(),
                 Workflow {
-                    component: component_id.clone(),
+                    component: Component::new(ComponentSource::Digest(digest)),
                     trigger: mock_eth_event_trigger(),
                     submit: Submit::eth_contract(
                         ChainName::new("eth").unwrap(),
                         rand_address_eth(),
                         None,
                     ),
-                    fuel_limit: None,
                     aggregator: None,
                 },
             )]
