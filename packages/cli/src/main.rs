@@ -31,7 +31,8 @@ pub(crate) async fn new_eth_client(
         .context(format!("chain {chain_name} not found"))?
         .clone();
 
-    let client_config = chain_config.to_client_config(None, ctx.config.eth_mnemonic.clone(), None);
+    let client_config =
+        chain_config.to_client_config(None, ctx.config.eth_credential.clone(), None);
 
     let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
 
