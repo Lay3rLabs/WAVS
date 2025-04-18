@@ -1,5 +1,17 @@
 [workspace]
-members = ["packages/*"]
+members = [
+  "packages/*",
+  "examples/components/cosmos-query",
+  "examples/components/chain-trigger-lookup",
+  "examples/components/echo-data",
+  "examples/components/echo-raw",
+  "examples/components/square",
+  "examples/components/permissions",
+  "examples/components/echo-block-interval",
+  "examples/components/echo-cron-interval",
+  "examples/components/_helpers",
+  "examples/contracts/cosmwasm/simple",
+]
 resolver = "2"
 
 [workspace.package]
@@ -90,6 +102,8 @@ wasmtime-wasi = { version = "29.0.1", default-features = true }
 wasmtime-wasi-http = "29.0.1"
 wasi = "0.14.0"
 wit-bindgen-rt = { version = "0.39.0", features = ["bitflags", "async"] }
+wit-bindgen = "0.39.0"
+wavs-wasi-utils = "0.4.0-alpha.4"
 
 # benchmarking
 criterion = "0.5.1"
@@ -128,3 +142,4 @@ wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
+example-helpers = { path = "examples/components/_helpers" }
