@@ -15,7 +15,7 @@ impl Guest for Component {
                 if let Ok(value) = std::env::var(env_var) {
                     return Ok(Some(encode_trigger_output(
                         trigger_id,
-                        value.as_bytes().to_vec(),
+                        value.as_bytes(),
                     )));
                 } else {
                     return Err(format!("env var {} not found", env_var));
@@ -25,7 +25,7 @@ impl Guest for Component {
                 if let Some(value) = host::config_var(config_var) {
                     return Ok(Some(encode_trigger_output(
                         trigger_id,
-                        value.as_bytes().to_vec(),
+                        value.as_bytes(),
                     )));
                 } else {
                     return Err(format!("config var {} not found", config_var));
