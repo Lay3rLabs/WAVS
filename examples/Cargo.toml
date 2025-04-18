@@ -38,7 +38,7 @@ alloy-sol-types = "1.0.0"
 alloy-provider = {version = "0.14.0", features = ["anvil-node", "ws"] }
 alloy-contract = "0.14.0"
 alloy-network = "0.14.0"
-layer-climb = "0.3.7"
+layer-climb = "0.4.0"
 wstd = "0.5.0"
 url = "2.5.3"
 cosmwasm-std = { version = "2.2.0", features = ["stargate"] }

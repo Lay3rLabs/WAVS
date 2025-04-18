@@ -87,9 +87,7 @@ impl TryFrom<layer_climb::prelude::Address> for EthAddress {
 
 impl From<EthAddress> for layer_climb::prelude::Address {
     fn from(addr: EthAddress) -> Self {
-        layer_climb::prelude::Address::Eth(
-            layer_climb::prelude::AddrEth::new_vec(addr.raw_bytes).unwrap(),
-        )
+        alloy_primitives::Address::from(addr).into()
     }
 }
 

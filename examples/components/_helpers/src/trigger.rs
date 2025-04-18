@@ -4,7 +4,7 @@ use crate::bindings::compat::{
 };
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use example_submit::DataWithId;
 use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
 use serde::{Deserialize, Serialize};
@@ -89,15 +89,7 @@ impl ChainQuerierExt for RootProvider {
         address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>> {
-        let address = match address {
-            layer_climb::prelude::Address::Cosmos { .. } => {
-                return Err(anyhow!("Cosmos address not supported"))
-            }
-            layer_climb::prelude::Address::Eth(addr_eth) => {
-                alloy_primitives::Address::new(addr_eth.as_bytes())
-            }
-        };
-        let contract = SimpleTrigger::new(address, self);
+        let contract = SimpleTrigger::new(address.try_into()?, self);
 
         Ok(contract.getTrigger(trigger_id).call().await?.data.to_vec())
     }
