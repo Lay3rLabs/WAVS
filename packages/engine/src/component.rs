@@ -21,7 +21,6 @@ pub struct HostComponent {
 pub type HostComponentLogger = fn(&ServiceID, &WorkflowID, &Digest, LogLevel, String);
 
 impl WasiView for HostComponent {
-
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.ctx
     }
