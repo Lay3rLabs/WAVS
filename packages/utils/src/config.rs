@@ -115,7 +115,7 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
         // Build the figment with proper layer ordering
         let figment = Figment::new()
             // First, apply default values as the lowest priority
-            .join(figment::providers::Serialized::defaults(CONFIG::default()))
+            .merge(figment::providers::Serialized::defaults(CONFIG::default()))
             // Apply the whole TOML file (this will get global values)
             .merge(figment::providers::Toml::file(&filepath))
             // Apply the process-specific section as a profile
