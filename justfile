@@ -63,7 +63,7 @@ _install-native HOME DATA:
 # compile WASI components, places the output in components dir
 wasi-build COMPONENT="*":
     @if [ "{{COMPONENT}}" = "*" ]; then \
-        rm -f ./examples/target/wasm32-wasip1/release/*.wasm; \
+        rm -f ./target/wasm32-wasip1/release/*.wasm; \
     fi
 
     @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
@@ -75,7 +75,7 @@ wasi-build COMPONENT="*":
 
     rm -rf {{WASI_OUT_DIR}}
     mkdir -p {{WASI_OUT_DIR}}
-    @cp ./examples/target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
+    @cp ./target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
     @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
 
 # compile solidity contracts (including examples) and copy the ABI to contracts/solidity/abi
@@ -191,7 +191,7 @@ download-solidity branch="dev":
     # Clean up
     rm -rf temp_clone
 
-wasi-publish component="*" version="0.4.0-alpha.2":
+wasi-publish component="*" version="0.4.0-alpha.3":
     @if [ "{{component}}" = "*" ]; then \
         awk '{print $2}' checksums.txt | while read path; do \
             id=$(basename "$path"); \

@@ -61,10 +61,10 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain: Option<String>,
 
-    /// mnemonic (usually leave this as None and override in env)
+    /// Mnemonic or private key (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mnemonic: Option<String>,
+    pub credential: Option<String>,
 
     /// hd index of the mnemonic to sign with
     #[arg(long)]

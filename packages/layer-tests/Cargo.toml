@@ -34,9 +34,9 @@ alloy-network = { workspace = true }
 alloy-signer-local = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-sol-types = { workspace = true }
-alloy-contract = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 alloy-signer = { workspace = true }
+alloy-contract = { workspace = true }
 uuid = { workspace = true }
 derive-enum-all-values = "=0.1.0"

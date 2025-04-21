@@ -40,7 +40,7 @@ impl Guest for Component {
 }
 
 async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
-    const DIRECTORY_NAME: &'static str = "./responses";
+    const DIRECTORY_NAME: &str = "./responses";
 
     let responses_path = Path::new(DIRECTORY_NAME);
     if !responses_path.exists() {

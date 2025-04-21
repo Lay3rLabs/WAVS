@@ -21,7 +21,7 @@ pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)>
         TriggerData::EthContractEvent(TriggerDataEthContractEvent { log, .. }) => {
             let event: NewTrigger = decode_event_log_data!(log)?;
 
-            let trigger_info = TriggerInfo::abi_decode(&event._0, false)?;
+            let trigger_info = TriggerInfo::abi_decode(&event._0)?;
             Ok((trigger_info.triggerId, trigger_info.data.to_vec()))
         }
         _ => Err(anyhow::anyhow!("Unsupported trigger data type")),
@@ -91,13 +91,7 @@ impl ChainQuerierExt for RootProvider {
     ) -> Result<Vec<u8>> {
         let contract = SimpleTrigger::new(address.try_into()?, self);
 
-        Ok(contract
-            .getTrigger(trigger_id)
-            .call()
-            .await?
-            ._0
-            .data
-            .to_vec())
+        Ok(contract.getTrigger(trigger_id).call().await?.data.to_vec())
     }
 }
 
@@ -115,11 +109,12 @@ mod example_trigger {
 }
 
 mod example_submit {
-    use alloy_sol_macro::sol;
+    use alloy_sol_types::sol;
     pub use ISimpleSubmit::DataWithId;
 
     sol!(
         #[allow(missing_docs)]
+        #[sol(rpc)]
         ISimpleSubmit,
         "../../contracts/solidity/abi/ISimpleSubmit.sol/ISimpleSubmit.json"
     );
