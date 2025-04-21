@@ -13,17 +13,18 @@
 # e.g., WAVS_LOG_LEVEL="info, wavs=debug" or WAVS_CORS_ALLOWED_ORIGINS="https://example.com, https://example2.com"
 
 # ----------------------------
-# General settings (shared)
+# Default settings (shared)
 # ----------------------------
 # The log level, in the format of tracing directives. Default is ["info"]
 # See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+[default]
 log_level = ["info", "wavs=debug"]
 
 # Chain configurations (shared across components)
 # Each component can override these in its own section if needed
 
 # Cosmos chains
-[chains.cosmos.layer-local]
+[default.chains.cosmos.layer-local]
 chain_id = "slay3r-local"
 bech32_prefix = "layer"
 rpc_endpoint = "http://localhost:26657"
@@ -32,7 +33,7 @@ gas_price = 0.025
 gas_denom = "uslay"
 faucet_endpoint = "http://localhost:8000"
 
-[chains.cosmos.layer-localnode]
+[default.chains.cosmos.layer-localnode]
 chain_id = "layer-local"
 bech32_prefix = "layer"
 rpc_endpoint = "http://layer:26657"
@@ -41,7 +42,7 @@ gas_price = 0.025
 gas_denom = "ulayer"
 faucet_endpoint = "http://faucet:8000"
 
-[chains.cosmos.layer-hacknet]
+[default.chains.cosmos.layer-hacknet]
 chain_id = "layer-hack-1"
 bech32_prefix = "layer"
 rpc_endpoint = "https://rpc.hack.layer.xyz:443"
@@ -50,7 +51,7 @@ gas_price = 0.025
 gas_denom = "ulayer"
 faucet_endpoint = "https://rabbit.hack.layer.xyz"
 
-[chains.cosmos.neutron]
+[default.chains.cosmos.neutron]
 chain_id = "pion-1"
 bech32_prefix = "neutron"
 rpc_endpoint = "https://rpc-falcron.pion-1.ntrn.tech"
@@ -59,27 +60,27 @@ gas_price = 0.0053
 gas_denom = "untrn"
 
 # Ethereum chains
-[chains.eth.local]
+[default.chains.eth.local]
 chain_id = "31337"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
 
-[chains.eth.local2]
+[default.chains.eth.local2]
 chain_id = "31338"
 ws_endpoint = "ws://localhost:8645"
 http_endpoint = "http://localhost:8645"
 
-[chains.eth.sepolia]
+[default.chains.eth.sepolia]
 chain_id = "11155111"
 ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
 http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
 
-[chains.eth.holesky]
+[default.chains.eth.holesky]
 chain_id = "17000"
 ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
 http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
 
-[chains.eth.holesky-fork]
+[default.chains.eth.holesky-fork]
 chain_id = "17000"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
