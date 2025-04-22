@@ -21,6 +21,9 @@ pub trait CliEnvExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
     // e.g. "WAVS"
     const ENV_VAR_PREFIX: &'static str;
 
+    // The section identifier in the TOML file, e.g. "wavs", "cli", "aggregator"
+    const TOML_IDENTIFIER: &'static str;
+
     // an optional argument to specify the home directory
     // if not supplied, config will try a series of fallbacks
     fn home_dir(&self) -> Option<PathBuf>;
@@ -47,7 +50,7 @@ pub trait CliEnvExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
 
 pub trait ConfigExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
     // e.g. "wavs.toml"
-    const FILENAME: &'static str;
+    const FILENAME: &'static str = "wavs.toml";
 
     // the data directory, which is the root of the data storage
     fn with_data_dir(&mut self, f: fn(&mut PathBuf));
@@ -109,14 +112,23 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
                 cli_env_args.home_dir()
             ))?;
 
-        // lastly, our final config, which can have more complex types with easier TOML-like syntax
-        // but is overriden by the cli/env args if they exist
-        // and also fills in defaults for required values at the end
-        let mut config: CONFIG = Figment::new()
-            .merge(figment::providers::Toml::file(filepath))
-            .merge(figment::providers::Serialized::defaults(cli_env_args))
-            .join(figment::providers::Serialized::defaults(CONFIG::default()))
-            .extract()?;
+        let figment = Figment::new()
+            // Start with the default values as the base
+            .merge(figment::providers::Serialized::defaults(CONFIG::default()))
+            // Then add default section from TOML
+            .merge(Figment::from(
+                figment::providers::Toml::file(&filepath).nested(),
+            ))
+            // Then add specific section, overriding globals where needed
+            .merge(
+                Figment::from(figment::providers::Toml::file(&filepath).nested())
+                    .select(ARG::TOML_IDENTIFIER),
+            )
+            // Finally override with cli/env args
+            .merge(figment::providers::Serialized::defaults(cli_env_args));
+
+        // Extract the config
+        let mut config: CONFIG = figment.extract()?;
 
         config.with_data_dir(|data_dir| {
             *data_dir = shellexpand::tilde(&data_dir.to_string_lossy())
@@ -176,6 +188,11 @@ impl ConfigFilePath {
         // i.e. ./{filename}
         if let Ok(dir) = std::env::current_dir() {
             dirs.push(dir);
+        }
+
+        // Check the workspace directory if available
+        if let Some(workspace_dir) = option_env!("CARGO_WORKSPACE_DIR") {
+            dirs.push(PathBuf::from(workspace_dir));
         }
 
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
@@ -410,6 +427,7 @@ mod test {
     use std::{path::PathBuf, sync::LazyLock};
 
     use serde::{Deserialize, Serialize};
+    use wavs_types::ChainName;
 
     use crate::{config::ConfigFilePath, serde::deserialize_vec_string};
 
@@ -441,8 +459,6 @@ mod test {
     }
 
     impl ConfigExt for TestConfig {
-        const FILENAME: &'static str = "wavs.toml";
-
         fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
             f(&mut self.data);
         }
@@ -491,6 +507,7 @@ mod test {
 
     impl CliEnvExt for TestCliEnv {
         const ENV_VAR_PREFIX: &'static str = "WAVS";
+        const TOML_IDENTIFIER: &'static str = "test";
 
         fn home_dir(&self) -> Option<PathBuf> {
             self.home.clone()
@@ -696,6 +713,249 @@ mod test {
         );
 
         assert!(chain_configs.get_chain(&"eth".try_into().unwrap()).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_service_specific_overrides() {
+        // Define a test config structure
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        struct ServiceConfig {
+            pub data: PathBuf,
+            pub chains: ChainConfigs,
+        }
+
+        impl Default for ServiceConfig {
+            fn default() -> Self {
+                Self {
+                    data: PathBuf::from("/var/service"),
+                    chains: ChainConfigs::default(),
+                }
+            }
+        }
+
+        impl ConfigExt for ServiceConfig {
+            const FILENAME: &'static str = "test_wavs.toml";
+
+            fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
+                f(&mut self.data);
+            }
+
+            fn log_levels(&self) -> impl Iterator<Item = &str> {
+                [].iter().copied()
+            }
+        }
+
+        // Define CLI args structure for the test
+        #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+        #[serde(default)]
+        struct ServiceCliEnv {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub home: Option<PathBuf>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub dotenv: Option<PathBuf>,
+        }
+
+        impl CliEnvExt for ServiceCliEnv {
+            const ENV_VAR_PREFIX: &'static str = "SERVICE";
+            const TOML_IDENTIFIER: &'static str = "service1";
+
+            fn home_dir(&self) -> Option<PathBuf> {
+                self.home.clone()
+            }
+
+            fn dotenv_path(&self) -> Option<PathBuf> {
+                self.dotenv.clone()
+            }
+        }
+
+        // Create test config file with global and service-specific overrides
+        let test_config = r#"
+    # Global chain config
+    [chains.eth.global_chain]
+    chain_id = "1000"
+    ws_endpoint = "ws://global.example.com"
+    http_endpoint = "http://global.example.com"
+
+    # Service1 specific settings
+    [service1]
+    data = "/var/service1"
+
+    # Service1 specific chain override
+    [service1.chains.eth.global_chain]
+    chain_id = "1000"
+    ws_endpoint = "ws://service1.example.com"
+    http_endpoint = "http://service1.example.com"
+
+    # Service1 specific chain that doesn't exist in global
+    [service1.chains.eth.service1_chain]
+    chain_id = "2000"
+    ws_endpoint = "ws://service1-special.example.com"
+    http_endpoint = "http://service1-special.example.com"
+
+    # Service2 specific settings
+    [service2]
+    data = "/var/service2"
+
+    # Service2 specific chain override
+    [service2.chains.eth.global_chain]
+    chain_id = "1000"
+    ws_endpoint = "ws://service2.example.com"
+    http_endpoint = "http://service2.example.com"
+    "#;
+
+        // Write test config file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join(ServiceConfig::FILENAME);
+        std::fs::write(&config_path, test_config).unwrap();
+
+        // Setup CLI env for service1
+        let service1_cli_env = ServiceCliEnv {
+            home: Some(temp_dir.path().to_path_buf()),
+            dotenv: None,
+        };
+
+        // Load service1 config
+        let service1_config: ServiceConfig = ConfigBuilder::new(service1_cli_env.clone())
+            .build()
+            .unwrap();
+
+        // Define expected chain configurations
+        let global_chain_name: ChainName = "global_chain".try_into().unwrap();
+        let service1_chain_name: ChainName = "service1_chain".try_into().unwrap();
+
+        // Test global chain with service1 overrides
+        let global_chain_config = service1_config
+            .chains
+            .get_chain(&global_chain_name)
+            .unwrap()
+            .unwrap();
+
+        if let crate::config::AnyChainConfig::Eth(eth_config) = global_chain_config {
+            assert_eq!(eth_config.chain_id, "1000");
+            // These should be overridden by service1
+            assert_eq!(
+                eth_config.ws_endpoint.as_deref(),
+                Some("ws://service1.example.com")
+            );
+            assert_eq!(
+                eth_config.http_endpoint.as_deref(),
+                Some("http://service1.example.com")
+            );
+        } else {
+            panic!("Expected Ethereum chain config");
+        }
+
+        // Test service1-specific chain
+        let service1_chain_config = service1_config
+            .chains
+            .get_chain(&service1_chain_name)
+            .unwrap()
+            .unwrap();
+
+        if let crate::config::AnyChainConfig::Eth(eth_config) = service1_chain_config {
+            assert_eq!(eth_config.chain_id, "2000");
+            assert_eq!(
+                eth_config.ws_endpoint.as_deref(),
+                Some("ws://service1-special.example.com")
+            );
+            assert_eq!(
+                eth_config.http_endpoint.as_deref(),
+                Some("http://service1-special.example.com")
+            );
+        } else {
+            panic!("Expected Ethereum chain config");
+        }
+
+        // Now test with a different service profile
+        #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+        #[serde(default)]
+        struct Service2CliEnv {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub home: Option<PathBuf>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub dotenv: Option<PathBuf>,
+        }
+
+        impl CliEnvExt for Service2CliEnv {
+            const ENV_VAR_PREFIX: &'static str = "SERVICE";
+            const TOML_IDENTIFIER: &'static str = "service2";
+
+            fn home_dir(&self) -> Option<PathBuf> {
+                self.home.clone()
+            }
+
+            fn dotenv_path(&self) -> Option<PathBuf> {
+                self.dotenv.clone()
+            }
+        }
+
+        let service2_cli_env = Service2CliEnv {
+            home: Some(temp_dir.path().to_path_buf()),
+            dotenv: None,
+        };
+
+        // Define a generic type that can be used for both service configs
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        struct Service2Config {
+            pub data: PathBuf,
+            pub chains: ChainConfigs,
+        }
+
+        impl Default for Service2Config {
+            fn default() -> Self {
+                Self {
+                    data: PathBuf::from("/var/service"),
+                    chains: ChainConfigs::default(),
+                }
+            }
+        }
+
+        impl ConfigExt for Service2Config {
+            const FILENAME: &'static str = "test_wavs.toml";
+
+            fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
+                f(&mut self.data);
+            }
+
+            fn log_levels(&self) -> impl Iterator<Item = &str> {
+                [].iter().copied()
+            }
+        }
+
+        // Load service2 config
+        let service2_config: Service2Config = ConfigBuilder::new(service2_cli_env).build().unwrap();
+
+        // Test global chain with service2 overrides
+        let global_chain_config = service2_config
+            .chains
+            .get_chain(&global_chain_name)
+            .unwrap()
+            .unwrap();
+
+        if let crate::config::AnyChainConfig::Eth(eth_config) = global_chain_config {
+            assert_eq!(eth_config.chain_id, "1000");
+            assert_eq!(
+                eth_config.ws_endpoint.as_deref(),
+                Some("ws://service2.example.com")
+            );
+            assert_eq!(
+                eth_config.http_endpoint.as_deref(),
+                Some("http://service2.example.com")
+            );
+        } else {
+            panic!("Expected Ethereum chain config");
+        }
+
+        // Test that service2 doesn't have the service1-specific chain
+        assert!(service2_config
+            .chains
+            .get_chain(&service1_chain_name)
+            .unwrap()
+            .is_none());
+
+        // Test data_dir override for different services
+        assert_eq!(service1_config.data, PathBuf::from("/var/service1"));
+        assert_eq!(service2_config.data, PathBuf::from("/var/service2"));
     }
 
     fn mock_chain_configs() -> ChainConfigs {

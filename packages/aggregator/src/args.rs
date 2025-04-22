@@ -79,6 +79,7 @@ pub struct CliArgs {
 
 impl CliEnvExt for CliArgs {
     const ENV_VAR_PREFIX: &'static str = "WAVS_AGGREGATOR";
+    const TOML_IDENTIFIER: &'static str = "aggregator";
 
     fn home_dir(&self) -> Option<PathBuf> {
         self.home.clone()

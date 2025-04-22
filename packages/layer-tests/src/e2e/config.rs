@@ -170,7 +170,7 @@ impl From<TestConfig> for Configs {
 
         let mut wavs_config: wavs::config::Config = ConfigBuilder::new(wavs::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
-            home: Some(workspace_path().join("packages").join("wavs")),
+            home: Some(workspace_path()),
             // deliberately point to a non-existing file
             dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
 
