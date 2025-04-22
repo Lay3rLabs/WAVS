@@ -1,12 +1,13 @@
+use super::*;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
-        super::config::handle_config,
-        super::info::handle_info,
-        super::packet::handle_packet,
-        super::register_service::handle_register_service
+        config::handle_config,
+        info::handle_info,
+        packet::handle_packet,
+        register_service::handle_register_service
     ),
     info(
         title = "WAVS Aggregator API",
