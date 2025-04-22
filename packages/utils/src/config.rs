@@ -190,13 +190,9 @@ impl ConfigFilePath {
             dirs.push(dir);
         }
 
-        // Check the workspace directory (parent of the crate directory)
-        if let Ok(dir) = std::env::current_dir() {
-            if let Some(packages_dir) = dir.parent() {
-                if let Some(workspace_dir) = packages_dir.parent() {
-                    dirs.push(workspace_dir.to_path_buf());
-                }
-            }
+        // Check the workspace directory if available
+        if let Some(workspace_dir) = option_env!("CARGO_WORKSPACE_DIR") {
+            dirs.push(PathBuf::from(workspace_dir));
         }
 
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
