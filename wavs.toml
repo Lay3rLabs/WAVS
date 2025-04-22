@@ -110,8 +110,6 @@ cors_allowed_origins = [
 # Active chain names to watch for triggers
 active_trigger_chains = ["local"]
 
-max_wasm_fuel = 1_000_000
-
 # WAVS-specific chain overrides (if needed)
 # Example:
 # [wavs.chains.eth.local]
