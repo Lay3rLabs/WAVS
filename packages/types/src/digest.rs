@@ -3,9 +3,10 @@ use serde::ser::{Serialize, Serializer};
 use sha2::{Digest as Sha2Digest, Sha256};
 use std::{fmt, str::FromStr};
 use thiserror::Error;
+use utoipa::ToSchema;
 
 /// Computed content digest. Set to Sha256, but we can change globally in this file
-#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub struct Digest([u8; 32]);
 
 impl Digest {

@@ -33,7 +33,7 @@ shellexpand = { workspace = true }
 cfg-if = { workspace = true }
 deadpool = { workspace = true }
 async-trait = { workspace = true }
-const-hex= { workspace = true }
+const-hex = { workspace = true }
 alloy-primitives = { workspace = true }
 # alloy-sol-macro = { workspace = true }
 alloy-sol-types = { workspace = true }
@@ -49,6 +49,7 @@ alloy-network = { workspace = true }
 alloy-transport = { workspace = true }
 # alloy-transport-http = {workspace = true}
 alloy-rpc-types-eth = { workspace = true }
+utoipa = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

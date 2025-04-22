@@ -19,6 +19,17 @@ alloy_sol_macro::sol!(
     "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
 );
 
+#[utoipa::path(
+    post,
+    path = "/packet",
+    request_body = AddPacketRequest,
+    responses(
+        (status = 200, description = "Packet successfully added to queue or sent to contract", body = AddPacketResponse),
+        (status = 400, description = "Invalid packet data or signature"),
+        (status = 500, description = "Internal server error during packet processing")
+    ),
+    description = "Validates and processes a packet, adding it to the aggregation queue. When enough packets from different signers accumulate to meet the threshold, the aggregated packet is sent to the target contract."
+)]
 #[axum::debug_handler]
 pub async fn handle_packet(
     State(state): State<HttpState>,

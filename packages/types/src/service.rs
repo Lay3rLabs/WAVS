@@ -2,13 +2,14 @@ use alloy_primitives::LogData;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroU32;
+use utoipa::ToSchema;
 use wasm_pkg_common::package::{PackageRef, Version};
 
 use crate::{ByteArray, Digest, Timestamp};
 
 use super::{ChainName, ServiceID, WorkflowID};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
     // Public identifier. Must be unique for all services
@@ -25,11 +26,12 @@ pub struct Service {
     pub manager: ServiceManager,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {
     Ethereum {
         chain_name: ChainName,
+        #[schema(value_type = String)]
         address: alloy_primitives::Address,
     },
 }
@@ -78,7 +80,7 @@ impl Service {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Component {
     pub source: ComponentSource,
@@ -103,7 +105,7 @@ pub struct Component {
     pub env_keys: HashSet<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
     Download { url: String, digest: Digest },
@@ -113,7 +115,7 @@ pub enum ComponentSource {
     Digest(Digest),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub struct Registry {
     pub digest: Digest,
     /// Optional domain to use for a registry (such as ghcr.io)
@@ -121,8 +123,10 @@ pub struct Registry {
     /// is not desired by user
     pub domain: Option<String>,
     /// Optional semver value, if absent then latest is used
+    #[schema(value_type = Option<String>)]
     pub version: Option<Version>,
     /// Package identifier of form <namespace>:<packagename>
+    #[schema(value_type = String)]
     pub package: PackageRef,
 }
 
@@ -138,7 +142,7 @@ impl ComponentSource {
 
 // FIXME: happy for a better name.
 /// This captures the triggers we listen to, the components we run, and how we submit the result
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Workflow {
     /// The trigger that fires this workflow
@@ -161,22 +165,25 @@ impl Workflow {
 }
 
 // The TriggerManager reacts to these triggers
-#[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
+        #[schema(value_type = Object)] // TODO: update this in layer-climb
         address: layer_climb_address::Address,
         chain_name: ChainName,
         event_type: String,
     },
     EthContractEvent {
+        #[schema(value_type = String)]
         address: alloy_primitives::Address,
         chain_name: ChainName,
         event_hash: ByteArray<32>,
     },
     BlockInterval {
         chain_name: ChainName,
+        #[schema(value_type = u32)]
         n_blocks: NonZeroU32,
     },
     Cron {
@@ -254,7 +261,7 @@ pub struct TriggerConfig {
 }
 
 // TODO - rename this? Trigger is a noun, Submit is a verb.. feels a bit weird
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Submit {
     // useful for when the component just does something with its own state
@@ -267,17 +274,18 @@ pub enum Submit {
     EthereumContract(EthereumContractSubmission),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Aggregator {
     Ethereum(EthereumContractSubmission),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct EthereumContractSubmission {
     pub chain_name: ChainName,
     /// Should be an IWavsServiceHandler contract
+    #[schema(value_type = String)]
     pub address: alloy_primitives::Address,
     /// max gas for the submission
     /// with an aggregator, that will be for all the signed envelopes combined
@@ -299,14 +307,14 @@ impl EthereumContractSubmission {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {
     Active,
     // we could have more like Stopped, Failed, Cooldown, etc.
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(default, rename_all = "snake_case")]
 #[derive(Default)]
 pub struct Permissions {
@@ -318,7 +326,7 @@ pub struct Permissions {
 
 // TODO: remove / change defaults?
 
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AllowedHostPermission {
     All,
