@@ -26,10 +26,10 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     // setup tracing
     let tracer_provider = if let Some(collector) = config.jaeger.clone() {
         let config = config.clone();
-        Some(setup_tracing(
-            &collector,
-            config.tracing_env_filter().unwrap(),
-        ))
+        Some(ctx.rt.spawn_blocking(move || {
+            let config = config.clone();
+            async move { setup_tracing(&collector, config.tracing_env_filter().unwrap()) }
+        }))
     } else {
         tracing_subscriber::registry()
             .with(
@@ -58,8 +58,13 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     ctx.kill();
     handles.join();
     if let Some(tracer) = tracer_provider {
-        tracer
-            .shutdown()
-            .expect("TracerProvider should shutdown successfully")
-    }
+        ctx.rt.block_on(async move {
+            tracer
+                .await
+                .unwrap()
+                .await
+                .shutdown()
+                .expect("TracerProvider should shutdown successfully")
+        })
+    };
 }
