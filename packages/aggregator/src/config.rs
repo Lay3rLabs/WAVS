@@ -78,8 +78,6 @@ impl Config {
 }
 
 impl ConfigExt for Config {
-    const FILENAME: &'static str = "aggregator.toml";
-
     fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
         f(&mut self.data);
     }

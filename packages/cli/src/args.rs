@@ -372,6 +372,7 @@ pub struct CliArgs {
 
 impl CliEnvExt for CliArgs {
     const ENV_VAR_PREFIX: &'static str = "WAVS_CLI";
+    const TOML_IDENTIFIER: &'static str = "cli";
 
     fn home_dir(&self) -> Option<PathBuf> {
         self.home.clone()

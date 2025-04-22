@@ -7,8 +7,6 @@ use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
-use wasmtime_wasi::{WasiCtx, WasiView};
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_engine::InstanceDepsBuilder;
 use wavs_types::{
     ComponentSource, Digest, ServiceID, TriggerAction, WasmResponse, Workflow, WorkflowID,
@@ -230,35 +228,6 @@ impl<S: CAStorage> WasmEngine<S> {
             .unwrap();
 
         rt.block_on(fut)
-    }
-}
-
-// TODO: revisit this an understand it.
-// Copied blindly from old code
-pub struct HostComponent {
-    pub chain_configs: ChainConfigs,
-    pub(crate) table: wasmtime::component::ResourceTable,
-    pub(crate) ctx: WasiCtx,
-    pub(crate) http: WasiHttpCtx,
-}
-
-impl WasiView for HostComponent {
-    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
-        &mut self.table
-    }
-
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.ctx
-    }
-}
-
-impl WasiHttpView for HostComponent {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        &mut self.table
-    }
-
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
     }
 }
 

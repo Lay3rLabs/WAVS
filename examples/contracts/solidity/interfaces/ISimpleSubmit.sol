@@ -17,4 +17,7 @@ interface ISimpleSubmit {
     }
 
     function getSignedData(ISimpleTrigger.TriggerId triggerId) external view returns (SignedData memory);
+
+    // just so alloy can see the generated type
+    function getDataWithId(ISimpleTrigger.TriggerId triggerId) external view returns (DataWithId memory);
 }

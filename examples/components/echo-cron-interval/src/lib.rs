@@ -12,9 +12,9 @@ impl Guest for Component {
         let trigger_id = 1338;
         let return_data = b"cron-interval data";
         if let TriggerData::Cron(_data) = trigger_action.data {
-            return Ok(Some(encode_trigger_output(trigger_id, return_data)));
+            Ok(Some(encode_trigger_output(trigger_id, return_data)))
         } else {
-            return Err("Invalid trigger data".to_string());
+            Err("Invalid trigger data".to_string())
         }
     }
 }
