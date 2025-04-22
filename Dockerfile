@@ -34,7 +34,7 @@ RUN apt-get update && apt-get upgrade -y
 RUN apt install -y libcurl4 jq
 
 COPY --from=builder /myapp/target/release/wavs /usr/local/bin/wavs
-COPY --from=builder /myapp/config.toml /var/wavs/config.toml
+COPY --from=builder /myapp/wavs.toml /var/wavs/wavs.toml
 
 COPY --from=builder /myapp/target/release/wavs-cli /usr/local/bin/wavs-cli
 
