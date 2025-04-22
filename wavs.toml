@@ -99,7 +99,7 @@ cors_allowed_origins = [
 ]
 
 # The port on which the server will listen. Default is 8000
-# port = 9000
+port = 8000
 
 # The host to serve on. Default is localhost
 # host = "localhost"
