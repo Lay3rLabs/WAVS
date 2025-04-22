@@ -34,13 +34,11 @@ RUN apt-get update && apt-get upgrade -y
 RUN apt install -y libcurl4 jq
 
 COPY --from=builder /myapp/target/release/wavs /usr/local/bin/wavs
-COPY --from=builder /myapp/packages/wavs/wavs.toml /var/wavs/wavs.toml
+COPY --from=builder /myapp/config.toml /var/wavs/config.toml
 
 COPY --from=builder /myapp/target/release/wavs-cli /usr/local/bin/wavs-cli
-COPY --from=builder /myapp/packages/cli/cli.toml /var/wavs-cli/cli.toml
 
 COPY --from=builder /myapp/target/release/wavs-aggregator /usr/local/bin/wavs-aggregator
-COPY --from=builder /myapp/packages/aggregator/aggregator.toml /var/wavs-aggregator/aggregator.toml
 
 # copy /usr/local/bin/forge, cast, anvil, and chisel from foundry
 COPY --from=foundry /usr/local/bin/forge /usr/local/bin/forge
