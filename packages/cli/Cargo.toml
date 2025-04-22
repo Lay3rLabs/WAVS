@@ -10,7 +10,6 @@ license.workspace = true
 publish = false
 
 [dependencies]
-wasm-pkg-common = { workspace = true }
 wasm-pkg-client = { workspace = true }
 wavs-types = { workspace = true }
 wavs-engine = { workspace = true }
@@ -33,5 +32,3 @@ cfg-if = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 alloy-json-abi = { workspace = true }
-cron = { workspace = true }
-chrono = { workspace = true }

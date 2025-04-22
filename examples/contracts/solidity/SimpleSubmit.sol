@@ -37,4 +37,13 @@ contract SimpleSubmit is IWavsServiceHandler, ISimpleSubmit {
     function getSignedData(ISimpleTrigger.TriggerId triggerId) external view returns (ISimpleSubmit.SignedData memory signedData) {
         signedData = signedDatas[triggerId];
     }
+
+    // not really needed, just to make alloy generate DataWithId
+    function getDataWithId(ISimpleTrigger.TriggerId triggerId) external view returns (ISimpleSubmit.DataWithId memory dataWithId) {
+        ISimpleSubmit.SignedData memory signedData = signedDatas[triggerId];
+        dataWithId = ISimpleSubmit.DataWithId({
+            triggerId: triggerId,
+            data: signedData.data
+        }); 
+    }
 }
