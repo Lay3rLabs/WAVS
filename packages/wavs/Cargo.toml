@@ -55,6 +55,8 @@ chrono = { workspace = true }
 cron = { workspace = true }
 bincode = { workspace = true }
 async-trait = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

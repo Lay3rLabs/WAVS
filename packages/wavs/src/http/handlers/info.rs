@@ -4,13 +4,23 @@ use axum::{extract::State, response::IntoResponse, Json};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use utils::config::AnyChainConfig;
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InfoResponse {
     pub operators: Vec<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/info",
+    responses(
+        (status = 200, description = "Successfully retrieved service information including the list of active operators", body = InfoResponse),
+        (status = 500, description = "Internal server error occurred while fetching service information")
+    ),
+    description = "Provides information about the WAVS service, including a list of all registered operators."
+)]
 #[axum::debug_handler]
 pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
     match inner_handle_info(state).await {

@@ -3,6 +3,18 @@ use reqwest::StatusCode;
 
 use crate::http::{error::HttpResult, state::HttpState};
 
+#[utoipa::path(
+    post,
+    path = "/save-service",
+    request_body = wavs_types::Service,
+    responses(
+        (status = 200, description = "Service saved successfully"),
+        (status = 400, description = "Invalid service data"),
+        (status = 404, description = "Service not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    description = "Updates an existing service with new configuration data"
+)]
 #[axum::debug_handler]
 pub async fn handle_save_service(
     State(state): State<HttpState>,

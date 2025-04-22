@@ -1,6 +1,7 @@
 mod config;
 mod info;
 mod not_found;
+pub(crate) mod openapi;
 pub mod service;
 
 pub use config::handle_config;

@@ -2,6 +2,19 @@ use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::ServiceID;
 
+#[utoipa::path(
+    get,
+    path = "/service/{service_id}",
+    params(
+        ("service_id" = String, Path, description = "Unique identifier for the service")
+    ),
+    responses(
+        (status = 200, description = "Service found", body = wavs_types::Service),
+        (status = 404, description = "Service not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    description = "Retrieves detailed information about a specific service by its ID"
+)]
 #[axum::debug_handler]
 pub async fn handle_get_service(
     State(state): State<HttpState>,

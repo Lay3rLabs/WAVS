@@ -9000,6 +9000,8 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "utils",
+ "utoipa",
+ "utoipa-swagger-ui",
  "wasm-pkg-common",
  "wasmtime",
  "wavs-engine",

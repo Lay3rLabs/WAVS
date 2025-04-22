@@ -3,6 +3,17 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use crate::http::{error::HttpResult, state::HttpState};
 use wavs_types::{DeleteServicesRequest, ServiceID};
 
+#[utoipa::path(
+    delete,
+    path = "/app",
+    request_body = DeleteServicesRequest,
+    responses(
+        (status = 204, description = "Service successfully deleted"),
+        (status = 404, description = "Service not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    description = "Removes the registered services from WAVS"
+)]
 #[axum::debug_handler]
 pub async fn handle_delete_service(
     State(state): State<HttpState>,
