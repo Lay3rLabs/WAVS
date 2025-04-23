@@ -35,7 +35,7 @@ pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
 ) -> impl IntoResponse {
-    match process_packet(state, req.packet).await {
+    match process_packet(state, &req.packet).await {
         Ok(resp) => Json(resp).into_response(),
         Err(e) => {
             tracing::error!("{:?}", e);
@@ -46,9 +46,8 @@ pub async fn handle_packet(
 
 async fn process_packet(
     state: HttpState,
-    packet: Packet,
+    packet: &Packet,
 ) -> anyhow::Result<Vec<AddPacketResponse>> {
-    let packet = &packet;
     let event_id = packet.event_id();
 
     let mut queue = match state.get_packet_queue(&event_id)? {
@@ -72,6 +71,8 @@ async fn process_packet(
         );
     }
 
+    let mut all_sent = true;
+    let mut any_sent = false;
     let mut responses: Vec<AddPacketResponse> = Vec::new();
 
     for (index, aggregator) in aggregators.iter().enumerate() {
@@ -151,27 +152,29 @@ async fn process_packet(
                         tx_receipt: Box::new(tx_receipt),
                         count: queue.len(),
                     });
+                    any_sent = true;
                 } else {
                     responses.push(AddPacketResponse::Aggregated { count: queue.len() });
+                    all_sent = false;
                 }
             }
         }
     }
 
-    if responses
-        .iter()
-        .all(|r| matches!(r, AddPacketResponse::Sent { .. }))
-    {
-        state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-    } else if responses
-        .iter()
-        .all(|r| matches!(r, AddPacketResponse::Aggregated { .. }))
-    {
-        state.save_packet_queue(&event_id, PacketQueue::Alive(queue))?;
-    } else {
+    // Log warning for mixed state
+    if any_sent && !all_sent {
         tracing::warn!("Mixed responses: some packets sent, some aggregated");
-        state.save_packet_queue(&event_id, PacketQueue::Alive(queue))?;
     }
+
+    // Apply the state change once, based on tracking variables
+    state.save_packet_queue(
+        &event_id,
+        if all_sent {
+            PacketQueue::Burned
+        } else {
+            PacketQueue::Alive(queue)
+        },
+    )?;
 
     Ok(responses)
 }
