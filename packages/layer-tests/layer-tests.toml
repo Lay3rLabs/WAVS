@@ -8,7 +8,6 @@ all = true
 # isolated = "eth-multi-trigger"
 # isolated = "eth-permissions"
 # registry = true
-# jaeger = "http://localhost:4317"
 # Run just one test (cannot be enabled at the same time as all)
 
 # See matrix.rs for all the available options
