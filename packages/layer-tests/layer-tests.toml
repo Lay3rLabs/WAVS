@@ -2,7 +2,7 @@
 log_level = ["info", "wavs=debug"]
 
 # Run all the tests
-# [layer-tests]
+[layer-tests]
 all = true
 # isolated = "eth-echo-data"
 # isolated = "eth-multi-trigger"
