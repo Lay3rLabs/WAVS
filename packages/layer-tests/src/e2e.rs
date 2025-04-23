@@ -30,7 +30,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             async move {
                 setup_tracing(
                     &collector,
-                    "wavs-tests-tracer",
+                    "wavs-tests",
                     config.tracing_env_filter().unwrap(),
                 )
             }

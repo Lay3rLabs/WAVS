@@ -22,7 +22,7 @@ fn main() {
             async move {
                 setup_tracing(
                     collector,
-                    "wavs-aggregator-tracer",
+                    "wavs-aggregator",
                     config.tracing_env_filter().unwrap(),
                 )
             }
