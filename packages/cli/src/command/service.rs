@@ -754,7 +754,7 @@ pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<Workflow
             trigger,
             component,
             submit,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
 
         // Add the workflow to the service
@@ -1157,7 +1157,7 @@ pub fn set_ethereum_submit(
         workflow.submit = SubmitJson::Submit(submit.clone());
 
         // Reset the workflow aggregator
-        workflow.aggregator = None;
+        workflow.aggregators = Vec::new();
 
         Ok((
             service,
@@ -1196,11 +1196,11 @@ pub fn set_aggregator_submit(
         workflow.submit = SubmitJson::Submit(submit.clone());
 
         // Set the workflow aggregator
-        workflow.aggregator = Some(Aggregator::Ethereum(EthereumContractSubmission {
+        workflow.aggregators = vec![Aggregator::Ethereum(EthereumContractSubmission {
             chain_name,
             address,
             max_gas,
-        }));
+        })];
 
         Ok((
             service,
@@ -1307,7 +1307,7 @@ pub async fn validate_service(
                 submits.push((workflow_id, submit));
             }
 
-            if let Some(aggregator) = &workflow.aggregator {
+            for aggregator in &workflow.aggregators {
                 match aggregator {
                     Aggregator::Ethereum(ethereum_contract_submission) => {
                         chains_to_validate.insert((
@@ -2726,7 +2726,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -2760,7 +2760,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -2772,7 +2772,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::new_unset(),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -2815,7 +2815,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(zero_fuel_component),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -2855,7 +2855,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -2897,7 +2897,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(env_component),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -2936,7 +2936,7 @@ mod tests {
                     trigger: TriggerJson::Json(Json::Unset),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -2981,7 +2981,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(zero_gas_submit),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -3020,7 +3020,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Json(Json::Unset),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -3053,11 +3053,11 @@ mod tests {
         // Test invalid URL in Aggregator submit
         {
             let mut workflows = BTreeMap::new();
-            let aggregator = Some(Aggregator::Ethereum(EthereumContractSubmission {
+            let aggregators = vec![Aggregator::Ethereum(EthereumContractSubmission {
                 address: ethereum_address,
                 chain_name: ethereum_chain.clone(),
                 max_gas: Some(1000000u64),
-            }));
+            })];
 
             workflows.insert(
                 workflow_id.clone(),
@@ -3067,7 +3067,7 @@ mod tests {
                     submit: SubmitJson::Submit(Submit::Aggregator {
                         url: "not-a-valid-url".to_string(),
                     }),
-                    aggregator,
+                    aggregators,
                 },
             );
 
@@ -3106,7 +3106,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             );
 
@@ -3147,7 +3147,7 @@ mod tests {
                     submit: SubmitJson::Submit(Submit::Aggregator {
                         url: "https://example.com".to_string(),
                     }),
-                    aggregator: None, // No aggregator defined
+                    aggregators: Vec::new(), // No aggregator defined
                 },
             );
 
@@ -3181,11 +3181,11 @@ mod tests {
         // Test no submit but aggregator defined
         {
             let mut workflows = BTreeMap::new();
-            let aggregator = Some(Aggregator::Ethereum(EthereumContractSubmission {
+            let aggregators = vec![Aggregator::Ethereum(EthereumContractSubmission {
                 address: ethereum_address,
                 chain_name: ethereum_chain.clone(),
                 max_gas: Some(1000000u64),
-            }));
+            })];
 
             workflows.insert(
                 workflow_id.clone(),
@@ -3193,7 +3193,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(Submit::None),
-                    aggregator,
+                    aggregators,
                 },
             );
 

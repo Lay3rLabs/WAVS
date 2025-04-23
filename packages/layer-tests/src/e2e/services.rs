@@ -378,7 +378,7 @@ async fn deploy_service_simple(
         trigger,
         component,
         submit,
-        aggregator: None,
+        aggregators: Vec::new(),
     };
 
     // Create Service
@@ -474,14 +474,14 @@ async fn deploy_service_raw(
         trigger: trigger1,
         component: component1,
         submit: submit1,
-        aggregator: None,
+        aggregators: Vec::new(),
     };
 
     let workflow2 = Workflow {
         trigger: trigger2,
         component: component2,
         submit: submit2,
-        aggregator: None,
+        aggregators: Vec::new(),
     };
 
     let workflows = BTreeMap::from([(workflow_id1, workflow1), (workflow_id2, workflow2)]);

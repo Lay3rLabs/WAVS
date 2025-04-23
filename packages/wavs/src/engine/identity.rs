@@ -89,7 +89,7 @@ mod test {
             trigger: trigger_config.trigger.clone(),
             component: wavs_types::Component::new(ComponentSource::Digest(d1.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
         let result = engine
             .execute(

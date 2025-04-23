@@ -296,7 +296,7 @@ mod tests {
             ),
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
 
         // execute it and get bytes back
@@ -331,7 +331,7 @@ mod tests {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
 
         workflow.component.env_keys = ["WAVS_ENV_TEST".to_string()].into_iter().collect();
@@ -405,7 +405,7 @@ mod tests {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
 
         workflow.component.fuel_limit = Some(low_fuel_limit);
@@ -486,7 +486,7 @@ mod tests {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
 
         // first, check that it works with enough time and async sleep
