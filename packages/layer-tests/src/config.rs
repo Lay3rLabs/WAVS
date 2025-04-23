@@ -18,6 +18,7 @@ pub struct TestConfig {
     pub registry_domain: Option<String>,
     pub isolated: Option<String>,
     pub all: Option<bool>,
+    pub jaeger: Option<String>,
     _log_levels: Vec<String>,
     _data_dir: PathBuf,
 }
@@ -47,6 +48,7 @@ impl Default for TestConfig {
                 .split(',')
                 .map(|s| s.to_string())
                 .collect(),
+            jaeger: None,
             _data_dir: tempfile::tempdir().unwrap().into_path(),
             isolated: None,
             all: None,

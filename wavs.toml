@@ -110,6 +110,9 @@ port = 8000
 # Active chain names to watch for triggers
 active_trigger_chains = ["local"]
 
+# Jaeger collector to send trace data
+# jaeger = "http://localhost:4317"
+
 # WAVS-specific chain overrides (if needed)
 # Example:
 # [wavs.chains.eth.local]
@@ -152,6 +155,9 @@ cors_allowed_origins = [
     "http://localhost:*",
     "http://127.0.0.1:*",
 ]
+
+# Jaeger collector to send trace data
+# jaeger = "http://localhost:4317"
 
 # Aggregator-specific chain overrides (if needed)
 # Example:

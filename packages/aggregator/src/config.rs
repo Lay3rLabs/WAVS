@@ -42,6 +42,9 @@ pub struct Config {
 
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
+
+    /// Jaeger collector to send trace data
+    pub jaeger: Option<String>,
 }
 
 /// Default values for the config struct
@@ -56,6 +59,7 @@ impl Default for Config {
             cors_allowed_origins: Vec::new(),
             credential: None,
             hd_index: None,
+            jaeger: None,
             chains: ChainConfigs {
                 cosmos: Default::default(),
                 eth: Default::default(),
