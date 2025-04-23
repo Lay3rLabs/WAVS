@@ -7,7 +7,6 @@ A quick guide to setting up Jaeger for collecting traces from Rust tests using t
 
  - ensure Docker is installed on your system.
 
-
 ## Set up Jaeger
 
 ### 1. Start Jaeger Using Docker
@@ -31,7 +30,7 @@ docker run \
 
 ### 2. Enable Jaeger endpoint
 
-Update the test configuration file `packages/layer-tests/layer-tests.toml` and uncomment the line:
+Update the configuration file `wavs.toml` and uncomment the line:
 ```bash
 jaeger = "http://localhost:4317"
 ```
