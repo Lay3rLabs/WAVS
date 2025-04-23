@@ -239,6 +239,9 @@ impl Submission for CoreSubmission {
             .eth_mnemonic_hd_index_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
+        // always start the hd_index at 0 instead of 1.
+        let hd_index = hd_index - 1;
+
         let signer = make_signer(&self.eth_mnemonic, Some(hd_index))
             .map_err(|e| SubmissionError::FailedToCreateEthereumSigner(service.id.clone(), e))?;
 
