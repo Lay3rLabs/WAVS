@@ -50,7 +50,6 @@ opentelemetry-jaeger-propagator = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 tracing-opentelemetry = {workspace = true}
-axum-tracing-opentelemetry = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

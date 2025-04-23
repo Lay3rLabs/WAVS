@@ -24,11 +24,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-opentelemetry = { workspace = true }
-opentelemetry-jaeger-propagator = { workspace = true }
-opentelemetry-otlp = { workspace = true }
-opentelemetry_sdk = { workspace = true }
-tracing-opentelemetry = {workspace = true}
 const-hex = { workspace = true }
 thiserror = { workspace = true }
 redb = { workspace = true }
