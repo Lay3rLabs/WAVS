@@ -2,12 +2,13 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use utils::{config::CliEnvExt, serde::deserialize_vec_string};
+use wavs_types::Workflow;
 
 /// This struct is used for both args and environment variables
 /// the basic idea is that every env var can be overriden by a cli arg
 /// and these override the config file
 /// env vars follow the pattern of WAVS_{UPPERCASE_ARG_NAME}
-#[derive(Debug, Parser, Serialize, Deserialize, Default)]
+#[derive(Debug, Parser, Serialize, Deserialize)]
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct CliArgs {
@@ -71,10 +72,15 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_submission_mnemonic: Option<String>,
 
-    /// The maximum amount of fuel (compute metering) to allow for 1 components execution
+    /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_wasm_fuel: Option<u64>,
+
+    /// The maximum amount of time (seconds) to allow for 1 component's execution
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_execution_seconds: Option<u64>,
 }
 
 impl CliEnvExt for CliArgs {
@@ -87,5 +93,25 @@ impl CliEnvExt for CliArgs {
 
     fn dotenv_path(&self) -> Option<PathBuf> {
         self.dotenv.clone()
+    }
+}
+
+impl Default for CliArgs {
+    fn default() -> Self {
+        Self {
+            max_wasm_fuel: Some(Workflow::DEFAULT_FUEL_LIMIT * 3),
+            max_execution_seconds: Some(Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3),
+            home: Default::default(),
+            dotenv: Default::default(),
+            port: Default::default(),
+            log_level: Default::default(),
+            host: Default::default(),
+            data: Default::default(),
+            cors_allowed_origins: Default::default(),
+            wasm_lru_size: Default::default(),
+            wasm_threads: Default::default(),
+            submission_mnemonic: Default::default(),
+            cosmos_submission_mnemonic: Default::default(),
+        }
     }
 }
