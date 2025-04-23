@@ -64,9 +64,9 @@ services:
 
   # Default all-memory Jaeger
   jaeger:
-    image: jaegertracing/all-in-one:1.67.0
+    image: jaegertracing/jaeger:2.5.0
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "4317:4317" # OTLP gRPC
-      - "8080:16686" # Jaeger UI
+      - "16686:16686" # Jaeger UI

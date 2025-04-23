@@ -18,19 +18,19 @@ docker run \
   --name jaeger \
   -e COLLECTOR_OTLP_ENABLED=true \
   -p 4317:4317 \
-  -p 8080:16686 \
-  jaegertracing/all-in-one:1.67.0
+  -p 16686:16686 \
+  jaegertracing/jaeger:2.5.0
 ```
 
 - ports:
   - `4317`: OTLP gRPC endpoint for receiving traces.
-  - `8080`: Jaeger UI for visualizing traces.
+  - `16686`: Jaeger UI for visualizing traces.
 - environment:
   - `COLLECTOR_OTLP_ENABLED=true`: Enables the OTLP receiver in Jaeger.
 
 ### 2. Enable Jaeger endpoint
 
-Update the configuration file `wavs.toml` and uncomment the line:
+Update the configuration file `packages/layer-tests/layer-tests.toml` and uncomment the line:
 ```bash
 jaeger = "http://localhost:4317"
 ```
@@ -48,7 +48,7 @@ cargo test
 
 Open the Jaeger UI in your browser:
 ```
-http://localhost:8080
+http://localhost:16686
 ```
 - select the service name `wavs` from the dropdown
 - search for traces and inspect them
