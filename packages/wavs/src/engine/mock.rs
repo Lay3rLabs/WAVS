@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::triggers::mock::get_mock_trigger_data;
 use tracing::instrument;
-use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
+use utils::config::{ChainConfigs, CosmosChainConfig, EvmChainConfig};
 use wavs_types::{Digest, TriggerAction, WasmResponse, Workflow};
 
 use super::{Engine, EngineError};
@@ -19,9 +19,9 @@ pub struct MockEngine {
 
 pub fn mock_chain_configs() -> ChainConfigs {
     ChainConfigs {
-        eth: vec![(
+        evm: vec![(
             "eth".try_into().unwrap(),
-            EthereumChainConfig {
+            EvmChainConfig {
                 chain_id: 31337.to_string(),
                 ws_endpoint: Some("ws://localhost:8546".to_string()),
                 http_endpoint: Some("http://localhost:8545".to_string()),
@@ -178,7 +178,7 @@ mod test {
 
         // d1 call gets r1
         let c1 = Workflow {
-            trigger: Trigger::eth_contract_event(
+            trigger: Trigger::evm_contract_event(
                 crate::test_utils::address::rand_address_eth(),
                 ChainName::new("eth").unwrap(),
                 rand_event_eth(),
@@ -204,7 +204,7 @@ mod test {
 
         // d2 call gets r2
         let c2 = Workflow {
-            trigger: Trigger::eth_contract_event(
+            trigger: Trigger::evm_contract_event(
                 crate::test_utils::address::rand_address_eth(),
                 ChainName::new("eth").unwrap(),
                 rand_event_eth(),
@@ -230,7 +230,7 @@ mod test {
 
         // d3 call returns missing error
         let c3 = Workflow {
-            trigger: Trigger::eth_contract_event(
+            trigger: Trigger::evm_contract_event(
                 crate::test_utils::address::rand_address_eth(),
                 ChainName::new("eth").unwrap(),
                 rand_event_eth(),

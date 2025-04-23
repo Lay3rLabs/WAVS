@@ -13,7 +13,7 @@ use crate::test_utils::address::rand_address_eth;
 use crate::AppContext;
 
 pub fn mock_eigen_submit() -> Submit {
-    Submit::eth_contract("eth".try_into().unwrap(), rand_address_eth(), None)
+    Submit::evm_contract("eth".try_into().unwrap(), rand_address_eth(), None)
 }
 
 #[derive(Clone)]
@@ -135,7 +135,7 @@ mod test {
                 eventId: mock_event_id().into(),
                 ordering: mock_event_order().into(),
             },
-            submit: Submit::eth_contract(ChainName::new("eth").unwrap(), rand_address_eth(), None),
+            submit: Submit::evm_contract(ChainName::new("eth").unwrap(), rand_address_eth(), None),
         }
     }
 

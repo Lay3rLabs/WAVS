@@ -1,6 +1,6 @@
 // Helpers to work with "trigger id" flows - which our example components do
 use crate::bindings::compat::{
-    TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent, WasmResponse,
+    TriggerData, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent, WasmResponse,
 };
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
@@ -18,7 +18,7 @@ pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)>
 
             Ok((event.id.u64(), event.data))
         }
-        TriggerData::EthContractEvent(TriggerDataEthContractEvent { log, .. }) => {
+        TriggerData::EvmContractEvent(TriggerDataEvmContractEvent { log, .. }) => {
             let event: NewTrigger = decode_event_log_data!(log)?;
 
             let trigger_info = TriggerInfo::abi_decode(&event._0)?;
@@ -39,7 +39,7 @@ pub fn encode_trigger_output(trigger_id: u64, output: impl AsRef<[u8]>) -> WasmR
     }
 }
 
-// extension traits for Cosmos and Ethereum queriers to add Trigger support
+// extension traits for Cosmos and EVM queriers to add Trigger support
 #[allow(async_fn_in_trait)]
 pub trait ChainQuerierExt {
     async fn trigger_data(
@@ -83,7 +83,7 @@ impl ChainQuerierExt for layer_climb::prelude::QueryClient {
 }
 
 impl ChainQuerierExt for RootProvider {
-    // convenience helper for typical use-case of querying an ethereum event trigger
+    // convenience helper for typical use-case of querying an EVM event trigger
     async fn trigger_data(
         &self,
         address: layer_climb::prelude::Address,

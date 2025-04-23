@@ -328,9 +328,9 @@ async fn query_service_from_address(
 
     // Handle different chain types
     match chain {
-        AnyChainConfig::Eth(eth_config) => {
+        AnyChainConfig::Evm(evm_config) => {
             // Get the HTTP endpoint, required for contract calls
-            let http_endpoint = eth_config.http_endpoint.clone().ok_or_else(|| {
+            let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
                 DispatcherError::Config(format!(
                     "No HTTP endpoint configured for chain {}",
                     chain_name
@@ -458,7 +458,7 @@ mod tests {
             mock::BigSquare,
         },
         triggers::mock::{
-            mock_eth_event_trigger, mock_eth_event_trigger_config, MockTriggerManagerVec,
+            mock_evm_event_trigger, mock_evm_event_trigger_config, MockTriggerManagerVec,
         },
     };
     use wavs_types::{
@@ -477,7 +477,7 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            config: mock_eth_event_trigger_config("service1", "workflow1"),
+            config: mock_evm_event_trigger_config("service1", "workflow1"),
             data: TriggerData::new_raw(payload),
         };
         let ctx = AppContext::new();
@@ -502,8 +502,8 @@ mod tests {
                 action.config.workflow_id.clone(),
                 Workflow {
                     component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_eth_event_trigger(),
-                    submit: Submit::eth_contract(
+                    trigger: mock_evm_event_trigger(),
+                    submit: Submit::evm_contract(
                         ChainName::new("eth").unwrap(),
                         service_manager_addr,
                         None,
@@ -513,7 +513,7 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
-            manager: ServiceManager::Ethereum {
+            manager: ServiceManager::Evm {
                 chain_name: ChainName::new("eth").unwrap(),
                 address: service_manager_addr,
             },
@@ -536,7 +536,7 @@ mod tests {
                 ordering: mock_event_order().into(),
                 payload: payload.into(),
             },
-            submit: Submit::eth_contract(
+            submit: Submit::evm_contract(
                 ChainName::new("eth").unwrap(),
                 service_manager_addr,
                 None,
@@ -559,7 +559,7 @@ mod tests {
         let contract_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
@@ -570,7 +570,7 @@ mod tests {
                 data: TriggerData::new_raw(br#"{"x":3}"#),
             },
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
@@ -609,8 +609,8 @@ mod tests {
                 workflow_id.clone(),
                 Workflow {
                     component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_eth_event_trigger(),
-                    submit: Submit::eth_contract(
+                    trigger: mock_evm_event_trigger(),
+                    submit: Submit::evm_contract(
                         ChainName::new("eth").unwrap(),
                         rand_address_eth(),
                         None,
@@ -620,7 +620,7 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
-            manager: ServiceManager::Ethereum {
+            manager: ServiceManager::Evm {
                 chain_name: ChainName::new("eth").unwrap(),
                 address: service_manager_addr,
             },
@@ -657,7 +657,7 @@ mod tests {
         let contract_address = rand_address_eth();
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
@@ -668,7 +668,7 @@ mod tests {
                 data: TriggerData::new_raw(br#"{"x":3}"#),
             },
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
@@ -687,7 +687,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs {
                 cosmos: BTreeMap::new(),
-                eth: BTreeMap::new(),
+                evm: BTreeMap::new(),
             },
             db_file.as_ref(),
         )
@@ -709,8 +709,8 @@ mod tests {
                 workflow_id.clone(),
                 Workflow {
                     component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_eth_event_trigger(),
-                    submit: Submit::eth_contract(
+                    trigger: mock_evm_event_trigger(),
+                    submit: Submit::evm_contract(
                         ChainName::new("eth").unwrap(),
                         rand_address_eth(),
                         None,
@@ -720,7 +720,7 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
-            manager: ServiceManager::Ethereum {
+            manager: ServiceManager::Evm {
                 chain_name: ChainName::new("eth").unwrap(),
                 address: service_manager_addr,
             },

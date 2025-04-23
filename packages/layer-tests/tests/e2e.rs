@@ -4,7 +4,7 @@ use utils::context::AppContext;
 // This is so we automatically run tests via `cargo test --workspace`
 // However, for developer purposes, we can also override and isolate tests
 // by running `cargo run` from the `layer-tests` package directory.
-// e.g. `cargo run -- --isolated eth-square`
+// e.g. `cargo run -- --isolated evm-square`
 #[test]
 fn e2e_tests() {
     let ctx = AppContext::new();

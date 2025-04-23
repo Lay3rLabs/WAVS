@@ -29,7 +29,7 @@ pub struct Service {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {
-    Ethereum {
+    Evm {
         chain_name: ChainName,
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
@@ -39,13 +39,13 @@ pub enum ServiceManager {
 impl ServiceManager {
     pub fn chain_name(&self) -> &ChainName {
         match self {
-            ServiceManager::Ethereum { chain_name, .. } => chain_name,
+            ServiceManager::Evm { chain_name, .. } => chain_name,
         }
     }
 
-    pub fn eth_address_unchecked(&self) -> alloy_primitives::Address {
+    pub fn evm_address_unchecked(&self) -> alloy_primitives::Address {
         match self {
-            ServiceManager::Ethereum { address, .. } => *address,
+            ServiceManager::Evm { address, .. } => *address,
         }
     }
 }
@@ -175,7 +175,7 @@ pub enum Trigger {
         chain_name: ChainName,
         event_type: String,
     },
-    EthContractEvent {
+    EvmContractEvent {
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
         chain_name: ChainName,
@@ -211,7 +211,7 @@ pub enum TriggerData {
         /// The block height where the event was emitted
         block_height: u64,
     },
-    EthContractEvent {
+    EvmContractEvent {
         /// The address of the contract that emitted the event
         contract_address: alloy_primitives::Address,
         /// The name of the chain where the event was emitted
@@ -271,18 +271,18 @@ pub enum Submit {
         url: String,
     },
     /// Service handler directly
-    EthereumContract(EthereumContractSubmission),
+    EvmContract(EvmContractSubmission),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Aggregator {
-    Ethereum(EthereumContractSubmission),
+    Evm(EvmContractSubmission),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub struct EthereumContractSubmission {
+pub struct EvmContractSubmission {
     pub chain_name: ChainName,
     /// Should be an IWavsServiceHandler contract
     #[schema(value_type = String)]
@@ -293,7 +293,7 @@ pub struct EthereumContractSubmission {
     pub max_gas: Option<u64>,
 }
 
-impl EthereumContractSubmission {
+impl EvmContractSubmission {
     pub fn new(
         chain_name: ChainName,
         address: alloy_primitives::Address,
@@ -353,17 +353,15 @@ mod test_ext {
 
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
-    use super::{Component, EthereumContractSubmission, Submit, Trigger, TriggerConfig};
+    use super::{Component, EvmContractSubmission, Submit, Trigger, TriggerConfig};
 
     impl Submit {
-        pub fn eth_contract(
+        pub fn evm_contract(
             chain_name: ChainName,
             address: alloy_primitives::Address,
             max_gas: Option<u64>,
         ) -> Submit {
-            Submit::EthereumContract(EthereumContractSubmission::new(
-                chain_name, address, max_gas,
-            ))
+            Submit::EvmContract(EvmContractSubmission::new(chain_name, address, max_gas))
         }
     }
 
@@ -392,12 +390,12 @@ mod test_ext {
                 event_type: event_type.to_string(),
             }
         }
-        pub fn eth_contract_event(
+        pub fn evm_contract_event(
             address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Self {
-            Trigger::EthContractEvent {
+            Trigger::EvmContractEvent {
                 address,
                 chain_name: chain_name.into(),
                 event_hash,
@@ -420,7 +418,7 @@ mod test_ext {
             })
         }
 
-        pub fn eth_contract_event(
+        pub fn evm_contract_event(
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             contract_address: alloy_primitives::Address,
@@ -430,7 +428,7 @@ mod test_ext {
             Ok(Self {
                 service_id: service_id.try_into()?,
                 workflow_id: workflow_id.try_into()?,
-                trigger: Trigger::eth_contract_event(contract_address, chain_name, event_hash),
+                trigger: Trigger::evm_contract_event(contract_address, chain_name, event_hash),
             })
         }
 

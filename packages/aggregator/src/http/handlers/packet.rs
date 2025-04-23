@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, ensure};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EthereumContractSubmission, Packet,
+    Aggregator, EvmContractSubmission, Packet,
 };
 
 use crate::http::{
@@ -77,17 +77,17 @@ async fn process_packet(
 
     for (index, aggregator) in aggregators.iter().enumerate() {
         match aggregator {
-            Aggregator::Ethereum(EthereumContractSubmission {
+            Aggregator::Evm(EvmContractSubmission {
                 chain_name,
                 address,
                 max_gas,
             }) => {
                 // this implicitly validates that the signature is valid
-                let signer = packet.signature.eth_signer_address(&packet.envelope)?;
+                let signer = packet.signature.evm_signer_address(&packet.envelope)?;
 
-                let client = state.get_eth_client(chain_name).await?;
+                let client = state.get_evm_client(chain_name).await?;
                 let service_manager = SimpleServiceManager::new(
-                    service.manager.eth_address_unchecked(),
+                    service.manager.evm_address_unchecked(),
                     client.provider.clone(),
                 );
                 let weight = service_manager.getOperatorWeight(signer).call().await?;
@@ -234,7 +234,7 @@ mod test {
 
         let derived_signer_1_address = packet
             .signature
-            .eth_signer_address(&packet.envelope)
+            .evm_signer_address(&packet.envelope)
             .unwrap();
         assert_eq!(derived_signer_1_address, signer_1.address());
 

@@ -119,8 +119,8 @@ cosmwasm-build:
     cp ./artifacts/*.wasm {{COSMWASM_OUT_DIR}}
 
 # on-chain integration test
-test-wavs-e2e-ethereum:
-    RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p wavs --features e2e_tests_ethereum_baseline e2e_tests
+test-wavs-e2e-evm:
+    RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p wavs --features e2e_tests_evm_baseline e2e_tests
 
 update-submodules:
     git submodule update --init --recursive

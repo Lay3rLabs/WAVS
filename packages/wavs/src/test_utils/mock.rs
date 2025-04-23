@@ -10,7 +10,7 @@ use crate::{
     },
     submission::mock::MockSubmission,
     test_utils::address::rand_address_eth,
-    triggers::mock::{mock_eth_event_trigger, MockTriggerManagerChannel},
+    triggers::mock::{mock_evm_event_trigger, MockTriggerManagerChannel},
     AppContext,
 };
 use axum::{
@@ -117,9 +117,9 @@ impl MockE2ETestRunner {
         self.dispatcher.engine.engine().register(digest, function);
 
         // but we can create a service via http router
-        let trigger = mock_eth_event_trigger();
+        let trigger = mock_evm_event_trigger();
 
-        let submit = Submit::eth_contract("eth".try_into().unwrap(), rand_address_eth(), None);
+        let submit = Submit::evm_contract("eth".try_into().unwrap(), rand_address_eth(), None);
 
         let service = Service::new_simple(
             service_id,
@@ -127,7 +127,7 @@ impl MockE2ETestRunner {
             trigger,
             source,
             submit,
-            ServiceManager::Ethereum {
+            ServiceManager::Evm {
                 chain_name: "eth".try_into().unwrap(),
                 address: rand_address_eth(),
             },

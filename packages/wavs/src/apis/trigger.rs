@@ -31,8 +31,8 @@ pub trait TriggerManager: Send + Sync {
 pub enum TriggerError {
     #[error("climb: {0}")]
     Climb(anyhow::Error),
-    #[error("ethereum: {0}")]
-    Ethereum(anyhow::Error),
+    #[error("EVM: {0}")]
+    EVM(anyhow::Error),
     #[error("parse avs payload: {0}")]
     ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]

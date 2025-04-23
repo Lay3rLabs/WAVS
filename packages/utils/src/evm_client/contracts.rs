@@ -4,9 +4,9 @@ use wavs_types::{
     IWavsServiceManager, IWavsServiceManagerQueryT, IWavsServiceManagerSigningT,
 };
 
-use super::{EthQueryClient, EthSigningClient};
+use super::{EvmQueryClient, EvmSigningClient};
 
-impl EthSigningClient {
+impl EvmSigningClient {
     pub fn service_handler(&self, address: Address) -> IWavsServiceHandlerSigningT {
         IWavsServiceHandler::new(address, self.provider.clone())
     }
@@ -16,7 +16,7 @@ impl EthSigningClient {
     }
 }
 
-impl EthQueryClient {
+impl EvmQueryClient {
     pub fn service_handler(&self, address: Address) -> IWavsServiceHandlerQueryT {
         IWavsServiceHandler::new(address, self.provider.clone())
     }

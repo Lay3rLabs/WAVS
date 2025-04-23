@@ -4,8 +4,8 @@ use alloy_provider::Provider;
 use alloy_rpc_types_eth::TransactionRequest;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
-    config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EthereumChainConfig},
-    eth_client::EthClientBuilder,
+    config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EvmChainConfig},
+    evm_client::EvmClientBuilder,
     filesystem::workspace_path,
 };
 use wavs_types::ChainName;
@@ -51,10 +51,10 @@ impl TestMnemonics {
     }
 
     pub async fn fund(&self, chain_configs: &ChainConfigs) {
-        for chain_config in chain_configs.eth.values() {
+        for chain_config in chain_configs.evm.values() {
             let anvil_mnemonic =
                 "test test test test test test test test test test test junk".to_string();
-            let anvil_client = EthClientBuilder::new(chain_config.to_client_config(
+            let anvil_client = EvmClientBuilder::new(chain_config.to_client_config(
                 None,
                 Some(anvil_mnemonic),
                 None,
@@ -99,15 +99,15 @@ impl From<TestConfig> for Configs {
 
         let mut chain_configs = ChainConfigs::default();
 
-        let mut eth_port = 8545;
-        let mut eth_chain_id = 31337;
+        let mut evm_port = 8545;
+        let mut evm_chain_id = 31337;
 
-        let mut push_eth_chain = |aggregator: bool| {
-            let http_endpoint = format!("http://127.0.0.1:{}", eth_port);
-            let ws_endpoint = format!("ws://127.0.0.1:{}", eth_port);
-            let chain_id = eth_chain_id.to_string();
+        let mut push_evm_chain = |aggregator: bool| {
+            let http_endpoint = format!("http://127.0.0.1:{}", evm_port);
+            let ws_endpoint = format!("ws://127.0.0.1:{}", evm_port);
+            let chain_id = evm_chain_id.to_string();
 
-            let chain_config = EthereumChainConfig {
+            let chain_config = EvmChainConfig {
                 chain_id: chain_id.to_string(),
                 http_endpoint: Some(http_endpoint),
                 ws_endpoint: Some(ws_endpoint),
@@ -120,11 +120,11 @@ impl From<TestConfig> for Configs {
             };
 
             chain_configs
-                .eth
+                .evm
                 .insert(ChainName::new(chain_id).unwrap(), chain_config);
 
-            eth_port += 1;
-            eth_chain_id += 1;
+            evm_port += 1;
+            evm_chain_id += 1;
         };
 
         let mut cosmos_port = 9545;
@@ -152,16 +152,16 @@ impl From<TestConfig> for Configs {
             cosmos_chain_id += 1;
         };
 
-        if matrix.eth_regular_chain_enabled() {
-            push_eth_chain(false);
+        if matrix.evm_regular_chain_enabled() {
+            push_evm_chain(false);
         }
 
-        if matrix.eth_secondary_chain_enabled() {
-            push_eth_chain(false);
+        if matrix.evm_secondary_chain_enabled() {
+            push_evm_chain(false);
         }
 
-        if matrix.eth_aggregator_chain_enabled() {
-            push_eth_chain(true);
+        if matrix.evm_aggregator_chain_enabled() {
+            push_evm_chain(true);
         }
 
         if matrix.cosmos_regular_chain_enabled() {
@@ -184,7 +184,7 @@ impl From<TestConfig> for Configs {
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
 
-        let aggregator_config = if matrix.eth_aggregator_chain_enabled() {
+        let aggregator_config = if matrix.evm_aggregator_chain_enabled() {
             let mut aggregator_config: wavs_aggregator::config::Config =
                 ConfigBuilder::new(wavs_aggregator::args::CliArgs {
                     data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
@@ -217,7 +217,7 @@ impl From<TestConfig> for Configs {
 
         cli_config.chains = chain_configs.clone();
         // some random mnemonic
-        cli_config.eth_credential = Some(mnemonics.cli.clone());
+        cli_config.evm_credential = Some(mnemonics.cli.clone());
 
         // Sanity check
 
@@ -226,8 +226,8 @@ impl From<TestConfig> for Configs {
                 "http://{}:{}",
                 aggregator_config.host, aggregator_config.port
             );
-            for eth_chain in chain_configs.eth.values() {
-                if let Some(endpoint) = eth_chain.aggregator_endpoint.as_ref() {
+            for evm_chain in chain_configs.evm.values() {
+                if let Some(endpoint) = evm_chain.aggregator_endpoint.as_ref() {
                     assert_eq!(*endpoint, aggregator_endpoint);
                 }
             }

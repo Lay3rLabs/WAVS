@@ -55,9 +55,9 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
                     }
                 )
             },
-            wavs_types::Trigger::EthContractEvent { address, chain_name, event_hash } => {
-                crate::bindings::world::wavs::worker::layer_types::TriggerSource::EthContractEvent(
-                    crate::bindings::world::wavs::worker::layer_types::TriggerSourceEthContractEvent {
+            wavs_types::Trigger::EvmContractEvent { address, chain_name, event_hash } => {
+                crate::bindings::world::wavs::worker::layer_types::TriggerSource::EvmContractEvent(
+                    crate::bindings::world::wavs::worker::layer_types::TriggerSourceEvmContractEvent {
                         address: address.into(),
                         chain_name: chain_name.to_string(),
                         event_hash: event_hash.as_slice().to_vec(),
@@ -89,19 +89,19 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
 
     fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
         match src {
-            wavs_types::TriggerData::EthContractEvent {
+            wavs_types::TriggerData::EvmContractEvent {
                 contract_address,
                 chain_name,
                 log,
                 block_height,
             } => {
-                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::EthContractEvent(
-                    crate::bindings::world::wavs::worker::layer_types::TriggerDataEthContractEvent {
-                        contract_address: crate::bindings::world::wavs::worker::layer_types::EthAddress {
+                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::EvmContractEvent(
+                    crate::bindings::world::wavs::worker::layer_types::TriggerDataEvmContractEvent {
+                        contract_address: crate::bindings::world::wavs::worker::layer_types::EvmAddress {
                             raw_bytes: contract_address.to_vec()
                         },
                         chain_name: chain_name.to_string(),
-                        log: crate::bindings::world::wavs::worker::layer_types::EthEventLogData {
+                        log: crate::bindings::world::wavs::worker::layer_types::EvmEventLogData {
                             topics: log
                                 .topics()
                                 .iter()
@@ -169,7 +169,7 @@ impl TryFrom<layer_climb::prelude::Address> for component::CosmosAddress {
     }
 }
 
-impl TryFrom<layer_climb::prelude::Address> for component::EthAddress {
+impl TryFrom<layer_climb::prelude::Address> for component::EvmAddress {
     type Error = EngineError;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
@@ -178,13 +178,13 @@ impl TryFrom<layer_climb::prelude::Address> for component::EthAddress {
                 raw_bytes: addr.as_bytes().to_vec(),
             }),
             _ => Err(EngineError::TriggerData(anyhow::anyhow!(
-                "Not an ethereum address"
+                "Not an EVM address"
             ))),
         }
     }
 }
 
-impl From<alloy_primitives::Address> for component::EthAddress {
+impl From<alloy_primitives::Address> for component::EvmAddress {
     fn from(address: alloy_primitives::Address) -> Self {
         Self {
             raw_bytes: address.to_vec(),
@@ -206,8 +206,8 @@ impl From<utils::config::CosmosChainConfig> for super::world::host::CosmosChainC
     }
 }
 
-impl From<utils::config::EthereumChainConfig> for super::world::host::EthChainConfig {
-    fn from(config: utils::config::EthereumChainConfig) -> Self {
+impl From<utils::config::EvmChainConfig> for super::world::host::EvmChainConfig {
+    fn from(config: utils::config::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id,
             ws_endpoint: config.ws_endpoint,

@@ -4,7 +4,7 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::ConfigExt,
-    eth_client::{EthClientBuilder, EthSigningClient},
+    evm_client::{EvmClientBuilder, EvmSigningClient},
 };
 use wavs_cli::{
     args::Command,
@@ -19,24 +19,24 @@ use wavs_cli::{
 };
 use wavs_types::ChainName;
 
-pub(crate) async fn new_eth_client(
+pub(crate) async fn new_evm_client(
     ctx: &CliContext,
     chain_name: &ChainName,
-) -> Result<EthSigningClient> {
+) -> Result<EvmSigningClient> {
     let chain_config = ctx
         .config
         .chains
-        .eth
+        .evm
         .get(chain_name)
         .context(format!("chain {chain_name} not found"))?
         .clone();
 
     let client_config =
-        chain_config.to_client_config(None, ctx.config.eth_credential.clone(), None);
+        chain_config.to_client_config(None, ctx.config.evm_credential.clone(), None);
 
-    let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
+    let evm_client = EvmClientBuilder::new(client_config).build_signing().await?;
 
-    Ok(eth_client)
+    Ok(evm_client)
 }
 
 #[tokio::main]
@@ -61,7 +61,7 @@ async fn main() {
 
     match command {
         Command::DeployServiceRaw { service, args: _ } => {
-            let provider = new_eth_client(&ctx, service.manager.chain_name())
+            let provider = new_evm_client(&ctx, service.manager.chain_name())
                 .await
                 .unwrap()
                 .provider;

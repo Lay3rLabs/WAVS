@@ -32,7 +32,7 @@ impl ComponentSources {
         ctx.rt.block_on(async {
             let component_names: HashSet<ComponentName> = configs
                 .matrix
-                .eth
+                .evm
                 .iter()
                 .map(|s| Vec::<ComponentName>::from(*s))
                 .chain(

@@ -5,7 +5,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use utils::{
     config::{ChainConfigs, ConfigExt},
-    error::EthClientError,
+    error::EvmClientError,
 };
 use utoipa::ToSchema;
 
@@ -62,7 +62,7 @@ impl Default for Config {
             jaeger: None,
             chains: ChainConfigs {
                 cosmos: Default::default(),
-                eth: Default::default(),
+                evm: Default::default(),
             },
         }
     }
@@ -73,7 +73,7 @@ impl Config {
         let mnemonic = self
             .credential
             .clone()
-            .ok_or(EthClientError::MissingMnemonic)?;
+            .ok_or(EvmClientError::MissingMnemonic)?;
         let signer = MnemonicBuilder::<English>::default()
             .phrase(mnemonic)
             .build()?;

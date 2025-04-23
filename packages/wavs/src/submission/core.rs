@@ -14,12 +14,12 @@ use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    config::{AnyChainConfig, EthereumChainConfig},
-    eth_client::{signing::make_signer, EthClientBuilder, EthClientTransport, EthSigningClient},
+    config::{AnyChainConfig, EvmChainConfig},
+    evm_client::{signing::make_signer, EvmClientBuilder, EvmClientTransport, EvmSigningClient},
 };
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainName, Envelope, EnvelopeExt, EthereumContractSubmission, Packet, PacketRoute, ServiceID,
+    ChainName, Envelope, EnvelopeExt, EvmContractSubmission, Packet, PacketRoute, ServiceID,
     SigningKeyResponse, Submit,
 };
 
@@ -28,10 +28,10 @@ pub struct CoreSubmission {
     chain_configs: BTreeMap<ChainName, AnyChainConfig>,
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
-    eth_signers: Arc<RwLock<HashMap<ServiceID, PrivateKeySigner>>>,
-    eth_sending_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
-    eth_mnemonic: String,
-    eth_mnemonic_hd_index_count: Arc<AtomicU32>,
+    evm_signers: Arc<RwLock<HashMap<ServiceID, PrivateKeySigner>>>,
+    evm_sending_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
+    evm_mnemonic: String,
+    evm_mnemonic_hd_index_count: Arc<AtomicU32>,
 }
 
 impl CoreSubmission {
@@ -41,13 +41,13 @@ impl CoreSubmission {
         Ok(Self {
             chain_configs: config.chains.clone().into(),
             http_client: reqwest::Client::new(),
-            eth_signers: Arc::new(RwLock::new(HashMap::new())),
-            eth_sending_clients: Arc::new(RwLock::new(HashMap::new())),
-            eth_mnemonic: config
+            evm_signers: Arc::new(RwLock::new(HashMap::new())),
+            evm_sending_clients: Arc::new(RwLock::new(HashMap::new())),
+            evm_mnemonic: config
                 .submission_mnemonic
                 .clone()
                 .ok_or(SubmissionError::MissingMnemonic)?,
-            eth_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
+            evm_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
         })
     }
 
@@ -56,17 +56,15 @@ impl CoreSubmission {
         route: PacketRoute,
         envelope: Envelope,
     ) -> Result<Packet, SubmissionError> {
-        let eth_signer = {
-            let lock = self.eth_signers.read().unwrap();
+        let evm_signer = {
+            let lock = self.evm_signers.read().unwrap();
             lock.get(&route.service_id)
-                .ok_or(SubmissionError::MissingEthereumSigner(
-                    route.service_id.clone(),
-                ))?
+                .ok_or(SubmissionError::MissingEvmSigner(route.service_id.clone()))?
                 .clone()
         };
 
         let signature = envelope
-            .sign(&eth_signer)
+            .sign(&evm_signer)
             .await
             .map_err(SubmissionError::FailedToSignEnvelope)?;
 
@@ -78,12 +76,12 @@ impl CoreSubmission {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn submit_to_ethereum(
+    async fn submit_to_evm(
         &self,
-        submission: EthereumContractSubmission,
+        submission: EvmContractSubmission,
         packet: Packet,
     ) -> Result<(), SubmissionError> {
-        let EthereumContractSubmission {
+        let EvmContractSubmission {
             chain_name,
             max_gas,
             address,
@@ -91,13 +89,11 @@ impl CoreSubmission {
 
         // free up the mutex to add more clients
         let client = {
-            self.eth_sending_clients
+            self.evm_sending_clients
                 .read()
                 .unwrap()
                 .get(&chain_name)
-                .ok_or(SubmissionError::MissingEthereumSendingClient(
-                    chain_name.clone(),
-                ))?
+                .ok_or(SubmissionError::MissingEvmSendingClient(chain_name.clone()))?
                 .clone()
         };
 
@@ -204,11 +200,11 @@ impl Submission for CoreSubmission {
                             };
 
                             match submit {
-                                Submit::EthereumContract(submission) => {
+                                Submit::EvmContract(submission) => {
                                     let _self = _self.clone();
                                     tokio::spawn(
                                         async move {
-                                            if let Err(e) = _self.submit_to_ethereum(submission, packet).await {
+                                            if let Err(e) = _self.submit_to_evm(submission, packet).await {
                                                 tracing::error!("{:?}", e);
                                             }
                                         }
@@ -236,11 +232,11 @@ impl Submission for CoreSubmission {
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     async fn add_service(&self, service: &wavs_types::Service) -> Result<(), SubmissionError> {
         let hd_index = self
-            .eth_mnemonic_hd_index_count
+            .evm_mnemonic_hd_index_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let signer = make_signer(&self.eth_mnemonic, Some(hd_index))
-            .map_err(|e| SubmissionError::FailedToCreateEthereumSigner(service.id.clone(), e))?;
+        let signer = make_signer(&self.evm_mnemonic, Some(hd_index))
+            .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service.id.clone(), e))?;
 
         tracing::info!(
             "Created new signing client for service {} -> {}",
@@ -248,39 +244,38 @@ impl Submission for CoreSubmission {
             signer.address()
         );
 
-        self.eth_signers
+        self.evm_signers
             .write()
             .unwrap()
             .insert(service.id.clone(), signer);
 
         for workflow in service.workflows.values() {
-            if let Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) =
-                &workflow.submit
+            if let Submit::EvmContract(EvmContractSubmission { chain_name, .. }) = &workflow.submit
             {
                 if !self
-                    .eth_sending_clients
+                    .evm_sending_clients
                     .read()
                     .unwrap()
                     .contains_key(chain_name)
                 {
-                    let chain_config: EthereumChainConfig = self
+                    let chain_config: EvmChainConfig = self
                         .chain_configs
                         .get(service.manager.chain_name())
-                        .ok_or(SubmissionError::MissingEthereumChain)?
+                        .ok_or(SubmissionError::MissingEvmChain)?
                         .clone()
                         .try_into()
-                        .map_err(|_| SubmissionError::NotEthereumChain)?;
+                        .map_err(|_| SubmissionError::NotEvmChain)?;
 
-                    let sending_client = EthClientBuilder::new(chain_config.to_client_config(
+                    let sending_client = EvmClientBuilder::new(chain_config.to_client_config(
                         None,
-                        Some(self.eth_mnemonic.clone()),
-                        Some(EthClientTransport::Http),
+                        Some(self.evm_mnemonic.clone()),
+                        Some(EvmClientTransport::Http),
                     ))
                     .build_signing()
                     .await
-                    .map_err(SubmissionError::Ethereum)?;
+                    .map_err(SubmissionError::EVM)?;
 
-                    self.eth_sending_clients
+                    self.evm_sending_clients
                         .write()
                         .unwrap()
                         .insert(chain_name.clone(), sending_client);
@@ -301,7 +296,7 @@ impl Submission for CoreSubmission {
         &self,
         service_id: ServiceID,
     ) -> Result<SigningKeyResponse, SubmissionError> {
-        self.eth_signers
+        self.evm_signers
             .read()
             .unwrap()
             .get(&service_id)

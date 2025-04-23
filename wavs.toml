@@ -59,28 +59,28 @@ grpc_endpoint = "http://grpc-falcron.pion-1.ntrn.tech:80"
 gas_price = 0.0053
 gas_denom = "untrn"
 
-# Ethereum chains
-[default.chains.eth.local]
+# EVM chains
+[default.chains.evm.local]
 chain_id = "31337"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
 
-[default.chains.eth.local2]
+[default.chains.evm.local2]
 chain_id = "31338"
 ws_endpoint = "ws://localhost:8645"
 http_endpoint = "http://localhost:8645"
 
-[default.chains.eth.sepolia]
+[default.chains.evm.sepolia]
 chain_id = "11155111"
 ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
 http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
 
-[default.chains.eth.holesky]
+[default.chains.evm.holesky]
 chain_id = "17000"
 ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
 http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
 
-[default.chains.eth.holesky-fork]
+[default.chains.evm.holesky-fork]
 chain_id = "17000"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
@@ -115,7 +115,7 @@ active_trigger_chains = ["local"]
 
 # WAVS-specific chain overrides (if needed)
 # Example:
-# [wavs.chains.eth.local]
+# [wavs.chains.evm.local]
 # chain_id = "31337"
 # ws_endpoint = "ws://localhost:8545"
 # http_endpoint = "http://localhost:8545"
@@ -131,16 +131,16 @@ active_trigger_chains = ["local"]
 # wavs_endpoint = "http://localhost:8000"
 
 # CLI-specific chain overrides
-[cli.chains.eth.local]
+[cli.chains.evm.local]
 aggregator_endpoint = "http://localhost:8001"
 
-[cli.chains.eth.local2]
+[cli.chains.evm.local2]
 aggregator_endpoint = "http://localhost:8001"
 
-[cli.chains.eth.sepolia]
+[cli.chains.evm.sepolia]
 aggregator_endpoint = "http://localhost:8001"
 
-[cli.chains.eth.holesky]
+[cli.chains.evm.holesky]
 aggregator_endpoint = "http://localhost:8001"
 
 # ----------------------------
@@ -161,7 +161,7 @@ cors_allowed_origins = [
 
 # Aggregator-specific chain overrides (if needed)
 # Example:
-# [aggregator.chains.eth.local]
+# [aggregator.chains.evm.local]
 # chain_id = "31337"
 # ws_endpoint = "ws://localhost:8545"
 # http_endpoint = "http://localhost:8545"

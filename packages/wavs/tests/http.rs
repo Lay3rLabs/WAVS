@@ -10,7 +10,7 @@ use wavs::{
         address::rand_address_eth,
         http::{map_response, TestHttpApp},
     },
-    triggers::mock::mock_eth_event_trigger,
+    triggers::mock::mock_evm_event_trigger,
 };
 use wavs_types::{ComponentSource, Digest, ServiceID, UploadComponentResponse};
 
@@ -80,10 +80,10 @@ async fn http_save_service() {
     let service = wavs_types::Service::new_simple(
         ServiceID::new("service-1").unwrap(),
         Some("My amazing service".to_string()),
-        mock_eth_event_trigger(),
+        mock_evm_event_trigger(),
         ComponentSource::Digest(Digest::new(&[1, 2, 3])),
         mock_eigen_submit(),
-        wavs_types::ServiceManager::Ethereum {
+        wavs_types::ServiceManager::Evm {
             chain_name: "eth".try_into().unwrap(),
             address: rand_address_eth(),
         },

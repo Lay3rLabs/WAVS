@@ -289,7 +289,7 @@ mod tests {
         // store square digest
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
         let workflow = Workflow {
-            trigger: Trigger::eth_contract_event(
+            trigger: Trigger::evm_contract_event(
                 crate::test_utils::address::rand_address_eth(),
                 ChainName::new("eth").unwrap(),
                 rand_event_eth(),

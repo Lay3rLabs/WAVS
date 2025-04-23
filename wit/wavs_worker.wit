@@ -33,18 +33,18 @@ interface layer-types {
     bech32-prefix: string,
   }
 
-  record eth-address {
+  record evm-address {
     raw-bytes: list<u8>
   }
 
-  record eth-event-log-data {
+  record evm-event-log-data {
     // the raw log topics that can be decoded into an event
     topics: list<list<u8>>,
     // the raw log data that can be decoded into an event
     data: list<u8>,
   }
 
-  record eth-chain-config {
+  record evm-chain-config {
     chain-id: string,
     ws-endpoint: option<string>,
     http-endpoint: option<string>,
@@ -62,15 +62,15 @@ interface layer-types {
   }
 
   variant trigger-source {
-    eth-contract-event(trigger-source-eth-contract-event),
+    evm-contract-event(trigger-source-evm-contract-event),
     cosmos-contract-event(trigger-source-cosmos-contract-event),
     block-interval(block-interval-source),
     cron(trigger-source-cron),
     manual
   }
 
-  record trigger-source-eth-contract-event {
-    address: eth-address,
+  record trigger-source-evm-contract-event {
+    address: evm-address,
     chain-name: string,
     event-hash: list<u8>
   }
@@ -93,17 +93,17 @@ interface layer-types {
   }
 
   variant trigger-data {
-    eth-contract-event(trigger-data-eth-contract-event),
+    evm-contract-event(trigger-data-evm-contract-event),
     cosmos-contract-event(trigger-data-cosmos-contract-event),
     block-interval(block-interval-data),
     cron(trigger-data-cron),
     raw(list<u8>)
   }
 
-  record trigger-data-eth-contract-event {
-    contract-address: eth-address,
+  record trigger-data-evm-contract-event {
+    contract-address: evm-address,
     chain-name: string,
-    log: eth-event-log-data,
+    log: evm-event-log-data,
     block-height: u64
   }
 
@@ -144,9 +144,9 @@ world layer-trigger-world {
   import wasi:http/outgoing-handler@0.2.0;
 
   import host: interface {
-    use layer-types.{eth-chain-config, cosmos-chain-config, log-level};
+    use layer-types.{evm-chain-config, cosmos-chain-config, log-level};
 
-    get-eth-chain-config: func(chain-name: string) -> option<eth-chain-config>;
+    get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
     get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
 
     config-var: func(key: string) -> option<string>;

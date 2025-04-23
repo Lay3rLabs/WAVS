@@ -17,8 +17,8 @@ use uuid::Uuid;
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
-    EthereumContractSubmission, Permissions, Registry, ServiceID, ServiceManager, ServiceStatus,
-    Submit, Trigger, WorkflowID,
+    EvmContractSubmission, Permissions, Registry, ServiceID, ServiceManager, ServiceStatus, Submit,
+    Trigger, WorkflowID,
 };
 
 use crate::{
@@ -36,7 +36,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChainType {
     Cosmos,
-    Ethereum,
+    EVM,
 }
 
 /// Handle service commands - this function will be called from main.rs
@@ -106,12 +106,12 @@ pub async fn handle_service_command(
                 }
             },
             WorkflowCommand::Submit { id, command } => match command {
-                SubmitCommand::SetEthereum {
+                SubmitCommand::SetEvm {
                     address,
                     chain_name,
                     max_gas,
                 } => {
-                    let result = set_ethereum_submit(&file, id, address, chain_name, max_gas)?;
+                    let result = set_evm_submit(&file, id, address, chain_name, max_gas)?;
                     display_result(ctx, result, &file, json)?;
                 }
                 SubmitCommand::SetAggregator {
@@ -142,22 +142,22 @@ pub async fn handle_service_command(
                     )?;
                     display_result(ctx, result, &file, json)?;
                 }
-                TriggerCommand::SetEthereum {
+                TriggerCommand::SetEvm {
                     address,
                     chain_name,
                     event_hash,
                 } => {
-                    let result = set_ethereum_trigger(&file, id, address, chain_name, event_hash)?;
+                    let result = set_evm_trigger(&file, id, address, chain_name, event_hash)?;
                     display_result(ctx, result, &file, json)?;
                 }
             },
         },
         ServiceCommand::Manager { command } => match command {
-            ManagerCommand::SetEthereum {
+            ManagerCommand::SetEvm {
                 chain_name,
                 address,
             } => {
-                let result = set_ethereum_manager(&file, address, chain_name)?;
+                let result = set_evm_manager(&file, address, chain_name)?;
                 display_result(ctx, result, &file, json)?;
             }
         },
@@ -345,12 +345,12 @@ impl std::fmt::Display for WorkflowTriggerResult {
                 writeln!(f, "    Chain:      {}", chain_name)?;
                 writeln!(f, "    Event Type: {}", event_type)?;
             }
-            Trigger::EthContractEvent {
+            Trigger::EvmContractEvent {
                 address,
                 chain_name,
                 event_hash,
             } => {
-                writeln!(f, "  Trigger Type: Ethereum Contract Event")?;
+                writeln!(f, "  Trigger Type: EVM Contract Event")?;
                 writeln!(f, "    Address:    {}", address)?;
                 writeln!(f, "    Chain:      {}", chain_name)?;
                 writeln!(f, "    Event Hash: {}", event_hash)?;
@@ -407,12 +407,12 @@ impl std::fmt::Display for WorkflowSubmitResult {
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
 
         match &self.submit {
-            Submit::EthereumContract(EthereumContractSubmission {
+            Submit::EvmContract(EvmContractSubmission {
                 address,
                 chain_name,
                 max_gas,
             }) => {
-                writeln!(f, "  Submit Type: Ethereum Service Handler")?;
+                writeln!(f, "  Submit Type: EVM Service Handler")?;
                 writeln!(f, "    Address:    {}", address)?;
                 writeln!(f, "    Chain:      {}", chain_name)?;
                 if let Some(gas) = max_gas {
@@ -432,20 +432,20 @@ impl std::fmt::Display for WorkflowSubmitResult {
     }
 }
 
-/// Result of setting the Ethereum manager
+/// Result of setting the EVM manager
 #[derive(Debug, Clone)]
-pub struct EthereumManagerResult {
-    /// The ethereum chain name
+pub struct EvmManagerResult {
+    /// The EVM chain name
     pub chain_name: ChainName,
-    /// The ethereum address
+    /// The EVM address
     pub address: alloy_primitives::Address,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
 
-impl std::fmt::Display for EthereumManagerResult {
+impl std::fmt::Display for EvmManagerResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Ethereum manager set successfully!")?;
+        writeln!(f, "EVM manager set successfully!")?;
         writeln!(f, "  Address:      {}", self.address)?;
         writeln!(f, "  Chain:        {}", self.chain_name)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
@@ -831,15 +831,15 @@ pub fn set_cosmos_trigger(
     })
 }
 
-/// Set an Ethereum contract event trigger for a workflow
-pub fn set_ethereum_trigger(
+/// Set an EVM contract event trigger for a workflow
+pub fn set_evm_trigger(
     file_path: &Path,
     workflow_id: WorkflowID,
     address_str: String,
     chain_name: ChainName,
     event_hash_str: String,
 ) -> Result<WorkflowTriggerResult> {
-    // Parse the Ethereum address
+    // Parse the EVM address
     let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     // Order the match cases from most explicit to event parsing:
@@ -865,7 +865,7 @@ pub fn set_ethereum_trigger(
         })?;
 
         // Update the trigger
-        let trigger = Trigger::EthContractEvent {
+        let trigger = Trigger::EvmContractEvent {
             address,
             chain_name,
             event_hash: ByteArray::new(event_hash),
@@ -1132,14 +1132,14 @@ pub fn update_component_env_keys(
     })
 }
 
-pub fn set_ethereum_submit(
+pub fn set_evm_submit(
     file_path: &Path,
     workflow_id: WorkflowID,
     address_str: String,
     chain_name: ChainName,
     max_gas: Option<u64>,
 ) -> Result<WorkflowSubmitResult> {
-    // Parse the Ethereum address
+    // Parse the EVM address
     let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
@@ -1149,7 +1149,7 @@ pub fn set_ethereum_submit(
         })?;
 
         // Update the submit
-        let submit = Submit::EthereumContract(EthereumContractSubmission {
+        let submit = Submit::EvmContract(EvmContractSubmission {
             address,
             chain_name,
             max_gas,
@@ -1182,7 +1182,7 @@ pub fn set_aggregator_submit(
     // Validate the URL format
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
 
-    // Parse the Ethereum address
+    // Parse the EVM address
     let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
@@ -1196,7 +1196,7 @@ pub fn set_aggregator_submit(
         workflow.submit = SubmitJson::Submit(submit.clone());
 
         // Set the workflow aggregator
-        workflow.aggregators = vec![Aggregator::Ethereum(EthereumContractSubmission {
+        workflow.aggregators = vec![Aggregator::Evm(EvmContractSubmission {
             chain_name,
             address,
             max_gas,
@@ -1213,24 +1213,24 @@ pub fn set_aggregator_submit(
     })
 }
 
-/// Set an Ethereum manager for the service
-pub fn set_ethereum_manager(
+/// Set an EVM manager for the service
+pub fn set_evm_manager(
     file_path: &Path,
     address_str: String,
     chain_name: ChainName,
-) -> Result<EthereumManagerResult> {
-    // Parse the Ethereum address
+) -> Result<EvmManagerResult> {
+    // Parse the EVM address
     let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
-        service.manager = ServiceManagerJson::Manager(ServiceManager::Ethereum {
+        service.manager = ServiceManagerJson::Manager(ServiceManager::Evm {
             chain_name: chain_name.clone(),
             address,
         });
 
         Ok((
             service,
-            EthereumManagerResult {
+            EvmManagerResult {
                 chain_name,
                 address,
                 file_path: file_path.to_path_buf(),
@@ -1286,8 +1286,8 @@ pub async fn validate_service(
                             ));
                         }
                     }
-                    Trigger::EthContractEvent { chain_name, .. } => {
-                        chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
+                    Trigger::EvmContractEvent { chain_name, .. } => {
+                        chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
                     }
                     _ => {}
                 }
@@ -1297,10 +1297,8 @@ pub async fn validate_service(
             }
 
             if let SubmitJson::Submit(submit) = &workflow.submit {
-                if let Submit::EthereumContract(EthereumContractSubmission { chain_name, .. }) =
-                    submit
-                {
-                    chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
+                if let Submit::EvmContract(EvmContractSubmission { chain_name, .. }) = submit {
+                    chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
                 }
 
                 // Collect submit for contract existence check
@@ -1309,11 +1307,9 @@ pub async fn validate_service(
 
             for aggregator in &workflow.aggregators {
                 match aggregator {
-                    Aggregator::Ethereum(ethereum_contract_submission) => {
-                        chains_to_validate.insert((
-                            ethereum_contract_submission.chain_name.clone(),
-                            ChainType::Ethereum,
-                        ));
+                    Aggregator::Evm(evm_contract_submission) => {
+                        chains_to_validate
+                            .insert((evm_contract_submission.chain_name.clone(), ChainType::EVM));
                     }
                 };
             }
@@ -1322,8 +1318,8 @@ pub async fn validate_service(
         let service_manager = if let ServiceManagerJson::Manager(service_manager) = &service.manager
         {
             match service_manager {
-                ServiceManager::Ethereum { chain_name, .. } => {
-                    chains_to_validate.insert((chain_name.clone(), ChainType::Ethereum));
+                ServiceManager::Evm { chain_name, .. } => {
+                    chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
                 }
             }
 
@@ -1334,7 +1330,7 @@ pub async fn validate_service(
 
         // Build maps of clients for chains actually used
         let mut cosmos_clients = HashMap::new();
-        let mut eth_providers = HashMap::new();
+        let mut evm_providers = HashMap::new();
 
         // Only get clients for chains actually used in triggers or submits
         for (chain_name, chain_type) in chains_to_validate.iter() {
@@ -1344,22 +1340,22 @@ pub async fn validate_service(
                         cosmos_clients.insert(chain_name.clone(), client.querier);
                     }
                 }
-                ChainType::Ethereum => {
-                    if let Ok(client) = ctx.new_eth_client(chain_name).await {
-                        eth_providers.insert(chain_name.clone(), client.provider.root().clone());
+                ChainType::EVM => {
+                    if let Ok(client) = ctx.new_evm_client(chain_name).await {
+                        evm_providers.insert(chain_name.clone(), client.provider.root().clone());
                     }
                 }
             }
         }
 
         // Validate that referenced contracts exist on-chain
-        if !cosmos_clients.is_empty() || !eth_providers.is_empty() {
+        if !cosmos_clients.is_empty() || !evm_providers.is_empty() {
             if let Err(err) = validate_contracts_exist(
                 service.id.as_ref(),
                 triggers,
                 submits,
                 service_manager,
-                &eth_providers,
+                &evm_providers,
                 &cosmos_clients,
                 &mut errors,
             )
@@ -1468,40 +1464,38 @@ pub async fn validate_contracts_exist(
     triggers: Vec<(&WorkflowID, &Trigger)>,
     submits: Vec<(&WorkflowID, &Submit)>,
     service_manager: Option<&ServiceManager>,
-    eth_providers: &HashMap<ChainName, RootProvider>,
+    evm_providers: &HashMap<ChainName, RootProvider>,
     cosmos_clients: &HashMap<ChainName, CosmosQueryClient>,
     errors: &mut Vec<String>,
 ) -> Result<()> {
     // Track which contracts we've already checked to avoid duplicate checks
-    let mut checked_eth_contracts = HashMap::new();
+    let mut checked_evm_contracts = HashMap::new();
     let mut checked_cosmos_contracts = HashMap::new();
 
     // Check all trigger contracts
     for (workflow_id, trigger) in triggers {
         match trigger {
-            Trigger::EthContractEvent {
+            Trigger::EvmContractEvent {
                 address,
                 chain_name,
                 ..
             } => {
                 // Check if we have a provider for this chain
-                if let Some(provider) = eth_providers.get(chain_name) {
+                if let Some(provider) = evm_providers.get(chain_name) {
                     // Only check each contract once per chain
                     let key = (address.to_string(), chain_name.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
-                        checked_eth_contracts.entry(key)
+                        checked_evm_contracts.entry(key)
                     {
                         let context =
                             format!("Service {} workflow {} trigger", service_id, workflow_id);
-                        match check_ethereum_contract_exists(address, provider, errors, &context)
-                            .await
-                        {
+                        match check_evm_contract_exists(address, provider, errors, &context).await {
                             Ok(exists) => {
                                 e.insert(exists);
                             }
                             Err(err) => {
                                 errors.push(format!(
-                                    "Error checking Ethereum contract for workflow {}: {}",
+                                    "Error checking EVM contract for workflow {}: {}",
                                     workflow_id, err
                                 ));
                             }
@@ -1509,7 +1503,7 @@ pub async fn validate_contracts_exist(
                     }
                 } else {
                     errors.push(format!(
-                        "Cannot check Ethereum contract for workflow {} - no provider configured for chain {}",
+                        "Cannot check EVM contract for workflow {} - no provider configured for chain {}",
                         workflow_id, chain_name
                     ));
                 }
@@ -1556,29 +1550,27 @@ pub async fn validate_contracts_exist(
     // Check all submit contracts
     for (workflow_id, submit) in submits {
         match submit {
-            Submit::EthereumContract(EthereumContractSubmission {
+            Submit::EvmContract(EvmContractSubmission {
                 address,
                 chain_name,
                 ..
             }) => {
                 // Check if we have a provider for this chain
-                if let Some(provider) = eth_providers.get(chain_name) {
+                if let Some(provider) = evm_providers.get(chain_name) {
                     // Only check each contract once per chain
                     let key = (address.to_string(), chain_name.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
-                        checked_eth_contracts.entry(key)
+                        checked_evm_contracts.entry(key)
                     {
                         let context =
                             format!("Service {} workflow {} submit", service_id, workflow_id);
-                        match check_ethereum_contract_exists(address, provider, errors, &context)
-                            .await
-                        {
+                        match check_evm_contract_exists(address, provider, errors, &context).await {
                             Ok(exists) => {
                                 e.insert(exists);
                             }
                             Err(err) => {
                                 errors.push(format!(
-                                    "Error checking Ethereum contract for workflow {} submit: {}",
+                                    "Error checking EVM contract for workflow {} submit: {}",
                                     workflow_id, err
                                 ));
                             }
@@ -1586,7 +1578,7 @@ pub async fn validate_contracts_exist(
                     }
                 } else {
                     errors.push(format!(
-                        "Cannot check Ethereum contract for workflow {} submit - no provider configured for chain {}",
+                        "Cannot check EVM contract for workflow {} submit - no provider configured for chain {}",
                         workflow_id, chain_name
                     ));
                 }
@@ -1600,25 +1592,23 @@ pub async fn validate_contracts_exist(
 
     if let Some(service_manager) = service_manager {
         match service_manager {
-            ServiceManager::Ethereum {
+            ServiceManager::Evm {
                 chain_name,
                 address,
             } => {
-                if let Some(provider) = eth_providers.get(chain_name) {
+                if let Some(provider) = evm_providers.get(chain_name) {
                     let key = (address.to_string(), chain_name.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
-                        checked_eth_contracts.entry(key)
+                        checked_evm_contracts.entry(key)
                     {
                         let context = format!("Service {} manager", service_id);
-                        match check_ethereum_contract_exists(address, provider, errors, &context)
-                            .await
-                        {
+                        match check_evm_contract_exists(address, provider, errors, &context).await {
                             Ok(exists) => {
                                 e.insert(exists);
                             }
                             Err(err) => {
                                 errors.push(format!(
-                                    "Error checking Ethereum contract for service manager: {}",
+                                    "Error checking EVM contract for service manager: {}",
                                     err
                                 ));
                             }
@@ -1637,8 +1627,8 @@ pub async fn validate_contracts_exist(
     Ok(())
 }
 
-/// Check if an Ethereum contract exists at the specified address
-async fn check_ethereum_contract_exists(
+/// Check if an EVM contract exists at the specified address
+async fn check_evm_contract_exists(
     address: &alloy_primitives::Address,
     provider: &RootProvider,
     errors: &mut Vec<String>,
@@ -1650,7 +1640,7 @@ async fn check_ethereum_contract_exists(
             let exists = !code.is_empty();
             if !exists {
                 errors.push(format!(
-                    "{}: Ethereum address {} has no contract deployed on chain (empty bytecode)",
+                    "{}: EVM address {} has no contract deployed on chain (empty bytecode)",
                     context, address
                 ));
             }
@@ -1658,7 +1648,7 @@ async fn check_ethereum_contract_exists(
         }
         Err(err) => {
             errors.push(format!(
-                "{}: Failed to check Ethereum contract at {}: {} (RPC connection issue)",
+                "{}: Failed to check EVM contract at {}: {} (RPC connection issue)",
                 context, address, err
             ));
             Err(err.into())
@@ -2385,55 +2375,55 @@ mod tests {
             .to_string()
             .contains("invalid bech32"),);
 
-        // Test setting Ethereum trigger
-        let eth_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
-        let eth_chain = ChainName::from_str("ethereum-mainnet").unwrap();
-        let eth_event_hash =
+        // Test setting EVM trigger
+        let evm_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+        let evm_event_hash =
             "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef".to_string();
 
-        let eth_result = set_ethereum_trigger(
+        let evm_result = set_evm_trigger(
             &file_path,
             workflow_id.clone(),
-            eth_address.clone(),
-            eth_chain.clone(),
-            eth_event_hash.clone(),
+            evm_address.clone(),
+            evm_chain.clone(),
+            evm_event_hash.clone(),
         )
         .unwrap();
 
-        // Verify ethereum trigger result
-        assert_eq!(eth_result.workflow_id, workflow_id);
-        if let Trigger::EthContractEvent {
+        // Verify EVM trigger result
+        assert_eq!(evm_result.workflow_id, workflow_id);
+        if let Trigger::EvmContractEvent {
             address,
             chain_name,
             event_hash,
-        } = &eth_result.trigger
+        } = &evm_result.trigger
         {
-            assert_eq!(address.to_string(), eth_address);
-            assert_eq!(chain_name, &eth_chain);
+            assert_eq!(address.to_string(), evm_address);
+            assert_eq!(chain_name, &evm_chain);
             // For event_hash we'll need to check the bytes match what we expect
-            let expected_hash_bytes = hex::decode(eth_event_hash.trim_start_matches("0x")).unwrap();
+            let expected_hash_bytes = hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
             assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
         } else {
             panic!("Expected EthContractEvent trigger");
         }
 
-        // Verify the service was updated with ethereum trigger
+        // Verify the service was updated with EVM trigger
         let service_after_eth: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        let eth_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
+        let evm_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
 
         // Handle TriggerJson wrapper
-        if let TriggerJson::Trigger(trigger) = &eth_workflow.trigger {
-            if let Trigger::EthContractEvent {
+        if let TriggerJson::Trigger(trigger) = &evm_workflow.trigger {
+            if let Trigger::EvmContractEvent {
                 address,
                 chain_name,
                 event_hash,
             } = trigger
             {
-                assert_eq!(address.to_string(), eth_address);
-                assert_eq!(chain_name, &eth_chain);
+                assert_eq!(address.to_string(), evm_address);
+                assert_eq!(chain_name, &evm_chain);
                 let expected_hash_bytes =
-                    hex::decode(eth_event_hash.trim_start_matches("0x")).unwrap();
+                    hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
                 assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
             } else {
                 panic!("Expected EthContractEvent trigger in service");
@@ -2444,12 +2434,12 @@ mod tests {
 
         // Test error handling for non-existent workflow
         let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
-        let trigger_error = set_ethereum_trigger(
+        let trigger_error = set_evm_trigger(
             &file_path,
             non_existent_workflow.clone(),
-            eth_address.clone(),
-            eth_chain.clone(),
-            eth_event_hash.clone(),
+            evm_address.clone(),
+            evm_chain.clone(),
+            evm_event_hash.clone(),
         );
 
         // Verify it returns an error with appropriate message
@@ -2474,16 +2464,16 @@ mod tests {
             .to_string()
             .contains("invalid bech32"));
 
-        let invalid_eth_address = "invalid-eth-address".to_string();
-        let invalid_eth_result = set_ethereum_trigger(
+        let invalid_evm_address = "invalid-address".to_string();
+        let invalid_evm_result = set_evm_trigger(
             &file_path,
             workflow_id.clone(),
-            invalid_eth_address,
-            eth_chain.clone(),
-            eth_event_hash.clone(),
+            invalid_evm_address,
+            evm_chain.clone(),
+            evm_event_hash.clone(),
         );
-        assert!(invalid_eth_result.is_err());
-        assert!(invalid_eth_result
+        assert!(invalid_evm_result.is_err());
+        assert!(invalid_evm_result
             .unwrap_err()
             .to_string()
             .contains("invalid string length"));
@@ -2520,50 +2510,50 @@ mod tests {
             panic!("Expected Json::Unset");
         }
 
-        // Test setting Ethereum submit
-        let eth_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
-        let eth_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+        // Test setting EVM submit
+        let evm_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
         let max_gas = Some(1000000u64);
 
-        let eth_result = set_ethereum_submit(
+        let evm_result = set_evm_submit(
             &file_path,
             workflow_id.clone(),
-            eth_address.clone(),
-            eth_chain.clone(),
+            evm_address.clone(),
+            evm_chain.clone(),
             max_gas,
         )
         .unwrap();
 
-        // Verify ethereum submit result
-        assert_eq!(eth_result.workflow_id, workflow_id);
-        if let Submit::EthereumContract(EthereumContractSubmission {
+        // Verify EVM submit result
+        assert_eq!(evm_result.workflow_id, workflow_id);
+        if let Submit::EvmContract(EvmContractSubmission {
             address,
             chain_name,
             max_gas: result_max_gas,
-        }) = &eth_result.submit
+        }) = &evm_result.submit
         {
-            assert_eq!(address.to_string(), eth_address);
-            assert_eq!(chain_name, &eth_chain);
+            assert_eq!(address.to_string(), evm_address);
+            assert_eq!(chain_name, &evm_chain);
             assert_eq!(result_max_gas, &max_gas);
         } else {
             panic!("Expected EthServiceHandler submit");
         }
 
-        // Verify the service was updated with ethereum submit
+        // Verify the service was updated with EVM submit
         let service_after_eth: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        let eth_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
+        let evm_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
 
         // Handle SubmitJson wrapper
-        if let SubmitJson::Submit(submit) = &eth_workflow.submit {
-            if let Submit::EthereumContract(EthereumContractSubmission {
+        if let SubmitJson::Submit(submit) = &evm_workflow.submit {
+            if let Submit::EvmContract(EvmContractSubmission {
                 address,
                 chain_name,
                 max_gas: result_max_gas,
             }) = submit
             {
-                assert_eq!(address.to_string(), eth_address);
-                assert_eq!(chain_name, &eth_chain);
+                assert_eq!(address.to_string(), evm_address);
+                assert_eq!(chain_name, &evm_chain);
                 assert_eq!(result_max_gas, &max_gas);
             } else {
                 panic!("Expected EthServiceHandler submit in service");
@@ -2573,20 +2563,20 @@ mod tests {
         }
 
         // Test updating with null max_gas
-        let eth_result_no_gas = set_ethereum_submit(
+        let evm_result_no_gas = set_evm_submit(
             &file_path,
             workflow_id.clone(),
-            eth_address.clone(),
-            eth_chain.clone(),
+            evm_address.clone(),
+            evm_chain.clone(),
             None,
         )
         .unwrap();
 
-        // Verify ethereum submit result without gas
-        if let Submit::EthereumContract(EthereumContractSubmission {
+        // Verify EVM submit result without gas
+        if let Submit::EvmContract(EvmContractSubmission {
             max_gas: result_max_gas,
             ..
-        }) = &eth_result_no_gas.submit
+        }) = &evm_result_no_gas.submit
         {
             assert_eq!(result_max_gas, &None);
         } else {
@@ -2595,11 +2585,11 @@ mod tests {
 
         // Test error handling for non-existent workflow
         let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
-        let submit_error = set_ethereum_submit(
+        let submit_error = set_evm_submit(
             &file_path,
             non_existent_workflow.clone(),
-            eth_address.clone(),
-            eth_chain.clone(),
+            evm_address.clone(),
+            evm_chain.clone(),
             max_gas,
         );
 
@@ -2610,16 +2600,16 @@ mod tests {
         assert!(submit_error_msg.contains("not found"));
 
         // Test error handling for invalid address
-        let invalid_eth_address = "invalid-eth-address".to_string();
-        let invalid_eth_result = set_ethereum_submit(
+        let invalid_evm_address = "invalid-address".to_string();
+        let invalid_evm_result = set_evm_submit(
             &file_path,
             workflow_id.clone(),
-            invalid_eth_address,
-            eth_chain.clone(),
+            invalid_evm_address,
+            evm_chain.clone(),
             max_gas,
         );
-        assert!(invalid_eth_result.is_err());
-        let invalid_address_error = invalid_eth_result.unwrap_err().to_string();
+        assert!(invalid_evm_result.is_err());
+        let invalid_address_error = invalid_evm_result.unwrap_err().to_string();
         assert!(invalid_address_error.contains("invalid"));
 
         // Test setting Aggregator submit
@@ -2629,8 +2619,8 @@ mod tests {
             &file_path,
             workflow_id.clone(),
             aggregator_url.clone(),
-            eth_chain.clone(),
-            eth_address.clone(),
+            evm_chain.clone(),
+            evm_address.clone(),
             None,
         )
         .unwrap();
@@ -2668,8 +2658,8 @@ mod tests {
             &file_path,
             workflow_id.clone(),
             invalid_url,
-            eth_chain,
-            eth_address,
+            evm_chain,
+            evm_address,
             None,
         );
         assert!(invalid_url_result.is_err());
@@ -2685,8 +2675,8 @@ mod tests {
         // Create common test objects
         let service_id = ServiceID::new("test-service-id").unwrap();
         let workflow_id = WorkflowID::new("workflow-123").unwrap();
-        let ethereum_chain = ChainName::from_str("ethereum-mainnet").unwrap();
-        let ethereum_address = alloy_primitives::Address::parse_checksummed(
+        let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+        let evm_address = alloy_primitives::Address::parse_checksummed(
             "0x00000000219ab540356cBB839Cbe05303d7705Fa",
             None,
         )
@@ -2699,22 +2689,22 @@ mod tests {
         let component = Component::new(ComponentSource::Digest(test_digest.clone()));
 
         // Create a valid trigger and submit for the workflow
-        let trigger = Trigger::EthContractEvent {
-            address: ethereum_address,
-            chain_name: ethereum_chain.clone(),
+        let trigger = Trigger::EvmContractEvent {
+            address: evm_address,
+            chain_name: evm_chain.clone(),
             event_hash: wavs_types::ByteArray::new([1u8; 32]),
         };
 
-        let submit = Submit::EthereumContract(EthereumContractSubmission {
-            address: ethereum_address,
-            chain_name: ethereum_chain.clone(),
+        let submit = Submit::EvmContract(EvmContractSubmission {
+            address: evm_address,
+            chain_name: evm_chain.clone(),
             max_gas: Some(1000000u64),
         });
 
         // Create service manager
-        let manager = ServiceManagerJson::Manager(ServiceManager::Ethereum {
-            chain_name: ethereum_chain.clone(),
-            address: ethereum_address,
+        let manager = ServiceManagerJson::Manager(ServiceManager::Evm {
+            chain_name: evm_chain.clone(),
+            address: evm_address,
         });
 
         // Test valid service
@@ -2969,9 +2959,9 @@ mod tests {
         // Test zero max_gas in submit
         {
             let mut workflows = BTreeMap::new();
-            let zero_gas_submit = Submit::EthereumContract(EthereumContractSubmission {
-                address: ethereum_address,
-                chain_name: ethereum_chain.clone(),
+            let zero_gas_submit = Submit::EvmContract(EvmContractSubmission {
+                address: evm_address,
+                chain_name: evm_chain.clone(),
                 max_gas: Some(0u64), // Zero gas
             });
 
@@ -3053,9 +3043,9 @@ mod tests {
         // Test invalid URL in Aggregator submit
         {
             let mut workflows = BTreeMap::new();
-            let aggregators = vec![Aggregator::Ethereum(EthereumContractSubmission {
-                address: ethereum_address,
-                chain_name: ethereum_chain.clone(),
+            let aggregators = vec![Aggregator::Evm(EvmContractSubmission {
+                address: evm_address,
+                chain_name: evm_chain.clone(),
                 max_gas: Some(1000000u64),
             })];
 
@@ -3181,9 +3171,9 @@ mod tests {
         // Test no submit but aggregator defined
         {
             let mut workflows = BTreeMap::new();
-            let aggregators = vec![Aggregator::Ethereum(EthereumContractSubmission {
-                address: ethereum_address,
-                chain_name: ethereum_chain.clone(),
+            let aggregators = vec![Aggregator::Evm(EvmContractSubmission {
+                address: evm_address,
+                chain_name: evm_chain.clone(),
                 max_gas: Some(1000000u64),
             })];
 

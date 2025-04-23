@@ -15,11 +15,11 @@ use wavs_types::{
     ChainName, IDError, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
 
-pub fn mock_eth_event_trigger_config(
+pub fn mock_evm_event_trigger_config(
     service_id: impl TryInto<ServiceID, Error = IDError>,
     workflow_id: impl TryInto<WorkflowID, Error = IDError>,
 ) -> TriggerConfig {
-    TriggerConfig::eth_contract_event(
+    TriggerConfig::evm_contract_event(
         service_id,
         workflow_id,
         rand_address_eth(),
@@ -43,8 +43,8 @@ pub fn mock_cosmos_event_trigger_config(
     .unwrap()
 }
 
-pub fn mock_eth_event_trigger() -> Trigger {
-    Trigger::eth_contract_event(
+pub fn mock_evm_event_trigger() -> Trigger {
+    Trigger::evm_contract_event(
         rand_address_eth(),
         ChainName::new("eth").unwrap(),
         rand_event_eth(),
@@ -236,7 +236,7 @@ impl MockTriggerManagerChannel {
         self.sender
             .send(TriggerAction {
                 config: match contract_address {
-                    Address::Eth(_) => TriggerConfig::eth_contract_event(
+                    Address::Eth(_) => TriggerConfig::evm_contract_event(
                         service_id,
                         workflow_id,
                         contract_address.clone().try_into().unwrap(),
@@ -318,11 +318,11 @@ mod tests {
     fn mock_trigger_sends() {
         let actions = vec![
             TriggerAction {
-                config: mock_eth_event_trigger_config("service1", "workflow1"),
+                config: mock_evm_event_trigger_config("service1", "workflow1"),
                 data: TriggerData::new_raw(b"foobar"),
             },
             TriggerAction {
-                config: mock_eth_event_trigger_config("service2", "workflow2"),
+                config: mock_evm_event_trigger_config("service2", "workflow2"),
                 data: TriggerData::new_raw(b"zoomba"),
             },
         ];
@@ -340,7 +340,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = mock_eth_event_trigger_config("abcd", "abcd");
+        let data = mock_evm_event_trigger_config("abcd", "abcd");
         triggers.add_trigger(data).unwrap();
     }
 
@@ -351,7 +351,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = mock_eth_event_trigger_config("abcd", "abcd");
+        let data = mock_evm_event_trigger_config("abcd", "abcd");
         triggers.add_trigger(data).unwrap_err();
     }
 }

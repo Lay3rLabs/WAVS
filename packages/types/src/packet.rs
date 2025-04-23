@@ -47,7 +47,7 @@ pub enum EnvelopeSignature {
 }
 
 impl EnvelopeSignature {
-    pub fn eth_signer_address(
+    pub fn evm_signer_address(
         &self,
         envelope: &Envelope,
     ) -> anyhow::Result<alloy_primitives::Address> {

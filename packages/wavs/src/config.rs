@@ -42,7 +42,7 @@ pub struct Config {
     /// All the available chains
     pub chains: ChainConfigs,
 
-    /// The mnemonic to use for submitting transactions on Ethereum chains
+    /// The mnemonic to use for submitting transactions on EVM chains
     pub submission_mnemonic: Option<String>,
 
     /// The mnemonic to use for submitting transactions on Cosmos chains
@@ -78,7 +78,7 @@ impl Default for Config {
             active_trigger_chains: Vec::new(),
             chains: ChainConfigs {
                 cosmos: BTreeMap::new(),
-                eth: BTreeMap::new(),
+                evm: BTreeMap::new(),
             },
             wasm_lru_size: 20,
             wasm_threads: 4,
@@ -102,7 +102,7 @@ impl Config {
                     None
                 }
             })
-            .chain(self.chains.eth.iter().filter_map(|(chain_name, chain)| {
+            .chain(self.chains.evm.iter().filter_map(|(chain_name, chain)| {
                 if self.active_trigger_chains.contains(chain_name) {
                     Some((chain_name.clone(), chain.clone().into()))
                 } else {

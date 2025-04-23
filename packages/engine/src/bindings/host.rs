@@ -18,14 +18,14 @@ impl super::world::host::Host for HostComponent {
             .map(|config| config.into())
     }
 
-    fn get_eth_chain_config(
+    fn get_evm_chain_config(
         &mut self,
         chain_name: String,
-    ) -> Option<super::world::host::EthChainConfig> {
+    ) -> Option<super::world::host::EvmChainConfig> {
         let chain_name = ChainName::new(chain_name).ok()?;
 
         self.chain_configs
-            .eth
+            .evm
             .get(&chain_name)
             .cloned()
             .map(|config| config.into())

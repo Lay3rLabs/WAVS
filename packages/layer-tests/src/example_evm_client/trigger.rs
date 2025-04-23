@@ -5,7 +5,7 @@ use alloy_provider::DynProvider;
 use alloy_sol_types::SolValue;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use utils::{alloy_helpers::SolidityEventFinder, eth_client::EthSigningClient};
+use utils::{alloy_helpers::SolidityEventFinder, evm_client::EvmSigningClient};
 
 use super::{
     example_trigger::ISimpleTrigger::TriggerInfo,
@@ -16,13 +16,13 @@ use super::{
 };
 
 pub struct SimpleEthTriggerClient {
-    pub eth: EthSigningClient,
+    pub eth: EvmSigningClient,
     pub contract_address: Address,
     pub contract: SimpleTriggerT,
 }
 
 impl SimpleEthTriggerClient {
-    pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
+    pub fn new(eth: EvmSigningClient, contract_address: Address) -> Self {
         let contract = SimpleTrigger::new(contract_address, eth.provider.clone());
 
         Self {
@@ -32,7 +32,7 @@ impl SimpleEthTriggerClient {
         }
     }
 
-    pub async fn new_deploy(eth: EthSigningClient) -> Result<Self> {
+    pub async fn new_deploy(eth: EvmSigningClient) -> Result<Self> {
         let contract_address = Self::deploy(eth.provider.clone()).await?;
         Ok(Self::new(eth, contract_address))
     }

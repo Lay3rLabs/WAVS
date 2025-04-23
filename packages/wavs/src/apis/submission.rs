@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use utils::error::EthClientError;
+use utils::error::EvmClientError;
 use wavs_types::{ChainName, Envelope, PacketRoute, Service, ServiceID, Submit};
 
 use crate::AppContext;
@@ -37,7 +37,7 @@ pub struct ChainMessage {
 #[derive(Error, Debug)]
 pub enum SubmissionError {
     #[error("eth client: {0}")]
-    EthClient(#[from] EthClientError),
+    EthClient(#[from] EvmClientError),
     #[error("climb: {0}")]
     Climb(anyhow::Error),
     #[error("missing mnemonic")]
@@ -52,12 +52,12 @@ pub enum SubmissionError {
     Faucet(String),
     #[error("missing cosmos chain")]
     MissingCosmosChain,
-    #[error("ethereum: {0}")]
-    Ethereum(anyhow::Error),
-    #[error("missing ethereum chain")]
-    MissingEthereumChain,
-    #[error("chain is not an ethereum chain")]
-    NotEthereumChain,
+    #[error("evm: {0}")]
+    EVM(anyhow::Error),
+    #[error("missing EVM chain")]
+    MissingEvmChain,
+    #[error("chain is not an EVM chain")]
+    NotEvmChain,
     #[error("cross-chain submissions are not supported yet")]
     NoCrossChainSubmissions,
     #[error("missing aggregator endpoint")]
@@ -67,7 +67,7 @@ pub enum SubmissionError {
     #[error("cosmos parse: {0}")]
     CosmosParse(anyhow::Error),
     #[error("expected eth address, got: {0}")]
-    ExpectedEthAddress(String),
+    ExpectedEvmAddress(String),
     #[error("expected eth message")]
     ExpectedEthMessage,
     #[error("failed to sign envelope: {0:?}")]
@@ -76,10 +76,10 @@ pub enum SubmissionError {
     FailedToSubmitEthDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
     FailedToSubmitCosmos(anyhow::Error),
-    #[error("missing ethereum signer for service {0}")]
-    MissingEthereumSigner(ServiceID),
-    #[error("failed to create signer for service {0}: {1:?}")]
-    FailedToCreateEthereumSigner(ServiceID, anyhow::Error),
-    #[error("missing ethereum signing client for chain {0}")]
-    MissingEthereumSendingClient(ChainName),
+    #[error("missing EVM signer for service {0}")]
+    MissingEvmSigner(ServiceID),
+    #[error("failed to create EVM signer for service {0}: {1:?}")]
+    FailedToCreateEvmSigner(ServiceID, anyhow::Error),
+    #[error("missing EVM signing client for chain {0}")]
+    MissingEvmSendingClient(ChainName),
 }

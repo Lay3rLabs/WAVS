@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 
 use utils::context::AppContext;
-use utils::eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient};
+use utils::evm_client::{EvmClientBuilder, EvmClientTransport, EvmSigningClient};
 use wavs_cli::clients::HttpClient;
 use wavs_types::ChainName;
 
@@ -12,7 +12,7 @@ use super::config::Configs;
 pub struct Clients {
     pub http_client: HttpClient,
     pub cli_ctx: Arc<wavs_cli::context::CliContext>,
-    pub eth_clients: Arc<HashMap<ChainName, EthSigningClient>>,
+    pub evm_clients: Arc<HashMap<ChainName, EvmSigningClient>>,
     pub cosmos_clients: Arc<HashMap<ChainName, layer_climb::prelude::SigningClient>>,
 }
 
@@ -47,20 +47,20 @@ impl Clients {
             .await
             .unwrap();
 
-            let mut eth_clients = HashMap::new();
+            let mut evm_clients = HashMap::new();
 
-            // Create a client for each Ethereum chain
-            for (chain_name, chain_config) in &configs.chains.eth {
-                let client = EthClientBuilder::new(chain_config.to_client_config(
+            // Create a client for each EVM chain
+            for (chain_name, chain_config) in &configs.chains.evm {
+                let client = EvmClientBuilder::new(chain_config.to_client_config(
                     None,
-                    cli_ctx.config.eth_credential.clone(),
-                    Some(EthClientTransport::Http),
+                    cli_ctx.config.evm_credential.clone(),
+                    Some(EvmClientTransport::Http),
                 ))
                 .build_signing()
                 .await
                 .unwrap();
 
-                eth_clients.insert(chain_name.clone(), client);
+                evm_clients.insert(chain_name.clone(), client);
             }
 
             let mut cosmos_clients = HashMap::new();
@@ -74,14 +74,14 @@ impl Clients {
             Self {
                 http_client,
                 cli_ctx: Arc::new(cli_ctx),
-                eth_clients: Arc::new(eth_clients),
+                evm_clients: Arc::new(evm_clients),
                 cosmos_clients: Arc::new(cosmos_clients),
             }
         })
     }
 
-    pub fn get_eth_client(&self, chain_name: &ChainName) -> EthSigningClient {
-        self.eth_clients.get(chain_name).cloned().unwrap()
+    pub fn get_evm_client(&self, chain_name: &ChainName) -> EvmSigningClient {
+        self.evm_clients.get(chain_name).cloned().unwrap()
     }
 
     pub fn get_cosmos_client(&self, chain_name: &ChainName) -> layer_climb::prelude::SigningClient {

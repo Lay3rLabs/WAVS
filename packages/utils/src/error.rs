@@ -4,7 +4,7 @@ use thiserror::Error;
 use wavs_types::ChainName;
 
 #[derive(Debug, Error)]
-pub enum EthClientError {
+pub enum EvmClientError {
     #[error("Missing mnemonic")]
     MissingMnemonic,
 
@@ -31,7 +31,7 @@ pub enum EthClientError {
 
 #[derive(Debug, Error)]
 pub enum ChainConfigError {
-    #[error("Expected Ethereum chain")]
+    #[error("Expected EVM chain")]
     ExpectedEthChain,
 
     #[error("Expected Cosmos chain")]

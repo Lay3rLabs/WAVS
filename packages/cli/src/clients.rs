@@ -61,7 +61,7 @@ impl HttpClient {
         let service_uri = format!("{}/service/{}", self.endpoint, service.id);
 
         let contract =
-            IWavsServiceManagerInstance::new(service.manager.eth_address_unchecked(), provider);
+            IWavsServiceManagerInstance::new(service.manager.evm_address_unchecked(), provider);
         contract
             .setServiceURI(service_uri)
             .send()
@@ -71,7 +71,7 @@ impl HttpClient {
 
         let body: String = serde_json::to_string(&AddServiceRequest {
             chain_name: service.manager.chain_name().clone(),
-            address: Address::Eth(service.manager.eth_address_unchecked().into()),
+            address: Address::Eth(service.manager.evm_address_unchecked().into()),
         })?;
 
         self.inner

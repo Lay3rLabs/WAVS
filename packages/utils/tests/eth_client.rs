@@ -3,7 +3,7 @@ use alloy_provider::Provider;
 use alloy_signer::Signer;
 use futures::StreamExt;
 use utils::{
-    eth_client::{EthClientBuilder, EthClientConfig},
+    evm_client::{EvmClientBuilder, EvmClientConfig},
     init_tracing_tests,
 };
 
@@ -13,13 +13,13 @@ async fn client_stream_blocks() {
     // seems to be we need to set a block time to get new blocks without explicit transactions?
     let anvil = Anvil::new().block_time_f64(0.02).try_spawn().unwrap();
 
-    let config = EthClientConfig {
+    let config = EvmClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),
         http_endpoint: Some(anvil.endpoint().to_string()),
         ..Default::default()
     };
 
-    let builder = EthClientBuilder::new(config);
+    let builder = EvmClientBuilder::new(config);
     let client = builder.build_query().await.unwrap();
 
     let mut stream = client
@@ -42,7 +42,7 @@ async fn client_sign_message() {
     init_tracing_tests();
     let anvil = Anvil::new().spawn();
 
-    let config = EthClientConfig {
+    let config = EvmClientConfig {
         ws_endpoint: Some(anvil.ws_endpoint().to_string()),
         http_endpoint: Some(anvil.endpoint().to_string()),
         credential: Some(
@@ -54,7 +54,7 @@ async fn client_sign_message() {
         gas_estimate_multiplier: None,
     };
 
-    let builder = EthClientBuilder::new(config);
+    let builder = EvmClientBuilder::new(config);
     let client = builder.build_signing().await.unwrap();
 
     let message = b"hello world";

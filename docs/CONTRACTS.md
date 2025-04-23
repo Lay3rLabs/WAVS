@@ -6,7 +6,7 @@ The `Trigger` and `Submit` are often Smart Contracts, and you're not limited wha
 
 # Triggers
 
-This is actually outside the scope of anything WAVS cares about - you can use any contract you want for your trigger, it doesn't need to follow any known interface or satisfy any custom message type. You may also use any tooling you wish to deploy it. The important thing is to pay attention to the event you want to use for the trigger. On Ethereum, this will be the event signature (a.k.a. "topic 0") and on Cosmos it will be your event type (i.e. the `event.ty` field).
+This is actually outside the scope of anything WAVS cares about - you can use any contract you want for your trigger, it doesn't need to follow any known interface or satisfy any custom message type. You may also use any tooling you wish to deploy it. The important thing is to pay attention to the event you want to use for the trigger. On EVM, this will be the event signature (a.k.a. "topic 0") and on Cosmos it will be your event type (i.e. the `event.ty` field).
 
 When you create a service with a contract event trigger, you simply tell WAVS the contract address and event.
 

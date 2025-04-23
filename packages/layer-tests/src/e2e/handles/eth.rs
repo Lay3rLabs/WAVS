@@ -1,16 +1,16 @@
 use std::process::{Command, Stdio};
 
-use utils::{config::EthereumChainConfig, context::AppContext};
+use utils::{config::EvmChainConfig, context::AppContext};
 
 use crate::e2e::config::Configs;
 
-pub struct EthereumInstance {
+pub struct EvmInstance {
     _anvil: LameAnvilInstance,
-    _chain_config: EthereumChainConfig,
+    _chain_config: EvmChainConfig,
 }
 
-impl EthereumInstance {
-    pub fn spawn(_ctx: AppContext, _configs: &Configs, chain_config: EthereumChainConfig) -> Self {
+impl EvmInstance {
+    pub fn spawn(_ctx: AppContext, _configs: &Configs, chain_config: EvmChainConfig) -> Self {
         let port = chain_config
             .http_endpoint
             .as_ref()
@@ -22,7 +22,7 @@ impl EthereumInstance {
             .unwrap();
 
         tracing::info!(
-            "Starting Ethereum chain: {} on port {}",
+            "Starting EVM chain: {} on port {}",
             chain_config.chain_id,
             port
         );
@@ -83,8 +83,8 @@ impl Drop for LameAnvilInstance {
     }
 }
 
-impl Drop for EthereumInstance {
+impl Drop for EvmInstance {
     fn drop(&mut self) {
-        tracing::info!("Stopping Ethereum chain: {}", self._chain_config.chain_id);
+        tracing::info!("Stopping EVM chain: {}", self._chain_config.chain_id);
     }
 }

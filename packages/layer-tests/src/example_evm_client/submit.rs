@@ -1,6 +1,6 @@
 use alloy_primitives::Address;
 use anyhow::Result;
-use utils::eth_client::EthSigningClient;
+use utils::evm_client::EvmSigningClient;
 
 use super::{
     example_submit::ISimpleSubmit::SignedData,
@@ -9,13 +9,13 @@ use super::{
 };
 
 pub struct SimpleEthSubmitClient {
-    pub eth: EthSigningClient,
+    pub eth: EvmSigningClient,
     pub contract_address: Address,
     pub contract: SimpleSubmitT,
 }
 
 impl SimpleEthSubmitClient {
-    pub fn new(eth: EthSigningClient, contract_address: Address) -> Self {
+    pub fn new(eth: EvmSigningClient, contract_address: Address) -> Self {
         let contract = SimpleSubmit::new(contract_address, eth.provider.clone());
 
         Self {

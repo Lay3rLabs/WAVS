@@ -2,7 +2,7 @@ use alloy_network::Ethereum;
 use anyhow::Context;
 use example_helpers::bindings::{
     compat::{
-        TriggerData, TriggerDataCosmosContractEvent, TriggerDataEthContractEvent, WasmResponse,
+        TriggerData, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent, WasmResponse,
     },
     world::{host, Guest, TriggerAction},
 };
@@ -35,12 +35,12 @@ impl Guest for Component {
                         .trigger_data(contract_address.into(), trigger_id)
                         .await?
                 }
-                TriggerData::EthContractEvent(TriggerDataEthContractEvent {
+                TriggerData::EvmContractEvent(TriggerDataEvmContractEvent {
                     chain_name,
                     contract_address,
                     ..
                 }) => {
-                    let chain_config = host::get_eth_chain_config(&chain_name).ok_or(
+                    let chain_config = host::get_evm_chain_config(&chain_name).ok_or(
                         anyhow::anyhow!("eth chain config for {chain_name} not found"),
                     )?;
 
