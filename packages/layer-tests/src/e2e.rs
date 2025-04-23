@@ -25,7 +25,6 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     // setup tracing
     let tracer_provider = if let Some(collector) = config.jaeger.clone() {
-        let config = config.clone();
         Some(ctx.rt.block_on({
             let config = config.clone();
             async move { setup_tracing(&collector, config.tracing_env_filter().unwrap()) }

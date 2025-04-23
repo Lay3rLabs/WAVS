@@ -8,15 +8,19 @@ use utils::{
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher, telemetry::setup_tracing};
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let args = CliArgs::parse();
     let config: Config = ConfigBuilder::new(args).build().unwrap();
+
+    let ctx = AppContext::new();
 
     // setup tracing
     let filters = config.tracing_env_filter().unwrap();
     let tracer_provider = if let Some(collector) = config.jaeger.as_ref() {
-        Some(setup_tracing(collector, filters))
+        Some(ctx.rt.block_on({
+            let config = config.clone();
+            async move { setup_tracing(collector, config.tracing_env_filter().unwrap()) }
+        }))
     } else {
         tracing_subscriber::registry()
             .with(
@@ -29,8 +33,6 @@ async fn main() {
             .unwrap();
         None
     };
-
-    let ctx = AppContext::new();
 
     let config_clone = config.clone();
     let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone).unwrap());
