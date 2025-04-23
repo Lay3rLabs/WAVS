@@ -156,6 +156,9 @@ cors_allowed_origins = [
     "http://127.0.0.1:*",
 ]
 
+# Jaeger collector to send trace data
+# jaeger = "http://localhost:4317"
+
 # Aggregator-specific chain overrides (if needed)
 # Example:
 # [aggregator.chains.eth.local]

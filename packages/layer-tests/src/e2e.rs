@@ -27,7 +27,13 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     let tracer_provider = if let Some(collector) = config.jaeger.clone() {
         Some(ctx.rt.block_on({
             let config = config.clone();
-            async move { setup_tracing(&collector, config.tracing_env_filter().unwrap()) }
+            async move {
+                setup_tracing(
+                    &collector,
+                    "wavs-tests-tracer",
+                    config.tracing_env_filter().unwrap(),
+                )
+            }
         }))
     } else {
         tracing_subscriber::registry()

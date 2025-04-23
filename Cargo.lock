@@ -9310,6 +9310,7 @@ dependencies = [
  "utils",
  "utoipa",
  "utoipa-swagger-ui",
+ "wavs",
  "wavs-types",
  "wildmatch",
 ]

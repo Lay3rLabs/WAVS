@@ -80,6 +80,7 @@ pub mod telemetry {
 
     pub fn setup_tracing(
         collector: &str,
+        tracer: &str,
         filters: tracing_subscriber::EnvFilter,
     ) -> SdkTracerProvider {
         global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
@@ -98,7 +99,7 @@ pub mod telemetry {
             .with_resource(Resource::builder().with_service_name("wavs").build())
             .build();
         global::set_tracer_provider(provider.clone());
-        let tracer = provider.tracer("wavs-tracer");
+        let tracer = provider.tracer(tracer.to_owned());
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
         let subscriber = tracing_subscriber::Registry::default()

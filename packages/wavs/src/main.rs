@@ -19,7 +19,13 @@ fn main() {
     let tracer_provider = if let Some(collector) = config.jaeger.as_ref() {
         Some(ctx.rt.block_on({
             let config = config.clone();
-            async move { setup_tracing(collector, config.tracing_env_filter().unwrap()) }
+            async move {
+                setup_tracing(
+                    collector,
+                    "wavs-tracer",
+                    config.tracing_env_filter().unwrap(),
+                )
+            }
         }))
     } else {
         tracing_subscriber::registry()
