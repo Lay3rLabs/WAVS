@@ -1,4 +1,8 @@
+[default]
+log_level = ["info", "wavs=debug"]
+
 # Run all the tests
+[layer-tests]
 all = true
 # isolated = "eth-echo-data"
 # isolated = "eth-multi-trigger"
@@ -10,7 +14,7 @@ all = true
 # See matrix.rs for all the available options
 # You can run groups of tests like:
 
-# [matrix.eth]
+# [layer-tests.matrix.eth]
 # echo-data = true
 # square = true
 # cron-interval = true
@@ -23,7 +27,7 @@ all = true
 # multi-trigger= true
 # cosmos-query = true
 
-# [matrix.cosmos]
+# [layer-tests.matrix.cosmos]
 # block-interval = true
 # chain-trigger-lookup = true
 # cosmos-query = true
@@ -32,6 +36,6 @@ all = true
 # square = true
 
 
-# [matrix.crosschain]
+# [layer-tests.matrix.crosschain]
 # cosmos-to-eth-echo-data = true
 # etc.

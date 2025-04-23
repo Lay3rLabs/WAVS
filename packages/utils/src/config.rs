@@ -191,11 +191,6 @@ impl ConfigFilePath {
             dirs.push(dir);
         }
 
-        // Check the workspace directory if available
-        if let Some(workspace_dir) = option_env!("CARGO_WORKSPACE_DIR") {
-            dirs.push(PathBuf::from(workspace_dir));
-        }
-
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
         // in this case, to not pollute the home directory, it looks for ~/.{dirname}/{filename} (e.g. ~/.wavs/wavs.toml)
         if let Some(dir) = dirs::home_dir().map(|dir| dir.join(format!(".{}", DIRNAME))) {
@@ -430,7 +425,9 @@ mod test {
     use serde::{Deserialize, Serialize};
     use wavs_types::ChainName;
 
-    use crate::{config::ConfigFilePath, serde::deserialize_vec_string};
+    use crate::{
+        config::ConfigFilePath, filesystem::workspace_path, serde::deserialize_vec_string,
+    };
 
     use super::{
         ChainConfigs, CliEnvExt, ConfigBuilder, ConfigExt, CosmosChainConfig, EthereumChainConfig,
@@ -481,15 +478,6 @@ mod test {
         pub log_level: Vec<String>,
     }
 
-    fn workspace_path() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .to_path_buf()
-    }
-
     fn utils_path() -> PathBuf {
         workspace_path().join("packages").join("utils")
     }
@@ -497,7 +485,7 @@ mod test {
     impl TestCliEnv {
         pub fn new() -> Self {
             Self {
-                home: Some(workspace_path().join("packages").join("wavs")),
+                home: Some(workspace_path()),
                 // this purposefully points at a non-existing file
                 // so that we don't load a real .env in tests
                 dotenv: Some(utils_path().join("does-not-exist")),
