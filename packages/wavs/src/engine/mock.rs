@@ -185,7 +185,7 @@ mod test {
             ),
             component: Component::new(ComponentSource::Digest(d1.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
         let res = engine
             .execute(
@@ -211,7 +211,7 @@ mod test {
             ),
             component: Component::new(ComponentSource::Digest(d2.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
         let res = engine
             .execute(
@@ -237,7 +237,7 @@ mod test {
             ),
             component: Component::new(ComponentSource::Digest(d3.clone())),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
         let err = engine
             .execute(

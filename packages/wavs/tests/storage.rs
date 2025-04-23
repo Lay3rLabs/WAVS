@@ -71,7 +71,7 @@ fn db_service_store() {
                 trigger: mock_eth_event_trigger(),
                 component: Component::new(ComponentSource::Digest(Digest::new(b"digest-1"))),
                 submit: Submit::None,
-                aggregator: None,
+                aggregators: Vec::new(),
             },
         ),
         (
@@ -80,7 +80,7 @@ fn db_service_store() {
                 trigger: mock_eth_event_trigger(),
                 component: Component::new(ComponentSource::Digest(Digest::new(b"digest-2"))),
                 submit: Submit::None,
-                aggregator: None,
+                aggregators: Vec::new(),
             },
         ),
     ]

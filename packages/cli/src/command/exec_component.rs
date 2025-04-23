@@ -84,7 +84,7 @@ impl ExecComponent {
                 &wasm_bytes,
             ))),
             submit: Submit::None,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
 
         workflow.component.permissions = Permissions {

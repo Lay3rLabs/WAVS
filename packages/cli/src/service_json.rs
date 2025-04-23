@@ -158,13 +158,13 @@ impl ServiceJson {
                                 }
                             }
 
-                            if workflow.aggregator.is_some() {
+                            if !workflow.aggregators.is_empty() {
                                 errors.push(format!("Workflow '{}' submits with eth contract, but it has an aggregator defined", workflow_id));
                             }
                         }
                         Submit::None => {
                             // None submit type is always valid
-                            if workflow.aggregator.is_some() {
+                            if !workflow.aggregators.is_empty() {
                                 errors.push(format!(
                                     "Workflow '{}' has no submit, but it has an aggregator defined",
                                     workflow_id
@@ -179,7 +179,7 @@ impl ServiceJson {
                                 ))
                             }
 
-                            if workflow.aggregator.is_none() {
+                            if workflow.aggregators.is_empty() {
                                 errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
                             }
                         }
@@ -187,7 +187,7 @@ impl ServiceJson {
                 }
             }
             // Check if max_gas is reasonable if specified
-            if let Some(aggregator) = &workflow.aggregator {
+            for aggregator in &workflow.aggregators {
                 match aggregator {
                     Aggregator::Ethereum(ethereum_contract_submission) => {
                         if let Some(max_gas) = ethereum_contract_submission.max_gas {
@@ -241,7 +241,7 @@ pub struct WorkflowJson {
     pub submit: SubmitJson,
     /// If submit is `Submit::Aggregator`, this is
     /// the required data for the aggregator to submit this workflow
-    pub aggregator: Option<Aggregator>,
+    pub aggregators: Vec<Aggregator>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

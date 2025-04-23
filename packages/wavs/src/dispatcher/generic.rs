@@ -508,7 +508,7 @@ mod tests {
                         service_manager_addr,
                         None,
                     ),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             )]
             .into(),
@@ -615,7 +615,7 @@ mod tests {
                         rand_address_eth(),
                         None,
                     ),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             )]
             .into(),
@@ -715,7 +715,7 @@ mod tests {
                         rand_address_eth(),
                         None,
                     ),
-                    aggregator: None,
+                    aggregators: Vec::new(),
                 },
             )]
             .into(),
