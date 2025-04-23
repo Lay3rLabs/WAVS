@@ -15,8 +15,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
+    telemetry::setup_tracing,
 };
-use wavs::telemetry::setup_tracing;
 
 use crate::{args::TestArgs, config::TestConfig};
 

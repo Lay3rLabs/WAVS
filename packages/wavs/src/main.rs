@@ -5,8 +5,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
+    telemetry::setup_tracing,
 };
-use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher, telemetry::setup_tracing};
+use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
 
 fn main() {
     let args = CliArgs::parse();

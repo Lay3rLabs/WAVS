@@ -4,8 +4,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
+    telemetry::setup_tracing,
 };
-use wavs::telemetry::setup_tracing;
 use wavs_aggregator::{args::CliArgs, config::Config, run_server};
 
 fn main() {
