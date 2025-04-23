@@ -61,3 +61,10 @@ services:
       - "./packages/cli:/wavs"
       - "./.docker/cli:/root/wavs/cli/"
     network_mode: "host"
+
+  # Default all-memory Jaeger
+  jaeger:
+    image: jaegertracing/jaeger:2.5.0
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "16686:16686" # Jaeger UI

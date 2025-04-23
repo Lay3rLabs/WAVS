@@ -56,6 +56,9 @@ pub struct Config {
 
     /// The maximum amount of time (seconds) to allow for 1 component's execution
     pub max_execution_seconds: u64,
+
+    /// Jaeger collector to send trace data
+    pub jaeger: Option<String>,
 }
 
 impl ConfigExt for Config {
@@ -90,6 +93,7 @@ impl Default for Config {
             registry_domain: None,
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3,
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
+            jaeger: None,
         }
     }
 }

@@ -8,6 +8,7 @@ use axum::{
     extract::DefaultBodyLimit,
     routing::{delete, get, post},
 };
+use axum_tracing_opentelemetry::middleware::OtelAxumLayer;
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use utoipa::OpenApi;
@@ -70,6 +71,7 @@ pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
     let mut router = axum::Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
+        .layer(OtelAxumLayer::default())
         .route("/config", get(handle_config))
         .route("/service/{service_id}", get(handle_get_service))
         .route("/service-key/{service_id}", get(handle_get_service_key))
