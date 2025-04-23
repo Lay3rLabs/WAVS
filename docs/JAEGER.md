@@ -16,7 +16,6 @@ Run the following command in a separate command line to start a Jaeger instance:
 ```bash
 docker run \
   --name jaeger \
-  -e COLLECTOR_OTLP_ENABLED=true \
   -p 4317:4317 \
   -p 16686:16686 \
   jaegertracing/jaeger:2.5.0
@@ -25,8 +24,6 @@ docker run \
 - ports:
   - `4317`: OTLP gRPC endpoint for receiving traces.
   - `16686`: Jaeger UI for visualizing traces.
-- environment:
-  - `COLLECTOR_OTLP_ENABLED=true`: Enables the OTLP receiver in Jaeger.
 
 ### 2. Enable Jaeger endpoint
 
