@@ -183,15 +183,27 @@ download-solidity branch="dev":
     
     # Clear existing content and create solidity directory
     rm -rf contracts/solidity
-    mkdir -p contracts/solidity
+    rm -rf examples/contracts/solidity
+    mkdir -p contracts/solidity/interfaces
+    mkdir -p examples/contracts/solidity/interfaces
     
     # Copy just what we need 
-    cp -r temp_clone/wavs-middleware/contracts/interfaces contracts/solidity/interfaces
+    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol contracts/solidity/interfaces/IWavsServiceHandler.sol
+    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol contracts/solidity/interfaces/IWavsServiceManager.sol
+
+    # and, for examples
+    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol examples/contracts/solidity/interfaces/IWavsServiceHandler.sol
+    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol examples/contracts/solidity/interfaces/IWavsServiceManager.sol
+    cp temp_clone/wavs-middleware/contracts/interfaces/ISimpleSubmit.sol examples/contracts/solidity/interfaces/ISimpleSubmit.sol
+    cp temp_clone/wavs-middleware/contracts/interfaces/ISimpleTrigger.sol examples/contracts/solidity/interfaces/ISimpleTrigger.sol
+    cp temp_clone/wavs-middleware/contracts/src/SimpleTrigger.sol examples/contracts/solidity/src/SimpleTrigger.sol
+    cp temp_clone/wavs-middleware/contracts/src/SimpleSubmit.sol examples/contracts/solidity/src/SimpleSubmit.sol
+    cp temp_clone/wavs-middleware/contracts/src/SimpleServiceManager.sol examples/contracts/solidity/src/SimpleServiceManager.sol
     
     # Clean up
     rm -rf temp_clone
 
-wasi-publish component="*" version="0.4.0-alpha.3":
+wasi-publish component="*" version="0.4.0-alpha.5":
     @if [ "{{component}}" = "*" ]; then \
         awk '{print $2}' checksums.txt | while read path; do \
             id=$(basename "$path"); \

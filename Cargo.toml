@@ -17,7 +17,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.4.0-alpha.2"
+version = "0.4.0-alpha.5"
 license = "MIT"
 authors = ["Lay3r Labs Team"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -104,7 +104,7 @@ wasmtime = { version = "31.0.0", features = [
 wasmtime-wasi = { version = "31.0.0", default-features = true }
 wasmtime-wasi-http = "31.0.0"
 wit-bindgen = "0.41.0"
-wavs-wasi-utils = "0.4.0-alpha.4"
+wavs-wasi-utils = "0.4.0-alpha.5"
 
 # benchmarking
 criterion = "0.5.1"
