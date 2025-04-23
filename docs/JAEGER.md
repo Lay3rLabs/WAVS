@@ -36,7 +36,7 @@ jaeger = "http://localhost:4317"
 
 Run your tests as usual:
 ```bash
-cargo test
+cd packages/layer-tests && cargo test
 ```
 - the OpenTelemetry tracer will send traces to the Jaeger server at `http://localhost:4317`.
 - if everything is correct, traces generated during the tests will be collected by Jaeger at shutdown.
