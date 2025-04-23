@@ -5,7 +5,7 @@ use std::{
 };
 use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
 use utoipa::ToSchema;
-use wavs_types::ChainName;
+use wavs_types::{ChainName, Workflow};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -50,6 +50,12 @@ pub struct Config {
 
     /// Domain to use for registries
     pub registry_domain: Option<String>,
+
+    /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
+    pub max_wasm_fuel: u64,
+
+    /// The maximum amount of time (seconds) to allow for 1 component's execution
+    pub max_execution_seconds: u64,
 }
 
 impl ConfigExt for Config {
@@ -82,6 +88,8 @@ impl Default for Config {
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
             registry_domain: None,
+            max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3,
+            max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
         }
     }
 }
