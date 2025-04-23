@@ -47,5 +47,10 @@ Open the Jaeger UI in your browser:
 ```
 http://localhost:16686
 ```
-- select the service name `wavs` from the dropdown
+- select the service name `wavs-tests` from the dropdown
 - search for traces and inspect them
+
+### For production usage
+
+- Setup Jaeger to use a persistent storage backend (e.g., Elasticsearch, Cassandra, etc.) instead of the default in-memory storage.
+- The service names will be `wavs` and `wavs-aggregator`
