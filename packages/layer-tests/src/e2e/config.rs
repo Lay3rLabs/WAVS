@@ -188,7 +188,7 @@ impl From<TestConfig> for Configs {
             let mut aggregator_config: wavs_aggregator::config::Config =
                 ConfigBuilder::new(wavs_aggregator::args::CliArgs {
                     data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
-                    home: Some(workspace_path().join("packages").join("aggregator")),
+                    home: Some(workspace_path()),
                     // deliberately point to a non-existing file
                     dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
                     ..Default::default()
@@ -206,7 +206,7 @@ impl From<TestConfig> for Configs {
 
         let cli_args = wavs_cli::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
-            home: Some(workspace_path().join("packages").join("cli")),
+            home: Some(workspace_path()),
             // deliberately point to a non-existing file
             dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
             ..Default::default()

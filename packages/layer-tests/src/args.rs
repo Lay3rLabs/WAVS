@@ -25,7 +25,7 @@ pub struct TestArgs {
 
 impl CliEnvExt for TestArgs {
     const ENV_VAR_PREFIX: &'static str = "WAVS_LAYER_TESTS";
-    const TOML_IDENTIFIER: &'static str = "layer_tests";
+    const TOML_IDENTIFIER: &'static str = "layer-tests";
 
     fn home_dir(&self) -> Option<PathBuf> {
         Some(workspace_path().join("packages").join("layer-tests"))
