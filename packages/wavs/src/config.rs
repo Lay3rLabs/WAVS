@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
 };
 use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
+use utoipa::ToSchema;
 use wavs_types::ChainName;
 
 /// The fully parsed and validated config struct we use in the application
@@ -12,7 +13,7 @@ use wavs_types::ChainName;
 /// 1. cli args
 /// 2. environment variables
 /// 3. config file
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Config {
     /// The port to bind the server to.
     /// Default is `8000`
@@ -25,6 +26,7 @@ pub struct Config {
     pub host: String,
     /// The directory to store all internal data files
     /// Default is `/var/wavs`
+    #[schema(value_type = String)]
     pub data: PathBuf,
     /// The allowed cors origins
     /// Default is empty

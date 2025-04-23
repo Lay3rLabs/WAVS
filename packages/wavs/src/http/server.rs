@@ -10,12 +10,15 @@ use axum::{
 };
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
 
 use super::{
     handlers::{
         handle_add_service, handle_config, handle_delete_service, handle_info,
         handle_list_services, handle_not_found, handle_upload_service,
+        openapi::ApiDoc,
         service::{
             get::handle_get_service, key::handle_get_service_key, save::handle_save_service,
         },
@@ -65,6 +68,7 @@ pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
 
     // build our application with a single route
     let mut router = axum::Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
         .route("/service/{service_id}", get(handle_get_service))

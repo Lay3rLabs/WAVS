@@ -7,32 +7,34 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{fmt, ops::Deref, str::FromStr};
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SigningKeyResponse {
     /// from alloy's SigningKey.to_bytes()
     Secp256k1(Vec<u8>),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct AddServiceRequest {
     pub chain_name: ChainName,
+    #[schema(value_type = Object)]
     pub address: Address,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct DeleteServicesRequest {
     pub service_ids: Vec<ServiceID>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct ListServicesResponse {
     pub services: Vec<ListServiceResponse>,
     pub digests: Vec<ShaDigest>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct ListServiceResponse {
     pub id: ServiceID,
     pub status: ServiceStatus,
@@ -41,12 +43,12 @@ pub struct ListServiceResponse {
     pub permissions: Permissions,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct UploadComponentResponse {
     pub digest: ShaDigest,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, ToSchema)]
 pub struct ShaDigest(Digest);
 
 impl ShaDigest {

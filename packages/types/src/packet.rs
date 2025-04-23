@@ -8,11 +8,13 @@ use async_trait::async_trait;
 use ripemd::Ripemd160;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Packet {
     pub route: PacketRoute,
+    #[schema(value_type  = Object)]
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,
 }
@@ -37,9 +39,10 @@ impl EnvelopeExt for Envelope {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EnvelopeSignature {
+    #[schema(value_type = Object)]
     Secp256k1(alloy_primitives::Signature),
 }
 
@@ -68,7 +71,7 @@ impl Packet {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct PacketRoute {
     pub service_id: ServiceID,

@@ -1,9 +1,10 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{self, Debug, Display, Formatter};
+use utoipa::ToSchema;
 
 /// A newtype that wraps a `[u8; N]` using const generics.
 /// and is serialized as a `0x` prefixed hex string.
-#[derive(Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy, ToSchema)]
 pub struct ByteArray<const N: usize>([u8; N]);
 
 impl<const N: usize> ByteArray<N> {

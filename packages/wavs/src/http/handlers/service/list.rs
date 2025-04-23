@@ -3,6 +3,15 @@ use axum::{extract::State, response::IntoResponse, Json};
 use std::ops::Bound;
 use wavs_types::{ListServiceResponse, ListServicesResponse};
 
+#[utoipa::path(
+    get,
+    path = "/app",
+    responses(
+        (status = 200, description = "Successfully retrieved service list", body = ListServicesResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    description = "Returns a list of all services registered with WAVS"
+)]
 #[axum::debug_handler]
 pub async fn handle_list_services(State(state): State<HttpState>) -> impl IntoResponse {
     match list_services_inner(&state).await {

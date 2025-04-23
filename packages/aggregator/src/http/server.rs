@@ -1,11 +1,14 @@
 use crate::{config::Config, AppContext};
 use axum::routing::{get, post};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
 
 use super::{
     handlers::{
         handle_config, handle_info, handle_not_found, handle_packet, handle_register_service,
+        ApiDoc,
     },
     state::HttpState,
 };
@@ -39,6 +42,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
 
     // build our application with a single route
     let mut router = axum::Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
         .route("/info", get(handle_info))

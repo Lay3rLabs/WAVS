@@ -7,6 +7,7 @@ use utils::{
     config::{ChainConfigs, ConfigExt},
     error::EthClientError,
 };
+use utoipa::ToSchema;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -14,7 +15,7 @@ use utils::{
 /// 1. cli args
 /// 2. environment variables
 /// 3. config file
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Config {
     /// The port to bind the server to.
     /// Default is `8001`
@@ -27,6 +28,7 @@ pub struct Config {
     pub host: String,
     /// The directory to store all internal data files
     /// Default is `/var/aggregator`
+    #[schema(value_type = String)]
     pub data: PathBuf,
     /// The allowed cors origins
     /// Default is empty

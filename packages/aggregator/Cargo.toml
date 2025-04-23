@@ -30,5 +30,7 @@ alloy-sol-types = { workspace = true }
 alloy-contract = { workspace = true }
 alloy-provider = { workspace = true }
 utils = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
 
 [dev-dependencies]

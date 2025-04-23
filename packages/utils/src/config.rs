@@ -3,6 +3,7 @@ use figment::{providers::Format, Figment};
 use layer_climb::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
+use utoipa::ToSchema;
 
 use crate::{
     error::ChainConfigError,
@@ -245,7 +246,7 @@ impl ConfigFilePath {
 
 // TODO - impl a custom Deserialize that ensures at *load-time* that keys are unique
 // currently we only get that guarantee when we call `get_chain()`
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone, ToSchema)]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
     pub cosmos: BTreeMap<ChainName, CosmosChainConfig>,
@@ -343,7 +344,7 @@ impl ChainConfigs {
 }
 
 /// Cosmos chain config with extra info like faucet and mnemonic
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct CosmosChainConfig {
     pub chain_id: String,
     pub bech32_prefix: String,
@@ -355,7 +356,7 @@ pub struct CosmosChainConfig {
 }
 
 /// Ethereum chain config with extra info like faucet and mnemonic
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct EthereumChainConfig {
     pub chain_id: String,
     pub ws_endpoint: Option<String>,
