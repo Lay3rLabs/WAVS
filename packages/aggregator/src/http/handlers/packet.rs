@@ -199,7 +199,12 @@ fn validate_packet(
         }
     }
 
-    ensure!(!operator_weight.is_zero(), "Operator is not registered, weight is: {:?} for signer: {:?}", operator_weight, signer.to_string());
+    ensure!(
+        !operator_weight.is_zero(),
+        "Operator is not registered, signer: {:?} with weight: {:?}",
+        signer.to_string(),
+        operator_weight,
+    );
 
     // TODO: ensure that the signer is in the operator set
 
