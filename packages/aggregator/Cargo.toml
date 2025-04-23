@@ -10,7 +10,6 @@ license.workspace = true
 publish = false
 
 [dependencies]
-wavs = { workspace = true }
 wavs-types = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
