@@ -65,7 +65,7 @@ impl Service {
             trigger,
             component: Component::new(source),
             submit,
-            aggregator: None,
+            aggregators: Vec::new(),
         };
 
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
@@ -156,7 +156,7 @@ pub struct Workflow {
 
     /// If submit is `Submit::Aggregator`, this is
     /// the required data for the aggregator to submit this workflow
-    pub aggregator: Option<Aggregator>,
+    pub aggregators: Vec<Aggregator>,
 }
 
 impl Workflow {
