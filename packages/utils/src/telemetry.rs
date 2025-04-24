@@ -45,3 +45,62 @@ pub fn setup_tracing(
     tracing::info!("Jaeger tracing enabled");
     provider
 }
+
+use opentelemetry::metrics::{Counter, Gauge, Meter};
+use opentelemetry::KeyValue;
+
+trait Metrics {
+    fn init(meter: &Meter) -> Self;
+}
+
+#[derive(Clone)]
+pub struct HttpMetrics {
+    pub registered_services: Gauge<i64>,
+}
+
+impl Metrics for HttpMetrics {
+    fn init(meter: &Meter) -> Self {
+        HttpMetrics {
+            registered_services: meter
+                .i64_gauge("registered_services")
+                .with_description("Number of services currently registered")
+                .build(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct WavsMetrics {
+    pub total_messages_processed: Counter<u64>,
+    pub total_errors: Counter<u64>,
+    pub messages_in_channel: Gauge<i64>,
+    pub uptime: Gauge<f64>,
+}
+
+impl Metrics for WavsMetrics {
+    fn init(meter: &Meter) -> WavsMetrics {
+        WavsMetrics {
+            total_messages_processed: meter
+                .u64_counter("total_messages_processed")
+                .with_description("Total number of messages processed")
+                .build(),
+            total_errors: meter
+                .u64_counter("total_errors")
+                .with_description("Total number of errors encountered")
+                .build(),
+            messages_in_channel: meter
+                .i64_gauge("messages_in_channel")
+                .with_description("Current number of messages in a channel")
+                .build(),
+            uptime: meter
+                .f64_gauge("uptime_seconds")
+                .with_description("System uptime in seconds")
+                .build(),
+        }
+    }
+}
+
+// pub fn update_messages_in_channel(&self, channel_id: &str, count: i64) {
+//     self.messages_in_channel
+//         .record(count, &[KeyValue::new("channel_id", channel_id.to_owned())]);
+// }
