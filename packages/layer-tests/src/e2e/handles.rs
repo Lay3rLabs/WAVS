@@ -6,7 +6,7 @@ use std::sync::Arc;
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
 use utils::context::AppContext;
-use wavs::{dispatcher::CoreDispatcher, metrics::Metrics};
+use wavs::{dispatcher::CoreDispatcher, telemetry::Metrics};
 
 use super::config::Configs;
 
@@ -18,7 +18,7 @@ pub struct AppHandles {
 }
 
 impl AppHandles {
-    pub fn start(ctx: &AppContext, configs: &Configs) -> Self {
+    pub fn start(ctx: &AppContext, configs: &Configs, metrics: Metrics) -> Self {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
@@ -33,7 +33,7 @@ impl AppHandles {
             cosmos_chains.push(handle);
         }
 
-        let dispatcher = Arc::new(CoreDispatcher::new_core(&configs.wavs, wavs_metrics).unwrap());
+        let dispatcher = Arc::new(CoreDispatcher::new_core(&configs.wavs, metrics.wavs).unwrap());
 
         let wavs_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
@@ -41,7 +41,7 @@ impl AppHandles {
             let config = configs.wavs.clone();
 
             move || {
-                wavs::run_server(ctx, config, dispatcher, http_metrics);
+                wavs::run_server(ctx, config, dispatcher, metrics.http);
             }
         });
 

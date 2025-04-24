@@ -49,15 +49,15 @@ pub fn setup_tracing(
 use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};
 
 pub struct Metrics {
-    http_metrics: HttpMetrics,
-    wavs_metrics: WavsMetrics,
+    pub http: HttpMetrics,
+    pub wavs: WavsMetrics,
 }
 
 impl Metrics {
     pub fn init(meter: &Meter) -> Self {
         Self {
-            http_metrics: HttpMetrics::init(meter),
-            wavs_metrics: WavsMetrics::init(meter),
+            http: HttpMetrics::init(meter),
+            wavs: WavsMetrics::init(meter),
         }
     }
 }
