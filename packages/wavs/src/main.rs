@@ -6,7 +6,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::{setup_tracing, HttpMetrics, Metrics, WavsMetrics},
+    telemetry::{setup_tracing, HttpMetrics, WavsMetrics},
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
 

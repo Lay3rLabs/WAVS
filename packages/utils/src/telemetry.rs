@@ -48,8 +48,18 @@ pub fn setup_tracing(
 
 use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};
 
-pub trait Metrics {
-    fn init(meter: &Meter) -> Self;
+pub struct Metrics {
+    http_metrics: HttpMetrics,
+    wavs_metrics: WavsMetrics,
+}
+
+impl Metrics {
+    pub fn init(meter: &Meter) -> Self {
+        Self {
+            http_metrics: HttpMetrics::init(meter),
+            wavs_metrics: WavsMetrics::init(meter),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -57,8 +67,8 @@ pub struct HttpMetrics {
     pub registered_services: UpDownCounter<i64>,
 }
 
-impl Metrics for HttpMetrics {
-    fn init(meter: &Meter) -> Self {
+impl HttpMetrics {
+    pub fn init(meter: &Meter) -> Self {
         HttpMetrics {
             registered_services: meter
                 .i64_up_down_counter("registered_services")
@@ -66,9 +76,7 @@ impl Metrics for HttpMetrics {
                 .build(),
         }
     }
-}
 
-impl HttpMetrics {
     pub fn increment_registered_services(&self) {
         self.registered_services.add(1, &[]);
     }
@@ -80,43 +88,110 @@ impl HttpMetrics {
 
 #[derive(Clone, Debug)]
 pub struct WavsMetrics {
-    pub total_messages_processed: Counter<u64>,
-    pub total_errors: Counter<u64>,
-    pub messages_in_channel: Gauge<i64>,
-    pub uptime: Gauge<f64>,
+    pub engine: EngineMetrics,
+    pub dispatcher: DispatcherMetrics,
+    pub submission: SubmissionMetrics,
+    pub trigger: TriggerMetrics,
 }
 
-impl Metrics for WavsMetrics {
-    fn init(meter: &Meter) -> WavsMetrics {
-        WavsMetrics {
-            total_messages_processed: meter
-                .u64_counter("total_messages_processed")
-                .with_description("Total number of messages processed")
+impl WavsMetrics {
+    pub fn init(meter: &Meter) -> Self {
+        Self {
+            engine: EngineMetrics::init(meter),
+            dispatcher: DispatcherMetrics::init(meter),
+            submission: SubmissionMetrics::init(meter),
+            trigger: TriggerMetrics::init(meter),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EngineMetrics {
+    pub total_threads: Counter<u64>,
+    pub total_errors: Counter<u64>,
+}
+
+impl EngineMetrics {
+    pub const LABEL: &'static str = "engine";
+
+    pub fn init(meter: &Meter) -> Self {
+        Self {
+            total_threads: meter
+                .u64_counter(format!("{}_total_threads", Self::LABEL))
+                .with_description("Total number of threads being used currently")
                 .build(),
             total_errors: meter
-                .u64_counter("total_errors")
+                .u64_counter(format!("{}_total_errors", Self::LABEL))
                 .with_description("Total number of errors encountered")
-                .build(),
-            messages_in_channel: meter
-                .i64_gauge("messages_in_channel")
-                .with_description("Current number of messages in a channel")
-                .build(),
-            uptime: meter
-                .f64_gauge("uptime_seconds")
-                .with_description("System uptime in seconds")
                 .build(),
         }
     }
 }
 
-impl WavsMetrics {
-    pub fn add_processed_messages(&self, count: u64) {
-        self.total_messages_processed.add(count, &[]);
-        // or with attributes
-        // self.total_messages_processed.add(count, &[KeyValue::new("source", "wav-decoder")]);
+#[derive(Clone, Debug)]
+pub struct DispatcherMetrics {
+    pub messages_in_channel: Gauge<u64>,
+    pub total_errors: Counter<u64>,
+}
+
+impl DispatcherMetrics {
+    pub const LABEL: &'static str = "dispatcher";
+
+    pub fn init(meter: &Meter) -> Self {
+        Self {
+            messages_in_channel: meter
+                .u64_gauge(format!("{}_messages_in_channel", Self::LABEL))
+                .with_description("Current number of messages in a channel")
+                .build(),
+            total_errors: meter
+                .u64_counter(format!("{}_total_errors", Self::LABEL))
+                .with_description("Total number of errors encountered")
+                .build(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmissionMetrics {
+    pub total_messages_processed: Counter<u64>,
+    pub total_errors: Counter<u64>,
+}
+
+impl SubmissionMetrics {
+    pub const LABEL: &'static str = "submission";
+
+    pub fn init(meter: &Meter) -> Self {
+        Self {
+            total_messages_processed: meter
+                .u64_counter(format!("{}_total_messages_processed", Self::LABEL))
+                .with_description("Total number of messages processed")
+                .build(),
+            total_errors: meter
+                .u64_counter(format!("{}_total_errors", Self::LABEL))
+                .with_description("Total number of errors encountered")
+                .build(),
+        }
     }
 
-    pub fn increment_processed_messages(&self) {
+    pub fn increment_total_processed_messages(&self) {
         self.total_messages_processed.add(1, &[]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TriggerMetrics {
+    pub total_errors: Counter<u64>,
+}
+
+impl TriggerMetrics {
+    pub const LABEL: &'static str = "trigger";
+
+    pub fn init(meter: &Meter) -> Self {
+        Self {
+            total_errors: meter
+                .u64_counter(format!("{}_total_errors", Self::LABEL))
+                .with_description("Total number of errors encountered")
+                .build(),
+        }
     }
 }

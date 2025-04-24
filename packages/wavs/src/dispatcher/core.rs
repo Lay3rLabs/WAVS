@@ -33,7 +33,7 @@ impl CoreDispatcher {
         ));
         let engine = MultiEngineRunner::new(engine, config.wasm_threads);
 
-        let submission = CoreSubmission::new(config, metrics)?;
+        let submission = CoreSubmission::new(config, metrics.submission)?;
 
         Self::new(
             triggers,

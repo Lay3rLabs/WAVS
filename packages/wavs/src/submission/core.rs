@@ -16,7 +16,7 @@ use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, EvmChainConfig},
     evm_client::{signing::make_signer, EvmClientBuilder, EvmClientTransport, EvmSigningClient},
-    telemetry::WavsMetrics,
+    telemetry::SubmissionMetrics,
 };
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -33,13 +33,13 @@ pub struct CoreSubmission {
     evm_sending_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
     evm_mnemonic: String,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
-    metrics: WavsMetrics,
+    metrics: SubmissionMetrics,
 }
 
 impl CoreSubmission {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "Submission"))]
-    pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, SubmissionError> {
+    pub fn new(config: &Config, metrics: SubmissionMetrics) -> Result<Self, SubmissionError> {
         Ok(Self {
             chain_configs: config.chains.clone().into(),
             http_client: reqwest::Client::new(),
@@ -117,7 +117,7 @@ impl CoreSubmission {
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
-        self.metrics.increment_processed_messages();
+        self.metrics.increment_total_processed_messages();
 
         Ok(())
     }
@@ -160,7 +160,7 @@ impl CoreSubmission {
             }
         }
 
-        self.metrics.increment_processed_messages();
+        self.metrics.increment_total_processed_messages();
 
         Ok(())
     }

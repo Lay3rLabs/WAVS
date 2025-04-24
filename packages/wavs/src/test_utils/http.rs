@@ -3,10 +3,7 @@ use std::sync::Arc;
 use axum::body::Body;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use utils::{
-    config::ChainConfigs,
-    telemetry::{HttpMetrics, Metrics},
-};
+use utils::{config::ChainConfigs, telemetry::HttpMetrics};
 
 use crate::{
     apis::{submission::Submission, trigger::TriggerManager},
