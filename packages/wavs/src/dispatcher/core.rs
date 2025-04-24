@@ -25,6 +25,8 @@ impl CoreDispatcher {
             config.wasm_lru_size,
             config.chains.clone(),
             config.registry_domain.clone(),
+            Some(config.max_wasm_fuel),
+            Some(config.max_execution_seconds),
         ));
         let engine = MultiEngineRunner::new(engine, config.wasm_threads);
 

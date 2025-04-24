@@ -1,9 +1,10 @@
 use alloy_primitives::LogData;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroU32;
 use utoipa::ToSchema;
-use wasm_pkg_common::package::{PackageRef, Version};
+use wasm_pkg_common::package::PackageRef;
 
 use crate::{ByteArray, Digest, Timestamp};
 

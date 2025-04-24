@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IWavsServiceHandler} from "../../../contracts/solidity/interfaces/IWavsServiceHandler.sol";
-import {IWavsServiceManager} from "../../../contracts/solidity/interfaces/IWavsServiceManager.sol";
-import {ISimpleTrigger} from "./interfaces/ISimpleTrigger.sol";
-import {ISimpleSubmit} from "./interfaces/ISimpleSubmit.sol";
+import {IWavsServiceHandler} from "../interfaces/IWavsServiceHandler.sol";
+import {IWavsServiceManager} from "../interfaces/IWavsServiceManager.sol";
+import {ISimpleTrigger} from "../interfaces/ISimpleTrigger.sol";
+import {ISimpleSubmit} from "../interfaces/ISimpleSubmit.sol";
 
 contract SimpleSubmit is IWavsServiceHandler, ISimpleSubmit {
     IWavsServiceManager private _serviceManager;

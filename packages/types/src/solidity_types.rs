@@ -4,7 +4,7 @@ mod service_manager {
         #[cfg(feature = "solidity-rpc")]
         #[sol(rpc)]
         IWavsServiceManager,
-        "../../contracts/solidity/abi/IWavsServiceManager.sol/IWavsServiceManager.json"
+        "./src/contracts/solidity/abi/IWavsServiceManager.sol/IWavsServiceManager.json"
     );
 }
 
@@ -15,7 +15,7 @@ mod service_handler {
         #[sol(rpc)]
         #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Eq)]
         IWavsServiceHandler,
-        "../../contracts/solidity/abi/IWavsServiceHandler.sol/IWavsServiceHandler.json"
+        "./src/contracts/solidity/abi/IWavsServiceHandler.sol/IWavsServiceHandler.json"
     );
 }
 

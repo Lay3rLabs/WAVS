@@ -4,20 +4,13 @@ use anyhow::{anyhow, bail, ensure};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EvmContractSubmission, Packet,
+    Aggregator, EvmContractSubmission, IWavsServiceManager, Packet,
 };
 
 use crate::http::{
     error::AnyError,
     state::{HttpState, PacketQueue, QueuedPacket},
 };
-
-alloy_sol_macro::sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    SimpleServiceManager,
-    "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
-);
 
 #[utoipa::path(
     post,
@@ -86,7 +79,7 @@ async fn process_packet(
                 let signer = packet.signature.evm_signer_address(&packet.envelope)?;
 
                 let client = state.get_evm_client(chain_name).await?;
-                let service_manager = SimpleServiceManager::new(
+                let service_manager = IWavsServiceManager::new(
                     service.manager.evm_address_unchecked(),
                     client.provider.clone(),
                 );

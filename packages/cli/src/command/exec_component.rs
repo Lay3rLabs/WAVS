@@ -103,6 +103,8 @@ impl ExecComponent {
             data_dir: tempfile::tempdir()?.into_path(),
             chain_configs: &cli_config.chains,
             log: log_wasi,
+            max_execution_seconds: None,
+            max_wasm_fuel: None,
         }
         .build()?;
 

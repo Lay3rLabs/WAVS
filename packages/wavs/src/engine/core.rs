@@ -23,6 +23,8 @@ pub struct WasmEngine<S: CAStorage> {
     memory_cache: RwLock<LruCache<Digest, Component>>,
     app_data_dir: PathBuf,
     wkg_client: Option<WkgClient>,
+    max_wasm_fuel: Option<u64>,
+    max_execution_seconds: Option<u64>,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -33,6 +35,8 @@ impl<S: CAStorage> WasmEngine<S> {
         lru_size: usize,
         chain_configs: ChainConfigs,
         registry_domain: Option<String>,
+        max_wasm_fuel: Option<u64>,
+        max_execution_seconds: Option<u64>,
     ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -56,6 +60,8 @@ impl<S: CAStorage> WasmEngine<S> {
             app_data_dir,
             chain_configs,
             wkg_client: registry_domain.map(|d| WkgClient::new(d).unwrap()),
+            max_execution_seconds,
+            max_wasm_fuel,
         }
     }
 }
@@ -189,6 +195,8 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 .join(trigger_action.config.service_id.as_ref()),
             chain_configs: &self.chain_configs,
             log,
+            max_execution_seconds: self.max_execution_seconds,
+            max_wasm_fuel: self.max_wasm_fuel,
         }
         .build()?;
 
@@ -250,7 +258,15 @@ mod tests {
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default(), None);
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            ChainConfigs::default(),
+            None,
+            None,
+            None,
+        );
 
         // store two blobs
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
@@ -268,7 +284,15 @@ mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, ChainConfigs::default(), None);
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            ChainConfigs::default(),
+            None,
+            None,
+            None,
+        );
 
         // store valid wasm
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
@@ -284,7 +308,15 @@ mod tests {
     fn execute_echo() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            mock_chain_configs(),
+            None,
+            None,
+            None,
+        );
 
         // store square digest
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
@@ -321,7 +353,15 @@ mod tests {
     fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            mock_chain_configs(),
+            None,
+            None,
+            None,
+        );
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
@@ -397,7 +437,15 @@ mod tests {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let low_fuel_limit = 1;
-        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            mock_chain_configs(),
+            None,
+            None,
+            None,
+        );
 
         // store square digest
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
@@ -437,7 +485,15 @@ mod tests {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let app_data_path = app_data.path().to_path_buf();
-        let engine = WasmEngine::new(storage, &app_data_path, 3, ChainConfigs::default(), None);
+        let engine = WasmEngine::new(
+            storage,
+            &app_data_path,
+            3,
+            ChainConfigs::default(),
+            None,
+            None,
+            None,
+        );
 
         // Create a service ID
         let service_id = ServiceID::new("test-service").unwrap();
@@ -477,7 +533,15 @@ mod tests {
     fn execute_with_low_time_limit() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let engine = WasmEngine::new(storage, &app_data, 3, mock_chain_configs(), None);
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            mock_chain_configs(),
+            None,
+            None,
+            None,
+        );
 
         engine.start().unwrap();
 
