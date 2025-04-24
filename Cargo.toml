@@ -46,6 +46,8 @@ opentelemetry-jaeger-propagator = "0.28.0"
 opentelemetry-otlp = { version = "0.28.0", default-features = false, features = [
   "trace",
   "grpc-tonic",
+  "metrics",
+  "http-proto"
 ] }
 opentelemetry_sdk = { version = "0.28.0", default-features = false, features = [
   "trace",

@@ -59,6 +59,9 @@ pub struct Config {
 
     /// Jaeger collector to send trace data
     pub jaeger: Option<String>,
+
+    /// Prometheus collector to send metrics data
+    pub prometheus: Option<String>,
 }
 
 impl ConfigExt for Config {
@@ -94,6 +97,7 @@ impl Default for Config {
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3,
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
             jaeger: None,
+            prometheus: None,
         }
     }
 }

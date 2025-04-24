@@ -5170,6 +5170,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry-http"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8863faf2910030d139fb48715ad5ff2f35029fc5f244f6d5f689ddcf4d26253"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "http",
+ "opentelemetry 0.28.0",
+ "tracing",
+]
+
+[[package]]
 name = "opentelemetry-jaeger-propagator"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5189,6 +5202,7 @@ dependencies = [
  "futures-core",
  "http",
  "opentelemetry 0.28.0",
+ "opentelemetry-http",
  "opentelemetry-proto",
  "opentelemetry_sdk 0.28.0",
  "prost 0.13.5",

@@ -1,6 +1,7 @@
 use opentelemetry::{global, trace::TracerProvider as _};
-use opentelemetry_otlp::{SpanExporter, WithExportConfig};
+use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
+    metrics::SdkMeterProvider,
     resource::Resource,
     trace::{self, Sampler, SdkTracerProvider},
 };
@@ -44,6 +45,27 @@ pub fn setup_tracing(
 
     tracing::info!("Jaeger tracing enabled");
     provider
+}
+
+pub fn setup_metrics(collector: &str) -> SdkMeterProvider {
+    let endpoint = format!("{}/api/v1/otlp/v1/metrics", collector);
+
+    let exporter = opentelemetry_otlp::MetricExporter::builder()
+        .with_http()
+        .with_protocol(Protocol::HttpBinary)
+        .with_endpoint(endpoint)
+        .build()
+        .expect("Failed to build OTLP exporter!");
+
+    let meter_provider = SdkMeterProvider::builder()
+        .with_periodic_exporter(exporter)
+        .build();
+
+    global::set_meter_provider(meter_provider.clone());
+
+    tracing::info!("Metrics enabled and exporting to {}", collector);
+
+    meter_provider
 }
 
 use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};

@@ -6,7 +6,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::{setup_tracing, HttpMetrics, WavsMetrics},
+    telemetry::{setup_metrics, setup_tracing, Metrics},
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
 
@@ -36,17 +36,26 @@ fn main() {
         None
     };
 
+    let meter_provider = if let Some(collector) = config.prometheus.as_ref() {
+        Some(setup_metrics(collector))
+    } else {
+        None
+    };
     let meter = global::meter("wavs_metrics");
-    let http_metrics = HttpMetrics::init(&meter);
-    let wavs_metrics = WavsMetrics::init(&meter);
+    let metrics = Metrics::init(&meter);
 
     let config_clone = config.clone();
-    let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone, wavs_metrics).unwrap());
+    let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone, metrics.wavs).unwrap());
 
-    wavs::run_server(ctx, config, dispatcher, http_metrics);
+    wavs::run_server(ctx, config, dispatcher, metrics.http);
     if let Some(tracer) = tracer_provider {
         tracer
             .shutdown()
             .expect("TracerProvider should shutdown successfully")
+    }
+    if let Some(meter) = meter_provider {
+        meter
+            .shutdown()
+            .expect("MeterProvider should shutdown successfully")
     }
 }
