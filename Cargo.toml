@@ -47,7 +47,8 @@ opentelemetry-otlp = { version = "0.28.0", default-features = false, features = 
   "trace",
   "grpc-tonic",
   "metrics",
-  "http-proto"
+  "http-proto",
+  "reqwest-client"
 ] }
 opentelemetry_sdk = { version = "0.28.0", default-features = false, features = [
   "trace",

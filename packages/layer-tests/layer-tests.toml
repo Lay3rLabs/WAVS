@@ -9,7 +9,7 @@ all = true
 # isolated = "evm-permissions"
 # registry = true
 # jaeger = "http://localhost:4317"
-# prometheus = "http://localhost:9090"
+prometheus = "http://localhost:9090"
 
 # Run just one test (cannot be enabled at the same time as all)
 

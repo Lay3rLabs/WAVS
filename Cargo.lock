@@ -5179,6 +5179,7 @@ dependencies = [
  "bytes",
  "http",
  "opentelemetry 0.28.0",
+ "reqwest",
  "tracing",
 ]
 
@@ -5206,6 +5207,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk 0.28.0",
  "prost 0.13.5",
+ "reqwest",
  "thiserror 2.0.12",
  "tokio",
  "tonic 0.12.3",
@@ -6246,6 +6248,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2",
