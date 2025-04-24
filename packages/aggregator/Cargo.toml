@@ -25,7 +25,6 @@ wildmatch = { workspace = true }
 alloy-signer = { workspace = true }
 alloy-signer-local = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-sol-macro = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-contract = { workspace = true }
 alloy-provider = { workspace = true }

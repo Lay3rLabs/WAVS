@@ -9295,7 +9295,6 @@ dependencies = [
  "alloy-provider",
  "alloy-signer",
  "alloy-signer-local",
- "alloy-sol-macro",
  "alloy-sol-types",
  "anyhow",
  "axum 0.8.3",

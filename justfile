@@ -83,21 +83,23 @@ wasi-build COMPONENT="*":
 solidity-build CLEAN="":
     @if [ "{{CLEAN}}" = "clean" ]; then \
         rm -rf {{REPO_ROOT}}/out; \
-        rm -rf {{REPO_ROOT}}/contracts/solidity/abi; \
+        rm -rf {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi; \
         rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi; \
     fi
     mkdir -p {{REPO_ROOT}}/out
-    mkdir -p {{REPO_ROOT}}/contracts/solidity/abi
+    mkdir -p {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi
     mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/contracts/solidity;
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
-    cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/contracts/solidity/abi/
+    # examples
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleServiceManager.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    # wavs-types
+    cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
 
 # compile cosmwasm example contracts
 cosmwasm-build:
@@ -186,6 +188,7 @@ download-solidity branch="dev":
     rm -rf examples/contracts/solidity
     mkdir -p contracts/solidity/interfaces
     mkdir -p examples/contracts/solidity/interfaces
+    mkdir -p examples/contracts/solidity/src
     
     # Copy just what we need 
     cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol contracts/solidity/interfaces/IWavsServiceHandler.sol
