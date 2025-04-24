@@ -28,6 +28,7 @@ pub async fn handle_delete_service(
 async fn delete_service_inner(state: HttpState, service_ids: Vec<ServiceID>) -> HttpResult<()> {
     for id in service_ids {
         state.dispatcher.remove_service(id)?;
+        state.metrics.decrement_registered_services();
     }
 
     Ok(())
