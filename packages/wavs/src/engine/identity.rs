@@ -64,7 +64,7 @@ impl Engine for IdentityEngine {
 mod test {
     use wavs_types::{ComponentSource, Submit, TriggerData};
 
-    use crate::triggers::mock::mock_eth_event_trigger_config;
+    use crate::triggers::mock::mock_evm_event_trigger_config;
 
     use super::*;
 
@@ -83,7 +83,7 @@ mod test {
         // execute returns self
         let request = b"this is only a test".to_vec();
 
-        let trigger_config = mock_eth_event_trigger_config("foobar", "baz");
+        let trigger_config = mock_evm_event_trigger_config("foobar", "baz");
 
         let workflow = Workflow {
             trigger: trigger_config.trigger.clone(),

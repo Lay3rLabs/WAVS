@@ -10,19 +10,19 @@ use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use utils::context::AppContext;
 use wavs_types::{
-    ChainName, Envelope, EnvelopeExt, EnvelopeSignature, EthereumContractSubmission, Service,
+    ChainName, Envelope, EnvelopeExt, EnvelopeSignature, EvmContractSubmission, Service,
     SigningKeyResponse, Submit,
 };
 
 use crate::{
     e2e::add_task::{add_task, wait_for_task_to_land},
-    example_eth_client::example_submit::ISimpleSubmit::SignedData,
+    example_evm_client::example_submit::ISimpleSubmit::SignedData,
 };
 
 use super::{
     clients::Clients,
     config::Configs,
-    matrix::{AnyService, CosmosService, CrossChainService, EthService},
+    matrix::{AnyService, CosmosService, CrossChainService, EvmService},
     services::Services,
 };
 
@@ -79,7 +79,7 @@ async fn test_service(
     if let Some(multi_trigger_service) = &multi_trigger_service {
         // sanity checks for multi-trigger, to surface errors earlier
         // since mistakes here lead to hard-to-catch race conditions
-        assert_eq!(name, AnyService::Eth(EthService::MultiTrigger));
+        assert_eq!(name, AnyService::EVM(EvmService::MultiTrigger));
         assert!(multi_trigger_service.workflows.len() == 1);
         assert!(service.workflows.len() == 1);
 
@@ -101,12 +101,12 @@ async fn test_service(
         let (workflow_id, workflow) = service.workflows.iter().nth(workflow_index).unwrap();
 
         let n_tasks = match &workflow.submit {
-            Submit::EthereumContract(EthereumContractSubmission { .. }) => 1,
+            Submit::EvmContract(EvmContractSubmission { .. }) => 1,
             Submit::Aggregator { .. } => 3, // TODO: make sure this value will work as aggregator is updated to calculate quorum, power, etc.
             Submit::None => 1,
         };
 
-        let submit_client = clients.get_eth_client(service.manager.chain_name());
+        let submit_client = clients.get_evm_client(service.manager.chain_name());
         let submit_start_block = submit_client.provider.get_block_number().await.unwrap();
 
         for task_number in 1..=n_tasks {
@@ -145,11 +145,9 @@ async fn test_service(
                         Submit::None => {
                             panic!("no submission in multi-trigger service");
                         }
-                        Submit::EthereumContract(EthereumContractSubmission {
-                            address, ..
-                        }) => *address,
+                        Submit::EvmContract(EvmContractSubmission { address, .. }) => *address,
                         Submit::Aggregator { .. } => {
-                            multi_trigger_service.manager.eth_address_unchecked()
+                            multi_trigger_service.manager.evm_address_unchecked()
                         }
                     };
 
@@ -197,24 +195,24 @@ fn get_input_for_service(
         .to_vec()
     };
     let input_data = match name {
-        AnyService::Eth(name) => match name {
-            EthService::ChainTriggerLookup => b"satoshi".to_vec(),
-            EthService::CosmosQuery => CosmosQueryRequest::BlockHeight {
+        AnyService::EVM(name) => match name {
+            EvmService::ChainTriggerLookup => b"satoshi".to_vec(),
+            EvmService::CosmosQuery => CosmosQueryRequest::BlockHeight {
                 chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
             }
             .to_vec(),
-            EthService::EchoData => b"The times".to_vec(),
-            EthService::EchoDataAggregator => b"Chancellor".to_vec(),
-            EthService::EchoDataSecondaryChain => b"collapse".to_vec(),
-            EthService::Permissions => permissions_req(),
-            EthService::Square => SquareRequest { x: 3 }.to_vec(),
-            EthService::MultiWorkflow => match workflow_index {
+            EvmService::EchoData => b"The times".to_vec(),
+            EvmService::EchoDataAggregator => b"Chancellor".to_vec(),
+            EvmService::EchoDataSecondaryChain => b"collapse".to_vec(),
+            EvmService::Permissions => permissions_req(),
+            EvmService::Square => SquareRequest { x: 3 }.to_vec(),
+            EvmService::MultiWorkflow => match workflow_index {
                 0 => SquareRequest { x: 3 }.to_vec(),
                 1 => b"the first one was nine".to_vec(),
                 _ => unimplemented!(),
             },
-            EthService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
-            EthService::CronInterval | EthService::BlockInterval => Vec::new(),
+            EvmService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
+            EvmService::CronInterval | EvmService::BlockInterval => Vec::new(),
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
@@ -228,7 +226,7 @@ fn get_input_for_service(
             CosmosService::CronInterval | CosmosService::BlockInterval => Vec::new(),
         },
         AnyService::CrossChain(name) => match name {
-            CrossChainService::CosmosToEthEchoData => b"hello eth world from cosmos".to_vec(),
+            CrossChainService::CosmosToEvmEchoData => b"hello EVM world from cosmos".to_vec(),
         },
     };
 
@@ -255,35 +253,35 @@ async fn verify_signed_data(
     };
 
     let expected_data = match name {
-        AnyService::Eth(eth_name) => match eth_name {
+        AnyService::EVM(evm_name) => match evm_name {
             // Just echo
-            EthService::EchoData
-            | EthService::EchoDataSecondaryChain
-            | EthService::EchoDataAggregator
-            | EthService::MultiTrigger
-            | EthService::ChainTriggerLookup => Some(input_req()),
+            EvmService::EchoData
+            | EvmService::EchoDataSecondaryChain
+            | EvmService::EchoDataAggregator
+            | EvmService::MultiTrigger
+            | EvmService::ChainTriggerLookup => Some(input_req()),
 
-            EthService::Square => Some(SquareResponse { y: 9 }.to_vec()),
+            EvmService::Square => Some(SquareResponse { y: 9 }.to_vec()),
 
-            EthService::MultiWorkflow => match workflow_index {
+            EvmService::MultiWorkflow => match workflow_index {
                 0 => Some(SquareResponse { y: 9 }.to_vec()),
                 1 => Some(input_req()),
                 _ => unimplemented!(),
             },
 
-            EthService::CosmosQuery => {
+            EvmService::CosmosQuery => {
                 let resp: CosmosQueryResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
 
-            EthService::Permissions => {
+            EvmService::Permissions => {
                 let resp: PermissionsResponse = serde_json::from_slice(data).unwrap();
                 tracing::info!("Response: {:?}", resp);
                 None
             }
-            EthService::BlockInterval => Some(b"block-interval data".to_vec()),
-            EthService::CronInterval => Some(b"cron-interval data".to_vec()),
+            EvmService::BlockInterval => Some(b"block-interval data".to_vec()),
+            EvmService::CronInterval => Some(b"cron-interval data".to_vec()),
         },
         AnyService::Cosmos(cosmos_name) => match cosmos_name {
             CosmosService::EchoData | CosmosService::ChainTriggerLookup => Some(input_req()),
@@ -305,7 +303,7 @@ async fn verify_signed_data(
             CosmosService::CronInterval => Some(b"cron-interval data".to_vec()),
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
-            CrossChainService::CosmosToEthEchoData => Some(input_req()),
+            CrossChainService::CosmosToEvmEchoData => Some(input_req()),
         },
     };
 
@@ -340,7 +338,7 @@ async fn verify_signed_data(
                 ordering: signed_data.envelope.ordering,
                 payload: signed_data.envelope.payload,
             };
-            let envelope_address = envelope_signature.eth_signer_address(&envelope).unwrap();
+            let envelope_address = envelope_signature.evm_signer_address(&envelope).unwrap();
 
             if service_address != envelope_address {
                 panic!(

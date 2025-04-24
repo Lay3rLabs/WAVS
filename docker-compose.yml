@@ -2,7 +2,7 @@
 # docker compose up
 #
 # docker exec -it wavs bash
-# wavs-cli deploy-service --component /wavs/components/eth_trigger_echo.wasm
+# wavs-cli deploy-service --component /wavs/components/evm_trigger_echo.wasm
 # wavs-cli add-task --input "echo value" --service-id <SERVICE_ID>
 #
 services:

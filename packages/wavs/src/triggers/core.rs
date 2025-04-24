@@ -16,7 +16,7 @@ use std::{
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::IntervalStream;
 use tracing::instrument;
-use utils::{config::AnyChainConfig, eth_client::EthClientBuilder};
+use utils::{config::AnyChainConfig, evm_client::EvmClientBuilder};
 use wavs_types::{
     ByteArray, ChainName, ServiceID, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
     WorkflowID,
@@ -39,7 +39,7 @@ struct LookupMaps {
     pub triggers_by_cosmos_contract_event:
         Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
     /// lookup id by (chain id, contract event address, event hash)
-    pub triggers_by_eth_contract_event: Arc<
+    pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
     /// lookup by chain_name -> n_blocks
@@ -59,7 +59,7 @@ impl LookupMaps {
             trigger_configs: Arc::new(RwLock::new(BTreeMap::new())),
             lookup_id: Arc::new(AtomicUsize::new(0)),
             triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
-            triggers_by_eth_contract_event: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_block_interval: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
             cron_scheduler: CronScheduler::default(),
@@ -79,13 +79,13 @@ enum StreamTriggers {
         contract_events: Vec<(Address, cosmwasm_std::Event)>,
         block_height: u64,
     },
-    Ethereum {
+    Evm {
         chain_name: ChainName,
         log: Log,
         block_height: u64,
     },
-    // We need a separate stream for Ethereum block interval triggers
-    EthereumBlock {
+    // We need a separate stream for EVM block interval triggers
+    EvmBlock {
         chain_name: ChainName,
         block_height: u64,
     },
@@ -129,15 +129,15 @@ impl CoreTriggerManager {
             }
         }
 
-        let mut ethereum_clients = HashMap::new();
+        let mut evm_clients = HashMap::new();
         for (chain_name, chain_config) in self.chain_configs.clone() {
-            if let AnyChainConfig::Eth(chain_config) = chain_config {
-                let client = EthClientBuilder::new(chain_config.to_client_config(None, None, None))
+            if let AnyChainConfig::Evm(chain_config) = chain_config {
+                let client = EvmClientBuilder::new(chain_config.to_client_config(None, None, None))
                     .build_query()
                     .await
-                    .map_err(TriggerError::Ethereum)?;
+                    .map_err(TriggerError::EVM)?;
 
-                ethereum_clients.insert(chain_name, client);
+                evm_clients.insert(chain_name, client);
             }
         }
 
@@ -195,8 +195,8 @@ impl CoreTriggerManager {
             streams.push(event_stream);
         }
 
-        for (chain_name, query_client) in ethereum_clients.iter() {
-            tracing::debug!("Trigger Manager for Ethereum chain {} started", chain_name);
+        for (chain_name, query_client) in evm_clients.iter() {
+            tracing::debug!("Trigger Manager for EVM chain {} started", chain_name);
 
             // Start the event stream
             let filter = Filter::new();
@@ -205,13 +205,13 @@ impl CoreTriggerManager {
                 .provider
                 .subscribe_logs(&filter)
                 .await
-                .map_err(|e| TriggerError::Ethereum(e.into()))?
+                .map_err(|e| TriggerError::EVM(e.into()))?
                 .into_stream();
 
             let chain_name = chain_name.clone();
 
             let event_stream = Box::pin(stream.map(move |log| {
-                Ok(StreamTriggers::Ethereum {
+                Ok(StreamTriggers::Evm {
                     chain_name: chain_name.clone(),
                     block_height: log.block_number.context("couldn't get eth block height")?,
                     log,
@@ -221,7 +221,7 @@ impl CoreTriggerManager {
             streams.push(event_stream);
         }
 
-        for (chain_name, query_client) in ethereum_clients.iter() {
+        for (chain_name, query_client) in evm_clients.iter() {
             let chain_name = chain_name.clone();
 
             // Start the block stream (for block-based triggers)
@@ -229,11 +229,11 @@ impl CoreTriggerManager {
                 .provider
                 .subscribe_blocks()
                 .await
-                .map_err(|e| TriggerError::Ethereum(e.into()))?
+                .map_err(|e| TriggerError::EVM(e.into()))?
                 .into_stream();
 
             let block_stream = Box::pin(stream.map(move |block| {
-                Ok(StreamTriggers::EthereumBlock {
+                Ok(StreamTriggers::EvmBlock {
                     chain_name: chain_name.clone(),
                     block_height: block.number,
                 })
@@ -274,7 +274,7 @@ impl CoreTriggerManager {
             let mut trigger_actions = Vec::new();
 
             match res {
-                StreamTriggers::Ethereum {
+                StreamTriggers::Evm {
                     log,
                     chain_name,
                     block_height,
@@ -284,7 +284,7 @@ impl CoreTriggerManager {
 
                         let triggers_by_contract_event_lock = self
                             .lookup_maps
-                            .triggers_by_eth_contract_event
+                            .triggers_by_evm_contract_event
                             .read()
                             .unwrap();
 
@@ -300,7 +300,7 @@ impl CoreTriggerManager {
                                 match trigger_configs_lock.get(id) {
                                     Some(trigger_config) => {
                                         trigger_actions.push(TriggerAction {
-                                            data: TriggerData::EthContractEvent {
+                                            data: TriggerData::EvmContractEvent {
                                                 contract_address,
                                                 chain_name: chain_name.clone(),
                                                 log: log.inner.data.clone(),
@@ -369,7 +369,7 @@ impl CoreTriggerManager {
                     // process block-based triggers
                     trigger_actions.extend(self.process_blocks(chain_name, block_height));
                 }
-                StreamTriggers::EthereumBlock {
+                StreamTriggers::EvmBlock {
                     chain_name,
                     block_height,
                 } => {
@@ -484,14 +484,14 @@ impl TriggerManager for CoreTriggerManager {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         match config.trigger.clone() {
-            Trigger::EthContractEvent {
+            Trigger::EvmContractEvent {
                 address,
                 chain_name,
                 event_hash,
             } => {
                 let mut lock = self
                     .lookup_maps
-                    .triggers_by_eth_contract_event
+                    .triggers_by_evm_contract_event
                     .write()
                     .unwrap();
                 let key = (chain_name.clone(), address, event_hash);
@@ -578,7 +578,7 @@ impl TriggerManager for CoreTriggerManager {
             &mut self.lookup_maps.trigger_configs.write().unwrap(),
             &mut self
                 .lookup_maps
-                .triggers_by_eth_contract_event
+                .triggers_by_evm_contract_event
                 .write()
                 .unwrap(),
             &mut self
@@ -596,9 +596,9 @@ impl TriggerManager for CoreTriggerManager {
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn remove_service(&self, service_id: wavs_types::ServiceID) -> Result<(), TriggerError> {
         let mut trigger_configs = self.lookup_maps.trigger_configs.write().unwrap();
-        let mut triggers_by_eth_contract_event = self
+        let mut triggers_by_evm_contract_event = self
             .lookup_maps
-            .triggers_by_eth_contract_event
+            .triggers_by_evm_contract_event
             .write()
             .unwrap();
         let mut triggers_by_cosmos_contract_event = self
@@ -619,7 +619,7 @@ impl TriggerManager for CoreTriggerManager {
         for lookup_id in workflow_map.values() {
             remove_trigger_data(
                 &mut trigger_configs,
-                &mut triggers_by_eth_contract_event,
+                &mut triggers_by_evm_contract_event,
                 &mut triggers_by_cosmos_contract_event,
                 &self.lookup_maps.cron_scheduler,
                 *lookup_id,
@@ -660,7 +660,7 @@ impl TriggerManager for CoreTriggerManager {
 
 fn remove_trigger_data(
     trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_eth_contract_address: &mut HashMap<
+    triggers_by_evm_contract_address: &mut HashMap<
         (ChainName, alloy_primitives::Address, ByteArray<32>),
         HashSet<LookupId>,
     >,
@@ -678,14 +678,14 @@ fn remove_trigger_data(
 
     // 2. remove from contracts
     match trigger_data.trigger {
-        Trigger::EthContractEvent {
+        Trigger::EvmContractEvent {
             address,
             chain_name,
             event_hash,
         } => {
-            triggers_by_eth_contract_address
+            triggers_by_evm_contract_address
                 .remove(&(chain_name.clone(), address, event_hash))
-                .ok_or(TriggerError::NoSuchEthContractEvent(
+                .ok_or(TriggerError::NoSuchEvmContractEvent(
                     chain_name, address, event_hash,
                 ))?;
         }
@@ -721,12 +721,12 @@ mod tests {
     use crate::{
         apis::trigger::TriggerManager,
         config::Config,
-        test_utils::address::{rand_address_eth, rand_event_eth},
+        test_utils::address::{rand_address_evm, rand_event_evm},
     };
     use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
 
     use layer_climb::prelude::*;
-    use utils::config::{ChainConfigs, CosmosChainConfig, EthereumChainConfig};
+    use utils::config::{ChainConfigs, CosmosChainConfig, EvmChainConfig};
 
     use super::CoreTriggerManager;
 
@@ -735,10 +735,10 @@ mod tests {
         let config = Config {
             active_trigger_chains: vec![ChainName::new("test").unwrap()],
             chains: ChainConfigs {
-                eth: [(
-                    ChainName::new("test-eth").unwrap(),
-                    EthereumChainConfig {
-                        chain_id: "eth-local".parse().unwrap(),
+                evm: [(
+                    ChainName::new("test-evm").unwrap(),
+                    EvmChainConfig {
+                        chain_id: "evm-local".parse().unwrap(),
                         ws_endpoint: Some("ws://127.0.0.1:26657".to_string()),
                         http_endpoint: Some("http://127.0.0.1:26657".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
@@ -773,41 +773,41 @@ mod tests {
         let service_id_2 = ServiceID::new("service-2").unwrap();
         let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
 
-        let task_queue_addr_1_1 = rand_address_eth();
-        let task_queue_addr_1_2 = rand_address_eth();
-        let task_queue_addr_2_1 = rand_address_eth();
-        let task_queue_addr_2_2 = rand_address_eth();
+        let task_queue_addr_1_1 = rand_address_evm();
+        let task_queue_addr_1_2 = rand_address_evm();
+        let task_queue_addr_2_1 = rand_address_evm();
+        let task_queue_addr_2_2 = rand_address_evm();
 
-        let trigger_1_1 = TriggerConfig::eth_contract_event(
+        let trigger_1_1 = TriggerConfig::evm_contract_event(
             &service_id_1,
             &workflow_id_1,
             task_queue_addr_1_1,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
-        let trigger_1_2 = TriggerConfig::eth_contract_event(
+        let trigger_1_2 = TriggerConfig::evm_contract_event(
             &service_id_1,
             &workflow_id_2,
             task_queue_addr_1_2,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
-        let trigger_2_1 = TriggerConfig::eth_contract_event(
+        let trigger_2_1 = TriggerConfig::evm_contract_event(
             &service_id_2,
             &workflow_id_1,
             task_queue_addr_2_1,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
-        let trigger_2_2 = TriggerConfig::eth_contract_event(
+        let trigger_2_2 = TriggerConfig::evm_contract_event(
             &service_id_2,
             &workflow_id_2,
             task_queue_addr_2_2,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
 
@@ -863,7 +863,7 @@ mod tests {
 
         fn get_trigger_addr(trigger: &Trigger) -> Address {
             match trigger {
-                Trigger::EthContractEvent { address, .. } => (*address).into(),
+                Trigger::EvmContractEvent { address, .. } => (*address).into(),
                 Trigger::CosmosContractEvent { address, .. } => address.clone(),
                 _ => panic!("unexpected trigger type"),
             }
@@ -875,10 +875,10 @@ mod tests {
         let config = Config {
             active_trigger_chains: vec![ChainName::new("test").unwrap()],
             chains: ChainConfigs {
-                eth: [(
-                    ChainName::new("test-eth").unwrap(),
-                    EthereumChainConfig {
-                        chain_id: "eth-local".parse().unwrap(),
+                evm: [(
+                    ChainName::new("test-evm").unwrap(),
+                    EvmChainConfig {
+                        chain_id: "evm-local".parse().unwrap(),
                         ws_endpoint: Some("ws://127.0.0.1:26657".to_string()),
                         http_endpoint: Some("http://127.0.0.1:26657".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
@@ -896,7 +896,7 @@ mod tests {
 
         let service_id = ServiceID::new("service-1").unwrap();
         let workflow_id = WorkflowID::new("workflow-1").unwrap();
-        let chain_name = ChainName::new("eth").unwrap();
+        let chain_name = ChainName::new("evm").unwrap();
 
         // set number of blocks to 1 to fire the trigger immediately
         let n_blocks = NonZero::new(1).unwrap();

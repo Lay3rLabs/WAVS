@@ -15,17 +15,17 @@ use serde::{Deserialize, Serialize};
 use signing::make_signer;
 use std::sync::{atomic::AtomicU64, Arc};
 
-use crate::error::EthClientError;
+use crate::error::EvmClientError;
 
 #[derive(Clone)]
-pub struct EthQueryClient {
-    pub config: EthClientConfig,
+pub struct EvmQueryClient {
+    pub config: EvmClientConfig,
     pub provider: DynProvider,
 }
 
-impl std::fmt::Debug for EthQueryClient {
+impl std::fmt::Debug for EvmQueryClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EthQueryClient")
+        f.debug_struct("EvmQueryClient")
             .field("ws_endpoint", &self.config.ws_endpoint)
             .field("http_endpoint", &self.config.http_endpoint)
             .finish()
@@ -33,8 +33,8 @@ impl std::fmt::Debug for EthQueryClient {
 }
 
 #[derive(Clone)]
-pub struct EthSigningClient {
-    pub config: EthClientConfig,
+pub struct EvmSigningClient {
+    pub config: EvmClientConfig,
     pub provider: DynProvider,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
@@ -51,9 +51,9 @@ pub struct EthSigningClient {
     pub gas_estimate_multiplier: f32,
 }
 
-impl std::fmt::Debug for EthSigningClient {
+impl std::fmt::Debug for EvmSigningClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EthSigningClient")
+        f.debug_struct("EvmSigningClient")
             .field("ws_endpoint", &self.config.ws_endpoint)
             .field("http_endpoint", &self.config.http_endpoint)
             .field("address", &self.address())
@@ -61,58 +61,58 @@ impl std::fmt::Debug for EthSigningClient {
     }
 }
 
-impl EthSigningClient {
+impl EvmSigningClient {
     pub fn address(&self) -> Address {
         self.signer.address()
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct EthClientConfig {
+pub struct EvmClientConfig {
     pub ws_endpoint: Option<String>,
     pub http_endpoint: Option<String>,
     pub credential: Option<String>,
     pub hd_index: Option<u32>,
     /// Preferred transport
-    pub transport: Option<EthClientTransport>,
+    pub transport: Option<EvmClientTransport>,
     // if not set, will be 1.25
     pub gas_estimate_multiplier: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
-pub enum EthClientTransport {
+pub enum EvmClientTransport {
     WebSocket,
     Http,
 }
 
-pub struct EthClientBuilder {
-    pub config: EthClientConfig,
+pub struct EvmClientBuilder {
+    pub config: EvmClientConfig,
 }
 
-impl EthClientBuilder {
-    pub fn new(config: EthClientConfig) -> Self {
+impl EvmClientBuilder {
+    pub fn new(config: EvmClientConfig) -> Self {
         Self { config }
     }
 
-    fn preferred_transport(&self) -> EthClientTransport {
+    fn preferred_transport(&self) -> EvmClientTransport {
         match (self.config.transport, &self.config.ws_endpoint) {
             // Http preferred or no preference and no websocket
-            (Some(EthClientTransport::Http), _) | (None, None) => EthClientTransport::Http,
+            (Some(EvmClientTransport::Http), _) | (None, None) => EvmClientTransport::Http,
             // Otherwise try to connect to websocket
-            _ => EthClientTransport::WebSocket,
+            _ => EvmClientTransport::WebSocket,
         }
     }
 
     pub fn endpoint(&self) -> Result<String> {
         match self.preferred_transport() {
             // Http preferred or no preference and no websocket
-            EthClientTransport::Http => Ok(self
+            EvmClientTransport::Http => Ok(self
                 .config
                 .http_endpoint
                 .as_ref()
                 .context("no http endpoint")?
                 .to_string()),
-            EthClientTransport::WebSocket => Ok(self
+            EvmClientTransport::WebSocket => Ok(self
                 .config
                 .ws_endpoint
                 .as_ref()
@@ -120,17 +120,17 @@ impl EthClientBuilder {
                 .to_string()),
         }
     }
-    pub async fn build_query(self) -> Result<EthQueryClient> {
+    pub async fn build_query(self) -> Result<EvmQueryClient> {
         let endpoint = self.endpoint()?;
 
-        Ok(EthQueryClient {
+        Ok(EvmQueryClient {
             config: self.config,
             provider: DynProvider::new(ProviderBuilder::new().connect(&endpoint).await?),
         })
     }
 
-    pub async fn build_signing(mut self) -> Result<EthSigningClient> {
-        if self.preferred_transport() != EthClientTransport::Http {
+    pub async fn build_signing(mut self) -> Result<EvmSigningClient> {
+        if self.preferred_transport() != EvmClientTransport::Http {
             tracing::warn!("signing clients should probably prefer http transport");
         }
 
@@ -138,7 +138,7 @@ impl EthClientBuilder {
             .config
             .credential
             .take()
-            .ok_or(EthClientError::MissingMnemonic)?;
+            .ok_or(EvmClientError::MissingMnemonic)?;
 
         let signer = make_signer(&credentials, self.config.hd_index)?;
 
@@ -170,7 +170,7 @@ impl EthClientBuilder {
         //         .on_builtin(&endpoint)
         //         .await?);
 
-        Ok(EthSigningClient {
+        Ok(EvmSigningClient {
             gas_estimate_multiplier: self.config.gas_estimate_multiplier.unwrap_or(1.25),
             config: self.config,
             provider,
@@ -238,63 +238,63 @@ mod test {
     #[test]
     fn preferred_transport() {
         // Not specified preference, websocket provided
-        let transport = EthClientBuilder::new(EthClientConfig {
+        let transport = EvmClientBuilder::new(EvmClientConfig {
             ws_endpoint: Some("foo".to_owned()),
             http_endpoint: Some("bar".to_owned()),
             transport: None,
             ..Default::default()
         })
         .preferred_transport();
-        assert!(matches!(transport, EthClientTransport::WebSocket));
+        assert!(matches!(transport, EvmClientTransport::WebSocket));
 
         // Not specified preference, websocket not provided
-        let transport = EthClientBuilder::new(EthClientConfig {
+        let transport = EvmClientBuilder::new(EvmClientConfig {
             ws_endpoint: None,
             http_endpoint: Some("bar".to_owned()),
             transport: None,
             ..Default::default()
         })
         .preferred_transport();
-        assert!(matches!(transport, EthClientTransport::Http));
+        assert!(matches!(transport, EvmClientTransport::Http));
 
         // Specified Http preference, websocket provided
-        let transport = EthClientBuilder::new(EthClientConfig {
+        let transport = EvmClientBuilder::new(EvmClientConfig {
             ws_endpoint: Some("foo".to_owned()),
             http_endpoint: Some("bar".to_owned()),
-            transport: Some(EthClientTransport::Http),
+            transport: Some(EvmClientTransport::Http),
             ..Default::default()
         })
         .preferred_transport();
-        assert!(matches!(transport, EthClientTransport::Http));
+        assert!(matches!(transport, EvmClientTransport::Http));
 
         // Specified Http preference, websocket not provided
-        let transport = EthClientBuilder::new(EthClientConfig {
+        let transport = EvmClientBuilder::new(EvmClientConfig {
             ws_endpoint: None,
             http_endpoint: Some("bar".to_owned()),
-            transport: Some(EthClientTransport::Http),
+            transport: Some(EvmClientTransport::Http),
             ..Default::default()
         })
         .preferred_transport();
-        assert!(matches!(transport, EthClientTransport::Http));
+        assert!(matches!(transport, EvmClientTransport::Http));
 
         // Specified Websocket preference, websocket provided
-        let transport = EthClientBuilder::new(EthClientConfig {
+        let transport = EvmClientBuilder::new(EvmClientConfig {
             ws_endpoint: Some("foo".to_owned()),
             http_endpoint: Some("bar".to_owned()),
-            transport: Some(EthClientTransport::WebSocket),
+            transport: Some(EvmClientTransport::WebSocket),
             ..Default::default()
         })
         .preferred_transport();
-        assert!(matches!(transport, EthClientTransport::WebSocket));
+        assert!(matches!(transport, EvmClientTransport::WebSocket));
 
         // Specified Websocket preference, websocket not provided
-        let transport = EthClientBuilder::new(EthClientConfig {
+        let transport = EvmClientBuilder::new(EvmClientConfig {
             ws_endpoint: None,
             http_endpoint: Some("bar".to_owned()),
-            transport: Some(EthClientTransport::WebSocket),
+            transport: Some(EvmClientTransport::WebSocket),
             ..Default::default()
         })
         .preferred_transport();
-        assert!(matches!(transport, EthClientTransport::WebSocket));
+        assert!(matches!(transport, EvmClientTransport::WebSocket));
     }
 }

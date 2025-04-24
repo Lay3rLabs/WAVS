@@ -6,8 +6,8 @@ use std::{
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
-    config::EthereumChainConfig,
-    eth_client::{EthClientBuilder, EthClientTransport, EthSigningClient},
+    config::EvmChainConfig,
+    evm_client::{EvmClientBuilder, EvmClientTransport, EvmSigningClient},
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
@@ -39,25 +39,25 @@ pub struct QueuedPacket {
 pub struct HttpState {
     pub config: Config,
     storage: Arc<RedbStorage>,
-    eth_clients: Arc<RwLock<HashMap<ChainName, EthSigningClient>>>,
+    evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
-        let eth_clients = Arc::new(RwLock::new(HashMap::new()));
+        let evm_clients = Arc::new(RwLock::new(HashMap::new()));
 
         Ok(Self {
             config,
             storage,
-            eth_clients,
+            evm_clients,
         })
     }
 
-    pub async fn get_eth_client(&self, chain_name: &ChainName) -> anyhow::Result<EthSigningClient> {
+    pub async fn get_evm_client(&self, chain_name: &ChainName) -> anyhow::Result<EvmSigningClient> {
         {
-            let lock = self.eth_clients.read().unwrap();
+            let lock = self.evm_clients.read().unwrap();
 
             if let Some(client) = lock.get(chain_name) {
                 return Ok(client.clone());
@@ -70,17 +70,17 @@ impl HttpState {
             .get_chain(chain_name)?
             .context(format!("chain not found for {}", chain_name))?;
 
-        let chain_config = EthereumChainConfig::try_from(chain_config)?;
+        let chain_config = EvmChainConfig::try_from(chain_config)?;
 
-        let sending_client = EthClientBuilder::new(chain_config.to_client_config(
+        let sending_client = EvmClientBuilder::new(chain_config.to_client_config(
             None,
             self.config.credential.clone(),
-            Some(EthClientTransport::Http),
+            Some(EvmClientTransport::Http),
         ))
         .build_signing()
         .await?;
 
-        self.eth_clients
+        self.evm_clients
             .write()
             .unwrap()
             .insert(chain_name.clone(), sending_client.clone());

@@ -26,8 +26,8 @@ pub struct Config {
     /// The mnemonic to use for submitting transactions on cosmos chains (usually None, set via env var)
     pub cosmos_mnemonic: Option<String>,
 
-    /// The credential to use for submitting transactions on ethereum chains (mnemonic or private key)
-    pub eth_credential: Option<String>,
+    /// The credential to use for submitting transactions on evm chains (mnemonic or private key)
+    pub evm_credential: Option<String>,
 
     pub registry_domain: Option<String>,
 }
@@ -52,10 +52,10 @@ impl Default for Config {
             data: PathBuf::from("/var/wavs-cli"),
             chains: ChainConfigs {
                 cosmos: BTreeMap::new(),
-                eth: BTreeMap::new(),
+                evm: BTreeMap::new(),
             },
             cosmos_mnemonic: None,
-            eth_credential: None,
+            evm_credential: None,
             registry_domain: None,
         }
     }

@@ -4,9 +4,9 @@ log_level = ["info", "wavs=debug"]
 # Run all the tests
 [layer-tests]
 all = true
-# isolated = "eth-echo-data"
-# isolated = "eth-multi-trigger"
-# isolated = "eth-permissions"
+# isolated = "evm-echo-data"
+# isolated = "evm-multi-trigger"
+# isolated = "evm-permissions"
 # registry = true
 # jaeger = "http://localhost:4317"
 
@@ -15,7 +15,7 @@ all = true
 # See matrix.rs for all the available options
 # You can run groups of tests like:
 
-# [layer-tests.matrix.eth]
+# [layer-tests.matrix.evm]
 # echo-data = true
 # square = true
 # cron-interval = true
@@ -38,5 +38,5 @@ all = true
 
 
 # [layer-tests.matrix.crosschain]
-# cosmos-to-eth-echo-data = true
+# cosmos-to-evm-echo-data = true
 # etc.

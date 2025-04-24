@@ -39,7 +39,7 @@ pub enum Command {
     /// Execute a component directly, without going through WAVS
     Exec {
         /// Path to the WASI component
-        /// The component must implement the eth-trigger-world WIT
+        /// The component must implement the trigger-world WIT
         #[clap(long)]
         component: String,
 
@@ -203,8 +203,8 @@ pub enum WorkflowCommand {
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum ManagerCommand {
-    /// Sets an ethereum service manager
-    SetEthereum {
+    /// Sets an EVM service manager
+    SetEvm {
         chain_name: ChainName,
         address: String,
     },
@@ -227,9 +227,9 @@ pub enum TriggerCommand {
         event_type: String,
     },
 
-    /// Set an Ethereum contract event trigger for a workflow
-    SetEthereum {
-        /// The hexadecimal Ethereum address (e.g., "0x1234...")
+    /// Set an EVM contract event trigger for a workflow
+    SetEvm {
+        /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
         address: String,
 
@@ -245,9 +245,9 @@ pub enum TriggerCommand {
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum SubmitCommand {
-    /// Set an Ethereum submit for a workflow
-    SetEthereum {
-        /// The hexadecimal Ethereum address (e.g., "0x1234...")
+    /// Set an EVM submit for a workflow
+    SetEvm {
+        /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
         address: String,
 
@@ -265,7 +265,7 @@ pub enum SubmitCommand {
         #[clap(long)]
         url: String,
 
-        /// The hexadecimal Ethereum address (e.g., "0x1234...")
+        /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
         address: String,
 
@@ -343,11 +343,11 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<PathBuf>,
 
-    /// Ethereum credential for signing transactions (can be a mnemonic or private key)
+    /// EVM credential for signing transactions (can be a mnemonic or private key)
     /// Usually leave this as None and override in env
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub eth_credential: Option<String>,
+    pub evm_credential: Option<String>,
 
     /// cosmos mnemonic (usually leave this as None and override in env)
     #[arg(long)]

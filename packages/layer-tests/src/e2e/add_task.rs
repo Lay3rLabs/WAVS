@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use alloy_provider::{ext::AnvilApi, Provider};
 use anyhow::{bail, Context, Result};
-use utils::eth_client::EthSigningClient;
-use wavs_types::{EthereumContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
+use utils::evm_client::EvmSigningClient;
+use wavs_types::{EvmContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
 
 use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
-    example_eth_client::{
-        example_submit::ISimpleSubmit::SignedData, SimpleEthSubmitClient, SimpleEthTriggerClient,
+    example_evm_client::{
+        example_submit::ISimpleSubmit::SignedData, SimpleEvmSubmitClient, SimpleEvmTriggerClient,
         TriggerId,
     },
 };
@@ -20,7 +20,7 @@ pub async fn add_task(
     service_id: String,
     workflow_id: Option<String>,
     input: Option<Vec<u8>>,
-    submit_client: EthSigningClient,
+    submit_client: EvmSigningClient,
     submit_start_block: u64,
     task_should_land_on_chain: bool,
 ) -> Result<(TriggerId, Option<SignedData>)> {
@@ -49,13 +49,13 @@ pub async fn add_task(
     };
 
     let trigger_id = match workflow.trigger {
-        Trigger::EthContractEvent {
+        Trigger::EvmContractEvent {
             chain_name,
             address,
             event_hash: _,
         } => {
-            let eth_client = clients.get_eth_client(&chain_name);
-            let client = SimpleEthTriggerClient::new(eth_client, address);
+            let evm_client = clients.get_evm_client(&chain_name);
+            let client = SimpleEvmTriggerClient::new(evm_client, address);
 
             client
                 .add_trigger(input.expect("on-chain triggers require input data"))
@@ -87,7 +87,7 @@ pub async fn add_task(
     };
 
     match workflow.submit {
-        Submit::EthereumContract(EthereumContractSubmission {
+        Submit::EvmContract(EvmContractSubmission {
             chain_name,
             address,
             max_gas: _,
@@ -124,7 +124,7 @@ pub async fn add_task(
                 Some(
                     wait_for_task_to_land(
                         submit_client,
-                        service.manager.eth_address_unchecked(),
+                        service.manager.evm_address_unchecked(),
                         trigger_id,
                         submit_start_block,
                     )
@@ -137,17 +137,29 @@ pub async fn add_task(
 }
 
 pub async fn wait_for_task_to_land(
-    eth_submit_client: EthSigningClient,
+    evm_submit_client: EvmSigningClient,
     address: alloy_primitives::Address,
     trigger_id: TriggerId,
     submit_start_block: u64,
 ) -> SignedData {
-    let submit_client = SimpleEthSubmitClient::new(eth_submit_client, address);
+    let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
 
     tokio::time::timeout(Duration::from_secs(5), async move {
         loop {
-            if submit_client.eth.provider.get_block_number().await.unwrap() == submit_start_block {
-                submit_client.eth.provider.evm_mine(None).await.unwrap();
+            if submit_client
+                .evm_client
+                .provider
+                .get_block_number()
+                .await
+                .unwrap()
+                == submit_start_block
+            {
+                submit_client
+                    .evm_client
+                    .provider
+                    .evm_mine(None)
+                    .await
+                    .unwrap();
             }
             match submit_client.trigger_validated(trigger_id).await {
                 true => {

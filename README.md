@@ -10,7 +10,7 @@ WAVS is a next-generation AVS (Actively Validated Service) platform, making it e
 
 ## Multichain-ready
 
-WAVS is designed for the multichain, enabling services to be triggered and results to be posted across different chains. Initially supported on Ethereum and Cosmos, WAVS creates a cross-chain computational layer that is decentralized and verifiable.
+WAVS is designed for the multichain, enabling services to be triggered and results to be posted across different chains. Initially supported on EVM and Cosmos, WAVS creates a cross-chain computational layer that is decentralized and verifiable.
 
 ## Guides
 

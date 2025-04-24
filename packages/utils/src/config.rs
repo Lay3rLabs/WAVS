@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 
 use crate::{
     error::ChainConfigError,
-    eth_client::{EthClientConfig, EthClientTransport},
+    evm_client::{EvmClientConfig, EvmClientTransport},
 };
 use wavs_types::ChainName;
 
@@ -245,15 +245,15 @@ impl ConfigFilePath {
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
     pub cosmos: BTreeMap<ChainName, CosmosChainConfig>,
-    /// Ethereum-style chains
-    pub eth: BTreeMap<ChainName, EthereumChainConfig>,
+    /// EVM-style chains
+    pub evm: BTreeMap<ChainName, EvmChainConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum AnyChainConfig {
     Cosmos(CosmosChainConfig),
-    Eth(EthereumChainConfig),
+    Evm(EvmChainConfig),
 }
 
 impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
@@ -262,8 +262,8 @@ impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
         for (name, config) in configs.cosmos {
             map.insert(name, AnyChainConfig::Cosmos(config));
         }
-        for (name, config) in configs.eth {
-            map.insert(name, AnyChainConfig::Eth(config));
+        for (name, config) in configs.evm {
+            map.insert(name, AnyChainConfig::Evm(config));
         }
         map
     }
@@ -276,7 +276,7 @@ impl TryFrom<AnyChainConfig> for CosmosChainConfig {
     fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
         match config {
             AnyChainConfig::Cosmos(config) => Ok(config),
-            AnyChainConfig::Eth(_) => Err(ChainConfigError::ExpectedCosmosChain),
+            AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedCosmosChain),
         }
     }
 }
@@ -303,38 +303,40 @@ impl TryFrom<layer_climb::prelude::ChainConfig> for AnyChainConfig {
     }
 }
 
-// Ethereum From/Into impls
-impl TryFrom<AnyChainConfig> for EthereumChainConfig {
+// EVM From/Into impls
+impl TryFrom<AnyChainConfig> for EvmChainConfig {
     type Error = ChainConfigError;
 
     fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
         match config {
-            AnyChainConfig::Eth(config) => Ok(config),
-            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEthChain),
+            AnyChainConfig::Evm(config) => Ok(config),
+            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
         }
     }
 }
 
-impl From<EthereumChainConfig> for AnyChainConfig {
-    fn from(config: EthereumChainConfig) -> Self {
-        AnyChainConfig::Eth(config)
+impl From<EvmChainConfig> for AnyChainConfig {
+    fn from(config: EvmChainConfig) -> Self {
+        AnyChainConfig::Evm(config)
     }
 }
 
 impl ChainConfigs {
     pub fn get_chain(&self, chain_name: &ChainName) -> Result<Option<AnyChainConfig>> {
-        match (self.eth.get(chain_name), self.cosmos.get(chain_name)) {
+        match (self.evm.get(chain_name), self.cosmos.get(chain_name)) {
             (Some(_), Some(_)) => {
                 Err(ChainConfigError::DuplicateChainName(chain_name.clone()).into())
             }
-            (Some(eth), None) => Ok(Some(AnyChainConfig::Eth(eth.clone()))),
+            (Some(evm_chain_config), None) => {
+                Ok(Some(AnyChainConfig::Evm(evm_chain_config.clone())))
+            }
             (None, Some(cosmos)) => Ok(Some(AnyChainConfig::Cosmos(cosmos.clone()))),
             (None, None) => Ok(None),
         }
     }
 
     pub fn all_chain_names(&self) -> Vec<ChainName> {
-        self.eth.keys().chain(self.cosmos.keys()).cloned().collect()
+        self.evm.keys().chain(self.cosmos.keys()).cloned().collect()
     }
 }
 
@@ -350,9 +352,9 @@ pub struct CosmosChainConfig {
     pub faucet_endpoint: Option<String>,
 }
 
-/// Ethereum chain config with extra info like faucet and mnemonic
+/// EVM chain config with extra info like faucet and mnemonic
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
-pub struct EthereumChainConfig {
+pub struct EvmChainConfig {
     pub chain_id: String,
     pub ws_endpoint: Option<String>,
     pub http_endpoint: Option<String>,
@@ -360,20 +362,20 @@ pub struct EthereumChainConfig {
     pub faucet_endpoint: Option<String>,
 }
 
-impl EthereumChainConfig {
+impl EvmChainConfig {
     pub fn to_client_config(
         &self,
         hd_index: Option<u32>,
         credential: Option<String>,
-        transport: Option<EthClientTransport>,
-    ) -> EthClientConfig {
-        EthClientConfig {
+        transport: Option<EvmClientTransport>,
+    ) -> EvmClientConfig {
+        EvmClientConfig {
             ws_endpoint: self.ws_endpoint.clone(),
             http_endpoint: self.http_endpoint.clone(),
             // if we are building a signing client, default to http transport
             transport: match (transport, credential.is_some()) {
                 (Some(transport), _) => Some(transport),
-                (None, true) => Some(EthClientTransport::Http),
+                (None, true) => Some(EvmClientTransport::Http),
                 _ => None,
             },
             hd_index,
@@ -430,7 +432,7 @@ mod test {
     };
 
     use super::{
-        ChainConfigs, CliEnvExt, ConfigBuilder, ConfigExt, CosmosChainConfig, EthereumChainConfig,
+        ChainConfigs, CliEnvExt, ConfigBuilder, ConfigExt, CosmosChainConfig, EvmChainConfig,
     };
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -675,13 +677,13 @@ mod test {
             .unwrap();
         assert_eq!(chain.chain_id, "cosmos");
 
-        let chain: EthereumChainConfig = chain_configs
-            .get_chain(&"eth".try_into().unwrap())
+        let chain: EvmChainConfig = chain_configs
+            .get_chain(&"evm".try_into().unwrap())
             .unwrap()
             .unwrap()
             .try_into()
             .unwrap();
-        assert_eq!(chain.chain_id, "eth");
+        assert_eq!(chain.chain_id, "evm");
     }
 
     #[test]
@@ -689,10 +691,10 @@ mod test {
         let mut chain_configs = mock_chain_configs();
 
         chain_configs.cosmos.insert(
-            "eth".try_into().unwrap(),
+            "evm".try_into().unwrap(),
             CosmosChainConfig {
-                chain_id: "eth".to_string(),
-                bech32_prefix: "eth".to_string(),
+                chain_id: "evm".to_string(),
+                bech32_prefix: "evm".to_string(),
                 rpc_endpoint: Some("http://127.0.0.1:1317".to_string()),
                 grpc_endpoint: Some("http://127.0.0.1:9090".to_string()),
                 gas_price: 0.01,
@@ -701,7 +703,7 @@ mod test {
             },
         );
 
-        assert!(chain_configs.get_chain(&"eth".try_into().unwrap()).is_err());
+        assert!(chain_configs.get_chain(&"evm".try_into().unwrap()).is_err());
     }
 
     #[tokio::test]
@@ -760,7 +762,7 @@ mod test {
         // Create test config file with global and service-specific overrides
         let test_config = r#"
     # Global chain config
-    [chains.eth.global_chain]
+    [chains.evm.global_chain]
     chain_id = "1000"
     ws_endpoint = "ws://global.example.com"
     http_endpoint = "http://global.example.com"
@@ -770,13 +772,13 @@ mod test {
     data = "/var/service1"
 
     # Service1 specific chain override
-    [service1.chains.eth.global_chain]
+    [service1.chains.evm.global_chain]
     chain_id = "1000"
     ws_endpoint = "ws://service1.example.com"
     http_endpoint = "http://service1.example.com"
 
     # Service1 specific chain that doesn't exist in global
-    [service1.chains.eth.service1_chain]
+    [service1.chains.evm.service1_chain]
     chain_id = "2000"
     ws_endpoint = "ws://service1-special.example.com"
     http_endpoint = "http://service1-special.example.com"
@@ -786,7 +788,7 @@ mod test {
     data = "/var/service2"
 
     # Service2 specific chain override
-    [service2.chains.eth.global_chain]
+    [service2.chains.evm.global_chain]
     chain_id = "1000"
     ws_endpoint = "ws://service2.example.com"
     http_endpoint = "http://service2.example.com"
@@ -819,19 +821,19 @@ mod test {
             .unwrap()
             .unwrap();
 
-        if let crate::config::AnyChainConfig::Eth(eth_config) = global_chain_config {
-            assert_eq!(eth_config.chain_id, "1000");
+        if let crate::config::AnyChainConfig::Evm(evm_config) = global_chain_config {
+            assert_eq!(evm_config.chain_id, "1000");
             // These should be overridden by service1
             assert_eq!(
-                eth_config.ws_endpoint.as_deref(),
+                evm_config.ws_endpoint.as_deref(),
                 Some("ws://service1.example.com")
             );
             assert_eq!(
-                eth_config.http_endpoint.as_deref(),
+                evm_config.http_endpoint.as_deref(),
                 Some("http://service1.example.com")
             );
         } else {
-            panic!("Expected Ethereum chain config");
+            panic!("Expected EVM chain config");
         }
 
         // Test service1-specific chain
@@ -841,18 +843,18 @@ mod test {
             .unwrap()
             .unwrap();
 
-        if let crate::config::AnyChainConfig::Eth(eth_config) = service1_chain_config {
-            assert_eq!(eth_config.chain_id, "2000");
+        if let crate::config::AnyChainConfig::Evm(evm_config) = service1_chain_config {
+            assert_eq!(evm_config.chain_id, "2000");
             assert_eq!(
-                eth_config.ws_endpoint.as_deref(),
+                evm_config.ws_endpoint.as_deref(),
                 Some("ws://service1-special.example.com")
             );
             assert_eq!(
-                eth_config.http_endpoint.as_deref(),
+                evm_config.http_endpoint.as_deref(),
                 Some("http://service1-special.example.com")
             );
         } else {
-            panic!("Expected Ethereum chain config");
+            panic!("Expected EVM chain config");
         }
 
         // Now test with a different service profile
@@ -921,18 +923,18 @@ mod test {
             .unwrap()
             .unwrap();
 
-        if let crate::config::AnyChainConfig::Eth(eth_config) = global_chain_config {
-            assert_eq!(eth_config.chain_id, "1000");
+        if let crate::config::AnyChainConfig::Evm(evm_config) = global_chain_config {
+            assert_eq!(evm_config.chain_id, "1000");
             assert_eq!(
-                eth_config.ws_endpoint.as_deref(),
+                evm_config.ws_endpoint.as_deref(),
                 Some("ws://service2.example.com")
             );
             assert_eq!(
-                eth_config.http_endpoint.as_deref(),
+                evm_config.http_endpoint.as_deref(),
                 Some("http://service2.example.com")
             );
         } else {
-            panic!("Expected Ethereum chain config");
+            panic!("Expected EVM chain config");
         }
 
         // Test that service2 doesn't have the service1-specific chain
@@ -977,11 +979,11 @@ mod test {
             ]
             .into_iter()
             .collect(),
-            eth: vec![
+            evm: vec![
                 (
-                    "eth".try_into().unwrap(),
-                    EthereumChainConfig {
-                        chain_id: "eth".to_string(),
+                    "evm".try_into().unwrap(),
+                    EvmChainConfig {
+                        chain_id: "evm".to_string(),
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
@@ -990,7 +992,7 @@ mod test {
                 ),
                 (
                     "polygon".try_into().unwrap(),
-                    EthereumChainConfig {
+                    EvmChainConfig {
                         chain_id: "polygon".to_string(),
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),

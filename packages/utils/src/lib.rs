@@ -2,7 +2,7 @@ pub mod alloy_helpers;
 pub mod config;
 pub mod context;
 pub mod error;
-pub mod eth_client;
+pub mod evm_client;
 pub mod filesystem;
 pub mod serde;
 pub mod storage;

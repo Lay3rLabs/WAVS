@@ -6,13 +6,13 @@ use super::components::ComponentName;
 
 #[derive(Clone, Debug, Default)]
 pub struct TestMatrix {
-    pub eth: HashSet<EthService>,
+    pub evm: HashSet<EvmService>,
     pub cosmos: HashSet<CosmosService>,
     pub cross_chain: HashSet<CrossChainService>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
-pub enum EthService {
+pub enum EvmService {
     ChainTriggerLookup,
     CosmosQuery,
     EchoData,
@@ -39,12 +39,12 @@ pub enum CosmosService {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum CrossChainService {
-    CosmosToEthEchoData,
+    CosmosToEvmEchoData,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AnyService {
-    Eth(EthService),
+    EVM(EvmService),
     Cosmos(CosmosService),
     CrossChain(CrossChainService),
 }
@@ -56,15 +56,15 @@ impl AnyService {
         match self {
             AnyService::Cosmos(_)
             | AnyService::CrossChain(_)
-            | AnyService::Eth(EthService::CosmosQuery) => false,
+            | AnyService::EVM(EvmService::CosmosQuery) => false,
             _ => true,
         }
     }
 }
 
-impl From<EthService> for AnyService {
-    fn from(service: EthService) -> Self {
-        AnyService::Eth(service)
+impl From<EvmService> for AnyService {
+    fn from(service: EvmService) -> Self {
+        AnyService::EVM(service)
     }
 }
 
@@ -81,43 +81,43 @@ impl From<CrossChainService> for AnyService {
 }
 
 impl TestMatrix {
-    pub fn eth_regular_chain_enabled(&self) -> bool {
-        // since we currently only submit to eth, it's always enabled
+    pub fn evm_regular_chain_enabled(&self) -> bool {
+        // since we currently only submit to EVM, it's always enabled
         // TODO - if we have `Submit::None` then this should be false if no other test is enabled
         true
     }
 
-    pub fn eth_secondary_chain_enabled(&self) -> bool {
-        self.eth.contains(&EthService::EchoDataSecondaryChain)
+    pub fn evm_secondary_chain_enabled(&self) -> bool {
+        self.evm.contains(&EvmService::EchoDataSecondaryChain)
     }
 
-    pub fn eth_aggregator_chain_enabled(&self) -> bool {
-        self.eth.contains(&EthService::EchoDataAggregator)
+    pub fn evm_aggregator_chain_enabled(&self) -> bool {
+        self.evm.contains(&EvmService::EchoDataAggregator)
     }
 
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
-        self.eth.contains(&EthService::CosmosQuery)
+        self.evm.contains(&EvmService::CosmosQuery)
             || !self.cosmos.is_empty()
             || self
                 .cross_chain
-                .contains(&CrossChainService::CosmosToEthEchoData)
+                .contains(&CrossChainService::CosmosToEvmEchoData)
     }
 }
 
-impl From<EthService> for Vec<ComponentName> {
-    fn from(service: EthService) -> Self {
+impl From<EvmService> for Vec<ComponentName> {
+    fn from(service: EvmService) -> Self {
         match service {
-            EthService::ChainTriggerLookup => vec![ComponentName::ChainTriggerLookup],
-            EthService::CosmosQuery => vec![ComponentName::CosmosQuery],
-            EthService::EchoData => vec![ComponentName::EchoData],
-            EthService::Permissions => vec![ComponentName::Permissions],
-            EthService::Square => vec![ComponentName::Square],
-            EthService::EchoDataSecondaryChain => vec![ComponentName::EchoData],
-            EthService::EchoDataAggregator => vec![ComponentName::EchoData],
-            EthService::MultiWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
-            EthService::MultiTrigger => vec![ComponentName::EchoData],
-            EthService::BlockInterval => vec![ComponentName::EchoBlockInterval],
-            EthService::CronInterval => vec![ComponentName::EchoCronInterval],
+            EvmService::ChainTriggerLookup => vec![ComponentName::ChainTriggerLookup],
+            EvmService::CosmosQuery => vec![ComponentName::CosmosQuery],
+            EvmService::EchoData => vec![ComponentName::EchoData],
+            EvmService::Permissions => vec![ComponentName::Permissions],
+            EvmService::Square => vec![ComponentName::Square],
+            EvmService::EchoDataSecondaryChain => vec![ComponentName::EchoData],
+            EvmService::EchoDataAggregator => vec![ComponentName::EchoData],
+            EvmService::MultiWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
+            EvmService::MultiTrigger => vec![ComponentName::EchoData],
+            EvmService::BlockInterval => vec![ComponentName::EchoBlockInterval],
+            EvmService::CronInterval => vec![ComponentName::EchoCronInterval],
         }
     }
 }
@@ -139,7 +139,7 @@ impl From<CosmosService> for Vec<ComponentName> {
 impl From<CrossChainService> for Vec<ComponentName> {
     fn from(service: CrossChainService) -> Self {
         match service {
-            CrossChainService::CosmosToEthEchoData => vec![ComponentName::EchoData],
+            CrossChainService::CosmosToEvmEchoData => vec![ComponentName::EchoData],
         }
     }
 }
@@ -147,7 +147,7 @@ impl From<CrossChainService> for Vec<ComponentName> {
 impl From<AnyService> for Vec<ComponentName> {
     fn from(service: AnyService) -> Self {
         match service {
-            AnyService::Eth(service) => service.into(),
+            AnyService::EVM(service) => service.into(),
             AnyService::Cosmos(service) => service.into(),
             AnyService::CrossChain(service) => service.into(),
         }

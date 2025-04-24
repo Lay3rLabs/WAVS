@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
     config::AnyChainConfig,
-    eth_client::{EthClientBuilder, EthSigningClient},
+    evm_client::{EvmClientBuilder, EvmSigningClient},
 };
 use wavs_types::ChainName;
 
@@ -54,21 +54,21 @@ impl CliContext {
         })
     }
 
-    pub(crate) async fn new_eth_client(&self, chain_name: &ChainName) -> Result<EthSigningClient> {
+    pub(crate) async fn new_evm_client(&self, chain_name: &ChainName) -> Result<EvmSigningClient> {
         let chain_config = self
             .config
             .chains
-            .eth
+            .evm
             .get(chain_name)
             .context(format!("chain {chain_name} not found"))?
             .clone();
 
         let client_config =
-            chain_config.to_client_config(None, self.config.eth_credential.clone(), None);
+            chain_config.to_client_config(None, self.config.evm_credential.clone(), None);
 
-        let eth_client = EthClientBuilder::new(client_config).build_signing().await?;
+        let evm_client = EvmClientBuilder::new(client_config).build_signing().await?;
 
-        Ok(eth_client)
+        Ok(evm_client)
     }
 
     pub async fn new_cosmos_client(&self, chain_name: &ChainName) -> Result<SigningClient> {
@@ -106,11 +106,11 @@ impl CliContext {
                 .flatten()
                 .context(format!("chain {chain_name} not found"))?
             {
-                AnyChainConfig::Eth(_) => {
+                AnyChainConfig::Evm(_) => {
                     let address = address.try_into()?;
 
                     match self
-                        .new_eth_client(chain_name)
+                        .new_evm_client(chain_name)
                         .await?
                         .provider
                         .get_code_at(address)

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 use utils::config::ConfigExt;
 
-use crate::e2e::matrix::{AnyService, CosmosService, CrossChainService, EthService, TestMatrix};
+use crate::e2e::matrix::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -58,14 +58,14 @@ impl Default for TestConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TestMatrixConfig {
-    pub eth: TestMatrixEthConfig,
+    pub evm: TestMatrixEvmConfig,
     pub cosmos: TestMatrixCosmosConfig,
     pub crosschain: TestMatrixCrossChainConfig,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct TestMatrixEthConfig {
+pub struct TestMatrixEvmConfig {
     pub chain_trigger_lookup: bool,
     pub cosmos_query: bool,
     pub echo_data: bool,
@@ -94,7 +94,7 @@ pub struct TestMatrixCosmosConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct TestMatrixCrossChainConfig {
-    pub cosmos_to_eth_echo_data: bool,
+    pub cosmos_to_evm_echo_data: bool,
 }
 
 impl TestMatrixConfig {
@@ -106,8 +106,8 @@ impl TestMatrixConfig {
                 panic!("Cannot specify both --all and --isolated");
             }
             (Some(true), _) => {
-                for service in EthService::all_values() {
-                    matrix.eth.insert(*service);
+                for service in EvmService::all_values() {
+                    matrix.evm.insert(*service);
                 }
 
                 for service in CosmosService::all_values() {
@@ -120,8 +120,8 @@ impl TestMatrixConfig {
             }
             (_, Some(isolated)) => {
                 match AnyService::from(isolated) {
-                    AnyService::Eth(service) => {
-                        matrix.eth.insert(service);
+                    AnyService::EVM(service) => {
+                        matrix.evm.insert(service);
                     }
                     AnyService::Cosmos(service) => {
                         matrix.cosmos.insert(service);
@@ -136,48 +136,48 @@ impl TestMatrixConfig {
             _ => {}
         }
 
-        if self.eth.chain_trigger_lookup {
-            matrix.eth.insert(EthService::ChainTriggerLookup);
+        if self.evm.chain_trigger_lookup {
+            matrix.evm.insert(EvmService::ChainTriggerLookup);
         }
 
-        if self.eth.cosmos_query {
-            matrix.eth.insert(EthService::CosmosQuery);
+        if self.evm.cosmos_query {
+            matrix.evm.insert(EvmService::CosmosQuery);
         }
 
-        if self.eth.echo_data {
-            matrix.eth.insert(EthService::EchoData);
+        if self.evm.echo_data {
+            matrix.evm.insert(EvmService::EchoData);
         }
 
-        if self.eth.echo_data_secondary_chain {
-            matrix.eth.insert(EthService::EchoDataSecondaryChain);
+        if self.evm.echo_data_secondary_chain {
+            matrix.evm.insert(EvmService::EchoDataSecondaryChain);
         }
 
-        if self.eth.echo_data_aggregator {
-            matrix.eth.insert(EthService::EchoDataAggregator);
+        if self.evm.echo_data_aggregator {
+            matrix.evm.insert(EvmService::EchoDataAggregator);
         }
 
-        if self.eth.permissions {
-            matrix.eth.insert(EthService::Permissions);
+        if self.evm.permissions {
+            matrix.evm.insert(EvmService::Permissions);
         }
 
-        if self.eth.square {
-            matrix.eth.insert(EthService::Square);
+        if self.evm.square {
+            matrix.evm.insert(EvmService::Square);
         }
 
-        if self.eth.multi_workflow {
-            matrix.eth.insert(EthService::MultiWorkflow);
+        if self.evm.multi_workflow {
+            matrix.evm.insert(EvmService::MultiWorkflow);
         }
 
-        if self.eth.multi_trigger {
-            matrix.eth.insert(EthService::MultiTrigger);
+        if self.evm.multi_trigger {
+            matrix.evm.insert(EvmService::MultiTrigger);
         }
 
-        if self.eth.block_interval {
-            matrix.eth.insert(EthService::BlockInterval);
+        if self.evm.block_interval {
+            matrix.evm.insert(EvmService::BlockInterval);
         }
 
-        if self.eth.cron_interval {
-            matrix.eth.insert(EthService::CronInterval);
+        if self.evm.cron_interval {
+            matrix.evm.insert(EvmService::CronInterval);
         }
 
         if self.cosmos.chain_trigger_lookup {
@@ -208,10 +208,10 @@ impl TestMatrixConfig {
             matrix.cosmos.insert(CosmosService::CronInterval);
         }
 
-        if self.crosschain.cosmos_to_eth_echo_data {
+        if self.crosschain.cosmos_to_evm_echo_data {
             matrix
                 .cross_chain
-                .insert(CrossChainService::CosmosToEthEchoData);
+                .insert(CrossChainService::CosmosToEvmEchoData);
         }
 
         matrix
@@ -221,17 +221,17 @@ impl TestMatrixConfig {
 impl From<&str> for AnyService {
     fn from(src: &str) -> Self {
         match src {
-            "eth-chain-trigger-lookup" => AnyService::Eth(EthService::ChainTriggerLookup),
-            "eth-cosmos-query" => AnyService::Eth(EthService::CosmosQuery),
-            "eth-echo-data" => AnyService::Eth(EthService::EchoData),
-            "eth-echo-data-secondary-chain" => AnyService::Eth(EthService::EchoDataSecondaryChain),
-            "eth-echo-data-aggregator" => AnyService::Eth(EthService::EchoDataAggregator),
-            "eth-permissions" => AnyService::Eth(EthService::Permissions),
-            "eth-square" => AnyService::Eth(EthService::Square),
-            "eth-multi-workflow" => AnyService::Eth(EthService::MultiWorkflow),
-            "eth-multi-trigger" => AnyService::Eth(EthService::MultiTrigger),
-            "eth-block-interval" => AnyService::Eth(EthService::BlockInterval),
-            "eth-cron-interval" => AnyService::Eth(EthService::CronInterval),
+            "evm-chain-trigger-lookup" => AnyService::EVM(EvmService::ChainTriggerLookup),
+            "evm-cosmos-query" => AnyService::EVM(EvmService::CosmosQuery),
+            "evm-echo-data" => AnyService::EVM(EvmService::EchoData),
+            "evm-echo-data-secondary-chain" => AnyService::EVM(EvmService::EchoDataSecondaryChain),
+            "evm-echo-data-aggregator" => AnyService::EVM(EvmService::EchoDataAggregator),
+            "evm-permissions" => AnyService::EVM(EvmService::Permissions),
+            "evm-square" => AnyService::EVM(EvmService::Square),
+            "evm-multi-workflow" => AnyService::EVM(EvmService::MultiWorkflow),
+            "evm-multi-trigger" => AnyService::EVM(EvmService::MultiTrigger),
+            "evm-block-interval" => AnyService::EVM(EvmService::BlockInterval),
+            "evm-cron-interval" => AnyService::EVM(EvmService::CronInterval),
             "cosmos-chain-trigger-lookup" => AnyService::Cosmos(CosmosService::ChainTriggerLookup),
             "cosmos-cosmos-query" => AnyService::Cosmos(CosmosService::CosmosQuery),
             "cosmos-echo-data" => AnyService::Cosmos(CosmosService::EchoData),
@@ -239,8 +239,8 @@ impl From<&str> for AnyService {
             "cosmos-square" => AnyService::Cosmos(CosmosService::Square),
             "cosmos-block-interval" => AnyService::Cosmos(CosmosService::BlockInterval),
             "cosmos-cron-interval" => AnyService::Cosmos(CosmosService::CronInterval),
-            "crosschain-cosmos-to-eth-echo-data" => {
-                AnyService::CrossChain(CrossChainService::CosmosToEthEchoData)
+            "crosschain-cosmos-to-evm-echo-data" => {
+                AnyService::CrossChain(CrossChainService::CosmosToEvmEchoData)
             }
             _ => panic!("Unknown service: {}", src),
         }

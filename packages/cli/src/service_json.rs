@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use wavs_types::{
-    Aggregator, Component, EthereumContractSubmission, ServiceID, ServiceManager, ServiceStatus,
-    Submit, Timestamp, Trigger, WorkflowID,
+    Aggregator, Component, EvmContractSubmission, ServiceID, ServiceManager, ServiceStatus, Submit,
+    Timestamp, Trigger, WorkflowID,
 };
 
 pub const ENV_PREFIX: &str = "WAVS_ENV_";
@@ -77,18 +77,18 @@ impl ServiceJson {
                                 ));
                             }
                         }
-                        Trigger::EthContractEvent {
+                        Trigger::EvmContractEvent {
                             address,
                             chain_name: _,
                             event_hash,
                         } => {
-                            // Validate Ethereum address format
+                            // Validate EVM address format
                             if let Err(err) = alloy_primitives::Address::parse_checksummed(
                                 address.to_string(),
                                 None,
                             ) {
                                 errors.push(format!(
-                                    "Workflow '{}' has an invalid Ethereum address format: {}",
+                                    "Workflow '{}' has an invalid EVM address format: {}",
                                     workflow_id, err
                                 ));
                             }
@@ -132,18 +132,18 @@ impl ServiceJson {
                 SubmitJson::Submit(submit) => {
                     // Basic submit validation
                     match submit {
-                        Submit::EthereumContract(EthereumContractSubmission {
+                        Submit::EvmContract(EvmContractSubmission {
                             address,
                             max_gas,
                             chain_name: _,
                         }) => {
-                            // Validate Ethereum address format
+                            // Validate EVM address format
                             if let Err(err) = alloy_primitives::Address::parse_checksummed(
                                 address.to_string(),
                                 None,
                             ) {
                                 errors.push(format!(
-                                    "Workflow '{}' has an invalid Ethereum address format in submit action: {}",
+                                    "Workflow '{}' has an invalid EVM address format in submit action: {}",
                                     workflow_id, err
                                 ));
                             }
@@ -159,7 +159,7 @@ impl ServiceJson {
                             }
 
                             if !workflow.aggregators.is_empty() {
-                                errors.push(format!("Workflow '{}' submits with eth contract, but it has an aggregator defined", workflow_id));
+                                errors.push(format!("Workflow '{}' submits with evm contract, but it has an aggregator defined", workflow_id));
                             }
                         }
                         Submit::None => {
@@ -189,8 +189,8 @@ impl ServiceJson {
             // Check if max_gas is reasonable if specified
             for aggregator in &workflow.aggregators {
                 match aggregator {
-                    Aggregator::Ethereum(ethereum_contract_submission) => {
-                        if let Some(max_gas) = ethereum_contract_submission.max_gas {
+                    Aggregator::Evm(evm_contract_submission) => {
+                        if let Some(max_gas) = evm_contract_submission.max_gas {
                             if max_gas == 0 {
                                 errors.push(format!(
                                     "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",

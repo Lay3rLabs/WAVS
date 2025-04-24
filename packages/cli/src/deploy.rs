@@ -13,7 +13,7 @@ pub trait CommandDeployResult: Display {
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Deployment {
-    pub eth_service_managers: BTreeMap<ChainName, Vec<alloy_primitives::Address>>,
+    pub evm_service_managers: BTreeMap<ChainName, Vec<alloy_primitives::Address>>,
     pub services: BTreeMap<ServiceID, Service>,
 }
 

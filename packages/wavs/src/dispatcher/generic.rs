@@ -328,9 +328,9 @@ async fn query_service_from_address(
 
     // Handle different chain types
     match chain {
-        AnyChainConfig::Eth(eth_config) => {
+        AnyChainConfig::Evm(evm_config) => {
             // Get the HTTP endpoint, required for contract calls
-            let http_endpoint = eth_config.http_endpoint.clone().ok_or_else(|| {
+            let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
                 DispatcherError::Config(format!(
                     "No HTTP endpoint configured for chain {}",
                     chain_name
@@ -454,11 +454,11 @@ mod tests {
         init_tracing_tests,
         submission::mock::{mock_event_id, mock_event_order, MockSubmission},
         test_utils::{
-            address::{rand_address_eth, rand_event_eth},
+            address::{rand_address_evm, rand_event_evm},
             mock::BigSquare,
         },
         triggers::mock::{
-            mock_eth_event_trigger, mock_eth_event_trigger_config, MockTriggerManagerVec,
+            mock_evm_event_trigger, mock_evm_event_trigger_config, MockTriggerManagerVec,
         },
     };
     use wavs_types::{
@@ -477,7 +477,7 @@ mod tests {
         let payload = b"foobar";
 
         let action = TriggerAction {
-            config: mock_eth_event_trigger_config("service1", "workflow1"),
+            config: mock_evm_event_trigger_config("service1", "workflow1"),
             data: TriggerData::new_raw(payload),
         };
         let ctx = AppContext::new();
@@ -494,7 +494,7 @@ mod tests {
 
         // Register a service to handle this action
         let digest = Digest::new(b"wasm1");
-        let service_manager_addr = rand_address_eth();
+        let service_manager_addr = rand_address_evm();
         let service = Service {
             id: action.config.service_id.clone(),
             name: "My awesome service".to_string(),
@@ -502,9 +502,9 @@ mod tests {
                 action.config.workflow_id.clone(),
                 Workflow {
                     component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_eth_event_trigger(),
-                    submit: Submit::eth_contract(
-                        ChainName::new("eth").unwrap(),
+                    trigger: mock_evm_event_trigger(),
+                    submit: Submit::evm_contract(
+                        ChainName::new("evm").unwrap(),
                         service_manager_addr,
                         None,
                     ),
@@ -513,8 +513,8 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
-            manager: ServiceManager::Ethereum {
-                chain_name: ChainName::new("eth").unwrap(),
+            manager: ServiceManager::Evm {
+                chain_name: ChainName::new("evm").unwrap(),
                 address: service_manager_addr,
             },
         };
@@ -536,8 +536,8 @@ mod tests {
                 ordering: mock_event_order().into(),
                 payload: payload.into(),
             },
-            submit: Submit::eth_contract(
-                ChainName::new("eth").unwrap(),
+            submit: Submit::evm_contract(
+                ChainName::new("evm").unwrap(),
                 service_manager_addr,
                 None,
             ),
@@ -556,26 +556,26 @@ mod tests {
         let service_id = ServiceID::new("service1").unwrap();
         let workflow_id = WorkflowID::new("workflow1").unwrap();
 
-        let contract_address = rand_address_eth();
+        let contract_address = rand_address_evm();
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
-                    ChainName::new("eth").unwrap(),
-                    rand_event_eth(),
+                    ChainName::new("evm").unwrap(),
+                    rand_event_evm(),
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":3}"#),
             },
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
-                    ChainName::new("eth").unwrap(),
-                    rand_event_eth(),
+                    ChainName::new("evm").unwrap(),
+                    rand_event_evm(),
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":21}"#),
@@ -601,7 +601,7 @@ mod tests {
             .register(&digest.clone(), BigSquare);
 
         // Register a service to handle this action
-        let service_manager_addr = rand_address_eth();
+        let service_manager_addr = rand_address_evm();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -609,10 +609,10 @@ mod tests {
                 workflow_id.clone(),
                 Workflow {
                     component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_eth_event_trigger(),
-                    submit: Submit::eth_contract(
-                        ChainName::new("eth").unwrap(),
-                        rand_address_eth(),
+                    trigger: mock_evm_event_trigger(),
+                    submit: Submit::evm_contract(
+                        ChainName::new("evm").unwrap(),
+                        rand_address_evm(),
                         None,
                     ),
                     aggregators: Vec::new(),
@@ -620,8 +620,8 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
-            manager: ServiceManager::Ethereum {
-                chain_name: ChainName::new("eth").unwrap(),
+            manager: ServiceManager::Evm {
+                chain_name: ChainName::new("evm").unwrap(),
                 address: service_manager_addr,
             },
         };
@@ -654,26 +654,26 @@ mod tests {
         // Prepare two actions to be squared
         let service_id = ServiceID::new("service1").unwrap();
         let workflow_id = WorkflowID::new("workflow1").unwrap();
-        let contract_address = rand_address_eth();
+        let contract_address = rand_address_evm();
         let actions = vec![
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
-                    ChainName::new("eth").unwrap(),
-                    rand_event_eth(),
+                    ChainName::new("evm").unwrap(),
+                    rand_event_evm(),
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":3}"#),
             },
             TriggerAction {
-                config: TriggerConfig::eth_contract_event(
+                config: TriggerConfig::evm_contract_event(
                     &service_id,
                     &workflow_id,
                     contract_address,
-                    ChainName::new("eth").unwrap(),
-                    rand_event_eth(),
+                    ChainName::new("evm").unwrap(),
+                    rand_event_evm(),
                 )
                 .unwrap(),
                 data: TriggerData::new_raw(br#"{"x":21}"#),
@@ -687,7 +687,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs {
                 cosmos: BTreeMap::new(),
-                eth: BTreeMap::new(),
+                evm: BTreeMap::new(),
             },
             db_file.as_ref(),
         )
@@ -701,7 +701,7 @@ mod tests {
             .register(&digest.clone(), BigSquare);
 
         // Register a service to handle this action
-        let service_manager_addr = rand_address_eth();
+        let service_manager_addr = rand_address_evm();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -709,10 +709,10 @@ mod tests {
                 workflow_id.clone(),
                 Workflow {
                     component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_eth_event_trigger(),
-                    submit: Submit::eth_contract(
-                        ChainName::new("eth").unwrap(),
-                        rand_address_eth(),
+                    trigger: mock_evm_event_trigger(),
+                    submit: Submit::evm_contract(
+                        ChainName::new("evm").unwrap(),
+                        rand_address_evm(),
                         None,
                     ),
                     aggregators: Vec::new(),
@@ -720,8 +720,8 @@ mod tests {
             )]
             .into(),
             status: ServiceStatus::Active,
-            manager: ServiceManager::Ethereum {
-                chain_name: ChainName::new("eth").unwrap(),
+            manager: ServiceManager::Evm {
+                chain_name: ChainName::new("evm").unwrap(),
                 address: service_manager_addr,
             },
         };

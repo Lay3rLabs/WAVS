@@ -4,9 +4,9 @@ use alloy_signer::k256::SecretKey;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use wavs_types::{Envelope, EnvelopeSignature, SignatureData};
 
-use crate::error::EthClientError;
+use crate::error::EvmClientError;
 
-use super::EthSigningClient;
+use super::EvmSigningClient;
 
 pub fn make_signer(credentials: &str, hd_index: Option<u32>) -> super::Result<PrivateKeySigner> {
     let hd_index = hd_index.unwrap_or_default();
@@ -16,7 +16,7 @@ pub fn make_signer(credentials: &str, hd_index: Option<u32>) -> super::Result<Pr
             // if the string begins with `0x`, it is a private key
             // and so we can't derive additional keys from it
             if hd_index > 0 {
-                return Err(EthClientError::DerivationWithPrivateKey.into());
+                return Err(EvmClientError::DerivationWithPrivateKey.into());
             }
             let private_key = const_hex::decode(stripped)?;
             let secret_key = SecretKey::from_slice(&private_key)?;
@@ -29,7 +29,7 @@ pub fn make_signer(credentials: &str, hd_index: Option<u32>) -> super::Result<Pr
     }
 }
 
-impl EthSigningClient {
+impl EvmSigningClient {
     pub async fn send_envelope_signatures(
         &self,
         envelope: Envelope,
@@ -37,7 +37,7 @@ impl EthSigningClient {
         block_height: u64,
         service_handler: Address,
         max_gas: Option<u64>,
-    ) -> Result<TransactionReceipt, EthClientError> {
+    ) -> Result<TransactionReceipt, EvmClientError> {
         let mut operators = Vec::with_capacity(signatures.len());
 
         for signature in &signatures {
@@ -45,8 +45,8 @@ impl EthSigningClient {
             // tracking issue: https://github.com/Lay3rLabs/wavs-middleware/issues/63
             operators.push(
                 signature
-                    .eth_signer_address(&envelope)
-                    .map_err(EthClientError::RecoverSignerAddress)?,
+                    .evm_signer_address(&envelope)
+                    .map_err(EvmClientError::RecoverSignerAddress)?,
             );
         }
 
@@ -66,7 +66,7 @@ impl EthSigningClient {
                     .handleSignedEnvelope(envelope.clone(), signature_data.clone())
                     .estimate_gas()
                     .await
-                    .map_err(|e| EthClientError::TransactionWithoutReceipt(e.into()))?;
+                    .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
 
                 // pad it with a multiplier to account for gas fluctuations
                 ((gas_estimate as f32) * self.gas_estimate_multiplier) as u64
@@ -85,14 +85,14 @@ impl EthSigningClient {
             .gas(gas)
             .send()
             .await
-            .map_err(|e| EthClientError::TransactionWithoutReceipt(e.into()))?
+            .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?
             .get_receipt()
             .await
-            .map_err(|e| EthClientError::TransactionWithoutReceipt(e.into()))?;
+            .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
 
         match receipt.status() {
             true => Ok(receipt),
-            false => Err(EthClientError::TransactionWithReceipt(Box::new(receipt))),
+            false => Err(EvmClientError::TransactionWithReceipt(Box::new(receipt))),
         }
     }
 }
@@ -111,7 +111,7 @@ mod test {
         let signature = envelope.sign(&signer).await.unwrap();
 
         assert_eq!(
-            signature.eth_signer_address(&envelope).unwrap(),
+            signature.evm_signer_address(&envelope).unwrap(),
             signer.address()
         );
     }

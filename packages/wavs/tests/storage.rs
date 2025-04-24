@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use utils::storage::db::{RedbStorage, Table, JSON};
-use wavs::{test_utils::address::rand_address_eth, triggers::mock::mock_eth_event_trigger};
+use wavs::{test_utils::address::rand_address_evm, triggers::mock::mock_evm_event_trigger};
 use wavs_types::{
     Component, ComponentSource, Digest, Service, ServiceID, ServiceManager, ServiceStatus, Submit,
     Workflow, WorkflowID,
@@ -68,7 +68,7 @@ fn db_service_store() {
         (
             WorkflowID::new("workflow-id-1").unwrap(),
             Workflow {
-                trigger: mock_eth_event_trigger(),
+                trigger: mock_evm_event_trigger(),
                 component: Component::new(ComponentSource::Digest(Digest::new(b"digest-1"))),
                 submit: Submit::None,
                 aggregators: Vec::new(),
@@ -77,7 +77,7 @@ fn db_service_store() {
         (
             WorkflowID::new("workflow-id-2").unwrap(),
             Workflow {
-                trigger: mock_eth_event_trigger(),
+                trigger: mock_evm_event_trigger(),
                 component: Component::new(ComponentSource::Digest(Digest::new(b"digest-2"))),
                 submit: Submit::None,
                 aggregators: Vec::new(),
@@ -91,9 +91,9 @@ fn db_service_store() {
         name: service_id.to_string(),
         workflows,
         status: ServiceStatus::Active,
-        manager: ServiceManager::Ethereum {
-            chain_name: "eth".parse().unwrap(),
-            address: rand_address_eth(),
+        manager: ServiceManager::Evm {
+            chain_name: "evm".parse().unwrap(),
+            address: rand_address_evm(),
         },
     };
 

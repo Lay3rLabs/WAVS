@@ -31,8 +31,8 @@ pub trait TriggerManager: Send + Sync {
 pub enum TriggerError {
     #[error("climb: {0}")]
     Climb(anyhow::Error),
-    #[error("ethereum: {0}")]
-    Ethereum(anyhow::Error),
+    #[error("EVM: {0}")]
+    EVM(anyhow::Error),
     #[error("parse avs payload: {0}")]
     ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]
@@ -45,8 +45,8 @@ pub enum TriggerError {
     TriggerDataParse(String),
     #[error("Cannot find cosmos trigger contract: {0} / {1} / {2}")]
     NoSuchCosmosContractEvent(ChainName, Address, String),
-    #[error("Cannot find eth trigger contract: {0} / {1} / {2}")]
-    NoSuchEthContractEvent(ChainName, alloy_primitives::Address, ByteArray<32>),
+    #[error("Cannot find EVM trigger contract: {0} / {1} / {2}")]
+    NoSuchEvmContractEvent(ChainName, alloy_primitives::Address, ByteArray<32>),
     #[error("Cannot find block interval trigger: {0} / {1}")]
     NoSuchBlockIntervalTrigger(ChainName, u32),
     #[error("Service exists, cannot register again: {0}")]

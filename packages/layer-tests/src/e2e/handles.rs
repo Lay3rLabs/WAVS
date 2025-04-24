@@ -1,10 +1,10 @@
 mod cosmos;
-mod eth;
+mod evm;
 
 use std::sync::Arc;
 
 use cosmos::CosmosInstance;
-use eth::EthereumInstance;
+use evm::EvmInstance;
 use utils::context::AppContext;
 use wavs::dispatcher::CoreDispatcher;
 
@@ -13,18 +13,18 @@ use super::config::Configs;
 pub struct AppHandles {
     pub wavs_handle: std::thread::JoinHandle<()>,
     pub aggregator_handle: Option<std::thread::JoinHandle<()>>,
-    _eth_chains: Vec<EthereumInstance>,
+    _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
 }
 
 impl AppHandles {
     pub fn start(ctx: &AppContext, configs: &Configs) -> Self {
-        let mut eth_chains = Vec::new();
+        let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
-        for chain_config in configs.chains.eth.values() {
-            let handle = EthereumInstance::spawn(ctx.clone(), configs, chain_config.clone());
-            eth_chains.push(handle);
+        for chain_config in configs.chains.evm.values() {
+            let handle = EvmInstance::spawn(ctx.clone(), configs, chain_config.clone());
+            evm_chains.push(handle);
         }
 
         for chain_config in configs.chains.cosmos.values() {
@@ -56,7 +56,7 @@ impl AppHandles {
         Self {
             wavs_handle,
             aggregator_handle,
-            _eth_chains: eth_chains,
+            _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
         }
     }

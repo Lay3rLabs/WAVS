@@ -19,9 +19,9 @@ impl From<cosmwasm_std::Event> for CosmosEvent {
     }
 }
 
-impl From<alloy_primitives::LogData> for EthEventLogData {
+impl From<alloy_primitives::LogData> for EvmEventLogData {
     fn from(log_data: alloy_primitives::LogData) -> Self {
-        EthEventLogData {
+        EvmEventLogData {
             topics: log_data
                 .topics()
                 .iter()
@@ -32,8 +32,8 @@ impl From<alloy_primitives::LogData> for EthEventLogData {
     }
 }
 
-impl From<EthEventLogData> for alloy_primitives::LogData {
-    fn from(log_data: EthEventLogData) -> Self {
+impl From<EvmEventLogData> for alloy_primitives::LogData {
+    fn from(log_data: EvmEventLogData) -> Self {
         alloy_primitives::LogData::new(
             log_data
                 .topics
@@ -72,12 +72,12 @@ impl From<CosmosAddress> for layer_climb::prelude::Address {
     }
 }
 
-impl TryFrom<layer_climb::prelude::Address> for EthAddress {
+impl TryFrom<layer_climb::prelude::Address> for EvmAddress {
     type Error = anyhow::Error;
 
     fn try_from(addr: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         match addr {
-            layer_climb::prelude::Address::Eth(eth) => Ok(EthAddress {
+            layer_climb::prelude::Address::Eth(eth) => Ok(EvmAddress {
                 raw_bytes: eth.as_bytes().to_vec(),
             }),
             _ => Err(anyhow::anyhow!("Cannot convert to EthAddr")),
@@ -85,22 +85,22 @@ impl TryFrom<layer_climb::prelude::Address> for EthAddress {
     }
 }
 
-impl From<EthAddress> for layer_climb::prelude::Address {
-    fn from(addr: EthAddress) -> Self {
+impl From<EvmAddress> for layer_climb::prelude::Address {
+    fn from(addr: EvmAddress) -> Self {
         alloy_primitives::Address::from(addr).into()
     }
 }
 
-impl From<alloy_primitives::Address> for EthAddress {
+impl From<alloy_primitives::Address> for EvmAddress {
     fn from(addr: alloy_primitives::Address) -> Self {
-        EthAddress {
+        EvmAddress {
             raw_bytes: addr.to_vec(),
         }
     }
 }
 
-impl From<EthAddress> for alloy_primitives::Address {
-    fn from(addr: EthAddress) -> Self {
+impl From<EvmAddress> for alloy_primitives::Address {
+    fn from(addr: EvmAddress) -> Self {
         alloy_primitives::Address::from_slice(&addr.raw_bytes)
     }
 }
