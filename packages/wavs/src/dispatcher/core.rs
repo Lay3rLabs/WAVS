@@ -19,7 +19,7 @@ impl CoreDispatcher {
     ) -> Result<CoreDispatcher, DispatcherError> {
         let file_storage = FileStorage::new(config.data.join("ca"))?;
 
-        let triggers = CoreTriggerManager::new(config)?;
+        let triggers = CoreTriggerManager::new(config, metrics.trigger)?;
 
         let app_storage = config.data.join("app");
         let engine = Arc::new(WasmEngine::new(
@@ -30,6 +30,7 @@ impl CoreDispatcher {
             config.registry_domain.clone(),
             Some(config.max_wasm_fuel),
             Some(config.max_execution_seconds),
+            metrics.engine,
         ));
         let engine = MultiEngineRunner::new(engine, config.wasm_threads);
 

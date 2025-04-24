@@ -5,6 +5,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
+use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::InstanceDepsBuilder;
@@ -25,6 +26,7 @@ pub struct WasmEngine<S: CAStorage> {
     wkg_client: Option<WkgClient>,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
+    metrics: EngineMetrics,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -37,6 +39,7 @@ impl<S: CAStorage> WasmEngine<S> {
         registry_domain: Option<String>,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
+        metrics: EngineMetrics,
     ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -62,6 +65,7 @@ impl<S: CAStorage> WasmEngine<S> {
             wkg_client: registry_domain.map(|d| WkgClient::new(d).unwrap()),
             max_execution_seconds,
             max_wasm_fuel,
+            metrics,
         }
     }
 }
@@ -254,6 +258,10 @@ mod tests {
     const PERMISSIONS: &[u8] =
         include_bytes!("../../../../examples/build/components/permissions.wasm");
 
+    fn metrics() -> EngineMetrics {
+        EngineMetrics::init(&opentelemetry::global::meter("trigger-test-metrics"))
+    }
+
     #[test]
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
@@ -266,6 +274,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store two blobs
@@ -292,6 +301,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store valid wasm
@@ -316,6 +326,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store square digest
@@ -361,6 +372,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
@@ -445,6 +457,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store square digest
@@ -493,6 +506,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // Create a service ID
@@ -541,6 +555,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         engine.start().unwrap();

@@ -16,7 +16,7 @@ use std::{
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::IntervalStream;
 use tracing::instrument;
-use utils::{config::AnyChainConfig, evm_client::EvmClientBuilder};
+use utils::{config::AnyChainConfig, evm_client::EvmClientBuilder, telemetry::TriggerMetrics};
 use wavs_types::{
     ByteArray, ChainName, ServiceID, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
     WorkflowID,
@@ -29,6 +29,7 @@ pub struct CoreTriggerManager {
     pub chain_configs: HashMap<ChainName, AnyChainConfig>,
     pub channel_bound: usize,
     lookup_maps: Arc<LookupMaps>,
+    metrics: TriggerMetrics,
 }
 
 #[allow(clippy::type_complexity)]
@@ -101,11 +102,12 @@ enum StreamTriggers {
 impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
-    pub fn new(config: &Config) -> Result<Self, TriggerError> {
+    pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
         Ok(Self {
             chain_configs: config.active_trigger_chain_configs(),
             channel_bound: 100, // TODO: get from config
             lookup_maps: Arc::new(LookupMaps::new()),
+            metrics,
         })
     }
 
@@ -726,7 +728,10 @@ mod tests {
     use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
 
     use layer_climb::prelude::*;
-    use utils::config::{ChainConfigs, CosmosChainConfig, EvmChainConfig};
+    use utils::{
+        config::{ChainConfigs, CosmosChainConfig, EvmChainConfig},
+        telemetry::TriggerMetrics,
+    };
 
     use super::CoreTriggerManager;
 
@@ -765,7 +770,11 @@ mod tests {
             ..Default::default()
         };
 
-        let manager = CoreTriggerManager::new(&config).unwrap();
+        let manager = CoreTriggerManager::new(
+            &config,
+            TriggerMetrics::init(&opentelemetry::global::meter("trigger-test-metrics")),
+        )
+        .unwrap();
 
         let service_id_1 = ServiceID::new("service-1").unwrap();
         let workflow_id_1 = WorkflowID::new("workflow-1").unwrap();
@@ -892,7 +901,11 @@ mod tests {
             ..Default::default()
         };
 
-        let manager = CoreTriggerManager::new(&config).unwrap();
+        let manager = CoreTriggerManager::new(
+            &config,
+            TriggerMetrics::init(&opentelemetry::global::meter("trigger-test-metrics")),
+        )
+        .unwrap();
 
         let service_id = ServiceID::new("service-1").unwrap();
         let workflow_id = WorkflowID::new("workflow-1").unwrap();
@@ -980,7 +993,11 @@ mod tests {
             ..Default::default()
         };
 
-        let manager = CoreTriggerManager::new(&config).unwrap();
+        let manager = CoreTriggerManager::new(
+            &config,
+            TriggerMetrics::init(&opentelemetry::global::meter("trigger-test-metrics")),
+        )
+        .unwrap();
 
         // Create service and workflow IDs
         let service_id = ServiceID::new("service-1").unwrap();
