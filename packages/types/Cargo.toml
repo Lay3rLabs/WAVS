@@ -36,3 +36,4 @@ alloy-signer = { workspace = true }
 alloy-contract = { workspace = true }
 async-trait = { workspace = true }
 utoipa = { workspace = true }
+semver = { workspace = true }

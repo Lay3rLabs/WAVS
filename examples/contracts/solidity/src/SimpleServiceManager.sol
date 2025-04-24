@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IWavsServiceManager} from "../../../contracts/solidity/interfaces/IWavsServiceManager.sol";
-import {IWavsServiceHandler} from "../../../contracts/solidity/interfaces/IWavsServiceHandler.sol";
+import {IWavsServiceManager} from "../interfaces/IWavsServiceManager.sol";
+import {IWavsServiceHandler} from "../interfaces/IWavsServiceHandler.sol";
 
 contract SimpleServiceManager is IWavsServiceManager {
     string private serviceURI;
