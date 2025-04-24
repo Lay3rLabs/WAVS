@@ -18,6 +18,8 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub data_dir: P,
     pub chain_configs: &'a ChainConfigs,
     pub log: HostComponentLogger,
+    pub max_wasm_fuel: Option<u64>,
+    pub max_execution_seconds: Option<u64>,
 }
 
 pub struct InstanceDeps {
@@ -38,6 +40,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             data_dir,
             chain_configs,
             log,
+            max_execution_seconds,
+            max_wasm_fuel,
         } = self;
 
         let permissions = &workflow.component.permissions;
@@ -84,15 +88,23 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             builder.envs(&env);
         }
 
-        let fuel_limit = workflow
+        let mut fuel_limit = workflow
             .component
             .fuel_limit
             .unwrap_or(Workflow::DEFAULT_FUEL_LIMIT);
 
-        let time_limit_seconds = workflow
+        if let Some(max_wasm_fuel) = max_wasm_fuel {
+            fuel_limit = fuel_limit.min(max_wasm_fuel);
+        }
+
+        let mut time_limit_seconds = workflow
             .component
             .time_limit_seconds
             .unwrap_or(Workflow::DEFAULT_TIME_LIMIT_SECONDS);
+
+        if let Some(max_execution_seconds) = max_execution_seconds {
+            time_limit_seconds = time_limit_seconds.min(max_execution_seconds);
+        }
 
         let ctx = builder.build();
 

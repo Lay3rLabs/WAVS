@@ -59,5 +59,6 @@ fn zeroed_cli_args(
         submission_mnemonic: None,
         cosmos_submission_mnemonic: None,
         max_wasm_fuel: None,
+        max_execution_seconds: None,
     }
 }
