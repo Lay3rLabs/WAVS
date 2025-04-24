@@ -46,8 +46,7 @@ pub fn setup_tracing(
     provider
 }
 
-use opentelemetry::metrics::{Counter, Gauge, Meter};
-use opentelemetry::KeyValue;
+use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};
 
 pub trait Metrics {
     fn init(meter: &Meter) -> Self;
@@ -55,17 +54,27 @@ pub trait Metrics {
 
 #[derive(Clone)]
 pub struct HttpMetrics {
-    pub registered_services: Gauge<i64>,
+    pub registered_services: UpDownCounter<i64>,
 }
 
 impl Metrics for HttpMetrics {
     fn init(meter: &Meter) -> Self {
         HttpMetrics {
             registered_services: meter
-                .i64_gauge("registered_services")
+                .i64_up_down_counter("registered_services")
                 .with_description("Number of services currently registered")
                 .build(),
         }
+    }
+}
+
+impl HttpMetrics {
+    pub fn increment_registered_services(&self) {
+        self.registered_services.add(1, &[]);
+    }
+
+    pub fn decrement_registered_services(&self) {
+        self.registered_services.add(-1, &[]);
     }
 }
 
@@ -100,7 +109,10 @@ impl Metrics for WavsMetrics {
     }
 }
 
-// pub fn update_messages_in_channel(&self, channel_id: &str, count: i64) {
-//     self.messages_in_channel
-//         .record(count, &[KeyValue::new("channel_id", channel_id.to_owned())]);
-// }
+impl WavsMetrics {
+    pub fn add_processed_messages(&self, count: u64) {
+        self.total_messages_processed.add(count, &[]);
+        // or with attributes
+        // self.total_messages_processed.add(count, &[KeyValue::new("source", "wav-decoder")]);
+    }
+}
