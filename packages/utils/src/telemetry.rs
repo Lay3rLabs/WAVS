@@ -68,10 +68,12 @@ pub struct HttpMetrics {
 }
 
 impl HttpMetrics {
+    pub const LABEL: &'static str = "http";
+
     pub fn init(meter: &Meter) -> Self {
         HttpMetrics {
             registered_services: meter
-                .i64_up_down_counter("registered_services")
+                .i64_up_down_counter(format!("{}_registered_services", Self::LABEL))
                 .with_description("Number of services currently registered")
                 .build(),
         }
