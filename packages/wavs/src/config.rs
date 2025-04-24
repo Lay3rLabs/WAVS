@@ -59,6 +59,12 @@ pub struct Config {
 
     /// Jaeger collector to send trace data
     pub jaeger: Option<String>,
+
+    /// Pinata JWT for uploading to IPFS
+    pub pinata_jwt: Option<String>,
+
+    /// Pinata Gateway for fetching IPFS files
+    pub pinata_gateway: String,
 }
 
 impl ConfigExt for Config {
@@ -94,6 +100,8 @@ impl Default for Config {
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3,
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
             jaeger: None,
+            pinata_jwt: None,
+            pinata_gateway: "gateway.pinata.cloud".to_string(),
         }
     }
 }

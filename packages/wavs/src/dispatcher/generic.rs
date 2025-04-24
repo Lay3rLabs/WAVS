@@ -1,6 +1,7 @@
 use alloy_provider::ProviderBuilder;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
+use cid::Cid;
 use layer_climb::prelude::Address;
 use redb::ReadableTable;
 use std::ops::Bound;
@@ -347,6 +348,9 @@ async fn query_service_from_address(
 
             let service_uri = contract.getServiceURI().call().await?;
 
+            // If an IPFS cid, then build a gateway query
+            if let Ok(cid) = Cid::try_from(service_uri.clone()) {}
+
             // Fetch the service JSON from the URI
             let response = reqwest::get(&service_uri).await?;
             let service_json = response.text().await?;
@@ -360,6 +364,91 @@ async fn query_service_from_address(
             unimplemented!()
         }
     }
+}
+
+pub async fn fetch_json(uri: &str) -> Result<Service> {
+    // Fetch the raw JSON content as a string
+    let json_content = if uri.starts_with("http://") || uri.starts_with("https://") {
+        // Regular HTTP/HTTPS URI
+        let response = reqwest::get(uri)
+            .await
+            .context(format!("Failed to fetch HTTP content from {}", uri))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "HTTP request failed with status code: {}",
+                response.status()
+            ));
+        }
+
+        response
+            .text()
+            .await
+            .context("Failed to read response text")?
+    } else if uri.starts_with("ipfs://") {
+        // Handle ipfs:// protocol format
+        let cid = uri.trim_start_matches("ipfs://");
+        fetch_ipfs_content(cid).await?
+    } else if let Ok(cid) = cid::Cid::try_from(uri) {
+        // It's likely an IPFS CID, fetch using IPFS gateway
+        fetch_ipfs_content(&cid.to_string()).await?
+    } else {
+        return Err(anyhow::anyhow!("Unsupported URI format: {}", uri));
+    };
+
+    // Parse the JSON into a Service
+    let service: Service = serde_json::from_str(&json_content)
+        .context(format!("Failed to deserialize Service JSON from {}", uri))?;
+
+    Ok(service)
+}
+
+// Helper function inside fetch_json to fetch from IPFS
+async fn fetch_ipfs_content(cid: &str) -> Result<String> {
+    // Determine which gateway to use based on environment
+    #[cfg(debug_assertions)]
+    let use_private = true;
+
+    #[cfg(not(debug_assertions))]
+    let use_private = false;
+
+    // Try to get Pinata JWT for private network
+    let pinata_jwt = if use_private {
+        todo!();
+    } else {
+        None
+    };
+
+    // Get Pinata gateway domain - either from env var or use default
+    let gateway_domain = todo!();
+    let client = reqwest::Client::new();
+
+    // For public files or when no JWT is available, use gateway directly
+    let url = format!("https://{}/ipfs/{}", gateway_domain, cid);
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .context(format!("Failed to fetch IPFS file from gateway: {}", cid))?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(anyhow::anyhow!(
+            "Failed to retrieve IPFS file with CID {}: {}",
+            cid,
+            error_text
+        ));
+    }
+
+    // Return the response as text
+    response
+        .text()
+        .await
+        .context("Failed to read response text")
 }
 
 // called at init and when a new service is added
