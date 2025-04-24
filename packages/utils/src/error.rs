@@ -32,7 +32,7 @@ pub enum EvmClientError {
 #[derive(Debug, Error)]
 pub enum ChainConfigError {
     #[error("Expected EVM chain")]
-    ExpectedEthChain,
+    ExpectedEvmChain,
 
     #[error("Expected Cosmos chain")]
     ExpectedCosmosChain,
