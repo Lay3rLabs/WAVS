@@ -52,7 +52,7 @@ pub trait Metrics {
     fn init(meter: &Meter) -> Self;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HttpMetrics {
     pub registered_services: UpDownCounter<i64>,
 }
@@ -78,7 +78,7 @@ impl HttpMetrics {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WavsMetrics {
     pub total_messages_processed: Counter<u64>,
     pub total_errors: Counter<u64>,
@@ -114,5 +114,9 @@ impl WavsMetrics {
         self.total_messages_processed.add(count, &[]);
         // or with attributes
         // self.total_messages_processed.add(count, &[KeyValue::new("source", "wav-decoder")]);
+    }
+
+    pub fn increment_processed_messages(&self) {
+        self.total_messages_processed.add(1, &[]);
     }
 }

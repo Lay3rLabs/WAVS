@@ -1,7 +1,6 @@
 mod cosmos;
 mod evm;
 
-use opentelemetry::global;
 use std::sync::Arc;
 
 use cosmos::CosmosInstance;
@@ -34,18 +33,15 @@ impl AppHandles {
             cosmos_chains.push(handle);
         }
 
-        let dispatcher = Arc::new(CoreDispatcher::new_core(&configs.wavs).unwrap());
+        let dispatcher = Arc::new(CoreDispatcher::new_core(&configs.wavs, wavs_metrics).unwrap());
 
         let wavs_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
             let ctx = ctx.clone();
             let config = configs.wavs.clone();
 
-            let meter = global::meter("wavs_test_metrics");
-            let metrics = Metrics::setup_metrics(&meter);
-
             move || {
-                wavs::run_server(ctx, config, dispatcher, metrics);
+                wavs::run_server(ctx, config, dispatcher, http_metrics);
             }
         });
 

@@ -6,7 +6,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::{setup_tracing, HttpMetrics, Metrics},
+    telemetry::{setup_tracing, HttpMetrics, Metrics, WavsMetrics},
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
 
@@ -36,13 +36,14 @@ fn main() {
         None
     };
 
-    let config_clone = config.clone();
-    let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone).unwrap());
-
     let meter = global::meter("wavs_metrics");
-    let metrics = HttpMetrics::init(&meter);
+    let http_metrics = HttpMetrics::init(&meter);
+    let wavs_metrics = WavsMetrics::init(&meter);
 
-    wavs::run_server(ctx, config, dispatcher, metrics);
+    let config_clone = config.clone();
+    let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone, wavs_metrics).unwrap());
+
+    wavs::run_server(ctx, config, dispatcher, http_metrics);
     if let Some(tracer) = tracer_provider {
         tracer
             .shutdown()

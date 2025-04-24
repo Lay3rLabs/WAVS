@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::setup_tracing,
+    telemetry::{setup_tracing, HttpMetrics, Metrics, WavsMetrics},
 };
 
 use crate::{args::TestArgs, config::TestConfig};
@@ -50,7 +50,11 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let configs: Configs = config.into();
 
-    let handles = AppHandles::start(&ctx, &configs);
+    let meter = opentelemetry::global::meter("wavs_test_metrics");
+    let http_metrics = HttpMetrics::init(&meter);
+    let wavs_metrics = WavsMetrics::init(&meter);
+
+    let handles = AppHandles::start(&ctx, &configs, wavs_metrics, http_metrics);
 
     let clients = clients::Clients::new(ctx.clone(), &configs);
 
