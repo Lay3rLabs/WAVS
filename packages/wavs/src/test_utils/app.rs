@@ -61,5 +61,6 @@ fn zeroed_cli_args(
         max_wasm_fuel: None,
         max_execution_seconds: None,
         pinata_jwt: None,
+        pinata_gateway: None,
     }
 }

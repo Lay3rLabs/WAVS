@@ -85,6 +85,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinata_jwt: Option<String>,
+
+    /// The Pinata gateway for fetching IPFS files
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinata_gateway: Option<String>,
 }
 
 impl CliEnvExt for CliArgs {
