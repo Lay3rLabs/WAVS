@@ -42,6 +42,7 @@ impl CoreDispatcher {
             submission,
             config.chains.clone(),
             config.data.join("db"),
+            metrics.dispatcher,
         )
     }
 }

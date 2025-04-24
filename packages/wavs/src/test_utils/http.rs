@@ -3,7 +3,10 @@ use std::sync::Arc;
 use axum::body::Body;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use utils::{config::ChainConfigs, telemetry::HttpMetrics};
+use utils::{
+    config::ChainConfigs,
+    telemetry::{DispatcherMetrics, HttpMetrics},
+};
 
 use crate::{
     apis::{submission::Submission, trigger::TriggerManager},
@@ -30,6 +33,8 @@ impl TestHttpApp {
         let engine = SingleEngineRunner::new(IdentityEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
+        let metrics =
+            DispatcherMetrics::init(&opentelemetry::global::meter("trigger-test-metrics"));
 
         let dispatcher = Arc::new(
             Dispatcher::new(
@@ -38,6 +43,7 @@ impl TestHttpApp {
                 submission,
                 ChainConfigs::default(),
                 storage_path,
+                metrics,
             )
             .unwrap(),
         );

@@ -11,6 +11,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
+use utils::telemetry::DispatcherMetrics;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
@@ -35,6 +36,7 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub submission: S,
     pub storage: Arc<RedbStorage>,
     pub chain_configs: ChainConfigs,
+    pub metrics: DispatcherMetrics,
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
@@ -44,6 +46,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         submission: S,
         chain_configs: ChainConfigs,
         db_storage_path: impl AsRef<Path>,
+        metrics: DispatcherMetrics,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
 
@@ -53,6 +56,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
             submission,
             storage,
             chain_configs,
+            metrics,
         })
     }
 }
