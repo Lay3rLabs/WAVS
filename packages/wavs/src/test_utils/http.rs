@@ -3,7 +3,10 @@ use std::sync::Arc;
 use axum::body::Body;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use utils::config::ChainConfigs;
+use utils::{
+    config::ChainConfigs,
+    telemetry::{HttpMetrics, Metrics},
+};
 
 use crate::{
     apis::{submission::Submission, trigger::TriggerManager},
@@ -12,7 +15,6 @@ use crate::{
         identity::IdentityEngine,
         runner::{EngineRunner, SingleEngineRunner},
     },
-    metrics::Metrics,
     submission::mock::MockSubmission,
     triggers::mock::MockTriggerManagerVec,
 };
@@ -55,7 +57,7 @@ impl TestHttpApp {
         let inner = TestApp::new().await;
 
         let meter = opentelemetry::global::meter("wavs_test_metrics");
-        let metrics = Metrics::setup_metrics(&meter);
+        let metrics = HttpMetrics::init(&meter);
 
         let http_router = crate::http::server::make_router(
             inner.config.as_ref().clone(),

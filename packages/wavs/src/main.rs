@@ -1,17 +1,12 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use opentelemetry::{global, trace::TracerProvider as _};
-use opentelemetry_otlp::{SpanExporter, WithExportConfig};
-use opentelemetry_sdk::{
-    resource::Resource,
-    trace::{self, Sampler, SdkTracerProvider},
-};
+use opentelemetry::global;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::setup_tracing,
+    telemetry::{setup_tracing, HttpMetrics, Metrics},
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
 
@@ -45,7 +40,7 @@ fn main() {
     let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone).unwrap());
 
     let meter = global::meter("wavs_metrics");
-    let metrics = Metrics::setup_metrics(&meter);
+    let metrics = HttpMetrics::init(&meter);
 
     wavs::run_server(ctx, config, dispatcher, metrics);
     if let Some(tracer) = tracer_provider {

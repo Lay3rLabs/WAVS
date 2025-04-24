@@ -9262,6 +9262,7 @@ dependencies = [
  "http-body-util",
  "layer-climb",
  "lru 0.14.0",
+ "opentelemetry 0.28.0",
  "rand 0.9.1",
  "rayon",
  "redb",

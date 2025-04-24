@@ -49,7 +49,7 @@ pub fn setup_tracing(
 use opentelemetry::metrics::{Counter, Gauge, Meter};
 use opentelemetry::KeyValue;
 
-trait Metrics {
+pub trait Metrics {
     fn init(meter: &Meter) -> Self;
 }
 

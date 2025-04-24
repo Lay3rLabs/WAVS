@@ -2,7 +2,6 @@ use crate::{
     apis::dispatcher::DispatchManager,
     config::Config,
     dispatcher::{CoreDispatcher, DispatcherError},
-    metrics::Metrics,
     AppContext,
 };
 use axum::{
@@ -12,6 +11,7 @@ use axum::{
 use axum_tracing_opentelemetry::middleware::OtelAxumLayer;
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use utils::telemetry::HttpMetrics;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
@@ -33,7 +33,7 @@ pub fn start(
     ctx: AppContext,
     config: Config,
     dispatcher: Arc<CoreDispatcher>,
-    metrics: Metrics,
+    metrics: HttpMetrics,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
@@ -66,7 +66,7 @@ pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
     config: Config,
     dispatcher: Arc<D>,
     is_mock_chain_client: bool,
-    metrics: Metrics,
+    metrics: HttpMetrics,
 ) -> anyhow::Result<axum::Router> {
     let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics).await?;
 
