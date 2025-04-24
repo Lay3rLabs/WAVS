@@ -36,7 +36,7 @@ impl Clients {
             .await
             .unwrap();
 
-            // fund all the eth clients
+            // fund all the EVM clients
             configs.mnemonics.fund(&configs.chains).await;
 
             let cli_ctx = wavs_cli::context::CliContext::new_deployment(

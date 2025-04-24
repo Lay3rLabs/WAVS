@@ -101,7 +101,7 @@ impl CoreSubmission {
             .provider
             .get_block_number()
             .await
-            .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
+            .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
         let _tx_receipt = client
             .send_envelope_signatures(
@@ -112,7 +112,7 @@ impl CoreSubmission {
                 max_gas,
             )
             .await
-            .map_err(|e| SubmissionError::FailedToSubmitEthDirect(e.into()))?;
+            .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
         Ok(())
     }

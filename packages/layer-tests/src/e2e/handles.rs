@@ -1,10 +1,10 @@
 mod cosmos;
-mod eth;
+mod evm;
 
 use std::sync::Arc;
 
 use cosmos::CosmosInstance;
-use eth::EvmInstance;
+use evm::EvmInstance;
 use utils::context::AppContext;
 use wavs::dispatcher::CoreDispatcher;
 

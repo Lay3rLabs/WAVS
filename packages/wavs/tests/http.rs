@@ -7,7 +7,7 @@ use wavs::{
     config::Config,
     submission::mock::mock_eigen_submit,
     test_utils::{
-        address::rand_address_eth,
+        address::rand_address_evm,
         http::{map_response, TestHttpApp},
     },
     triggers::mock::mock_evm_event_trigger,
@@ -84,8 +84,8 @@ async fn http_save_service() {
         ComponentSource::Digest(Digest::new(&[1, 2, 3])),
         mock_eigen_submit(),
         wavs_types::ServiceManager::Evm {
-            chain_name: "eth".try_into().unwrap(),
-            address: rand_address_eth(),
+            chain_name: "evm".try_into().unwrap(),
+            address: rand_address_evm(),
         },
     );
 

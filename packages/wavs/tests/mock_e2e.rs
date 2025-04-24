@@ -7,7 +7,7 @@ use utils::context::AppContext;
 use wavs::{
     engine::runner::EngineRunner,
     test_utils::{
-        address::rand_address_eth,
+        address::rand_address_evm,
         mock::{BigSquare, ComponentNone, MockE2ETestRunner, SquareIn, SquareOut},
     },
 };
@@ -18,7 +18,7 @@ fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
     let service_id = ServiceID::new("service1").unwrap();
-    let task_queue_address = rand_address_eth();
+    let task_queue_address = rand_address_evm();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
@@ -52,7 +52,7 @@ fn mock_e2e_trigger_flow() {
                     &WorkflowID::default(),
                     &task_queue_address.into(),
                     &SquareIn { x: 3 },
-                    "eth",
+                    "evm",
                 )
                 .await;
             runner
@@ -63,7 +63,7 @@ fn mock_e2e_trigger_flow() {
                     &WorkflowID::default(),
                     &task_queue_address.into(),
                     &SquareIn { x: 21 },
-                    "eth",
+                    "evm",
                 )
                 .await;
         }
@@ -170,7 +170,7 @@ fn mock_e2e_component_none() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
     let service_id = ServiceID::new("service1").unwrap();
-    let task_queue_address = rand_address_eth();
+    let task_queue_address = rand_address_evm();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
@@ -204,7 +204,7 @@ fn mock_e2e_component_none() {
                     &WorkflowID::default(),
                     &task_queue_address.into(),
                     &SquareIn { x: 3 },
-                    "eth",
+                    "evm",
                 )
                 .await;
         }

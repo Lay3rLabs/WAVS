@@ -15,26 +15,26 @@ use super::{
     },
 };
 
-pub struct SimpleEthTriggerClient {
-    pub eth: EvmSigningClient,
+pub struct SimpleEvmTriggerClient {
+    pub evm_client: EvmSigningClient,
     pub contract_address: Address,
     pub contract: SimpleTriggerT,
 }
 
-impl SimpleEthTriggerClient {
-    pub fn new(eth: EvmSigningClient, contract_address: Address) -> Self {
-        let contract = SimpleTrigger::new(contract_address, eth.provider.clone());
+impl SimpleEvmTriggerClient {
+    pub fn new(evm_client: EvmSigningClient, contract_address: Address) -> Self {
+        let contract = SimpleTrigger::new(contract_address, evm_client.provider.clone());
 
         Self {
-            eth,
+            evm_client,
             contract_address,
             contract,
         }
     }
 
-    pub async fn new_deploy(eth: EvmSigningClient) -> Result<Self> {
-        let contract_address = Self::deploy(eth.provider.clone()).await?;
-        Ok(Self::new(eth, contract_address))
+    pub async fn new_deploy(evm_client: EvmSigningClient) -> Result<Self> {
+        let contract_address = Self::deploy(evm_client.provider.clone()).await?;
+        Ok(Self::new(evm_client, contract_address))
     }
 
     pub async fn deploy(provider: DynProvider) -> Result<Address> {

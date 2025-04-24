@@ -58,14 +58,14 @@ impl Default for TestConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TestMatrixConfig {
-    pub eth: TestMatrixEthConfig,
+    pub evm: TestMatrixEvmConfig,
     pub cosmos: TestMatrixCosmosConfig,
     pub crosschain: TestMatrixCrossChainConfig,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct TestMatrixEthConfig {
+pub struct TestMatrixEvmConfig {
     pub chain_trigger_lookup: bool,
     pub cosmos_query: bool,
     pub echo_data: bool,
@@ -136,47 +136,47 @@ impl TestMatrixConfig {
             _ => {}
         }
 
-        if self.eth.chain_trigger_lookup {
+        if self.evm.chain_trigger_lookup {
             matrix.evm.insert(EvmService::ChainTriggerLookup);
         }
 
-        if self.eth.cosmos_query {
+        if self.evm.cosmos_query {
             matrix.evm.insert(EvmService::CosmosQuery);
         }
 
-        if self.eth.echo_data {
+        if self.evm.echo_data {
             matrix.evm.insert(EvmService::EchoData);
         }
 
-        if self.eth.echo_data_secondary_chain {
+        if self.evm.echo_data_secondary_chain {
             matrix.evm.insert(EvmService::EchoDataSecondaryChain);
         }
 
-        if self.eth.echo_data_aggregator {
+        if self.evm.echo_data_aggregator {
             matrix.evm.insert(EvmService::EchoDataAggregator);
         }
 
-        if self.eth.permissions {
+        if self.evm.permissions {
             matrix.evm.insert(EvmService::Permissions);
         }
 
-        if self.eth.square {
+        if self.evm.square {
             matrix.evm.insert(EvmService::Square);
         }
 
-        if self.eth.multi_workflow {
+        if self.evm.multi_workflow {
             matrix.evm.insert(EvmService::MultiWorkflow);
         }
 
-        if self.eth.multi_trigger {
+        if self.evm.multi_trigger {
             matrix.evm.insert(EvmService::MultiTrigger);
         }
 
-        if self.eth.block_interval {
+        if self.evm.block_interval {
             matrix.evm.insert(EvmService::BlockInterval);
         }
 
-        if self.eth.cron_interval {
+        if self.evm.cron_interval {
             matrix.evm.insert(EvmService::CronInterval);
         }
 
@@ -211,7 +211,7 @@ impl TestMatrixConfig {
         if self.crosschain.cosmos_to_evm_echo_data {
             matrix
                 .cross_chain
-                .insert(CrossChainService::CosmosToEthEchoData);
+                .insert(CrossChainService::CosmosToEvmEchoData);
         }
 
         matrix
@@ -240,7 +240,7 @@ impl From<&str> for AnyService {
             "cosmos-block-interval" => AnyService::Cosmos(CosmosService::BlockInterval),
             "cosmos-cron-interval" => AnyService::Cosmos(CosmosService::CronInterval),
             "crosschain-cosmos-to-evm-echo-data" => {
-                AnyService::CrossChain(CrossChainService::CosmosToEthEchoData)
+                AnyService::CrossChain(CrossChainService::CosmosToEvmEchoData)
             }
             _ => panic!("Unknown service: {}", src),
         }

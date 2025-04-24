@@ -8,7 +8,7 @@ use wavs_types::{EvmContractSubmission, ServiceID, Submit, Trigger, WorkflowID};
 use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
-        example_submit::ISimpleSubmit::SignedData, SimpleEthSubmitClient, SimpleEthTriggerClient,
+        example_submit::ISimpleSubmit::SignedData, SimpleEvmSubmitClient, SimpleEvmTriggerClient,
         TriggerId,
     },
 };
@@ -55,7 +55,7 @@ pub async fn add_task(
             event_hash: _,
         } => {
             let evm_client = clients.get_evm_client(&chain_name);
-            let client = SimpleEthTriggerClient::new(evm_client, address);
+            let client = SimpleEvmTriggerClient::new(evm_client, address);
 
             client
                 .add_trigger(input.expect("on-chain triggers require input data"))
@@ -142,12 +142,24 @@ pub async fn wait_for_task_to_land(
     trigger_id: TriggerId,
     submit_start_block: u64,
 ) -> SignedData {
-    let submit_client = SimpleEthSubmitClient::new(evm_submit_client, address);
+    let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
 
     tokio::time::timeout(Duration::from_secs(5), async move {
         loop {
-            if submit_client.eth.provider.get_block_number().await.unwrap() == submit_start_block {
-                submit_client.eth.provider.evm_mine(None).await.unwrap();
+            if submit_client
+                .evm_client
+                .provider
+                .get_block_number()
+                .await
+                .unwrap()
+                == submit_start_block
+            {
+                submit_client
+                    .evm_client
+                    .provider
+                    .evm_mine(None)
+                    .await
+                    .unwrap();
             }
             match submit_client.trigger_validated(trigger_id).await {
                 true => {

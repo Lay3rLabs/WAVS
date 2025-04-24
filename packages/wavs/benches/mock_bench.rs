@@ -7,7 +7,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use utils::context::AppContext;
 #[cfg(feature = "mock")]
 use wavs::test_utils::{
-    address::rand_address_eth,
+    address::rand_address_evm,
     mock::{BigSquare, MockE2ETestRunner, SquareIn},
 };
 #[cfg(feature = "mock")]
@@ -19,7 +19,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let service_id = ServiceID::new("default").unwrap();
     let workflow_id = WorkflowID::default();
-    let task_queue_address = rand_address_eth();
+    let task_queue_address = rand_address_evm();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
@@ -59,7 +59,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                                 &workflow_id,
                                 &task_queue_address.into(),
                                 &SquareIn { x: i as u64 },
-                                "eth",
+                                "evm",
                             )
                             .await;
                     }

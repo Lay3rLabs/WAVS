@@ -39,7 +39,7 @@ pub enum CosmosService {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
 pub enum CrossChainService {
-    CosmosToEthEchoData,
+    CosmosToEvmEchoData,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -82,7 +82,7 @@ impl From<CrossChainService> for AnyService {
 
 impl TestMatrix {
     pub fn evm_regular_chain_enabled(&self) -> bool {
-        // since we currently only submit to eth, it's always enabled
+        // since we currently only submit to EVM, it's always enabled
         // TODO - if we have `Submit::None` then this should be false if no other test is enabled
         true
     }
@@ -100,7 +100,7 @@ impl TestMatrix {
             || !self.cosmos.is_empty()
             || self
                 .cross_chain
-                .contains(&CrossChainService::CosmosToEthEchoData)
+                .contains(&CrossChainService::CosmosToEvmEchoData)
     }
 }
 
@@ -139,7 +139,7 @@ impl From<CosmosService> for Vec<ComponentName> {
 impl From<CrossChainService> for Vec<ComponentName> {
     fn from(service: CrossChainService) -> Self {
         match service {
-            CrossChainService::CosmosToEthEchoData => vec![ComponentName::EchoData],
+            CrossChainService::CosmosToEvmEchoData => vec![ComponentName::EchoData],
         }
     }
 }

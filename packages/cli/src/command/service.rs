@@ -2404,13 +2404,13 @@ mod tests {
             let expected_hash_bytes = hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
             assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
         } else {
-            panic!("Expected EthContractEvent trigger");
+            panic!("Expected EvmContractEvent trigger");
         }
 
         // Verify the service was updated with EVM trigger
-        let service_after_eth: ServiceJson =
+        let service_after: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        let evm_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
+        let evm_workflow = service_after.workflows.get(&workflow_id).unwrap();
 
         // Handle TriggerJson wrapper
         if let TriggerJson::Trigger(trigger) = &evm_workflow.trigger {
@@ -2426,7 +2426,7 @@ mod tests {
                     hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
                 assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
             } else {
-                panic!("Expected EthContractEvent trigger in service");
+                panic!("Expected EvmContractEvent trigger in service");
             }
         } else {
             panic!("Expected TriggerJson::Trigger");
@@ -2536,13 +2536,13 @@ mod tests {
             assert_eq!(chain_name, &evm_chain);
             assert_eq!(result_max_gas, &max_gas);
         } else {
-            panic!("Expected EthServiceHandler submit");
+            panic!("Expected EvmServiceHandler submit");
         }
 
         // Verify the service was updated with EVM submit
-        let service_after_eth: ServiceJson =
+        let service_after: ServiceJson =
             serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        let evm_workflow = service_after_eth.workflows.get(&workflow_id).unwrap();
+        let evm_workflow = service_after.workflows.get(&workflow_id).unwrap();
 
         // Handle SubmitJson wrapper
         if let SubmitJson::Submit(submit) = &evm_workflow.submit {
@@ -2556,7 +2556,7 @@ mod tests {
                 assert_eq!(chain_name, &evm_chain);
                 assert_eq!(result_max_gas, &max_gas);
             } else {
-                panic!("Expected EthServiceHandler submit in service");
+                panic!("Expected EvmServiceHandler submit in service");
             }
         } else {
             panic!("Expected SubmitJson::Submit");
@@ -2580,7 +2580,7 @@ mod tests {
         {
             assert_eq!(result_max_gas, &None);
         } else {
-            panic!("Expected EthServiceHandler submit");
+            panic!("Expected EvmServiceHandler submit");
         }
 
         // Test error handling for non-existent workflow

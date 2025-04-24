@@ -4,7 +4,7 @@ use layer_climb::prelude::*;
 use rand::prelude::*;
 use wavs_types::ByteArray;
 
-pub fn rand_address_eth() -> alloy_primitives::Address {
+pub fn rand_address_evm() -> alloy_primitives::Address {
     let mut rng = rand::rng();
 
     let entropy: [u8; 32] = rng.random();
@@ -18,12 +18,12 @@ pub fn rand_address_eth() -> alloy_primitives::Address {
     signer.address()
 }
 
-pub fn rand_event_eth() -> ByteArray<32> {
+pub fn rand_event_evm() -> ByteArray<32> {
     ByteArray::new(rand::rng().random())
 }
 
 pub fn rand_event_cosmos() -> String {
-    const_hex::encode(rand_event_eth().as_slice())
+    const_hex::encode(rand_event_evm().as_slice())
 }
 
 pub fn rand_address_layer() -> Address {

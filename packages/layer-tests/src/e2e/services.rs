@@ -17,7 +17,7 @@ use super::{
     config::Configs,
     matrix::{AnyService, CosmosService, EvmService},
 };
-use crate::example_evm_client::{example_submit::SimpleSubmit, SimpleEthTriggerClient};
+use crate::example_evm_client::{example_submit::SimpleSubmit, SimpleEvmTriggerClient};
 use alloy_primitives::Address;
 use alloy_provider::ext::AnvilApi;
 use alloy_sol_types::SolEvent;
@@ -48,7 +48,7 @@ impl Services {
             if chain.aggregator_endpoint.is_some() {
                 chain_names.evm_aggregator.push(chain_name.clone());
             } else {
-                chain_names.eth.push(chain_name.clone());
+                chain_names.evm.push(chain_name.clone());
             }
         }
 
@@ -243,8 +243,8 @@ async fn deploy_service_simple(
         AnyService::EVM(EvmService::EchoDataAggregator) => {
             Some(chain_names.evm_aggregator[0].clone())
         }
-        AnyService::EVM(EvmService::EchoDataSecondaryChain) => Some(chain_names.eth[1].clone()),
-        AnyService::EVM(_) => Some(chain_names.eth[0].clone()),
+        AnyService::EVM(EvmService::EchoDataSecondaryChain) => Some(chain_names.evm[1].clone()),
+        AnyService::EVM(_) => Some(chain_names.evm[0].clone()),
         AnyService::Cosmos(_) => Some(chain_names.cosmos[0].clone()),
         AnyService::CrossChain(_) => Some(chain_names.cosmos[0].clone()),
     };
@@ -328,13 +328,13 @@ async fn deploy_service_simple(
     // Determine the submit chain
     let submit_chain = match service_kind {
         AnyService::EVM(_) => trigger_chain.clone(),
-        AnyService::Cosmos(_) | AnyService::CrossChain(_) => Some(chain_names.eth[0].clone()),
+        AnyService::Cosmos(_) | AnyService::CrossChain(_) => Some(chain_names.evm[0].clone()),
     };
 
     // Get service manager address from the submit chain
     let service_manager_chain = match &submit_chain {
         Some(chain) => chain.clone(),
-        None => chain_names.eth[0].clone(),
+        None => chain_names.evm[0].clone(),
     };
     let service_manager_address = deploy_service_manager(clients, &service_manager_chain).await;
 
@@ -460,7 +460,7 @@ async fn deploy_service_raw(
         file_system: true,
     };
 
-    let chain_name = chain_names.eth[0].clone();
+    let chain_name = chain_names.evm[0].clone();
     let service_manager_address = deploy_service_manager(clients, &chain_name).await;
 
     let submit1 = deploy_submit(clients, &chain_name, service_manager_address).await;
@@ -513,11 +513,11 @@ async fn deploy_service_raw(
 }
 
 async fn deploy_trigger(clients: &Clients, chain_names: &ChainNames) -> Trigger {
-    let chain_name = chain_names.eth[0].clone();
+    let chain_name = chain_names.evm[0].clone();
     let client = clients.get_evm_client(&chain_name);
     let event_hash = *crate::example_evm_client::example_trigger::NewTrigger::SIGNATURE_HASH;
 
-    let address = SimpleEthTriggerClient::deploy(client.provider.clone())
+    let address = SimpleEvmTriggerClient::deploy(client.provider.clone())
         .await
         .unwrap();
 
@@ -558,7 +558,7 @@ async fn deploy_service_manager(clients: &Clients, chain_name: &ChainName) -> Ad
 
 #[derive(Debug, Default, Clone)]
 struct ChainNames {
-    eth: Vec<ChainName>,
+    evm: Vec<ChainName>,
     evm_aggregator: Vec<ChainName>,
     cosmos: Vec<ChainName>,
 }

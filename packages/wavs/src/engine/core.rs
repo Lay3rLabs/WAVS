@@ -238,7 +238,7 @@ mod tests {
         ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, WorkflowID,
     };
 
-    use crate::{engine::mock::mock_chain_configs, test_utils::address::rand_event_eth};
+    use crate::{engine::mock::mock_chain_configs, test_utils::address::rand_event_evm};
 
     use super::*;
 
@@ -290,9 +290,9 @@ mod tests {
         let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
         let workflow = Workflow {
             trigger: Trigger::evm_contract_event(
-                crate::test_utils::address::rand_address_eth(),
-                ChainName::new("eth").unwrap(),
-                rand_event_eth(),
+                crate::test_utils::address::rand_address_evm(),
+                ChainName::new("evm").unwrap(),
+                rand_event_evm(),
             ),
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,

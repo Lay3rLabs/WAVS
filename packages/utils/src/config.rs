@@ -310,7 +310,7 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
     fn try_from(config: AnyChainConfig) -> std::result::Result<Self, Self::Error> {
         match config {
             AnyChainConfig::Evm(config) => Ok(config),
-            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEthChain),
+            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
         }
     }
 }
@@ -327,7 +327,9 @@ impl ChainConfigs {
             (Some(_), Some(_)) => {
                 Err(ChainConfigError::DuplicateChainName(chain_name.clone()).into())
             }
-            (Some(eth), None) => Ok(Some(AnyChainConfig::Evm(eth.clone()))),
+            (Some(evm_chain_config), None) => {
+                Ok(Some(AnyChainConfig::Evm(evm_chain_config.clone())))
+            }
             (None, Some(cosmos)) => Ok(Some(AnyChainConfig::Cosmos(cosmos.clone()))),
             (None, None) => Ok(None),
         }
@@ -676,12 +678,12 @@ mod test {
         assert_eq!(chain.chain_id, "cosmos");
 
         let chain: EvmChainConfig = chain_configs
-            .get_chain(&"eth".try_into().unwrap())
+            .get_chain(&"evm".try_into().unwrap())
             .unwrap()
             .unwrap()
             .try_into()
             .unwrap();
-        assert_eq!(chain.chain_id, "eth");
+        assert_eq!(chain.chain_id, "evm");
     }
 
     #[test]
@@ -689,10 +691,10 @@ mod test {
         let mut chain_configs = mock_chain_configs();
 
         chain_configs.cosmos.insert(
-            "eth".try_into().unwrap(),
+            "evm".try_into().unwrap(),
             CosmosChainConfig {
-                chain_id: "eth".to_string(),
-                bech32_prefix: "eth".to_string(),
+                chain_id: "evm".to_string(),
+                bech32_prefix: "evm".to_string(),
                 rpc_endpoint: Some("http://127.0.0.1:1317".to_string()),
                 grpc_endpoint: Some("http://127.0.0.1:9090".to_string()),
                 gas_price: 0.01,
@@ -701,7 +703,7 @@ mod test {
             },
         );
 
-        assert!(chain_configs.get_chain(&"eth".try_into().unwrap()).is_err());
+        assert!(chain_configs.get_chain(&"evm".try_into().unwrap()).is_err());
     }
 
     #[tokio::test]
@@ -760,7 +762,7 @@ mod test {
         // Create test config file with global and service-specific overrides
         let test_config = r#"
     # Global chain config
-    [chains.eth.global_chain]
+    [chains.evm.global_chain]
     chain_id = "1000"
     ws_endpoint = "ws://global.example.com"
     http_endpoint = "http://global.example.com"
@@ -979,9 +981,9 @@ mod test {
             .collect(),
             evm: vec![
                 (
-                    "eth".try_into().unwrap(),
+                    "evm".try_into().unwrap(),
                     EvmChainConfig {
-                        chain_id: "eth".to_string(),
+                        chain_id: "evm".to_string(),
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),

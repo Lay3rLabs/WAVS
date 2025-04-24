@@ -36,8 +36,8 @@ pub struct ChainMessage {
 
 #[derive(Error, Debug)]
 pub enum SubmissionError {
-    #[error("eth client: {0}")]
-    EthClient(#[from] EvmClientError),
+    #[error("EVM client: {0}")]
+    EvmClient(#[from] EvmClientError),
     #[error("climb: {0}")]
     Climb(anyhow::Error),
     #[error("missing mnemonic")]
@@ -66,14 +66,14 @@ pub enum SubmissionError {
     AggregatorUrl(url::ParseError),
     #[error("cosmos parse: {0}")]
     CosmosParse(anyhow::Error),
-    #[error("expected eth address, got: {0}")]
+    #[error("expected EVM address, got: {0}")]
     ExpectedEvmAddress(String),
-    #[error("expected eth message")]
-    ExpectedEthMessage,
+    #[error("expected EVM message")]
+    ExpectedEvmMessage,
     #[error("failed to sign envelope: {0:?}")]
     FailedToSignEnvelope(alloy_signer::Error),
-    #[error("failed to submit to eth directly: {0}")]
-    FailedToSubmitEthDirect(anyhow::Error),
+    #[error("failed to submit to EVM directly: {0}")]
+    FailedToSubmitEvmDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
     FailedToSubmitCosmos(anyhow::Error),
     #[error("missing EVM signer for service {0}")]

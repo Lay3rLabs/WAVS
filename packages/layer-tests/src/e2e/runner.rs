@@ -226,7 +226,7 @@ fn get_input_for_service(
             CosmosService::CronInterval | CosmosService::BlockInterval => Vec::new(),
         },
         AnyService::CrossChain(name) => match name {
-            CrossChainService::CosmosToEthEchoData => b"hello eth world from cosmos".to_vec(),
+            CrossChainService::CosmosToEvmEchoData => b"hello EVM world from cosmos".to_vec(),
         },
     };
 
@@ -303,7 +303,7 @@ async fn verify_signed_data(
             CosmosService::CronInterval => Some(b"cron-interval data".to_vec()),
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
-            CrossChainService::CosmosToEthEchoData => Some(input_req()),
+            CrossChainService::CosmosToEvmEchoData => Some(input_req()),
         },
     };
 

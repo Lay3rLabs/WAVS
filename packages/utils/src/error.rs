@@ -37,6 +37,6 @@ pub enum ChainConfigError {
     #[error("Expected Cosmos chain")]
     ExpectedCosmosChain,
 
-    #[error("Duplidate chain name for {0}")]
+    #[error("Duplicate chain name for {0}")]
     DuplicateChainName(ChainName),
 }

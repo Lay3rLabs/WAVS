@@ -685,7 +685,7 @@ fn remove_trigger_data(
         } => {
             triggers_by_evm_contract_address
                 .remove(&(chain_name.clone(), address, event_hash))
-                .ok_or(TriggerError::NoSuchEthContractEvent(
+                .ok_or(TriggerError::NoSuchEvmContractEvent(
                     chain_name, address, event_hash,
                 ))?;
         }
@@ -721,7 +721,7 @@ mod tests {
     use crate::{
         apis::trigger::TriggerManager,
         config::Config,
-        test_utils::address::{rand_address_eth, rand_event_eth},
+        test_utils::address::{rand_address_evm, rand_event_evm},
     };
     use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
 
@@ -773,41 +773,41 @@ mod tests {
         let service_id_2 = ServiceID::new("service-2").unwrap();
         let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
 
-        let task_queue_addr_1_1 = rand_address_eth();
-        let task_queue_addr_1_2 = rand_address_eth();
-        let task_queue_addr_2_1 = rand_address_eth();
-        let task_queue_addr_2_2 = rand_address_eth();
+        let task_queue_addr_1_1 = rand_address_evm();
+        let task_queue_addr_1_2 = rand_address_evm();
+        let task_queue_addr_2_1 = rand_address_evm();
+        let task_queue_addr_2_2 = rand_address_evm();
 
         let trigger_1_1 = TriggerConfig::evm_contract_event(
             &service_id_1,
             &workflow_id_1,
             task_queue_addr_1_1,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
         let trigger_1_2 = TriggerConfig::evm_contract_event(
             &service_id_1,
             &workflow_id_2,
             task_queue_addr_1_2,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
         let trigger_2_1 = TriggerConfig::evm_contract_event(
             &service_id_2,
             &workflow_id_1,
             task_queue_addr_2_1,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
         let trigger_2_2 = TriggerConfig::evm_contract_event(
             &service_id_2,
             &workflow_id_2,
             task_queue_addr_2_2,
-            ChainName::new("eth").unwrap(),
-            rand_event_eth(),
+            ChainName::new("evm").unwrap(),
+            rand_event_evm(),
         )
         .unwrap();
 

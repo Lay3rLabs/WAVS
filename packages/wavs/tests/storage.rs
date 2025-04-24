@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use utils::storage::db::{RedbStorage, Table, JSON};
-use wavs::{test_utils::address::rand_address_eth, triggers::mock::mock_evm_event_trigger};
+use wavs::{test_utils::address::rand_address_evm, triggers::mock::mock_evm_event_trigger};
 use wavs_types::{
     Component, ComponentSource, Digest, Service, ServiceID, ServiceManager, ServiceStatus, Submit,
     Workflow, WorkflowID,
@@ -92,8 +92,8 @@ fn db_service_store() {
         workflows,
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: "eth".parse().unwrap(),
-            address: rand_address_eth(),
+            chain_name: "evm".parse().unwrap(),
+            address: rand_address_evm(),
         },
     };
 

@@ -9,11 +9,11 @@ use tracing::instrument;
 use wavs_types::{EventId, EventOrder, ServiceID, Submit};
 
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
-use crate::test_utils::address::rand_address_eth;
+use crate::test_utils::address::rand_address_evm;
 use crate::AppContext;
 
 pub fn mock_eigen_submit() -> Submit {
-    Submit::evm_contract("eth".try_into().unwrap(), rand_address_eth(), None)
+    Submit::evm_contract("evm".try_into().unwrap(), rand_address_evm(), None)
 }
 
 #[derive(Clone)]
@@ -120,7 +120,7 @@ mod test {
 
     use wavs_types::{ChainName, Envelope, PacketRoute};
 
-    use crate::test_utils::address::rand_address_eth;
+    use crate::test_utils::address::rand_address_evm;
 
     use super::*;
 
@@ -135,7 +135,7 @@ mod test {
                 eventId: mock_event_id().into(),
                 ordering: mock_event_order().into(),
             },
-            submit: Submit::evm_contract(ChainName::new("eth").unwrap(), rand_address_eth(), None),
+            submit: Submit::evm_contract(ChainName::new("evm").unwrap(), rand_address_evm(), None),
         }
     }
 
