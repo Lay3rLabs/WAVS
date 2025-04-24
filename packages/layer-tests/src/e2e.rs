@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::{setup_tracing, Metrics},
+    telemetry::{setup_metrics, setup_tracing, Metrics},
 };
 
 use crate::{args::TestArgs, config::TestConfig};
@@ -48,10 +48,16 @@ pub fn run(args: TestArgs, ctx: AppContext) {
         None
     };
 
-    let configs: Configs = config.into();
+    let meter_provider = if let Some(collector) = config.prometheus.as_ref() {
+        Some(setup_metrics(collector))
+    } else {
+        None
+    };
 
     let meter = opentelemetry::global::meter("wavs_test_metrics");
     let metrics = Metrics::init(&meter);
+
+    let configs: Configs = config.into();
 
     let handles = AppHandles::start(&ctx, &configs, metrics);
 
@@ -69,5 +75,10 @@ pub fn run(args: TestArgs, ctx: AppContext) {
         tracer
             .shutdown()
             .expect("TracerProvider should shutdown successfully")
+    }
+    if let Some(meter) = meter_provider {
+        meter
+            .shutdown()
+            .expect("MeterProvider should shutdown successfully")
     }
 }
