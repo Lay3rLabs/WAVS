@@ -2,6 +2,7 @@ use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utils::service::fetch_service;
 use utils::{
     config::ConfigExt,
     evm_client::{EvmClientBuilder, EvmSigningClient},
@@ -9,7 +10,7 @@ use utils::{
 use wavs_cli::{
     args::Command,
     command::{
-        deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs},
+        deploy_service_raw::{DeployService, DeployServiceArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
         upload_component::{UploadComponent, UploadComponentArgs},
@@ -60,15 +61,29 @@ async fn main() {
         .unwrap();
 
     match command {
-        Command::DeployServiceRaw { service, args: _ } => {
+        Command::DeployService {
+            service_url,
+            args: _,
+        } => {
+            let service = fetch_service(&service_url, &ctx.config.ipfs_gateway)
+                .await
+                .unwrap();
+
             let provider = new_evm_client(&ctx, service.manager.chain_name())
                 .await
                 .unwrap()
                 .provider;
 
-            let res = DeployServiceRaw::run(&ctx, provider, DeployServiceRawArgs { service })
-                .await
-                .unwrap();
+            let res = DeployService::run(
+                &ctx,
+                provider,
+                DeployServiceArgs {
+                    service,
+                    service_url: Some(service_url),
+                },
+            )
+            .await
+            .unwrap();
 
             ctx.handle_deploy_result(res).unwrap();
         }

@@ -1,5 +1,5 @@
 use alloy_provider::ProviderBuilder;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use layer_climb::prelude::Address;
 use redb::ReadableTable;
@@ -11,6 +11,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
+use utils::service::fetch_service;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
@@ -366,49 +367,6 @@ async fn query_service_from_address(
             unimplemented!()
         }
     }
-}
-
-pub async fn fetch_service(uri: &str, ipfs_gateway: &str) -> Result<Service> {
-    fn join_ipfs_url(ipfs_gateway: &str, cid: &str) -> String {
-        if ipfs_gateway.ends_with('/') {
-            format!("{}{}", ipfs_gateway, cid)
-        } else {
-            format!("{}/{}", ipfs_gateway, cid)
-        }
-    }
-
-    // Normalize the URI into a full URL
-    let url = if uri.starts_with("http://") || uri.starts_with("https://") {
-        uri.to_string()
-    } else if uri.starts_with("ipfs://") {
-        let cid = uri.trim_start_matches("ipfs://");
-        join_ipfs_url(ipfs_gateway, cid)
-    } else if cid::Cid::try_from(uri).is_ok() {
-        join_ipfs_url(ipfs_gateway, uri)
-    } else {
-        return Err(anyhow::anyhow!("Unsupported URI format: {}", uri));
-    };
-
-    // Perform the HTTP request
-    let response = reqwest::get(&url)
-        .await
-        .with_context(|| format!("Failed to fetch content from {}", url))?;
-
-    if !response.status().is_success() {
-        let error_text = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(anyhow::anyhow!("Request to {} failed: {}", url, error_text));
-    }
-
-    let body = response
-        .text()
-        .await
-        .context("Failed to read response body")?;
-
-    // Parse JSON into Service
-    serde_json::from_str(&body).with_context(|| format!("Failed to parse JSON from {}", url))
 }
 
 // called at init and when a new service is added

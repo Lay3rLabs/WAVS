@@ -133,6 +133,9 @@ active_trigger_chains = ["local"]
 # WAVS endpoint
 # wavs_endpoint = "http://localhost:8000"
 
+# The IPFS gateway URL used to access IPFS content over HTTP.
+# ipfs_gateway = "https://cloudflare-ipfs.com/ipfs/"
+
 # CLI-specific chain overrides
 [cli.chains.evm.local]
 aggregator_endpoint = "http://localhost:8001"

@@ -47,23 +47,29 @@ impl HttpClient {
         &self,
         provider: T,
         service: Service,
+        service_url: Option<String>,
     ) -> Result<()> {
-        let body = serde_json::to_string(&service)?;
+        let service_url = match service_url {
+            Some(url) => url,
+            None => {
+                let body = serde_json::to_string(&service)?;
 
-        self.inner
-            .post(format!("{}/save-service", self.endpoint))
-            .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await?
-            .error_for_status()?;
+                self.inner
+                    .post(format!("{}/save-service", self.endpoint))
+                    .header("Content-Type", "application/json")
+                    .body(body)
+                    .send()
+                    .await?
+                    .error_for_status()?;
 
-        let service_uri = format!("{}/service/{}", self.endpoint, service.id);
+                format!("{}/service/{}", self.endpoint, service.id)
+            }
+        };
 
         let contract =
             IWavsServiceManagerInstance::new(service.manager.evm_address_unchecked(), provider);
         contract
-            .setServiceURI(service_uri)
+            .setServiceURI(service_url)
             .send()
             .await?
             .watch()
