@@ -465,6 +465,7 @@ mod tests {
             mock_evm_event_trigger, mock_evm_event_trigger_config, MockTriggerManagerVec,
         },
     };
+    use opentelemetry::global;
     use wavs_types::{
         ChainName, Component, ComponentSource, Envelope, PacketRoute, ServiceID, ServiceManager,
         ServiceStatus, Submit, TriggerData, Workflow, WorkflowID,
@@ -493,6 +494,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs::default(),
             db_file.as_ref(),
+            DispatcherMetrics::init(&global::meter("wavs_metrics")),
         )
         .unwrap();
 
@@ -594,6 +596,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs::default(),
             db_file.as_ref(),
+            DispatcherMetrics::init(&global::meter("wavs_metrics")),
         )
         .unwrap();
 
@@ -694,6 +697,7 @@ mod tests {
                 evm: BTreeMap::new(),
             },
             db_file.as_ref(),
+            DispatcherMetrics::init(&global::meter("wavs_metrics")),
         )
         .unwrap();
 
