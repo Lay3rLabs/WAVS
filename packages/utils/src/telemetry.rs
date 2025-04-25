@@ -47,7 +47,7 @@ pub fn setup_tracing(
     provider
 }
 
-pub fn setup_metrics(collector: &str) -> SdkMeterProvider {
+pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
     let endpoint = format!("{}/api/v1/otlp/v1/metrics", collector);
 
     let exporter = opentelemetry_otlp::MetricExporter::builder()
@@ -58,6 +58,11 @@ pub fn setup_metrics(collector: &str) -> SdkMeterProvider {
         .expect("Failed to build OTLP exporter!");
 
     let meter_provider = SdkMeterProvider::builder()
+        .with_resource(
+            Resource::builder()
+                .with_service_name(service_name.to_owned())
+                .build(),
+        )
         .with_periodic_exporter(exporter)
         .build();
 

@@ -37,7 +37,7 @@ fn main() {
     };
 
     let meter_provider = if let Some(collector) = config.prometheus.as_ref() {
-        Some(setup_metrics(collector))
+        Some(setup_metrics(collector, "wavs_metrics"))
     } else {
         None
     };
