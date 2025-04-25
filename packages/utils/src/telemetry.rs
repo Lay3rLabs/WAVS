@@ -155,6 +155,10 @@ impl EngineMetrics {
                 .build(),
         }
     }
+
+    pub fn increment_total_errors(&self) {
+        self.total_errors.add(1, &[]);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -177,6 +181,10 @@ impl DispatcherMetrics {
                 .with_description("Total number of errors encountered")
                 .build(),
         }
+    }
+
+    pub fn increment_total_errors(&self) {
+        self.total_errors.add(1, &[]);
     }
 }
 
@@ -206,6 +214,10 @@ impl SubmissionMetrics {
         self.total_messages_processed
             .add(1, &[KeyValue::new("source", source.to_owned())]);
     }
+
+    pub fn increment_total_errors(&self) {
+        self.total_errors.add(1, &[]);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -223,5 +235,9 @@ impl TriggerMetrics {
                 .with_description("Total number of errors encountered")
                 .build(),
         }
+    }
+
+    pub fn increment_total_errors(&self) {
+        self.total_errors.add(1, &[]);
     }
 }
