@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
-use utils::context::AppContext;
-use wavs::{dispatcher::CoreDispatcher, telemetry::Metrics};
+use utils::{context::AppContext, telemetry::Metrics};
+use wavs::dispatcher::CoreDispatcher;
 
 use super::config::Configs;
 
