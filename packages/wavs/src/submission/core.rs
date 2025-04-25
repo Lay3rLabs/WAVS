@@ -143,20 +143,37 @@ impl CoreSubmission {
             )));
         }
 
-        let response: AddPacketResponse =
-            response.json().await.map_err(SubmissionError::Reqwest)?;
+        // Get the raw text response
+        let response_text = response.text().await.map_err(SubmissionError::Reqwest)?;
 
-        match response {
-            AddPacketResponse::Sent { tx_receipt, count } => {
-                tracing::debug!(
-                    "Aggregator submitted with tx hash {} and payload count {}",
-                    tx_receipt.transaction_hash,
-                    count
-                );
+        // Parse as an array of AddPacketResponse instead of a single object
+        let responses: Vec<AddPacketResponse> = match serde_json::from_str(&response_text) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::error!("Failed to parse aggregator response: {:?}", e);
+                tracing::error!("Response body was: {:?}", response_text);
+                return Err(SubmissionError::Aggregator(format!(
+                    "Failed to parse response: {}", e
+                )));
             }
-            AddPacketResponse::Aggregated { count } => {
-                tracing::debug!("Aggregated with current payload count {}", count);
+        };
+
+        // Process the first response (or all if needed)
+        if let Some(first_response) = responses.first() {
+            match first_response {
+                AddPacketResponse::Sent { tx_receipt, count } => {
+                    tracing::debug!(
+                        "Aggregator submitted with tx hash {} and payload count {}",
+                        tx_receipt.transaction_hash,
+                        count
+                    );
+                }
+                AddPacketResponse::Aggregated { count } => {
+                    tracing::debug!("Aggregated with current payload count {}", count);
+                }
             }
+        } else {
+            tracing::warn!("Aggregator returned empty response array");
         }
 
         Ok(())
