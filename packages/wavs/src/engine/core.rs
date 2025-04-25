@@ -31,6 +31,7 @@ pub struct WasmEngine<S: CAStorage> {
 
 impl<S: CAStorage> WasmEngine<S> {
     /// Create a new Wasm Engine manager.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         wasm_storage: S,
         app_data_dir: impl AsRef<Path>,
@@ -116,6 +117,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                         let bytes = client.fetch(registry).await?;
                         self.store_component_bytes(&bytes)
                     } else {
+                        self.metrics.increment_total_errors("no registry");
                         return Err(EngineError::NoRegistry);
                     }
                 } else {
@@ -126,6 +128,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 if self.wasm_storage.data_exists(digest)? {
                     Ok(digest.clone())
                 } else {
+                    self.metrics.increment_total_errors("unknown digest");
                     Err(EngineError::UnknownDigest(digest.clone()))
                 }
             }
@@ -218,7 +221,11 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         if dir_path.exists() {
             match std::fs::remove_dir_all(&dir_path) {
                 Ok(_) => tracing::info!("Successfully removed storage at {:?}", dir_path),
-                Err(e) => tracing::error!("Failed to remove storage at {:?}: {}", dir_path, e),
+                Err(e) => {
+                    self.metrics
+                        .increment_total_errors("failed to remove storage");
+                    tracing::error!("Failed to remove storage at {:?}: {}", dir_path, e)
+                }
             }
         } else {
             tracing::warn!("Storage directory {:?} does not exist", dir_path);

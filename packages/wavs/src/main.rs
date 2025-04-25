@@ -36,11 +36,10 @@ fn main() {
         None
     };
 
-    let meter_provider = if let Some(collector) = config.prometheus.as_ref() {
-        Some(setup_metrics(collector, "wavs_metrics"))
-    } else {
-        None
-    };
+    let meter_provider = config
+        .prometheus
+        .as_ref()
+        .map(|collector| setup_metrics(collector, "wavs_metrics"));
     let meter = global::meter("wavs_metrics");
     let metrics = Metrics::init(&meter);
 

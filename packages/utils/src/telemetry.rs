@@ -156,8 +156,9 @@ impl EngineMetrics {
         }
     }
 
-    pub fn increment_total_errors(&self) {
-        self.total_errors.add(1, &[]);
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 }
 
@@ -183,8 +184,9 @@ impl DispatcherMetrics {
         }
     }
 
-    pub fn increment_total_errors(&self) {
-        self.total_errors.add(1, &[]);
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 }
 
@@ -215,8 +217,9 @@ impl SubmissionMetrics {
             .add(1, &[KeyValue::new("source", source.to_owned())]);
     }
 
-    pub fn increment_total_errors(&self) {
-        self.total_errors.add(1, &[]);
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 }
 
@@ -237,7 +240,8 @@ impl TriggerMetrics {
         }
     }
 
-    pub fn increment_total_errors(&self) {
-        self.total_errors.add(1, &[]);
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 }

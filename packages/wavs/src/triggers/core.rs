@@ -190,7 +190,10 @@ impl CoreTriggerManager {
                                 block_height: block_events.height,
                             })
                         }
-                        Err(err) => Err(err),
+                        Err(err) => {
+                            self.metrics.increment_total_errors("block_events");
+                            Err(err)
+                        }
                     }),
             );
 
@@ -312,6 +315,9 @@ impl CoreTriggerManager {
                                         });
                                     }
                                     None => {
+                                        self.metrics.increment_total_errors(
+                                            "evm event trigger config not found",
+                                        );
                                         tracing::error!(
                                             "Trigger config not found for lookup_id {}",
                                             id
@@ -357,6 +363,9 @@ impl CoreTriggerManager {
                                             });
                                         }
                                         None => {
+                                            self.metrics.increment_total_errors(
+                                                "cosmos event trigger config not found",
+                                            );
                                             tracing::error!(
                                                 "Trigger config not found for lookup_id {}",
                                                 id
@@ -392,6 +401,8 @@ impl CoreTriggerManager {
                                 });
                             }
                             None => {
+                                self.metrics
+                                    .increment_total_errors("cron trigger config not found");
                                 tracing::warn!(
                                     "Trigger config not found for cron lookup_id {}",
                                     lookup_id
