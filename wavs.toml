@@ -20,6 +20,9 @@
 [default]
 log_level = ["info", "wavs=debug"]
 
+# The IPFS gateway URL used to access IPFS content over HTTP.
+# ipfs_gateway = "https://cloudflare-ipfs.com/ipfs/"
+
 # Chain configurations (shared across components)
 # Each component can override these in its own section if needed
 
@@ -101,9 +104,6 @@ cors_allowed_origins = [
 # The port on which the server will listen. Default is 8000
 port = 8000
 
-# The IPFS gateway URL used to access IPFS content over HTTP.
-# ipfs_gateway = "https://cloudflare-ipfs.com/ipfs/"
-
 # The host to serve on. Default is localhost
 # host = "localhost"
 
@@ -132,9 +132,6 @@ active_trigger_chains = ["local"]
 
 # WAVS endpoint
 # wavs_endpoint = "http://localhost:8000"
-
-# The IPFS gateway URL used to access IPFS content over HTTP.
-# ipfs_gateway = "https://cloudflare-ipfs.com/ipfs/"
 
 # CLI-specific chain overrides
 [cli.chains.evm.local]
