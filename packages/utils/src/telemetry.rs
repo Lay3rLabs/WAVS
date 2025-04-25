@@ -1,4 +1,4 @@
-use opentelemetry::{global, trace::TracerProvider as _};
+use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
     metrics::SdkMeterProvider,
@@ -202,8 +202,9 @@ impl SubmissionMetrics {
         }
     }
 
-    pub fn increment_total_processed_messages(&self) {
-        self.total_messages_processed.add(1, &[]);
+    pub fn increment_total_processed_messages(&self, source: &str) {
+        self.total_messages_processed
+            .add(1, &[KeyValue::new("source", source.to_owned())]);
     }
 }
 

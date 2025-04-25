@@ -117,7 +117,8 @@ impl CoreSubmission {
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
-        self.metrics.increment_total_processed_messages();
+        self.metrics
+            .increment_total_processed_messages("to_ethereum");
 
         Ok(())
     }
@@ -160,7 +161,8 @@ impl CoreSubmission {
             }
         }
 
-        self.metrics.increment_total_processed_messages();
+        self.metrics
+            .increment_total_processed_messages("to_aggregator");
 
         Ok(())
     }
