@@ -101,8 +101,8 @@ cors_allowed_origins = [
 # The port on which the server will listen. Default is 8000
 port = 8000
 
-# The IPFS gateway to use
-# pinata_gateway = "ipfs.io"
+# The IPFS gateway URL used to access IPFS content over HTTP.
+# ipfs_gateway = "https://cloudflare-ipfs.com/ipfs/"
 
 # The host to serve on. Default is localhost
 # host = "localhost"

@@ -60,7 +60,6 @@ fn zeroed_cli_args(
         cosmos_submission_mnemonic: None,
         max_wasm_fuel: None,
         max_execution_seconds: None,
-        pinata_jwt: None,
-        pinata_gateway: None,
+        ipfs_gateway: None,
     }
 }

@@ -81,15 +81,10 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_execution_seconds: Option<u64>,
 
-    /// The Pinata JWT for uploading to IPFS
+    /// The IPFS gateway URL used to access IPFS content over HTTP.
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pinata_jwt: Option<String>,
-
-    /// The Pinata gateway for fetching IPFS files
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pinata_gateway: Option<String>,
+    pub ipfs_gateway: Option<String>,
 }
 
 impl CliEnvExt for CliArgs {

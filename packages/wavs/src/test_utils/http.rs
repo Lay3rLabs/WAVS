@@ -38,6 +38,7 @@ impl TestHttpApp {
                 submission,
                 ChainConfigs::default(),
                 storage_path,
+                "https://ipfs.io/ipfs/".to_string(),
             )
             .unwrap(),
         );
