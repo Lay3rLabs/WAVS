@@ -84,16 +84,22 @@ async fn process_packet(
                     client.provider.clone(),
                 );
                 let weight = service_manager.getOperatorWeight(signer).call().await?;
+                tracing::info!("New packet from signer {}, weight: {}", signer, weight);
+                tracing::info!("Packet envelope: {:?}", packet.envelope);
+
+                // Calculate total weight starting from current signer
                 let mut total_weight = weight;
 
-                // Sum up weights
-                for packet in queue.iter() {
-                    let weight = service_manager
-                        .getOperatorWeight(packet.signer)
+                // Sum up weights from all packets in the queue
+                for queued_packet in queue.iter() {
+                    let queued_weight = service_manager
+                        .getOperatorWeight(queued_packet.signer)
                         .call()
                         .await?;
-                    total_weight = weight
-                        .checked_add(total_weight)
+                    tracing::info!("Queued packet from signer {}, weight: {}", queued_packet.signer, queued_weight);
+
+                    total_weight = total_weight
+                        .checked_add(queued_weight)
                         .ok_or(anyhow!("Total weight calculation overflowed"))?;
                 }
 
@@ -102,6 +108,8 @@ async fn process_packet(
                     .getLastCheckpointThresholdWeight()
                     .call()
                     .await?;
+
+                tracing::info!("Total weight: {}, Threshold: {}", total_weight, threshold);
 
                 validate_packet(packet, &queue, signer, weight)?;
 
@@ -118,6 +126,7 @@ async fn process_packet(
                 // we don't care about count, we care about the power of the signers
                 // right now this is just hardcoded for demo purposes
                 if total_weight >= threshold {
+                    tracing::info!("Threshold met! Total weight: {}, Threshold: {}", total_weight, threshold);
                     if threshold.is_zero() {
                         tracing::warn!(
                             "you are using threshold of 0 in your AVS quorum, best to only do this for testing"
@@ -147,6 +156,7 @@ async fn process_packet(
                     });
                     any_sent = true;
                 } else {
+                    tracing::info!("Threshold NOT met. Total weight: {}, Threshold: {}", total_weight, threshold);
                     responses.push(AddPacketResponse::Aggregated { count: queue.len() });
                     all_sent = false;
                 }
@@ -178,6 +188,7 @@ fn validate_packet(
     signer: Address,
     operator_weight: U256,
 ) -> anyhow::Result<()> {
+    tracing::info!("Validating packet from signer {}", signer);
     match queue.first() {
         None => {}
         Some(prev) => {
@@ -185,6 +196,10 @@ fn validate_packet(
             if packet.envelope != prev.packet.envelope {
                 bail!("Unexpected envelope difference!");
             }
+
+            tracing::info!("Comparing with previous signer {}", prev.signer);
+            tracing::info!("New packet envelope: {:?}", packet.envelope);
+            tracing::info!("Previous packet envelope: {:?}", prev.packet.envelope);
 
             // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
             // if packet.block_height != last_packet.block_height {
