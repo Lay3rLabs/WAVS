@@ -1,4 +1,9 @@
-# Setting up Jaeger for tracing in tests
+# Table of contents
+
+1. [Jaeger for tracing](#jaeger-for-tracing)
+2. [Prometheus for metrics](#prometheus-for-metrics)
+
+# Setting up Jaeger for tracing in tests <a id="jaeger-for-tracing"></a>
 
 A quick guide to setting up Jaeger for collecting traces from Rust tests using the OpenTelemetry Protocol (OTLP).
 
@@ -55,8 +60,9 @@ http://localhost:16686
 - Setup Jaeger to use a persistent storage backend (e.g., Elasticsearch, Cassandra, etc.) instead of the default in-memory storage.
 - The service names will be `wavs` and `wavs-aggregator`
 
+---
 
-# Setting up Prometheus for collecting metrics in tests
+# Setting up Prometheus for collecting metrics in tests <a id="prometheus-for-metrics"></a>
 
 How to run Prometheus and configure wavs to collect metrics during Rust tests using the OpenTelemetry Protocol (OTLP).
 
@@ -105,7 +111,6 @@ Run your tests as usual:
 cd packages/layer-tests && cargo test
 ```
 - the OpenTelemetry metrics will be periodically uploaded to Prometheus server at `http://localhost:9090`.
-- if everything is correct, traces generated during the tests will be collected by Jaeger at shutdown.
 
 ### 4. View metrics in Prometheus
 
