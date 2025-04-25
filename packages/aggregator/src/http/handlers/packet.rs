@@ -12,6 +12,13 @@ use crate::http::{
     state::{HttpState, PacketQueue, QueuedPacket},
 };
 
+use tokio::sync::Mutex;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref QUEUE_MUTEX: Mutex<()> = Mutex::new(());
+}
+
 #[utoipa::path(
     post,
     path = "/packet",
@@ -42,7 +49,13 @@ async fn process_packet(
     packet: &Packet,
 ) -> anyhow::Result<Vec<AddPacketResponse>> {
     let event_id = packet.event_id();
+    tracing::info!("Processing packet for event ID: {}", event_id);
 
+    // Acquire global lock first before doing anything
+    let _lock = QUEUE_MUTEX.lock().await;
+    tracing::info!("Acquired lock for event ID: {}", event_id);
+
+    // Get the most current queue state under the lock
     let mut queue = match state.get_packet_queue(&event_id)? {
         PacketQueue::Burned => {
             bail!("Packet queue for event {event_id} is already burned");
@@ -50,22 +63,41 @@ async fn process_packet(
         PacketQueue::Alive(queue) => queue,
     };
 
+    // Log actual queue size (for debugging)
+    tracing::info!("Found alive queue for event {}, actual size: {}", event_id, queue.len());
+    for (i, q) in queue.iter().enumerate() {
+        tracing::info!("Queue item {}: signer {}", i, q.signer);
+    }
+
+    // Extract signature and validate
+    let signer = packet.signature.eth_signer_address(&packet.envelope)?;
+    tracing::info!("New packet from signer: {}", signer);
+
+    // Check if already in queue
+    let already_in_queue = queue.iter().any(|q| q.signer == signer);
+    if already_in_queue {
+        tracing::warn!("Signer {} already in queue, ignoring duplicate", signer);
+
+        // Return current state without changing
+        let mut responses = Vec::new();
+        responses.push(AddPacketResponse::Aggregated { count: queue.len() });
+        return Ok(responses);
+    }
+
     let envelope = packet.envelope.clone();
     let route = packet.route.clone();
 
+    // 2. Get all other necessary information
     let service = state.get_service(&route)?;
     let aggregators = &service.workflows[&route.workflow_id].aggregators;
 
     if aggregators.is_empty() {
-        bail!(
-            "No aggregator configured for workflow {} on service {}",
-            route.workflow_id,
-            route.service_id
-        );
+        bail!("No aggregator configured for workflow {} on service {}",
+              route.workflow_id, route.service_id);
     }
 
+    // 3. Process with each aggregator
     let mut all_sent = true;
-    let mut any_sent = false;
     let mut responses: Vec<AddPacketResponse> = Vec::new();
 
     for (index, aggregator) in aggregators.iter().enumerate() {
@@ -75,62 +107,72 @@ async fn process_packet(
                 address,
                 max_gas,
             }) => {
-                // this implicitly validates that the signature is valid
-                let signer = packet.signature.eth_signer_address(&packet.envelope)?;
+                tracing::info!("Using aggregator for chain {} at address {}", chain_name, address);
 
+                // 4. Get client for this chain
                 let client = state.get_eth_client(chain_name).await?;
                 let service_manager = IWavsServiceManager::new(
                     service.manager.eth_address_unchecked(),
                     client.provider.clone(),
                 );
-                let weight = service_manager.getOperatorWeight(signer).call().await?;
-                let mut total_weight = weight;
 
-                // Sum up weights
-                for packet in queue.iter() {
-                    let weight = service_manager
-                        .getOperatorWeight(packet.signer)
-                        .call()
-                        .await?;
-                    total_weight = weight
-                        .checked_add(total_weight)
-                        .ok_or(anyhow!("Total weight calculation overflowed"))?;
+                // 5. Get weights
+                let current_weight = service_manager.getOperatorWeight(signer).call().await?;
+                tracing::info!("Current signer weight: {}", current_weight);
+
+                // Validate the packet against the queue
+                if let Err(e) = validate_packet(packet, &queue, signer, current_weight) {
+                    tracing::error!("Packet validation failed: {}", e);
+                    return Err(e);
                 }
 
-                // Get the threshold
+                // 6. Add packet to queue regardless of aggregator index
+                tracing::info!("Adding packet from signer {} to queue", signer);
+                queue.push(QueuedPacket {
+                    packet: packet.clone(),
+                    signer,
+                });
+
+                // Save updated queue immediately
+                tracing::info!("Saving updated queue with {} packets", queue.len());
+                state.save_packet_queue(&event_id, PacketQueue::Alive(queue.clone()))?;
+
+                // 7. Calculate total weight across all signers in queue
+                let mut total_weight = U256::ZERO;
+                for queued_packet in &queue {
+                    let weight = service_manager
+                        .getOperatorWeight(queued_packet.signer)
+                        .call()
+                        .await?;
+                    tracing::info!("  Queue signer {} weight: {}", queued_packet.signer, weight);
+                    total_weight = total_weight.checked_add(weight)
+                        .ok_or(anyhow!("Total weight calculation overflowed"))?;
+                }
+                tracing::info!("Total accumulated weight: {}", total_weight);
+
+                // 8. Get threshold weight
                 let threshold = service_manager
                     .getLastCheckpointThresholdWeight()
                     .call()
                     .await?;
+                tracing::info!("Threshold weight: {}", threshold);
 
-                validate_packet(packet, &queue, signer, weight)?;
-
-                if index == 0 {
-                    queue.push(QueuedPacket {
-                        packet: packet.clone(),
-                        signer,
-                    });
-                }
-
-                // TODO:
-                // given the total power of the quorum (which could be, say, 60% of the total operator set power)
-                // we need to calculate the power of the signers so far, and see if it meets the quorum power
-                // we don't care about count, we care about the power of the signers
-                // right now this is just hardcoded for demo purposes
+                // 9. Check if threshold is met
                 if total_weight >= threshold {
-                    if threshold.is_zero() {
-                        tracing::warn!(
-                            "you are using threshold of 0 in your AVS quorum, best to only do this for testing"
-                        );
-                    }
+                    tracing::info!("THRESHOLD MET! total_weight={} >= threshold={}",
+                                  total_weight, threshold);
 
-                    let signatures = queue
+                    // 10. Collect signatures from all queued packets
+                    let signatures: Vec<_> = queue
                         .iter()
                         .map(|queued| queued.packet.signature.clone())
                         .collect();
+                    tracing::info!("Collected {} signatures for submission", signatures.len());
 
+                    // 11. Submit transaction
                     let block_height = client.provider.get_block_number().await?;
 
+                    tracing::info!("Submitting transaction to contract...");
                     let tx_receipt = client
                         .send_envelope_signatures(
                             envelope.clone(),
@@ -141,34 +183,31 @@ async fn process_packet(
                         )
                         .await?;
 
+                    if tx_receipt.status() {
+                        tracing::info!("Transaction succeeded: {}", tx_receipt.transaction_hash);
+                    } else {
+                        tracing::error!("Transaction failed: {}", tx_receipt.transaction_hash);
+                    }
+
                     responses.push(AddPacketResponse::Sent {
                         tx_receipt: Box::new(tx_receipt),
                         count: queue.len(),
                     });
-                    any_sent = true;
+                    // any_sent = true;
+
+                    // Mark queue as burned after successful send
+                    state.save_packet_queue(&event_id, PacketQueue::Burned)?;
                 } else {
+                    tracing::info!("Threshold NOT met: total_weight={} < threshold={}",
+                                  total_weight, threshold);
                     responses.push(AddPacketResponse::Aggregated { count: queue.len() });
-                    all_sent = false;
+                    // all_sent = false;
                 }
             }
         }
     }
 
-    // Log warning for mixed state
-    if any_sent && !all_sent {
-        tracing::warn!("Mixed responses: some packets sent, some aggregated");
-    }
-
-    // Apply the state change once, based on tracking variables
-    state.save_packet_queue(
-        &event_id,
-        if all_sent {
-            PacketQueue::Burned
-        } else {
-            PacketQueue::Alive(queue)
-        },
-    )?;
-
+    // Return responses for all aggregators
     Ok(responses)
 }
 
@@ -178,23 +217,59 @@ fn validate_packet(
     signer: Address,
     operator_weight: U256,
 ) -> anyhow::Result<()> {
+    tracing::info!("Validating packet from signer: {}", signer);
+
     match queue.first() {
-        None => {}
+        None => {
+            tracing::info!("Empty queue, no previous packet to compare with");
+        }
         Some(prev) => {
-            // check if the packet is the same as the last one
-            if packet.envelope != prev.packet.envelope {
-                bail!("Unexpected envelope difference!");
+            tracing::info!("Comparing with previous packet from signer: {}", prev.signer);
+
+            // Log envelope details for comparison
+            tracing::info!("Current envelope eventId: {}", packet.envelope.eventId);
+            tracing::info!("Previous envelope eventId: {}", prev.packet.envelope.eventId);
+            tracing::info!("Current envelope ordering: {:?}", packet.envelope.ordering);
+            tracing::info!("Previous envelope ordering: {:?}", prev.packet.envelope.ordering);
+
+            // Check if payloads are different and why
+            if packet.envelope.payload != prev.packet.envelope.payload {
+                tracing::info!("Payload comparison failed!");
+
+                // Try to extract and compare as JSON
+                if let (Ok(curr), Ok(prev)) = (
+                    std::str::from_utf8(&packet.envelope.payload),
+                    std::str::from_utf8(&prev.packet.envelope.payload)
+                ) {
+                    tracing::info!("Current payload (as string): {}", curr);
+                    tracing::info!("Previous payload (as string): {}", prev);
+
+                    // Find the different parts
+                    for (i, (c1, c2)) in curr.chars().zip(prev.chars()).enumerate() {
+                        if c1 != c2 {
+                            tracing::info!("First difference at position {}: '{}' vs '{}'", i, c1, c2);
+                            break;
+                        }
+                    }
+
+                    if curr.len() != prev.len() {
+                        tracing::info!("Payload length difference: current={}, previous={}",
+                            curr.len(), prev.len());
+                    }
+                }
             }
 
-            // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
-            // if packet.block_height != last_packet.block_height {
-            //     bail!("Unexpected block height difference!");
-            // }
+            // check if the packet is the same as the last one
+            if packet.envelope != prev.packet.envelope {
+                tracing::error!("Envelope difference detected!");
+                bail!("Unexpected envelope difference!");
+            }
         }
     }
 
     for queued_packet in queue {
         if signer == queued_packet.signer {
+            tracing::error!("Duplicate signer {} found at position {}", signer, queued_packet.signer);
             bail!("Signer {} already in queue", signer);
         }
     }
@@ -203,6 +278,7 @@ fn validate_packet(
 
     // TODO: ensure that the signer is in the operator set
 
+    tracing::info!("Packet validation successful");
     Ok(())
 }
 
