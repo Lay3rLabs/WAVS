@@ -21,7 +21,7 @@
 log_level = ["info", "wavs=debug"]
 
 # The IPFS gateway URL used to access IPFS content over HTTP.
-# ipfs_gateway = "https://cloudflare-ipfs.com/ipfs/"
+# ipfs_gateway = "https://ipfs.io/ipfs/"
 
 # Chain configurations (shared across components)
 # Each component can override these in its own section if needed
