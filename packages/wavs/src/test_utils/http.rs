@@ -33,8 +33,7 @@ impl TestHttpApp {
         let engine = SingleEngineRunner::new(IdentityEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
-        let metrics =
-            DispatcherMetrics::init(&opentelemetry::global::meter("trigger-test-metrics"));
+        let metrics = DispatcherMetrics::new(&opentelemetry::global::meter("trigger-test-metrics"));
 
         let dispatcher = Arc::new(
             Dispatcher::new(
@@ -60,7 +59,7 @@ impl TestHttpApp {
         let inner = TestApp::new().await;
 
         let meter = opentelemetry::global::meter("wavs_test_metrics");
-        let metrics = HttpMetrics::init(&meter);
+        let metrics = HttpMetrics::new(&meter);
 
         let http_router = crate::http::server::make_router(
             inner.config.as_ref().clone(),

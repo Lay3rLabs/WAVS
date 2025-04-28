@@ -72,11 +72,11 @@ How to run Prometheus and configure wavs to collect metrics during Rust tests us
 
 ## Set up Prometheus
 
-### 0. Have a `prometheus.yml` file 
+### 1. Configure a `prometheus.yml` file 
 
 In order to run a Prometheus instance in Docker, we need to have a `prometheus.yml` configuration file. For this test, an empty file is sufficient. If you are in the main `wavs` directory, there is already one there.
 
-### 1. Start Prometheus Using Docker
+### 2. Start Prometheus Using Docker
 
 Run the following command in a separate command line to run a Prometheus instance:
 
@@ -97,14 +97,14 @@ docker run \
   - `--config.file=/etc/prometheus/prometheus.yml`: specifies the path to the configuration file inside the container.
   - `--web.enable-otlp-receiver`: enables Prometheus to accept metrics via the OTLP protocol.
 
-### 2. Enable Prometheus collection endpoint
+### 3. Enable Prometheus collection endpoint
 
 Update the configuration file `packages/layer-tests/layer-tests.toml` and uncomment the line:
 ```bash
 prometheus = "http://localhost:9090"
 ```
 
-### 3. Run your tests
+### 4. Run your tests
 
 Run your tests as usual:
 ```bash
@@ -112,7 +112,7 @@ cd packages/layer-tests && cargo test
 ```
 - the OpenTelemetry metrics will be periodically uploaded to Prometheus server at `http://localhost:9090`.
 
-### 4. View metrics in Prometheus
+### 5. View metrics in Prometheus
 
 Open Prometheus in your browser:
 ```

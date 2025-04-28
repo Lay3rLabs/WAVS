@@ -266,7 +266,7 @@ mod tests {
         include_bytes!("../../../../examples/build/components/permissions.wasm");
 
     fn metrics() -> EngineMetrics {
-        EngineMetrics::init(&opentelemetry::global::meter("engine-test-metrics"))
+        EngineMetrics::new(&opentelemetry::global::meter("engine-test-metrics"))
     }
 
     #[test]

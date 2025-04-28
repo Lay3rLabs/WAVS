@@ -783,7 +783,7 @@ mod tests {
 
         let manager = CoreTriggerManager::new(
             &config,
-            TriggerMetrics::init(&opentelemetry::global::meter("trigger-test-metrics")),
+            TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
         )
         .unwrap();
 
@@ -914,7 +914,7 @@ mod tests {
 
         let manager = CoreTriggerManager::new(
             &config,
-            TriggerMetrics::init(&opentelemetry::global::meter("trigger-test-metrics")),
+            TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
         )
         .unwrap();
 
@@ -1006,7 +1006,7 @@ mod tests {
 
         let manager = CoreTriggerManager::new(
             &config,
-            TriggerMetrics::init(&opentelemetry::global::meter("trigger-test-metrics")),
+            TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
         )
         .unwrap();
 

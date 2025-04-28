@@ -46,7 +46,7 @@ impl MockE2ETestRunner {
                 submission,
                 ChainConfigs::default(),
                 storage_path,
-                DispatcherMetrics::init(&opentelemetry::global::meter("wavs_metrics")),
+                DispatcherMetrics::default(),
             )
             .unwrap(),
         );

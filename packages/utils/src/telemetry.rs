@@ -1,3 +1,4 @@
+use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
@@ -73,18 +74,16 @@ pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
     meter_provider
 }
 
-use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};
-
 pub struct Metrics {
     pub http: HttpMetrics,
     pub wavs: WavsMetrics,
 }
 
 impl Metrics {
-    pub fn init(meter: &Meter) -> Self {
+    pub fn new(meter: &Meter) -> Self {
         Self {
-            http: HttpMetrics::init(meter),
-            wavs: WavsMetrics::init(meter),
+            http: HttpMetrics::new(meter),
+            wavs: WavsMetrics::new(meter),
         }
     }
 }
@@ -95,12 +94,12 @@ pub struct HttpMetrics {
 }
 
 impl HttpMetrics {
-    pub const LABEL: &'static str = "http";
+    pub const NAMESPACE: &'static str = "http";
 
-    pub fn init(meter: &Meter) -> Self {
+    pub fn new(meter: &Meter) -> Self {
         HttpMetrics {
             registered_services: meter
-                .i64_up_down_counter(format!("{}_registered_services", Self::LABEL))
+                .i64_up_down_counter(format!("{}.registered_services", Self::NAMESPACE))
                 .with_description("Number of services currently registered")
                 .build(),
         }
@@ -124,12 +123,12 @@ pub struct WavsMetrics {
 }
 
 impl WavsMetrics {
-    pub fn init(meter: &Meter) -> Self {
+    pub fn new(meter: &Meter) -> Self {
         Self {
-            engine: EngineMetrics::init(meter),
-            dispatcher: DispatcherMetrics::init(meter),
-            submission: SubmissionMetrics::init(meter),
-            trigger: TriggerMetrics::init(meter),
+            engine: EngineMetrics::new(meter),
+            dispatcher: DispatcherMetrics::new(meter),
+            submission: SubmissionMetrics::new(meter),
+            trigger: TriggerMetrics::new(meter),
         }
     }
 }
@@ -141,16 +140,16 @@ pub struct EngineMetrics {
 }
 
 impl EngineMetrics {
-    pub const LABEL: &'static str = "engine";
+    pub const NAMESPACE: &'static str = "engine";
 
-    pub fn init(meter: &Meter) -> Self {
+    pub fn new(meter: &Meter) -> Self {
         Self {
             total_threads: meter
-                .u64_counter(format!("{}_total_threads", Self::LABEL))
+                .u64_counter(format!("{}.total_threads", Self::NAMESPACE))
                 .with_description("Total number of threads being used currently")
                 .build(),
             total_errors: meter
-                .u64_counter(format!("{}_total_errors", Self::LABEL))
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
         }
@@ -169,16 +168,16 @@ pub struct DispatcherMetrics {
 }
 
 impl DispatcherMetrics {
-    pub const LABEL: &'static str = "dispatcher";
+    pub const NAMESPACE: &'static str = "dispatcher";
 
-    pub fn init(meter: &Meter) -> Self {
+    pub fn new(meter: &Meter) -> Self {
         Self {
             messages_in_channel: meter
-                .u64_gauge(format!("{}_messages_in_channel", Self::LABEL))
+                .u64_gauge(format!("{}.messages_in_channel", Self::NAMESPACE))
                 .with_description("Current number of messages in a channel")
                 .build(),
             total_errors: meter
-                .u64_counter(format!("{}_total_errors", Self::LABEL))
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
         }
@@ -190,6 +189,12 @@ impl DispatcherMetrics {
     }
 }
 
+impl Default for DispatcherMetrics {
+    fn default() -> Self {
+        Self::new(&global::meter("wavs_metrics"))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SubmissionMetrics {
     pub total_messages_processed: Counter<u64>,
@@ -197,16 +202,16 @@ pub struct SubmissionMetrics {
 }
 
 impl SubmissionMetrics {
-    pub const LABEL: &'static str = "submission";
+    pub const NAMESPACE: &'static str = "submission";
 
-    pub fn init(meter: &Meter) -> Self {
+    pub fn new(meter: &Meter) -> Self {
         Self {
             total_messages_processed: meter
-                .u64_counter(format!("{}_total_messages_processed", Self::LABEL))
+                .u64_counter(format!("{}.total_messages_processed", Self::NAMESPACE))
                 .with_description("Total number of messages processed")
                 .build(),
             total_errors: meter
-                .u64_counter(format!("{}_total_errors", Self::LABEL))
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
         }
@@ -229,12 +234,12 @@ pub struct TriggerMetrics {
 }
 
 impl TriggerMetrics {
-    pub const LABEL: &'static str = "trigger";
+    pub const NAMESPACE: &'static str = "trigger";
 
-    pub fn init(meter: &Meter) -> Self {
+    pub fn new(meter: &Meter) -> Self {
         Self {
             total_errors: meter
-                .u64_counter(format!("{}_total_errors", Self::LABEL))
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
         }
