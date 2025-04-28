@@ -145,7 +145,10 @@ async fn process_packet(
                         )
                         .await?;
 
-                    // get the current packets again, in case it's changed since last await point
+                    // Re-read the live packet queue to capture any state changes since the last await point.
+                    // This is intentional to ensure we account for concurrent updates. The `get_live_packet_queue`
+                    // method is assumed to be thread-safe. If this assumption changes, synchronization mechanisms
+                    // should be introduced to avoid inconsistencies.
                     let count = state.get_live_packet_queue(&event_id)?.len();
 
                     responses.push(AddPacketResponse::Sent {
