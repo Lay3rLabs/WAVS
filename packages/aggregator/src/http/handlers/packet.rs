@@ -281,53 +281,6 @@ mod test {
     #[tokio::test]
     async fn process_many_packets_serial() {
         process_many_packets(false).await;
-        let deps = TestDeps::new().await;
-
-        let service_manager = deps.deploy_simple_service_manager().await;
-        let service = deps
-            .create_service("service-1".parse().unwrap(), *service_manager.address())
-            .await;
-
-        let mut signers = Vec::new();
-        const NUM_SIGNERS: usize = 20;
-        const NUM_THRESHOLD: usize = NUM_SIGNERS / 2 + 1;
-
-        service_manager
-            .setLastCheckpointTotalWeight(U256::from(NUM_SIGNERS as u64))
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-
-        service_manager
-            .setLastCheckpointThresholdWeight(U256::from(NUM_THRESHOLD as u64))
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-
-        for _ in 0..NUM_THRESHOLD {
-            let signer = mock_signer();
-            service_manager
-                .setOperatorWeight(signer.address(), U256::ONE)
-                .send()
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
-            signers.push(signer);
-        }
-
-        let envelope = mock_envelope([1, 2, 3]);
-        for signer in signers {
-            let packet = mock_packet(&signer, &envelope, service.id.clone());
-            process_packet(deps.state.clone(), &packet).await.unwrap();
-        }
     }
 
     #[tokio::test]
