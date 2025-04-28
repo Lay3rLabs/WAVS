@@ -43,12 +43,8 @@ async fn process_packet(
 ) -> anyhow::Result<Vec<AddPacketResponse>> {
     let event_id = packet.event_id();
 
-    let mut queue = match state.get_packet_queue(&event_id)? {
-        PacketQueue::Burned => {
-            bail!("Packet queue for event {event_id} is already burned");
-        }
-        PacketQueue::Alive(queue) => queue,
-    };
+    // early exit optimization
+    let _ = state.get_live_packet_queue(&event_id)?;
 
     let envelope = packet.envelope.clone();
     let route = packet.route.clone();
@@ -83,33 +79,41 @@ async fn process_packet(
                     service.manager.evm_address_unchecked(),
                     client.provider.clone(),
                 );
-                let weight = service_manager.getOperatorWeight(signer).call().await?;
-                let mut total_weight = weight;
-
-                // Sum up weights
-                for packet in queue.iter() {
-                    let weight = service_manager
-                        .getOperatorWeight(packet.signer)
-                        .call()
-                        .await?;
-                    total_weight = weight
-                        .checked_add(total_weight)
-                        .ok_or(anyhow!("Total weight calculation overflowed"))?;
-                }
-
                 // Get the threshold
                 let threshold = service_manager
                     .getLastCheckpointThresholdWeight()
                     .call()
                     .await?;
 
-                validate_packet(packet, &queue, signer, weight)?;
+                let weight = service_manager.getOperatorWeight(signer).call().await?;
+                let mut total_weight = weight;
+
+                // Sum up weights
+                for signer in state
+                    .get_live_packet_queue(&event_id)?
+                    .iter()
+                    .map(|queued| queued.signer)
+                {
+                    // TODO, contract should have a method to get multiple weights in one call
+                    // but it doesn't really matter until those weights can change under our feet
+                    let weight = service_manager.getOperatorWeight(signer).call().await?;
+                    total_weight = weight
+                        .checked_add(total_weight)
+                        .ok_or(anyhow!("Total weight calculation overflowed"))?;
+                }
+
+                // get the current packets again, in case it's changed since last await point
+                let mut queued_packets = state.get_live_packet_queue(&event_id)?;
+                validate_packet(packet, &queued_packets, signer, weight)?;
 
                 if index == 0 {
-                    queue.push(QueuedPacket {
+                    queued_packets.push(QueuedPacket {
                         packet: packet.clone(),
                         signer,
                     });
+
+                    state
+                        .save_packet_queue(&event_id, PacketQueue::Alive(queued_packets.clone()))?;
                 }
 
                 // TODO:
@@ -124,7 +128,7 @@ async fn process_packet(
                         );
                     }
 
-                    let signatures = queue
+                    let signatures = queued_packets
                         .iter()
                         .map(|queued| queued.packet.signature.clone())
                         .collect();
@@ -141,13 +145,18 @@ async fn process_packet(
                         )
                         .await?;
 
+                    // get the current packets again, in case it's changed since last await point
+                    let count = state.get_live_packet_queue(&event_id)?.len();
+
                     responses.push(AddPacketResponse::Sent {
                         tx_receipt: Box::new(tx_receipt),
-                        count: queue.len(),
+                        count,
                     });
                     any_sent = true;
                 } else {
-                    responses.push(AddPacketResponse::Aggregated { count: queue.len() });
+                    responses.push(AddPacketResponse::Aggregated {
+                        count: queued_packets.len(),
+                    });
                     all_sent = false;
                 }
             }
@@ -159,16 +168,9 @@ async fn process_packet(
         tracing::warn!("Mixed responses: some packets sent, some aggregated");
     }
 
-    println!("responses: {:?}", responses);
-    // Apply the state change once, based on tracking variables
-    state.save_packet_queue(
-        &event_id,
-        if all_sent {
-            PacketQueue::Burned
-        } else {
-            PacketQueue::Alive(queue)
-        },
-    )?;
+    if all_sent {
+        state.save_packet_queue(&event_id, PacketQueue::Burned)?;
+    }
 
     Ok(responses)
 }

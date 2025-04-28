@@ -95,6 +95,16 @@ impl HttpState {
         }
     }
 
+    pub fn get_live_packet_queue(&self, event_id: &EventId) -> anyhow::Result<Vec<QueuedPacket>> {
+        match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
+            Some(queue) => match queue.value() {
+                PacketQueue::Alive(queue) => Ok(queue),
+                PacketQueue::Burned => Err(anyhow::anyhow!("Packet queue {event_id} is burned")),
+            },
+            None => Ok(Vec::new()),
+        }
+    }
+
     pub fn save_packet_queue(&self, event_id: &EventId, queue: PacketQueue) -> Result<(), DBError> {
         self.storage.set(PACKET_QUEUES, event_id.as_ref(), &queue)
     }
