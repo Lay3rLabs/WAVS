@@ -19,6 +19,7 @@ pub struct TestConfig {
     pub isolated: Option<String>,
     pub all: Option<bool>,
     pub jaeger: Option<String>,
+    pub prometheus: Option<String>,
     _log_levels: Vec<String>,
     _data_dir: PathBuf,
 }
@@ -49,6 +50,7 @@ impl Default for TestConfig {
                 .map(|s| s.to_string())
                 .collect(),
             jaeger: None,
+            prometheus: None,
             _data_dir: tempfile::tempdir().unwrap().into_path(),
             isolated: None,
             all: None,

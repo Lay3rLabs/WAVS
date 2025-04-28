@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use utils::storage::db::{DBError, RedbStorage, Table, JSON};
+use utils::{
+    storage::db::{DBError, RedbStorage, Table, JSON},
+    telemetry::HttpMetrics,
+};
 use wavs_types::ServiceID;
 
 use crate::{apis::dispatcher::DispatchManager, config::Config, dispatcher::DispatcherError};
@@ -14,6 +17,7 @@ pub struct HttpState {
     pub is_mock_chain_client: bool,
     pub http_client: reqwest::Client,
     pub storage: Arc<RedbStorage>,
+    pub metrics: HttpMetrics,
 }
 
 impl HttpState {
@@ -21,6 +25,7 @@ impl HttpState {
         config: Config,
         dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
         is_mock_chain_client: bool,
+        metrics: HttpMetrics,
     ) -> anyhow::Result<Self> {
         if !config.data.exists() {
             std::fs::create_dir_all(&config.data).map_err(|err| {
@@ -40,6 +45,7 @@ impl HttpState {
             is_mock_chain_client,
             http_client: reqwest::Client::new(),
             storage,
+            metrics,
         })
     }
 

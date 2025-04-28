@@ -11,6 +11,7 @@ use axum::{
 use axum_tracing_opentelemetry::middleware::OtelAxumLayer;
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use utils::telemetry::HttpMetrics;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
@@ -32,6 +33,7 @@ pub fn start(
     ctx: AppContext,
     config: Config,
     dispatcher: Arc<CoreDispatcher>,
+    metrics: HttpMetrics,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
@@ -39,7 +41,7 @@ pub fn start(
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(config, dispatcher, false).await?;
+        let router = make_router(config, dispatcher, false, metrics).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -64,8 +66,9 @@ pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
     config: Config,
     dispatcher: Arc<D>,
     is_mock_chain_client: bool,
+    metrics: HttpMetrics,
 ) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client).await?;
+    let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics).await?;
 
     // build our application with a single route
     let mut router = axum::Router::new()

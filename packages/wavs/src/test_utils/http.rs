@@ -3,7 +3,10 @@ use std::sync::Arc;
 use axum::body::Body;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use utils::config::ChainConfigs;
+use utils::{
+    config::ChainConfigs,
+    telemetry::{DispatcherMetrics, HttpMetrics},
+};
 
 use crate::{
     apis::{submission::Submission, trigger::TriggerManager},
@@ -30,6 +33,7 @@ impl TestHttpApp {
         let engine = SingleEngineRunner::new(IdentityEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
+        let metrics = DispatcherMetrics::new(&opentelemetry::global::meter("trigger-test-metrics"));
 
         let dispatcher = Arc::new(
             Dispatcher::new(
@@ -38,6 +42,7 @@ impl TestHttpApp {
                 submission,
                 ChainConfigs::default(),
                 storage_path,
+                metrics,
                 "https://ipfs.io/ipfs/".to_string(),
             )
             .unwrap(),
@@ -54,10 +59,17 @@ impl TestHttpApp {
     {
         let inner = TestApp::new().await;
 
-        let http_router =
-            crate::http::server::make_router(inner.config.as_ref().clone(), dispatcher, true)
-                .await
-                .unwrap();
+        let meter = opentelemetry::global::meter("wavs_test_metrics");
+        let metrics = HttpMetrics::new(&meter);
+
+        let http_router = crate::http::server::make_router(
+            inner.config.as_ref().clone(),
+            dispatcher,
+            true,
+            metrics,
+        )
+        .await
+        .unwrap();
 
         Self {
             inner,

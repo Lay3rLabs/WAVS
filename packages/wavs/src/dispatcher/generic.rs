@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
 use utils::service::fetch_service;
+use utils::telemetry::DispatcherMetrics;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
@@ -36,6 +37,7 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub submission: S,
     pub storage: Arc<RedbStorage>,
     pub chain_configs: ChainConfigs,
+    pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
 }
 
@@ -46,6 +48,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         submission: S,
         chain_configs: ChainConfigs,
         db_storage_path: impl AsRef<Path>,
+        metrics: DispatcherMetrics,
         ipfs_gateway: String,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
@@ -56,6 +59,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
             submission,
             storage,
             chain_configs,
+            metrics,
             ipfs_gateway,
         })
     }
@@ -498,6 +502,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs::default(),
             db_file.as_ref(),
+            DispatcherMetrics::default(),
             IPFS_GATEWAY.to_string(),
         )
         .unwrap();
@@ -600,6 +605,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs::default(),
             db_file.as_ref(),
+            DispatcherMetrics::default(),
             IPFS_GATEWAY.to_string(),
         )
         .unwrap();
@@ -701,6 +707,7 @@ mod tests {
                 evm: BTreeMap::new(),
             },
             db_file.as_ref(),
+            DispatcherMetrics::default(),
             IPFS_GATEWAY.to_string(),
         )
         .unwrap();

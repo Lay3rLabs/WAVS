@@ -1,6 +1,8 @@
-use opentelemetry::{global, trace::TracerProvider as _};
-use opentelemetry_otlp::{SpanExporter, WithExportConfig};
+use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};
+use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
+use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
+    metrics::SdkMeterProvider,
     resource::Resource,
     trace::{self, Sampler, SdkTracerProvider},
 };
@@ -44,4 +46,207 @@ pub fn setup_tracing(
 
     tracing::info!("Jaeger tracing enabled");
     provider
+}
+
+pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
+    let endpoint = format!("{}/api/v1/otlp/v1/metrics", collector);
+
+    let exporter = opentelemetry_otlp::MetricExporter::builder()
+        .with_http()
+        .with_protocol(Protocol::HttpBinary)
+        .with_endpoint(endpoint)
+        .build()
+        .expect("Failed to build OTLP exporter!");
+
+    let meter_provider = SdkMeterProvider::builder()
+        .with_resource(
+            Resource::builder()
+                .with_service_name(service_name.to_owned())
+                .build(),
+        )
+        .with_periodic_exporter(exporter)
+        .build();
+
+    global::set_meter_provider(meter_provider.clone());
+
+    tracing::info!("Metrics enabled and exporting to {}", collector);
+
+    meter_provider
+}
+
+pub struct Metrics {
+    pub http: HttpMetrics,
+    pub wavs: WavsMetrics,
+}
+
+impl Metrics {
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            http: HttpMetrics::new(meter),
+            wavs: WavsMetrics::new(meter),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct HttpMetrics {
+    pub registered_services: UpDownCounter<i64>,
+}
+
+impl HttpMetrics {
+    pub const NAMESPACE: &'static str = "http";
+
+    pub fn new(meter: &Meter) -> Self {
+        HttpMetrics {
+            registered_services: meter
+                .i64_up_down_counter(format!("{}.registered_services", Self::NAMESPACE))
+                .with_description("Number of services currently registered")
+                .build(),
+        }
+    }
+
+    pub fn increment_registered_services(&self) {
+        self.registered_services.add(1, &[]);
+    }
+
+    pub fn decrement_registered_services(&self) {
+        self.registered_services.add(-1, &[]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct WavsMetrics {
+    pub engine: EngineMetrics,
+    pub dispatcher: DispatcherMetrics,
+    pub submission: SubmissionMetrics,
+    pub trigger: TriggerMetrics,
+}
+
+impl WavsMetrics {
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            engine: EngineMetrics::new(meter),
+            dispatcher: DispatcherMetrics::new(meter),
+            submission: SubmissionMetrics::new(meter),
+            trigger: TriggerMetrics::new(meter),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EngineMetrics {
+    pub total_threads: Counter<u64>,
+    pub total_errors: Counter<u64>,
+}
+
+impl EngineMetrics {
+    pub const NAMESPACE: &'static str = "engine";
+
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            total_threads: meter
+                .u64_counter(format!("{}.total_threads", Self::NAMESPACE))
+                .with_description("Total number of threads being used currently")
+                .build(),
+            total_errors: meter
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
+                .with_description("Total number of errors encountered")
+                .build(),
+        }
+    }
+
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DispatcherMetrics {
+    pub messages_in_channel: Gauge<u64>,
+    pub total_errors: Counter<u64>,
+}
+
+impl DispatcherMetrics {
+    pub const NAMESPACE: &'static str = "dispatcher";
+
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            messages_in_channel: meter
+                .u64_gauge(format!("{}.messages_in_channel", Self::NAMESPACE))
+                .with_description("Current number of messages in a channel")
+                .build(),
+            total_errors: meter
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
+                .with_description("Total number of errors encountered")
+                .build(),
+        }
+    }
+
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
+    }
+}
+
+impl Default for DispatcherMetrics {
+    fn default() -> Self {
+        Self::new(&global::meter("wavs_metrics"))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmissionMetrics {
+    pub total_messages_processed: Counter<u64>,
+    pub total_errors: Counter<u64>,
+}
+
+impl SubmissionMetrics {
+    pub const NAMESPACE: &'static str = "submission";
+
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            total_messages_processed: meter
+                .u64_counter(format!("{}.total_messages_processed", Self::NAMESPACE))
+                .with_description("Total number of messages processed")
+                .build(),
+            total_errors: meter
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
+                .with_description("Total number of errors encountered")
+                .build(),
+        }
+    }
+
+    pub fn increment_total_processed_messages(&self, source: &str) {
+        self.total_messages_processed
+            .add(1, &[KeyValue::new("source", source.to_owned())]);
+    }
+
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TriggerMetrics {
+    pub total_errors: Counter<u64>,
+}
+
+impl TriggerMetrics {
+    pub const NAMESPACE: &'static str = "trigger";
+
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            total_errors: meter
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
+                .with_description("Total number of errors encountered")
+                .build(),
+        }
+    }
+
+    pub fn increment_total_errors(&self, error: &str) {
+        self.total_errors
+            .add(1, &[KeyValue::new("error", error.to_owned())]);
+    }
 }
