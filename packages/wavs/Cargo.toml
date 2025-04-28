@@ -16,6 +16,7 @@ mock = []
 wavs-types = { workspace = true }
 wavs-engine = { workspace = true }
 utils = { workspace = true }
+cid = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }

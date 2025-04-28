@@ -49,7 +49,10 @@ opentelemetry = { workspace = true }
 opentelemetry-jaeger-propagator = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }
-tracing-opentelemetry = {workspace = true}
+tracing-opentelemetry = { workspace = true }
+url = { workspace = true }
+cid = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

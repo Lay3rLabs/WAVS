@@ -38,6 +38,7 @@ impl CoreDispatcher {
             submission,
             config.chains.clone(),
             config.data.join("db"),
+            config.ipfs_gateway.clone(),
         )
     }
 }

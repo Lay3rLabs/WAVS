@@ -60,5 +60,6 @@ fn zeroed_cli_args(
         cosmos_submission_mnemonic: None,
         max_wasm_fuel: None,
         max_execution_seconds: None,
+        ipfs_gateway: None,
     }
 }

@@ -11,6 +11,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
+use utils::service::fetch_service;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
@@ -35,6 +36,7 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub submission: S,
     pub storage: Arc<RedbStorage>,
     pub chain_configs: ChainConfigs,
+    pub ipfs_gateway: String,
 }
 
 impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
@@ -44,6 +46,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         submission: S,
         chain_configs: ChainConfigs,
         db_storage_path: impl AsRef<Path>,
+        ipfs_gateway: String,
     ) -> Result<Self, DispatcherError> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
 
@@ -53,6 +56,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
             submission,
             storage,
             chain_configs,
+            ipfs_gateway,
         })
     }
 }
@@ -149,7 +153,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         chain_name: ChainName,
         address: Address,
     ) -> Result<(), Self::Error> {
-        let service = query_service_from_address(chain_name, address, &self.chain_configs).await?;
+        let service = query_service_from_address(
+            chain_name,
+            address,
+            &self.chain_configs,
+            &self.ipfs_gateway,
+        )
+        .await?;
 
         // persist it in storage if not there yet
         if self
@@ -317,6 +327,7 @@ async fn query_service_from_address(
     chain_name: ChainName,
     address: Address,
     chain_configs: &ChainConfigs,
+    ipfs_gateway: &str,
 ) -> Result<Service, DispatcherError> {
     // Get the chain config
     let chain = chain_configs.get_chain(&chain_name)?.ok_or_else(|| {
@@ -348,11 +359,7 @@ async fn query_service_from_address(
             let service_uri = contract.getServiceURI().call().await?;
 
             // Fetch the service JSON from the URI
-            let response = reqwest::get(&service_uri).await?;
-            let service_json = response.text().await?;
-
-            // Parse the JSON into a Service object
-            let service: Service = serde_json::from_str(&service_json)?;
+            let service = fetch_service(&service_uri, ipfs_gateway).await?;
 
             Ok(service)
         }
@@ -468,6 +475,8 @@ mod tests {
 
     use super::*;
 
+    const IPFS_GATEWAY: &str = "https://ipfs.io/ipfs/";
+
     /// Ensure that some items pass end-to-end in simplest possible setup
     #[test]
     fn dispatcher_pipeline_happy_path() {
@@ -489,6 +498,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs::default(),
             db_file.as_ref(),
+            IPFS_GATEWAY.to_string(),
         )
         .unwrap();
 
@@ -590,6 +600,7 @@ mod tests {
             MockSubmission::new(),
             ChainConfigs::default(),
             db_file.as_ref(),
+            IPFS_GATEWAY.to_string(),
         )
         .unwrap();
 
@@ -690,6 +701,7 @@ mod tests {
                 evm: BTreeMap::new(),
             },
             db_file.as_ref(),
+            IPFS_GATEWAY.to_string(),
         )
         .unwrap();
 

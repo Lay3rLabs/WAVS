@@ -23,7 +23,7 @@ use alloy_provider::ext::AnvilApi;
 use alloy_sol_types::SolEvent;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
-use wavs_cli::command::deploy_service_raw::{DeployServiceRaw, DeployServiceRawArgs};
+use wavs_cli::command::deploy_service_raw::{DeployService, DeployServiceArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
     Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
@@ -169,14 +169,15 @@ impl Services {
                     }
 
                     // now we've patched it - just call the CLI command directly
-                    DeployServiceRaw::run(
+                    DeployService::run(
                         &clients.cli_ctx,
                         clients
                             .get_evm_client(service.manager.chain_name())
                             .provider
                             .clone(),
-                        DeployServiceRawArgs {
+                        DeployServiceArgs {
                             service: additional_service.clone(),
+                            service_url: None,
                         },
                     )
                     .await
@@ -406,11 +407,12 @@ async fn deploy_service_simple(
     // Deploy using DeployServiceRaw instead of DeployService
 
     let submit_client = clients.get_evm_client(service.manager.chain_name());
-    DeployServiceRaw::run(
+    DeployService::run(
         &clients.cli_ctx,
         submit_client.provider.clone(),
-        DeployServiceRawArgs {
+        DeployServiceArgs {
             service: service.clone(),
+            service_url: None,
         },
     )
     .await
@@ -496,14 +498,15 @@ async fn deploy_service_raw(
         },
     };
 
-    DeployServiceRaw::run(
+    DeployService::run(
         &clients.cli_ctx,
         clients
             .get_evm_client(service.manager.chain_name())
             .provider
             .clone(),
-        DeployServiceRawArgs {
+        DeployServiceArgs {
             service: service.clone(),
+            service_url: None,
         },
     )
     .await

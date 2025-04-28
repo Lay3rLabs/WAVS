@@ -31,6 +31,7 @@ reqwest = { version = "0.12.15", features = ["json"] }
 tower-http = { version = "0.6.2", features = ["cors", "trace"] }
 tower = { version = "0.5.2", features = ["util"] }
 url = "2.5.4"
+cid = "0.11.1"
 
 # utoipa for OpenAPI
 utoipa = { version = "5.3.1", features = ["axum_extras", "macros"] }
@@ -147,7 +148,7 @@ uuid = { version = "1.16.0", features = ["v7", "serde"] }
 cfg-if = "1.0.0"
 
 # versioning
-semver = {version = "1.0.26", features = ["serde"] }
+semver = { version = "1.0.26", features = ["serde"] }
 
 # local
 utils = { path = "packages/utils" }
