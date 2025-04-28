@@ -43,6 +43,7 @@ impl TestHttpApp {
                 ChainConfigs::default(),
                 storage_path,
                 metrics,
+                "https://ipfs.io/ipfs/".to_string(),
             )
             .unwrap(),
         );

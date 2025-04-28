@@ -3,7 +3,10 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
 };
-use utils::config::{AnyChainConfig, ChainConfigs, ConfigExt};
+use utils::{
+    config::{AnyChainConfig, ChainConfigs, ConfigExt},
+    service::DEFAULT_IPFS_GATEWAY,
+};
 use utoipa::ToSchema;
 use wavs_types::{ChainName, Workflow};
 
@@ -62,6 +65,9 @@ pub struct Config {
 
     /// Prometheus collector to send metrics data
     pub prometheus: Option<String>,
+
+    /// The IPFS gateway URL used to access IPFS content over HTTP.
+    pub ipfs_gateway: String,
 }
 
 impl ConfigExt for Config {
@@ -98,6 +104,7 @@ impl Default for Config {
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
             jaeger: None,
             prometheus: None,
+            ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
         }
     }
 }

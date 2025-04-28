@@ -47,6 +47,7 @@ impl MockE2ETestRunner {
                 ChainConfigs::default(),
                 storage_path,
                 DispatcherMetrics::default(),
+                "https://ipfs.io/ipfs/".to_string(),
             )
             .unwrap(),
         );

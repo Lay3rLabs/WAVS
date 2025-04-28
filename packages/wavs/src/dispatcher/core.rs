@@ -43,6 +43,7 @@ impl CoreDispatcher {
             config.chains.clone(),
             config.data.join("db"),
             metrics.dispatcher,
+            config.ipfs_gateway.clone(),
         )
     }
 }

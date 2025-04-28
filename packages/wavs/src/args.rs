@@ -80,6 +80,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_execution_seconds: Option<u64>,
+
+    /// The IPFS gateway URL used to access IPFS content over HTTP.
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ipfs_gateway: Option<String>,
 }
 
 impl CliEnvExt for CliArgs {

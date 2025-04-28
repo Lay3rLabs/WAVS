@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
-use utils::config::{ChainConfigs, ConfigExt};
+use utils::{
+    config::{ChainConfigs, ConfigExt},
+    service::DEFAULT_IPFS_GATEWAY,
+};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -30,6 +33,9 @@ pub struct Config {
     pub evm_credential: Option<String>,
 
     pub registry_domain: Option<String>,
+
+    /// The IPFS gateway URL used to access IPFS content over HTTP.
+    pub ipfs_gateway: String,
 }
 
 impl ConfigExt for Config {
@@ -57,6 +63,7 @@ impl Default for Config {
             cosmos_mnemonic: None,
             evm_credential: None,
             registry_domain: None,
+            ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
         }
     }
 }

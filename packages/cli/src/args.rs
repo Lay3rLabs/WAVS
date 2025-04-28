@@ -24,13 +24,22 @@ pub enum Command {
         args: CliArgs,
     },
 
-    /// Deploy a service from a full JSON-encoded `Service`
-    /// If the input is prefixed with `@`, it will be read from the file path
-    /// Uses core contracts that were previously deployed via the CLI
-    /// Assumes that the components have already been uploaded, operators have already registered on contracts
-    DeployServiceRaw {
+    /// # Description
+    /// Deploys a service by loading its definition from a URL. The URL can be:
+    /// - http:// or https:// pointing to a JSON service definition
+    /// - ipfs:// with a valid CID as the host (e.g., ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi)
+    ///
+    /// # Prerequisites
+    /// - Core contracts must have been previously deployed via the CLI
+    /// - Service components must already be uploaded
+    /// - Operators must already be registered on the contracts
+    ///
+    /// # Parameters
+    /// * `service_url`: URL pointing to the JSON service definition
+    /// * `args`: Additional CLI arguments for the deployment operation
+    DeployService {
         #[clap(long, value_parser = parse_service_input)]
-        service: Service,
+        service_url: String,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -291,7 +300,7 @@ fn parse_service_input(s: &str) -> Result<Service, String> {
 impl Command {
     pub fn args(&self) -> CliArgs {
         let args = match self {
-            Self::DeployServiceRaw { args, .. } => args,
+            Self::DeployService { args, .. } => args,
             Self::UploadComponent { args, .. } => args,
             Self::Exec { args, .. } => args,
             Self::Service { args, .. } => args,
@@ -368,6 +377,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json: Option<bool>,
+
+    /// The IPFS gateway URL used to access IPFS content over HTTP.
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ipfs_gateway: Option<String>,
 }
 
 impl CliEnvExt for CliArgs {
