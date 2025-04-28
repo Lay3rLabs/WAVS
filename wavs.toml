@@ -115,6 +115,8 @@ active_trigger_chains = ["local"]
 
 # Jaeger collector to send trace data
 # jaeger = "http://localhost:4317"
+# Prometheus endpoint to send metrics to
+# prometheus = "http://localhost:9090"
 
 # WAVS-specific chain overrides (if needed)
 # Example:

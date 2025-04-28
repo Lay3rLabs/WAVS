@@ -19,7 +19,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tower::Service as _;
-use utils::config::ChainConfigs;
+use utils::{config::ChainConfigs, telemetry::DispatcherMetrics};
 use wavs_types::{
     ComponentSource, DeleteServicesRequest, ListServicesResponse, Service, ServiceID,
     ServiceManager, Submit,
@@ -46,6 +46,7 @@ impl MockE2ETestRunner {
                 submission,
                 ChainConfigs::default(),
                 storage_path,
+                DispatcherMetrics::default(),
                 "https://ipfs.io/ipfs/".to_string(),
             )
             .unwrap(),

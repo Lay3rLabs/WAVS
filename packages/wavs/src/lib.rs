@@ -15,10 +15,16 @@ use config::Config;
 use dispatcher::CoreDispatcher;
 use std::sync::Arc;
 use utils::context::AppContext;
+use utils::telemetry::HttpMetrics;
 
 /// Entry point to start up the whole server
 /// Called from main and end-to-end tests
-pub fn run_server(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatcher>) {
+pub fn run_server(
+    ctx: AppContext,
+    config: Config,
+    dispatcher: Arc<CoreDispatcher>,
+    metrics: HttpMetrics,
+) {
     let _ = ctrlc::set_handler({
         let ctx = ctx.clone();
         move || {
@@ -31,7 +37,7 @@ pub fn run_server(ctx: AppContext, config: Config, dispatcher: Arc<CoreDispatche
         let dispatcher = dispatcher.clone();
         let ctx = ctx.clone();
         move || {
-            http::server::start(ctx, config, dispatcher).unwrap();
+            http::server::start(ctx, config, dispatcher, metrics).unwrap();
         }
     });
 

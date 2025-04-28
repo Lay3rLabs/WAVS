@@ -63,6 +63,9 @@ pub struct Config {
     /// Jaeger collector to send trace data
     pub jaeger: Option<String>,
 
+    /// Prometheus collector to send metrics data
+    pub prometheus: Option<String>,
+
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
 }
@@ -100,6 +103,7 @@ impl Default for Config {
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3,
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
             jaeger: None,
+            prometheus: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
         }
     }

@@ -5,6 +5,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
+use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::InstanceDepsBuilder;
@@ -25,10 +26,12 @@ pub struct WasmEngine<S: CAStorage> {
     wkg_client: Option<WkgClient>,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
+    metrics: EngineMetrics,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
     /// Create a new Wasm Engine manager.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         wasm_storage: S,
         app_data_dir: impl AsRef<Path>,
@@ -37,6 +40,7 @@ impl<S: CAStorage> WasmEngine<S> {
         registry_domain: Option<String>,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
+        metrics: EngineMetrics,
     ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -62,6 +66,7 @@ impl<S: CAStorage> WasmEngine<S> {
             wkg_client: registry_domain.map(|d| WkgClient::new(d).unwrap()),
             max_execution_seconds,
             max_wasm_fuel,
+            metrics,
         }
     }
 }
@@ -112,6 +117,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                         let bytes = client.fetch(registry).await?;
                         self.store_component_bytes(&bytes)
                     } else {
+                        self.metrics.increment_total_errors("no registry");
                         return Err(EngineError::NoRegistry);
                     }
                 } else {
@@ -122,6 +128,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
                 if self.wasm_storage.data_exists(digest)? {
                     Ok(digest.clone())
                 } else {
+                    self.metrics.increment_total_errors("unknown digest");
                     Err(EngineError::UnknownDigest(digest.clone()))
                 }
             }
@@ -214,7 +221,11 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
         if dir_path.exists() {
             match std::fs::remove_dir_all(&dir_path) {
                 Ok(_) => tracing::info!("Successfully removed storage at {:?}", dir_path),
-                Err(e) => tracing::error!("Failed to remove storage at {:?}: {}", dir_path, e),
+                Err(e) => {
+                    self.metrics
+                        .increment_total_errors("failed to remove storage");
+                    tracing::error!("Failed to remove storage at {:?}: {}", dir_path, e)
+                }
             }
         } else {
             tracing::warn!("Storage directory {:?} does not exist", dir_path);
@@ -254,6 +265,10 @@ mod tests {
     const PERMISSIONS: &[u8] =
         include_bytes!("../../../../examples/build/components/permissions.wasm");
 
+    fn metrics() -> EngineMetrics {
+        EngineMetrics::new(&opentelemetry::global::meter("engine-test-metrics"))
+    }
+
     #[test]
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
@@ -266,6 +281,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store two blobs
@@ -292,6 +308,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store valid wasm
@@ -316,6 +333,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store square digest
@@ -361,6 +379,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
@@ -445,6 +464,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // store square digest
@@ -493,6 +513,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         // Create a service ID
@@ -541,6 +562,7 @@ mod tests {
             None,
             None,
             None,
+            metrics(),
         );
 
         engine.start().unwrap();

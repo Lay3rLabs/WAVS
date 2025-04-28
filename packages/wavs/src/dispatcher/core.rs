@@ -5,7 +5,7 @@ use crate::engine::runner::MultiEngineRunner;
 use crate::engine::WasmEngine;
 use crate::submission::core::CoreSubmission;
 use crate::triggers::core::CoreTriggerManager;
-use utils::storage::fs::FileStorage;
+use utils::{storage::fs::FileStorage, telemetry::WavsMetrics};
 
 use super::generic::{Dispatcher, DispatcherError};
 
@@ -13,10 +13,13 @@ pub type CoreDispatcher =
     Dispatcher<CoreTriggerManager, MultiEngineRunner<Arc<WasmEngine<FileStorage>>>, CoreSubmission>;
 
 impl CoreDispatcher {
-    pub fn new_core(config: &Config) -> Result<CoreDispatcher, DispatcherError> {
+    pub fn new_core(
+        config: &Config,
+        metrics: WavsMetrics,
+    ) -> Result<CoreDispatcher, DispatcherError> {
         let file_storage = FileStorage::new(config.data.join("ca"))?;
 
-        let triggers = CoreTriggerManager::new(config)?;
+        let triggers = CoreTriggerManager::new(config, metrics.trigger)?;
 
         let app_storage = config.data.join("app");
         let engine = Arc::new(WasmEngine::new(
@@ -27,10 +30,11 @@ impl CoreDispatcher {
             config.registry_domain.clone(),
             Some(config.max_wasm_fuel),
             Some(config.max_execution_seconds),
+            metrics.engine,
         ));
         let engine = MultiEngineRunner::new(engine, config.wasm_threads);
 
-        let submission = CoreSubmission::new(config)?;
+        let submission = CoreSubmission::new(config, metrics.submission)?;
 
         Self::new(
             triggers,
@@ -38,6 +42,7 @@ impl CoreDispatcher {
             submission,
             config.chains.clone(),
             config.data.join("db"),
+            metrics.dispatcher,
             config.ipfs_gateway.clone(),
         )
     }
