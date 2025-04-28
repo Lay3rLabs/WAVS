@@ -33,3 +33,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 
 [dev-dependencies]
+tempfile = {workspace = true}
+alloy-node-bindings = { workspace = true }
+futures = { workspace = true }
+
