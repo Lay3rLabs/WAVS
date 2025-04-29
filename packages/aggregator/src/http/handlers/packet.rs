@@ -43,14 +43,10 @@ async fn process_packet(
 ) -> anyhow::Result<Vec<AddPacketResponse>> {
     let event_id = packet.event_id();
 
-    // early exit optimization
-    let _ = state.get_live_packet_queue(&event_id)?;
-
-    let envelope = packet.envelope.clone();
     let route = packet.route.clone();
 
-    let service = state.get_service(&route)?;
-    let aggregators = &service.workflows[&route.workflow_id].aggregators;
+    let service = state.get_service(&packet.route)?;
+    let aggregators = &service.workflows[&packet.route.workflow_id].aggregators;
 
     if aggregators.is_empty() {
         bail!(
@@ -60,122 +56,128 @@ async fn process_packet(
         );
     }
 
-    let mut all_sent = true;
-    let mut any_sent = false;
-    let mut responses: Vec<AddPacketResponse> = Vec::new();
+    state.event_transaction.run(event_id.clone(), {
+        let state = state.clone();
+        let envelope = packet.envelope.clone();
+        || async move {
+            let mut queue = state.get_live_packet_queue(&event_id)?;
+            let mut responses: Vec<AddPacketResponse> = Vec::new();
 
-    for (index, aggregator) in aggregators.iter().enumerate() {
-        match aggregator {
-            Aggregator::Evm(EvmContractSubmission {
-                chain_name,
-                address,
-                max_gas,
-            }) => {
-                // this implicitly validates that the signature is valid
-                let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+            for (index, aggregator) in aggregators.iter().enumerate() {
+                match aggregator {
+                    Aggregator::Evm(EvmContractSubmission {
+                        chain_name,
+                        address,
+                        max_gas,
+                    }) => {
+                        // this implicitly validates that the signature is valid
+                        let signer = packet.signature.evm_signer_address(&packet.envelope)?;
 
-                let client = state.get_evm_client(chain_name).await?;
-                let service_manager = IWavsServiceManager::new(
-                    service.manager.evm_address_unchecked(),
-                    client.provider.clone(),
-                );
-                // Get the threshold
-                let threshold = service_manager
-                    .getLastCheckpointThresholdWeight()
-                    .call()
-                    .await?;
-
-                let weight = service_manager.getOperatorWeight(signer).call().await?;
-                let mut total_weight = weight;
-
-                // Sum up weights
-                for signer in state
-                    .get_live_packet_queue(&event_id)?
-                    .iter()
-                    .map(|queued| queued.signer)
-                {
-                    // TODO, contract should have a method to get multiple weights in one call
-                    // but it doesn't really matter until those weights can change under our feet
-                    let weight = service_manager.getOperatorWeight(signer).call().await?;
-                    total_weight = weight
-                        .checked_add(total_weight)
-                        .ok_or(anyhow!("Total weight calculation overflowed"))?;
-                }
-
-                // get the current packets again, in case it's changed since last await point
-                let mut queued_packets = state.get_live_packet_queue(&event_id)?;
-                validate_packet(packet, &queued_packets, signer, weight)?;
-
-                if index == 0 {
-                    queued_packets.push(QueuedPacket {
-                        packet: packet.clone(),
-                        signer,
-                    });
-
-                    state
-                        .save_packet_queue(&event_id, PacketQueue::Alive(queued_packets.clone()))?;
-                }
-
-                // TODO:
-                // given the total power of the quorum (which could be, say, 60% of the total operator set power)
-                // we need to calculate the power of the signers so far, and see if it meets the quorum power
-                // we don't care about count, we care about the power of the signers
-                // right now this is just hardcoded for demo purposes
-                if total_weight >= threshold {
-                    if threshold.is_zero() {
-                        tracing::warn!(
-                            "you are using threshold of 0 in your AVS quorum, best to only do this for testing"
+                        let client = state.get_evm_client(chain_name).await?;
+                        let service_manager = IWavsServiceManager::new(
+                            service.manager.evm_address_unchecked(),
+                            client.provider.clone(),
                         );
+                        // Get the threshold
+                        let threshold = service_manager
+                            .getLastCheckpointThresholdWeight()
+                            .call()
+                            .await?;
+
+                        let weight = service_manager.getOperatorWeight(signer).call().await?;
+                        let mut total_weight = weight;
+
+                        // Sum up weights
+                        for signer in queue.iter().map(|queued| queued.signer)
+                        {
+                            // TODO, contract should have a method to get multiple weights in one call
+                            // but it doesn't really matter until those weights can change under our feet
+                            let weight = service_manager.getOperatorWeight(signer).call().await?;
+                            total_weight = weight
+                                .checked_add(total_weight)
+                                .ok_or(anyhow!("Total weight calculation overflowed"))?;
+                        }
+
+                        // get the current packets again, in case it's changed since last await point
+                        validate_packet(packet, &queue, signer, weight)?;
+
+                        if index == 0 {
+                            // update the saved queue, but only for first aggregator
+                            // invariant: they should all see the same queue
+                            queue.push(QueuedPacket {
+                                packet: packet.clone(),
+                                signer,
+                            });
+
+                            state
+                                .save_packet_queue(&event_id, PacketQueue::Alive(queue.clone()))?;
+                        }
+
+                        // TODO:
+                        // given the total power of the quorum (which could be, say, 60% of the total operator set power)
+                        // we need to calculate the power of the signers so far, and see if it meets the quorum power
+                        // we don't care about count, we care about the power of the signers
+                        // right now this is just hardcoded for demo purposes
+                        if total_weight >= threshold {
+                            if threshold.is_zero() {
+                                tracing::warn!(
+                                    "you are using threshold of 0 in your AVS quorum, best to only do this for testing"
+                                );
+                            }
+
+                            let signatures = queue
+                                .iter()
+                                .map(|queued| queued.packet.signature.clone())
+                                .collect();
+
+                            let block_height = client.provider.get_block_number().await?;
+
+                            let tx_receipt = client
+                                .send_envelope_signatures(
+                                    envelope.clone(),
+                                    signatures,
+                                    block_height,
+                                    *address,
+                                    *max_gas,
+                                )
+                                .await?;
+
+                            responses.push(AddPacketResponse::Sent {
+                                tx_receipt: Box::new(tx_receipt),
+                                count: queue.len()
+                            });
+                        } else {
+                            responses.push(AddPacketResponse::Aggregated {
+                                count: queue.len(),
+                            });
+                        }
                     }
-
-                    let signatures = queued_packets
-                        .iter()
-                        .map(|queued| queued.packet.signature.clone())
-                        .collect();
-
-                    let block_height = client.provider.get_block_number().await?;
-
-                    let tx_receipt = client
-                        .send_envelope_signatures(
-                            envelope.clone(),
-                            signatures,
-                            block_height,
-                            *address,
-                            *max_gas,
-                        )
-                        .await?;
-
-                    // Re-read the live packet queue to capture any state changes since the last await point.
-                    // This is intentional to ensure we account for concurrent updates. The `get_live_packet_queue`
-                    // method is assumed to be thread-safe. If this assumption changes, synchronization mechanisms
-                    // should be introduced to avoid inconsistencies.
-                    let count = state.get_live_packet_queue(&event_id)?.len();
-
-                    responses.push(AddPacketResponse::Sent {
-                        tx_receipt: Box::new(tx_receipt),
-                        count,
-                    });
-                    any_sent = true;
-                } else {
-                    responses.push(AddPacketResponse::Aggregated {
-                        count: queued_packets.len(),
-                    });
-                    all_sent = false;
                 }
             }
+
+            if responses.len() != aggregators.len() {
+                bail!("Unexpected number of responses: expected {}, got {}", aggregators.len(), responses.len());
+            }
+
+            if responses.iter().all(|response| matches!(response, AddPacketResponse::Sent { .. })) {
+                // all aggregator destinations reached quorum and had their packets sent, burn the event
+                state.save_packet_queue(&event_id, PacketQueue::Burned)?;
+            } else {
+                let mut sent_count = 0;
+                let mut aggregated_count = 0;
+                for response in responses.iter() {
+                    match response {
+                        AddPacketResponse::Sent { .. } => sent_count += 1,
+                        AddPacketResponse::Aggregated { count } => aggregated_count += count,
+                    }
+                }
+                // some aggregator destinations 
+                tracing::warn!("Mixed responses: {} destinations sent, {} destinations aggregated", sent_count, aggregated_count);
+            }
+
+            Ok(responses)
         }
-    }
-
-    // Log warning for mixed state
-    if any_sent && !all_sent {
-        tracing::warn!("Mixed responses: some packets sent, some aggregated");
-    }
-
-    if all_sent {
-        state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-    }
-
-    Ok(responses)
+    }).await
 }
 
 fn validate_packet(
