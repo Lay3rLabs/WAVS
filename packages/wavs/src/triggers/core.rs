@@ -218,7 +218,7 @@ impl CoreTriggerManager {
             let event_stream = Box::pin(stream.map(move |log| {
                 Ok(StreamTriggers::Evm {
                     chain_name: chain_name.clone(),
-                    block_height: log.block_number.context("couldn't get eth block height")?,
+                    block_height: log.block_number.context("couldn't get EVM block height")?,
                     log,
                 })
             }));

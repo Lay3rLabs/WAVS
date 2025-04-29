@@ -11,7 +11,7 @@ use example_helpers::{
     trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt},
 };
 use serde::{Deserialize, Serialize};
-use wavs_wasi_utils::ethereum::new_eth_provider;
+use wavs_wasi_utils::evm::new_evm_provider;
 
 struct Component;
 
@@ -41,10 +41,10 @@ impl Guest for Component {
                     ..
                 }) => {
                     let chain_config = host::get_evm_chain_config(&chain_name).ok_or(
-                        anyhow::anyhow!("eth chain config for {chain_name} not found"),
+                        anyhow::anyhow!("EVM chain config for {chain_name} not found"),
                     )?;
 
-                    new_eth_provider::<Ethereum>(
+                    new_evm_provider::<Ethereum>(
                         chain_config
                             .http_endpoint
                             .context("http_endpoint is missing")?,

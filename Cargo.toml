@@ -118,7 +118,7 @@ wasmtime = { version = "31.0.0", features = [
 wasmtime-wasi = { version = "31.0.0", default-features = true }
 wasmtime-wasi-http = "31.0.0"
 wit-bindgen = "0.41.0"
-wavs-wasi-utils = "0.4.0-alpha.5"
+wavs-wasi-utils = "0.4.0-alpha.7"
 
 # benchmarking
 criterion = "0.5.1"
