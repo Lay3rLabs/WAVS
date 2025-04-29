@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 use utils::{
     config::{ChainConfigs, ConfigExt},
     service::DEFAULT_IPFS_GATEWAY,
@@ -56,10 +56,7 @@ impl Default for Config {
             wavs_endpoint: "http://127.0.0.1:8000".to_string(),
             log_level: vec!["info".to_string()],
             data: PathBuf::from("/var/wavs-cli"),
-            chains: ChainConfigs {
-                cosmos: BTreeMap::new(),
-                evm: BTreeMap::new(),
-            },
+            chains: ChainConfigs::default(),
             cosmos_mnemonic: None,
             evm_credential: None,
             registry_domain: None,
