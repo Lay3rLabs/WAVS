@@ -117,8 +117,7 @@ impl CoreSubmission {
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
-        self.metrics
-            .increment_total_processed_messages("to_ethereum");
+        self.metrics.increment_total_processed_messages("to_evm");
 
         Ok(())
     }
