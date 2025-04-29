@@ -7,7 +7,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainName, Digest, Service, ServiceID, WorkflowID};
+use wavs_types::{ChainName, Digest, ServiceID, WorkflowID};
 
 use crate::config::Config;
 
