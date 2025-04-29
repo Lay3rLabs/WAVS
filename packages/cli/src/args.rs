@@ -214,7 +214,9 @@ pub enum WorkflowCommand {
 pub enum ManagerCommand {
     /// Sets an EVM service manager
     SetEvm {
+        #[clap(long)]
         chain_name: ChainName,
+        #[clap(long)]
         address: String,
     },
 }
