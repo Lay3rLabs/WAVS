@@ -82,13 +82,10 @@ async fn main() {
                     service_url: Some(service_url),
                 },
             )
-            .await;
+            .await
+            .unwrap();
 
-            if let Err(e) = res.as_ref() {
-                tracing::error!("Failed to deploy service: {:?}", e);
-            }
-
-            ctx.handle_deploy_result(res.unwrap()).unwrap();
+            ctx.handle_deploy_result(res).unwrap();
         }
         Command::UploadComponent {
             component_path,
