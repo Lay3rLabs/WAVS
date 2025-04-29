@@ -39,19 +39,8 @@ _install-native HOME DATA:
     @rm -rf "{{DATA}}"
     @mkdir -p "{{HOME}}"
     @mkdir -p "{{DATA}}"
-    @cp "./packages/wavs/wavs.toml" "{{HOME}}"
-    @cp "./packages/cli/cli.toml" "{{HOME}}"
-    @cp "./packages/aggregator/aggregator.toml" "{{HOME}}"
+    @cp "./wavs.toml" "{{HOME}}"
     @cp "./.env.example" "{{HOME}}/.env"
-    @if [ "$(uname)" == "Darwin" ]; then \
-        sed -i '' -e "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"; \
-        sed -i '' -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/cli.toml"; \
-        sed -i '' -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/aggregator.toml"; \
-    else \
-        sed -i -e "s|^# data = \"~/wavs/data\"|data = \"{{DATA}}/wavs\"|" "{{HOME}}/wavs.toml"; \
-        sed -i -e "s|^# data = \"~/wavs/cli\"|data = \"{{DATA}}/wavs-cli\"|" "{{HOME}}/cli.toml"; \
-        sed -i -e "s|^# data = \"~/wavs/aggregator\"|data = \"{{DATA}}/wavs-aggregator\"|" "{{HOME}}/aggregator.toml"; \
-    fi
     @cargo install --path ./packages/wavs
     @cargo install --path ./packages/cli
     @cargo install --path ./packages/aggregator
@@ -159,18 +148,18 @@ download-wit branch="main":
     # Create a temporary directory
     rm -rf temp_clone
     mkdir temp_clone
-    
+
     # Clone the specific branch into the temp directory
     git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
-    
+
     # Clear existing content and create wit directory
     rm -rf wit
     mkdir -p wit
-    
+
     # Copy just the wit directory and lock file from the cloned repo
     cp -r temp_clone/wavs-wasi/wit/* wit/
     cp -r temp_clone/wavs-wasi/wkg.lock wkg.lock
-    
+
     # Clean up
     rm -rf temp_clone
 
@@ -179,18 +168,18 @@ download-solidity branch="dev":
     # Create a temporary directory
     rm -rf temp_clone
     mkdir temp_clone
-    
+
     # Clone the specific branch into the temp directory
-    git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-middleware.git 
-    
+    git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-middleware.git
+
     # Clear existing content and create solidity directory
     rm -rf contracts/solidity
     rm -rf examples/contracts/solidity
     mkdir -p contracts/solidity/interfaces
     mkdir -p examples/contracts/solidity/interfaces
     mkdir -p examples/contracts/solidity/src
-    
-    # Copy just what we need 
+
+    # Copy just what we need
     cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol contracts/solidity/interfaces/IWavsServiceHandler.sol
     cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol contracts/solidity/interfaces/IWavsServiceManager.sol
 
@@ -202,7 +191,7 @@ download-solidity branch="dev":
     cp temp_clone/wavs-middleware/contracts/src/SimpleTrigger.sol examples/contracts/solidity/src/SimpleTrigger.sol
     cp temp_clone/wavs-middleware/contracts/src/SimpleSubmit.sol examples/contracts/solidity/src/SimpleSubmit.sol
     cp temp_clone/wavs-middleware/contracts/src/SimpleServiceManager.sol examples/contracts/solidity/src/SimpleServiceManager.sol
-    
+
     # Clean up
     rm -rf temp_clone
 
