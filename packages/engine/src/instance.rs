@@ -79,8 +79,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
         let env: Vec<_> = std::env::vars()
             .filter(|(key, _)| {
-                key.starts_with("WAVS_ENV")
-                    && workflow.component.env_keys.contains(&key.to_string())
+                key.starts_with("WAVS_ENV") && workflow.component.env_keys.contains(key)
             })
             .collect();
 
