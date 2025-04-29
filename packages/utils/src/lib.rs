@@ -1,4 +1,5 @@
 pub mod alloy_helpers;
+pub mod async_transaction;
 pub mod config;
 pub mod context;
 pub mod error;

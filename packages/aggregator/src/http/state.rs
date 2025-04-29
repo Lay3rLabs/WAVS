@@ -6,6 +6,7 @@ use std::{
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
+    async_transaction::AsyncTransaction,
     config::EvmChainConfig,
     evm_client::{EvmClientBuilder, EvmClientTransport, EvmSigningClient},
     storage::db::{DBError, RedbStorage, Table, JSON},
@@ -38,6 +39,7 @@ pub struct QueuedPacket {
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
+    pub event_transaction: AsyncTransaction<EventId>,
     storage: Arc<RedbStorage>,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
 }
@@ -52,6 +54,7 @@ impl HttpState {
             config,
             storage,
             evm_clients,
+            event_transaction: AsyncTransaction::new(false),
         })
     }
 
@@ -92,6 +95,16 @@ impl HttpState {
         match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
             Some(queue) => Ok(queue.value()),
             None => Ok(PacketQueue::Alive(Vec::new())),
+        }
+    }
+
+    pub fn get_live_packet_queue(&self, event_id: &EventId) -> anyhow::Result<Vec<QueuedPacket>> {
+        match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
+            Some(queue) => match queue.value() {
+                PacketQueue::Alive(queue) => Ok(queue),
+                PacketQueue::Burned => Err(anyhow::anyhow!("Packet queue {event_id} is burned")),
+            },
+            None => Ok(Vec::new()),
         }
     }
 
