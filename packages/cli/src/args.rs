@@ -38,7 +38,7 @@ pub enum Command {
     /// * `service_url`: URL pointing to the JSON service definition
     /// * `args`: Additional CLI arguments for the deployment operation
     DeployService {
-        #[clap(long, value_parser = parse_service_input)]
+        #[clap(long)]
         service_url: String,
 
         #[clap(flatten)]
@@ -286,15 +286,6 @@ pub enum SubmitCommand {
         #[clap(long)]
         max_gas: Option<u64>,
     },
-}
-
-fn parse_service_input(s: &str) -> Result<Service, String> {
-    if let Some(path) = s.strip_prefix('@').map(PathBuf::from) {
-        let json = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-        Ok(serde_json::from_str(&json).map_err(|e| e.to_string())?)
-    } else {
-        Ok(serde_json::from_str(s).map_err(|e| e.to_string())?)
-    }
 }
 
 impl Command {
