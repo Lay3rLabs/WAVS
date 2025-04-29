@@ -43,7 +43,7 @@ impl HttpClient {
         Ok(response.digest.into())
     }
 
-    pub async fn create_service_raw<T: Provider>(
+    pub async fn create_service<T: Provider>(
         &self,
         provider: T,
         service: Service,
