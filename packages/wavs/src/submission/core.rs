@@ -145,24 +145,26 @@ impl CoreSubmission {
             )));
         }
 
-        let response: AddPacketResponse =
+        let responses: Vec<AddPacketResponse> =
             response.json().await.map_err(SubmissionError::Reqwest)?;
 
-        match response {
-            AddPacketResponse::Sent { tx_receipt, count } => {
-                tracing::debug!(
-                    "Aggregator submitted with tx hash {} and payload count {}",
-                    tx_receipt.transaction_hash,
-                    count
-                );
+        for response in responses {
+            match response {
+                AddPacketResponse::Sent { tx_receipt, count } => {
+                    tracing::debug!(
+                        "Aggregator submitted with tx hash {} and payload count {}",
+                        tx_receipt.transaction_hash,
+                        count
+                    );
+                }
+                AddPacketResponse::Aggregated { count } => {
+                    tracing::debug!("Aggregated with current payload count {}", count);
+                }
             }
-            AddPacketResponse::Aggregated { count } => {
-                tracing::debug!("Aggregated with current payload count {}", count);
-            }
-        }
 
-        self.metrics
-            .increment_total_processed_messages("to_aggregator");
+            self.metrics
+                .increment_total_processed_messages("to_aggregator");
+        }
 
         Ok(())
     }
