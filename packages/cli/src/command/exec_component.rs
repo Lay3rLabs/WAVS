@@ -1,4 +1,7 @@
+use std::collections::BTreeMap;
+
 use anyhow::Result;
+use utils::config::WAVS_ENV_PREFIX;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
@@ -49,6 +52,7 @@ pub struct ExecComponentArgs {
     pub component_path: String,
     pub input: ComponentInput,
     pub fuel_limit: Option<u64>,
+    pub config: BTreeMap<String, String>,
 }
 
 impl ExecComponent {
@@ -58,16 +62,17 @@ impl ExecComponent {
             component_path,
             input,
             fuel_limit,
+            config,
         }: ExecComponentArgs,
     ) -> Result<Self> {
         let wasm_bytes = read_component(&component_path)?;
 
-        let mut config = WTConfig::new();
-        config.wasm_component_model(true);
-        config.async_support(true);
-        config.consume_fuel(true);
+        let mut wt_config = WTConfig::new();
+        wt_config.wasm_component_model(true);
+        wt_config.async_support(true);
+        wt_config.consume_fuel(true);
 
-        let engine = WTEngine::new(&config)?;
+        let engine = WTEngine::new(&wt_config)?;
 
         let trigger_action = TriggerAction {
             config: TriggerConfig {
@@ -78,21 +83,28 @@ impl ExecComponent {
             data: TriggerData::Raw(input.decode()?),
         };
 
-        let mut workflow = Workflow {
+        // Automatically pick up all env vars with the WAVS_ENV_PREFIX
+        let env_keys = std::env::vars()
+            .map(|(key, _)| key)
+            .filter(|key| key.starts_with(WAVS_ENV_PREFIX))
+            .collect();
+
+        let workflow = Workflow {
             trigger: trigger_action.config.trigger.clone(),
-            component: wavs_types::Component::new(ComponentSource::Digest(Digest::new(
-                &wasm_bytes,
-            ))),
+            component: wavs_types::Component {
+                source: ComponentSource::Digest(Digest::new(&wasm_bytes)),
+                permissions: Permissions {
+                    allowed_http_hosts: AllowedHostPermission::All,
+                    file_system: true,
+                },
+                fuel_limit,
+                time_limit_seconds: None,
+                config,
+                env_keys,
+            },
             submit: Submit::None,
             aggregators: Vec::new(),
         };
-
-        workflow.component.permissions = Permissions {
-            allowed_http_hosts: AllowedHostPermission::All,
-            file_system: true,
-        };
-
-        workflow.component.fuel_limit = fuel_limit;
 
         let mut instance_deps = InstanceDepsBuilder {
             workflow,
@@ -161,6 +173,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("hello world".to_string()),
             fuel_limit: None,
+            config: BTreeMap::default(),
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -173,6 +186,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("0x68656C6C6F20776F726C64".to_string()),
             fuel_limit: None,
+            config: BTreeMap::default(),
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -185,6 +199,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("68656C6C6F20776F726C64".to_string()),
             fuel_limit: None,
+            config: BTreeMap::default(),
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -204,11 +219,44 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new(format!("@{}", file.path().to_string_lossy())),
             fuel_limit: None,
+            config: BTreeMap::default(),
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
         assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
+        assert!(result.fuel_used > 0);
+
+        // Test config var usage in the Wasm component
+        let mut config_map = BTreeMap::new();
+        config_map.insert("my_config_key".to_string(), "config-value".to_string());
+
+        let args = ExecComponentArgs {
+            component_path: component_path.clone(),
+            input: ComponentInput::new("configvar:my_config_key".to_string()),
+            fuel_limit: None,
+            config: config_map,
+        };
+
+        let result = ExecComponent::run(&Config::default(), args).await.unwrap();
+
+        assert_eq!(result.wasm_response.unwrap().payload, b"config-value");
+        assert!(result.fuel_used > 0);
+
+        // Set an env var and test it via envvar:<key> lookup
+        let var = format!("{}MY_ENV_VAR", WAVS_ENV_PREFIX);
+        std::env::set_var(&var, "env-value");
+
+        let args = ExecComponentArgs {
+            component_path: component_path.clone(),
+            input: ComponentInput::new(format!("envvar:{}", var)),
+            fuel_limit: None,
+            config: BTreeMap::default(),
+        };
+
+        let result = ExecComponent::run(&Config::default(), args).await.unwrap();
+
+        assert_eq!(result.wasm_response.unwrap().payload, b"env-value");
         assert!(result.fuel_used > 0);
     }
 }

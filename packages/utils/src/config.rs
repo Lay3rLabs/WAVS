@@ -11,6 +11,8 @@ use crate::{
 };
 use wavs_types::ChainName;
 
+pub const WAVS_ENV_PREFIX: &str = "WAVS_ENV_";
+
 /// The builder we use to build Config
 #[derive(Debug)]
 pub struct ConfigBuilder<CONFIG, ARG> {
