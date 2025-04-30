@@ -324,7 +324,10 @@ async fn verify_signed_data(
         .unwrap();
 
     match service_signing_key {
-        SigningKeyResponse::Secp256k1(service_signing_key_bytes) => {
+        SigningKeyResponse::Secp256k1 {
+            key: service_signing_key_bytes,
+            hd_index: _,
+        } => {
             let service_private_key = SigningKey::from_slice(&service_signing_key_bytes).unwrap();
             let service_signer = PrivateKeySigner::from_signing_key(service_private_key);
             let service_address = service_signer.address();
