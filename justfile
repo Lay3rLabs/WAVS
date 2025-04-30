@@ -47,6 +47,11 @@ _install-native HOME DATA:
     @echo "Add these variables to your system environment:"
     @echo ""
     @echo "export WAVS_HOME=\"{{HOME}}\""
+    @echo "export WAVS_DATA=\"{{DATA}}/wavs\""
+    @echo "export WAVS_CLI_HOME=\"{{HOME}}\""
+    @echo "export WAVS_CLI_DATA=\"{{DATA}}/wavs-cli\""
+    @echo "export WAVS_AGGREGATOR_HOME=\"{{HOME}}\""
+    @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
 # compile WASI components, places the output in components dir
