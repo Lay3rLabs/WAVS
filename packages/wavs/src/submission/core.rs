@@ -29,11 +29,16 @@ pub struct CoreSubmission {
     chain_configs: BTreeMap<ChainName, AnyChainConfig>,
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
-    evm_signers: Arc<RwLock<HashMap<ServiceID, PrivateKeySigner>>>,
+    evm_signers: Arc<RwLock<HashMap<ServiceID, SignerInfo>>>,
     evm_sending_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
     evm_mnemonic: String,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
+}
+
+struct SignerInfo {
+    signer: PrivateKeySigner,
+    hd_index: u32,
 }
 
 impl CoreSubmission {
@@ -63,6 +68,7 @@ impl CoreSubmission {
             let lock = self.evm_signers.read().unwrap();
             lock.get(&route.service_id)
                 .ok_or(SubmissionError::MissingEvmSigner(route.service_id.clone()))?
+                .signer
                 .clone()
         };
 
@@ -257,7 +263,7 @@ impl Submission for CoreSubmission {
         self.evm_signers
             .write()
             .unwrap()
-            .insert(service.id.clone(), signer);
+            .insert(service.id.clone(), SignerInfo { signer, hd_index });
 
         for workflow in service.workflows.values() {
             if let Submit::EvmContract(EvmContractSubmission { chain_name, .. }) = &workflow.submit
@@ -311,10 +317,13 @@ impl Submission for CoreSubmission {
             .unwrap()
             .get(&service_id)
             .ok_or(SubmissionError::MissingMnemonic)
-            .map(|signer| {
-                let key_bytes = signer.credential().to_bytes().to_vec();
+            .map(|SignerInfo { signer, hd_index }| {
+                let key = signer.credential().to_bytes().to_vec();
 
-                SigningKeyResponse::Secp256k1(key_bytes)
+                SigningKeyResponse::Secp256k1 {
+                    key,
+                    hd_index: *hd_index,
+                }
             })
     }
 }

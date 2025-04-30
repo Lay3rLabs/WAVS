@@ -12,8 +12,12 @@ use utoipa::ToSchema;
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SigningKeyResponse {
-    /// from alloy's SigningKey.to_bytes()
-    Secp256k1(Vec<u8>),
+    Secp256k1 {
+        /// from alloy's SigningKey.to_bytes()
+        key: Vec<u8>,
+        /// The derivation index used to create this key from the mnemonic
+        hd_index: u32,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
