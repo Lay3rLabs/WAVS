@@ -2115,7 +2115,7 @@ mod tests {
         // Verify it returns an error for invalid prefix
         assert!(invalid_result.is_err());
         let error_msg = invalid_result.unwrap_err().to_string();
-        assert!(error_msg.contains("must start with 'WAVS_ENV_'"));
+        assert!(error_msg.contains("must start with 'WAVS_ENV'"));
 
         // Test clearing env keys
         let clear_env_result =
@@ -2911,7 +2911,7 @@ mod tests {
                 result
                     .errors
                     .iter()
-                    .any(|error| error.contains("doesn't start with 'WAVS_ENV_'")),
+                    .any(|error| error.contains("doesn't start with 'WAVS_ENV'")),
                 "Validation should catch invalid environment variable prefix"
             );
         }
