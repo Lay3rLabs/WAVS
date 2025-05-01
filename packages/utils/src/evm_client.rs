@@ -13,7 +13,10 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use signing::make_signer;
-use std::sync::{atomic::AtomicU64, Arc};
+use std::{
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
+};
 
 use crate::error::EvmClientError;
 
@@ -163,6 +166,10 @@ impl EvmClientBuilder {
                 .connect(&endpoint)
                 .await?,
         );
+
+        // Always use the 7s poll interval which is the default in prod
+        // The provider client will guess if we're running locally leading to poll interval of 250ms, and it causes polling errors
+        provider.client().set_poll_interval(Duration::from_secs(7));
 
         // default
         // let provider = DynProvder::new(ProviderBuilder::new()

@@ -40,7 +40,7 @@ impl DeployService {
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
         http_client
-            .create_service_raw(provider, service, args.service_url.clone())
+            .create_service(provider, service, args.service_url.clone())
             .await?;
 
         let _self = Self { args };

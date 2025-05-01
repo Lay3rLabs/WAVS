@@ -46,7 +46,7 @@ pub enum Command {
     },
 
     /// Execute a component directly, without going through WAVS
-    /// Env vars starting with the "WAVS_ENV_" prefix will be picked up by the component.
+    /// Env vars starting with the "WAVS_ENV" prefix will be picked up by the component.
     Exec {
         /// Path to the WASI component
         /// The component must implement the trigger-world WIT
@@ -219,7 +219,9 @@ pub enum WorkflowCommand {
 pub enum ManagerCommand {
     /// Sets an EVM service manager
     SetEvm {
+        #[clap(long)]
         chain_name: ChainName,
+        #[clap(long)]
         address: String,
     },
 }

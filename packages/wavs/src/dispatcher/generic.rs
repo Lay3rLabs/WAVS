@@ -434,9 +434,6 @@ pub enum DispatcherError {
     #[error("Alloy contract error: {0}")]
     AlloyContract(#[from] alloy_contract::Error),
 
-    #[error("Reqwest error: {0}")]
-    Reqwest(#[from] reqwest::Error),
-
     #[error("Serde error: {0}")]
     Serde(#[from] serde_json::Error),
 

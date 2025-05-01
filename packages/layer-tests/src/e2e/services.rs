@@ -23,7 +23,7 @@ use alloy_provider::ext::AnvilApi;
 use alloy_sol_types::SolEvent;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
-use wavs_cli::command::deploy_service_raw::{DeployService, DeployServiceArgs};
+use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
     Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,

@@ -10,7 +10,7 @@ use utils::{
 use wavs_cli::{
     args::Command,
     command::{
-        deploy_service_raw::{DeployService, DeployServiceArgs},
+        deploy_service::{DeployService, DeployServiceArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
         upload_component::{UploadComponent, UploadComponentArgs},
