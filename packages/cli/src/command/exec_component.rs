@@ -244,7 +244,7 @@ mod test {
         assert!(result.fuel_used > 0);
 
         // Set an env var and test it via envvar:<key> lookup
-        let var = format!("{}MY_ENV_VAR", WAVS_ENV_PREFIX);
+        let var = format!("{}_MY_ENV_VAR", WAVS_ENV_PREFIX);
         std::env::set_var(&var, "env-value");
 
         let args = ExecComponentArgs {
