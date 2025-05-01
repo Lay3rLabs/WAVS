@@ -7,12 +7,12 @@ use layer_climb::{
 };
 use reqwest::Client;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
     path::{Path, PathBuf},
 };
-use utils::wkg::WkgClient;
+use utils::{config::WAVS_ENV_PREFIX, wkg::WkgClient};
 use uuid::Uuid;
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
@@ -29,7 +29,6 @@ use crate::{
     context::CliContext,
     service_json::{
         ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson, TriggerJson, WorkflowJson,
-        ENV_PREFIX,
     },
 };
 
@@ -264,7 +263,7 @@ impl std::fmt::Display for ComponentSourceRegistryResult {
 #[derive(Debug, Clone)]
 pub struct ComponentEnvKeysResult {
     /// The updated environment variable keys
-    pub env_keys: HashSet<String>,
+    pub env_keys: BTreeSet<String>,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -1093,7 +1092,7 @@ pub fn update_component_env_keys(
 
         if let Some(values) = values {
             // Validate each environment variable to ensure it has the required prefix
-            let mut validated_env_keys = HashSet::new();
+            let mut validated_env_keys = BTreeSet::new();
             for key in values {
                 let key = key.trim().to_string();
 
@@ -1101,11 +1100,11 @@ pub fn update_component_env_keys(
                     continue; // Skip empty keys
                 }
 
-                if !key.starts_with(ENV_PREFIX) {
+                if !key.starts_with(WAVS_ENV_PREFIX) {
                     return Err(anyhow::anyhow!(
                         "Environment variable '{}' must start with '{}'",
                         key,
-                        ENV_PREFIX
+                        WAVS_ENV_PREFIX
                     ));
                 }
 
@@ -2116,7 +2115,7 @@ mod tests {
         // Verify it returns an error for invalid prefix
         assert!(invalid_result.is_err());
         let error_msg = invalid_result.unwrap_err().to_string();
-        assert!(error_msg.contains("must start with 'WAVS_ENV_'"));
+        assert!(error_msg.contains("must start with 'WAVS_ENV'"));
 
         // Test clearing env keys
         let clear_env_result =
@@ -2912,7 +2911,7 @@ mod tests {
                 result
                     .errors
                     .iter()
-                    .any(|error| error.contains("doesn't start with 'WAVS_ENV_'")),
+                    .any(|error| error.contains("doesn't start with 'WAVS_ENV'")),
                 "Validation should catch invalid environment variable prefix"
             );
         }

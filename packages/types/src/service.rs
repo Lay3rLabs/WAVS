@@ -1,7 +1,7 @@
 use alloy_primitives::LogData;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU32;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
@@ -103,7 +103,7 @@ pub struct Component {
 
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
-    pub env_keys: HashSet<String>,
+    pub env_keys: BTreeSet<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
@@ -348,7 +348,7 @@ pub struct WasmResponse {
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
     use std::{
-        collections::{BTreeMap, HashSet},
+        collections::{BTreeMap, BTreeSet},
         num::NonZeroU32,
     };
 
@@ -374,7 +374,7 @@ mod test_ext {
                 fuel_limit: None,
                 time_limit_seconds: None,
                 config: BTreeMap::new(),
-                env_keys: HashSet::new(),
+                env_keys: BTreeSet::new(),
             }
         }
     }
