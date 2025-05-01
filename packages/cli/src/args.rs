@@ -46,6 +46,7 @@ pub enum Command {
     },
 
     /// Execute a component directly, without going through WAVS
+    /// Env vars starting with the "WAVS_ENV_" prefix will be picked up by the component.
     Exec {
         /// Path to the WASI component
         /// The component must implement the trigger-world WIT
@@ -65,6 +66,10 @@ pub enum Command {
         /// Optional fuel limit for component execution
         #[clap(long)]
         fuel_limit: Option<u64>,
+
+        /// Component config in KEY=VALUE format, comma-separated: --config a=1,b=2
+        #[clap(long, value_delimiter = ',')]
+        config: Vec<String>,
     },
 
     /// Service management commands

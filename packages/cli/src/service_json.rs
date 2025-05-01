@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
     Aggregator, Component, EvmContractSubmission, ServiceID, ServiceManager, ServiceStatus, Submit,
     Timestamp, Trigger, WorkflowID,
 };
-
-pub const ENV_PREFIX: &str = "WAVS_ENV_";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -51,10 +50,10 @@ impl ServiceJson {
 
                 // Validate env_keys have the correct prefix
                 for key in &component.env_keys {
-                    if !key.starts_with(ENV_PREFIX) {
+                    if !key.starts_with(WAVS_ENV_PREFIX) {
                         errors.push(format!(
                 "Workflow '{}' has environment variable '{}' that doesn't start with '{}'",
-                workflow_id, key, ENV_PREFIX
+                workflow_id, key, WAVS_ENV_PREFIX
             ));
                     }
                 }

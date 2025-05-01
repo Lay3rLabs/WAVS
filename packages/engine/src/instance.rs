@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use utils::config::ChainConfigs;
+use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
 use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
@@ -79,7 +79,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
         let env: Vec<_> = std::env::vars()
             .filter(|(key, _)| {
-                key.starts_with("WAVS_ENV") && workflow.component.env_keys.contains(key)
+                key.starts_with(WAVS_ENV_PREFIX) && workflow.component.env_keys.contains(key)
             })
             .collect();
 

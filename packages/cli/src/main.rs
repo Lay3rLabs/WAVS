@@ -101,14 +101,27 @@ async fn main() {
             component,
             input,
             fuel_limit,
+            config,
             args: _,
         } => {
+            let config = config
+                .into_iter()
+                .filter_map(|pair| {
+                    let mut parts = pair.splitn(2, '=');
+                    match (parts.next(), parts.next()) {
+                        (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
+                        _ => None, // skip malformed entries
+                    }
+                })
+                .collect();
+
             let res = ExecComponent::run(
                 &ctx.config,
                 ExecComponentArgs {
                     component_path: component,
                     input: ComponentInput::new(input),
                     fuel_limit,
+                    config,
                 },
             )
             .await
