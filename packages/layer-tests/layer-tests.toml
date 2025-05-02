@@ -1,43 +1,30 @@
 [default]
 log_level = ["info", "wavs=debug"]
 
-# Run all the tests
 [layer-tests]
-all = true
-# isolated = "evm-echo-data"
-# isolated = "evm-multi-trigger"
-# isolated = "evm-permissions"
+# Run all tests
+mode = "all"
+
+# Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
+# mode = "all_eth"
+
+# Run a specific test
+# mode = {"isolated" = [
+#     {evm = "echo_data"},
+# ]}
+
+# Run a few specific tests
+# mode = {"isolated" = [
+#     {evm = "echo_data"},
+#     {evm = "echo_data_aggregator"},
+#     {cosmos = "permissions"},
+# ]}
+
+# Load components from the registry
 # registry = true
+
+# Send tracing to Jaeger
 # jaeger = "http://localhost:4317"
+
+# Send metrics to Prometheus
 # prometheus = "http://localhost:9090"
-
-# Run just one test (cannot be enabled at the same time as all)
-
-# See matrix.rs for all the available options
-# You can run groups of tests like:
-
-# [layer-tests.matrix.evm]
-# echo-data = true
-# square = true
-# cron-interval = true
-# block-interval = true
-# chain-trigger-lookup = true
-# echo-data-secondary-chain = true
-# echo-data-aggregator = true
-# permissions = true
-# multi-workflow = true
-# multi-trigger= true
-# cosmos-query = true
-
-# [layer-tests.matrix.cosmos]
-# block-interval = true
-# chain-trigger-lookup = true
-# cosmos-query = true
-# echo-data = true
-# permissions = true
-# square = true
-
-
-# [layer-tests.matrix.crosschain]
-# cosmos-to-evm-echo-data = true
-# etc.

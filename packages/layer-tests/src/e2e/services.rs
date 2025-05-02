@@ -118,7 +118,7 @@ impl Services {
 
             let fut = async move {
                 let service = match service_kind {
-                    AnyService::EVM(EvmService::MultiWorkflow) => {
+                    AnyService::Evm(EvmService::MultiWorkflow) => {
                         deploy_service_raw(service_kind, clients, component_sources, &chain_names)
                             .await
                     }
@@ -144,7 +144,7 @@ impl Services {
 
                 tracing::info!("[{:?}] Deployed service: {}", service_kind, service.id);
 
-                if service_kind == AnyService::EVM(EvmService::MultiTrigger) {
+                if service_kind == AnyService::Evm(EvmService::MultiTrigger) {
                     // it's a bit ugly but it works, just clone the original service and replace:
                     // 1. the service id (so it's a new service, from the perspective of WAVS)
                     // 2. the workflow submission
@@ -241,30 +241,30 @@ async fn deploy_service_simple(
 
     // Determine trigger chain directly based on service_kind
     let trigger_chain = match service_kind {
-        AnyService::EVM(EvmService::EchoDataAggregator) => {
+        AnyService::Evm(EvmService::EchoDataAggregator) => {
             Some(chain_names.evm_aggregator[0].clone())
         }
-        AnyService::EVM(EvmService::EchoDataSecondaryChain) => Some(chain_names.evm[1].clone()),
-        AnyService::EVM(_) => Some(chain_names.evm[0].clone()),
+        AnyService::Evm(EvmService::EchoDataSecondaryChain) => Some(chain_names.evm[1].clone()),
+        AnyService::Evm(_) => Some(chain_names.evm[0].clone()),
         AnyService::Cosmos(_) => Some(chain_names.cosmos[0].clone()),
         AnyService::CrossChain(_) => Some(chain_names.cosmos[0].clone()),
     };
 
     // Create the actual trigger based on the service_kind
     let trigger = match service_kind {
-        AnyService::EVM(EvmService::BlockInterval) => {
+        AnyService::Evm(EvmService::BlockInterval) => {
             let chain_name = trigger_chain.as_ref().unwrap().clone();
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
             }
         }
-        AnyService::EVM(EvmService::CronInterval) => Trigger::Cron {
+        AnyService::Evm(EvmService::CronInterval) => Trigger::Cron {
             schedule: "*/1 * * * * *".to_string(),
             start_time: None,
             end_time: None,
         },
-        AnyService::EVM(_) => {
+        AnyService::Evm(_) => {
             let chain_name = trigger_chain.as_ref().unwrap().clone();
             let client = clients.get_evm_client(trigger_chain.as_ref().unwrap());
 
@@ -328,7 +328,7 @@ async fn deploy_service_simple(
 
     // Determine the submit chain
     let submit_chain = match service_kind {
-        AnyService::EVM(_) => trigger_chain.clone(),
+        AnyService::Evm(_) => trigger_chain.clone(),
         AnyService::Cosmos(_) | AnyService::CrossChain(_) => Some(chain_names.evm[0].clone()),
     };
 
@@ -396,7 +396,7 @@ async fn deploy_service_simple(
     tracing::info!(
         "Deploying Service {} on trigger_chain: [{}] submit_chain: [{}]",
         match service_kind {
-            AnyService::EVM(service) => format!("EVM {:?}", service),
+            AnyService::Evm(service) => format!("EVM {:?}", service),
             AnyService::Cosmos(service) => format!("Cosmos {:?}", service),
             AnyService::CrossChain(service) => format!("CrossChain {:?}", service),
         },
@@ -427,7 +427,7 @@ async fn deploy_service_raw(
     component_sources: &ComponentSources,
     chain_names: &ChainNames,
 ) -> Service {
-    if !matches!(service_kind, AnyService::EVM(EvmService::MultiWorkflow)) {
+    if !matches!(service_kind, AnyService::Evm(EvmService::MultiWorkflow)) {
         panic!("unexpected service kind: {:?}", service_kind);
     }
 

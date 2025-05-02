@@ -79,7 +79,7 @@ async fn test_service(
     if let Some(multi_trigger_service) = &multi_trigger_service {
         // sanity checks for multi-trigger, to surface errors earlier
         // since mistakes here lead to hard-to-catch race conditions
-        assert_eq!(name, AnyService::EVM(EvmService::MultiTrigger));
+        assert_eq!(name, AnyService::Evm(EvmService::MultiTrigger));
         assert!(multi_trigger_service.workflows.len() == 1);
         assert!(service.workflows.len() == 1);
 
@@ -195,7 +195,7 @@ fn get_input_for_service(
         .to_vec()
     };
     let input_data = match name {
-        AnyService::EVM(name) => match name {
+        AnyService::Evm(name) => match name {
             EvmService::ChainTriggerLookup => b"satoshi".to_vec(),
             EvmService::CosmosQuery => CosmosQueryRequest::BlockHeight {
                 chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
@@ -253,7 +253,7 @@ async fn verify_signed_data(
     };
 
     let expected_data = match name {
-        AnyService::EVM(evm_name) => match evm_name {
+        AnyService::Evm(evm_name) => match evm_name {
             // Just echo
             EvmService::EchoData
             | EvmService::EchoDataSecondaryChain
