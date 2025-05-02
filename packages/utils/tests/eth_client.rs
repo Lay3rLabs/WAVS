@@ -19,7 +19,7 @@ async fn client_stream_blocks() {
         ..Default::default()
     };
 
-    let builder = EvmClientBuilder::new(config);
+    let builder = EvmClientBuilder::new(config, None);
     let client = builder.build_query().await.unwrap();
 
     let mut stream = client
@@ -54,7 +54,7 @@ async fn client_sign_message() {
         gas_estimate_multiplier: None,
     };
 
-    let builder = EvmClientBuilder::new(config);
+    let builder = EvmClientBuilder::new(config, None);
     let client = builder.build_signing().await.unwrap();
 
     let message = b"hello world";

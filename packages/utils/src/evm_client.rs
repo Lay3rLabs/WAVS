@@ -90,11 +90,15 @@ pub enum EvmClientTransport {
 
 pub struct EvmClientBuilder {
     pub config: EvmClientConfig,
+    pub poll_interval: Option<Duration>,
 }
 
 impl EvmClientBuilder {
-    pub fn new(config: EvmClientConfig) -> Self {
-        Self { config }
+    pub fn new(config: EvmClientConfig, poll_interval: Option<Duration>) -> Self {
+        Self {
+            config,
+            poll_interval,
+        }
     }
 
     fn preferred_transport(&self) -> EvmClientTransport {
@@ -167,9 +171,9 @@ impl EvmClientBuilder {
                 .await?,
         );
 
-        // Always use the 7s poll interval which is the default in prod
-        // The provider client will guess if we're running locally leading to poll interval of 250ms, and it causes polling errors
-        provider.client().set_poll_interval(Duration::from_secs(7));
+        if let Some(poll_interval) = self.poll_interval {
+            provider.client().set_poll_interval(poll_interval);
+        }
 
         // default
         // let provider = DynProvder::new(ProviderBuilder::new()
@@ -245,62 +249,80 @@ mod test {
     #[test]
     fn preferred_transport() {
         // Not specified preference, websocket provided
-        let transport = EvmClientBuilder::new(EvmClientConfig {
-            ws_endpoint: Some("foo".to_owned()),
-            http_endpoint: Some("bar".to_owned()),
-            transport: None,
-            ..Default::default()
-        })
+        let transport = EvmClientBuilder::new(
+            EvmClientConfig {
+                ws_endpoint: Some("foo".to_owned()),
+                http_endpoint: Some("bar".to_owned()),
+                transport: None,
+                ..Default::default()
+            },
+            None,
+        )
         .preferred_transport();
         assert!(matches!(transport, EvmClientTransport::WebSocket));
 
         // Not specified preference, websocket not provided
-        let transport = EvmClientBuilder::new(EvmClientConfig {
-            ws_endpoint: None,
-            http_endpoint: Some("bar".to_owned()),
-            transport: None,
-            ..Default::default()
-        })
+        let transport = EvmClientBuilder::new(
+            EvmClientConfig {
+                ws_endpoint: None,
+                http_endpoint: Some("bar".to_owned()),
+                transport: None,
+                ..Default::default()
+            },
+            None,
+        )
         .preferred_transport();
         assert!(matches!(transport, EvmClientTransport::Http));
 
         // Specified Http preference, websocket provided
-        let transport = EvmClientBuilder::new(EvmClientConfig {
-            ws_endpoint: Some("foo".to_owned()),
-            http_endpoint: Some("bar".to_owned()),
-            transport: Some(EvmClientTransport::Http),
-            ..Default::default()
-        })
+        let transport = EvmClientBuilder::new(
+            EvmClientConfig {
+                ws_endpoint: Some("foo".to_owned()),
+                http_endpoint: Some("bar".to_owned()),
+                transport: Some(EvmClientTransport::Http),
+                ..Default::default()
+            },
+            None,
+        )
         .preferred_transport();
         assert!(matches!(transport, EvmClientTransport::Http));
 
         // Specified Http preference, websocket not provided
-        let transport = EvmClientBuilder::new(EvmClientConfig {
-            ws_endpoint: None,
-            http_endpoint: Some("bar".to_owned()),
-            transport: Some(EvmClientTransport::Http),
-            ..Default::default()
-        })
+        let transport = EvmClientBuilder::new(
+            EvmClientConfig {
+                ws_endpoint: None,
+                http_endpoint: Some("bar".to_owned()),
+                transport: Some(EvmClientTransport::Http),
+                ..Default::default()
+            },
+            None,
+        )
         .preferred_transport();
         assert!(matches!(transport, EvmClientTransport::Http));
 
         // Specified Websocket preference, websocket provided
-        let transport = EvmClientBuilder::new(EvmClientConfig {
-            ws_endpoint: Some("foo".to_owned()),
-            http_endpoint: Some("bar".to_owned()),
-            transport: Some(EvmClientTransport::WebSocket),
-            ..Default::default()
-        })
+        let transport = EvmClientBuilder::new(
+            EvmClientConfig {
+                ws_endpoint: Some("foo".to_owned()),
+                http_endpoint: Some("bar".to_owned()),
+                transport: Some(EvmClientTransport::WebSocket),
+                ..Default::default()
+            },
+            None,
+        )
         .preferred_transport();
         assert!(matches!(transport, EvmClientTransport::WebSocket));
 
         // Specified Websocket preference, websocket not provided
-        let transport = EvmClientBuilder::new(EvmClientConfig {
-            ws_endpoint: None,
-            http_endpoint: Some("bar".to_owned()),
-            transport: Some(EvmClientTransport::WebSocket),
-            ..Default::default()
-        })
+        let transport = EvmClientBuilder::new(
+            EvmClientConfig {
+                ws_endpoint: None,
+                http_endpoint: Some("bar".to_owned()),
+                transport: Some(EvmClientTransport::WebSocket),
+                ..Default::default()
+            },
+            None,
+        )
         .preferred_transport();
         assert!(matches!(transport, EvmClientTransport::WebSocket));
     }

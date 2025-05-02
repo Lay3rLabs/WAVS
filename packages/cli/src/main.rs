@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
@@ -20,6 +22,8 @@ use wavs_cli::{
 };
 use wavs_types::ChainName;
 
+// duplicated here instead of using the one in CliContext so
+// that we don't end up accidentally using the CliContext one in e2e tests
 pub(crate) async fn new_evm_client(
     ctx: &CliContext,
     chain_name: &ChainName,
@@ -35,7 +39,16 @@ pub(crate) async fn new_evm_client(
     let client_config =
         chain_config.to_client_config(None, ctx.config.evm_credential.clone(), None);
 
-    let evm_client = EvmClientBuilder::new(client_config).build_signing().await?;
+    let evm_client = EvmClientBuilder::new(
+        client_config,
+        if ctx.config.evm_poll_interval_ms > 0 {
+            Some(Duration::from_millis(ctx.config.evm_poll_interval_ms))
+        } else {
+            None
+        },
+    )
+    .build_signing()
+    .await?;
 
     Ok(evm_client)
 }
