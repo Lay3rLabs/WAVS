@@ -371,8 +371,8 @@ impl EvmChainConfig {
     ) -> std::result::Result<EvmSigningClientConfig, EvmClientError> {
         let endpoint = match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
             // prefer HTTP for signing clients
-            (_, Some(http)) => EvmEndpoint::Http(http),
-            (Some(ws), _) => EvmEndpoint::WebSocket(ws),
+            (_, Some(url)) => EvmEndpoint::new_http(&url)?,
+            (Some(url), _) => EvmEndpoint::new_ws(&url)?,
             _ => {
                 return Err(EvmClientError::ParseEndpoint(
                     "No endpoint provided".to_string(),
@@ -386,8 +386,8 @@ impl EvmChainConfig {
     pub fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError> {
         match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
             // prefer WS for query clients
-            (Some(ws), _) => Ok(EvmEndpoint::WebSocket(ws)),
-            (_, Some(http)) => Ok(EvmEndpoint::Http(http)),
+            (Some(url), _) => EvmEndpoint::new_ws(&url),
+            (_, Some(url)) => EvmEndpoint::new_http(&url),
             _ => Err(EvmClientError::ParseEndpoint(
                 "No endpoint provided".to_string(),
             )),

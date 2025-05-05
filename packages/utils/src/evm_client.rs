@@ -9,9 +9,8 @@ use alloy_provider::{
 };
 use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::{TransportErrorKind, TransportResult};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use signing::make_signer;
 use std::{
     str::FromStr,
@@ -27,27 +26,50 @@ pub struct EvmQueryClient {
     pub provider: DynProvider,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum EvmEndpoint {
-    WebSocket(String),
-    Http(String),
+    WebSocket(reqwest::Url),
+    Http(reqwest::Url),
 }
 
 impl FromStr for EvmEndpoint {
     type Err = EvmClientError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("ws://") || s.starts_with("wss://") {
-            Ok(EvmEndpoint::WebSocket(s.to_string()))
-        } else if s.starts_with("http://") || s.starts_with("https://") {
-            Ok(EvmEndpoint::Http(s.to_string()))
-        } else {
-            Err(EvmClientError::ParseEndpoint(s.to_string()))
+        let url =
+            reqwest::Url::parse(s).map_err(|e| EvmClientError::ParseEndpoint(e.to_string()))?;
+        match url.scheme() {
+            "ws" | "wss" => Ok(EvmEndpoint::WebSocket(url)),
+            "http" | "https" => Ok(EvmEndpoint::Http(url)),
+            scheme => Err(EvmClientError::ParseEndpoint(format!(
+                "could not determine endpoint from scheme {scheme} (full url: {s})"
+            ))),
         }
     }
 }
 
 impl EvmEndpoint {
+    pub fn new_http(url: &str) -> Result<Self, EvmClientError> {
+        let url =
+            reqwest::Url::parse(url).map_err(|e| EvmClientError::ParseEndpoint(e.to_string()))?;
+
+        if url.scheme() != "http" && url.scheme() != "https" {
+            tracing::warn!("EvmEndpoint::new_http: url scheme is not http or https");
+        }
+
+        Ok(EvmEndpoint::Http(url))
+    }
+    pub fn new_ws(url: &str) -> Result<Self, EvmClientError> {
+        let url =
+            reqwest::Url::parse(url).map_err(|e| EvmClientError::ParseEndpoint(e.to_string()))?;
+
+        if url.scheme() != "ws" && url.scheme() != "wss" {
+            tracing::warn!("EvmEndpoint::new_ws: url scheme is not ws or wss");
+        }
+
+        Ok(EvmEndpoint::WebSocket(url))
+    }
+
     pub async fn to_provider(&self) -> std::result::Result<DynProvider, EvmClientError> {
         Ok(match self {
             EvmEndpoint::WebSocket(url) => {
@@ -59,12 +81,7 @@ impl EvmEndpoint {
                         .map_err(|e| EvmClientError::WebSocketProvider(e.into()))?,
                 )
             }
-            EvmEndpoint::Http(url) => {
-                let url =
-                    reqwest::Url::parse(url).map_err(|e| EvmClientError::HttpProvider(e.into()))?;
-
-                DynProvider::new(ProviderBuilder::new().on_http(url))
-            }
+            EvmEndpoint::Http(url) => DynProvider::new(ProviderBuilder::new().on_http(url.clone())),
         })
     }
 }
@@ -100,7 +117,7 @@ pub struct EvmSigningClient {
     pub signer: Arc<PrivateKeySigner>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct EvmSigningClientConfig {
     pub endpoint: EvmEndpoint,
     pub credential: String,
@@ -168,11 +185,7 @@ impl EvmSigningClient {
                 let ws = WsConnect::new(url.clone());
                 DynProvider::new(builder.on_ws(ws).await?)
             }
-            EvmEndpoint::Http(url) => {
-                let url = reqwest::Url::parse(url).context("Invalid HTTP endpoint")?;
-
-                DynProvider::new(builder.on_http(url))
-            }
+            EvmEndpoint::Http(url) => DynProvider::new(builder.on_http(url.clone())),
         };
 
         if let Some(poll_interval) = config.poll_interval {
