@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::Duration,
 };
 
 use anyhow::{bail, Context};
@@ -76,17 +75,12 @@ impl HttpState {
 
         let chain_config = EvmChainConfig::try_from(chain_config)?;
 
-        let mut client_config = chain_config.signing_client_config(
+        let client_config = chain_config.signing_client_config(
             self.config
                 .credential
                 .clone()
                 .context("missing evm_credential")?,
         )?;
-
-        if self.config.evm_poll_interval_ms > 0 {
-            client_config = client_config
-                .with_poll_interval(Duration::from_millis(self.config.evm_poll_interval_ms));
-        }
 
         let evm_client = EvmSigningClient::new(client_config).await?;
 

@@ -37,11 +37,6 @@ pub struct Config {
     /// Mnemonic or private key of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub credential: Option<String>,
 
-    // The interval in milliseconds to poll after submitting a transaction
-    // 0 will use whatever alloy's default is
-    // default is intended for prod use and is 7000ms
-    pub evm_poll_interval_ms: u64,
-
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
 
@@ -66,7 +61,6 @@ impl Default for Config {
                 cosmos: Default::default(),
                 evm: Default::default(),
             },
-            evm_poll_interval_ms: 7000,
         }
     }
 }

@@ -32,11 +32,6 @@ pub struct Config {
     /// The credential to use for submitting transactions on evm chains (mnemonic or private key)
     pub evm_credential: Option<String>,
 
-    // The interval in milliseconds to poll after submitting a transaction
-    // 0 will use whatever alloy's default is
-    // default is intended for prod use and is 7000ms
-    pub evm_poll_interval_ms: u64,
-
     pub registry_domain: Option<String>,
 
     /// The IPFS gateway URL used to access IPFS content over HTTP.
@@ -66,7 +61,6 @@ impl Default for Config {
             evm_credential: None,
             registry_domain: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
-            evm_poll_interval_ms: 7000,
         }
     }
 }

@@ -150,10 +150,6 @@ impl EvmSigningClientConfig {
         self.gas_estimate_multiplier = Some(gas_estimate_multiplier);
         self
     }
-    pub fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
-        self.poll_interval = Some(poll_interval);
-        self
-    }
 }
 
 impl EvmSigningClient {

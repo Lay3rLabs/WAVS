@@ -48,11 +48,6 @@ pub struct Config {
     /// The mnemonic to use for submitting transactions on EVM chains
     pub submission_mnemonic: Option<String>,
 
-    // The interval in milliseconds to poll after submitting a transaction
-    // 0 will use whatever alloy's default is
-    // default is intended for prod use and is 7000ms
-    pub submission_poll_interval_ms: u64,
-
     /// The mnemonic to use for submitting transactions on Cosmos chains
     pub cosmos_submission_mnemonic: Option<String>,
 
@@ -110,7 +105,6 @@ impl Default for Config {
             jaeger: None,
             prometheus: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
-            submission_poll_interval_ms: 7000,
         }
     }
 }

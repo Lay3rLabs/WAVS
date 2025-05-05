@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
@@ -33,17 +31,12 @@ pub(crate) async fn new_evm_client(
         .context(format!("chain {chain_name} not found"))?
         .clone();
 
-    let mut client_config = chain_config.signing_client_config(
+    let client_config = chain_config.signing_client_config(
         ctx.config
             .evm_credential
             .clone()
             .context("missing evm_credential")?,
     )?;
-
-    if ctx.config.evm_poll_interval_ms > 0 {
-        client_config = client_config
-            .with_poll_interval(Duration::from_millis(ctx.config.evm_poll_interval_ms));
-    }
 
     let evm_client = EvmSigningClient::new(client_config).await?;
 

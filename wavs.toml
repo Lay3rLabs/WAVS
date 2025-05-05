@@ -67,26 +67,31 @@ gas_denom = "untrn"
 chain_id = "31337"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
+poll_interval_ms = 7000
 
 [default.chains.evm.local2]
 chain_id = "31338"
 ws_endpoint = "ws://localhost:8645"
 http_endpoint = "http://localhost:8645"
+poll_interval_ms = 7000
 
 [default.chains.evm.sepolia]
 chain_id = "11155111"
 ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
 http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
+poll_interval_ms = 7000
 
 [default.chains.evm.holesky]
 chain_id = "17000"
 ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
 http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
+poll_interval_ms = 7000
 
 [default.chains.evm.holesky-fork]
 chain_id = "17000"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
+poll_interval_ms = 7000
 
 # ----------------------------
 # WAVS specific settings

@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Mutex, time::Duration};
+use std::{fmt::Display, sync::Mutex};
 
 use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
 use alloy_provider::Provider;
@@ -60,17 +60,12 @@ impl CliContext {
             .context(format!("chain {chain_name} not found"))?
             .clone();
 
-        let mut client_config = chain_config.signing_client_config(
+        let client_config = chain_config.signing_client_config(
             self.config
                 .evm_credential
                 .clone()
                 .context("missing evm_credential")?,
         )?;
-
-        if self.config.evm_poll_interval_ms > 0 {
-            client_config = client_config
-                .with_poll_interval(Duration::from_millis(self.config.evm_poll_interval_ms));
-        }
 
         let evm_client = EvmSigningClient::new(client_config).await?;
 
