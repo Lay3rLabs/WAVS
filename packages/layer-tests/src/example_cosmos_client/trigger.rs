@@ -4,25 +4,31 @@ use layer_climb::prelude::*;
 use simple_example_cosmos::entry::execute::ExecuteMsg;
 pub use simple_example_cosmos::event::NewMessageEvent;
 
-#[derive(Clone)]
 pub struct SimpleCosmosTriggerClient {
-    pub signing_client: SigningClient,
+    pub signing_client: deadpool::managed::Object<SigningClientPoolManager>,
     pub contract_address: Address,
 }
 
 type TriggerId = Uint64;
 
 impl SimpleCosmosTriggerClient {
-    pub fn new(signing_client: SigningClient, contract_address: Address) -> Self {
+    pub fn new(
+        signing_client: deadpool::managed::Object<SigningClientPoolManager>,
+        contract_address: Address,
+    ) -> Self {
         Self {
             signing_client,
             contract_address,
         }
     }
 
-    pub async fn new_code_id(signing_client: SigningClient, code_id: u64) -> Result<Self> {
+    pub async fn new_code_id(
+        signing_client: deadpool::managed::Object<SigningClientPoolManager>,
+        code_id: u64,
+        label: &str,
+    ) -> Result<Self> {
         let (addr, _) = signing_client
-            .contract_instantiate(None, code_id, "simple-trigger", &Empty {}, Vec::new(), None)
+            .contract_instantiate(None, code_id, label, &Empty {}, Vec::new(), None)
             .await?;
 
         Ok(Self::new(signing_client, addr))

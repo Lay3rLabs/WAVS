@@ -32,7 +32,6 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
     let configs = Arc::new(configs);
     let clients = Arc::new(clients);
 
-    let mut serial_futures = Vec::new();
     let mut concurrent_futures = FuturesUnordered::new();
 
     for (name, (service, multi_trigger_service)) in all {
@@ -49,19 +48,10 @@ pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: 
             );
         };
 
-        if name.concurrent() {
-            concurrent_futures.push(fut);
-        } else {
-            serial_futures.push(fut);
-        }
+        concurrent_futures.push(fut);
     }
 
     ctx.rt.block_on(async move {
-        tracing::info!("\n\n Running serial tests...");
-        for fut in serial_futures {
-            fut.await;
-        }
-
         tracing::info!("\n\n Running concurrent tests...");
         while (concurrent_futures.next().await).is_some() {}
     });
