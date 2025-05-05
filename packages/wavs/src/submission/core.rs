@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{atomic::AtomicU32, Arc, RwLock},
-    time::Duration,
 };
 
 use crate::{
@@ -16,7 +15,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, EvmChainConfig},
-    evm_client::{signing::make_signer, EvmClientBuilder, EvmClientTransport, EvmSigningClient},
+    evm_client::{signing::make_signer, EvmSigningClient},
     telemetry::SubmissionMetrics,
 };
 use wavs_types::{
@@ -32,7 +31,6 @@ pub struct CoreSubmission {
     // created on-demand from chain_name and hd_index
     evm_signers: Arc<RwLock<HashMap<ServiceID, SignerInfo>>>,
     evm_sending_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
-    evm_poll_interval: Option<Duration>,
     evm_mnemonic: String,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
@@ -58,11 +56,6 @@ impl CoreSubmission {
                 .ok_or(SubmissionError::MissingMnemonic)?,
             evm_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
             metrics,
-            evm_poll_interval: if config.submission_poll_interval_ms > 0 {
-                Some(Duration::from_millis(config.submission_poll_interval_ms))
-            } else {
-                None
-            },
         })
     }
 
@@ -289,17 +282,12 @@ impl Submission for CoreSubmission {
                         .try_into()
                         .map_err(|_| SubmissionError::NotEvmChain)?;
 
-                    let sending_client = EvmClientBuilder::new(
-                        chain_config.to_client_config(
-                            None,
-                            Some(self.evm_mnemonic.clone()),
-                            Some(EvmClientTransport::Http),
-                        ),
-                        self.evm_poll_interval,
-                    )
-                    .build_signing()
-                    .await
-                    .map_err(SubmissionError::EVM)?;
+                    let sending_client_config =
+                        chain_config.signing_client_config(self.evm_mnemonic.clone())?;
+
+                    let sending_client = EvmSigningClient::new(sending_client_config)
+                        .await
+                        .map_err(SubmissionError::EVM)?;
 
                     self.evm_sending_clients
                         .write()

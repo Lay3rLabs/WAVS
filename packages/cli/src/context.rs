@@ -1,13 +1,10 @@
-use std::{fmt::Display, sync::Mutex, time::Duration};
+use std::{fmt::Display, sync::Mutex};
 
 use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
 use alloy_provider::Provider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
-use utils::{
-    config::AnyChainConfig,
-    evm_client::{EvmClientBuilder, EvmSigningClient},
-};
+use utils::{config::AnyChainConfig, evm_client::EvmSigningClient};
 use wavs_types::ChainName;
 
 use crate::{args::Command, deploy::Deployment};
@@ -63,19 +60,14 @@ impl CliContext {
             .context(format!("chain {chain_name} not found"))?
             .clone();
 
-        let client_config =
-            chain_config.to_client_config(None, self.config.evm_credential.clone(), None);
+        let client_config = chain_config.signing_client_config(
+            self.config
+                .evm_credential
+                .clone()
+                .context("missing evm_credential")?,
+        )?;
 
-        let evm_client = EvmClientBuilder::new(
-            client_config,
-            if self.config.evm_poll_interval_ms > 0 {
-                Some(Duration::from_millis(self.config.evm_poll_interval_ms))
-            } else {
-                None
-            },
-        )
-        .build_signing()
-        .await?;
+        let evm_client = EvmSigningClient::new(client_config).await?;
 
         Ok(evm_client)
     }

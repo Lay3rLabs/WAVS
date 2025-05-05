@@ -5,15 +5,15 @@ use alloy_network::{EthereumWallet, Network};
 use alloy_primitives::Address;
 use alloy_provider::{
     fillers::{BlobGasFiller, ChainIdFiller, GasFiller, NonceManager},
-    DynProvider, Provider, ProviderBuilder,
+    DynProvider, Provider, ProviderBuilder, WsConnect,
 };
 use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::{TransportErrorKind, TransportResult};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use signing::make_signer;
 use std::{
+    str::FromStr,
     sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
@@ -22,22 +22,92 @@ use crate::error::EvmClientError;
 
 #[derive(Clone)]
 pub struct EvmQueryClient {
-    pub config: EvmClientConfig,
+    pub endpoint: EvmEndpoint,
     pub provider: DynProvider,
+}
+
+#[derive(Debug, Clone)]
+pub enum EvmEndpoint {
+    WebSocket(reqwest::Url),
+    Http(reqwest::Url),
+}
+
+impl FromStr for EvmEndpoint {
+    type Err = EvmClientError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let url =
+            reqwest::Url::parse(s).map_err(|e| EvmClientError::ParseEndpoint(e.to_string()))?;
+        match url.scheme() {
+            "ws" | "wss" => Ok(EvmEndpoint::WebSocket(url)),
+            "http" | "https" => Ok(EvmEndpoint::Http(url)),
+            scheme => Err(EvmClientError::ParseEndpoint(format!(
+                "could not determine endpoint from scheme {scheme} (full url: {s})"
+            ))),
+        }
+    }
+}
+
+impl EvmEndpoint {
+    pub fn new_http(url: &str) -> Result<Self, EvmClientError> {
+        url.parse::<Self>().and_then(|endpoint| {
+            if matches!(endpoint, EvmEndpoint::Http(_)) {
+                Ok(endpoint)
+            } else {
+                Err(EvmClientError::ParseEndpoint(
+                    "url scheme is not http or https".to_string(),
+                ))
+            }
+        })
+    }
+    pub fn new_ws(url: &str) -> Result<Self, EvmClientError> {
+        url.parse::<Self>().and_then(|endpoint| {
+            if matches!(endpoint, EvmEndpoint::WebSocket(_)) {
+                Ok(endpoint)
+            } else {
+                Err(EvmClientError::ParseEndpoint(
+                    "url scheme is not ws or wss".to_string(),
+                ))
+            }
+        })
+    }
+
+    pub async fn to_provider(&self) -> std::result::Result<DynProvider, EvmClientError> {
+        Ok(match self {
+            EvmEndpoint::WebSocket(url) => {
+                let ws = WsConnect::new(url.clone());
+                DynProvider::new(
+                    ProviderBuilder::new()
+                        .on_ws(ws)
+                        .await
+                        .map_err(|e| EvmClientError::WebSocketProvider(e.into()))?,
+                )
+            }
+            EvmEndpoint::Http(url) => DynProvider::new(ProviderBuilder::new().on_http(url.clone())),
+        })
+    }
+}
+
+impl EvmQueryClient {
+    pub async fn new(endpoint: EvmEndpoint) -> std::result::Result<Self, EvmClientError> {
+        Ok(EvmQueryClient {
+            provider: endpoint.to_provider().await?,
+            endpoint,
+        })
+    }
 }
 
 impl std::fmt::Debug for EvmQueryClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EvmQueryClient")
-            .field("ws_endpoint", &self.config.ws_endpoint)
-            .field("http_endpoint", &self.config.http_endpoint)
+            .field("endpoint", &self.endpoint)
             .finish()
     }
 }
 
 #[derive(Clone)]
 pub struct EvmSigningClient {
-    pub config: EvmClientConfig,
+    pub config: EvmSigningClientConfig,
     pub provider: DynProvider,
     /// The wallet is a collection of signers, with one designated as the default signer
     /// it allows signing transactions
@@ -47,18 +117,98 @@ pub struct EvmSigningClient {
     /// since the signer in `EthereumWallet` implements only `TxSigner`
     /// and there is not a direct way convert it into `Signer`
     pub signer: Arc<PrivateKeySigner>,
+}
 
+#[derive(Debug, Clone)]
+pub struct EvmSigningClientConfig {
+    pub endpoint: EvmEndpoint,
+    pub credential: String,
+    pub hd_index: Option<u32>,
     /// If a transaction does not have `max_gas` set, then it will estimate
     /// however the actual gas needed fluctuates, so we can pad it with a multiplier
-    /// by default this is 1.25
-    pub gas_estimate_multiplier: f32,
+    /// if unset, it will be 1.25
+    pub gas_estimate_multiplier: Option<f32>,
+    /// The interval at which to poll the provider for new blocks
+    /// if unset, will use the default of the provider (which may differ across networks)
+    pub poll_interval: Option<Duration>,
+}
+
+impl EvmSigningClientConfig {
+    pub fn new(endpoint: EvmEndpoint, credential: String) -> Self {
+        Self {
+            endpoint,
+            credential,
+            hd_index: None,
+            gas_estimate_multiplier: None,
+            poll_interval: None,
+        }
+    }
+
+    pub fn with_hd_index(mut self, hd_index: u32) -> Self {
+        self.hd_index = Some(hd_index);
+        self
+    }
+    pub fn with_gas_estimate_multiplier(mut self, gas_estimate_multiplier: f32) -> Self {
+        self.gas_estimate_multiplier = Some(gas_estimate_multiplier);
+        self
+    }
+}
+
+impl EvmSigningClient {
+    const DEFAULT_GAS_ESTIMATE_MULTIPLIER: f32 = 1.25;
+
+    pub async fn new(config: EvmSigningClientConfig) -> Result<Self> {
+        let signer = make_signer(&config.credential, config.hd_index)?;
+
+        let wallet: EthereumWallet = signer.clone().into();
+
+        let first_nonce = config
+            .endpoint
+            .to_provider()
+            .await?
+            .get_transaction_count(signer.address())
+            .await?;
+
+        let nonce_manager = FastNonceManager::new(Some(signer.address()), first_nonce);
+
+        let builder = ProviderBuilder::default()
+            .with_nonce_management(nonce_manager)
+            .filler(GasFiller)
+            .filler(BlobGasFiller)
+            .filler(ChainIdFiller::new(None))
+            .wallet(wallet.clone());
+
+        let provider = match &config.endpoint {
+            EvmEndpoint::WebSocket(url) => {
+                let ws = WsConnect::new(url.clone());
+                DynProvider::new(builder.on_ws(ws).await?)
+            }
+            EvmEndpoint::Http(url) => DynProvider::new(builder.on_http(url.clone())),
+        };
+
+        if let Some(poll_interval) = config.poll_interval {
+            provider.client().set_poll_interval(poll_interval);
+        }
+
+        Ok(Self {
+            config,
+            provider,
+            wallet: Arc::new(wallet),
+            signer: Arc::new(signer),
+        })
+    }
+
+    pub fn gas_estimate_multiplier(&self) -> f32 {
+        self.config
+            .gas_estimate_multiplier
+            .unwrap_or(Self::DEFAULT_GAS_ESTIMATE_MULTIPLIER)
+    }
 }
 
 impl std::fmt::Debug for EvmSigningClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EvmSigningClient")
-            .field("ws_endpoint", &self.config.ws_endpoint)
-            .field("http_endpoint", &self.config.http_endpoint)
+            .field("endpoint", &self.config.endpoint)
             .field("address", &self.address())
             .finish()
     }
@@ -67,127 +217,6 @@ impl std::fmt::Debug for EvmSigningClient {
 impl EvmSigningClient {
     pub fn address(&self) -> Address {
         self.signer.address()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct EvmClientConfig {
-    pub ws_endpoint: Option<String>,
-    pub http_endpoint: Option<String>,
-    pub credential: Option<String>,
-    pub hd_index: Option<u32>,
-    /// Preferred transport
-    pub transport: Option<EvmClientTransport>,
-    // if not set, will be 1.25
-    pub gas_estimate_multiplier: Option<f32>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
-pub enum EvmClientTransport {
-    WebSocket,
-    Http,
-}
-
-pub struct EvmClientBuilder {
-    pub config: EvmClientConfig,
-    pub poll_interval: Option<Duration>,
-}
-
-impl EvmClientBuilder {
-    pub fn new(config: EvmClientConfig, poll_interval: Option<Duration>) -> Self {
-        Self {
-            config,
-            poll_interval,
-        }
-    }
-
-    fn preferred_transport(&self) -> EvmClientTransport {
-        match (self.config.transport, &self.config.ws_endpoint) {
-            // Http preferred or no preference and no websocket
-            (Some(EvmClientTransport::Http), _) | (None, None) => EvmClientTransport::Http,
-            // Otherwise try to connect to websocket
-            _ => EvmClientTransport::WebSocket,
-        }
-    }
-
-    pub fn endpoint(&self) -> Result<String> {
-        match self.preferred_transport() {
-            // Http preferred or no preference and no websocket
-            EvmClientTransport::Http => Ok(self
-                .config
-                .http_endpoint
-                .as_ref()
-                .context("no http endpoint")?
-                .to_string()),
-            EvmClientTransport::WebSocket => Ok(self
-                .config
-                .ws_endpoint
-                .as_ref()
-                .context("Websocket is preferred transport, but endpoint was not provided")?
-                .to_string()),
-        }
-    }
-    pub async fn build_query(self) -> Result<EvmQueryClient> {
-        let endpoint = self.endpoint()?;
-
-        Ok(EvmQueryClient {
-            config: self.config,
-            provider: DynProvider::new(ProviderBuilder::new().connect(&endpoint).await?),
-        })
-    }
-
-    pub async fn build_signing(mut self) -> Result<EvmSigningClient> {
-        if self.preferred_transport() != EvmClientTransport::Http {
-            tracing::warn!("signing clients should probably prefer http transport");
-        }
-
-        let credentials = self
-            .config
-            .credential
-            .take()
-            .ok_or(EvmClientError::MissingMnemonic)?;
-
-        let signer = make_signer(&credentials, self.config.hd_index)?;
-
-        let wallet: EthereumWallet = signer.clone().into();
-
-        let endpoint = self.endpoint()?;
-
-        let query_provider = ProviderBuilder::new().connect(&endpoint).await?;
-        let first_nonce = query_provider
-            .get_transaction_count(signer.address())
-            .await?;
-
-        let nonce_manager = FastNonceManager::new(Some(signer.address()), first_nonce);
-
-        let provider = DynProvider::new(
-            ProviderBuilder::default()
-                .with_nonce_management(nonce_manager)
-                .filler(GasFiller)
-                .filler(BlobGasFiller)
-                .filler(ChainIdFiller::new(None))
-                .wallet(wallet.clone())
-                .connect(&endpoint)
-                .await?,
-        );
-
-        if let Some(poll_interval) = self.poll_interval {
-            provider.client().set_poll_interval(poll_interval);
-        }
-
-        // default
-        // let provider = DynProvder::new(ProviderBuilder::new()
-        //         .wallet(wallet.clone())
-        //         .on_builtin(&endpoint)
-        //         .await?);
-
-        Ok(EvmSigningClient {
-            gas_estimate_multiplier: self.config.gas_estimate_multiplier.unwrap_or(1.25),
-            config: self.config,
-            provider,
-            wallet: Arc::new(wallet),
-            signer: Arc::new(signer),
-        })
     }
 }
 
@@ -247,83 +276,20 @@ mod test {
     use super::*;
 
     #[test]
-    fn preferred_transport() {
-        // Not specified preference, websocket provided
-        let transport = EvmClientBuilder::new(
-            EvmClientConfig {
-                ws_endpoint: Some("foo".to_owned()),
-                http_endpoint: Some("bar".to_owned()),
-                transport: None,
-                ..Default::default()
-            },
-            None,
-        )
-        .preferred_transport();
-        assert!(matches!(transport, EvmClientTransport::WebSocket));
+    fn parse_endpoint() {
+        let endpoint = EvmEndpoint::from_str("ws://localhost:8545").unwrap();
+        assert!(matches!(endpoint, EvmEndpoint::WebSocket(_)));
 
-        // Not specified preference, websocket not provided
-        let transport = EvmClientBuilder::new(
-            EvmClientConfig {
-                ws_endpoint: None,
-                http_endpoint: Some("bar".to_owned()),
-                transport: None,
-                ..Default::default()
-            },
-            None,
-        )
-        .preferred_transport();
-        assert!(matches!(transport, EvmClientTransport::Http));
+        let endpoint = EvmEndpoint::from_str("http://localhost:8545").unwrap();
+        assert!(matches!(endpoint, EvmEndpoint::Http(_)));
 
-        // Specified Http preference, websocket provided
-        let transport = EvmClientBuilder::new(
-            EvmClientConfig {
-                ws_endpoint: Some("foo".to_owned()),
-                http_endpoint: Some("bar".to_owned()),
-                transport: Some(EvmClientTransport::Http),
-                ..Default::default()
-            },
-            None,
-        )
-        .preferred_transport();
-        assert!(matches!(transport, EvmClientTransport::Http));
+        let endpoint = EvmEndpoint::from_str("https://localhost:8545").unwrap();
+        assert!(matches!(endpoint, EvmEndpoint::Http(_)));
 
-        // Specified Http preference, websocket not provided
-        let transport = EvmClientBuilder::new(
-            EvmClientConfig {
-                ws_endpoint: None,
-                http_endpoint: Some("bar".to_owned()),
-                transport: Some(EvmClientTransport::Http),
-                ..Default::default()
-            },
-            None,
-        )
-        .preferred_transport();
-        assert!(matches!(transport, EvmClientTransport::Http));
+        let endpoint = EvmEndpoint::from_str("wss://localhost:8545").unwrap();
+        assert!(matches!(endpoint, EvmEndpoint::WebSocket(_)));
 
-        // Specified Websocket preference, websocket provided
-        let transport = EvmClientBuilder::new(
-            EvmClientConfig {
-                ws_endpoint: Some("foo".to_owned()),
-                http_endpoint: Some("bar".to_owned()),
-                transport: Some(EvmClientTransport::WebSocket),
-                ..Default::default()
-            },
-            None,
-        )
-        .preferred_transport();
-        assert!(matches!(transport, EvmClientTransport::WebSocket));
-
-        // Specified Websocket preference, websocket not provided
-        let transport = EvmClientBuilder::new(
-            EvmClientConfig {
-                ws_endpoint: None,
-                http_endpoint: Some("bar".to_owned()),
-                transport: Some(EvmClientTransport::WebSocket),
-                ..Default::default()
-            },
-            None,
-        )
-        .preferred_transport();
-        assert!(matches!(transport, EvmClientTransport::WebSocket));
+        let endpoint = EvmEndpoint::from_str("localhost:8545").unwrap_err();
+        assert!(matches!(endpoint, EvmClientError::ParseEndpoint(_)));
     }
 }

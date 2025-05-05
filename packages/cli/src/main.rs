@@ -1,14 +1,9 @@
-use std::time::Duration;
-
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::service::fetch_service;
-use utils::{
-    config::ConfigExt,
-    evm_client::{EvmClientBuilder, EvmSigningClient},
-};
+use utils::{config::ConfigExt, evm_client::EvmSigningClient};
 use wavs_cli::{
     args::Command,
     command::{
@@ -36,19 +31,14 @@ pub(crate) async fn new_evm_client(
         .context(format!("chain {chain_name} not found"))?
         .clone();
 
-    let client_config =
-        chain_config.to_client_config(None, ctx.config.evm_credential.clone(), None);
+    let client_config = chain_config.signing_client_config(
+        ctx.config
+            .evm_credential
+            .clone()
+            .context("missing evm_credential")?,
+    )?;
 
-    let evm_client = EvmClientBuilder::new(
-        client_config,
-        if ctx.config.evm_poll_interval_ms > 0 {
-            Some(Duration::from_millis(ctx.config.evm_poll_interval_ms))
-        } else {
-            None
-        },
-    )
-    .build_signing()
-    .await?;
+    let evm_client = EvmSigningClient::new(client_config).await?;
 
     Ok(evm_client)
 }

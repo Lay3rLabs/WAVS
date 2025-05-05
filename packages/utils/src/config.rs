@@ -6,8 +6,8 @@ use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 use utoipa::ToSchema;
 
 use crate::{
-    error::ChainConfigError,
-    evm_client::{EvmClientConfig, EvmClientTransport},
+    error::{ChainConfigError, EvmClientError},
+    evm_client::{EvmEndpoint, EvmSigningClientConfig},
 };
 use wavs_types::ChainName;
 
@@ -362,27 +362,41 @@ pub struct EvmChainConfig {
     pub http_endpoint: Option<String>,
     pub aggregator_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
+    pub poll_interval_ms: Option<u64>,
 }
 
 impl EvmChainConfig {
-    pub fn to_client_config(
+    pub fn signing_client_config(
         &self,
-        hd_index: Option<u32>,
-        credential: Option<String>,
-        transport: Option<EvmClientTransport>,
-    ) -> EvmClientConfig {
-        EvmClientConfig {
-            ws_endpoint: self.ws_endpoint.clone(),
-            http_endpoint: self.http_endpoint.clone(),
-            // if we are building a signing client, default to http transport
-            transport: match (transport, credential.is_some()) {
-                (Some(transport), _) => Some(transport),
-                (None, true) => Some(EvmClientTransport::Http),
-                _ => None,
-            },
-            hd_index,
-            credential,
-            gas_estimate_multiplier: None,
+        credential: String,
+    ) -> std::result::Result<EvmSigningClientConfig, EvmClientError> {
+        let endpoint = match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
+            // prefer HTTP for signing clients
+            (_, Some(url)) => EvmEndpoint::new_http(&url)?,
+            (Some(url), _) => EvmEndpoint::new_ws(&url)?,
+            _ => {
+                return Err(EvmClientError::ParseEndpoint(
+                    "No endpoint provided".to_string(),
+                ));
+            }
+        };
+
+        let mut config = EvmSigningClientConfig::new(endpoint, credential);
+        if let Some(poll_interval_ms) = self.poll_interval_ms {
+            config.poll_interval = Some(std::time::Duration::from_millis(poll_interval_ms));
+        }
+
+        Ok(config)
+    }
+
+    pub fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError> {
+        match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
+            // prefer WS for query clients
+            (Some(url), _) => EvmEndpoint::new_ws(&url),
+            (_, Some(url)) => EvmEndpoint::new_http(&url),
+            _ => Err(EvmClientError::ParseEndpoint(
+                "No endpoint provided".to_string(),
+            )),
         }
     }
 }
@@ -990,6 +1004,7 @@ mod test {
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
+                        poll_interval_ms: None,
                     },
                 ),
                 (
@@ -1000,6 +1015,7 @@ mod test {
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
+                        poll_interval_ms: None,
                     },
                 ),
             ]
