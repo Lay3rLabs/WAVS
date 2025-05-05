@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use derive_enum_all_values::AllValues;
+use serde::{Deserialize, Serialize};
 
 use super::components::ComponentName;
 
@@ -11,7 +12,10 @@ pub struct TestMatrix {
     pub cross_chain: HashSet<CrossChainService>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum EvmService {
     ChainTriggerLookup,
     CosmosQuery,
@@ -26,7 +30,10 @@ pub enum EvmService {
     CronInterval,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum CosmosService {
     ChainTriggerLookup,
     CosmosQuery,
@@ -37,14 +44,18 @@ pub enum CosmosService {
     CronInterval,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AllValues,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum CrossChainService {
     CosmosToEvmEchoData,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
 pub enum AnyService {
-    EVM(EvmService),
+    Evm(EvmService),
     Cosmos(CosmosService),
     CrossChain(CrossChainService),
 }
@@ -56,7 +67,7 @@ impl AnyService {
         match self {
             AnyService::Cosmos(_)
             | AnyService::CrossChain(_)
-            | AnyService::EVM(EvmService::CosmosQuery) => false,
+            | AnyService::Evm(EvmService::CosmosQuery) => false,
             _ => true,
         }
     }
@@ -64,7 +75,7 @@ impl AnyService {
 
 impl From<EvmService> for AnyService {
     fn from(service: EvmService) -> Self {
-        AnyService::EVM(service)
+        AnyService::Evm(service)
     }
 }
 
@@ -147,7 +158,7 @@ impl From<CrossChainService> for Vec<ComponentName> {
 impl From<AnyService> for Vec<ComponentName> {
     fn from(service: AnyService) -> Self {
         match service {
-            AnyService::EVM(service) => service.into(),
+            AnyService::Evm(service) => service.into(),
             AnyService::Cosmos(service) => service.into(),
             AnyService::CrossChain(service) => service.into(),
         }

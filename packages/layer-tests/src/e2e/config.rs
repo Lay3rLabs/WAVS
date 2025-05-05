@@ -91,9 +91,7 @@ impl TestMnemonics {
 
 impl From<TestConfig> for Configs {
     fn from(test_config: TestConfig) -> Self {
-        let matrix = test_config
-            .matrix
-            .into_validated(test_config.all, test_config.isolated.as_deref());
+        let matrix: TestMatrix = test_config.mode.into();
 
         let mnemonics = TestMnemonics::new();
 
