@@ -6,8 +6,8 @@ use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 use utoipa::ToSchema;
 
 use crate::{
-    error::ChainConfigError,
-    evm_client::{EvmClientConfig, EvmClientTransport},
+    error::{ChainConfigError, EvmClientError},
+    evm_client::{EvmEndpoint, EvmSigningClientConfig},
 };
 use wavs_types::ChainName;
 
@@ -365,24 +365,32 @@ pub struct EvmChainConfig {
 }
 
 impl EvmChainConfig {
-    pub fn to_client_config(
+    pub fn signing_client_config(
         &self,
-        hd_index: Option<u32>,
-        credential: Option<String>,
-        transport: Option<EvmClientTransport>,
-    ) -> EvmClientConfig {
-        EvmClientConfig {
-            ws_endpoint: self.ws_endpoint.clone(),
-            http_endpoint: self.http_endpoint.clone(),
-            // if we are building a signing client, default to http transport
-            transport: match (transport, credential.is_some()) {
-                (Some(transport), _) => Some(transport),
-                (None, true) => Some(EvmClientTransport::Http),
-                _ => None,
-            },
-            hd_index,
-            credential,
-            gas_estimate_multiplier: None,
+        credential: String,
+    ) -> std::result::Result<EvmSigningClientConfig, EvmClientError> {
+        let endpoint = match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
+            // prefer HTTP for signing clients
+            (_, Some(http)) => EvmEndpoint::Http(http),
+            (Some(ws), _) => EvmEndpoint::WebSocket(ws),
+            _ => {
+                return Err(EvmClientError::ParseEndpoint(
+                    "No endpoint provided".to_string(),
+                ));
+            }
+        };
+
+        Ok(EvmSigningClientConfig::new(endpoint, credential))
+    }
+
+    pub fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError> {
+        match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
+            // prefer WS for query clients
+            (Some(ws), _) => Ok(EvmEndpoint::WebSocket(ws)),
+            (_, Some(http)) => Ok(EvmEndpoint::Http(http)),
+            _ => Err(EvmClientError::ParseEndpoint(
+                "No endpoint provided".to_string(),
+            )),
         }
     }
 }

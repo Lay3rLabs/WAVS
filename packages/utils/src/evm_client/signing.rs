@@ -69,7 +69,7 @@ impl EvmSigningClient {
                     .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
 
                 // pad it with a multiplier to account for gas fluctuations
-                ((gas_estimate as f32) * self.gas_estimate_multiplier) as u64
+                ((gas_estimate as f32) * self.gas_estimate_multiplier()) as u64
             }
 
             Some(gas) => {

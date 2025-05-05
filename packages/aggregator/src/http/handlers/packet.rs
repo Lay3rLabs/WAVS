@@ -232,7 +232,7 @@ mod test {
     use tempfile::TempDir;
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
-        evm_client::{EvmClientBuilder, EvmSigningClient},
+        evm_client::EvmSigningClient,
         filesystem::workspace_path,
     };
     use wavs_types::{
@@ -489,18 +489,15 @@ mod test {
             config.credential =
                 Some("test test test test test test test test test test test junk".to_string());
 
-            let client = EvmClientBuilder::new(
-                config
-                    .chains
-                    .evm
-                    .get(&chain_name)
-                    .unwrap()
-                    .to_client_config(None, config.credential.clone(), None),
-                None,
-            )
-            .build_signing()
-            .await
-            .unwrap();
+            let client_config = config
+                .chains
+                .evm
+                .get(&chain_name)
+                .unwrap()
+                .signing_client_config(config.credential.clone().unwrap())
+                .unwrap();
+
+            let client = EvmSigningClient::new(client_config).await.unwrap();
 
             let state = HttpState::new(config).unwrap();
 

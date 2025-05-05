@@ -16,7 +16,7 @@ use std::{
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::IntervalStream;
 use tracing::instrument;
-use utils::{config::AnyChainConfig, evm_client::EvmClientBuilder, telemetry::TriggerMetrics};
+use utils::{config::AnyChainConfig, evm_client::EvmQueryClient, telemetry::TriggerMetrics};
 use wavs_types::{
     ByteArray, ChainName, ServiceID, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
     WorkflowID,
@@ -134,11 +134,7 @@ impl CoreTriggerManager {
         let mut evm_clients = HashMap::new();
         for (chain_name, chain_config) in self.chain_configs.clone() {
             if let AnyChainConfig::Evm(chain_config) = chain_config {
-                let client =
-                    EvmClientBuilder::new(chain_config.to_client_config(None, None, None), None)
-                        .build_query()
-                        .await
-                        .map_err(TriggerError::EVM)?;
+                let client = EvmQueryClient::new(chain_config.query_client_endpoint()?).await?;
 
                 evm_clients.insert(chain_name, client);
             }
@@ -211,7 +207,7 @@ impl CoreTriggerManager {
                 .provider
                 .subscribe_logs(&filter)
                 .await
-                .map_err(|e| TriggerError::EVM(e.into()))?
+                .map_err(|e| TriggerError::EvmSubscription(e.into()))?
                 .into_stream();
 
             let chain_name = chain_name.clone();
@@ -235,7 +231,7 @@ impl CoreTriggerManager {
                 .provider
                 .subscribe_blocks()
                 .await
-                .map_err(|e| TriggerError::EVM(e.into()))?
+                .map_err(|e| TriggerError::EvmSubscription(e.into()))?
                 .into_stream();
 
             let block_stream = Box::pin(stream.map(move |block| {

@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, EvmChainConfig},
-    evm_client::{signing::make_signer, EvmClientBuilder, EvmClientTransport, EvmSigningClient},
+    evm_client::{signing::make_signer, EvmSigningClient},
     telemetry::SubmissionMetrics,
 };
 use wavs_types::{
@@ -289,17 +289,17 @@ impl Submission for CoreSubmission {
                         .try_into()
                         .map_err(|_| SubmissionError::NotEvmChain)?;
 
-                    let sending_client = EvmClientBuilder::new(
-                        chain_config.to_client_config(
-                            None,
-                            Some(self.evm_mnemonic.clone()),
-                            Some(EvmClientTransport::Http),
-                        ),
-                        self.evm_poll_interval,
-                    )
-                    .build_signing()
-                    .await
-                    .map_err(SubmissionError::EVM)?;
+                    let mut sending_client_config =
+                        chain_config.signing_client_config(self.evm_mnemonic.clone())?;
+
+                    if let Some(poll_interval) = self.evm_poll_interval {
+                        sending_client_config =
+                            sending_client_config.with_poll_interval(poll_interval);
+                    }
+
+                    let sending_client = EvmSigningClient::new(sending_client_config)
+                        .await
+                        .map_err(SubmissionError::EVM)?;
 
                     self.evm_sending_clients
                         .write()

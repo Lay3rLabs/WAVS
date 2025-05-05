@@ -5,7 +5,7 @@ use alloy_rpc_types_eth::TransactionRequest;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
     config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EvmChainConfig},
-    evm_client::EvmClientBuilder,
+    evm_client::EvmSigningClient,
     filesystem::workspace_path,
 };
 use wavs_types::ChainName;
@@ -54,13 +54,8 @@ impl TestMnemonics {
         for chain_config in chain_configs.evm.values() {
             let anvil_mnemonic =
                 "test test test test test test test test test test test junk".to_string();
-            let anvil_client = EvmClientBuilder::new(
-                chain_config.to_client_config(None, Some(anvil_mnemonic), None),
-                None,
-            )
-            .build_signing()
-            .await
-            .unwrap();
+            let anvil_config = chain_config.signing_client_config(anvil_mnemonic).unwrap();
+            let anvil_client = EvmSigningClient::new(anvil_config).await.unwrap();
 
             for mnemonic in [&self.cli, &self.wavs, &self.aggregator] {
                 let dest_addr = MnemonicBuilder::<English>::default()

@@ -3,10 +3,7 @@ use std::path::PathBuf;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{
-    config::{ChainConfigs, ConfigExt},
-    error::EvmClientError,
-};
+use utils::config::{ChainConfigs, ConfigExt};
 use utoipa::ToSchema;
 
 /// The fully parsed and validated config struct we use in the application
@@ -79,7 +76,7 @@ impl Config {
         let mnemonic = self
             .credential
             .clone()
-            .ok_or(EvmClientError::MissingMnemonic)?;
+            .ok_or(anyhow::anyhow!("missing credentials"))?;
         let signer = MnemonicBuilder::<English>::default()
             .phrase(mnemonic)
             .build()?;

@@ -5,9 +5,6 @@ use wavs_types::ChainName;
 
 #[derive(Debug, Error)]
 pub enum EvmClientError {
-    #[error("Missing mnemonic")]
-    MissingMnemonic,
-
     #[error("HD index must be zero when using a private key (use mnemonic instead)")]
     DerivationWithPrivateKey,
 
@@ -25,8 +22,18 @@ pub enum EvmClientError {
 
     #[error("Unable to estimate gas: {0:#?}")]
     GasEstimation(anyhow::Error),
+
     #[error("Unable to recover signer address: {0:#?}")]
     RecoverSignerAddress(anyhow::Error),
+
+    #[error("Unable to parse endpoint: {0}")]
+    ParseEndpoint(String),
+
+    #[error("Unable to create web socket provider: {0:#?}")]
+    WebSocketProvider(anyhow::Error),
+
+    #[error("Unable to create http provider: {0:#?}")]
+    HttpProvider(anyhow::Error),
 }
 
 #[derive(Debug, Error)]

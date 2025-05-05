@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 
 use utils::context::AppContext;
-use utils::evm_client::{EvmClientBuilder, EvmClientTransport, EvmSigningClient};
+use utils::evm_client::EvmSigningClient;
 use wavs_cli::clients::HttpClient;
 use wavs_types::ChainName;
 
@@ -51,19 +51,13 @@ impl Clients {
 
             // Create a client for each EVM chain
             for (chain_name, chain_config) in &configs.chains.evm {
-                let client = EvmClientBuilder::new(
-                    chain_config.to_client_config(
-                        None,
-                        cli_ctx.config.evm_credential.clone(),
-                        Some(EvmClientTransport::Http),
-                    ),
-                    None,
-                )
-                .build_signing()
-                .await
-                .unwrap();
+                let client_config = chain_config
+                    .signing_client_config(cli_ctx.config.evm_credential.clone().unwrap())
+                    .unwrap();
 
-                evm_clients.insert(chain_name.clone(), client);
+                let evm_client = EvmSigningClient::new(client_config).await.unwrap();
+
+                evm_clients.insert(chain_name.clone(), evm_client);
             }
 
             let mut cosmos_clients = HashMap::new();

@@ -1,6 +1,7 @@
 use layer_climb::prelude::*;
 use thiserror::Error;
 use tokio::sync::mpsc;
+use utils::error::EvmClientError;
 
 use crate::AppContext;
 
@@ -31,8 +32,10 @@ pub trait TriggerManager: Send + Sync {
 pub enum TriggerError {
     #[error("climb: {0}")]
     Climb(anyhow::Error),
-    #[error("EVM: {0}")]
-    EVM(anyhow::Error),
+    #[error("EvmClient: {0}")]
+    EvmClient(#[from] EvmClientError),
+    #[error("Evm subscription: {0}")]
+    EvmSubscription(anyhow::Error),
     #[error("parse avs payload: {0}")]
     ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use utils::{
     async_transaction::AsyncTransaction,
     config::EvmChainConfig,
-    evm_client::{EvmClientBuilder, EvmClientTransport, EvmSigningClient},
+    evm_client::EvmSigningClient,
     storage::db::{DBError, RedbStorage, Table, JSON},
 };
 use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
@@ -76,27 +76,26 @@ impl HttpState {
 
         let chain_config = EvmChainConfig::try_from(chain_config)?;
 
-        let sending_client = EvmClientBuilder::new(
-            chain_config.to_client_config(
-                None,
-                self.config.credential.clone(),
-                Some(EvmClientTransport::Http),
-            ),
-            if self.config.evm_poll_interval_ms > 0 {
-                Some(Duration::from_millis(self.config.evm_poll_interval_ms))
-            } else {
-                None
-            },
-        )
-        .build_signing()
-        .await?;
+        let mut client_config = chain_config.signing_client_config(
+            self.config
+                .credential
+                .clone()
+                .context("missing evm_credential")?,
+        )?;
+
+        if self.config.evm_poll_interval_ms > 0 {
+            client_config = client_config
+                .with_poll_interval(Duration::from_millis(self.config.evm_poll_interval_ms));
+        }
+
+        let evm_client = EvmSigningClient::new(client_config).await?;
 
         self.evm_clients
             .write()
             .unwrap()
-            .insert(chain_name.clone(), sending_client.clone());
+            .insert(chain_name.clone(), evm_client.clone());
 
-        Ok(sending_client)
+        Ok(evm_client)
     }
 
     pub fn get_packet_queue(&self, event_id: &EventId) -> anyhow::Result<PacketQueue> {
