@@ -50,24 +50,26 @@ impl FromStr for EvmEndpoint {
 
 impl EvmEndpoint {
     pub fn new_http(url: &str) -> Result<Self, EvmClientError> {
-        let url =
-            reqwest::Url::parse(url).map_err(|e| EvmClientError::ParseEndpoint(e.to_string()))?;
-
-        if url.scheme() != "http" && url.scheme() != "https" {
-            tracing::warn!("EvmEndpoint::new_http: url scheme is not http or https");
-        }
-
-        Ok(EvmEndpoint::Http(url))
+        url.parse::<Self>().and_then(|endpoint| {
+            if matches!(endpoint, EvmEndpoint::Http(_)) {
+                Ok(endpoint)
+            } else {
+                Err(EvmClientError::ParseEndpoint(
+                    "url scheme is not http or https".to_string(),
+                ))
+            }
+        })
     }
     pub fn new_ws(url: &str) -> Result<Self, EvmClientError> {
-        let url =
-            reqwest::Url::parse(url).map_err(|e| EvmClientError::ParseEndpoint(e.to_string()))?;
-
-        if url.scheme() != "ws" && url.scheme() != "wss" {
-            tracing::warn!("EvmEndpoint::new_ws: url scheme is not ws or wss");
-        }
-
-        Ok(EvmEndpoint::WebSocket(url))
+        url.parse::<Self>().and_then(|endpoint| {
+            if matches!(endpoint, EvmEndpoint::WebSocket(_)) {
+                Ok(endpoint)
+            } else {
+                Err(EvmClientError::ParseEndpoint(
+                    "url scheme is not ws or wss".to_string(),
+                ))
+            }
+        })
     }
 
     pub async fn to_provider(&self) -> std::result::Result<DynProvider, EvmClientError> {
@@ -148,10 +150,6 @@ impl EvmSigningClientConfig {
     }
     pub fn with_gas_estimate_multiplier(mut self, gas_estimate_multiplier: f32) -> Self {
         self.gas_estimate_multiplier = Some(gas_estimate_multiplier);
-        self
-    }
-    pub fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
-        self.poll_interval = Some(poll_interval);
         self
     }
 }

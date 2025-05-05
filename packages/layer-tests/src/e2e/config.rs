@@ -109,6 +109,7 @@ impl From<TestConfig> for Configs {
                     None
                 },
                 faucet_endpoint: None,
+                poll_interval_ms: None,
             };
 
             chain_configs
@@ -171,7 +172,6 @@ impl From<TestConfig> for Configs {
         .unwrap();
 
         wavs_config.active_trigger_chains = chain_configs.all_chain_names();
-        wavs_config.submission_poll_interval_ms = 0;
 
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
@@ -190,7 +190,6 @@ impl From<TestConfig> for Configs {
 
             aggregator_config.chains = chain_configs.clone();
             aggregator_config.credential = Some(mnemonics.aggregator.clone());
-            aggregator_config.evm_poll_interval_ms = 0;
 
             Some(aggregator_config)
         } else {
@@ -211,7 +210,6 @@ impl From<TestConfig> for Configs {
         cli_config.chains = chain_configs.clone();
         // some random mnemonic
         cli_config.evm_credential = Some(mnemonics.cli.clone());
-        cli_config.evm_poll_interval_ms = 0;
 
         // Sanity check
 

@@ -756,6 +756,7 @@ mod tests {
                         http_endpoint: Some("http://127.0.0.1:26657".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
                         faucet_endpoint: None,
+                        poll_interval_ms: None,
                     },
                 )]
                 .into_iter()
@@ -900,6 +901,7 @@ mod tests {
                         http_endpoint: Some("http://127.0.0.1:26657".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8001".to_string()),
                         faucet_endpoint: None,
+                        poll_interval_ms: None,
                     },
                 )]
                 .into_iter()

@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{atomic::AtomicU32, Arc, RwLock},
-    time::Duration,
 };
 
 use crate::{
@@ -32,7 +31,6 @@ pub struct CoreSubmission {
     // created on-demand from chain_name and hd_index
     evm_signers: Arc<RwLock<HashMap<ServiceID, SignerInfo>>>,
     evm_sending_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
-    evm_poll_interval: Option<Duration>,
     evm_mnemonic: String,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
@@ -58,11 +56,6 @@ impl CoreSubmission {
                 .ok_or(SubmissionError::MissingMnemonic)?,
             evm_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
             metrics,
-            evm_poll_interval: if config.submission_poll_interval_ms > 0 {
-                Some(Duration::from_millis(config.submission_poll_interval_ms))
-            } else {
-                None
-            },
         })
     }
 
@@ -289,13 +282,8 @@ impl Submission for CoreSubmission {
                         .try_into()
                         .map_err(|_| SubmissionError::NotEvmChain)?;
 
-                    let mut sending_client_config =
+                    let sending_client_config =
                         chain_config.signing_client_config(self.evm_mnemonic.clone())?;
-
-                    if let Some(poll_interval) = self.evm_poll_interval {
-                        sending_client_config =
-                            sending_client_config.with_poll_interval(poll_interval);
-                    }
 
                     let sending_client = EvmSigningClient::new(sending_client_config)
                         .await

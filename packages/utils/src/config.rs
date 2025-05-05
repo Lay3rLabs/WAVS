@@ -362,6 +362,7 @@ pub struct EvmChainConfig {
     pub http_endpoint: Option<String>,
     pub aggregator_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
+    pub poll_interval_ms: Option<u64>,
 }
 
 impl EvmChainConfig {
@@ -380,7 +381,12 @@ impl EvmChainConfig {
             }
         };
 
-        Ok(EvmSigningClientConfig::new(endpoint, credential))
+        let mut config = EvmSigningClientConfig::new(endpoint, credential);
+        if let Some(poll_interval_ms) = self.poll_interval_ms {
+            config.poll_interval = Some(std::time::Duration::from_millis(poll_interval_ms));
+        }
+
+        Ok(config)
     }
 
     pub fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError> {
@@ -998,6 +1004,7 @@ mod test {
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
+                        poll_interval_ms: None,
                     },
                 ),
                 (
@@ -1008,6 +1015,7 @@ mod test {
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
+                        poll_interval_ms: None,
                     },
                 ),
             ]
