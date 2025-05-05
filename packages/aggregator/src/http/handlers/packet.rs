@@ -496,6 +496,7 @@ mod test {
                     .get(&chain_name)
                     .unwrap()
                     .to_client_config(None, config.credential.clone(), None),
+                None,
             )
             .build_signing()
             .await

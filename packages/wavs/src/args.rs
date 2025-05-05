@@ -85,6 +85,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ipfs_gateway: Option<String>,
+
+    /// The interval in milliseconds to poll after submitting a transaction
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submission_poll_interval_ms: Option<u64>,
 }
 
 impl CliEnvExt for CliArgs {

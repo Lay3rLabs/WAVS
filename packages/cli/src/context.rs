@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Mutex};
+use std::{fmt::Display, sync::Mutex, time::Duration};
 
 use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
 use alloy_provider::Provider;
@@ -66,7 +66,16 @@ impl CliContext {
         let client_config =
             chain_config.to_client_config(None, self.config.evm_credential.clone(), None);
 
-        let evm_client = EvmClientBuilder::new(client_config).build_signing().await?;
+        let evm_client = EvmClientBuilder::new(
+            client_config,
+            if self.config.evm_poll_interval_ms > 0 {
+                Some(Duration::from_millis(self.config.evm_poll_interval_ms))
+            } else {
+                None
+            },
+        )
+        .build_signing()
+        .await?;
 
         Ok(evm_client)
     }

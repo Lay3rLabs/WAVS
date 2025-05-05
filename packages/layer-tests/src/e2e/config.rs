@@ -54,11 +54,10 @@ impl TestMnemonics {
         for chain_config in chain_configs.evm.values() {
             let anvil_mnemonic =
                 "test test test test test test test test test test test junk".to_string();
-            let anvil_client = EvmClientBuilder::new(chain_config.to_client_config(
+            let anvil_client = EvmClientBuilder::new(
+                chain_config.to_client_config(None, Some(anvil_mnemonic), None),
                 None,
-                Some(anvil_mnemonic),
-                None,
-            ))
+            )
             .build_signing()
             .await
             .unwrap();
@@ -171,13 +170,13 @@ impl From<TestConfig> for Configs {
             home: Some(workspace_path()),
             // deliberately point to a non-existing file
             dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
-
             ..Default::default()
         })
         .build()
         .unwrap();
 
         wavs_config.active_trigger_chains = chain_configs.all_chain_names();
+        wavs_config.submission_poll_interval_ms = 0;
 
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
@@ -196,6 +195,7 @@ impl From<TestConfig> for Configs {
 
             aggregator_config.chains = chain_configs.clone();
             aggregator_config.credential = Some(mnemonics.aggregator.clone());
+            aggregator_config.evm_poll_interval_ms = 0;
 
             Some(aggregator_config)
         } else {
@@ -216,6 +216,7 @@ impl From<TestConfig> for Configs {
         cli_config.chains = chain_configs.clone();
         // some random mnemonic
         cli_config.evm_credential = Some(mnemonics.cli.clone());
+        cli_config.evm_poll_interval_ms = 0;
 
         // Sanity check
 

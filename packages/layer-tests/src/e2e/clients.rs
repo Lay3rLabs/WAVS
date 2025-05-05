@@ -51,11 +51,14 @@ impl Clients {
 
             // Create a client for each EVM chain
             for (chain_name, chain_config) in &configs.chains.evm {
-                let client = EvmClientBuilder::new(chain_config.to_client_config(
+                let client = EvmClientBuilder::new(
+                    chain_config.to_client_config(
+                        None,
+                        cli_ctx.config.evm_credential.clone(),
+                        Some(EvmClientTransport::Http),
+                    ),
                     None,
-                    cli_ctx.config.evm_credential.clone(),
-                    Some(EvmClientTransport::Http),
-                ))
+                )
                 .build_signing()
                 .await
                 .unwrap();
