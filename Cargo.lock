@@ -4413,9 +4413,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4357b6951dc31357c2085a64f03130f03a9fc8e071bbafa96085051bcd5e9308"
+checksum = "c2ccc02ed2b270d81f15919c534305258332d3f4b07f7fc0056aa9fb65967e39"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -4425,9 +4425,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5e53f82d4b1b413342401cc49c3620fad63297645b51d91827f91fd7afd33f0"
+checksum = "d7ccf13662c33e8f316be8550e93147a086b88f262f88628b4b97ff2d9677952"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -4450,9 +4450,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-cli"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2752bf9068d692fb163f6b18fd2b1f7deeccb837c507fa2025d622a978fe9b99"
+checksum = "ecb01be6c50bbd8cb689016be7802c3a1ff5830631238c25d0c9b6f2ac134dbd"
 dependencies = [
  "anyhow",
  "bip39",
@@ -4471,9 +4471,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7be8fc5df2fcc0608142328302f5e639bf2d9a39f175c4936992bd08707e6d9a"
+checksum = "819dcaabdee95caa54f85eca64f6879d068f90f6b5daff43b80dcdec34a1cb9f"
 dependencies = [
  "anyhow",
  "serde",
@@ -4482,9 +4482,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a73edc1ab1fff912b86ab37c48178f026e6e29bf79041a7bd62da5eddfccddba"
+checksum = "7d322a1ffdbfe2250f8466730a9af1a06f7d3644ca567860b48dbd889939b007"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4523,9 +4523,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3926f60e1ca135b6343122d44784b7cf115df2beec89b9703424126f45053084"
+checksum = "5216f7925a3129d3f6691b720e6658c9a7c0954ce581a4fa34c3d6317f5efea1"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto",
