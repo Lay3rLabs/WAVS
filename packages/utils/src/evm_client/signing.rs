@@ -86,7 +86,7 @@ impl EvmSigningClient {
             .gas(gas)
             .send()
             .await
-            .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?
+            .map_err(|e| EvmClientError::SendTransaction(e.into()))?
             .get_receipt()
             .await
             .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
