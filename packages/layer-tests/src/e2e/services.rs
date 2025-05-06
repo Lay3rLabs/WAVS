@@ -85,6 +85,7 @@ impl Services {
                 let cosmos_bytecode = cosmos_bytecode.clone();
                 async move {
                     client
+                        .await
                         .contract_upload_file(cosmos_bytecode, None)
                         .await
                         .unwrap()
@@ -109,7 +110,6 @@ impl Services {
 
         let lookup = Arc::new(Mutex::new(BTreeMap::default()));
 
-        let mut serial_futures = Vec::new();
         let mut concurrent_futures = FuturesUnordered::new();
 
         for service_kind in all_services {
@@ -198,19 +198,10 @@ impl Services {
                 }
             };
 
-            if service_kind.concurrent() {
-                concurrent_futures.push(fut);
-            } else {
-                serial_futures.push(fut);
-            }
+            concurrent_futures.push(fut);
         }
 
         ctx.rt.block_on(async move {
-            tracing::info!("\n\n Deploying serial services...");
-            for fut in serial_futures {
-                fut.await;
-            }
-
             tracing::info!("\n\n Deploying concurrent services...");
             while (concurrent_futures.next().await).is_some() {}
         });
@@ -284,7 +275,7 @@ async fn deploy_service_simple(
             }
         }
         AnyService::Cosmos(CosmosService::CronInterval) => Trigger::Cron {
-            schedule: "*/10 * * * * *".to_string(),
+            schedule: "*/1 * * * * *".to_string(),
             start_time: None,
             end_time: None,
         },
@@ -305,12 +296,16 @@ async fn deploy_service_simple(
             );
 
             let chain_name = trigger_chain.as_ref().unwrap().clone();
-            let client = clients.get_cosmos_client(&chain_name);
+            let client = clients.get_cosmos_client(&chain_name).await;
 
-            let contract_address = SimpleCosmosTriggerClient::new_code_id(client, code_id)
-                .await
-                .unwrap()
-                .contract_address;
+            let contract_address = SimpleCosmosTriggerClient::new_code_id(
+                client,
+                code_id,
+                &format!("simple_trigger_{}", uuid::Uuid::now_v7()),
+            )
+            .await
+            .unwrap()
+            .contract_address;
 
             tracing::info!(
                 "[{:?}] Deployed new cosmos trigger contract (address: {})",

@@ -77,7 +77,7 @@ impl TryFrom<layer_climb::prelude::Address> for EvmAddress {
 
     fn try_from(addr: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         match addr {
-            layer_climb::prelude::Address::Eth(eth) => Ok(EvmAddress {
+            layer_climb::prelude::Address::Evm(eth) => Ok(EvmAddress {
                 raw_bytes: eth.as_bytes().to_vec(),
             }),
             _ => Err(anyhow::anyhow!("Cannot convert to EthAddr")),
