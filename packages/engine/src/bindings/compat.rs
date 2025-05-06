@@ -174,7 +174,7 @@ impl TryFrom<layer_climb::prelude::Address> for component::EvmAddress {
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         match address {
-            layer_climb::prelude::Address::Eth(addr) => Ok(Self {
+            layer_climb::prelude::Address::Evm(addr) => Ok(Self {
                 raw_bytes: addr.as_bytes().to_vec(),
             }),
             _ => Err(EngineError::TriggerData(anyhow::anyhow!(
