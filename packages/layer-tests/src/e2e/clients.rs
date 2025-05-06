@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 
 use deadpool::managed::Pool;
-use layer_climb::pool::SigningClientPoolManager;
+use layer_climb::pool::{SigningClientPool, SigningClientPoolManager};
 use utils::context::AppContext;
 use utils::evm_client::EvmSigningClient;
 use wavs_cli::clients::HttpClient;
@@ -15,7 +15,7 @@ pub struct Clients {
     pub http_client: HttpClient,
     pub cli_ctx: Arc<wavs_cli::context::CliContext>,
     pub evm_clients: Arc<HashMap<ChainName, EvmSigningClient>>,
-    pub cosmos_client_pools: Arc<HashMap<ChainName, Pool<SigningClientPoolManager>>>,
+    pub cosmos_client_pools: Arc<HashMap<ChainName, SigningClientPool>>,
 }
 
 impl Clients {
@@ -91,7 +91,9 @@ impl Clients {
                 .await
                 .unwrap();
 
-                let pool = Pool::builder(pool_manager).max_size(8).build().unwrap();
+                let pool = SigningClientPool::new(
+                    Pool::builder(pool_manager).max_size(8).build().unwrap(),
+                );
 
                 cosmos_client_pools.insert(chain_name.clone(), pool);
             }
