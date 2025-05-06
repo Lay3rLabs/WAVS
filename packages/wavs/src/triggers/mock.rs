@@ -236,7 +236,7 @@ impl MockTriggerManagerChannel {
         self.sender
             .send(TriggerAction {
                 config: match contract_address {
-                    Address::Eth(_) => TriggerConfig::evm_contract_event(
+                    Address::Evm(_) => TriggerConfig::evm_contract_event(
                         service_id,
                         workflow_id,
                         contract_address.clone().try_into().unwrap(),
