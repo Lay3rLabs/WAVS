@@ -42,7 +42,7 @@ impl EvmSigningClient {
             .iter()
             .map(|sig| {
                 sig.evm_signer_address(&envelope)
-                    .map(|addr| (addr, sig.as_bytes().into())) // keep (addr, sig) together
+                    .map(|addr| (addr, sig.as_bytes().into()))
                     .map_err(EvmClientError::RecoverSignerAddress)
             })
             .collect::<Result<_, _>>()?;
