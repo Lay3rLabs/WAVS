@@ -77,7 +77,7 @@ impl HttpClient {
 
         let body: String = serde_json::to_string(&AddServiceRequest {
             chain_name: service.manager.chain_name().clone(),
-            address: Address::Eth(service.manager.evm_address_unchecked().into()),
+            address: Address::Evm(service.manager.evm_address_unchecked().into()),
         })?;
 
         self.inner
