@@ -200,23 +200,23 @@ download-solidity branch="dev":
     # Clean up
     rm -rf temp_clone
 
-wasi-publish component="*" version="0.4.0-alpha.5":
-    @if [ "{{component}}" = "*" ]; then \
-        awk '{print $2}' checksums.txt | while read path; do \
-            id=$(basename "$path"); \
-            id="${id%.wasm}"; \
-            id="${id//_/-}"; \
-            echo "Publishing $path at wavs-tests:$id@{{version}}"; \
-            wkg publish "$path" --package="wavs-tests:$id@{{version}}"; \
-        done \
-    else \
-        awk '{print $2}' checksums.txt | while read path; do \
-            id=$(basename "$path"); \
-            id="${id%.wasm}"; \
-            id="${id//_/-}"; \
-            if [[ "$id" == "{{component}}" ]]; then \
-                echo "Publishing $path at wavs-tests:$id@{{version}}"; \
-                wkg publish "$path" --package="wavs-tests:$id@{{version}}"; \
-            fi; \
-        done \
-    fi
+wasi-publish component="*" version="0.4.0-beta.1":
+	if [ "{{component}}" = "*" ]; then \
+	    awk '{print $2}' checksums.txt | while read path; do \
+	        id=$(basename "$path"); \
+	        id="${id%.wasm}"; \
+	        id=$(echo "$id" | sed 's/_/-/g'); \
+	        echo "Publishing $path at wavs-tests:$id@{{version}}"; \
+	        wkg publish "$path" --package="wavs-tests:$id@{{version}}"; \
+	    done; \
+	else \
+	    awk '{print $2}' checksums.txt | while read path; do \
+	        id=$(basename "$path"); \
+	        id="${id%.wasm}"; \
+	        id=$(echo "$id" | sed 's/_/-/g'); \
+	        if [ "$id" = "{{component}}" ]; then \
+	            echo "Publishing $path at wavs-tests:$id@{{version}}"; \
+	            wkg publish "$path" --package="wavs-tests:$id@{{version}}"; \
+	        fi; \
+	    done; \
+	fi
