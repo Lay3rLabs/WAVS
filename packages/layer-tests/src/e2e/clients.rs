@@ -115,7 +115,6 @@ impl Clients {
     ) -> deadpool::managed::Object<SigningClientPoolManager> {
         self.cosmos_client_pools
             .get(chain_name)
-            .cloned()
             .unwrap()
             .get()
             .await
