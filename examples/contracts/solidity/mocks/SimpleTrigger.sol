@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ISimpleTrigger} from "../interfaces/ISimpleTrigger.sol";
+import {ISimpleTrigger} from "./ISimpleTrigger.sol";
 
 contract SimpleTrigger {
     // Data structures

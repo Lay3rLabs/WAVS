@@ -3,8 +3,8 @@ pragma solidity ^0.8.0;
 
 import {IWavsServiceHandler} from "../interfaces/IWavsServiceHandler.sol";
 import {IWavsServiceManager} from "../interfaces/IWavsServiceManager.sol";
-import {ISimpleTrigger} from "../interfaces/ISimpleTrigger.sol";
-import {ISimpleSubmit} from "../interfaces/ISimpleSubmit.sol";
+import {ISimpleTrigger} from "./ISimpleTrigger.sol";
+import {ISimpleSubmit} from "./ISimpleSubmit.sol";
 
 contract SimpleSubmit is IWavsServiceHandler, ISimpleSubmit {
     IWavsServiceManager private _serviceManager;

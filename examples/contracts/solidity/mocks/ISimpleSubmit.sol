@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {ISimpleTrigger} from "./ISimpleTrigger.sol";
-import {IWavsServiceHandler} from "./IWavsServiceHandler.sol";
+import {IWavsServiceHandler} from "../interfaces/IWavsServiceHandler.sol";
 
 interface ISimpleSubmit {
     struct DataWithId {
