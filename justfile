@@ -78,19 +78,21 @@ solidity-build CLEAN="":
     @if [ "{{CLEAN}}" = "clean" ]; then \
         rm -rf {{REPO_ROOT}}/out; \
         rm -rf {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi; \
-        rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi; \
+        rm -rf {{REPO_ROOT}}/contracts/solidity/abi; \
     fi
     mkdir -p {{REPO_ROOT}}/out
     mkdir -p {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi
-    mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
+    mkdir -p {{REPO_ROOT}}/contracts/solidity/abi
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/contracts/solidity;
-    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
     # examples
-    cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/ISimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/SimpleServiceManager.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/*.sol {{REPO_ROOT}}/contracts/solidity/abi/
+
+    # cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/contracts/solidity/abi/
+    # cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/contracts/solidity/abi/
+    # cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/contracts/solidity/abi/
+    # cp -r {{REPO_ROOT}}/out/ISimpleSubmit.sol {{REPO_ROOT}}/contracts/solidity/abi/
+    # cp -r {{REPO_ROOT}}/out/SimpleServiceManager.sol {{REPO_ROOT}}/contracts/solidity/abi/
+
     # wavs-types
     cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
@@ -181,24 +183,12 @@ download-solidity branch="40-repo-reorg":
 
     # Clear existing content and create solidity directory
     rm -rf contracts/solidity
-    rm -rf examples/contracts/solidity
     mkdir -p contracts/solidity/interfaces
-    mkdir -p examples/contracts/solidity/interfaces
-    mkdir -p examples/contracts/solidity/mocks
+    mkdir -p contracts/solidity/mocks
 
-    # Copy just what we need
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol contracts/solidity/interfaces/IWavsServiceHandler.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol contracts/solidity/interfaces/IWavsServiceManager.sol
-
-    # and, for examples
-    # Note the stuff we want is in mocks. Interfaces is the same as above. Maybe we can unite these steps?
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol examples/contracts/solidity/interfaces/IWavsServiceHandler.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol examples/contracts/solidity/interfaces/IWavsServiceManager.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/ISimpleSubmit.sol examples/contracts/solidity/mocks/ISimpleSubmit.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/ISimpleTrigger.sol examples/contracts/solidity/mocks/ISimpleTrigger.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/SimpleTrigger.sol examples/contracts/solidity/mocks/SimpleTrigger.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/SimpleSubmit.sol examples/contracts/solidity/mocks/SimpleSubmit.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/SimpleServiceManager.sol examples/contracts/solidity/mocks/SimpleServiceManager.sol
+    # Copy the dirs we use
+    cp temp_clone/wavs-middleware/contracts/interfaces/*.sol contracts/solidity/interfaces
+    cp temp_clone/wavs-middleware/contracts/mocks/*.sol contracts/solidity/mocks
 
     # Clean up
     rm -rf temp_clone
