@@ -182,20 +182,14 @@ download-solidity branch="dev":
     rm -rf examples/contracts/solidity
     mkdir -p contracts/solidity/interfaces
     mkdir -p examples/contracts/solidity/interfaces
-    mkdir -p examples/contracts/solidity/src
+    mkdir -p examples/contracts/solidity/mocks
 
-    # Copy just what we need
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol contracts/solidity/interfaces/IWavsServiceHandler.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol contracts/solidity/interfaces/IWavsServiceManager.sol
+    # Copy just the interfaces
+    cp temp_clone/wavs-middleware/contracts/interfaces/*.sol contracts/solidity/interfaces/
 
-    # and, for examples
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol examples/contracts/solidity/interfaces/IWavsServiceHandler.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol examples/contracts/solidity/interfaces/IWavsServiceManager.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/ISimpleSubmit.sol examples/contracts/solidity/interfaces/ISimpleSubmit.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/ISimpleTrigger.sol examples/contracts/solidity/interfaces/ISimpleTrigger.sol
-    cp temp_clone/wavs-middleware/contracts/src/SimpleTrigger.sol examples/contracts/solidity/src/SimpleTrigger.sol
-    cp temp_clone/wavs-middleware/contracts/src/SimpleSubmit.sol examples/contracts/solidity/src/SimpleSubmit.sol
-    cp temp_clone/wavs-middleware/contracts/src/SimpleServiceManager.sol examples/contracts/solidity/src/SimpleServiceManager.sol
+    # and, for examples - interfaces and mocks
+    cp temp_clone/wavs-middleware/contracts/interfaces/*.sol examples/contracts/solidity/interfaces/
+    cp temp_clone/wavs-middleware/contracts/mocks/*.sol examples/contracts/solidity/mocks/
 
     # Clean up
     rm -rf temp_clone
