@@ -70,6 +70,10 @@ async fn main() {
         } => {
             let service = fetch_service(&service_url, &ctx.config.ipfs_gateway)
                 .await
+                .context(format!(
+                    "Failed to fetch service from URL '{}' using gateway '{}'",
+                    service_url, ctx.config.ipfs_gateway
+                ))
                 .unwrap();
 
             let provider = new_evm_client(&ctx, service.manager.chain_name())

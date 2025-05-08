@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use utils::config::WAVS_ENV_PREFIX;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
@@ -65,14 +65,18 @@ impl ExecComponent {
             config,
         }: ExecComponentArgs,
     ) -> Result<Self> {
-        let wasm_bytes = read_component(&component_path)?;
+        let wasm_bytes = read_component(&component_path).context(format!(
+            "Failed to read WASM component from path: {}",
+            component_path
+        ))?;
 
         let mut wt_config = WTConfig::new();
         wt_config.wasm_component_model(true);
         wt_config.async_support(true);
         wt_config.consume_fuel(true);
 
-        let engine = WTEngine::new(&wt_config)?;
+        let engine = WTEngine::new(&wt_config)
+            .context("Failed to create Wasmtime engine with the specified configuration")?;
 
         let trigger_action = TriggerAction {
             config: TriggerConfig {
@@ -80,7 +84,10 @@ impl ExecComponent {
                 workflow_id: WorkflowID::default(),
                 trigger: Trigger::Manual,
             },
-            data: TriggerData::Raw(input.decode()?),
+            data: TriggerData::Raw(input.decode().context(format!(
+                "Failed to decode input '{}' for component execution",
+                input.into_string()
+            ))?),
         };
 
         // Automatically pick up all env vars with the WAVS_ENV_PREFIX
@@ -118,10 +125,16 @@ impl ExecComponent {
             max_execution_seconds: None,
             max_wasm_fuel: None,
         }
-        .build()?;
+        .build()
+        .context("Failed to build instance dependencies for component execution")?;
 
-        let initial_fuel = instance_deps.store.get_fuel()?;
-        let wasm_response = wavs_engine::execute(&mut instance_deps, trigger_action).await?;
+        let initial_fuel = instance_deps
+            .store
+            .get_fuel()
+            .context("Failed to get initial fuel value from the instance store")?;
+        let wasm_response = wavs_engine::execute(&mut instance_deps, trigger_action)
+            .await
+            .context("Failed to execute component with the provided input")?;
 
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 
