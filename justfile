@@ -169,9 +169,7 @@ download-wit branch="main":
     rm -rf temp_clone
 
 # downloads the latest solidity repo
-# TODO: revert
-# download-solidity branch="dev":
-download-solidity branch="40-repo-reorg":
+download-solidity branch="dev":
     # Create a temporary directory
     rm -rf temp_clone
     mkdir temp_clone
@@ -186,19 +184,12 @@ download-solidity branch="40-repo-reorg":
     mkdir -p examples/contracts/solidity/interfaces
     mkdir -p examples/contracts/solidity/mocks
 
-    # Copy just what we need
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol contracts/solidity/interfaces/IWavsServiceHandler.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol contracts/solidity/interfaces/IWavsServiceManager.sol
+    # Copy just the interfaces
+    cp temp_clone/wavs-middleware/contracts/interfaces/*.sol contracts/solidity/interfaces/
 
-    # and, for examples
-    # Note the stuff we want is in mocks. Interfaces is the same as above. Maybe we can unite these steps?
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceHandler.sol examples/contracts/solidity/interfaces/IWavsServiceHandler.sol
-    cp temp_clone/wavs-middleware/contracts/interfaces/IWavsServiceManager.sol examples/contracts/solidity/interfaces/IWavsServiceManager.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/ISimpleSubmit.sol examples/contracts/solidity/mocks/ISimpleSubmit.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/ISimpleTrigger.sol examples/contracts/solidity/mocks/ISimpleTrigger.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/SimpleTrigger.sol examples/contracts/solidity/mocks/SimpleTrigger.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/SimpleSubmit.sol examples/contracts/solidity/mocks/SimpleSubmit.sol
-    cp temp_clone/wavs-middleware/contracts/mocks/SimpleServiceManager.sol examples/contracts/solidity/mocks/SimpleServiceManager.sol
+    # and, for examples - interfaces and mocks
+    cp temp_clone/wavs-middleware/contracts/interfaces/*.sol examples/contracts/solidity/interfaces/
+    cp temp_clone/wavs-middleware/contracts/mocks/*.sol examples/contracts/solidity/mocks/
 
     # Clean up
     rm -rf temp_clone
