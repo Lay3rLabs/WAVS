@@ -32,8 +32,8 @@ pub trait TriggerManager: Send + Sync {
 pub enum TriggerError {
     #[error("climb: {0}")]
     Climb(anyhow::Error),
-    #[error("EvmClient: {0}")]
-    EvmClient(#[from] EvmClientError),
+    #[error("EvmClient (chain {0}): {1}")]
+    EvmClient(ChainName, EvmClientError),
     #[error("Evm subscription: {0}")]
     EvmSubscription(anyhow::Error),
     #[error("parse avs payload: {0}")]
