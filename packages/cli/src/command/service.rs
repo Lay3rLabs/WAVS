@@ -6,6 +6,7 @@ use layer_climb::{
     querier::QueryClient as CosmosQueryClient,
 };
 use reqwest::Client;
+use serde::Serialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::File,
@@ -50,21 +51,21 @@ pub async fn handle_service_command(
     match command {
         ServiceCommand::Init { name, id } => {
             let result = init_service(&file, name, id)?;
-            display_result(ctx, result, &file, json)?;
+            display_result(ctx, result, json)?;
         }
         ServiceCommand::Workflow { command } => match command {
             WorkflowCommand::Add { id } => {
                 let result = add_workflow(&file, id)?;
-                display_result(ctx, result, &file, json)?;
+                display_result(ctx, result, json)?;
             }
             WorkflowCommand::Delete { id } => {
                 let result = delete_workflow(&file, id)?;
-                display_result(ctx, result, &file, json)?;
+                display_result(ctx, result, json)?;
             }
             WorkflowCommand::Component { id, command } => match command {
                 ComponentCommand::SetSourceDigest { digest } => {
                     let result = set_component_source_digest(&file, id, digest)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::SetSourceRegistry {
                     domain,
@@ -80,30 +81,30 @@ pub async fn handle_service_command(
                         version,
                     )
                     .await?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::Permissions {
                     http_hosts,
                     file_system,
                 } => {
                     let result = update_component_permissions(&file, id, http_hosts, file_system)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::FuelLimit { fuel } => {
                     let result = update_component_fuel_limit(&file, id, fuel)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::Config { values } => {
                     let result = update_component_config(&file, id, values)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::TimeLimit { seconds } => {
                     let result = update_component_time_limit_seconds(&file, id, seconds)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::Env { values } => {
                     let result = update_component_env_keys(&file, id, values)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
             },
             WorkflowCommand::Submit { id, command } => match command {
@@ -113,7 +114,7 @@ pub async fn handle_service_command(
                     max_gas,
                 } => {
                     let result = set_evm_submit(&file, id, address, chain_name, max_gas)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 SubmitCommand::SetAggregator {
                     url,
@@ -123,7 +124,7 @@ pub async fn handle_service_command(
                 } => {
                     let result =
                         set_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
             },
             WorkflowCommand::Trigger { id, command } => match command {
@@ -141,7 +142,7 @@ pub async fn handle_service_command(
                         chain_name,
                         event_type,
                     )?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 TriggerCommand::SetEvm {
                     address,
@@ -149,7 +150,7 @@ pub async fn handle_service_command(
                     event_hash,
                 } => {
                     let result = set_evm_trigger(&file, id, address, chain_name, event_hash)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 TriggerCommand::SetBlockInterval {
                     chain_name,
@@ -174,12 +175,12 @@ pub async fn handle_service_command(
                 address,
             } => {
                 let result = set_evm_manager(&file, address, chain_name)?;
-                display_result(ctx, result, &file, json)?;
+                display_result(ctx, result, json)?;
             }
         },
         ServiceCommand::Validate {} => {
             let result = validate_service(&file, Some(ctx)).await?;
-            display_result(ctx, result, &file, json)?;
+            display_result(ctx, result, json)?;
         }
     }
 
@@ -187,14 +188,13 @@ pub async fn handle_service_command(
 }
 
 // Helper function to handle display based on json flag
-fn display_result<T: std::fmt::Display>(
+fn display_result<T: std::fmt::Display + Serialize>(
     ctx: &CliContext,
     result: T,
-    file_path: &Path,
     json: bool,
 ) -> Result<()> {
     if json {
-        print_file_as_json(file_path)?;
+        print_result_as_json(result)?;
     } else {
         ctx.handle_display_result(result);
     }
@@ -202,21 +202,15 @@ fn display_result<T: std::fmt::Display>(
 }
 
 /// Helper function to print file content as JSON
-fn print_file_as_json(file_path: &Path) -> Result<()> {
-    // Read the file content
-    let file_content = std::fs::read_to_string(file_path)?;
-
-    // Parse it as JSON to ensure it's valid
-    let json_value: serde_json::Value = serde_json::from_str(&file_content)?;
-
+fn print_result_as_json<T: Serialize>(result: T) -> Result<()> {
     // Print the pretty-printed JSON
-    println!("{}", serde_json::to_string_pretty(&json_value)?);
+    println!("{}", serde_json::to_string_pretty(&result)?);
 
     Ok(())
 }
 
 /// Result of service initialization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ServiceInitResult {
     /// The generated service
     pub service: ServiceJson,
@@ -234,7 +228,7 @@ impl std::fmt::Display for ServiceInitResult {
 }
 
 /// Result of setting a component's source to a digest
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentSourceDigestResult {
     /// The component digest
     pub digest: Digest,
@@ -251,7 +245,7 @@ impl std::fmt::Display for ComponentSourceDigestResult {
 }
 
 /// Result of setting a component's source to a registry
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentSourceRegistryResult {
     /// The domain
     pub domain: String,
@@ -277,7 +271,7 @@ impl std::fmt::Display for ComponentSourceRegistryResult {
 }
 
 /// Result of updating a component's environment variables
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentEnvKeysResult {
     /// The updated environment variable keys
     pub env_keys: BTreeSet<String>,
@@ -301,7 +295,7 @@ impl std::fmt::Display for ComponentEnvKeysResult {
 }
 
 /// Result of adding a workflow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowAddResult {
     /// The workflow id
     pub workflow_id: WorkflowID,
@@ -318,7 +312,7 @@ impl std::fmt::Display for WorkflowAddResult {
 }
 
 /// Result of deleting a workflow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowDeleteResult {
     /// The workflow id that was deleted
     pub workflow_id: WorkflowID,
@@ -335,7 +329,7 @@ impl std::fmt::Display for WorkflowDeleteResult {
 }
 
 /// Result of updating a workflow's trigger
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowTriggerResult {
     /// The workflow id that was updated
     pub workflow_id: WorkflowID,
@@ -407,7 +401,7 @@ impl std::fmt::Display for WorkflowTriggerResult {
 }
 
 /// Result of updating a workflow's submit
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSubmitResult {
     /// The workflow id that was updated
     pub workflow_id: WorkflowID,
@@ -449,7 +443,7 @@ impl std::fmt::Display for WorkflowSubmitResult {
 }
 
 /// Result of setting the EVM manager
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EvmManagerResult {
     /// The EVM chain name
     pub chain_name: ChainName,
@@ -469,7 +463,7 @@ impl std::fmt::Display for EvmManagerResult {
 }
 
 /// Result of service validation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ServiceValidationResult {
     /// The service ID
     pub service_id: String,
@@ -522,7 +516,7 @@ where
 }
 
 /// Result of updating a component's fuel limit
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentFuelLimitResult {
     /// The updated fuel limit
     pub fuel_limit: Option<u64>,
@@ -542,7 +536,7 @@ impl std::fmt::Display for ComponentFuelLimitResult {
 }
 
 /// Result of updating a component's configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentConfigResult {
     /// The updated configuration
     pub config: BTreeMap<String, String>,
@@ -566,7 +560,7 @@ impl std::fmt::Display for ComponentConfigResult {
 }
 
 /// Result of updating a component's maximum execution time
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentTimeLimitResult {
     /// The updated maximum execution time in seconds
     pub time_limit_seconds: Option<u64>,
@@ -586,7 +580,7 @@ impl std::fmt::Display for ComponentTimeLimitResult {
 }
 
 /// Result of updating component permissions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentPermissionsResult {
     /// The updated permissions
     pub permissions: Permissions,
