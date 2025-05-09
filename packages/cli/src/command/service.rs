@@ -10,7 +10,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, str::FromStr,
 };
 use utils::{config::WAVS_ENV_PREFIX, wkg::WkgClient};
 use uuid::Uuid;
@@ -838,8 +838,11 @@ pub fn set_evm_trigger(
     chain_name: ChainName,
     event_hash_str: String,
 ) -> Result<WorkflowTriggerResult> {
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
+    // Parse the EVM address and convert to checksummed format
+    let address = alloy_primitives::Address::from_str(address_str.as_ref())
+        .with_context(|| format!("Invalid EVM address format: {}", address_str))?;
+
+    let address = alloy_primitives::Address::parse_checksummed(address.to_checksum(None), None)?;
 
     // Order the match cases from most explicit to event parsing:
     // 1. 0x-prefixed hex string
@@ -1692,6 +1695,7 @@ mod tests {
     use layer_climb::prelude::{ChainConfig, ChainId};
     use layer_climb::querier::QueryClient as CosmosQueryClient;
     use tempfile::tempdir;
+    use alloy_primitives::Address;
 
     #[test]
     fn test_service_init() {
@@ -3293,4 +3297,71 @@ mod tests {
             panic!("Expected Component");
         }
     }
-}
+
+
+    #[test]
+    fn test_set_evm_trigger_with_non_checksummed_address() {
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("evm_trigger_test.json");
+
+        // Initialize a service
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        init_service(
+            &file_path,
+            "Test Service".to_string(),
+            Some(service_id.clone()),
+        )
+        .unwrap();
+
+        // Add a workflow
+        let workflow_id = WorkflowID::new("workflow-123").unwrap();
+        add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
+
+        // Non-checksummed EVM address (all lowercase)
+        let non_checksummed_address = "0xd6f8ff0036d8b2088107902102f9415330868109";
+
+        // The checksummed version would be 0xd6F8Ff0036D8B2088107902102f9415330868109
+        let expected_checksummed_address = Address::from_str(non_checksummed_address).unwrap();
+
+        // Event hash (using Transfer event signature hash)
+        let event_hash = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+        // Test setting an EVM trigger with non-checksummed address
+        let result = set_evm_trigger(
+            &file_path,
+            workflow_id.clone(),
+            non_checksummed_address.to_string(),
+            ChainName::new("ethereum").unwrap(),
+            event_hash.to_string(),
+        ).unwrap();
+
+        // Verify the address was properly handled and checksummed
+        match &result.trigger {
+            Trigger::EvmContractEvent { address, chain_name, event_hash: _ } => {
+                // Verify the address matches the expected checksummed address
+                assert_eq!(*address, expected_checksummed_address);
+
+                // Verify chain name
+                assert_eq!(chain_name, &ChainName::new("ethereum").unwrap());
+            },
+            _ => panic!("Expected EvmContractEvent trigger"),
+        }
+
+        // Verify that the service file was updated
+        let service_json = std::fs::read_to_string(&file_path).unwrap();
+        let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+
+        let workflow = service.workflows.get(&workflow_id).unwrap();
+
+        match &workflow.trigger {
+            TriggerJson::Trigger(Trigger::EvmContractEvent { address, chain_name, event_hash: _ }) => {
+                // Verify the address in the file matches the expected checksummed address
+                assert_eq!(*address, expected_checksummed_address);
+
+                // Verify chain name
+                assert_eq!(chain_name, &ChainName::new("ethereum").unwrap());
+            },
+            _ => panic!("Expected EvmContractEvent trigger in the service file"),
+        }
+    }}
