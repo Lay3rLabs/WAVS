@@ -353,7 +353,7 @@ async fn query_service_from_address(
             })?;
 
             // Create a provider using the HTTP endpoint
-            let provider = ProviderBuilder::new().on_http(
+            let provider = ProviderBuilder::new().connect_http(
                 reqwest::Url::parse(&http_endpoint)
                     .unwrap_or_else(|_| panic!("Could not parse http endpoint {}", http_endpoint)),
             );
