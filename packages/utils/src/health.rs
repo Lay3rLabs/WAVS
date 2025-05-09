@@ -63,6 +63,7 @@ async fn check_evm_chain_health_query(
         .await
         .map_err(|e| HealthCheckError::EvmGasPrice(chain_name, e.to_string()))?;
 
+    // Check if the node is syncing
     let syncing_status = client
         .provider
         .syncing()
