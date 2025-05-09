@@ -5,6 +5,7 @@ pub mod context;
 pub mod error;
 pub mod evm_client;
 pub mod filesystem;
+pub mod health;
 pub mod serde;
 pub mod service;
 pub mod storage;
