@@ -83,7 +83,9 @@ impl EvmEndpoint {
                         .map_err(|e| EvmClientError::WebSocketProvider(e.into()))?,
                 )
             }
-            EvmEndpoint::Http(url) => DynProvider::new(ProviderBuilder::new().connect_http(url.clone())),
+            EvmEndpoint::Http(url) => {
+                DynProvider::new(ProviderBuilder::new().connect_http(url.clone()))
+            }
         })
     }
 }
