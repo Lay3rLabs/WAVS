@@ -106,30 +106,30 @@ type Result<'a, T> = std::result::Result<T, HealthCheckError<'a>>;
 
 #[derive(Error, Debug)]
 pub enum HealthCheckError<'a> {
-    #[error("[{0}/evm] {1:?}")]
+    #[error("[evm.{0}] {1:?}")]
     EvmClientError(&'a ChainName, EvmClientError),
 
-    #[error("[{0}/evm] Failed to get block number: {1}")]
+    #[error("[evm.{0}] Failed to get block number: {1}")]
     EvmBlockNumber(&'a ChainName, String),
 
-    #[error("[{0}/evm] Failed to get chain ID: {1}")]
+    #[error("[evm.{0}] Failed to get chain ID: {1}")]
     EvmChainId(&'a ChainName, String),
 
-    #[error("[{0}/evm] Failed to get gas price: {1}")]
+    #[error("[evm.{0}] Failed to get gas price: {1}")]
     EvmGasPrice(&'a ChainName, String),
 
-    #[error("[{0}/evm] Failed to get syncing status: {1}")]
+    #[error("[evm.{0}] Failed to get syncing status: {1}")]
     EvmSyncingStatus(&'a ChainName, String),
 
-    #[error("[{0}/evm] Chain is still syncing: {1}")]
+    #[error("[evm.{0}] Chain is still syncing: {1}")]
     EvmStillSyncing(&'a ChainName, U256),
 
-    #[error("[{0}/cosmos] create client: {1:?}")]
+    #[error("[cosmos.{0}] create client: {1:?}")]
     CosmosCreateClient(&'a ChainName, anyhow::Error),
 
-    #[error("[{0}/cosmos] block height: {1:?}")]
+    #[error("[cosmos.{0}] block height: {1:?}")]
     CosmosBlockHeight(&'a ChainName, anyhow::Error),
 
-    #[error("[{0}/cosmos] node info: {1:?}")]
+    #[error("[cosmos.{0}] node info: {1:?}")]
     CosmosNodeInfo(&'a ChainName, anyhow::Error),
 }
