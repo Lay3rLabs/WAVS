@@ -78,12 +78,14 @@ impl EvmEndpoint {
                 let ws = WsConnect::new(url.clone());
                 DynProvider::new(
                     ProviderBuilder::new()
-                        .on_ws(ws)
+                        .connect_ws(ws)
                         .await
                         .map_err(|e| EvmClientError::WebSocketProvider(e.into()))?,
                 )
             }
-            EvmEndpoint::Http(url) => DynProvider::new(ProviderBuilder::new().on_http(url.clone())),
+            EvmEndpoint::Http(url) => {
+                DynProvider::new(ProviderBuilder::new().connect_http(url.clone()))
+            }
         })
     }
 }
@@ -181,9 +183,9 @@ impl EvmSigningClient {
         let provider = match &config.endpoint {
             EvmEndpoint::WebSocket(url) => {
                 let ws = WsConnect::new(url.clone());
-                DynProvider::new(builder.on_ws(ws).await?)
+                DynProvider::new(builder.connect_ws(ws).await?)
             }
-            EvmEndpoint::Http(url) => DynProvider::new(builder.on_http(url.clone())),
+            EvmEndpoint::Http(url) => DynProvider::new(builder.connect_http(url.clone())),
         };
 
         if let Some(poll_interval) = config.poll_interval {
