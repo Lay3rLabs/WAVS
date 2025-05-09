@@ -2553,6 +2553,58 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("invalid string length"));
+
+        // Test setting BlockInterval trigger
+        let interval_chain = ChainName::from_str("polygon-mainnet").unwrap();
+        let n_blocks = NonZeroU32::new(10).unwrap();
+
+        let block_interval_result = set_block_interval_trigger(
+            &file_path,
+            workflow_id.clone(),
+            interval_chain.clone(),
+            n_blocks,
+        )
+        .unwrap();
+
+        assert_eq!(block_interval_result.workflow_id, workflow_id);
+        if let Trigger::BlockInterval {
+            chain_name,
+            n_blocks: blocks,
+        } = &block_interval_result.trigger
+        {
+            assert_eq!(chain_name, &interval_chain);
+            assert_eq!(*blocks, n_blocks);
+        } else {
+            panic!("Expected BlockInterval trigger");
+        }
+
+        // Test setting Cron trigger
+        let cron_expr = "0 0 * * * *".to_string(); // every hour
+        let start_time = Some(Timestamp::from_nanos(1_000_000_000_000_000_000));
+        let end_time = Some(Timestamp::from_nanos(2_000_000_000_000_000_000));
+
+        let cron_result = set_cron_trigger(
+            &file_path,
+            workflow_id.clone(),
+            cron::Schedule::from_str(&cron_expr).unwrap(),
+            start_time,
+            end_time,
+        )
+        .unwrap();
+
+        assert_eq!(cron_result.workflow_id, workflow_id);
+        if let Trigger::Cron {
+            schedule,
+            start_time: s,
+            end_time: e,
+        } = &cron_result.trigger
+        {
+            assert_eq!(schedule, &cron_expr);
+            assert_eq!(s, &start_time);
+            assert_eq!(e, &end_time);
+        } else {
+            panic!("Expected Cron trigger");
+        }
     }
 
     #[test]
