@@ -6,6 +6,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
+    health::health_check_chains_query,
     telemetry::{setup_metrics, setup_tracing, Metrics},
 };
 use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
@@ -35,6 +36,29 @@ fn main() {
             .unwrap();
         None
     };
+
+    ctx.rt.block_on(async {
+        // require query chain health for all trigger chains before starting
+        if let Err(err) =
+            health_check_chains_query(&config.chains, &config.active_trigger_chains).await
+        {
+            panic!("Trigger chain health-check failed: {}", err);
+        }
+
+        // warn bad health for non-trigger chains (services may or may not submit to these)
+        let non_trigger_chains = config.chains.all_chain_names();
+        let non_trigger_chains = non_trigger_chains
+            .iter()
+            .filter(|chain_name| !config.active_trigger_chains.contains(chain_name))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if !non_trigger_chains.is_empty() {
+            if let Err(err) = health_check_chains_query(&config.chains, &non_trigger_chains).await {
+                tracing::warn!("Non-trigger-chain health-check failed: {}", err);
+            }
+        }
+    });
 
     let meter_provider = config
         .prometheus

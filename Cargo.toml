@@ -17,7 +17,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.4.0-beta.1"
+version = "0.4.0-beta.2"
 license = "MIT"
 authors = ["Lay3r Labs Team"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -25,7 +25,7 @@ rust-version = "1.85.0"
 
 [workspace.dependencies]
 # http utilities
-axum = { version = "0.8.3", features = ["macros"] }
+axum = { version = "0.8.4", features = ["macros"] }
 http-body-util = "0.1.3"
 reqwest = { version = "0.12.15", features = ["json"] }
 tower-http = { version = "0.6.2", features = ["cors", "trace"] }
@@ -40,22 +40,22 @@ utoipa-swagger-ui = { version = "9.0.1", features = ["axum"] }
 # error handling and logging
 anyhow = "1.0.98"
 axum-tracing-opentelemetry = "0.28.0"
-opentelemetry = { version = "0.28.0", default-features = false, features = [
+opentelemetry = { version = "0.29.1", default-features = false, features = [
   "trace",
 ] }
-opentelemetry-jaeger-propagator = "0.28.0"
-opentelemetry-otlp = { version = "0.28.0", default-features = false, features = [
+opentelemetry-jaeger-propagator = "0.29.0"
+opentelemetry-otlp = { version = "0.29.0", default-features = false, features = [
   "trace",
   "grpc-tonic",
   "metrics",
   "http-proto",
   "reqwest-blocking-client",
 ] }
-opentelemetry_sdk = { version = "0.28.0", default-features = false, features = [
+opentelemetry_sdk = { version = "0.29.0", default-features = false, features = [
   "trace",
   "rt-tokio",
 ] }
-tracing-opentelemetry = { version = "0.29.0", default-features = false, features = [
+tracing-opentelemetry = { version = "0.30.0", default-features = false, features = [
   "metrics",
 ] }
 thiserror = "2.0.12"
@@ -69,7 +69,7 @@ dirs = "6.0.0"
 shellexpand = "3.1.1"
 
 # async runtime
-tokio = { version = "1.44.2", features = ["full"] }
+tokio = { version = "1.45.0", features = ["full"] }
 tokio-stream = { version = "0.1" }
 futures = "0.3.31"
 rayon = "1.10.0"
@@ -83,21 +83,21 @@ walkdir = "2.5.0"
 wildmatch = "2.4.0"
 
 # EVM-specific dependencies
-alloy-node-bindings = "0.14.0"
-alloy-json-abi = "1.0.0"
-alloy-primitives = { version = "1.0.0", features = ["serde"] }
-alloy-provider = { version = "0.14.0", features = ["anvil-node", "ws"] }
-alloy-sol-types = "1.0.0"
-alloy-sol-macro = { version = "1.0.0", features = ["json"] }
-alloy-transport = "0.14.0"
-alloy-contract = "0.14.0"
-alloy-signer = "0.14.0"
-alloy-signer-local = { version = "0.14.0", features = ["mnemonic"] }
-alloy-network = "0.14.0"
-alloy-rpc-types-eth = "0.14.0"
-layer-climb = "0.4.2"
-layer-climb-address = "0.4.2"
-layer-climb-cli = "0.4.2"
+alloy-node-bindings = "0.15.10"
+alloy-json-abi = "1.1.0"
+alloy-primitives = { version = "1.1.0", features = ["serde"] }
+alloy-provider = { version = "0.15.10", features = ["anvil-node", "ws"] }
+alloy-sol-types = "1.1.0"
+alloy-sol-macro = { version = "1.1.0", features = ["json"] }
+alloy-transport = "0.15.10"
+alloy-contract = "0.15.10"
+alloy-signer = "0.15.10"
+alloy-signer-local = { version = "0.15.10", features = ["mnemonic"] }
+alloy-network = "0.15.10"
+alloy-rpc-types-eth = "0.15.10"
+layer-climb = "0.4.3"
+layer-climb-address = "0.4.3"
+layer-climb-cli = "0.4.3"
 
 # Cosmos-specific dependencies
 cosmwasm-schema = "2.2.2"
@@ -109,16 +109,16 @@ wstd = "0.5.3"
 # WASM and WIT bindings
 wasm-pkg-client = "0.10.0"
 wasm-pkg-common = "0.10.0"
-wasmtime = { version = "31.0.0", features = [
+wasmtime = { version = "32.0.0", features = [
   "cache",
   "component-model",
   "runtime",
   "std",
 ] }
-wasmtime-wasi = { version = "31.0.0", default-features = true }
-wasmtime-wasi-http = "31.0.0"
-wit-bindgen = "0.41.0"
-wavs-wasi-utils = "0.4.0-beta.1"
+wasmtime-wasi = { version = "32.0.0", default-features = true }
+wasmtime-wasi-http = "32.0.0"
+wit-bindgen = "0.42.1"
+wavs-wasi-utils = "0.4.0-beta.2"
 
 # benchmarking
 criterion = "0.5.1"
@@ -134,7 +134,7 @@ rand = "0.9.1"
 bip39 = "2.1.0"
 
 # hashing
-sha2 = "0.10.8"
+sha2 = "0.10.9"
 const-hex = "1.14.0"
 ripemd = "0.1.3"
 
@@ -143,7 +143,7 @@ redb = { version = "2.5" }
 lru = "0.14.0"
 
 # time
-chrono = "0.4.40"
+chrono = "0.4.41"
 cron = { version = "0.15.0", features = ["serde"] }
 uuid = { version = "1.16.0", features = ["v7", "serde"] }
 
