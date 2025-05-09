@@ -10,7 +10,8 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
-    path::{Path, PathBuf}, str::FromStr,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 use utils::{config::WAVS_ENV_PREFIX, wkg::WkgClient};
 use uuid::Uuid;
@@ -1692,10 +1693,10 @@ mod tests {
 
     use super::*;
     use alloy_primitives::hex;
+    use alloy_primitives::Address;
     use layer_climb::prelude::{ChainConfig, ChainId};
     use layer_climb::querier::QueryClient as CosmosQueryClient;
     use tempfile::tempdir;
-    use alloy_primitives::Address;
 
     #[test]
     fn test_service_init() {
@@ -3298,7 +3299,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_set_evm_trigger_with_non_checksummed_address() {
         // Create a temporary directory for the test
@@ -3334,17 +3334,22 @@ mod tests {
             non_checksummed_address.to_string(),
             ChainName::new("ethereum").unwrap(),
             event_hash.to_string(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify the address was properly handled and checksummed
         match &result.trigger {
-            Trigger::EvmContractEvent { address, chain_name, event_hash: _ } => {
+            Trigger::EvmContractEvent {
+                address,
+                chain_name,
+                event_hash: _,
+            } => {
                 // Verify the address matches the expected checksummed address
                 assert_eq!(*address, expected_checksummed_address);
 
                 // Verify chain name
                 assert_eq!(chain_name, &ChainName::new("ethereum").unwrap());
-            },
+            }
             _ => panic!("Expected EvmContractEvent trigger"),
         }
 
@@ -3355,13 +3360,18 @@ mod tests {
         let workflow = service.workflows.get(&workflow_id).unwrap();
 
         match &workflow.trigger {
-            TriggerJson::Trigger(Trigger::EvmContractEvent { address, chain_name, event_hash: _ }) => {
+            TriggerJson::Trigger(Trigger::EvmContractEvent {
+                address,
+                chain_name,
+                event_hash: _,
+            }) => {
                 // Verify the address in the file matches the expected checksummed address
                 assert_eq!(*address, expected_checksummed_address);
 
                 // Verify chain name
                 assert_eq!(chain_name, &ChainName::new("ethereum").unwrap());
-            },
+            }
             _ => panic!("Expected EvmContractEvent trigger in the service file"),
         }
-    }}
+    }
+}
