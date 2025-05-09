@@ -5,9 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [unreleased]
+## [v0.4.0]
 
-- added a block-interval trigger type; it works by specifying the blockchain name and the number of blocks at which you want it to be triggered
+### Added
+
+- Block-based interval triggers ("every N blocks")
+- Cron interval triggers ("every N seconds")
+- OCI/Registry support for WASI components
+- Golang support for WASI components
+- Decentralized Service manifests (via on-chain contract query)
+- CLI deprecated "simple service" deploy in favor of full-powered "raw service" deploy
+- CLI has commands to build up a full service manifest
+- Jaeger tracing
+- Prometheus metrics
+- Swagger UI for local endpoint discoverability
+- Limit running time in components (not just fuel, but time)
+- General support for private keys instead of mnemonics where allowed
+- service-key WAVS endpoint (returns hd-index and key)
+- test components published to wa.dev
+- Middleware repo for Eigenlayer-specific code
+- CI-based deploy for cargo packages
+
+
+### Changed 
+
+- Service type: no more ComponentID indirection, Workflow contains all
+- Service type: moved settings like fuel limit on component
+- Service type: much clearer config vs. env keys ergonomics
+- Service type: aggregator flow improved
+- WIT: method to get config value from the service
+- WIT: refactor types (allow future ordering and optional return value)
+- WAVS config: moved to a single config file with sections for each process
+- WAVS config: evm polling interval is now a config option 
+- WAVS is Eigenlayer-agnostic (no more Eigenlayer-specific code, split out to middleware repo)
+- Payload sent to ServiceHandler is now an Envelope type containing EventId (and unused OrderId)
+- E2E tests now run concurrently
+- General repo refactoring
+
+### Fixed
+
+- Aggregator (many bugs, now works correctly)
+- WAVS concurrency (nonce management, spawn tasks, etc.)
+- AVS Keys vs. Operator Keys in WAVS (each service has its own avs key)
+- Eigenlayer middleware contracts
+- Docker building
 
 ## [v0.3.0]
 - bumped `WIT`, `@wavs/solidity`, `wavs-types`, `wavs-wasi-chain` and `examples` to `0.3.0`
@@ -159,7 +200,7 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-rc1...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0...HEAD
 [v0.3.0-rc1]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-beta...v0.3.0-rc1
 [v0.3.0-beta]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha10...v0.3.0-beta
 [v0.3.0-alpha10]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0-alpha9...v0.3.0-alpha10

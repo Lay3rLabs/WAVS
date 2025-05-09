@@ -134,7 +134,12 @@ impl CoreTriggerManager {
         let mut evm_clients = HashMap::new();
         for (chain_name, chain_config) in self.chain_configs.clone() {
             if let AnyChainConfig::Evm(chain_config) = chain_config {
-                let client = EvmQueryClient::new(chain_config.query_client_endpoint()?).await?;
+                let endpoint = chain_config
+                    .query_client_endpoint()
+                    .map_err(|e| TriggerError::EvmClient(chain_name.clone(), e))?;
+                let client = EvmQueryClient::new(endpoint)
+                    .await
+                    .map_err(|e| TriggerError::EvmClient(chain_name.clone(), e))?;
 
                 evm_clients.insert(chain_name, client);
             }
@@ -476,7 +481,11 @@ impl TriggerManager for CoreTriggerManager {
                     _ = kill_receiver.recv() => {
                         tracing::debug!("Trigger Manager shutting down");
                     },
-                    _ = _self.start_watcher(action_sender) => {
+                    res = _self.start_watcher(action_sender) => {
+                        if let Err(err) = res {
+                            tracing::error!("Trigger Manager watcher error: {:?}", err);
+                            ctx.kill();
+                        }
                     }
                 }
             }
