@@ -227,7 +227,7 @@ fn get_input_for_service(
     }
 }
 
-async fn verify_signed_data(
+pub async fn verify_signed_data(
     clients: &Clients,
     name: AnyService,
     signed_data: SignedData,
@@ -370,7 +370,7 @@ impl SquareResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum CosmosQueryRequest {
     BlockHeight {
@@ -395,7 +395,7 @@ pub enum CosmosQueryResponse {
     Balance(String),
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PermissionsRequest {
     pub get_url: String,
     pub post_url: String,

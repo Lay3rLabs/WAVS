@@ -1,19 +1,24 @@
-// src/e2e/test_registry.rs
-
+use anyhow::{Context, Result};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use utils::config::ChainConfigs;
+use utils::context::AppContext;
 use wavs_types::ChainName;
 
-use super::components::ComponentName;
+use super::clients::Clients;
+use super::components::{ComponentName, ComponentSources};
+use super::config::Configs;
+use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::runner::{CosmosQueryRequest, PermissionsRequest};
-use super::test_definition::{ExpectedOutput, TestBuilder, TestDefinition};
+use super::test_definition::{ExpectedOutput, TestBuilder, TestContext, TestDefinition, TestState};
 
-/// Registry for managing test definitions
+/// Registry for managing test definitions and their deployed services
 pub struct TestRegistry {
     tests: HashMap<String, TestDefinition>,
+    test_contexts: Arc<Mutex<HashMap<String, TestContext>>>,
 }
 
 /// Structure to hold the different chain names for test configuration
@@ -50,11 +55,23 @@ impl TestRegistry {
     pub fn new() -> Self {
         Self {
             tests: HashMap::new(),
+            test_contexts: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     /// Register a test definition
     pub fn register(&mut self, test: TestDefinition) -> &mut Self {
+        // Initialize test context
+        self.test_contexts.lock().unwrap().insert(
+            test.name.clone(),
+            TestContext {
+                state: TestState::NotRun,
+                execution_time: None,
+                metadata: HashMap::new(),
+            },
+        );
+
+        // Store the test
         self.tests.insert(test.name.clone(), test);
         self
     }
@@ -62,6 +79,11 @@ impl TestRegistry {
     /// Get a test definition by name
     pub fn get(&self, name: &str) -> Option<&TestDefinition> {
         self.tests.get(name)
+    }
+
+    /// Get a mutable reference to a test definition
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut TestDefinition> {
+        self.tests.get_mut(name)
     }
 
     /// List all registered test names
@@ -74,6 +96,11 @@ impl TestRegistry {
         self.tests.values().collect()
     }
 
+    /// Get all test definitions as mutable references
+    pub fn list_all_mut(&mut self) -> Vec<&mut TestDefinition> {
+        self.tests.values_mut().collect()
+    }
+
     /// Filter tests by a predicate
     pub fn filter<F>(&self, predicate: F) -> Vec<&TestDefinition>
     where
@@ -82,12 +109,105 @@ impl TestRegistry {
         self.tests.values().filter(|test| predicate(test)).collect()
     }
 
+    /// Get the context for a test
+    pub fn get_test_context(&self, name: &str) -> Option<TestContext> {
+        self.test_contexts.lock().unwrap().get(name).cloned()
+    }
+
+    /// Update the context for a test
+    pub fn update_test_context(&mut self, name: &str, context: TestContext) {
+        if let Some(current) = self.test_contexts.lock().unwrap().get_mut(name) {
+            *current = context;
+        }
+    }
+
+    /// Deploy services for all tests
+    pub async fn deploy_services(
+        &mut self,
+        ctx: &AppContext,
+        configs: &Configs,
+        clients: &Clients,
+        component_sources: &ComponentSources,
+    ) -> Result<()> {
+        // Move the test_contexts into a separate variable to avoid borrowing self
+        let test_contexts = &self.test_contexts;
+
+        // Process each test one at a time
+        for (test_name, test) in &mut self.tests {
+            // Update test context to indicate deployment is in progress
+            {
+                let mut contexts = test_contexts.lock().unwrap();
+                if let Some(context) = contexts.get_mut(test_name) {
+                    *context = TestContext {
+                        state: TestState::Running,
+                        execution_time: None,
+                        metadata: {
+                            let mut map = HashMap::new();
+                            map.insert("stage".to_string(), "deploying".to_string());
+                            map
+                        },
+                    };
+                }
+            }
+
+            // Deploy service for this test
+            let result =
+                helpers::deploy_service_for_test(test, configs, clients, component_sources).await;
+
+            // Update test context based on the result
+            {
+                let mut contexts = test_contexts.lock().unwrap();
+                if let Some(context) = contexts.get_mut(test_name) {
+                    match &result {
+                        Ok(_) => {
+                            *context = TestContext {
+                                state: TestState::NotRun,
+                                execution_time: None,
+                                metadata: {
+                                    let mut map = HashMap::new();
+                                    map.insert("stage".to_string(), "deployed".to_string());
+                                    map
+                                },
+                            };
+                        }
+                        Err(e) => {
+                            *context = TestContext {
+                                state: TestState::Failed(format!("Deployment failed: {}", e)),
+                                execution_time: None,
+                                metadata: {
+                                    let mut map = HashMap::new();
+                                    map.insert(
+                                        "stage".to_string(),
+                                        "deployment_failed".to_string(),
+                                    );
+                                    map.insert("error".to_string(), e.to_string());
+                                    map
+                                },
+                            };
+                        }
+                    }
+                }
+            }
+
+            // If deployment was successful, attach services to the test
+            if let Ok((service, multi_trigger_service)) = result {
+                test.service = Some(service);
+                test.multi_trigger_service = multi_trigger_service;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Create a registry based on the test mode
-    pub fn from_test_mode(test_mode: &TestMode, chain_configs: &ChainConfigs) -> Self {
+    pub fn from_test_mode(
+        test_mode: &crate::config::TestMode,
+        chain_configs: &ChainConfigs,
+    ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.clone().into();
 
-        // Get chain names using the same approach as in services.rs
+        // Get chain names
         let chain_names = ChainNames::from_config(chain_configs);
 
         let mut registry = Self::new();
@@ -202,7 +322,7 @@ impl TestRegistry {
         registry
     }
 
-    // Individual test registration methods
+    // Individual test registration methods (same as before)
     fn register_evm_echo_data_test(&mut self, chain: &ChainName) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data")
@@ -499,9 +619,6 @@ impl TestRegistry {
     }
 }
 
-/// Re-export TestMode
-pub use crate::config::TestMode;
-
 // Helper function to create a standard permissions request for tests
 fn create_permissions_request() -> PermissionsRequest {
     PermissionsRequest {
@@ -510,7 +627,7 @@ fn create_permissions_request() -> PermissionsRequest {
         post_data: ("hello".to_string(), "world".to_string()),
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs(),
     }
 }

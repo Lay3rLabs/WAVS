@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
-use wavs_types::{ChainName, Submit, Trigger, TriggerConfig};
+use wavs_types::{ChainName, Service, Submit, Trigger};
 
 use crate::e2e::components::ComponentName;
 use crate::e2e::runner::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
@@ -37,6 +38,34 @@ pub struct TestDefinition {
 
     /// Number of tasks to execute (for aggregator tests)
     pub num_tasks: u32,
+
+    /// Reference to the deployed service (populated during test execution)
+    pub service: Option<Service>,
+
+    /// Reference to the multi-trigger service (populated during test execution)
+    pub multi_trigger_service: Option<Service>,
+}
+
+/// Configuration for a trigger
+#[derive(Clone, Debug)]
+pub enum TriggerConfig {
+    /// EVM contract event trigger
+    EvmContract { chain_name: ChainName },
+
+    /// Cosmos contract event trigger
+    CosmosContract { chain_name: ChainName },
+
+    /// Block interval trigger
+    BlockInterval {
+        chain_name: ChainName,
+        n_blocks: u32,
+    },
+
+    /// Cron trigger
+    Cron { schedule: String },
+
+    /// Use an existing trigger
+    UseExisting { trigger: Trigger },
 }
 
 /// Configuration for a submit
@@ -120,6 +149,52 @@ pub enum OutputStructure {
     PermissionsResponse,
 }
 
+/// State of a test
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TestState {
+    /// Test has not been run yet
+    NotRun,
+
+    /// Test is currently running
+    Running,
+
+    /// Test has passed
+    Passed,
+
+    /// Test has failed with an error
+    Failed(String),
+}
+
+/// Test context containing runtime state
+#[derive(Clone, Debug)]
+pub struct TestContext {
+    /// Current state of the test
+    pub state: TestState,
+
+    /// Duration of the test execution (if completed)
+    pub execution_time: Option<Duration>,
+
+    /// Additional context about the test run
+    pub metadata: HashMap<String, String>,
+}
+
+impl TestDefinition {
+    /// Gets the service for this test, panicking if none is set
+    pub fn get_service(&self) -> &Service {
+        self.service.as_ref().expect("Service not set for test")
+    }
+
+    /// Gets the multi-trigger service for this test, if set
+    pub fn get_multi_trigger_service(&self) -> Option<&Service> {
+        self.multi_trigger_service.as_ref()
+    }
+
+    /// Checks if this test has a service
+    pub fn has_service(&self) -> bool {
+        self.service.is_some()
+    }
+}
+
 /// Builder pattern for creating test definitions
 pub struct TestBuilder {
     pub definition: TestDefinition,
@@ -144,6 +219,8 @@ impl TestBuilder {
                 timeout: Duration::from_secs(5),
                 use_multi_trigger: false,
                 num_tasks: 1,
+                service: None,
+                multi_trigger_service: None,
             },
         }
     }
@@ -296,12 +373,6 @@ impl TestBuilder {
     /// Build the test definition
     pub fn build(self) -> TestDefinition {
         self.definition
-    }
-}
-
-impl Default for TestDefinition {
-    fn default() -> Self {
-        TestBuilder::new("default_test").build()
     }
 }
 

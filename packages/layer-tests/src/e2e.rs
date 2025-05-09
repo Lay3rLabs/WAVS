@@ -3,14 +3,17 @@ mod clients;
 mod components;
 mod config;
 mod handles;
+mod helpers;
 pub mod matrix;
 mod runner;
 mod services;
+mod test_definition;
+mod test_registry;
+mod test_runner;
 
 use components::ComponentSources;
 use config::Configs;
 use handles::AppHandles;
-use services::Services;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
@@ -21,7 +24,9 @@ use utils::{
 use crate::{args::TestArgs, config::TestConfig};
 
 pub fn run(args: TestArgs, ctx: AppContext) {
+    let isolated = args.isolated.clone();
     let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
+    let mode = config.mode.clone();
 
     // setup tracing
     let tracer_provider = if let Some(collector) = config.jaeger.clone() {
@@ -68,9 +73,36 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let component_sources = ComponentSources::new(ctx.clone(), &configs, &clients.http_client);
 
-    let services = Services::new(ctx.clone(), &configs, &clients, &component_sources);
+    // Create test registry from test mode
+    let mut registry = test_registry::TestRegistry::from_test_mode(&mode, &configs.chains);
 
-    runner::run_tests(ctx.clone(), configs, clients, services);
+    // Deploy services for tests
+    match ctx.rt.block_on(async {
+        tracing::info!("Deploying services for tests...");
+        registry
+            .deploy_services(&ctx, &configs, &clients, &component_sources)
+            .await
+    }) {
+        Ok(_) => {
+            // Create and run the test runner
+            let test_runner = test_runner::TestRunner::new(ctx.clone(), configs, clients, registry);
+
+            // If a specific test is requested, run just that test
+            if let Some(test_name) = &isolated {
+                tracing::info!("Running isolated test: {}", test_name);
+                match test_runner.run_test_by_name(test_name) {
+                    Ok(_) => tracing::info!("Isolated test {} passed", test_name),
+                    Err(e) => tracing::error!("Isolated test {} failed: {:?}", test_name, e),
+                }
+            } else {
+                // Otherwise run all tests
+                test_runner.run_tests();
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to deploy services for tests: {:?}", e);
+        }
+    }
 
     ctx.kill();
     handles.join();
