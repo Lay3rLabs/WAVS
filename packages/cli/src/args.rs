@@ -222,7 +222,7 @@ pub enum ManagerCommand {
         #[clap(long)]
         chain_name: ChainName,
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
     },
 }
 
@@ -247,7 +247,7 @@ pub enum TriggerCommand {
     SetEvm {
         /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
 
         /// The chain name (e.g., "ethereum-mainnet")
         #[clap(long)]
@@ -288,7 +288,7 @@ pub enum SubmitCommand {
     SetEvm {
         /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
 
         /// The chain name (e.g., "ethereum-mainnet")
         #[clap(long)]
@@ -306,7 +306,7 @@ pub enum SubmitCommand {
 
         /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
 
         /// The chain name (e.g., "ethereum-mainnet")
         #[clap(long)]
