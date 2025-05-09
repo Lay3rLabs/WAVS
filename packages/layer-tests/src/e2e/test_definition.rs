@@ -1,10 +1,13 @@
-use std::collections::HashMap;
+#![allow(dead_code)]
+
 use std::time::Duration;
 
 use wavs_types::{ChainName, Service, Submit, Trigger};
 
 use crate::e2e::components::ComponentName;
-use crate::e2e::runner::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
+use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
+
+use super::types::{CosmosQueryResponse, PermissionsResponse};
 
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
@@ -149,44 +152,10 @@ pub enum OutputStructure {
     PermissionsResponse,
 }
 
-/// State of a test
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TestState {
-    /// Test has not been run yet
-    NotRun,
-
-    /// Test is currently running
-    Running,
-
-    /// Test has passed
-    Passed,
-
-    /// Test has failed with an error
-    Failed(String),
-}
-
-/// Test context containing runtime state
-#[derive(Clone, Debug)]
-pub struct TestContext {
-    /// Current state of the test
-    pub state: TestState,
-
-    /// Duration of the test execution (if completed)
-    pub execution_time: Option<Duration>,
-
-    /// Additional context about the test run
-    pub metadata: HashMap<String, String>,
-}
-
 impl TestDefinition {
     /// Gets the service for this test, panicking if none is set
     pub fn get_service(&self) -> &Service {
         self.service.as_ref().expect("Service not set for test")
-    }
-
-    /// Gets the multi-trigger service for this test, if set
-    pub fn get_multi_trigger_service(&self) -> Option<&Service> {
-        self.multi_trigger_service.as_ref()
     }
 
     /// Checks if this test has a service
@@ -398,19 +367,17 @@ impl ExpectedOutput {
             }
             ExpectedOutput::SameAsInput => {
                 if let Some(input_bytes) = input.to_bytes() {
-                    &input_bytes == actual
+                    input_bytes == actual
                 } else {
                     false
                 }
             }
             ExpectedOutput::StructureOnly(structure) => match structure {
                 OutputStructure::CosmosQueryResponse => {
-                    serde_json::from_slice::<crate::e2e::runner::CosmosQueryResponse>(actual)
-                        .is_ok()
+                    serde_json::from_slice::<CosmosQueryResponse>(actual).is_ok()
                 }
                 OutputStructure::PermissionsResponse => {
-                    serde_json::from_slice::<crate::e2e::runner::PermissionsResponse>(actual)
-                        .is_ok()
+                    serde_json::from_slice::<PermissionsResponse>(actual).is_ok()
                 }
             },
             ExpectedOutput::Any => true,

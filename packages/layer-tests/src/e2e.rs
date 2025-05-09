@@ -5,11 +5,10 @@ mod config;
 mod handles;
 mod helpers;
 pub mod matrix;
-mod runner;
-mod services;
 mod test_definition;
 mod test_registry;
 mod test_runner;
+mod types;
 
 use components::ComponentSources;
 use config::Configs;
@@ -79,13 +78,11 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     // Deploy services for tests
     match ctx.rt.block_on(async {
         tracing::info!("Deploying services for tests...");
-        registry
-            .deploy_services(&ctx, &configs, &clients, &component_sources)
-            .await
+        registry.deploy_services(&clients, &component_sources).await
     }) {
         Ok(_) => {
             // Create and run the test runner
-            let test_runner = test_runner::TestRunner::new(ctx.clone(), configs, clients, registry);
+            let test_runner = test_runner::TestRunner::new(ctx.clone(), clients, registry);
 
             // If a specific test is requested, run just that test
             if let Some(test_name) = &isolated {

@@ -1,24 +1,20 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use utils::config::ChainConfigs;
-use utils::context::AppContext;
 use wavs_types::ChainName;
 
 use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
-use super::config::Configs;
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
-use super::runner::{CosmosQueryRequest, PermissionsRequest};
-use super::test_definition::{ExpectedOutput, TestBuilder, TestContext, TestDefinition, TestState};
+use super::test_definition::{ExpectedOutput, TestBuilder, TestDefinition};
+use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
 /// Registry for managing test definitions and their deployed services
 pub struct TestRegistry {
     tests: HashMap<String, TestDefinition>,
-    test_contexts: Arc<Mutex<HashMap<String, TestContext>>>,
 }
 
 /// Structure to hold the different chain names for test configuration
@@ -55,22 +51,11 @@ impl TestRegistry {
     pub fn new() -> Self {
         Self {
             tests: HashMap::new(),
-            test_contexts: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     /// Register a test definition
     pub fn register(&mut self, test: TestDefinition) -> &mut Self {
-        // Initialize test context
-        self.test_contexts.lock().unwrap().insert(
-            test.name.clone(),
-            TestContext {
-                state: TestState::NotRun,
-                execution_time: None,
-                metadata: HashMap::new(),
-            },
-        );
-
         // Store the test
         self.tests.insert(test.name.clone(), test);
         self
@@ -81,119 +66,26 @@ impl TestRegistry {
         self.tests.get(name)
     }
 
-    /// Get a mutable reference to a test definition
-    pub fn get_mut(&mut self, name: &str) -> Option<&mut TestDefinition> {
-        self.tests.get_mut(name)
-    }
-
-    /// List all registered test names
-    pub fn list_names(&self) -> Vec<String> {
-        self.tests.keys().cloned().collect()
-    }
-
     /// Get all test definitions
     pub fn list_all(&self) -> Vec<&TestDefinition> {
         self.tests.values().collect()
     }
 
-    /// Get all test definitions as mutable references
-    pub fn list_all_mut(&mut self) -> Vec<&mut TestDefinition> {
-        self.tests.values_mut().collect()
-    }
-
-    /// Filter tests by a predicate
-    pub fn filter<F>(&self, predicate: F) -> Vec<&TestDefinition>
-    where
-        F: Fn(&TestDefinition) -> bool,
-    {
-        self.tests.values().filter(|test| predicate(test)).collect()
-    }
-
-    /// Get the context for a test
-    pub fn get_test_context(&self, name: &str) -> Option<TestContext> {
-        self.test_contexts.lock().unwrap().get(name).cloned()
-    }
-
-    /// Update the context for a test
-    pub fn update_test_context(&mut self, name: &str, context: TestContext) {
-        if let Some(current) = self.test_contexts.lock().unwrap().get_mut(name) {
-            *current = context;
-        }
-    }
-
     /// Deploy services for all tests
     pub async fn deploy_services(
         &mut self,
-        ctx: &AppContext,
-        configs: &Configs,
         clients: &Clients,
         component_sources: &ComponentSources,
     ) -> Result<()> {
-        // Move the test_contexts into a separate variable to avoid borrowing self
-        let test_contexts = &self.test_contexts;
-
         // Process each test one at a time
-        for (test_name, test) in &mut self.tests {
-            // Update test context to indicate deployment is in progress
-            {
-                let mut contexts = test_contexts.lock().unwrap();
-                if let Some(context) = contexts.get_mut(test_name) {
-                    *context = TestContext {
-                        state: TestState::Running,
-                        execution_time: None,
-                        metadata: {
-                            let mut map = HashMap::new();
-                            map.insert("stage".to_string(), "deploying".to_string());
-                            map
-                        },
-                    };
-                }
-            }
-
+        for test in self.tests.values_mut() {
             // Deploy service for this test
-            let result =
-                helpers::deploy_service_for_test(test, configs, clients, component_sources).await;
-
-            // Update test context based on the result
-            {
-                let mut contexts = test_contexts.lock().unwrap();
-                if let Some(context) = contexts.get_mut(test_name) {
-                    match &result {
-                        Ok(_) => {
-                            *context = TestContext {
-                                state: TestState::NotRun,
-                                execution_time: None,
-                                metadata: {
-                                    let mut map = HashMap::new();
-                                    map.insert("stage".to_string(), "deployed".to_string());
-                                    map
-                                },
-                            };
-                        }
-                        Err(e) => {
-                            *context = TestContext {
-                                state: TestState::Failed(format!("Deployment failed: {}", e)),
-                                execution_time: None,
-                                metadata: {
-                                    let mut map = HashMap::new();
-                                    map.insert(
-                                        "stage".to_string(),
-                                        "deployment_failed".to_string(),
-                                    );
-                                    map.insert("error".to_string(), e.to_string());
-                                    map
-                                },
-                            };
-                        }
-                    }
-                }
-            }
+            let (service, multi_trigger_service) =
+                helpers::deploy_service_for_test(test, clients, component_sources).await?;
 
             // If deployment was successful, attach services to the test
-            if let Ok((service, multi_trigger_service)) = result {
-                test.service = Some(service);
-                test.multi_trigger_service = multi_trigger_service;
-            }
+            test.service = Some(service);
+            test.multi_trigger_service = multi_trigger_service;
         }
 
         Ok(())
@@ -328,8 +220,8 @@ impl TestRegistry {
             TestBuilder::new("evm_echo_data")
                 .description("Tests the EchoData component on the primary EVM chain")
                 .component(ComponentName::EchoData)
-                .evm_trigger(&chain.to_string())
-                .evm_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .evm_submit(chain.as_ref())
                 .input_text("The times")
                 .expect_same_output()
                 .build(),
@@ -341,8 +233,8 @@ impl TestRegistry {
             TestBuilder::new("evm_echo_data_secondary_chain")
                 .description("Tests the EchoData component on the secondary EVM chain")
                 .component(ComponentName::EchoData)
-                .evm_trigger(&chain.to_string())
-                .evm_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .evm_submit(chain.as_ref())
                 .input_text("collapse")
                 .expect_same_output()
                 .build(),
@@ -354,8 +246,8 @@ impl TestRegistry {
             TestBuilder::new("evm_echo_data_aggregator")
                 .description("Tests the EchoData component using an aggregator")
                 .component(ComponentName::EchoData)
-                .evm_trigger(&chain.to_string())
-                .aggregator_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .aggregator_submit(chain.as_ref())
                 .input_text("Chancellor")
                 .expect_same_output()
                 .num_tasks(3)
@@ -368,8 +260,8 @@ impl TestRegistry {
             TestBuilder::new("evm_square")
                 .description("Tests the Square component on EVM chain")
                 .component(ComponentName::Square)
-                .evm_trigger(&chain.to_string())
-                .evm_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .evm_submit(chain.as_ref())
                 .input_square(3)
                 .expect_square(9)
                 .build(),
@@ -381,8 +273,8 @@ impl TestRegistry {
             TestBuilder::new("evm_chain_trigger_lookup")
                 .description("Tests the ChainTriggerLookup component on EVM chain")
                 .component(ComponentName::ChainTriggerLookup)
-                .evm_trigger(&chain.to_string())
-                .evm_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .evm_submit(chain.as_ref())
                 .input_text("satoshi")
                 .expect_same_output()
                 .build(),
@@ -398,8 +290,8 @@ impl TestRegistry {
             TestBuilder::new("evm_cosmos_query")
                 .description("Tests the CosmosQuery component from EVM to Cosmos")
                 .component(ComponentName::CosmosQuery)
-                .evm_trigger(&evm_chain.to_string())
-                .evm_submit(&evm_chain.to_string())
+                .evm_trigger(evm_chain.as_ref())
+                .evm_submit(evm_chain.as_ref())
                 .input_cosmos_query(CosmosQueryRequest::BlockHeight {
                     chain_name: cosmos_chain.clone(),
                 })
@@ -415,8 +307,8 @@ impl TestRegistry {
             TestBuilder::new("evm_permissions")
                 .description("Tests permissions for HTTP and file system access on EVM chain")
                 .component(ComponentName::Permissions)
-                .evm_trigger(&chain.to_string())
-                .evm_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .evm_submit(chain.as_ref())
                 .input_permissions(create_permissions_request())
                 .expect_output_structure(ExpectedOutput::StructureOnly(
                     super::test_definition::OutputStructure::PermissionsResponse,
@@ -430,8 +322,8 @@ impl TestRegistry {
             TestBuilder::new("evm_multi_workflow")
                 .description("Tests multiple workflows in a single service on EVM chain")
                 .components(vec![ComponentName::Square, ComponentName::EchoData])
-                .evm_trigger(&chain.to_string())
-                .evm_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .evm_submit(chain.as_ref())
                 .build(),
         )
     }
@@ -441,8 +333,8 @@ impl TestRegistry {
             TestBuilder::new("evm_multi_trigger")
                 .description("Tests multiple services triggered by the same event on EVM chain")
                 .component(ComponentName::EchoData)
-                .evm_trigger(&chain.to_string())
-                .evm_submit(&chain.to_string())
+                .evm_trigger(chain.as_ref())
+                .evm_submit(chain.as_ref())
                 .input_text("tttrrrrriiiigggeerrr")
                 .expect_same_output()
                 .with_multi_trigger()
@@ -455,8 +347,8 @@ impl TestRegistry {
             TestBuilder::new("evm_block_interval")
                 .description("Tests the block interval trigger on EVM chain")
                 .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(&chain.to_string(), 1)
-                .evm_submit(&chain.to_string())
+                .block_interval_trigger(chain.as_ref(), 1)
+                .evm_submit(chain.as_ref())
                 .timeout(Duration::from_secs(15))
                 .build(),
         )
@@ -468,7 +360,7 @@ impl TestRegistry {
                 .description("Tests the cron interval trigger")
                 .component(ComponentName::EchoCronInterval)
                 .cron_trigger("* * * * * *")
-                .evm_submit(&chain.to_string())
+                .evm_submit(chain.as_ref())
                 .timeout(Duration::from_secs(15))
                 .build(),
         )
@@ -485,8 +377,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_echo_data")
                 .description("Tests the EchoData component on Cosmos chain")
                 .component(ComponentName::EchoData)
-                .cosmos_trigger(&cosmos_chain.to_string())
-                .evm_submit(&evm_chain.to_string())
+                .cosmos_trigger(cosmos_chain.as_ref())
+                .evm_submit(evm_chain.as_ref())
                 .input_text("on brink")
                 .expect_same_output()
                 .build(),
@@ -502,8 +394,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_square")
                 .description("Tests the Square component on Cosmos chain")
                 .component(ComponentName::Square)
-                .cosmos_trigger(&cosmos_chain.to_string())
-                .evm_submit(&evm_chain.to_string())
+                .cosmos_trigger(cosmos_chain.as_ref())
+                .evm_submit(evm_chain.as_ref())
                 .input_square(3)
                 .expect_square(9)
                 .build(),
@@ -519,8 +411,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_chain_trigger_lookup")
                 .description("Tests the ChainTriggerLookup component on Cosmos chain")
                 .component(ComponentName::ChainTriggerLookup)
-                .cosmos_trigger(&cosmos_chain.to_string())
-                .evm_submit(&evm_chain.to_string())
+                .cosmos_trigger(cosmos_chain.as_ref())
+                .evm_submit(evm_chain.as_ref())
                 .input_text("nakamoto")
                 .expect_same_output()
                 .build(),
@@ -536,8 +428,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_cosmos_query")
                 .description("Tests the CosmosQuery component on Cosmos chain")
                 .component(ComponentName::CosmosQuery)
-                .cosmos_trigger(&cosmos_chain.to_string())
-                .evm_submit(&evm_chain.to_string())
+                .cosmos_trigger(cosmos_chain.as_ref())
+                .evm_submit(evm_chain.as_ref())
                 .input_cosmos_query(CosmosQueryRequest::BlockHeight {
                     chain_name: cosmos_chain.clone(),
                 })
@@ -557,8 +449,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_permissions")
                 .description("Tests permissions for HTTP and file system access on Cosmos chain")
                 .component(ComponentName::Permissions)
-                .cosmos_trigger(&cosmos_chain.to_string())
-                .evm_submit(&evm_chain.to_string())
+                .cosmos_trigger(cosmos_chain.as_ref())
+                .evm_submit(evm_chain.as_ref())
                 .input_permissions(create_permissions_request())
                 .expect_output_structure(ExpectedOutput::StructureOnly(
                     super::test_definition::OutputStructure::PermissionsResponse,
@@ -576,8 +468,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_block_interval")
                 .description("Tests the block interval trigger on Cosmos chain")
                 .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(&cosmos_chain.to_string(), 1)
-                .evm_submit(&evm_chain.to_string())
+                .block_interval_trigger(cosmos_chain.as_ref(), 1)
+                .evm_submit(evm_chain.as_ref())
                 .timeout(Duration::from_secs(15))
                 .build(),
         )
@@ -593,7 +485,7 @@ impl TestRegistry {
                 .description("Tests the cron interval trigger on Cosmos chain")
                 .component(ComponentName::EchoCronInterval)
                 .cron_trigger("* * * * * *")
-                .evm_submit(&evm_chain.to_string())
+                .evm_submit(evm_chain.as_ref())
                 .timeout(Duration::from_secs(15))
                 .build(),
         )
@@ -610,8 +502,8 @@ impl TestRegistry {
             TestBuilder::new("cross_chain_cosmos_to_evm_echo_data")
                 .description("Tests the EchoData component from Cosmos to EVM")
                 .component(ComponentName::EchoData)
-                .cosmos_trigger(&cosmos_chain.to_string())
-                .evm_submit(&evm_chain.to_string())
+                .cosmos_trigger(cosmos_chain.as_ref())
+                .evm_submit(evm_chain.as_ref())
                 .input_text("hello EVM world from cosmos")
                 .expect_same_output()
                 .build(),

@@ -11,7 +11,6 @@ use utils::context::AppContext;
 use crate::e2e::{
     add_task::{add_task, wait_for_task_to_land},
     clients::Clients,
-    config::Configs,
     test_definition::TestDefinition,
     test_registry::TestRegistry,
 };
@@ -19,21 +18,14 @@ use crate::e2e::{
 /// Simplified test runner that leverages services directly attached to test definitions
 pub struct TestRunner {
     ctx: AppContext,
-    configs: Arc<Configs>,
     clients: Arc<Clients>,
     registry: Arc<TestRegistry>,
 }
 
 impl TestRunner {
-    pub fn new(
-        ctx: AppContext,
-        configs: Configs,
-        clients: Clients,
-        registry: TestRegistry,
-    ) -> Self {
+    pub fn new(ctx: AppContext, clients: Clients, registry: TestRegistry) -> Self {
         Self {
             ctx,
-            configs: Arc::new(configs),
             clients: Arc::new(clients),
             registry: Arc::new(registry),
         }
@@ -59,7 +51,6 @@ impl TestRunner {
         let mut concurrent_futures = FuturesUnordered::new();
 
         for test in tests {
-            let configs = self.configs.clone();
             let clients = self.clients.clone();
             let test_name = test.name.clone();
 
@@ -67,7 +58,7 @@ impl TestRunner {
                 tracing::info!("Running test: {}", test_name);
                 let start_time = Instant::now();
 
-                match run_test(test, &configs, &clients).await {
+                match run_test(test, &clients).await {
                     Ok(_) => {
                         let duration = start_time.elapsed();
                         tracing::info!(
@@ -109,14 +100,13 @@ impl TestRunner {
             return Err(anyhow::anyhow!("Test {} has no attached service", name));
         }
 
-        let configs = self.configs.clone();
         let clients = self.clients.clone();
 
         self.ctx.rt.block_on(async move {
             tracing::info!("Running test: {}", name);
             let start_time = Instant::now();
 
-            match run_test(test, &configs, &clients).await {
+            match run_test(test, &clients).await {
                 Ok(_) => {
                     let duration = start_time.elapsed();
                     tracing::info!("Test {} passed (ran for {}ms)", name, duration.as_millis());
@@ -140,13 +130,13 @@ impl TestRunner {
 }
 
 /// Run a single test
-async fn run_test(test: &TestDefinition, configs: &Configs, clients: &Clients) -> Result<()> {
+async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
     // Get the service from the test
     let service = test.get_service();
     let service_id = service.id.to_string();
 
     // For this example, we'll assume we're testing the first workflow
-    let (workflow_id, workflow) = service
+    let (workflow_id, _) = service
         .workflows
         .iter()
         .next()

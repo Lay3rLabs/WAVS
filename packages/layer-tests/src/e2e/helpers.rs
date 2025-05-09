@@ -5,19 +5,16 @@ use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
-use utils::context::AppContext;
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, EvmContractSubmission,
-    Permissions, Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow,
-    WorkflowID,
+    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
+    Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::{
     e2e::{
         clients::Clients,
         components::ComponentSources,
-        config::Configs,
         test_definition::{SubmitConfig, TestDefinition, TriggerConfig},
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
@@ -27,7 +24,6 @@ use crate::{
 /// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
     test: &TestDefinition,
-    configs: &Configs,
     clients: &Clients,
     component_sources: &ComponentSources,
 ) -> Result<(Service, Option<Service>)> {
@@ -63,11 +59,8 @@ pub async fn deploy_service_for_test(
     // Create the trigger based on test configuration
     let trigger = create_trigger_from_config(&test.trigger, clients).await?;
 
-    // Get the chain name from the trigger for use with the service manager
-    let trigger_chain = get_chain_from_trigger(&trigger)?;
-
     // Create the submit based on test configuration
-    let submit = create_submit_from_config(&test.submit, clients, trigger_chain.clone()).await?;
+    let submit = create_submit_from_config(&test.submit, clients).await?;
 
     // Get the service manager address for the submit chain
     let submit_chain = get_chain_from_submit(&submit)?;
@@ -222,7 +215,6 @@ pub async fn create_trigger_from_config(
 pub async fn create_submit_from_config(
     submit_config: &SubmitConfig,
     clients: &Clients,
-    trigger_chain: ChainName,
 ) -> Result<Submit> {
     match submit_config {
         SubmitConfig::EvmContract { chain_name } => {
@@ -230,7 +222,7 @@ pub async fn create_submit_from_config(
 
             deploy_submit(clients, chain_name, service_manager_address).await
         }
-        SubmitConfig::Aggregator { chain_name } => {
+        SubmitConfig::Aggregator { .. } => {
             // For aggregator, we use a URL instead of a contract address
             Ok(Submit::Aggregator {
                 url: "http://127.0.0.1:8001".to_string(),
@@ -238,17 +230,6 @@ pub async fn create_submit_from_config(
         }
         SubmitConfig::None => Ok(Submit::None),
         SubmitConfig::UseExisting { submit } => Ok(submit.clone()),
-    }
-}
-
-/// Get the chain name from a trigger
-pub fn get_chain_from_trigger(trigger: &Trigger) -> Result<ChainName> {
-    match trigger {
-        Trigger::EvmContractEvent { chain_name, .. } => Ok(chain_name.clone()),
-        Trigger::CosmosContractEvent { chain_name, .. } => Ok(chain_name.clone()),
-        Trigger::BlockInterval { chain_name, .. } => Ok(chain_name.clone()),
-        Trigger::Cron { .. } => bail!("Cron trigger does not have a chain name"),
-        Trigger::Manual => bail!("Manual trigger does not have a chain name"),
     }
 }
 
@@ -306,7 +287,7 @@ pub async fn deploy_submit(
 }
 
 /// Get the Cosmos code ID (this would need to be predeployed or deployed here)
-pub async fn get_cosmos_code_id(clients: &Clients, chain_name: &ChainName) -> Result<u64> {
+pub async fn get_cosmos_code_id(_clients: &Clients, _chain_namee: &ChainName) -> Result<u64> {
     // This would need to be implemented based on your cosmos code deployment
     // For now, return a hardcoded value as an example
     // In practice, you would need to either:
