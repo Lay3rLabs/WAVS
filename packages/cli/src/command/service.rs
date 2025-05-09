@@ -1,6 +1,6 @@
 use alloy_json_abi::Event;
 use alloy_provider::{Provider, RootProvider};
-use anyhow::{Context as _, Result};
+use anyhow::{anyhow, Context as _, Result};
 use layer_climb::{
     prelude::{Address, ConfigAddressExt as _},
     querier::QueryClient as CosmosQueryClient,
@@ -10,6 +10,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
+    num::NonZeroU32,
     path::{Path, PathBuf},
 };
 use utils::{config::WAVS_ENV_PREFIX, wkg::WkgClient};
@@ -18,7 +19,7 @@ use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
     EvmContractSubmission, Permissions, Registry, ServiceID, ServiceManager, ServiceStatus, Submit,
-    Trigger, WorkflowID,
+    Timestamp, Trigger, WorkflowID,
 };
 
 use crate::{
@@ -28,7 +29,8 @@ use crate::{
     },
     context::CliContext,
     service_json::{
-        ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson, TriggerJson, WorkflowJson,
+        validate_cron_config, ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson,
+        TriggerJson, WorkflowJson,
     },
 };
 
@@ -147,6 +149,21 @@ pub async fn handle_service_command(
                     event_hash,
                 } => {
                     let result = set_evm_trigger(&file, id, address, chain_name, event_hash)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                TriggerCommand::SetBlockInterval {
+                    chain_name,
+                    n_blocks,
+                } => {
+                    let result = set_block_interval_trigger(&file, id, chain_name, n_blocks)?;
+                    display_result(ctx, result, &file, json)?;
+                }
+                TriggerCommand::SetCron {
+                    schedule,
+                    start_time,
+                    end_time,
+                } => {
+                    let result = set_cron_trigger(&file, id, schedule, start_time, end_time)?;
                     display_result(ctx, result, &file, json)?;
                 }
             },
@@ -868,6 +885,66 @@ pub fn set_evm_trigger(
             address,
             chain_name,
             event_hash: ByteArray::new(event_hash),
+        };
+        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+pub fn set_block_interval_trigger(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    chain_name: ChainName,
+    n_blocks: NonZeroU32,
+) -> Result<WorkflowTriggerResult> {
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        let trigger = Trigger::BlockInterval {
+            chain_name,
+            n_blocks,
+        };
+        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+pub fn set_cron_trigger(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    schedule: cron::Schedule,
+    start_time: Option<Timestamp>,
+    end_time: Option<Timestamp>,
+) -> Result<WorkflowTriggerResult> {
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        validate_cron_config(start_time, end_time).map_err(|e| anyhow!(e))?;
+
+        let trigger = Trigger::Cron {
+            schedule: schedule.to_string(),
+            start_time,
+            end_time,
         };
         workflow.trigger = TriggerJson::Trigger(trigger.clone());
 

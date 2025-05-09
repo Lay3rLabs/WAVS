@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
@@ -101,10 +101,17 @@ impl ServiceJson {
                             }
                         }
                         Trigger::Cron {
-                            schedule: _,
+                            schedule,
                             start_time,
                             end_time,
                         } => {
+                            if let Err(err) = cron::Schedule::from_str(schedule) {
+                                errors.push(format!(
+                                    "Workflow '{}' has an invalid cron trigger schedule: {}",
+                                    workflow_id, err
+                                ));
+                            }
+
                             if let Err(err) = validate_cron_config(*start_time, *end_time) {
                                 errors.push(format!(
                                     "Workflow '{}' has an invalid cron trigger: {}",
