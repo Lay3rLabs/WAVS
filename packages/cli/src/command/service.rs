@@ -834,13 +834,10 @@ pub fn set_cosmos_trigger(
 pub fn set_evm_trigger(
     file_path: &Path,
     workflow_id: WorkflowID,
-    address_str: String,
+    address: alloy_primitives::Address,
     chain_name: ChainName,
     event_hash_str: String,
 ) -> Result<WorkflowTriggerResult> {
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
-
     // Order the match cases from most explicit to event parsing:
     // 1. 0x-prefixed hex string
     // 2. raw hex string (no 0x)
@@ -1134,13 +1131,10 @@ pub fn update_component_env_keys(
 pub fn set_evm_submit(
     file_path: &Path,
     workflow_id: WorkflowID,
-    address_str: String,
+    address: alloy_primitives::Address,
     chain_name: ChainName,
     max_gas: Option<u64>,
 ) -> Result<WorkflowSubmitResult> {
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
-
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
@@ -1175,14 +1169,11 @@ pub fn set_aggregator_submit(
     workflow_id: WorkflowID,
     url: String,
     chain_name: ChainName,
-    address_str: String,
+    address: alloy_primitives::Address,
     max_gas: Option<u64>,
 ) -> Result<WorkflowSubmitResult> {
     // Validate the URL format
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
-
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
@@ -1215,12 +1206,9 @@ pub fn set_aggregator_submit(
 /// Set an EVM manager for the service
 pub fn set_evm_manager(
     file_path: &Path,
-    address_str: String,
+    address: alloy_primitives::Address,
     chain_name: ChainName,
 ) -> Result<EvmManagerResult> {
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
-
     modify_service_file(file_path, |mut service| {
         service.manager = ServiceManagerJson::Manager(ServiceManager::Evm {
             chain_name: chain_name.clone(),
@@ -1688,6 +1676,7 @@ mod tests {
     use crate::service_json::Json;
 
     use super::*;
+    use alloy_primitives::address;
     use alloy_primitives::hex;
     use layer_climb::prelude::{ChainConfig, ChainId};
     use layer_climb::querier::QueryClient as CosmosQueryClient;
@@ -2375,7 +2364,7 @@ mod tests {
             .contains("invalid bech32"),);
 
         // Test setting EVM trigger
-        let evm_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let evm_address = address!("0x00000000219ab540356cBB839Cbe05303d7705Fa");
         let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
         let evm_event_hash =
             "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef".to_string();
@@ -2383,7 +2372,7 @@ mod tests {
         let evm_result = set_evm_trigger(
             &file_path,
             workflow_id.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             evm_event_hash.clone(),
         )
@@ -2397,7 +2386,7 @@ mod tests {
             event_hash,
         } = &evm_result.trigger
         {
-            assert_eq!(address.to_string(), evm_address);
+            assert_eq!(*address, evm_address);
             assert_eq!(chain_name, &evm_chain);
             // For event_hash we'll need to check the bytes match what we expect
             let expected_hash_bytes = hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
@@ -2419,7 +2408,7 @@ mod tests {
                 event_hash,
             } = trigger
             {
-                assert_eq!(address.to_string(), evm_address);
+                assert_eq!(*address, evm_address);
                 assert_eq!(chain_name, &evm_chain);
                 let expected_hash_bytes =
                     hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
@@ -2436,7 +2425,7 @@ mod tests {
         let trigger_error = set_evm_trigger(
             &file_path,
             non_existent_workflow.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             evm_event_hash.clone(),
         );
@@ -2462,20 +2451,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("invalid bech32"));
-
-        let invalid_evm_address = "invalid-address".to_string();
-        let invalid_evm_result = set_evm_trigger(
-            &file_path,
-            workflow_id.clone(),
-            invalid_evm_address,
-            evm_chain.clone(),
-            evm_event_hash.clone(),
-        );
-        assert!(invalid_evm_result.is_err());
-        assert!(invalid_evm_result
-            .unwrap_err()
-            .to_string()
-            .contains("invalid string length"));
     }
 
     #[test]
@@ -2510,14 +2485,14 @@ mod tests {
         }
 
         // Test setting EVM submit
-        let evm_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let evm_address = address!("0x00000000219ab540356cBB839Cbe05303d7705Fa");
         let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
         let max_gas = Some(1000000u64);
 
         let evm_result = set_evm_submit(
             &file_path,
             workflow_id.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             max_gas,
         )
@@ -2531,7 +2506,7 @@ mod tests {
             max_gas: result_max_gas,
         }) = &evm_result.submit
         {
-            assert_eq!(address.to_string(), evm_address);
+            assert_eq!(*address, evm_address);
             assert_eq!(chain_name, &evm_chain);
             assert_eq!(result_max_gas, &max_gas);
         } else {
@@ -2551,7 +2526,7 @@ mod tests {
                 max_gas: result_max_gas,
             }) = submit
             {
-                assert_eq!(address.to_string(), evm_address);
+                assert_eq!(*address, evm_address);
                 assert_eq!(chain_name, &evm_chain);
                 assert_eq!(result_max_gas, &max_gas);
             } else {
@@ -2565,7 +2540,7 @@ mod tests {
         let evm_result_no_gas = set_evm_submit(
             &file_path,
             workflow_id.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             None,
         )
@@ -2587,7 +2562,7 @@ mod tests {
         let submit_error = set_evm_submit(
             &file_path,
             non_existent_workflow.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             max_gas,
         );
@@ -2598,19 +2573,6 @@ mod tests {
         assert!(submit_error_msg.contains(&non_existent_workflow.to_string()));
         assert!(submit_error_msg.contains("not found"));
 
-        // Test error handling for invalid address
-        let invalid_evm_address = "invalid-address".to_string();
-        let invalid_evm_result = set_evm_submit(
-            &file_path,
-            workflow_id.clone(),
-            invalid_evm_address,
-            evm_chain.clone(),
-            max_gas,
-        );
-        assert!(invalid_evm_result.is_err());
-        let invalid_address_error = invalid_evm_result.unwrap_err().to_string();
-        assert!(invalid_address_error.contains("invalid"));
-
         // Test setting Aggregator submit
         let aggregator_url = "https://api.example.com/aggregator".to_string();
 
@@ -2619,7 +2581,7 @@ mod tests {
             workflow_id.clone(),
             aggregator_url.clone(),
             evm_chain.clone(),
-            evm_address.clone(),
+            evm_address,
             None,
         )
         .unwrap();
