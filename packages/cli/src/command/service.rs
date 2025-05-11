@@ -157,7 +157,7 @@ pub async fn handle_service_command(
                     n_blocks,
                 } => {
                     let result = set_block_interval_trigger(&file, id, chain_name, n_blocks)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 TriggerCommand::SetCron {
                     schedule,
@@ -165,7 +165,7 @@ pub async fn handle_service_command(
                     end_time,
                 } => {
                     let result = set_cron_trigger(&file, id, schedule, start_time, end_time)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
             },
         },
