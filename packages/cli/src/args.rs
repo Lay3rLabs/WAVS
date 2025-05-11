@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{num::NonZeroU32, path::PathBuf};
 
 use clap::{arg, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainName, Digest, ServiceID, WorkflowID};
+use wavs_types::{ChainName, Digest, ServiceID, Timestamp, WorkflowID};
 
 use crate::config::Config;
 
@@ -256,6 +256,29 @@ pub enum TriggerCommand {
         /// The event hash as a hex string (32 bytes)
         #[clap(long)]
         event_hash: String,
+    },
+
+    /// Set a block interval trigger for a workflow
+    SetBlockInterval {
+        #[clap(long)]
+        chain_name: ChainName,
+        #[clap(long)]
+        n_blocks: NonZeroU32,
+    },
+
+    /// Set a cron trigger for a workflow
+    SetCron {
+        /// A cron expression defining the schedule for execution.
+        #[clap(long)]
+        schedule: cron::Schedule,
+
+        /// Optional start time (timestamp in nanoseconds)
+        #[clap(long)]
+        start_time: Option<Timestamp>,
+
+        /// Optional end time (timestamp in nanoseconds)
+        #[clap(long)]
+        end_time: Option<Timestamp>,
     },
 }
 
