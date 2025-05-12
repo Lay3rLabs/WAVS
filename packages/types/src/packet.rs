@@ -1,6 +1,7 @@
 pub use crate::solidity_types::Envelope;
 use crate::{
-    IWavsServiceManager, ServiceID, SignatureData, TriggerAction, TriggerConfig, WorkflowID,
+    ServiceID, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction,
+    TriggerConfig, WorkflowID,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes};
 use alloy_signer::Signer;
@@ -39,6 +40,24 @@ pub trait EnvelopeExt {
         signatures: Vec<EnvelopeSignature>,
         block_height: u64,
     ) -> std::result::Result<SignatureData, EnvelopeError>;
+}
+
+pub fn convert_envelope_for_service_manager(envelope: Envelope) -> ServiceManagerEnvelope {
+    ServiceManagerEnvelope {
+        eventId: envelope.eventId,
+        ordering: envelope.ordering,
+        payload: envelope.payload,
+    }
+}
+
+pub fn convert_signature_data_for_service_manager(
+    signature_data: SignatureData,
+) -> ServiceManagerSignatureData {
+    ServiceManagerSignatureData {
+        operators: signature_data.operators,
+        signatures: signature_data.signatures,
+        referenceBlock: signature_data.referenceBlock,
+    }
 }
 
 impl EnvelopeExt for Envelope {

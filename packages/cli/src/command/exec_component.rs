@@ -124,7 +124,7 @@ impl ExecComponent {
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
             engine: &engine,
-            data_dir: tempfile::tempdir()?.into_path(),
+            data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains,
             log: log_wasi,
             max_execution_seconds: Some(u64::MAX),

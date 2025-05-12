@@ -1,12 +1,11 @@
-use alloy_primitives::{Address, U256};
+use alloy_primitives::Address;
 use alloy_provider::Provider;
-use alloy_sol_types::SolValue;
-use anyhow::{anyhow, bail, ensure};
+use anyhow::bail;
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EnvelopeExt, EvmContractSubmission, IWavsServiceHandler, IWavsServiceManager,
-    Packet,
+    convert_envelope_for_service_manager, convert_signature_data_for_service_manager, Aggregator,
+    EnvelopeExt, EnvelopeSignature, EvmContractSubmission, IWavsServiceManager, Packet,
 };
 
 use crate::http::{
@@ -65,7 +64,7 @@ async fn process_packet(
             let envelope = packet.envelope.clone();
             || async move {
                 let mut queue = state.get_live_packet_queue(&event_id)?;
-                let signatures = queue
+                let signatures: Vec<EnvelopeSignature> = queue
                     .iter()
                     .map(|queued| queued.packet.signature.clone())
                     .collect();
@@ -88,7 +87,7 @@ async fn process_packet(
                             );
                             let block_height = client.provider.get_block_number().await?;
                             let signature_data =
-                                envelope.signature_data(signatures, block_height)?;
+                                envelope.signature_data(signatures.clone(), block_height)?;
 
                             // validate the packet on each turn of the loop, in case it's changed over an await point
                             validate_packet(packet, &queue, signer)?;
@@ -108,7 +107,12 @@ async fn process_packet(
                             }
 
                             match service_manager
-                                .validate(envelope, signature_data)
+                                .validate(
+                                    convert_envelope_for_service_manager(envelope.clone()),
+                                    convert_signature_data_for_service_manager(
+                                        signature_data.clone(),
+                                    ),
+                                )
                                 .call()
                                 .await
                             {
@@ -207,7 +211,7 @@ mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
     use alloy_node_bindings::{Anvil, AnvilInstance};
-    use alloy_primitives::{Bytes, FixedBytes};
+    use alloy_primitives::{Bytes, FixedBytes, U256};
     use alloy_provider::DynProvider;
     use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
     use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};

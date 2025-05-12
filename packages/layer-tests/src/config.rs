@@ -48,7 +48,7 @@ impl Default for TestConfig {
                 .collect(),
             jaeger: None,
             prometheus: None,
-            _data_dir: tempfile::tempdir().unwrap().into_path(),
+            _data_dir: tempfile::tempdir().unwrap().keep(),
             mode: TestMode::default(),
         }
     }
