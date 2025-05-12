@@ -150,9 +150,7 @@ async fn process_packet(
                                             count: queue.len(),
                                         });
                                     } else {
-                                        return Err(
-                                            AggregatorError::ServiceManagerValidate(e).into()
-                                        );
+                                        return Err(AggregatorError::ServiceManagerValidate(e));
                                     }
                                 }
                             }
@@ -348,7 +346,7 @@ mod test {
 
         if !concurrent {
             for (index, signer) in signers.iter().enumerate() {
-                let packet = mock_packet(&signer, &envelope, service.id.clone());
+                let packet = mock_packet(signer, &envelope, service.id.clone());
                 let resp = process_packet(deps.state.clone(), &packet)
                     .await
                     .unwrap()
@@ -377,7 +375,7 @@ mod test {
             let mut futures = FuturesUnordered::new();
             // in concurrent mode, just fire off exactly NUM_THRESHHOLD signers
             for signer in signers.iter().take(NUM_THRESHOLD) {
-                let packet = mock_packet(&signer, &envelope, service.id.clone());
+                let packet = mock_packet(signer, &envelope, service.id.clone());
                 futures.push({
                     let state = deps.state.clone();
                     let seen_count = seen_count.clone();
@@ -400,7 +398,7 @@ mod test {
         }
 
         // last one should be burned
-        let packet = mock_packet(&signers.last().unwrap(), &envelope, service.id.clone());
+        let packet = mock_packet(signers.last().unwrap(), &envelope, service.id.clone());
         if let Err(e) = process_packet(deps.state.clone(), &packet).await {
             if !matches!(
                 e,

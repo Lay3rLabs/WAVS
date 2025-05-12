@@ -114,7 +114,7 @@ impl EnvelopeSignature {
         match self {
             EnvelopeSignature::Secp256k1(sig) => sig
                 .recover_address_from_prehash(&envelope.eip191_hash())
-                .map_err(EnvelopeError::RecoverSignerAddress)
+                .map_err(EnvelopeError::RecoverSignerAddress),
         }
     }
 
