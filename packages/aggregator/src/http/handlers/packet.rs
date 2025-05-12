@@ -71,6 +71,9 @@ async fn process_packet(
                     .collect();
                 let mut responses: Vec<AddPacketResponse> = Vec::new();
 
+                // this implicitly validates that the signature is valid
+                let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+
                 for (index, aggregator) in aggregators.iter().enumerate() {
                     match aggregator {
                         Aggregator::Evm(EvmContractSubmission {
@@ -78,9 +81,6 @@ async fn process_packet(
                             address,
                             max_gas,
                         }) => {
-                            // this implicitly validates that the signature is valid
-                            let signer = packet.signature.evm_signer_address(&packet.envelope)?;
-
                             let client = state.get_evm_client(chain_name).await?;
                             let service_manager = IWavsServiceManager::new(
                                 service.manager.evm_address_unchecked(),
