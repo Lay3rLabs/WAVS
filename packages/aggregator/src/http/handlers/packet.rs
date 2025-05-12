@@ -1,10 +1,12 @@
 use alloy_primitives::{Address, U256};
 use alloy_provider::Provider;
+use alloy_sol_types::SolValue;
 use anyhow::{anyhow, bail, ensure};
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EvmContractSubmission, IWavsServiceManager, Packet,
+    Aggregator, EnvelopeExt, EvmContractSubmission, IWavsServiceHandler, IWavsServiceManager,
+    Packet,
 };
 
 use crate::http::{
@@ -56,148 +58,138 @@ async fn process_packet(
         );
     }
 
-    state.event_transaction.run(event_id.clone(), {
-        let state = state.clone();
-        let envelope = packet.envelope.clone();
-        || async move {
-            let mut queue = state.get_live_packet_queue(&event_id)?;
-            let mut responses: Vec<AddPacketResponse> = Vec::new();
+    state
+        .event_transaction
+        .run(event_id.clone(), {
+            let state = state.clone();
+            let envelope = packet.envelope.clone();
+            || async move {
+                let mut queue = state.get_live_packet_queue(&event_id)?;
+                let signatures = queue
+                    .iter()
+                    .map(|queued| queued.packet.signature.clone())
+                    .collect();
+                let mut responses: Vec<AddPacketResponse> = Vec::new();
 
-            for (index, aggregator) in aggregators.iter().enumerate() {
-                match aggregator {
-                    Aggregator::Evm(EvmContractSubmission {
-                        chain_name,
-                        address,
-                        max_gas,
-                    }) => {
-                        // this implicitly validates that the signature is valid
-                        let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+                for (index, aggregator) in aggregators.iter().enumerate() {
+                    match aggregator {
+                        Aggregator::Evm(EvmContractSubmission {
+                            chain_name,
+                            address,
+                            max_gas,
+                        }) => {
+                            // this implicitly validates that the signature is valid
+                            let signer = packet.signature.evm_signer_address(&packet.envelope)?;
 
-                        let client = state.get_evm_client(chain_name).await?;
-                        let service_manager = IWavsServiceManager::new(
-                            service.manager.evm_address_unchecked(),
-                            client.provider.clone(),
-                        );
-                        // Get the threshold
-                        let threshold = service_manager
-                            .getLastCheckpointThresholdWeight()
-                            .call()
-                            .await?;
+                            let client = state.get_evm_client(chain_name).await?;
+                            let service_manager = IWavsServiceManager::new(
+                                service.manager.evm_address_unchecked(),
+                                client.provider.clone(),
+                            );
+                            let block_height = client.provider.get_block_number().await?;
+                            let signature_data =
+                                envelope.signature_data(signatures, block_height)?;
 
-                        let weight = service_manager.getOperatorWeight(signer).call().await?;
-                        let mut total_weight = weight;
+                            // validate the packet on each turn of the loop, in case it's changed over an await point
+                            validate_packet(packet, &queue, signer)?;
 
-                        // Sum up weights
-                        for signer in queue.iter().map(|queued| queued.signer)
-                        {
-                            // TODO, contract should have a method to get multiple weights in one call
-                            // but it doesn't really matter until those weights can change under our feet
-                            let weight = service_manager.getOperatorWeight(signer).call().await?;
-                            total_weight = weight
-                                .checked_add(total_weight)
-                                .ok_or(anyhow!("Total weight calculation overflowed"))?;
-                        }
+                            if index == 0 {
+                                // update the saved queue, but only for first aggregator
+                                // invariant: they should all see the same queue
+                                queue.push(QueuedPacket {
+                                    packet: packet.clone(),
+                                    signer,
+                                });
 
-                        // get the current packets again, in case it's changed since last await point
-                        validate_packet(packet, &queue, signer, weight)?;
-
-                        if index == 0 {
-                            // update the saved queue, but only for first aggregator
-                            // invariant: they should all see the same queue
-                            queue.push(QueuedPacket {
-                                packet: packet.clone(),
-                                signer,
-                            });
-
-                            state
-                                .save_packet_queue(&event_id, PacketQueue::Alive(queue.clone()))?;
-                        }
-
-                        // TODO:
-                        // given the total power of the quorum (which could be, say, 60% of the total operator set power)
-                        // we need to calculate the power of the signers so far, and see if it meets the quorum power
-                        // we don't care about count, we care about the power of the signers
-                        // right now this is just hardcoded for demo purposes
-                        if total_weight >= threshold {
-                            if threshold.is_zero() {
-                                tracing::warn!(
-                                    "you are using threshold of 0 in your AVS quorum, best to only do this for testing"
-                                );
+                                state.save_packet_queue(
+                                    &event_id,
+                                    PacketQueue::Alive(queue.clone()),
+                                )?;
                             }
 
-                            let signatures = queue
-                                .iter()
-                                .map(|queued| queued.packet.signature.clone())
-                                .collect();
+                            match service_manager
+                                .validate(envelope, signature_data)
+                                .call()
+                                .await
+                            {
+                                Ok(_) => {
+                                    let tx_receipt = client
+                                        .send_envelope_signatures(
+                                            envelope.clone(),
+                                            signature_data.clone(),
+                                            *address,
+                                            *max_gas,
+                                        )
+                                        .await?;
 
-                            let block_height = client.provider.get_block_number().await?;
-
-                            let tx_receipt = client
-                                .send_envelope_signatures(
-                                    envelope.clone(),
-                                    signatures,
-                                    block_height,
-                                    *address,
-                                    *max_gas,
-                                )
-                                .await?;
-
-                            responses.push(AddPacketResponse::Sent {
-                                tx_receipt: Box::new(tx_receipt),
-                                count: queue.len()
-                            });
-                        } else {
-                            responses.push(AddPacketResponse::Aggregated {
-                                count: queue.len(),
-                            });
+                                    responses.push(AddPacketResponse::Sent {
+                                        tx_receipt: Box::new(tx_receipt),
+                                        count: queue.len(),
+                                    });
+                                }
+                                Err(e) => {
+                                    // we already validated the packet, so an error here _should_ be
+                                    // strictly "no quorum reached" kinda thing
+                                    // so log it and move on
+                                    tracing::debug!(
+                                        "Aggregator {} validation failed: {}",
+                                        chain_name,
+                                        e
+                                    );
+                                    responses
+                                        .push(AddPacketResponse::Aggregated { count: queue.len() });
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            if responses.len() != aggregators.len() {
-                bail!("Unexpected number of responses: expected {}, got {}", aggregators.len(), responses.len());
-            }
-
-            if responses.iter().all(|response| matches!(response, AddPacketResponse::Sent { .. })) {
-                // all aggregator destinations reached quorum and had their packets sent, burn the event
-                state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-            } else {
-                let mut sent_count = 0;
-                let mut aggregated_count = 0;
-                for response in responses.iter() {
-                    match response {
-                        AddPacketResponse::Sent { .. } => sent_count += 1,
-                        AddPacketResponse::Aggregated { count } => aggregated_count += count,
-                    }
+                if responses.len() != aggregators.len() {
+                    bail!(
+                        "Unexpected number of responses: expected {}, got {}",
+                        aggregators.len(),
+                        responses.len()
+                    );
                 }
-                // some aggregator destinations 
-                tracing::warn!("Mixed responses: {} destinations sent, {} destinations aggregated", sent_count, aggregated_count);
-            }
 
-            Ok(responses)
-        }
-    }).await
+                if responses
+                    .iter()
+                    .all(|response| matches!(response, AddPacketResponse::Sent { .. }))
+                {
+                    // all aggregator destinations reached quorum and had their packets sent, burn the event
+                    state.save_packet_queue(&event_id, PacketQueue::Burned)?;
+                } else {
+                    let mut sent_count = 0;
+                    let mut aggregated_count = 0;
+                    for response in responses.iter() {
+                        match response {
+                            AddPacketResponse::Sent { .. } => sent_count += 1,
+                            AddPacketResponse::Aggregated { count } => aggregated_count += count,
+                        }
+                    }
+                    // some aggregator destinations
+                    tracing::warn!(
+                        "Mixed responses: {} destinations sent, {} destinations aggregated",
+                        sent_count,
+                        aggregated_count
+                    );
+                }
+
+                Ok(responses)
+            }
+        })
+        .await
 }
 
-fn validate_packet(
-    packet: &Packet,
-    queue: &[QueuedPacket],
-    signer: Address,
-    operator_weight: U256,
-) -> anyhow::Result<()> {
+fn validate_packet(packet: &Packet, queue: &[QueuedPacket], signer: Address) -> anyhow::Result<()> {
     match queue.first() {
         None => {}
         Some(prev) => {
             // check if the packet is the same as the last one
+            // TODO - let custom logic here? wasm component?
             if packet.envelope != prev.packet.envelope {
                 bail!("Unexpected envelope difference!");
             }
-
-            // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
-            // if packet.block_height != last_packet.block_height {
-            //     bail!("Unexpected block height difference!");
-            // }
         }
     }
 
@@ -206,10 +198,6 @@ fn validate_packet(
             bail!("Signer {} already in queue", signer);
         }
     }
-
-    ensure!(!operator_weight.is_zero(), "Operator is not registered");
-
-    // TODO: ensure that the signer is in the operator set
 
     Ok(())
 }
@@ -258,7 +246,7 @@ mod test {
         assert_eq!(derived_signer_1_address, signer_1.address());
 
         // empty queue is okay
-        validate_packet(&packet, &queue, signer_1.address(), U256::ONE).unwrap();
+        validate_packet(&packet, &queue, signer_1.address()).unwrap();
 
         queue.push(QueuedPacket {
             packet: packet.clone(),
@@ -267,18 +255,18 @@ mod test {
 
         // "fails" (expectedly) because the signer is the same
         let packet = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_1.address(), U256::ONE).unwrap_err();
+        validate_packet(&packet, &queue, signer_1.address()).unwrap_err();
 
         // "fails" (expectedly) because the envelope is different
         let packet = mock_packet(&signer_2, &envelope_2, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_2.address(), U256::ONE).unwrap_err();
+        validate_packet(&packet, &queue, signer_2.address()).unwrap_err();
 
         // "fails" (expectedly) because the operator is not registered (0 weight)
         let packet = mock_packet(&signer_2, &envelope_1, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_2.address(), U256::ZERO).unwrap_err();
+        validate_packet(&packet, &queue, signer_2.address()).unwrap_err();
 
         // passes because the signer is different but envelope is the same
-        validate_packet(&packet, &queue, signer_2.address(), U256::ONE).unwrap();
+        validate_packet(&packet, &queue, signer_2.address()).unwrap();
         queue.push(QueuedPacket {
             packet: packet.clone(),
             signer: signer_2.address(),

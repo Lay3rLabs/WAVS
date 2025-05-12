@@ -1,5 +1,7 @@
 pub use crate::solidity_types::Envelope;
-use crate::{ServiceID, TriggerAction, TriggerConfig, WorkflowID};
+use crate::{
+    IWavsServiceManager, ServiceID, SignatureData, TriggerAction, TriggerConfig, WorkflowID,
+};
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes};
 use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
@@ -8,6 +10,7 @@ use async_trait::async_trait;
 use ripemd::Ripemd160;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
+use thiserror::Error;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
@@ -30,12 +33,51 @@ pub trait EnvelopeExt {
             .await
             .map(EnvelopeSignature::Secp256k1)
     }
+
+    fn signature_data(
+        &self,
+        signatures: Vec<EnvelopeSignature>,
+        block_height: u64,
+    ) -> std::result::Result<SignatureData, EnvelopeError>;
 }
 
 impl EnvelopeExt for Envelope {
     fn eip191_hash(&self) -> FixedBytes<32> {
         let envelope_bytes = self.abi_encode();
         eip191_hash_message(keccak256(&envelope_bytes))
+    }
+
+    fn signature_data(
+        &self,
+        signatures: Vec<EnvelopeSignature>,
+        block_height: u64,
+    ) -> std::result::Result<SignatureData, EnvelopeError> {
+        let mut operators_and_signatures: Vec<(
+            alloy_primitives::Address,
+            alloy_primitives::Bytes,
+        )> = signatures
+            .iter()
+            .map(|sig| {
+                sig.evm_signer_address(self)
+                    .map(|addr| (addr, sig.as_bytes().into()))
+                    .map_err(EnvelopeError::RecoverSignerAddress)
+            })
+            .collect::<Result<_, _>>()?;
+
+        // Solidity‑compatible ascending order (lexicographic / numeric)
+        operators_and_signatures.sort_by_key(|(addr, _)| *addr);
+
+        // unzip back into two parallel, sorted vectors
+        let (operators, signatures): (
+            Vec<alloy_primitives::Address>,
+            Vec<alloy_primitives::Bytes>,
+        ) = operators_and_signatures.into_iter().unzip();
+
+        Ok(SignatureData {
+            operators,
+            signatures,
+            referenceBlock: block_height as u32,
+        })
     }
 }
 
@@ -163,4 +205,10 @@ impl AsRef<[u8]> for EventOrder {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
+}
+
+#[derive(Debug, Error)]
+pub enum EnvelopeError {
+    #[error("Unable to recover signer address: {0:#?}")]
+    RecoverSignerAddress(anyhow::Error),
 }

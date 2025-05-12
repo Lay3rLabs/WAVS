@@ -1,8 +1,8 @@
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::Address;
 use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_signer::k256::SecretKey;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-use wavs_types::{Envelope, EnvelopeSignature, SignatureData};
+use wavs_types::{Envelope, SignatureData};
 
 use crate::error::EvmClientError;
 
@@ -33,33 +33,10 @@ impl EvmSigningClient {
     pub async fn send_envelope_signatures(
         &self,
         envelope: Envelope,
-        signatures: Vec<EnvelopeSignature>,
-        block_height: u64,
+        signature_data: SignatureData,
         service_handler: Address,
         max_gas: Option<u64>,
     ) -> Result<TransactionReceipt, EvmClientError> {
-        let mut operators_and_signatures: Vec<(Address, Bytes)> = signatures
-            .iter()
-            .map(|sig| {
-                sig.evm_signer_address(&envelope)
-                    .map(|addr| (addr, sig.as_bytes().into()))
-                    .map_err(EvmClientError::RecoverSignerAddress)
-            })
-            .collect::<Result<_, _>>()?;
-
-        // Solidity‑compatible ascending order (lexicographic / numeric)
-        operators_and_signatures.sort_by_key(|(addr, _)| *addr);
-
-        // unzip back into two parallel, sorted vectors
-        let (operators, signatures): (Vec<Address>, Vec<Bytes>) =
-            operators_and_signatures.into_iter().unzip();
-
-        let signature_data = SignatureData {
-            operators,
-            signatures,
-            referenceBlock: block_height as u32,
-        };
-
         let gas = match max_gas {
             None => {
                 let gas_estimate = self
