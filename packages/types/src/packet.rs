@@ -42,21 +42,23 @@ pub trait EnvelopeExt {
     ) -> std::result::Result<SignatureData, EnvelopeError>;
 }
 
-pub fn convert_envelope_for_service_manager(envelope: Envelope) -> ServiceManagerEnvelope {
-    ServiceManagerEnvelope {
-        eventId: envelope.eventId,
-        ordering: envelope.ordering,
-        payload: envelope.payload,
+impl From<Envelope> for ServiceManagerEnvelope {
+    fn from(envelope: Envelope) -> Self {
+        ServiceManagerEnvelope {
+            eventId: envelope.eventId,
+            ordering: envelope.ordering,
+            payload: envelope.payload,
+        }
     }
 }
 
-pub fn convert_signature_data_for_service_manager(
-    signature_data: SignatureData,
-) -> ServiceManagerSignatureData {
-    ServiceManagerSignatureData {
-        operators: signature_data.operators,
-        signatures: signature_data.signatures,
-        referenceBlock: signature_data.referenceBlock,
+impl From<SignatureData> for ServiceManagerSignatureData {
+    fn from(signature_data: SignatureData) -> Self {
+        ServiceManagerSignatureData {
+            operators: signature_data.operators,
+            signatures: signature_data.signatures,
+            referenceBlock: signature_data.referenceBlock,
+        }
     }
 }
 

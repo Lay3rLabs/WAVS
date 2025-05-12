@@ -4,8 +4,7 @@ use alloy_sol_types::SolError;
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    convert_envelope_for_service_manager, convert_signature_data_for_service_manager, Aggregator,
-    EnvelopeExt, EnvelopeSignature, EvmContractSubmission, IWavsServiceManager, Packet,
+    Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission, IWavsServiceManager, Packet,
 };
 
 use crate::{
@@ -113,12 +112,7 @@ async fn process_packet(
                             }
 
                             match service_manager
-                                .validate(
-                                    convert_envelope_for_service_manager(envelope.clone()),
-                                    convert_signature_data_for_service_manager(
-                                        signature_data.clone(),
-                                    ),
-                                )
+                                .validate(envelope.clone().into(), signature_data.clone().into())
                                 .call()
                                 .await
                             {
