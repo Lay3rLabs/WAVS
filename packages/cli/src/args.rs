@@ -67,6 +67,10 @@ pub enum Command {
         #[clap(long)]
         fuel_limit: Option<u64>,
 
+        /// Optional time limit (seconds) for component execution
+        #[clap(long)]
+        time_limit: Option<u64>,
+
         /// Component config in KEY=VALUE format, comma-separated: --config a=1,b=2
         #[clap(long, value_delimiter = ',')]
         config: Vec<String>,
