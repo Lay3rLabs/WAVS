@@ -135,7 +135,7 @@ async fn process_packet(
                                     if let Some(revert) = e.as_revert_data().and_then(|raw| {
                                         alloy_sol_types::Revert::abi_decode(&raw).ok()
                                     }) {
-                                        tracing::error!(
+                                        tracing::debug!(
                                             "Aggregator {} validation failed: {}",
                                             chain_name,
                                             revert.reason
