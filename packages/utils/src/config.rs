@@ -324,7 +324,7 @@ impl From<EvmChainConfig> for AnyChainConfig {
 }
 
 impl ChainConfigs {
-    pub fn get_chain(&self, chain_name: &ChainName) -> Result<Option<AnyChainConfig>> {
+    pub fn get_chain(&self, chain_name: &ChainName) -> std::result::Result<Option<AnyChainConfig>, ChainConfigError> {
         match (self.evm.get(chain_name), self.cosmos.get(chain_name)) {
             (Some(_), Some(_)) => {
                 Err(ChainConfigError::DuplicateChainName(chain_name.clone()).into())

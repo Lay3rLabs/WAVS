@@ -3,6 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use layer_climb::prelude::Address;
 use redb::ReadableTable;
+use utils::error::ChainConfigError;
 use std::ops::Bound;
 use std::path::Path;
 use std::sync::Arc;
@@ -427,6 +428,9 @@ pub enum DispatcherError {
 
     #[error("Registry error: {0}")]
     Registry(#[from] RegistryError),
+
+    #[error("Chain config error: {0}")]
+    ChainConfig(#[from] ChainConfigError),
 
     #[error("Registry cache path error: {0}")]
     RegistryCachePath(#[from] anyhow::Error),

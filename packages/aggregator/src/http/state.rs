@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
     async_transaction::AsyncTransaction,
@@ -13,7 +12,10 @@ use utils::{
 };
 use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
 
-use crate::config::Config;
+use crate::{
+    config::Config,
+    error::{AggregatorError, AggregatorResult, PacketValidationError},
+};
 
 // key is EventId
 const PACKET_QUEUES: Table<&[u8], JSON<PacketQueue>> = Table::new("packet_queues");
@@ -46,7 +48,7 @@ pub struct HttpState {
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
-    pub fn new(config: Config) -> anyhow::Result<Self> {
+    pub fn new(config: Config) -> AggregatorResult<Self> {
         let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
 
@@ -58,7 +60,10 @@ impl HttpState {
         })
     }
 
-    pub async fn get_evm_client(&self, chain_name: &ChainName) -> anyhow::Result<EvmSigningClient> {
+    pub async fn get_evm_client(
+        &self,
+        chain_name: &ChainName,
+    ) -> AggregatorResult<EvmSigningClient> {
         {
             let lock = self.evm_clients.read().unwrap();
 
@@ -71,7 +76,7 @@ impl HttpState {
             .config
             .chains
             .get_chain(chain_name)?
-            .context(format!("chain not found for {}", chain_name))?;
+            .ok_or(AggregatorError::ChainNotFound(chain_name.clone()))?;
 
         let chain_config = EvmChainConfig::try_from(chain_config)?;
 
@@ -79,10 +84,12 @@ impl HttpState {
             self.config
                 .credential
                 .clone()
-                .context("missing evm_credential")?,
+                .ok_or(AggregatorError::MissingEvmCredential)?,
         )?;
 
-        let evm_client = EvmSigningClient::new(client_config).await?;
+        let evm_client = EvmSigningClient::new(client_config)
+            .await
+            .map_err(AggregatorError::CreateEvmClient)?;
 
         self.evm_clients
             .write()
@@ -92,18 +99,20 @@ impl HttpState {
         Ok(evm_client)
     }
 
-    pub fn get_packet_queue(&self, event_id: &EventId) -> anyhow::Result<PacketQueue> {
+    pub fn get_packet_queue(&self, event_id: &EventId) -> AggregatorResult<PacketQueue> {
         match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
             Some(queue) => Ok(queue.value()),
             None => Ok(PacketQueue::Alive(Vec::new())),
         }
     }
 
-    pub fn get_live_packet_queue(&self, event_id: &EventId) -> anyhow::Result<Vec<QueuedPacket>> {
+    pub fn get_live_packet_queue(&self, event_id: &EventId) -> AggregatorResult<Vec<QueuedPacket>> {
         match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
             Some(queue) => match queue.value() {
                 PacketQueue::Alive(queue) => Ok(queue),
-                PacketQueue::Burned => Err(anyhow::anyhow!("Packet queue {event_id} is burned")),
+                PacketQueue::Burned => {
+                    Err(PacketValidationError::EventBurned(event_id.clone()).into())
+                }
             },
             None => Ok(Vec::new()),
         }
@@ -113,23 +122,20 @@ impl HttpState {
         self.storage.set(PACKET_QUEUES, event_id.as_ref(), &queue)
     }
 
-    pub fn get_service(&self, route: &PacketRoute) -> anyhow::Result<Service> {
+    pub fn get_service(&self, route: &PacketRoute) -> AggregatorResult<Service> {
         match self.storage.get(SERVICES, &route.service_id)? {
             Some(destination) => Ok(destination.value()),
-            None => Err(anyhow::anyhow!(
-                "Service {} is not registered",
-                route.service_id
-            )),
+            None => Err(AggregatorError::MissingService(route.service_id.clone())),
         }
     }
 
-    pub fn register_service(&self, service: &Service) -> anyhow::Result<()> {
+    pub fn register_service(&self, service: &Service) -> AggregatorResult<()> {
         if self.storage.get(SERVICES, &service.id)?.is_none() {
             tracing::info!("Registering aggregator for service {}", service.id);
 
             self.storage.set(SERVICES, &service.id, service)?;
         } else {
-            bail!("{} already registered", service.id);
+            return Err(AggregatorError::RepeatService(service.id.clone()));
         }
 
         Ok(())

@@ -3,7 +3,7 @@ use crate::{
     ServiceID, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction,
     TriggerConfig, WorkflowID,
 };
-use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes};
+use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::SolValue;
@@ -79,7 +79,6 @@ impl EnvelopeExt for Envelope {
             .map(|sig| {
                 sig.evm_signer_address(self)
                     .map(|addr| (addr, sig.as_bytes().into()))
-                    .map_err(EnvelopeError::RecoverSignerAddress)
             })
             .collect::<Result<_, _>>()?;
 
@@ -111,11 +110,11 @@ impl EnvelopeSignature {
     pub fn evm_signer_address(
         &self,
         envelope: &Envelope,
-    ) -> anyhow::Result<alloy_primitives::Address> {
+    ) -> std::result::Result<alloy_primitives::Address, EnvelopeError> {
         match self {
             EnvelopeSignature::Secp256k1(sig) => sig
                 .recover_address_from_prehash(&envelope.eip191_hash())
-                .map_err(|e| e.into()),
+                .map_err(EnvelopeError::RecoverSignerAddress)
         }
     }
 
@@ -228,6 +227,6 @@ impl AsRef<[u8]> for EventOrder {
 
 #[derive(Debug, Error)]
 pub enum EnvelopeError {
-    #[error("Unable to recover signer address: {0:#?}")]
-    RecoverSignerAddress(anyhow::Error),
+    #[error("Unable to recover signer address: {0:?}")]
+    RecoverSignerAddress(SignatureError),
 }
