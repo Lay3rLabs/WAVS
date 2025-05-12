@@ -108,6 +108,7 @@ async fn main() {
             component,
             input,
             fuel_limit,
+            time_limit,
             config,
             args: _,
         } => {
@@ -127,6 +128,7 @@ async fn main() {
                 ExecComponentArgs {
                     component_path: component,
                     input: ComponentInput::new(input),
+                    time_limit,
                     fuel_limit,
                     config,
                 },
