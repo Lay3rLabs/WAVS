@@ -148,30 +148,30 @@ async fn process_packet(
                             }
                         }
                     }
+                }
 
-                    if responses.len() != aggregators.len() {
-                        return Err(AggregatorError::UnexpectedResponsesLength {
-                            responses: responses.len(),
-                            aggregators: aggregators.len(),
-                        });
-                    }
+                if responses.len() != aggregators.len() {
+                    return Err(AggregatorError::UnexpectedResponsesLength {
+                        responses: responses.len(),
+                        aggregators: aggregators.len(),
+                    });
+                }
 
-                    let (sent_count, aggregated_count) =
-                        responses.iter().fold((0, 0), |(s, a), r| match r {
-                            AddPacketResponse::Sent { .. } => (s + 1, a),
-                            AddPacketResponse::Aggregated { count } => (s, a + count),
-                        });
+                let (sent_count, aggregated_count) =
+                    responses.iter().fold((0, 0), |(s, a), r| match r {
+                        AddPacketResponse::Sent { .. } => (s + 1, a),
+                        AddPacketResponse::Aggregated { count } => (s, a + count),
+                    });
 
-                    if aggregated_count == 0 {
-                        // all aggregator destinations reached quorum and had their packets sent, burn the event
-                        state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-                    } else {
-                        tracing::warn!(
-                            "Mixed responses: {} destinations sent, {} destinations aggregated",
-                            sent_count,
-                            aggregated_count
-                        );
-                    }
+                if aggregated_count == 0 {
+                    // all aggregator destinations reached quorum and had their packets sent, burn the event
+                    state.save_packet_queue(&event_id, PacketQueue::Burned)?;
+                } else {
+                    tracing::warn!(
+                        "Mixed responses: {} destinations sent, {} destinations aggregated",
+                        sent_count,
+                        aggregated_count
+                    );
                 }
                 Ok(responses)
             }
