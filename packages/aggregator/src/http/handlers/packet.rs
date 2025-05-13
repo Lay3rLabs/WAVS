@@ -64,6 +64,11 @@ async fn process_packet(
             let state = state.clone();
             let envelope = packet.envelope.clone();
             || async move {
+                let mut queue = state.get_live_packet_queue(&event_id)?;
+                let signatures: Vec<EnvelopeSignature> = queue
+                    .iter()
+                    .map(|queued| queued.packet.signature.clone())
+                    .collect();
                 let mut responses: Vec<AddPacketResponse> = Vec::new();
 
                 // this implicitly validates that the signature is valid
@@ -86,20 +91,15 @@ async fn process_packet(
                                 .get_block_number()
                                 .await
                                 .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
+                            let signature_data =
+                                envelope.signature_data(signatures.clone(), block_height)?;
 
-                            // validate the packet on each turn of the loop, in case it's changed since our last submission
-                            let mut queue = state.get_live_packet_queue(&event_id)?;
-                            let signatures: Vec<EnvelopeSignature> = queue
-                                .iter()
-                                .map(|queued| queued.packet.signature.clone())
-                                .collect();
+                            // validate the packet on each turn of the loop, in case it's changed over an await point
                             validate_packet(packet, &queue, signer)?;
 
-                            let signature_data =
-                                envelope.signature_data(signatures, block_height)?;
-
                             if index == 0 {
-                                // packet is valid, push it onto the queue, but only for first aggregator
+                                // update the saved queue, but only for first aggregator
+                                // invariant: they should all see the same queue
                                 queue.push(QueuedPacket {
                                     packet: packet.clone(),
                                     signer,
@@ -117,7 +117,6 @@ async fn process_packet(
                                 .await
                             {
                                 Ok(_) => {
-                                    // queue as a whole is valid, send it to the aggregator
                                     let tx_receipt = client
                                         .send_envelope_signatures(
                                             envelope.clone(),
@@ -131,8 +130,6 @@ async fn process_packet(
                                         tx_receipt: Box::new(tx_receipt),
                                         count: queue.len(),
                                     });
-
-                                    // TBD - burn the event immediately, for this aggregator?
                                 }
                                 Err(e) => {
                                     if let Some(revert) = e.as_revert_data().and_then(|raw| {
