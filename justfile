@@ -169,7 +169,7 @@ download-wit branch="main":
     rm -rf temp_clone
 
 # downloads the latest solidity repo
-download-solidity branch="improve-mocks":
+download-solidity branch="dev":
     # Create a temporary directory
     rm -rf temp_clone
     mkdir temp_clone
