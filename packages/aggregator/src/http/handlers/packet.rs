@@ -45,7 +45,6 @@ async fn process_packet(
     packet: &Packet,
 ) -> AggregatorResult<Vec<AddPacketResponse>> {
     let event_id = packet.event_id();
-
     let route = packet.route.clone();
 
     let service = state.get_service(&packet.route)?;
@@ -69,10 +68,12 @@ async fn process_packet(
                     .iter()
                     .map(|queued| queued.packet.signature.clone())
                     .collect();
-                let mut responses: Vec<AddPacketResponse> = Vec::new();
 
                 // this implicitly validates that the signature is valid
                 let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+                validate_packet(packet, &queue, signer)?;
+
+                let mut responses: Vec<AddPacketResponse> = Vec::new();
 
                 for (index, aggregator) in aggregators.iter().enumerate() {
                     match aggregator {
@@ -93,9 +94,6 @@ async fn process_packet(
                                 .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
                             let signature_data =
                                 envelope.signature_data(signatures.clone(), block_height)?;
-
-                            // validate the packet on each turn of the loop, in case it's changed over an await point
-                            validate_packet(packet, &queue, signer)?;
 
                             if index == 0 {
                                 // update the saved queue, but only for first aggregator
@@ -159,29 +157,22 @@ async fn process_packet(
                     });
                 }
 
-                if responses
-                    .iter()
-                    .all(|response| matches!(response, AddPacketResponse::Sent { .. }))
-                {
+                let (sent_count, aggregated_count) =
+                    responses.iter().fold((0, 0), |(s, a), r| match r {
+                        AddPacketResponse::Sent { .. } => (s + 1, a),
+                        AddPacketResponse::Aggregated { count } => (s, a + count),
+                    });
+
+                if aggregated_count == 0 {
                     // all aggregator destinations reached quorum and had their packets sent, burn the event
                     state.save_packet_queue(&event_id, PacketQueue::Burned)?;
                 } else {
-                    let mut sent_count = 0;
-                    let mut aggregated_count = 0;
-                    for response in responses.iter() {
-                        match response {
-                            AddPacketResponse::Sent { .. } => sent_count += 1,
-                            AddPacketResponse::Aggregated { count } => aggregated_count += count,
-                        }
-                    }
-                    // some aggregator destinations
                     tracing::warn!(
                         "Mixed responses: {} destinations sent, {} destinations aggregated",
                         sent_count,
                         aggregated_count
                     );
                 }
-
                 Ok(responses)
             }
         })
