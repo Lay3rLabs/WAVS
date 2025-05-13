@@ -222,7 +222,14 @@ mod test {
     use wavs_types::{
         ChainName, Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute, Service, ServiceID,
     };
-    use TestServiceManager::TestServiceManagerInstance;
+    use SimpleServiceManager::SimpleServiceManagerInstance;
+
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        SimpleServiceManager,
+        "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
+    );
 
     #[test]
     fn packet_validation() {
@@ -526,84 +533,10 @@ mod test {
             service
         }
 
-        async fn deploy_simple_service_manager(&self) -> TestServiceManagerInstance<DynProvider> {
-            TestServiceManager::deploy(self.client.provider.clone())
+        async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
+            SimpleServiceManager::deploy(self.client.provider.clone())
                 .await
                 .unwrap()
         }
     }
-
-    sol!(
-        // solc TestServiceManager.sol --via-ir --optimize --bin
-        #[sol(rpc, bytecode="608080604052346015576105c2908161001a8239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c806308fc760a146104cf5780630e6b11101461049a578063314f3a491461047d5780635f11301b1461031357806398ec1ac9146102db578063b933fa74146102be578063cc922c6a146101c5578063cd71589e146100995763fb8524b11461007c575f80fd5b3461009557602036600319011261009557600435600255005b5f80fd5b346100955760403660031901126100955760043567ffffffffffffffff81116100955760609060031990360301126100955760243567ffffffffffffffff811161009557606081600401916003199036030112610095575f90815b6100fe8280610536565b9050831015610176576101118280610536565b841015610162578360051b013560018060a01b038116809103610095575f52600160205260405f2054810180911161014e576001909201916100f4565b634e487b7160e01b5f52601160045260245ffd5b634e487b7160e01b5f52603260045260245ffd5b6002541161018057005b60405162461bcd60e51b815260206004820152601a60248201527f4e6f7420656e6f756768206f70657261746f72207765696768740000000000006044820152606490fd5b34610095575f366003190112610095576040515f5f54906101e5826104fe565b8084526020840192600181169081156102a55750600114610264575b50829003601f01601f191682019167ffffffffffffffff831181841017610250576040918391828452602083525180918160208501528484015e5f828201840152601f01601f19168101030190f35b634e487b7160e01b5f52604160045260245ffd5b90505f80525f51602061056d5f395f51905f525f905b82821061028f57506020915083010183610201565b600181602092548385890101520191019061027a565b60ff1916845250151560051b8301602001905083610201565b34610095575f366003190112610095576020600254604051908152f35b34610095576020366003190112610095576001600160a01b036102fc6104e8565b165f526001602052602060405f2054604051908152f35b346100955760203660031901126100955760043567ffffffffffffffff8111610095573660238201121561009557806004013567ffffffffffffffff81116100955736602482840101116100955761036b5f546104fe565b601f8111610419575b505f601f82116001146103af5781925f926103a1575b50505f19600383901b1c191660019190911b175f55005b60249250010135828061038a565b601f198216925f51602061056d5f395f51905f52915f5b8581106103fe575083600195106103e2575b505050811b015f55005b01602401355f19600384901b60f8161c191690558280806103d8565b909260206001819260248787010135815501940191016103c6565b601f820160051c5f51602061056d5f395f51905f52019060208310610468575b601f0160051c5f51602061056d5f395f51905f5201905b81811061045d5750610374565b5f8155600101610450565b5f51602061056d5f395f51905f529150610439565b34610095575f366003190112610095576020600354604051908152f35b34610095576040366003190112610095576001600160a01b036104bb6104e8565b165f52600160205260243560405f20555f80f35b3461009557602036600319011261009557600435600355005b600435906001600160a01b038216820361009557565b90600182811c9216801561052c575b602083101461051857565b634e487b7160e01b5f52602260045260245ffd5b91607f169161050d565b903590601e1981360301821215610095570180359067ffffffffffffffff821161009557602001918160051b360383136100955756fe290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563a26469706673582212209b44b6db9e95bc62e7f4fe7016e755081a43780db7c8c4b69e852d5247c9262664736f6c634300081d0033")]
-        contract TestServiceManager {
-            string private serviceURI;
-
-            mapping(address => uint256) private operatorWeights;
-            uint256 private lastCheckpointThresholdWeight;
-            uint256 private lastCheckpointTotalWeight;
-
-
-            struct SignatureData {
-                address[] operators;
-                bytes[] signatures;
-                uint32 referenceBlock;
-            }
-            struct Envelope {
-                bytes20 eventId;
-                // currently unused, for future version. added now for padding
-                bytes12 ordering;
-                bytes payload;
-            }
-
-            function validate(
-                Envelope calldata envelope,
-                SignatureData calldata signatureData
-            ) external view {
-                // get total operator weight of these signatures
-                uint256 totalWeight = 0;
-                for (uint256 i = 0; i < signatureData.operators.length; i++) {
-                    totalWeight += operatorWeights[signatureData.operators[i]];
-                }
-
-                // check if total weight is above threshold
-                require(
-                    totalWeight >= lastCheckpointThresholdWeight,
-                    "Not enough operator weight"
-                );
-            }
-
-            function getServiceURI() external view returns (string memory) {
-                return serviceURI;
-            }
-
-            function setServiceURI(string calldata _serviceURI) external {
-                serviceURI = _serviceURI;
-            }
-
-            function setOperatorWeight(address operator, uint256 weight) external {
-                operatorWeights[operator] = weight;
-            }
-
-            function setLastCheckpointThresholdWeight(uint256 weight) external {
-                lastCheckpointThresholdWeight = weight;
-            }
-
-            function setLastCheckpointTotalWeight(uint256 weight) external {
-                lastCheckpointTotalWeight = weight;
-            }
-
-            function getOperatorWeight(address operator) external view returns (uint256) {
-                return operatorWeights[operator];
-            }
-
-            function getLastCheckpointThresholdWeight() external view returns (uint256) {
-                return lastCheckpointThresholdWeight;
-            }
-
-            function getLastCheckpointTotalWeight() external view returns (uint256) {
-                return lastCheckpointTotalWeight;
-            }
-        }
-    );
 }
