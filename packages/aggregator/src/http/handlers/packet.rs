@@ -64,18 +64,25 @@ async fn process_packet(
             let envelope = packet.envelope.clone();
             || async move {
                 let mut queue = state.get_live_packet_queue(&event_id)?;
-                let signatures: Vec<EnvelopeSignature> = queue
-                    .iter()
-                    .map(|queued| queued.packet.signature.clone())
-                    .collect();
 
                 // this implicitly validates that the signature is valid
                 let signer = packet.signature.evm_signer_address(&packet.envelope)?;
                 validate_packet(packet, &queue, signer)?;
 
+                queue.push(QueuedPacket {
+                    packet: packet.clone(),
+                    signer,
+                });
+                let queue = queue;
+
+                let signatures: Vec<EnvelopeSignature> = queue
+                    .iter()
+                    .map(|queued| queued.packet.signature.clone())
+                    .collect();
+
                 let mut responses: Vec<AddPacketResponse> = Vec::new();
 
-                for (index, aggregator) in aggregators.iter().enumerate() {
+                for aggregator in aggregators.iter() {
                     match aggregator {
                         Aggregator::Evm(EvmContractSubmission {
                             chain_name,
@@ -94,20 +101,6 @@ async fn process_packet(
                                 .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
                             let signature_data =
                                 envelope.signature_data(signatures.clone(), block_height)?;
-
-                            if index == 0 {
-                                // update the saved queue, but only for first aggregator
-                                // invariant: they should all see the same queue
-                                queue.push(QueuedPacket {
-                                    packet: packet.clone(),
-                                    signer,
-                                });
-
-                                state.save_packet_queue(
-                                    &event_id,
-                                    PacketQueue::Alive(queue.clone()),
-                                )?;
-                            }
 
                             match service_manager
                                 .validate(envelope.clone().into(), signature_data.clone().into())
@@ -172,6 +165,7 @@ async fn process_packet(
                         sent_count,
                         aggregated_count
                     );
+                    state.save_packet_queue(&event_id, PacketQueue::Alive(queue.clone()))?;
                 }
                 Ok(responses)
             }
@@ -350,7 +344,7 @@ mod test {
                     } => {
                         // in serial mode, break when we get a sent packet
                         // and assert that it's what we expect
-                        assert_eq!(count - 1, NUM_THRESHOLD);
+                        assert_eq!(count, NUM_THRESHOLD);
                         assert_eq!(count - 1, index);
                         break;
                     }
