@@ -2,7 +2,7 @@ use alloy_rpc_types_eth::TransactionReceipt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{Packet, Service};
+use crate::{ChainName, EventId, Packet, Service, ServiceID};
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -19,6 +19,11 @@ pub enum AddPacketResponse {
     },
     Aggregated {
         count: usize,
+    },
+    Burned {
+        service_id: ServiceID,
+        event_id: EventId,
+        chain_name: ChainName,
     },
 }
 

@@ -163,6 +163,18 @@ impl CoreSubmission {
                 AddPacketResponse::Aggregated { count } => {
                     tracing::debug!("Aggregated with current payload count {}", count);
                 }
+                AddPacketResponse::Burned {
+                    service_id,
+                    event_id,
+                    chain_name,
+                } => {
+                    tracing::debug!(
+                        "Aggregator burned with service_id {}, event_id {}, chain_name {}",
+                        service_id,
+                        event_id,
+                        chain_name
+                    );
+                }
             }
 
             self.metrics
