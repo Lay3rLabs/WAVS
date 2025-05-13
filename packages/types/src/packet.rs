@@ -149,18 +149,7 @@ impl PacketRoute {
     }
 }
 
-#[derive(
-    Serialize,
-    Deserialize,
-    Clone,
-    Eq,
-    PartialEq,
-    Debug,
-    Hash,
-    ToSchema,
-    bincode::Decode,
-    bincode::Encode,
-)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
 pub struct EventId([u8; 20]);
 

@@ -11,7 +11,7 @@ use crate::{
     error::{AggregatorError, AggregatorResult, PacketValidationError},
     http::{
         error::AnyError,
-        state::{HttpState, PacketQueue, PacketQueueId, QueuedPacket},
+        state::{HttpState, PacketQueue, QueuedPacket},
     },
 };
 
@@ -76,11 +76,6 @@ async fn process_packet(
                             address,
                             max_gas,
                         }) => {
-                            let packet_queue_id = PacketQueueId {
-                                service_id: route.service_id.clone(),
-                                chain_name: chain_name.clone(),
-                                event_id: event_id.clone(),
-                            };
                             let client = state.get_evm_client(chain_name).await?;
                             let service_manager = IWavsServiceManager::new(
                                 service.manager.evm_address_unchecked(),
@@ -93,22 +88,7 @@ async fn process_packet(
                                 .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
 
                             // validate the packet on each turn of the loop, in case it's changed since our last submission
-                            let mut queue = match state.get_live_packet_queue(&packet_queue_id) {
-                                Ok(queue) => queue,
-                                Err(e) => {
-                                    if let AggregatorError::PacketValidation(PacketValidationError::EventBurned(_)) = e {
-                                        // event has been burned, continue on to the next aggregator 
-                                        responses.push(AddPacketResponse::Burned {
-                                            service_id: packet_queue_id.service_id.clone(),
-                                            chain_name: packet_queue_id.chain_name.clone(),
-                                            event_id: packet_queue_id.event_id.clone(),
-                                        });
-                                        continue;
-                                    } else {
-                                        return Err(e);
-                                    }
-                                }
-                            };
+                            let mut queue = state.get_live_packet_queue(&event_id)?;
                             let signatures: Vec<EnvelopeSignature> = queue
                                 .iter()
                                 .map(|queued| queued.packet.signature.clone())
@@ -120,14 +100,13 @@ async fn process_packet(
 
                             if index == 0 {
                                 // packet is valid, push it onto the queue, but only for first aggregator
-                                // other requests in flight will see this updated queue too
                                 queue.push(QueuedPacket {
                                     packet: packet.clone(),
                                     signer,
                                 });
 
                                 state.save_packet_queue(
-                                    &packet_queue_id,
+                                    &event_id,
                                     PacketQueue::Alive(queue.clone()),
                                 )?;
                             }
@@ -153,7 +132,7 @@ async fn process_packet(
                                         count: queue.len(),
                                     });
 
-                                    state.save_packet_queue(&packet_queue_id, PacketQueue::Burned)?;
+                                    // TBD - burn the event immediately, for this aggregator?
                                 }
                                 Err(e) => {
                                     if let Some(revert) = e.as_revert_data().and_then(|raw| {
@@ -183,24 +162,26 @@ async fn process_packet(
                     });
                 }
 
-                let mut sent_count = 0;
-                let mut burned_count = 0;
-                let mut aggregated_count = 0;
-                for response in responses.iter() {
-                    match response {
-                        AddPacketResponse::Sent { .. } => sent_count += 1,
-                        AddPacketResponse::Aggregated { count } => aggregated_count += count,
-                        AddPacketResponse::Burned { .. } => burned_count += 1,
+                if responses
+                    .iter()
+                    .all(|response| matches!(response, AddPacketResponse::Sent { .. }))
+                {
+                    // all aggregator destinations reached quorum and had their packets sent, burn the event
+                    state.save_packet_queue(&event_id, PacketQueue::Burned)?;
+                } else {
+                    let mut sent_count = 0;
+                    let mut aggregated_count = 0;
+                    for response in responses.iter() {
+                        match response {
+                            AddPacketResponse::Sent { .. } => sent_count += 1,
+                            AddPacketResponse::Aggregated { count } => aggregated_count += count,
+                        }
                     }
-                }
-
-                if aggregated_count > 0 && (sent_count != 0 || burned_count != 0) {
-                    // some aggregated, some not
+                    // some aggregator destinations
                     tracing::warn!(
-                        "Mixed responses: {} destinations sent, {} destinations aggregated, {} destinations burned",
+                        "Mixed responses: {} destinations sent, {} destinations aggregated",
                         sent_count,
-                        aggregated_count,
-                        burned_count
+                        aggregated_count
                     );
                 }
 
@@ -384,9 +365,6 @@ mod test {
                         assert_eq!(count - 1, NUM_THRESHOLD);
                         assert_eq!(count - 1, index);
                         break;
-                    }
-                    AddPacketResponse::Burned { .. } => {
-                        // nothing to do here
                     }
                 }
             }

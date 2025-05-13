@@ -3,9 +3,7 @@ use utils::{
     error::{ChainConfigError, EvmClientError},
     storage::db::DBError,
 };
-use wavs_types::{ChainName, EnvelopeError, ServiceID, WorkflowID};
-
-use crate::http::state::PacketQueueId;
+use wavs_types::{ChainName, EnvelopeError, EventId, ServiceID, WorkflowID};
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
 
@@ -58,12 +56,6 @@ pub enum AggregatorError {
 
     #[error("Block number: {0}")]
     BlockNumber(anyhow::Error),
-
-    #[error("Bincode decode: {0:?}")]
-    BincodeDecode(#[from] bincode::error::DecodeError),
-
-    #[error("Bincode encode: {0:?}")]
-    BincodeEncode(#[from] bincode::error::EncodeError),
 }
 
 #[derive(Error, Debug)]
@@ -74,6 +66,6 @@ pub enum PacketValidationError {
     #[error("Signer already in queue: {0}")]
     RepeatSigner(alloy_primitives::Address),
 
-    #[error("Packets for packet queue {0:?} already burned")]
-    EventBurned(PacketQueueId),
+    #[error("Packets for event {0} already burned")]
+    EventBurned(EventId),
 }

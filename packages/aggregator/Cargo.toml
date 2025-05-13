@@ -31,7 +31,6 @@ alloy-provider = { workspace = true }
 utils = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
-bincode = { workspace = true }
 
 [dev-dependencies]
 tempfile = {workspace = true}
