@@ -58,156 +58,147 @@ async fn process_packet(
         });
     }
 
-    state
-        .event_transaction
-        .run(event_id.clone(), {
-            let state = state.clone();
-            let envelope = packet.envelope.clone();
-            || async move {
-                let mut responses: Vec<AddPacketResponse> = Vec::new();
+    let state = state.clone();
+    let envelope = packet.envelope.clone();
+    let mut responses: Vec<AddPacketResponse> = Vec::new();
 
-                // this implicitly validates that the signature is valid
-                let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+    // this implicitly validates that the signature is valid
+    let signer = packet.signature.evm_signer_address(&packet.envelope)?;
 
-                for (index, aggregator) in aggregators.iter().enumerate() {
-                    match aggregator {
-                        Aggregator::Evm(EvmContractSubmission {
-                            chain_name,
-                            address,
-                            max_gas,
-                        }) => {
-                            let packet_queue_id = PacketQueueId {
-                                service_id: route.service_id.clone(),
-                                chain_name: chain_name.clone(),
-                                event_id: event_id.clone(),
-                            };
-                            let client = state.get_evm_client(chain_name).await?;
-                            let service_manager = IWavsServiceManager::new(
-                                service.manager.evm_address_unchecked(),
-                                client.provider.clone(),
+    for (index, aggregator) in aggregators.iter().enumerate() {
+        match aggregator {
+            Aggregator::Evm(EvmContractSubmission {
+                chain_name,
+                address,
+                max_gas,
+            }) => {
+                let packet_queue_id = PacketQueueId {
+                    service_id: route.service_id.clone(),
+                    chain_name: chain_name.clone(),
+                    event_id: event_id.clone(),
+                };
+                let client = state.get_evm_client(chain_name).await?;
+                let service_manager = IWavsServiceManager::new(
+                    service.manager.evm_address_unchecked(),
+                    client.provider.clone(),
+                );
+                let block_height = client
+                    .provider
+                    .get_block_number()
+                    .await
+                    .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
+
+                // validate the packet on each turn of the loop, in case it's changed since our last submission
+                let mut queue = match state.get_live_packet_queue(&packet_queue_id) {
+                    Ok(queue) => queue,
+                    Err(e) => {
+                        if let AggregatorError::PacketValidation(
+                            PacketValidationError::EventBurned(_),
+                        ) = e
+                        {
+                            // event has been burned, continue on to the next aggregator
+                            responses.push(AddPacketResponse::Burned {
+                                service_id: packet_queue_id.service_id.clone(),
+                                chain_name: packet_queue_id.chain_name.clone(),
+                                event_id: packet_queue_id.event_id.clone(),
+                            });
+                            continue;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                };
+                let signatures: Vec<EnvelopeSignature> = queue
+                    .iter()
+                    .map(|queued| queued.packet.signature.clone())
+                    .collect();
+                validate_packet(packet, &queue, signer)?;
+
+                let signature_data = envelope.signature_data(signatures, block_height)?;
+
+                if index == 0 {
+                    // packet is valid, push it onto the queue, but only for first aggregator
+                    // other requests in flight will see this updated queue too
+                    queue.push(QueuedPacket {
+                        packet: packet.clone(),
+                        signer,
+                    });
+
+                    state.save_packet_queue(&packet_queue_id, PacketQueue::Alive(queue.clone()))?;
+                }
+
+                match service_manager
+                    .validate(envelope.clone().into(), signature_data.clone().into())
+                    .call()
+                    .await
+                {
+                    Ok(_) => {
+                        // queue as a whole is valid, send it to the aggregator
+                        let tx_receipt = client
+                            .send_envelope_signatures(
+                                envelope.clone(),
+                                signature_data.clone(),
+                                *address,
+                                *max_gas,
+                            )
+                            .await?;
+
+                        responses.push(AddPacketResponse::Sent {
+                            tx_receipt: Box::new(tx_receipt),
+                            count: queue.len(),
+                        });
+
+                        state.save_packet_queue(&packet_queue_id, PacketQueue::Burned)?;
+                    }
+                    Err(e) => {
+                        if let Some(revert) = e
+                            .as_revert_data()
+                            .and_then(|raw| alloy_sol_types::Revert::abi_decode(&raw).ok())
+                        {
+                            tracing::debug!(
+                                "Aggregator {} validation failed: {}",
+                                chain_name,
+                                revert.reason
                             );
-                            let block_height = client
-                                .provider
-                                .get_block_number()
-                                .await
-                                .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
-
-                            // validate the packet on each turn of the loop, in case it's changed since our last submission
-                            let mut queue = match state.get_live_packet_queue(&packet_queue_id) {
-                                Ok(queue) => queue,
-                                Err(e) => {
-                                    if let AggregatorError::PacketValidation(PacketValidationError::EventBurned(_)) = e {
-                                        // event has been burned, continue on to the next aggregator 
-                                        responses.push(AddPacketResponse::Burned {
-                                            service_id: packet_queue_id.service_id.clone(),
-                                            chain_name: packet_queue_id.chain_name.clone(),
-                                            event_id: packet_queue_id.event_id.clone(),
-                                        });
-                                        continue;
-                                    } else {
-                                        return Err(e);
-                                    }
-                                }
-                            };
-                            let signatures: Vec<EnvelopeSignature> = queue
-                                .iter()
-                                .map(|queued| queued.packet.signature.clone())
-                                .collect();
-                            validate_packet(packet, &queue, signer)?;
-
-                            let signature_data =
-                                envelope.signature_data(signatures, block_height)?;
-
-                            if index == 0 {
-                                // packet is valid, push it onto the queue, but only for first aggregator
-                                // other requests in flight will see this updated queue too
-                                queue.push(QueuedPacket {
-                                    packet: packet.clone(),
-                                    signer,
-                                });
-
-                                state.save_packet_queue(
-                                    &packet_queue_id,
-                                    PacketQueue::Alive(queue.clone()),
-                                )?;
-                            }
-
-                            match service_manager
-                                .validate(envelope.clone().into(), signature_data.clone().into())
-                                .call()
-                                .await
-                            {
-                                Ok(_) => {
-                                    // queue as a whole is valid, send it to the aggregator
-                                    let tx_receipt = client
-                                        .send_envelope_signatures(
-                                            envelope.clone(),
-                                            signature_data.clone(),
-                                            *address,
-                                            *max_gas,
-                                        )
-                                        .await?;
-
-                                    responses.push(AddPacketResponse::Sent {
-                                        tx_receipt: Box::new(tx_receipt),
-                                        count: queue.len(),
-                                    });
-
-                                    state.save_packet_queue(&packet_queue_id, PacketQueue::Burned)?;
-                                }
-                                Err(e) => {
-                                    if let Some(revert) = e.as_revert_data().and_then(|raw| {
-                                        alloy_sol_types::Revert::abi_decode(&raw).ok()
-                                    }) {
-                                        tracing::debug!(
-                                            "Aggregator {} validation failed: {}",
-                                            chain_name,
-                                            revert.reason
-                                        );
-                                        responses.push(AddPacketResponse::Aggregated {
-                                            count: queue.len(),
-                                        });
-                                    } else {
-                                        return Err(AggregatorError::ServiceManagerValidate(e));
-                                    }
-                                }
-                            }
+                            responses.push(AddPacketResponse::Aggregated { count: queue.len() });
+                        } else {
+                            return Err(AggregatorError::ServiceManagerValidate(e));
                         }
                     }
                 }
-
-                if responses.len() != aggregators.len() {
-                    return Err(AggregatorError::UnexpectedResponsesLength {
-                        responses: responses.len(),
-                        aggregators: aggregators.len(),
-                    });
-                }
-
-                let mut sent_count = 0;
-                let mut burned_count = 0;
-                let mut aggregated_count = 0;
-                for response in responses.iter() {
-                    match response {
-                        AddPacketResponse::Sent { .. } => sent_count += 1,
-                        AddPacketResponse::Aggregated { count } => aggregated_count += count,
-                        AddPacketResponse::Burned { .. } => burned_count += 1,
-                    }
-                }
-
-                if aggregated_count > 0 && (sent_count != 0 || burned_count != 0) {
-                    // some aggregated, some not
-                    tracing::warn!(
-                        "Mixed responses: {} destinations sent, {} destinations aggregated, {} destinations burned",
-                        sent_count,
-                        aggregated_count,
-                        burned_count
-                    );
-                }
-
-                Ok(responses)
             }
-        })
-        .await
+        }
+    }
+
+    if responses.len() != aggregators.len() {
+        return Err(AggregatorError::UnexpectedResponsesLength {
+            responses: responses.len(),
+            aggregators: aggregators.len(),
+        });
+    }
+
+    let mut sent_count = 0;
+    let mut burned_count = 0;
+    let mut aggregated_count = 0;
+    for response in responses.iter() {
+        match response {
+            AddPacketResponse::Sent { .. } => sent_count += 1,
+            AddPacketResponse::Aggregated { count } => aggregated_count += count,
+            AddPacketResponse::Burned { .. } => burned_count += 1,
+        }
+    }
+
+    if aggregated_count > 0 && (sent_count != 0 || burned_count != 0) {
+        // some aggregated, some not
+        tracing::warn!(
+            "Mixed responses: {} destinations sent, {} destinations aggregated, {} destinations burned",
+            sent_count,
+            aggregated_count,
+            burned_count
+        );
+    }
+
+    Ok(responses)
 }
 
 fn validate_packet(
