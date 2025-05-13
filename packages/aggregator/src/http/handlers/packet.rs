@@ -1,15 +1,18 @@
-use alloy_primitives::{Address, U256};
+use alloy_primitives::Address;
 use alloy_provider::Provider;
-use anyhow::{anyhow, bail, ensure};
+use alloy_sol_types::SolError;
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EvmContractSubmission, IWavsServiceManager, Packet,
+    Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission, IWavsServiceManager, Packet,
 };
 
-use crate::http::{
-    error::AnyError,
-    state::{HttpState, PacketQueue, QueuedPacket},
+use crate::{
+    error::{AggregatorError, AggregatorResult, PacketValidationError},
+    http::{
+        error::AnyError,
+        state::{HttpState, PacketQueue, QueuedPacket},
+    },
 };
 
 #[utoipa::path(
@@ -40,176 +43,157 @@ pub async fn handle_packet(
 async fn process_packet(
     state: HttpState,
     packet: &Packet,
-) -> anyhow::Result<Vec<AddPacketResponse>> {
+) -> AggregatorResult<Vec<AddPacketResponse>> {
     let event_id = packet.event_id();
-
     let route = packet.route.clone();
 
     let service = state.get_service(&packet.route)?;
     let aggregators = &service.workflows[&packet.route.workflow_id].aggregators;
 
     if aggregators.is_empty() {
-        bail!(
-            "No aggregator configured for workflow {} on service {}",
-            route.workflow_id,
-            route.service_id
-        );
+        return Err(AggregatorError::MissingWorkflow {
+            workflow_id: route.workflow_id,
+            service_id: route.service_id,
+        });
     }
 
-    state.event_transaction.run(event_id.clone(), {
-        let state = state.clone();
-        let envelope = packet.envelope.clone();
-        || async move {
-            let mut queue = state.get_live_packet_queue(&event_id)?;
-            let mut responses: Vec<AddPacketResponse> = Vec::new();
+    state
+        .event_transaction
+        .run(event_id.clone(), {
+            let state = state.clone();
+            let envelope = packet.envelope.clone();
+            || async move {
+                let mut queue = state.get_live_packet_queue(&event_id)?;
 
-            for (index, aggregator) in aggregators.iter().enumerate() {
-                match aggregator {
-                    Aggregator::Evm(EvmContractSubmission {
-                        chain_name,
-                        address,
-                        max_gas,
-                    }) => {
-                        // this implicitly validates that the signature is valid
-                        let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+                // this implicitly validates that the signature is valid
+                let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+                validate_packet(packet, &queue, signer)?;
 
-                        let client = state.get_evm_client(chain_name).await?;
-                        let service_manager = IWavsServiceManager::new(
-                            service.manager.evm_address_unchecked(),
-                            client.provider.clone(),
-                        );
-                        // Get the threshold
-                        let threshold = service_manager
-                            .getLastCheckpointThresholdWeight()
-                            .call()
-                            .await?;
+                queue.push(QueuedPacket {
+                    packet: packet.clone(),
+                    signer,
+                });
+                let queue = queue;
 
-                        let weight = service_manager.getOperatorWeight(signer).call().await?;
-                        let mut total_weight = weight;
+                let signatures: Vec<EnvelopeSignature> = queue
+                    .iter()
+                    .map(|queued| queued.packet.signature.clone())
+                    .collect();
 
-                        // Sum up weights
-                        for signer in queue.iter().map(|queued| queued.signer)
-                        {
-                            // TODO, contract should have a method to get multiple weights in one call
-                            // but it doesn't really matter until those weights can change under our feet
-                            let weight = service_manager.getOperatorWeight(signer).call().await?;
-                            total_weight = weight
-                                .checked_add(total_weight)
-                                .ok_or(anyhow!("Total weight calculation overflowed"))?;
-                        }
+                let mut responses: Vec<AddPacketResponse> = Vec::new();
 
-                        // get the current packets again, in case it's changed since last await point
-                        validate_packet(packet, &queue, signer, weight)?;
+                for aggregator in aggregators.iter() {
+                    match aggregator {
+                        Aggregator::Evm(EvmContractSubmission {
+                            chain_name,
+                            address,
+                            max_gas,
+                        }) => {
+                            let client = state.get_evm_client(chain_name).await?;
+                            let service_manager = IWavsServiceManager::new(
+                                service.manager.evm_address_unchecked(),
+                                client.provider.clone(),
+                            );
+                            let block_height = client
+                                .provider
+                                .get_block_number()
+                                .await
+                                .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
+                            let signature_data =
+                                envelope.signature_data(signatures.clone(), block_height)?;
 
-                        if index == 0 {
-                            // update the saved queue, but only for first aggregator
-                            // invariant: they should all see the same queue
-                            queue.push(QueuedPacket {
-                                packet: packet.clone(),
-                                signer,
-                            });
+                            match service_manager
+                                .validate(envelope.clone().into(), signature_data.clone().into())
+                                .call()
+                                .await
+                            {
+                                Ok(_) => {
+                                    let tx_receipt = client
+                                        .send_envelope_signatures(
+                                            envelope.clone(),
+                                            signature_data.clone(),
+                                            *address,
+                                            *max_gas,
+                                        )
+                                        .await?;
 
-                            state
-                                .save_packet_queue(&event_id, PacketQueue::Alive(queue.clone()))?;
-                        }
-
-                        // TODO:
-                        // given the total power of the quorum (which could be, say, 60% of the total operator set power)
-                        // we need to calculate the power of the signers so far, and see if it meets the quorum power
-                        // we don't care about count, we care about the power of the signers
-                        // right now this is just hardcoded for demo purposes
-                        if total_weight >= threshold {
-                            if threshold.is_zero() {
-                                tracing::warn!(
-                                    "you are using threshold of 0 in your AVS quorum, best to only do this for testing"
-                                );
+                                    responses.push(AddPacketResponse::Sent {
+                                        tx_receipt: Box::new(tx_receipt),
+                                        count: queue.len(),
+                                    });
+                                }
+                                Err(e) => {
+                                    if let Some(revert) = e.as_revert_data().and_then(|raw| {
+                                        alloy_sol_types::Revert::abi_decode(&raw).ok()
+                                    }) {
+                                        tracing::debug!(
+                                            "Aggregator {} validation failed: {}",
+                                            chain_name,
+                                            revert.reason
+                                        );
+                                        responses.push(AddPacketResponse::Aggregated {
+                                            count: queue.len(),
+                                        });
+                                    } else {
+                                        return Err(AggregatorError::ServiceManagerValidate(e));
+                                    }
+                                }
                             }
-
-                            let signatures = queue
-                                .iter()
-                                .map(|queued| queued.packet.signature.clone())
-                                .collect();
-
-                            let block_height = client.provider.get_block_number().await?;
-
-                            let tx_receipt = client
-                                .send_envelope_signatures(
-                                    envelope.clone(),
-                                    signatures,
-                                    block_height,
-                                    *address,
-                                    *max_gas,
-                                )
-                                .await?;
-
-                            responses.push(AddPacketResponse::Sent {
-                                tx_receipt: Box::new(tx_receipt),
-                                count: queue.len()
-                            });
-                        } else {
-                            responses.push(AddPacketResponse::Aggregated {
-                                count: queue.len(),
-                            });
                         }
                     }
                 }
-            }
 
-            if responses.len() != aggregators.len() {
-                bail!("Unexpected number of responses: expected {}, got {}", aggregators.len(), responses.len());
-            }
-
-            if responses.iter().all(|response| matches!(response, AddPacketResponse::Sent { .. })) {
-                // all aggregator destinations reached quorum and had their packets sent, burn the event
-                state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-            } else {
-                let mut sent_count = 0;
-                let mut aggregated_count = 0;
-                for response in responses.iter() {
-                    match response {
-                        AddPacketResponse::Sent { .. } => sent_count += 1,
-                        AddPacketResponse::Aggregated { count } => aggregated_count += count,
-                    }
+                if responses.len() != aggregators.len() {
+                    return Err(AggregatorError::UnexpectedResponsesLength {
+                        responses: responses.len(),
+                        aggregators: aggregators.len(),
+                    });
                 }
-                // some aggregator destinations 
-                tracing::warn!("Mixed responses: {} destinations sent, {} destinations aggregated", sent_count, aggregated_count);
-            }
 
-            Ok(responses)
-        }
-    }).await
+                let (sent_count, aggregated_count) =
+                    responses.iter().fold((0, 0), |(s, a), r| match r {
+                        AddPacketResponse::Sent { .. } => (s + 1, a),
+                        AddPacketResponse::Aggregated { count } => (s, a + count),
+                    });
+
+                if aggregated_count == 0 {
+                    // all aggregator destinations reached quorum and had their packets sent, burn the event
+                    state.save_packet_queue(&event_id, PacketQueue::Burned)?;
+                } else {
+                    tracing::warn!(
+                        "Mixed responses: {} destinations sent, {} destinations aggregated",
+                        sent_count,
+                        aggregated_count
+                    );
+                    state.save_packet_queue(&event_id, PacketQueue::Alive(queue.clone()))?;
+                }
+                Ok(responses)
+            }
+        })
+        .await
 }
 
 fn validate_packet(
     packet: &Packet,
     queue: &[QueuedPacket],
     signer: Address,
-    operator_weight: U256,
-) -> anyhow::Result<()> {
+) -> AggregatorResult<()> {
     match queue.first() {
         None => {}
         Some(prev) => {
             // check if the packet is the same as the last one
+            // TODO - let custom logic here? wasm component?
             if packet.envelope != prev.packet.envelope {
-                bail!("Unexpected envelope difference!");
+                return Err(PacketValidationError::EnvelopeDiff.into());
             }
-
-            // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
-            // if packet.block_height != last_packet.block_height {
-            //     bail!("Unexpected block height difference!");
-            // }
         }
     }
 
     for queued_packet in queue {
         if signer == queued_packet.signer {
-            bail!("Signer {} already in queue", signer);
+            return Err(PacketValidationError::RepeatSigner(signer).into());
         }
     }
-
-    ensure!(!operator_weight.is_zero(), "Operator is not registered");
-
-    // TODO: ensure that the signer is in the operator set
 
     Ok(())
 }
@@ -219,7 +203,7 @@ mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
     use alloy_node_bindings::{Anvil, AnvilInstance};
-    use alloy_primitives::{Bytes, FixedBytes};
+    use alloy_primitives::{Bytes, FixedBytes, U256};
     use alloy_provider::DynProvider;
     use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
     use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
@@ -249,38 +233,35 @@ mod test {
         let envelope_1 = mock_envelope([1, 2, 3]);
         let envelope_2 = mock_envelope([4, 5, 6]);
 
-        let packet = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
+        let packet_1 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
 
-        let derived_signer_1_address = packet
+        let derived_signer_1_address = packet_1
             .signature
-            .evm_signer_address(&packet.envelope)
+            .evm_signer_address(&packet_1.envelope)
             .unwrap();
         assert_eq!(derived_signer_1_address, signer_1.address());
 
         // empty queue is okay
-        validate_packet(&packet, &queue, signer_1.address(), U256::ONE).unwrap();
+        validate_packet(&packet_1, &queue, signer_1.address()).unwrap();
 
         queue.push(QueuedPacket {
-            packet: packet.clone(),
+            packet: packet_1,
             signer: signer_1.address(),
         });
 
         // "fails" (expectedly) because the signer is the same
-        let packet = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_1.address(), U256::ONE).unwrap_err();
+        let packet_2 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
+        validate_packet(&packet_2, &queue, signer_1.address()).unwrap_err();
 
         // "fails" (expectedly) because the envelope is different
-        let packet = mock_packet(&signer_2, &envelope_2, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_2.address(), U256::ONE).unwrap_err();
-
-        // "fails" (expectedly) because the operator is not registered (0 weight)
-        let packet = mock_packet(&signer_2, &envelope_1, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_2.address(), U256::ZERO).unwrap_err();
+        let packet_3 = mock_packet(&signer_2, &envelope_2, "service-1".parse().unwrap());
+        validate_packet(&packet_3, &queue, signer_2.address()).unwrap_err();
 
         // passes because the signer is different but envelope is the same
-        validate_packet(&packet, &queue, signer_2.address(), U256::ONE).unwrap();
+        let packet_3 = mock_packet(&signer_2, &envelope_1, "service-1".parse().unwrap());
+        validate_packet(&packet_3, &queue, signer_2.address()).unwrap();
         queue.push(QueuedPacket {
-            packet: packet.clone(),
+            packet: packet_3,
             signer: signer_2.address(),
         });
     }
@@ -325,7 +306,7 @@ mod test {
             .await
             .unwrap();
 
-        for _ in 0..NUM_THRESHOLD {
+        for _ in 0..NUM_SIGNERS {
             let signer = mock_signer();
             service_manager
                 .setOperatorWeight(signer.address(), U256::ONE)
@@ -343,25 +324,37 @@ mod test {
         let seen_count: Arc<Mutex<HashSet<usize>>> = Arc::new(Mutex::new(HashSet::new()));
 
         if !concurrent {
-            for signer in signers {
-                let packet = mock_packet(&signer, &envelope, service.id.clone());
-                if let AddPacketResponse::Aggregated { count } =
-                    process_packet(deps.state.clone(), &packet)
-                        .await
-                        .unwrap()
-                        .pop()
-                        .unwrap()
-                {
-                    let mut seen_count = seen_count.lock().unwrap();
-                    if !seen_count.insert(count) {
-                        panic!("Duplicate count: {}", count);
+            for (index, signer) in signers.iter().enumerate() {
+                let packet = mock_packet(signer, &envelope, service.id.clone());
+                let resp = process_packet(deps.state.clone(), &packet)
+                    .await
+                    .unwrap()
+                    .pop()
+                    .unwrap();
+                match resp {
+                    AddPacketResponse::Aggregated { count } => {
+                        let mut seen_count = seen_count.lock().unwrap();
+                        if !seen_count.insert(count) {
+                            panic!("Duplicate count: {}", count);
+                        }
+                    }
+                    AddPacketResponse::Sent {
+                        count,
+                        tx_receipt: _,
+                    } => {
+                        // in serial mode, break when we get a sent packet
+                        // and assert that it's what we expect
+                        assert_eq!(count, NUM_THRESHOLD);
+                        assert_eq!(count - 1, index);
+                        break;
                     }
                 }
             }
         } else {
             let mut futures = FuturesUnordered::new();
-            for signer in signers {
-                let packet = mock_packet(&signer, &envelope, service.id.clone());
+            // in concurrent mode, just fire off exactly NUM_THRESHHOLD signers
+            for signer in signers.iter().take(NUM_THRESHOLD) {
+                let packet = mock_packet(signer, &envelope, service.id.clone());
                 futures.push({
                     let state = deps.state.clone();
                     let seen_count = seen_count.clone();
@@ -380,6 +373,17 @@ mod test {
 
             while futures.next().await.is_some() {
                 // just wait for all futures to finish
+            }
+        }
+
+        // last one should be burned
+        let packet = mock_packet(signers.last().unwrap(), &envelope, service.id.clone());
+        if let Err(e) = process_packet(deps.state.clone(), &packet).await {
+            if !matches!(
+                e,
+                AggregatorError::PacketValidation(PacketValidationError::EventBurned(_))
+            ) {
+                panic!("Unexpected error (should be burned): {:?}", e);
             }
         }
     }
@@ -531,7 +535,7 @@ mod test {
 
     sol!(
         // solc TestServiceManager.sol --via-ir --optimize --bin
-        #[sol(rpc, bytecode="608080604052346015576104b5908161001a8239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c806308fc760a146103f85780630e6b1110146103c3578063314f3a49146103a65780635f11301b1461023c57806398ec1ac914610204578063b933fa74146101e7578063cc922c6a146100ee578063cd71589e146100995763fb8524b11461007c575f80fd5b3461009557602036600319011261009557600435600255005b5f80fd5b346100955760403660031901126100955760043567ffffffffffffffff81116100955760609060031990360301126100955760243567ffffffffffffffff811161009557606090600319903603011261009557005b34610095575f366003190112610095576040515f5f549061010e82610427565b8084526020840192600181169081156101ce575060011461018d575b50829003601f01601f191682019167ffffffffffffffff831181841017610179576040918391828452602083525180918160208501528484015e5f828201840152601f01601f19168101030190f35b634e487b7160e01b5f52604160045260245ffd5b90505f80525f5160206104605f395f51905f525f905b8282106101b85750602091508301018361012a565b60018160209254838589010152019101906101a3565b60ff1916845250151560051b830160200190508361012a565b34610095575f366003190112610095576020600254604051908152f35b34610095576020366003190112610095576001600160a01b03610225610411565b165f526001602052602060405f2054604051908152f35b346100955760203660031901126100955760043567ffffffffffffffff8111610095573660238201121561009557806004013567ffffffffffffffff8111610095573660248284010111610095576102945f54610427565b601f8111610342575b505f601f82116001146102d85781925f926102ca575b50505f19600383901b1c191660019190911b175f55005b6024925001013582806102b3565b601f198216925f5160206104605f395f51905f52915f5b8581106103275750836001951061030b575b505050811b015f55005b01602401355f19600384901b60f8161c19169055828080610301565b909260206001819260248787010135815501940191016102ef565b601f820160051c5f5160206104605f395f51905f52019060208310610391575b601f0160051c5f5160206104605f395f51905f5201905b818110610386575061029d565b5f8155600101610379565b5f5160206104605f395f51905f529150610362565b34610095575f366003190112610095576020600354604051908152f35b34610095576040366003190112610095576001600160a01b036103e4610411565b165f52600160205260243560405f20555f80f35b3461009557602036600319011261009557600435600355005b600435906001600160a01b038216820361009557565b90600182811c92168015610455575b602083101461044157565b634e487b7160e01b5f52602260045260245ffd5b91607f169161043656fe290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563a264697066735822122019df7c28a706099281ade4f02b0f476af1f8afd081e40b2359de39cb25c7735664736f6c634300081d0033")]
+        #[sol(rpc, bytecode="608080604052346015576105c2908161001a8239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c806308fc760a146104cf5780630e6b11101461049a578063314f3a491461047d5780635f11301b1461031357806398ec1ac9146102db578063b933fa74146102be578063cc922c6a146101c5578063cd71589e146100995763fb8524b11461007c575f80fd5b3461009557602036600319011261009557600435600255005b5f80fd5b346100955760403660031901126100955760043567ffffffffffffffff81116100955760609060031990360301126100955760243567ffffffffffffffff811161009557606081600401916003199036030112610095575f90815b6100fe8280610536565b9050831015610176576101118280610536565b841015610162578360051b013560018060a01b038116809103610095575f52600160205260405f2054810180911161014e576001909201916100f4565b634e487b7160e01b5f52601160045260245ffd5b634e487b7160e01b5f52603260045260245ffd5b6002541161018057005b60405162461bcd60e51b815260206004820152601a60248201527f4e6f7420656e6f756768206f70657261746f72207765696768740000000000006044820152606490fd5b34610095575f366003190112610095576040515f5f54906101e5826104fe565b8084526020840192600181169081156102a55750600114610264575b50829003601f01601f191682019167ffffffffffffffff831181841017610250576040918391828452602083525180918160208501528484015e5f828201840152601f01601f19168101030190f35b634e487b7160e01b5f52604160045260245ffd5b90505f80525f51602061056d5f395f51905f525f905b82821061028f57506020915083010183610201565b600181602092548385890101520191019061027a565b60ff1916845250151560051b8301602001905083610201565b34610095575f366003190112610095576020600254604051908152f35b34610095576020366003190112610095576001600160a01b036102fc6104e8565b165f526001602052602060405f2054604051908152f35b346100955760203660031901126100955760043567ffffffffffffffff8111610095573660238201121561009557806004013567ffffffffffffffff81116100955736602482840101116100955761036b5f546104fe565b601f8111610419575b505f601f82116001146103af5781925f926103a1575b50505f19600383901b1c191660019190911b175f55005b60249250010135828061038a565b601f198216925f51602061056d5f395f51905f52915f5b8581106103fe575083600195106103e2575b505050811b015f55005b01602401355f19600384901b60f8161c191690558280806103d8565b909260206001819260248787010135815501940191016103c6565b601f820160051c5f51602061056d5f395f51905f52019060208310610468575b601f0160051c5f51602061056d5f395f51905f5201905b81811061045d5750610374565b5f8155600101610450565b5f51602061056d5f395f51905f529150610439565b34610095575f366003190112610095576020600354604051908152f35b34610095576040366003190112610095576001600160a01b036104bb6104e8565b165f52600160205260243560405f20555f80f35b3461009557602036600319011261009557600435600355005b600435906001600160a01b038216820361009557565b90600182811c9216801561052c575b602083101461051857565b634e487b7160e01b5f52602260045260245ffd5b91607f169161050d565b903590601e1981360301821215610095570180359067ffffffffffffffff821161009557602001918160051b360383136100955756fe290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563a26469706673582212209b44b6db9e95bc62e7f4fe7016e755081a43780db7c8c4b69e852d5247c9262664736f6c634300081d0033")]
         contract TestServiceManager {
             string private serviceURI;
 
@@ -556,7 +560,17 @@ mod test {
                 Envelope calldata envelope,
                 SignatureData calldata signatureData
             ) external view {
-                // always valid
+                // get total operator weight of these signatures
+                uint256 totalWeight = 0;
+                for (uint256 i = 0; i < signatureData.operators.length; i++) {
+                    totalWeight += operatorWeights[signatureData.operators[i]];
+                }
+
+                // check if total weight is above threshold
+                require(
+                    totalWeight >= lastCheckpointThresholdWeight,
+                    "Not enough operator weight"
+                );
             }
 
             function getServiceURI() external view returns (string memory) {

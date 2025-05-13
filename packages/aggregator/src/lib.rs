@@ -1,5 +1,6 @@
 pub mod args;
 pub mod config;
+pub mod error;
 pub mod http;
 
 use utils::{context::AppContext, storage::fs::FileStorage};
