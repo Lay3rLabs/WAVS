@@ -163,6 +163,14 @@ impl CoreSubmission {
                 AddPacketResponse::Aggregated { count } => {
                     tracing::debug!("Aggregated with current payload count {}", count);
                 }
+
+                AddPacketResponse::Error { reason } => {
+                    tracing::error!("Aggregator errored: {}", reason);
+                }
+
+                AddPacketResponse::Burned => {
+                    tracing::debug!("Aggregator queue is burned");
+                }
             }
 
             self.metrics

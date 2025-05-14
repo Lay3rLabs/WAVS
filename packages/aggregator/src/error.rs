@@ -3,7 +3,7 @@ use utils::{
     error::{ChainConfigError, EvmClientError},
     storage::db::DBError,
 };
-use wavs_types::{ChainName, EnvelopeError, EventId, ServiceID, WorkflowID};
+use wavs_types::{ChainName, EnvelopeError, ServiceID, WorkflowID};
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
 
@@ -56,16 +56,16 @@ pub enum AggregatorError {
 
     #[error("Block number: {0}")]
     BlockNumber(anyhow::Error),
+
+    #[error("Failed to encode with bincode: {0:?}")]
+    BincodeEncode(#[from] bincode::error::EncodeError),
+
+    #[error("Failed to decode with bincode: {0:?}")]
+    BincodeDecode(#[from] bincode::error::DecodeError),
 }
 
 #[derive(Error, Debug)]
 pub enum PacketValidationError {
     #[error("Unexpected envelope difference")]
     EnvelopeDiff,
-
-    #[error("Signer already in queue: {0}")]
-    RepeatSigner(alloy_primitives::Address),
-
-    #[error("Packets for event {0} already burned")]
-    EventBurned(EventId),
 }

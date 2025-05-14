@@ -8,17 +8,36 @@ use utils::{
     async_transaction::AsyncTransaction,
     config::EvmChainConfig,
     evm_client::EvmSigningClient,
-    storage::db::{DBError, RedbStorage, Table, JSON},
+    storage::db::{RedbStorage, Table, JSON},
 };
-use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
+use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service, ServiceID};
 
 use crate::{
     config::Config,
-    error::{AggregatorError, AggregatorResult, PacketValidationError},
+    error::{AggregatorError, AggregatorResult},
 };
 
-// key is EventId
+// key is PacketQueueId
 const PACKET_QUEUES: Table<&[u8], JSON<PacketQueue>> = Table::new("packet_queues");
+
+#[derive(
+    Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode,
+)]
+pub struct PacketQueueId {
+    pub event_id: EventId,
+    pub service_id: ServiceID,
+    pub aggregator_index: usize,
+}
+
+impl PacketQueueId {
+    pub fn to_bytes(&self) -> AggregatorResult<Vec<u8>> {
+        Ok(bincode::encode_to_vec(self, bincode::config::standard())?)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> AggregatorResult<Self> {
+        Ok(bincode::borrow_decode_from_slice(bytes, bincode::config::standard())?.0)
+    }
+}
 
 // key is ServiceId
 const SERVICES: Table<&str, JSON<Service>> = Table::new("services");
@@ -41,7 +60,7 @@ pub struct QueuedPacket {
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
-    pub event_transaction: AsyncTransaction<EventId>,
+    pub queue_transaction: AsyncTransaction<PacketQueueId>,
     storage: Arc<RedbStorage>,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
 }
@@ -56,7 +75,7 @@ impl HttpState {
             config,
             storage,
             evm_clients,
-            event_transaction: AsyncTransaction::new(false),
+            queue_transaction: AsyncTransaction::new(false),
         })
     }
 
@@ -99,27 +118,19 @@ impl HttpState {
         Ok(evm_client)
     }
 
-    pub fn get_packet_queue(&self, event_id: &EventId) -> AggregatorResult<PacketQueue> {
-        match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
+    pub fn get_packet_queue(&self, id: &PacketQueueId) -> AggregatorResult<PacketQueue> {
+        match self.storage.get(PACKET_QUEUES, &id.to_bytes()?)? {
             Some(queue) => Ok(queue.value()),
             None => Ok(PacketQueue::Alive(Vec::new())),
         }
     }
 
-    pub fn get_live_packet_queue(&self, event_id: &EventId) -> AggregatorResult<Vec<QueuedPacket>> {
-        match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
-            Some(queue) => match queue.value() {
-                PacketQueue::Alive(queue) => Ok(queue),
-                PacketQueue::Burned => {
-                    Err(PacketValidationError::EventBurned(event_id.clone()).into())
-                }
-            },
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub fn save_packet_queue(&self, event_id: &EventId, queue: PacketQueue) -> Result<(), DBError> {
-        self.storage.set(PACKET_QUEUES, event_id.as_ref(), &queue)
+    pub fn save_packet_queue(
+        &self,
+        id: &PacketQueueId,
+        queue: PacketQueue,
+    ) -> AggregatorResult<()> {
+        Ok(self.storage.set(PACKET_QUEUES, &id.to_bytes()?, &queue)?)
     }
 
     pub fn get_service(&self, route: &PacketRoute) -> AggregatorResult<Service> {
@@ -137,6 +148,13 @@ impl HttpState {
         } else {
             return Err(AggregatorError::RepeatService(service.id.clone()));
         }
+
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn unchecked_save_service(&self, service: &Service) -> AggregatorResult<()> {
+        self.storage.set(SERVICES, &service.id, service)?;
 
         Ok(())
     }
