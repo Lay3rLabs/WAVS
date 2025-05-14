@@ -2,6 +2,7 @@ use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use alloy_sol_types::SolError;
 use axum::{extract::State, response::IntoResponse, Json};
+use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
     Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
@@ -70,10 +71,11 @@ async fn process_packet(
 
     let mut responses: Vec<AddPacketResponse> = Vec::new();
 
-    for (aggregator_index, aggregator) in aggregators.iter().cloned().enumerate() {
+    for (aggregator_index, aggregator) in aggregators.iter().enumerate() {
         let resp = AggregatorProcess {
-            state: state.clone(),
+            state: &state,
             service_manager: &service_manager,
+            async_tx: state.queue_transaction.clone(),
             aggregator,
             queue_id: PacketQueueId {
                 event_id: event_id.clone(),
@@ -109,9 +111,10 @@ async fn process_packet(
 }
 
 struct AggregatorProcess<'a> {
-    state: HttpState,
+    state: &'a HttpState,
+    async_tx: AsyncTransaction<PacketQueueId>,
     service_manager: &'a IWavsServiceManagerInstance<DynProvider>,
-    aggregator: Aggregator,
+    aggregator: &'a Aggregator,
     queue_id: PacketQueueId,
     packet: &'a Packet,
     signer: Address,
@@ -121,6 +124,7 @@ impl AggregatorProcess<'_> {
     async fn run(self) -> AggregatorResult<AddPacketResponse> {
         let Self {
             state,
+            async_tx,
             service_manager,
             aggregator,
             queue_id,
@@ -137,9 +141,7 @@ impl AggregatorProcess<'_> {
                 // execute the logic within a transaction, keyed by queue_id
                 // other queue ids can run concurrently, but this makes sure that
                 // we aren't validating a queue that was updated from another request coming in
-                state
-                    .clone()
-                    .queue_transaction
+                async_tx
                     .run(queue_id.clone(), move || async move {
                         let queue = match state.get_packet_queue(&queue_id)? {
                             PacketQueue::Alive(queue) => {
@@ -177,13 +179,13 @@ impl AggregatorProcess<'_> {
                             .await
                         {
                             Ok(_) => {
-                                let client = state.get_evm_client(&chain_name).await?;
+                                let client = state.get_evm_client(chain_name).await?;
                                 let tx_receipt = client
                                     .send_envelope_signatures(
                                         packet.envelope.clone(),
                                         signature_data.clone(),
-                                        address,
-                                        max_gas,
+                                        *address,
+                                        *max_gas,
                                     )
                                     .await?;
 
