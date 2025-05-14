@@ -39,9 +39,6 @@ pub struct TestDefinition {
     /// Whether to test with multiple triggers
     pub use_multi_trigger: bool,
 
-    /// Number of tasks to execute (for aggregator tests)
-    pub num_tasks: u32,
-
     /// Reference to the deployed service (populated during test execution)
     pub service: Option<Service>,
 
@@ -68,7 +65,7 @@ pub enum TriggerConfig {
     Cron { schedule: String },
 
     /// Use an existing trigger
-    UseExisting { trigger: Trigger },
+    UseExisting(Trigger),
 }
 
 /// Configuration for a submit
@@ -84,7 +81,7 @@ pub enum SubmitConfig {
     None,
 
     /// Use an existing submit
-    UseExisting { submit: Submit },
+    UseExisting(Submit),
 }
 
 /// Different types of input data
@@ -187,7 +184,6 @@ impl TestBuilder {
                 expected_output: ExpectedOutput::Any,
                 timeout: Duration::from_secs(5),
                 use_multi_trigger: false,
-                num_tasks: 1,
                 service: None,
                 multi_trigger_service: None,
             },
@@ -330,12 +326,6 @@ impl TestBuilder {
     /// Enable multi-trigger testing
     pub fn with_multi_trigger(mut self) -> Self {
         self.definition.use_multi_trigger = true;
-        self
-    }
-
-    /// Set the number of tasks to execute (for aggregator tests)
-    pub fn num_tasks(mut self, num_tasks: u32) -> Self {
-        self.definition.num_tasks = num_tasks;
         self
     }
 

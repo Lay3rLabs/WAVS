@@ -1,8 +1,8 @@
-// src/e2e/helper.rs
-
+use alloy_provider::ext::AnvilApi;
 use alloy_sol_types::SolEvent;
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
+use utils::filesystem::workspace_path;
 use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
@@ -27,8 +27,10 @@ pub async fn deploy_service_for_test(
     clients: &Clients,
     component_sources: &ComponentSources,
 ) -> Result<(Service, Option<Service>)> {
+    tracing::info!("Deploying service for test: {}", test.name);
+
     // Create unique service ID
-    let service_id = ServiceID::new(Uuid::now_v7().as_simple().to_string())?;
+    let service_id = ServiceID::new(Uuid::now_v7().as_hyphenated().to_string())?;
 
     // Create components from test definition
     let mut components = Vec::new();
@@ -56,15 +58,57 @@ pub async fn deploy_service_for_test(
         bail!("No components specified for test: {}", test.name);
     }
 
+    tracing::info!("[{}] Creating trigger from config", test.name);
     // Create the trigger based on test configuration
-    let trigger = create_trigger_from_config(&test.trigger, clients).await?;
+    let trigger = create_trigger_from_config(&test.trigger, clients)
+        .await
+        .context("Failed to create trigger")?;
 
+    // Determine the best chain to use for service manager
+    let service_manager_chain = match &test.submit {
+        SubmitConfig::EvmContract { chain_name } => chain_name.clone(),
+        SubmitConfig::Aggregator { chain_name } => chain_name.clone(),
+        SubmitConfig::None => {
+            // Find first available EVM chain
+            clients
+                .cli_ctx
+                .config
+                .chains
+                .evm
+                .keys()
+                .next()
+                .cloned()
+                .context("No EVM chains available for service manager")?
+        }
+        SubmitConfig::UseExisting(submit) => match submit {
+            Submit::EvmContract(EvmContractSubmission { chain_name, .. }) => chain_name.clone(),
+            _ => clients
+                .cli_ctx
+                .config
+                .chains
+                .evm
+                .keys()
+                .next()
+                .cloned()
+                .context("No EVM chains available for service manager")?,
+        },
+    };
+
+    tracing::info!(
+        "[{}] Deploying service manager on chain {}",
+        test.name,
+        service_manager_chain
+    );
+    // Deploy the service manager contract
+    let service_manager_address = deploy_service_manager(clients, &service_manager_chain)
+        .await
+        .context("Failed to deploy service manager")?;
+
+    tracing::info!("[{}] Creating submit from config", test.name);
     // Create the submit based on test configuration
-    let submit = create_submit_from_config(&test.submit, clients).await?;
-
-    // Get the service manager address for the submit chain
-    let submit_chain = get_chain_from_submit(&submit)?;
-    let service_manager_address = deploy_service_manager(clients, &submit_chain).await?;
+    let submit = create_submit_from_config(&test.submit, clients, service_manager_address)
+        .await
+        .context("Failed to create submit")?;
 
     // Create service workflows
     let workflow_id = WorkflowID::new("default")?;
@@ -85,13 +129,21 @@ pub async fn deploy_service_for_test(
         workflows,
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: submit_chain.clone(),
+            chain_name: service_manager_chain.clone(),
             address: service_manager_address,
         },
     };
 
     // Deploy the service using the CLI
-    let submit_client = clients.get_evm_client(&submit_chain);
+    let submit_client = clients.get_evm_client(&service_manager_chain);
+
+    tracing::info!("[{}] Deploying service: {}", test.name, service.id);
+    // Set mining rate to ensure blocks are being generated
+    if let Err(e) = submit_client.provider.evm_mine(None).await {
+        tracing::warn!("Failed to mine block: {:?}", e);
+    }
+
+    // Deploy the service
     DeployService::run(
         &clients.cli_ctx,
         submit_client.provider.clone(),
@@ -100,14 +152,27 @@ pub async fn deploy_service_for_test(
             service_url: None,
         },
     )
-    .await?;
+    .await
+    .context("Failed to deploy service")?;
 
     // If this test uses multiple triggers, create a second service
     let multi_trigger_service = if test.use_multi_trigger {
+        tracing::info!("[{}] Creating multi-trigger service", test.name);
         let multi_service_id = ServiceID::new(Uuid::now_v7().as_simple().to_string())?;
 
+        // Deploy a new service manager for the multi-trigger service
+        let multi_service_manager_address = deploy_service_manager(clients, &service_manager_chain)
+            .await
+            .context("Failed to deploy service manager for multi-trigger")?;
+
         // Create a new submit for the multi-trigger service
-        let multi_submit = deploy_submit(clients, &submit_chain, service_manager_address).await?;
+        let multi_submit = deploy_submit(
+            clients,
+            &service_manager_chain,
+            multi_service_manager_address,
+        )
+        .await
+        .context("Failed to deploy submit for multi-trigger")?;
 
         // Create workflow for multi-trigger service (using same trigger)
         let multi_workflow_id = WorkflowID::new("multi")?;
@@ -127,12 +192,17 @@ pub async fn deploy_service_for_test(
             workflows: multi_workflows,
             status: ServiceStatus::Active,
             manager: ServiceManager::Evm {
-                chain_name: submit_chain.clone(),
-                address: service_manager_address,
+                chain_name: service_manager_chain.clone(),
+                address: multi_service_manager_address,
             },
         };
 
         // Deploy the multi-trigger service
+        tracing::info!(
+            "[{}] Deploying multi-trigger service: {}",
+            test.name,
+            multi_service.id
+        );
         DeployService::run(
             &clients.cli_ctx,
             submit_client.provider.clone(),
@@ -141,7 +211,8 @@ pub async fn deploy_service_for_test(
                 service_url: None,
             },
         )
-        .await?;
+        .await
+        .context("Failed to deploy multi-trigger service")?;
 
         Some(multi_service)
     } else {
@@ -161,7 +232,10 @@ pub async fn create_trigger_from_config(
             let client = clients.get_evm_client(chain_name);
 
             // Deploy a new EVM trigger contract
-            let contract = SimpleTrigger::deploy(client.provider.clone()).await?;
+            tracing::info!("Deploying EVM trigger contract on chain {}", chain_name);
+            let contract = SimpleTrigger::deploy(client.provider.clone())
+                .await
+                .context("Failed to deploy EVM trigger contract")?;
             let address = *contract.address();
 
             // Get the event hash
@@ -177,16 +251,37 @@ pub async fn create_trigger_from_config(
         TriggerConfig::CosmosContract { chain_name } => {
             let client = clients.get_cosmos_client(chain_name).await;
 
-            // Get the code ID for cosmos - this would need to be predeployed or deployed here
-            let code_id = get_cosmos_code_id(clients, chain_name).await?;
+            // Get the code ID with better error handling
+            tracing::info!("Getting cosmos code ID for chain {}", chain_name);
+            let code_id = get_cosmos_code_id(clients, chain_name)
+                .await
+                .context(format!(
+                    "Failed to get cosmos code ID for chain {}",
+                    chain_name
+                ))?;
 
-            // Deploy a new Cosmos trigger contract
-            let contract = SimpleCosmosTriggerClient::new_code_id(
-                client,
+            tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
+
+            // Deploy a new Cosmos trigger contract with better error handling
+            let contract_name = format!("simple_trigger_{}", Uuid::now_v7());
+            tracing::info!(
+                "Instantiating new contract '{}' with code ID {} on chain {}",
+                contract_name,
                 code_id,
-                &format!("simple_trigger_{}", Uuid::now_v7()),
-            )
-            .await?;
+                chain_name
+            );
+
+            let contract = SimpleCosmosTriggerClient::new_code_id(client, code_id, &contract_name)
+                .await
+                .context(format!(
+                    "Failed to instantiate cosmos contract with code ID {} on chain {}",
+                    code_id, chain_name
+                ))?;
+
+            tracing::info!(
+                "Successfully deployed cosmos contract at address: {}",
+                contract.contract_address
+            );
 
             Ok(Trigger::CosmosContractEvent {
                 chain_name: chain_name.clone(),
@@ -207,7 +302,7 @@ pub async fn create_trigger_from_config(
             start_time: None,
             end_time: None,
         }),
-        TriggerConfig::UseExisting { trigger } => Ok(trigger.clone()),
+        TriggerConfig::UseExisting(trigger) => Ok(trigger.clone()),
     }
 }
 
@@ -215,33 +310,38 @@ pub async fn create_trigger_from_config(
 pub async fn create_submit_from_config(
     submit_config: &SubmitConfig,
     clients: &Clients,
+    service_manager_address: alloy_primitives::Address,
 ) -> Result<Submit> {
     match submit_config {
         SubmitConfig::EvmContract { chain_name } => {
-            let service_manager_address = deploy_service_manager(clients, chain_name).await?;
-
             deploy_submit(clients, chain_name, service_manager_address).await
         }
-        SubmitConfig::Aggregator { .. } => {
-            // For aggregator, we use a URL instead of a contract address
-            Ok(Submit::Aggregator {
-                url: "http://127.0.0.1:8001".to_string(),
-            })
+        SubmitConfig::Aggregator { chain_name } => {
+            // Check if the aggregator configuration exists
+            let aggregator_config = clients
+                .cli_ctx
+                .config
+                .chains
+                .evm
+                .get(chain_name)
+                .and_then(|chain| chain.aggregator_endpoint.clone());
+
+            let url = match aggregator_config {
+                Some(endpoint) => endpoint,
+                None => {
+                    // Use a default endpoint as fallback
+                    tracing::warn!(
+                        "No aggregator endpoint configured for chain {}, using default URL",
+                        chain_name
+                    );
+                    "http://127.0.0.1:8001".to_string()
+                }
+            };
+
+            Ok(Submit::Aggregator { url })
         }
         SubmitConfig::None => Ok(Submit::None),
-        SubmitConfig::UseExisting { submit } => Ok(submit.clone()),
-    }
-}
-
-/// Get the chain name from a submit
-pub fn get_chain_from_submit(submit: &Submit) -> Result<ChainName> {
-    match submit {
-        Submit::EvmContract(submission) => Ok(submission.chain_name.clone()),
-        Submit::Aggregator { .. } => {
-            // For aggregator, you would need to determine the chain from somewhere else
-            bail!("Cannot determine chain name from aggregator submit")
-        }
-        Submit::None => bail!("None submit does not have a chain name"),
+        SubmitConfig::UseExisting(submit) => Ok(submit.clone()),
     }
 }
 
@@ -253,13 +353,18 @@ pub async fn deploy_service_manager(
     // Re-export from services.rs or implement here
     let evm_client = clients.get_evm_client(chain_name);
 
-    Ok(
-        *crate::example_evm_client::example_service_manager::SimpleServiceManager::deploy(
-            evm_client.provider.clone(),
-        )
-        .await?
-        .address(),
+    tracing::info!("Deploying service manager on chain {}", chain_name);
+
+    let result = crate::example_evm_client::example_service_manager::SimpleServiceManager::deploy(
+        evm_client.provider.clone(),
     )
+    .await
+    .context("Failed to deploy service manager contract")?;
+
+    let address = *result.address();
+    tracing::info!("Service manager deployed at address: {}", address);
+
+    Ok(address)
 }
 
 /// Deploy submit contract and create a Submit from it
@@ -268,16 +373,24 @@ pub async fn deploy_submit(
     chain_name: &ChainName,
     service_manager_address: alloy_primitives::Address,
 ) -> Result<Submit> {
-    // Changed return type from Address to Submit
     // Deploy the contract
     let evm_client = clients.get_evm_client(chain_name);
 
-    let address = *crate::example_evm_client::example_submit::SimpleSubmit::deploy(
+    tracing::info!(
+        "Deploying submit contract on chain {} with service manager: {}",
+        chain_name,
+        service_manager_address
+    );
+
+    let result = crate::example_evm_client::example_submit::SimpleSubmit::deploy(
         evm_client.provider.clone(),
         service_manager_address,
     )
-    .await?
-    .address();
+    .await
+    .context("Failed to deploy submit contract")?;
+
+    let address = *result.address();
+    tracing::info!("Submit contract deployed at address: {}", address);
 
     Ok(Submit::EvmContract(EvmContractSubmission {
         chain_name: chain_name.clone(),
@@ -286,13 +399,47 @@ pub async fn deploy_submit(
     }))
 }
 
-/// Get the Cosmos code ID (this would need to be predeployed or deployed here)
-pub async fn get_cosmos_code_id(_clients: &Clients, _chain_namee: &ChainName) -> Result<u64> {
-    // This would need to be implemented based on your cosmos code deployment
-    // For now, return a hardcoded value as an example
-    // In practice, you would need to either:
-    // 1. Look up a predeployed code ID from a config
-    // 2. Deploy the code and return the ID
+pub async fn get_cosmos_code_id(clients: &Clients, chain_name: &ChainName) -> Result<u64> {
+    // Check if the WASM file exists
+    let wasm_path = workspace_path()
+        .join("examples")
+        .join("build")
+        .join("contracts")
+        .join("simple_example.wasm");
 
-    Ok(1) // Placeholder value
+    if !wasm_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Cosmos contract WASM file not found at: {}",
+            wasm_path.display()
+        ));
+    }
+
+    // Read the WASM bytecode
+    let cosmos_bytecode = tokio::fs::read(&wasm_path).await?;
+
+    tracing::info!(
+        "Uploading cosmos wasm byte code ({} bytes) to chain {}",
+        cosmos_bytecode.len(),
+        chain_name
+    );
+
+    // Get a cosmos client for the chain
+    let client = clients.get_cosmos_client(chain_name).await;
+
+    // Upload the contract and get the real code ID
+    let (code_id, _) = client
+        .contract_upload_file(cosmos_bytecode, None)
+        .await
+        .context(format!(
+            "Failed to upload WASM code to chain {}",
+            chain_name
+        ))?;
+
+    tracing::info!(
+        "Successfully uploaded WASM bytecode to chain {}, code_id: {}",
+        chain_name,
+        code_id
+    );
+
+    Ok(code_id)
 }

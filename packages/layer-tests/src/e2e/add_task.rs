@@ -138,16 +138,21 @@ pub async fn add_task(
     }
 }
 
+// The new optimized version of wait_for_task_to_land with exponential backoff
 pub async fn wait_for_task_to_land(
     evm_submit_client: EvmSigningClient,
     address: alloy_primitives::Address,
     trigger_id: TriggerId,
     submit_start_block: u64,
 ) -> SignedData {
-    let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
+    let submit_client = SimpleEvmSubmitClient::new(evm_submit_client.clone(), address);
 
     tokio::time::timeout(Duration::from_secs(5), async move {
+        let mut backoff = 50; // milliseconds
+        let max_backoff = 500; // maximum backoff in milliseconds
+
         loop {
+            // Force mining if block hasn't advanced
             if submit_client
                 .evm_client
                 .provider
@@ -163,17 +168,19 @@ pub async fn wait_for_task_to_land(
                     .await
                     .unwrap();
             }
+
             match submit_client.trigger_validated(trigger_id).await {
                 true => {
                     return submit_client.signed_data(trigger_id).await.unwrap();
                 }
                 false => {
-                    tracing::debug!("Waiting for task response on trigger {}", trigger_id,);
+                    tracing::debug!("Waiting for task response on trigger {}", trigger_id);
                 }
             }
 
-            // still open, waiting...
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            // Exponential backoff with capping
+            tokio::time::sleep(std::time::Duration::from_millis(backoff)).await;
+            backoff = std::cmp::min(backoff * 2, max_backoff);
         }
     })
     .await

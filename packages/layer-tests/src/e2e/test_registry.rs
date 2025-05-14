@@ -10,6 +10,7 @@ use super::components::{ComponentName, ComponentSources};
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{ExpectedOutput, TestBuilder, TestDefinition};
+use super::types::SquareResponse;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
 /// Registry for managing test definitions and their deployed services
@@ -250,7 +251,6 @@ impl TestRegistry {
                 .aggregator_submit(chain.as_ref())
                 .input_text("Chancellor")
                 .expect_same_output()
-                .num_tasks(3)
                 .build(),
         )
     }
@@ -322,6 +322,12 @@ impl TestRegistry {
             TestBuilder::new("evm_multi_workflow")
                 .description("Tests multiple workflows in a single service on EVM chain")
                 .components(vec![ComponentName::Square, ComponentName::EchoData])
+                .input_square(10)
+                .expect_output(
+                    serde_json::to_string(&SquareResponse { y: 100 })
+                        .unwrap()
+                        .into(),
+                )
                 .evm_trigger(chain.as_ref())
                 .evm_submit(chain.as_ref())
                 .build(),
