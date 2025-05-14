@@ -335,9 +335,14 @@ mod test {
         // empty queue is okay
         let queue = add_packet_to_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
 
-        // "fails" (expectedly) because the signer is the same
+        // succeeds, replaces the packet for the signer
         let packet_2 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
-        add_packet_to_queue(&packet_2, queue.clone(), signer_1.address()).unwrap_err();
+        let queue = add_packet_to_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(
+            queue[0].packet.signature.as_bytes(),
+            packet_2.signature.as_bytes()
+        );
 
         // "fails" (expectedly) because the envelope is different
         let packet_3 = mock_packet(&signer_2, &envelope_2, "service-1".parse().unwrap());
