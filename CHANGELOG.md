@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning].
 - WAVS concurrency (nonce management, spawn tasks, etc.)
 - AVS Keys vs. Operator Keys in WAVS (each service has its own avs key)
 - Eigenlayer middleware contracts
+- Client code verifies that address is a contract
 - Docker building
 
 ## [v0.3.0]
