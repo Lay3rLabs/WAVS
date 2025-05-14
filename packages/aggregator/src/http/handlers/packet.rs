@@ -164,7 +164,7 @@ impl AggregatorProcess<'_> {
                             .map(|queued| queued.packet.signature.clone())
                             .collect();
 
-                        // TODO: anvil specific? InvalidReferenceBlock()
+                        // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
                         let signature_data = packet
                             .envelope
                             .signature_data(signatures, block_height - 1)?;
