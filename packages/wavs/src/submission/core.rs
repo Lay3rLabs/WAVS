@@ -165,7 +165,7 @@ impl CoreSubmission {
                 }
 
                 AddPacketResponse::Error { reason } => {
-                    tracing::debug!("Aggregator errored: {}", reason);
+                    tracing::error!("Aggregator errored: {}", reason);
                 }
 
                 AddPacketResponse::Burned => {
