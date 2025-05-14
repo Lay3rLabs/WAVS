@@ -1,15 +1,21 @@
-use alloy_primitives::{Address, U256};
-use alloy_provider::Provider;
-use anyhow::{anyhow, bail, ensure};
+use alloy_primitives::Address;
+use alloy_provider::{DynProvider, Provider};
+use alloy_sol_types::SolError;
 use axum::{extract::State, response::IntoResponse, Json};
+use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EvmContractSubmission, IWavsServiceManager, Packet,
+    Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
+    IWavsServiceManager::{self, IWavsServiceManagerInstance},
+    Packet,
 };
 
-use crate::http::{
-    error::AnyError,
-    state::{HttpState, PacketQueue, QueuedPacket},
+use crate::{
+    error::{AggregatorError, AggregatorResult, PacketValidationError},
+    http::{
+        error::AnyError,
+        state::{HttpState, PacketQueue, PacketQueueId, QueuedPacket},
+    },
 };
 
 #[utoipa::path(
@@ -40,178 +46,223 @@ pub async fn handle_packet(
 async fn process_packet(
     state: HttpState,
     packet: &Packet,
-) -> anyhow::Result<Vec<AddPacketResponse>> {
+) -> AggregatorResult<Vec<AddPacketResponse>> {
     let event_id = packet.event_id();
-
     let route = packet.route.clone();
 
     let service = state.get_service(&packet.route)?;
     let aggregators = &service.workflows[&packet.route.workflow_id].aggregators;
 
     if aggregators.is_empty() {
-        bail!(
-            "No aggregator configured for workflow {} on service {}",
-            route.workflow_id,
-            route.service_id
-        );
+        return Err(AggregatorError::MissingWorkflow {
+            workflow_id: route.workflow_id,
+            service_id: route.service_id,
+        });
     }
 
-    state.event_transaction.run(event_id.clone(), {
-        let state = state.clone();
-        let envelope = packet.envelope.clone();
-        || async move {
-            let mut queue = state.get_live_packet_queue(&event_id)?;
-            let mut responses: Vec<AddPacketResponse> = Vec::new();
+    // this implicitly validates that the signature is valid
+    let signer = packet.signature.evm_signer_address(&packet.envelope)?;
 
-            for (index, aggregator) in aggregators.iter().enumerate() {
-                match aggregator {
-                    Aggregator::Evm(EvmContractSubmission {
-                        chain_name,
-                        address,
-                        max_gas,
-                    }) => {
-                        // this implicitly validates that the signature is valid
-                        let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+    let service_manager_client = state.get_evm_client(service.manager.chain_name()).await?;
+    let service_manager = IWavsServiceManager::new(
+        service.manager.evm_address_unchecked(),
+        service_manager_client.provider.clone(),
+    );
 
-                        let client = state.get_evm_client(chain_name).await?;
-                        let service_manager = IWavsServiceManager::new(
-                            service.manager.evm_address_unchecked(),
-                            client.provider.clone(),
-                        );
-                        // Get the threshold
-                        let threshold = service_manager
-                            .getLastCheckpointThresholdWeight()
-                            .call()
-                            .await?;
+    let mut responses: Vec<AddPacketResponse> = Vec::new();
 
-                        let weight = service_manager.getOperatorWeight(signer).call().await?;
-                        let mut total_weight = weight;
-
-                        // Sum up weights
-                        for signer in queue.iter().map(|queued| queued.signer)
-                        {
-                            // TODO, contract should have a method to get multiple weights in one call
-                            // but it doesn't really matter until those weights can change under our feet
-                            let weight = service_manager.getOperatorWeight(signer).call().await?;
-                            total_weight = weight
-                                .checked_add(total_weight)
-                                .ok_or(anyhow!("Total weight calculation overflowed"))?;
-                        }
-
-                        // get the current packets again, in case it's changed since last await point
-                        validate_packet(packet, &queue, signer, weight)?;
-
-                        if index == 0 {
-                            // update the saved queue, but only for first aggregator
-                            // invariant: they should all see the same queue
-                            queue.push(QueuedPacket {
-                                packet: packet.clone(),
-                                signer,
-                            });
-
-                            state
-                                .save_packet_queue(&event_id, PacketQueue::Alive(queue.clone()))?;
-                        }
-
-                        // TODO:
-                        // given the total power of the quorum (which could be, say, 60% of the total operator set power)
-                        // we need to calculate the power of the signers so far, and see if it meets the quorum power
-                        // we don't care about count, we care about the power of the signers
-                        // right now this is just hardcoded for demo purposes
-                        if total_weight >= threshold {
-                            if threshold.is_zero() {
-                                tracing::warn!(
-                                    "you are using threshold of 0 in your AVS quorum, best to only do this for testing"
-                                );
-                            }
-
-                            let signatures = queue
-                                .iter()
-                                .map(|queued| queued.packet.signature.clone())
-                                .collect();
-
-                            let block_height = client.provider.get_block_number().await?;
-
-                            let tx_receipt = client
-                                .send_envelope_signatures(
-                                    envelope.clone(),
-                                    signatures,
-                                    block_height,
-                                    *address,
-                                    *max_gas,
-                                )
-                                .await?;
-
-                            responses.push(AddPacketResponse::Sent {
-                                tx_receipt: Box::new(tx_receipt),
-                                count: queue.len()
-                            });
-                        } else {
-                            responses.push(AddPacketResponse::Aggregated {
-                                count: queue.len(),
-                            });
-                        }
-                    }
-                }
-            }
-
-            if responses.len() != aggregators.len() {
-                bail!("Unexpected number of responses: expected {}, got {}", aggregators.len(), responses.len());
-            }
-
-            if responses.iter().all(|response| matches!(response, AddPacketResponse::Sent { .. })) {
-                // all aggregator destinations reached quorum and had their packets sent, burn the event
-                state.save_packet_queue(&event_id, PacketQueue::Burned)?;
-            } else {
-                let mut sent_count = 0;
-                let mut aggregated_count = 0;
-                for response in responses.iter() {
-                    match response {
-                        AddPacketResponse::Sent { .. } => sent_count += 1,
-                        AddPacketResponse::Aggregated { count } => aggregated_count += count,
-                    }
-                }
-                // some aggregator destinations 
-                tracing::warn!("Mixed responses: {} destinations sent, {} destinations aggregated", sent_count, aggregated_count);
-            }
-
-            Ok(responses)
+    for (aggregator_index, aggregator) in aggregators.iter().enumerate() {
+        let resp = AggregatorProcess {
+            state: &state,
+            service_manager: &service_manager,
+            async_tx: state.queue_transaction.clone(),
+            aggregator,
+            queue_id: PacketQueueId {
+                event_id: event_id.clone(),
+                service_id: service.id.clone(),
+                aggregator_index,
+            },
+            packet,
+            signer,
         }
-    }).await
+        .run()
+        .await;
+
+        match resp {
+            Ok(resp) => {
+                responses.push(resp);
+            }
+            Err(e) => {
+                responses.push(AddPacketResponse::Error {
+                    reason: format!("{:?}", e),
+                });
+            }
+        }
+    }
+
+    if responses.len() != aggregators.len() {
+        return Err(AggregatorError::UnexpectedResponsesLength {
+            responses: responses.len(),
+            aggregators: aggregators.len(),
+        });
+    }
+
+    Ok(responses)
 }
 
-fn validate_packet(
-    packet: &Packet,
-    queue: &[QueuedPacket],
+struct AggregatorProcess<'a> {
+    state: &'a HttpState,
+    async_tx: AsyncTransaction<PacketQueueId>,
+    service_manager: &'a IWavsServiceManagerInstance<DynProvider>,
+    aggregator: &'a Aggregator,
+    queue_id: PacketQueueId,
+    packet: &'a Packet,
     signer: Address,
-    operator_weight: U256,
-) -> anyhow::Result<()> {
+}
+
+impl AggregatorProcess<'_> {
+    async fn run(self) -> AggregatorResult<AddPacketResponse> {
+        let Self {
+            state,
+            async_tx,
+            service_manager,
+            aggregator,
+            queue_id,
+            packet,
+            signer,
+        } = self;
+
+        match aggregator {
+            Aggregator::Evm(EvmContractSubmission {
+                chain_name,
+                address,
+                max_gas,
+            }) => {
+                // execute the logic within a transaction, keyed by queue_id
+                // other queue ids can run concurrently, but this makes sure that
+                // we aren't validating a queue that was updated from another request coming in
+                async_tx
+                    .run(queue_id.clone(), move || async move {
+                        let queue = match state.get_packet_queue(&queue_id)? {
+                            PacketQueue::Alive(queue) => {
+                                // this will also locally validate the packet
+                                add_packet_to_queue(packet, queue, signer)?
+                            }
+                            PacketQueue::Burned => {
+                                return Ok(AddPacketResponse::Burned);
+                            }
+                        };
+
+                        let block_height = service_manager
+                            .provider()
+                            .get_block_number()
+                            .await
+                            .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
+
+                        let signatures: Vec<EnvelopeSignature> = queue
+                            .iter()
+                            .map(|queued| queued.packet.signature.clone())
+                            .collect();
+
+                        let signature_data =
+                            packet.envelope.signature_data(signatures, block_height)?;
+
+                        // validate the potential quorum on-chain
+                        // we'll get an error if quorum is not met, but may get other errors as well
+                        // success means we've reached quorum and can send the signatures + data
+                        match service_manager
+                            .validate(
+                                packet.envelope.clone().into(),
+                                signature_data.clone().into(),
+                            )
+                            .call()
+                            .await
+                        {
+                            Ok(_) => {
+                                let client = state.get_evm_client(chain_name).await?;
+                                let tx_receipt = client
+                                    .send_envelope_signatures(
+                                        packet.envelope.clone(),
+                                        signature_data.clone(),
+                                        *address,
+                                        *max_gas,
+                                    )
+                                    .await?;
+
+                                state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+
+                                Ok(AddPacketResponse::Sent {
+                                    tx_receipt: Box::new(tx_receipt),
+                                    count: queue.len(),
+                                })
+                            }
+                            Err(e) => {
+                                if let Some(revert) = e
+                                    .as_revert_data()
+                                    .and_then(|raw| alloy_sol_types::Revert::abi_decode(&raw).ok())
+                                {
+                                    // TODO - we want to get the specific error of "valid but not enough signers"
+                                    // but for now, we've validated the signature and other things locally
+                                    // so we can be optimistic and aggregate
+                                    tracing::debug!(
+                                        "Aggregator {} validation failed: {}",
+                                        chain_name,
+                                        revert.reason
+                                    );
+
+                                    state.save_packet_queue(
+                                        &queue_id,
+                                        PacketQueue::Alive(queue.clone()),
+                                    )?;
+
+                                    Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                } else {
+                                    Err(AggregatorError::ServiceManagerValidate(e))
+                                }
+                            }
+                        }
+                    })
+                    .await
+            }
+        }
+    }
+}
+
+fn add_packet_to_queue(
+    packet: &Packet,
+    mut queue: Vec<QueuedPacket>,
+    signer: Address,
+) -> AggregatorResult<Vec<QueuedPacket>> {
     match queue.first() {
         None => {}
         Some(prev) => {
             // check if the packet is the same as the last one
+            // TODO - let custom logic here? wasm component?
             if packet.envelope != prev.packet.envelope {
-                bail!("Unexpected envelope difference!");
+                return Err(PacketValidationError::EnvelopeDiff.into());
             }
-
-            // see https://github.com/Lay3rLabs/wavs-middleware/issues/54
-            // if packet.block_height != last_packet.block_height {
-            //     bail!("Unexpected block height difference!");
-            // }
         }
     }
 
-    for queued_packet in queue {
+    for queued_packet in queue.iter_mut() {
+        // if the signer is the same as the one in the queue, we can just update it
+        // this effectively allows re-trying failed aggregation
         if signer == queued_packet.signer {
-            bail!("Signer {} already in queue", signer);
+            *queued_packet = QueuedPacket {
+                packet: packet.clone(),
+                signer,
+            };
+
+            return Ok(queue);
         }
     }
 
-    ensure!(!operator_weight.is_zero(), "Operator is not registered");
+    queue.push(QueuedPacket {
+        packet: packet.clone(),
+        signer,
+    });
 
-    // TODO: ensure that the signer is in the operator set
-
-    Ok(())
+    Ok(queue)
 }
 
 #[cfg(test)]
@@ -219,12 +270,19 @@ mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
     use alloy_node_bindings::{Anvil, AnvilInstance};
-    use alloy_primitives::{Bytes, FixedBytes};
+    use alloy_primitives::{Bytes, FixedBytes, U256};
     use alloy_provider::DynProvider;
     use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
     use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
-    use alloy_sol_types::sol;
+    use alloy_sol_types::SolValue;
     use futures::{stream::FuturesUnordered, StreamExt};
+    use service_handler::{
+        ISimpleSubmit::DataWithId,
+        SimpleSubmit::{
+            self as SimpleServiceHandler, SimpleSubmitInstance as SimpleServiceHandlerInstance,
+        },
+    };
+    use service_manager::SimpleServiceManager::{self, SimpleServiceManagerInstance};
     use std::{
         collections::{BTreeMap, HashSet},
         sync::{Arc, Mutex},
@@ -238,51 +296,63 @@ mod test {
     use wavs_types::{
         ChainName, Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute, Service, ServiceID,
     };
-    use TestServiceManager::TestServiceManagerInstance;
+
+    mod service_manager {
+        use alloy_sol_types::sol;
+
+        sol!(
+            #[allow(missing_docs)]
+            #[sol(rpc)]
+            SimpleServiceManager,
+            "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
+        );
+    }
+
+    mod service_handler {
+        use alloy_sol_types::sol;
+
+        sol!(
+            #[allow(missing_docs)]
+            #[sol(rpc)]
+            SimpleSubmit,
+            "../../examples/contracts/solidity/abi/SimpleSubmit.sol/SimpleSubmit.json"
+        );
+    }
 
     #[test]
     fn packet_validation() {
-        let mut queue = Vec::new();
-
         let signer_1 = mock_signer();
         let signer_2 = mock_signer();
-        let envelope_1 = mock_envelope([1, 2, 3]);
-        let envelope_2 = mock_envelope([4, 5, 6]);
+        let envelope_1 = mock_envelope(1, [1, 2, 3]);
+        let envelope_2 = mock_envelope(2, [4, 5, 6]);
 
-        let packet = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
+        let packet_1 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
 
-        let derived_signer_1_address = packet
+        let derived_signer_1_address = packet_1
             .signature
-            .evm_signer_address(&packet.envelope)
+            .evm_signer_address(&packet_1.envelope)
             .unwrap();
         assert_eq!(derived_signer_1_address, signer_1.address());
 
         // empty queue is okay
-        validate_packet(&packet, &queue, signer_1.address(), U256::ONE).unwrap();
+        let queue = add_packet_to_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
 
-        queue.push(QueuedPacket {
-            packet: packet.clone(),
-            signer: signer_1.address(),
-        });
-
-        // "fails" (expectedly) because the signer is the same
-        let packet = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_1.address(), U256::ONE).unwrap_err();
+        // succeeds, replaces the packet for the signer
+        let packet_2 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
+        let queue = add_packet_to_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(
+            queue[0].packet.signature.as_bytes(),
+            packet_2.signature.as_bytes()
+        );
 
         // "fails" (expectedly) because the envelope is different
-        let packet = mock_packet(&signer_2, &envelope_2, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_2.address(), U256::ONE).unwrap_err();
-
-        // "fails" (expectedly) because the operator is not registered (0 weight)
-        let packet = mock_packet(&signer_2, &envelope_1, "service-1".parse().unwrap());
-        validate_packet(&packet, &queue, signer_2.address(), U256::ZERO).unwrap_err();
+        let packet_3 = mock_packet(&signer_2, &envelope_2, "service-1".parse().unwrap());
+        add_packet_to_queue(&packet_3, queue.clone(), signer_2.address()).unwrap_err();
 
         // passes because the signer is different but envelope is the same
-        validate_packet(&packet, &queue, signer_2.address(), U256::ONE).unwrap();
-        queue.push(QueuedPacket {
-            packet: packet.clone(),
-            signer: signer_2.address(),
-        });
+        let packet_3 = mock_packet(&signer_2, &envelope_1, "service-1".parse().unwrap());
+        add_packet_to_queue(&packet_3, queue, signer_2.address()).unwrap();
     }
 
     #[tokio::test]
@@ -295,12 +365,206 @@ mod test {
         process_many_packets(true).await;
     }
 
+    #[tokio::test]
+    async fn process_mixed_responses() {
+        let deps = TestDeps::new().await;
+
+        let service_manager = deps.deploy_simple_service_manager().await;
+
+        let mut signers = Vec::new();
+        const NUM_SIGNERS: usize = 3;
+        const NUM_THRESHOLD: usize = 2;
+
+        service_manager
+            .setLastCheckpointTotalWeight(U256::from(NUM_SIGNERS as u64))
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        service_manager
+            .setLastCheckpointThresholdWeight(U256::from(NUM_THRESHOLD as u64))
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        for _ in 0..NUM_SIGNERS {
+            let signer = mock_signer();
+            service_manager
+                .setOperatorWeight(signer.address(), U256::ONE)
+                .send()
+                .await
+                .unwrap()
+                .watch()
+                .await
+                .unwrap();
+            signers.push(signer);
+        }
+
+        let envelope = mock_envelope(1, [1, 2, 3]);
+
+        let service_handler = deps
+            .deploy_simple_service_handler(*service_manager.address())
+            .await;
+
+        let fixed_second_service_handler = deps
+            .deploy_simple_service_handler(*service_manager.address())
+            .await;
+
+        // Make sure we properly collect errors without actually erroring out
+        let mut service = deps
+            .create_service(
+                "service-1".parse().unwrap(),
+                *service_manager.address(),
+                vec![*service_handler.address(), Address::ZERO],
+            )
+            .await;
+
+        let mut all_results = Vec::new();
+        for signer in signers.iter().take(NUM_THRESHOLD) {
+            let packet = mock_packet(signer, &envelope, service.id.clone());
+            let state = deps.state.clone();
+            let results = process_packet(state.clone(), &packet).await.unwrap();
+            all_results.push(results);
+        }
+
+        for (signer_index, final_results) in all_results.into_iter().enumerate() {
+            for (agg_index, result) in final_results.into_iter().enumerate() {
+                match (signer_index, agg_index) {
+                    // first signer on any chain is just aggregating
+                    (0, _) => {
+                        assert!(matches!(
+                            result,
+                            AddPacketResponse::Aggregated { count: 1, .. }
+                        ));
+                    }
+                    // second signer on valid chain sends
+                    (1, 0) => {
+                        assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
+                    }
+                    // second signer on invalid chain errors
+                    (1, 1) => {
+                        assert!(matches!(result, AddPacketResponse::Error { .. }));
+                    }
+                    _ => {
+                        panic!(
+                            "Unexpected result for signer {} and aggregator {}: {:?}",
+                            signer_index, agg_index, result
+                        );
+                    }
+                }
+            }
+        }
+
+        // now try again, for the same envelope - should be similar except we get burn results
+        let mut all_results = Vec::new();
+        for signer in signers.iter().take(NUM_THRESHOLD) {
+            let packet = mock_packet(signer, &envelope, service.id.clone());
+            let state = deps.state.clone();
+            let results = process_packet(state.clone(), &packet).await.unwrap();
+            all_results.push(results);
+        }
+
+        for (signer_index, final_results) in all_results.into_iter().enumerate() {
+            for (agg_index, result) in final_results.into_iter().enumerate() {
+                match (signer_index, agg_index) {
+                    // valid chain is burned
+                    (_, 0) => {
+                        assert!(matches!(result, AddPacketResponse::Burned));
+                    }
+                    // first signer on invalid chain still aggregates properly
+                    (0, 1) => {
+                        assert!(matches!(
+                            result,
+                            AddPacketResponse::Aggregated { count: 1, .. }
+                        ));
+                    }
+                    // second signer on invalid chain errors
+                    (1, 1) => {
+                        assert!(matches!(result, AddPacketResponse::Error { .. }));
+                    }
+                    _ => {
+                        panic!(
+                            "Unexpected result for signer {} and aggregator {}: {:?}",
+                            signer_index, agg_index, result
+                        );
+                    }
+                }
+            }
+        }
+
+        // now let's change reality, make the second aggregator valid
+        // we should get essentially the same as previous attempt, but second aggregator should succeed
+
+        *service
+            .workflows
+            .get_mut(&"workflow".parse().unwrap())
+            .unwrap()
+            .aggregators
+            .get_mut(1)
+            .unwrap() = wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
+            chain_name: deps.chain_name.clone(),
+            address: *fixed_second_service_handler.address(),
+            max_gas: None,
+        });
+
+        deps.state.unchecked_save_service(&service).unwrap();
+
+        let mut all_results = Vec::new();
+        for signer in signers.iter().take(NUM_THRESHOLD) {
+            let packet = mock_packet(signer, &envelope, service.id.clone());
+            let state = deps.state.clone();
+            let results = process_packet(state.clone(), &packet).await.unwrap();
+            all_results.push(results);
+        }
+
+        for (signer_index, final_results) in all_results.into_iter().enumerate() {
+            for (agg_index, result) in final_results.into_iter().enumerate() {
+                match (signer_index, agg_index) {
+                    // valid chain is burned
+                    (_, 0) => {
+                        assert!(matches!(result, AddPacketResponse::Burned));
+                    }
+                    // first signer on previously-invalid chain still aggregates properly
+                    (0, 1) => {
+                        assert!(matches!(
+                            result,
+                            AddPacketResponse::Aggregated { count: 1, .. }
+                        ));
+                    }
+                    // second signer on previously-invalid chain now sends properly!!
+                    (1, 1) => {
+                        assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
+                    }
+                    _ => {
+                        panic!(
+                            "Unexpected result for signer {} and aggregator {}: {:?}",
+                            signer_index, agg_index, result
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     async fn process_many_packets(concurrent: bool) {
         let deps = TestDeps::new().await;
 
         let service_manager = deps.deploy_simple_service_manager().await;
+        let service_handler = deps
+            .deploy_simple_service_handler(*service_manager.address())
+            .await;
         let service = deps
-            .create_service("service-2".parse().unwrap(), *service_manager.address())
+            .create_service(
+                "service-2".parse().unwrap(),
+                *service_manager.address(),
+                vec![*service_handler.address()],
+            )
             .await;
 
         let mut signers = Vec::new();
@@ -325,7 +589,7 @@ mod test {
             .await
             .unwrap();
 
-        for _ in 0..NUM_THRESHOLD {
+        for _ in 0..NUM_SIGNERS {
             let signer = mock_signer();
             service_manager
                 .setOperatorWeight(signer.address(), U256::ONE)
@@ -338,30 +602,48 @@ mod test {
             signers.push(signer);
         }
 
-        let envelope = mock_envelope([1, 2, 3]);
+        let envelope = mock_envelope(1, [1, 2, 3]);
 
         let seen_count: Arc<Mutex<HashSet<usize>>> = Arc::new(Mutex::new(HashSet::new()));
 
         if !concurrent {
-            for signer in signers {
-                let packet = mock_packet(&signer, &envelope, service.id.clone());
-                if let AddPacketResponse::Aggregated { count } =
-                    process_packet(deps.state.clone(), &packet)
-                        .await
-                        .unwrap()
-                        .pop()
-                        .unwrap()
-                {
-                    let mut seen_count = seen_count.lock().unwrap();
-                    if !seen_count.insert(count) {
-                        panic!("Duplicate count: {}", count);
+            for (index, signer) in signers.iter().enumerate() {
+                let packet = mock_packet(signer, &envelope, service.id.clone());
+                let resp = process_packet(deps.state.clone(), &packet)
+                    .await
+                    .unwrap()
+                    .pop()
+                    .unwrap();
+                match resp {
+                    AddPacketResponse::Aggregated { count } => {
+                        let mut seen_count = seen_count.lock().unwrap();
+                        if !seen_count.insert(count) {
+                            panic!("Duplicate count: {}", count);
+                        }
+                    }
+                    AddPacketResponse::Sent {
+                        count,
+                        tx_receipt: _,
+                    } => {
+                        // in serial mode, break when we get a sent packet
+                        // and assert that it's what we expect
+                        assert_eq!(count, NUM_THRESHOLD);
+                        assert_eq!(count - 1, index);
+                        break;
+                    }
+                    AddPacketResponse::Error { reason } => {
+                        panic!("{}", reason);
+                    }
+                    AddPacketResponse::Burned => {
+                        panic!("should not get to burned, broke the loop upon sent");
                     }
                 }
             }
         } else {
             let mut futures = FuturesUnordered::new();
-            for signer in signers {
-                let packet = mock_packet(&signer, &envelope, service.id.clone());
+            // in concurrent mode, just fire off exactly NUM_THRESHHOLD signers
+            for signer in signers.iter().take(NUM_THRESHOLD) {
+                let packet = mock_packet(signer, &envelope, service.id.clone());
                 futures.push({
                     let state = deps.state.clone();
                     let seen_count = seen_count.clone();
@@ -382,12 +664,20 @@ mod test {
                 // just wait for all futures to finish
             }
         }
+
+        // last one should be burned
+        let packet = mock_packet(signers.last().unwrap(), &envelope, service.id.clone());
+        let responses = process_packet(deps.state.clone(), &packet).await.unwrap();
+        for resp in responses {
+            assert!(matches!(resp, AddPacketResponse::Burned));
+        }
     }
 
-    fn mock_service(
+    async fn mock_service(
         chain_name: ChainName,
         service_id: ServiceID,
         service_manager_address: Address,
+        service_handler_addresses: Vec<Address>,
     ) -> wavs_types::Service {
         let mut workflows = BTreeMap::new();
         workflows.insert(
@@ -398,13 +688,16 @@ mod test {
                     wavs_types::Digest::new(&[0; 32]),
                 )),
                 submit: wavs_types::Submit::None,
-                aggregators: vec![wavs_types::Aggregator::Evm(
-                    wavs_types::EvmContractSubmission {
-                        chain_name: chain_name.clone(),
-                        address: FixedBytes([2; 20]).into(),
-                        max_gas: None,
-                    },
-                )],
+                aggregators: service_handler_addresses
+                    .into_iter()
+                    .map(|address| {
+                        wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
+                            chain_name: chain_name.clone(),
+                            address,
+                            max_gas: None,
+                        })
+                    })
+                    .collect(),
             },
         );
 
@@ -443,9 +736,14 @@ mod test {
             .unwrap()
     }
 
-    fn mock_envelope(payload: impl Into<Bytes>) -> Envelope {
+    fn mock_envelope(trigger_id: u64, data: impl Into<Bytes>) -> Envelope {
+        // SimpleSubmit has its own data format, so we need to encode it
+        let payload = DataWithId {
+            triggerId: trigger_id,
+            data: data.into(),
+        };
         Envelope {
-            payload: payload.into(),
+            payload: payload.abi_encode().into(),
             eventId: FixedBytes([0; 20]),
             ordering: FixedBytes([0; 12]),
         }
@@ -515,81 +813,32 @@ mod test {
             &self,
             service_id: ServiceID,
             service_manager_address: Address,
+            service_handler_addresses: Vec<Address>,
         ) -> Service {
-            let service =
-                mock_service(self.chain_name.clone(), service_id, service_manager_address);
+            let service = mock_service(
+                self.chain_name.clone(),
+                service_id,
+                service_manager_address,
+                service_handler_addresses,
+            )
+            .await;
             self.state.register_service(&service).unwrap();
             service
         }
 
-        async fn deploy_simple_service_manager(&self) -> TestServiceManagerInstance<DynProvider> {
-            TestServiceManager::deploy(self.client.provider.clone())
+        async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
+            SimpleServiceManager::deploy(self.client.provider.clone())
+                .await
+                .unwrap()
+        }
+
+        async fn deploy_simple_service_handler(
+            &self,
+            service_manager_address: Address,
+        ) -> SimpleServiceHandlerInstance<DynProvider> {
+            SimpleServiceHandler::deploy(self.client.provider.clone(), service_manager_address)
                 .await
                 .unwrap()
         }
     }
-
-    sol!(
-        // solc TestServiceManager.sol --via-ir --optimize --bin
-        #[sol(rpc, bytecode="608080604052346015576104b5908161001a8239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c806308fc760a146103f85780630e6b1110146103c3578063314f3a49146103a65780635f11301b1461023c57806398ec1ac914610204578063b933fa74146101e7578063cc922c6a146100ee578063cd71589e146100995763fb8524b11461007c575f80fd5b3461009557602036600319011261009557600435600255005b5f80fd5b346100955760403660031901126100955760043567ffffffffffffffff81116100955760609060031990360301126100955760243567ffffffffffffffff811161009557606090600319903603011261009557005b34610095575f366003190112610095576040515f5f549061010e82610427565b8084526020840192600181169081156101ce575060011461018d575b50829003601f01601f191682019167ffffffffffffffff831181841017610179576040918391828452602083525180918160208501528484015e5f828201840152601f01601f19168101030190f35b634e487b7160e01b5f52604160045260245ffd5b90505f80525f5160206104605f395f51905f525f905b8282106101b85750602091508301018361012a565b60018160209254838589010152019101906101a3565b60ff1916845250151560051b830160200190508361012a565b34610095575f366003190112610095576020600254604051908152f35b34610095576020366003190112610095576001600160a01b03610225610411565b165f526001602052602060405f2054604051908152f35b346100955760203660031901126100955760043567ffffffffffffffff8111610095573660238201121561009557806004013567ffffffffffffffff8111610095573660248284010111610095576102945f54610427565b601f8111610342575b505f601f82116001146102d85781925f926102ca575b50505f19600383901b1c191660019190911b175f55005b6024925001013582806102b3565b601f198216925f5160206104605f395f51905f52915f5b8581106103275750836001951061030b575b505050811b015f55005b01602401355f19600384901b60f8161c19169055828080610301565b909260206001819260248787010135815501940191016102ef565b601f820160051c5f5160206104605f395f51905f52019060208310610391575b601f0160051c5f5160206104605f395f51905f5201905b818110610386575061029d565b5f8155600101610379565b5f5160206104605f395f51905f529150610362565b34610095575f366003190112610095576020600354604051908152f35b34610095576040366003190112610095576001600160a01b036103e4610411565b165f52600160205260243560405f20555f80f35b3461009557602036600319011261009557600435600355005b600435906001600160a01b038216820361009557565b90600182811c92168015610455575b602083101461044157565b634e487b7160e01b5f52602260045260245ffd5b91607f169161043656fe290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563a264697066735822122019df7c28a706099281ade4f02b0f476af1f8afd081e40b2359de39cb25c7735664736f6c634300081d0033")]
-        contract TestServiceManager {
-            string private serviceURI;
-
-            mapping(address => uint256) private operatorWeights;
-            uint256 private lastCheckpointThresholdWeight;
-            uint256 private lastCheckpointTotalWeight;
-
-
-            struct SignatureData {
-                address[] operators;
-                bytes[] signatures;
-                uint32 referenceBlock;
-            }
-            struct Envelope {
-                bytes20 eventId;
-                // currently unused, for future version. added now for padding
-                bytes12 ordering;
-                bytes payload;
-            }
-
-            function validate(
-                Envelope calldata envelope,
-                SignatureData calldata signatureData
-            ) external view {
-                // always valid
-            }
-
-            function getServiceURI() external view returns (string memory) {
-                return serviceURI;
-            }
-
-            function setServiceURI(string calldata _serviceURI) external {
-                serviceURI = _serviceURI;
-            }
-
-            function setOperatorWeight(address operator, uint256 weight) external {
-                operatorWeights[operator] = weight;
-            }
-
-            function setLastCheckpointThresholdWeight(uint256 weight) external {
-                lastCheckpointThresholdWeight = weight;
-            }
-
-            function setLastCheckpointTotalWeight(uint256 weight) external {
-                lastCheckpointTotalWeight = weight;
-            }
-
-            function getOperatorWeight(address operator) external view returns (uint256) {
-                return operatorWeights[operator];
-            }
-
-            function getLastCheckpointThresholdWeight() external view returns (uint256) {
-                return lastCheckpointThresholdWeight;
-            }
-
-            function getLastCheckpointTotalWeight() external view returns (uint256) {
-                return lastCheckpointTotalWeight;
-            }
-        }
-    );
 }

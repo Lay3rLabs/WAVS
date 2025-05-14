@@ -17,8 +17,12 @@ pub enum AddPacketResponse {
         tx_receipt: Box<TransactionReceipt>,
         count: usize,
     },
+    Burned,
     Aggregated {
         count: usize,
+    },
+    Error {
+        reason: String,
     },
 }
 

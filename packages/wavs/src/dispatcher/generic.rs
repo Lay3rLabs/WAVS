@@ -11,6 +11,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
+use utils::error::ChainConfigError;
 use utils::service::fetch_service;
 use utils::telemetry::DispatcherMetrics;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
@@ -427,6 +428,9 @@ pub enum DispatcherError {
 
     #[error("Registry error: {0}")]
     Registry(#[from] RegistryError),
+
+    #[error("Chain config error: {0}")]
+    ChainConfig(#[from] ChainConfigError),
 
     #[error("Registry cache path error: {0}")]
     RegistryCachePath(#[from] anyhow::Error),

@@ -1,3 +1,5 @@
+use std::{num::ParseIntError, str::FromStr};
+
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -37,5 +39,15 @@ impl Timestamp {
     pub fn now() -> Self {
         // Current time is always after 1970, so this unwrap is safe
         Self::from_datetime(Utc::now()).expect("Current time should always be valid")
+    }
+}
+
+// Define FromStr for to enable parsing from command line strings
+impl FromStr for Timestamp {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let nanos: u64 = s.parse()?;
+        Ok(Timestamp::from_nanos(nanos))
     }
 }

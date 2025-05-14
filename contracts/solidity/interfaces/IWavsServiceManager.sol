@@ -22,17 +22,6 @@ interface IWavsServiceManager {
     function getOperatorWeight(address operator) external view returns (uint256);
 
     /**
-     * @notice Gets the total weight from the last checkpoint
-     * @return The total weight from the last checkpoint
-     */
-    function getLastCheckpointTotalWeight() external view returns (uint256);
-
-    /**
-     * @notice Gets the threshold weight from the last checkpoint
-     * @return The threshold weight from the last checkpoint
-     */
-    function getLastCheckpointThresholdWeight() external view returns (uint256);
-    /**
      * @param envelope The envelope containing the data.
      * @param signatureData The signature data.
      */

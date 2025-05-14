@@ -135,7 +135,9 @@ jobs:
 
       - name: Create and push multi-arch manifest
         run: |
+          export GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           docker buildx imagetools create \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$GIT_HASH \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}-amd64 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}-arm64

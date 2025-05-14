@@ -1,15 +1,17 @@
 use alloy_json_abi::Event;
 use alloy_provider::{Provider, RootProvider};
-use anyhow::{Context as _, Result};
+use anyhow::{anyhow, Context as _, Result};
 use layer_climb::{
     prelude::{Address, ConfigAddressExt as _},
     querier::QueryClient as CosmosQueryClient,
 };
 use reqwest::Client;
+use serde::Serialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
+    num::NonZeroU32,
     path::{Path, PathBuf},
 };
 use utils::{config::WAVS_ENV_PREFIX, wkg::WkgClient};
@@ -18,7 +20,7 @@ use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
     EvmContractSubmission, Permissions, Registry, ServiceID, ServiceManager, ServiceStatus, Submit,
-    Trigger, WorkflowID,
+    Timestamp, Trigger, WorkflowID,
 };
 
 use crate::{
@@ -28,7 +30,8 @@ use crate::{
     },
     context::CliContext,
     service_json::{
-        ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson, TriggerJson, WorkflowJson,
+        validate_cron_config, ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson,
+        TriggerJson, WorkflowJson,
     },
 };
 
@@ -48,21 +51,21 @@ pub async fn handle_service_command(
     match command {
         ServiceCommand::Init { name, id } => {
             let result = init_service(&file, name, id)?;
-            display_result(ctx, result, &file, json)?;
+            display_result(ctx, result, json)?;
         }
         ServiceCommand::Workflow { command } => match command {
             WorkflowCommand::Add { id } => {
                 let result = add_workflow(&file, id)?;
-                display_result(ctx, result, &file, json)?;
+                display_result(ctx, result, json)?;
             }
             WorkflowCommand::Delete { id } => {
                 let result = delete_workflow(&file, id)?;
-                display_result(ctx, result, &file, json)?;
+                display_result(ctx, result, json)?;
             }
             WorkflowCommand::Component { id, command } => match command {
                 ComponentCommand::SetSourceDigest { digest } => {
                     let result = set_component_source_digest(&file, id, digest)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::SetSourceRegistry {
                     domain,
@@ -78,30 +81,30 @@ pub async fn handle_service_command(
                         version,
                     )
                     .await?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::Permissions {
                     http_hosts,
                     file_system,
                 } => {
                     let result = update_component_permissions(&file, id, http_hosts, file_system)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::FuelLimit { fuel } => {
                     let result = update_component_fuel_limit(&file, id, fuel)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::Config { values } => {
                     let result = update_component_config(&file, id, values)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::TimeLimit { seconds } => {
                     let result = update_component_time_limit_seconds(&file, id, seconds)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 ComponentCommand::Env { values } => {
                     let result = update_component_env_keys(&file, id, values)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
             },
             WorkflowCommand::Submit { id, command } => match command {
@@ -111,7 +114,7 @@ pub async fn handle_service_command(
                     max_gas,
                 } => {
                     let result = set_evm_submit(&file, id, address, chain_name, max_gas)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 SubmitCommand::SetAggregator {
                     url,
@@ -121,7 +124,7 @@ pub async fn handle_service_command(
                 } => {
                     let result =
                         set_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
             },
             WorkflowCommand::Trigger { id, command } => match command {
@@ -139,7 +142,7 @@ pub async fn handle_service_command(
                         chain_name,
                         event_type,
                     )?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
                 }
                 TriggerCommand::SetEvm {
                     address,
@@ -147,7 +150,22 @@ pub async fn handle_service_command(
                     event_hash,
                 } => {
                     let result = set_evm_trigger(&file, id, address, chain_name, event_hash)?;
-                    display_result(ctx, result, &file, json)?;
+                    display_result(ctx, result, json)?;
+                }
+                TriggerCommand::SetBlockInterval {
+                    chain_name,
+                    n_blocks,
+                } => {
+                    let result = set_block_interval_trigger(&file, id, chain_name, n_blocks)?;
+                    display_result(ctx, result, json)?;
+                }
+                TriggerCommand::SetCron {
+                    schedule,
+                    start_time,
+                    end_time,
+                } => {
+                    let result = set_cron_trigger(&file, id, schedule, start_time, end_time)?;
+                    display_result(ctx, result, json)?;
                 }
             },
         },
@@ -157,12 +175,12 @@ pub async fn handle_service_command(
                 address,
             } => {
                 let result = set_evm_manager(&file, address, chain_name)?;
-                display_result(ctx, result, &file, json)?;
+                display_result(ctx, result, json)?;
             }
         },
         ServiceCommand::Validate {} => {
             let result = validate_service(&file, Some(ctx)).await?;
-            display_result(ctx, result, &file, json)?;
+            display_result(ctx, result, json)?;
         }
     }
 
@@ -170,14 +188,13 @@ pub async fn handle_service_command(
 }
 
 // Helper function to handle display based on json flag
-fn display_result<T: std::fmt::Display>(
+fn display_result<T: std::fmt::Display + Serialize>(
     ctx: &CliContext,
     result: T,
-    file_path: &Path,
     json: bool,
 ) -> Result<()> {
     if json {
-        print_file_as_json(file_path)?;
+        print_result_as_json(result)?;
     } else {
         ctx.handle_display_result(result);
     }
@@ -185,21 +202,15 @@ fn display_result<T: std::fmt::Display>(
 }
 
 /// Helper function to print file content as JSON
-fn print_file_as_json(file_path: &Path) -> Result<()> {
-    // Read the file content
-    let file_content = std::fs::read_to_string(file_path)?;
-
-    // Parse it as JSON to ensure it's valid
-    let json_value: serde_json::Value = serde_json::from_str(&file_content)?;
-
+fn print_result_as_json<T: Serialize>(result: T) -> Result<()> {
     // Print the pretty-printed JSON
-    println!("{}", serde_json::to_string_pretty(&json_value)?);
+    println!("{}", serde_json::to_string_pretty(&result)?);
 
     Ok(())
 }
 
 /// Result of service initialization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ServiceInitResult {
     /// The generated service
     pub service: ServiceJson,
@@ -217,7 +228,7 @@ impl std::fmt::Display for ServiceInitResult {
 }
 
 /// Result of setting a component's source to a digest
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentSourceDigestResult {
     /// The component digest
     pub digest: Digest,
@@ -234,7 +245,7 @@ impl std::fmt::Display for ComponentSourceDigestResult {
 }
 
 /// Result of setting a component's source to a registry
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentSourceRegistryResult {
     /// The domain
     pub domain: String,
@@ -260,7 +271,7 @@ impl std::fmt::Display for ComponentSourceRegistryResult {
 }
 
 /// Result of updating a component's environment variables
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentEnvKeysResult {
     /// The updated environment variable keys
     pub env_keys: BTreeSet<String>,
@@ -284,7 +295,7 @@ impl std::fmt::Display for ComponentEnvKeysResult {
 }
 
 /// Result of adding a workflow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowAddResult {
     /// The workflow id
     pub workflow_id: WorkflowID,
@@ -301,7 +312,7 @@ impl std::fmt::Display for WorkflowAddResult {
 }
 
 /// Result of deleting a workflow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowDeleteResult {
     /// The workflow id that was deleted
     pub workflow_id: WorkflowID,
@@ -318,7 +329,7 @@ impl std::fmt::Display for WorkflowDeleteResult {
 }
 
 /// Result of updating a workflow's trigger
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowTriggerResult {
     /// The workflow id that was updated
     pub workflow_id: WorkflowID,
@@ -390,7 +401,7 @@ impl std::fmt::Display for WorkflowTriggerResult {
 }
 
 /// Result of updating a workflow's submit
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSubmitResult {
     /// The workflow id that was updated
     pub workflow_id: WorkflowID,
@@ -432,7 +443,7 @@ impl std::fmt::Display for WorkflowSubmitResult {
 }
 
 /// Result of setting the EVM manager
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EvmManagerResult {
     /// The EVM chain name
     pub chain_name: ChainName,
@@ -452,7 +463,7 @@ impl std::fmt::Display for EvmManagerResult {
 }
 
 /// Result of service validation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ServiceValidationResult {
     /// The service ID
     pub service_id: String,
@@ -505,7 +516,7 @@ where
 }
 
 /// Result of updating a component's fuel limit
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentFuelLimitResult {
     /// The updated fuel limit
     pub fuel_limit: Option<u64>,
@@ -525,7 +536,7 @@ impl std::fmt::Display for ComponentFuelLimitResult {
 }
 
 /// Result of updating a component's configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentConfigResult {
     /// The updated configuration
     pub config: BTreeMap<String, String>,
@@ -549,7 +560,7 @@ impl std::fmt::Display for ComponentConfigResult {
 }
 
 /// Result of updating a component's maximum execution time
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentTimeLimitResult {
     /// The updated maximum execution time in seconds
     pub time_limit_seconds: Option<u64>,
@@ -569,7 +580,7 @@ impl std::fmt::Display for ComponentTimeLimitResult {
 }
 
 /// Result of updating component permissions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentPermissionsResult {
     /// The updated permissions
     pub permissions: Permissions,
@@ -834,13 +845,10 @@ pub fn set_cosmos_trigger(
 pub fn set_evm_trigger(
     file_path: &Path,
     workflow_id: WorkflowID,
-    address_str: String,
+    address: alloy_primitives::Address,
     chain_name: ChainName,
     event_hash_str: String,
 ) -> Result<WorkflowTriggerResult> {
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
-
     // Order the match cases from most explicit to event parsing:
     // 1. 0x-prefixed hex string
     // 2. raw hex string (no 0x)
@@ -868,6 +876,66 @@ pub fn set_evm_trigger(
             address,
             chain_name,
             event_hash: ByteArray::new(event_hash),
+        };
+        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+pub fn set_block_interval_trigger(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    chain_name: ChainName,
+    n_blocks: NonZeroU32,
+) -> Result<WorkflowTriggerResult> {
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        let trigger = Trigger::BlockInterval {
+            chain_name,
+            n_blocks,
+        };
+        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+pub fn set_cron_trigger(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    schedule: cron::Schedule,
+    start_time: Option<Timestamp>,
+    end_time: Option<Timestamp>,
+) -> Result<WorkflowTriggerResult> {
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        validate_cron_config(start_time, end_time).map_err(|e| anyhow!(e))?;
+
+        let trigger = Trigger::Cron {
+            schedule: schedule.to_string(),
+            start_time,
+            end_time,
         };
         workflow.trigger = TriggerJson::Trigger(trigger.clone());
 
@@ -1134,13 +1202,10 @@ pub fn update_component_env_keys(
 pub fn set_evm_submit(
     file_path: &Path,
     workflow_id: WorkflowID,
-    address_str: String,
+    address: alloy_primitives::Address,
     chain_name: ChainName,
     max_gas: Option<u64>,
 ) -> Result<WorkflowSubmitResult> {
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
-
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
@@ -1175,14 +1240,11 @@ pub fn set_aggregator_submit(
     workflow_id: WorkflowID,
     url: String,
     chain_name: ChainName,
-    address_str: String,
+    address: alloy_primitives::Address,
     max_gas: Option<u64>,
 ) -> Result<WorkflowSubmitResult> {
     // Validate the URL format
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
-
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
 
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
@@ -1215,12 +1277,9 @@ pub fn set_aggregator_submit(
 /// Set an EVM manager for the service
 pub fn set_evm_manager(
     file_path: &Path,
-    address_str: String,
+    address: alloy_primitives::Address,
     chain_name: ChainName,
 ) -> Result<EvmManagerResult> {
-    // Parse the EVM address
-    let address = alloy_primitives::Address::parse_checksummed(address_str, None)?;
-
     modify_service_file(file_path, |mut service| {
         service.manager = ServiceManagerJson::Manager(ServiceManager::Evm {
             chain_name: chain_name.clone(),
@@ -1688,6 +1747,7 @@ mod tests {
     use crate::service_json::Json;
 
     use super::*;
+    use alloy_primitives::address;
     use alloy_primitives::hex;
     use layer_climb::prelude::{ChainConfig, ChainId};
     use layer_climb::querier::QueryClient as CosmosQueryClient;
@@ -2375,7 +2435,7 @@ mod tests {
             .contains("invalid bech32"),);
 
         // Test setting EVM trigger
-        let evm_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let evm_address = address!("0x00000000219ab540356cBB839Cbe05303d7705Fa");
         let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
         let evm_event_hash =
             "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef".to_string();
@@ -2383,7 +2443,7 @@ mod tests {
         let evm_result = set_evm_trigger(
             &file_path,
             workflow_id.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             evm_event_hash.clone(),
         )
@@ -2397,7 +2457,7 @@ mod tests {
             event_hash,
         } = &evm_result.trigger
         {
-            assert_eq!(address.to_string(), evm_address);
+            assert_eq!(*address, evm_address);
             assert_eq!(chain_name, &evm_chain);
             // For event_hash we'll need to check the bytes match what we expect
             let expected_hash_bytes = hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
@@ -2419,7 +2479,7 @@ mod tests {
                 event_hash,
             } = trigger
             {
-                assert_eq!(address.to_string(), evm_address);
+                assert_eq!(*address, evm_address);
                 assert_eq!(chain_name, &evm_chain);
                 let expected_hash_bytes =
                     hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
@@ -2436,7 +2496,7 @@ mod tests {
         let trigger_error = set_evm_trigger(
             &file_path,
             non_existent_workflow.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             evm_event_hash.clone(),
         );
@@ -2463,19 +2523,57 @@ mod tests {
             .to_string()
             .contains("invalid bech32"));
 
-        let invalid_evm_address = "invalid-address".to_string();
-        let invalid_evm_result = set_evm_trigger(
+        // Test setting BlockInterval trigger
+        let interval_chain = ChainName::from_str("polygon-mainnet").unwrap();
+        let n_blocks = NonZeroU32::new(10).unwrap();
+
+        let block_interval_result = set_block_interval_trigger(
             &file_path,
             workflow_id.clone(),
-            invalid_evm_address,
-            evm_chain.clone(),
-            evm_event_hash.clone(),
-        );
-        assert!(invalid_evm_result.is_err());
-        assert!(invalid_evm_result
-            .unwrap_err()
-            .to_string()
-            .contains("invalid string length"));
+            interval_chain.clone(),
+            n_blocks,
+        )
+        .unwrap();
+
+        assert_eq!(block_interval_result.workflow_id, workflow_id);
+        if let Trigger::BlockInterval {
+            chain_name,
+            n_blocks: blocks,
+        } = &block_interval_result.trigger
+        {
+            assert_eq!(chain_name, &interval_chain);
+            assert_eq!(*blocks, n_blocks);
+        } else {
+            panic!("Expected BlockInterval trigger");
+        }
+
+        // Test setting Cron trigger
+        let cron_expr = "0 0 * * * *".to_string(); // every hour
+        let start_time = Some(Timestamp::from_nanos(1_000_000_000_000_000_000));
+        let end_time = Some(Timestamp::from_nanos(2_000_000_000_000_000_000));
+
+        let cron_result = set_cron_trigger(
+            &file_path,
+            workflow_id.clone(),
+            cron::Schedule::from_str(&cron_expr).unwrap(),
+            start_time,
+            end_time,
+        )
+        .unwrap();
+
+        assert_eq!(cron_result.workflow_id, workflow_id);
+        if let Trigger::Cron {
+            schedule,
+            start_time: s,
+            end_time: e,
+        } = &cron_result.trigger
+        {
+            assert_eq!(schedule, &cron_expr);
+            assert_eq!(s, &start_time);
+            assert_eq!(e, &end_time);
+        } else {
+            panic!("Expected Cron trigger");
+        }
     }
 
     #[test]
@@ -2510,14 +2608,14 @@ mod tests {
         }
 
         // Test setting EVM submit
-        let evm_address = "0x00000000219ab540356cBB839Cbe05303d7705Fa".to_string();
+        let evm_address = address!("0x00000000219ab540356cBB839Cbe05303d7705Fa");
         let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
         let max_gas = Some(1000000u64);
 
         let evm_result = set_evm_submit(
             &file_path,
             workflow_id.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             max_gas,
         )
@@ -2531,7 +2629,7 @@ mod tests {
             max_gas: result_max_gas,
         }) = &evm_result.submit
         {
-            assert_eq!(address.to_string(), evm_address);
+            assert_eq!(*address, evm_address);
             assert_eq!(chain_name, &evm_chain);
             assert_eq!(result_max_gas, &max_gas);
         } else {
@@ -2551,7 +2649,7 @@ mod tests {
                 max_gas: result_max_gas,
             }) = submit
             {
-                assert_eq!(address.to_string(), evm_address);
+                assert_eq!(*address, evm_address);
                 assert_eq!(chain_name, &evm_chain);
                 assert_eq!(result_max_gas, &max_gas);
             } else {
@@ -2565,7 +2663,7 @@ mod tests {
         let evm_result_no_gas = set_evm_submit(
             &file_path,
             workflow_id.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             None,
         )
@@ -2587,7 +2685,7 @@ mod tests {
         let submit_error = set_evm_submit(
             &file_path,
             non_existent_workflow.clone(),
-            evm_address.clone(),
+            evm_address,
             evm_chain.clone(),
             max_gas,
         );
@@ -2598,19 +2696,6 @@ mod tests {
         assert!(submit_error_msg.contains(&non_existent_workflow.to_string()));
         assert!(submit_error_msg.contains("not found"));
 
-        // Test error handling for invalid address
-        let invalid_evm_address = "invalid-address".to_string();
-        let invalid_evm_result = set_evm_submit(
-            &file_path,
-            workflow_id.clone(),
-            invalid_evm_address,
-            evm_chain.clone(),
-            max_gas,
-        );
-        assert!(invalid_evm_result.is_err());
-        let invalid_address_error = invalid_evm_result.unwrap_err().to_string();
-        assert!(invalid_address_error.contains("invalid"));
-
         // Test setting Aggregator submit
         let aggregator_url = "https://api.example.com/aggregator".to_string();
 
@@ -2619,7 +2704,7 @@ mod tests {
             workflow_id.clone(),
             aggregator_url.clone(),
             evm_chain.clone(),
-            evm_address.clone(),
+            evm_address,
             None,
         )
         .unwrap();

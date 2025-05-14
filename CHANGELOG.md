@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning].
 - test components published to wa.dev
 - Middleware repo for Eigenlayer-specific code
 - CI-based deploy for cargo packages
+- Multi-aggregator support for services (with retry and distinct responses)
 
 
 ### Changed 
@@ -48,6 +49,7 @@ and this project adheres to [Semantic Versioning].
 - WAVS concurrency (nonce management, spawn tasks, etc.)
 - AVS Keys vs. Operator Keys in WAVS (each service has its own avs key)
 - Eigenlayer middleware contracts
+- Client code verifies that address is a contract
 - Docker building
 
 ## [v0.3.0]

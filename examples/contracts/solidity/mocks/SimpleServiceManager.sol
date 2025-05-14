@@ -7,41 +7,92 @@ import {IWavsServiceHandler} from "../interfaces/IWavsServiceHandler.sol";
 contract SimpleServiceManager is IWavsServiceManager {
     string private serviceURI;
 
+    mapping(address => uint256) private operatorWeights;
+    uint256 private lastCheckpointThresholdWeight;
+    uint256 private lastCheckpointTotalWeight;
+
     function validate(
-        IWavsServiceHandler.Envelope calldata envelope,
+        IWavsServiceHandler.Envelope calldata /* envelope */,
         IWavsServiceHandler.SignatureData calldata signatureData
-    ) external view {
-        // always valid, for demo purposes
+    ) external view override {
+        // Validate that operators are sorted in ascending byte order
+        require(
+            _validateOperatorSorting(signatureData.operators),
+            "Operators are not properly sorted"
+        );
+
+        // Get the total operator weight of these signatures
+        uint256 totalWeight = 0;
+        for (uint256 i = 0; i < signatureData.operators.length; i++) {
+            totalWeight += operatorWeights[signatureData.operators[i]];
+        }
+
+        // Check if total weight is above threshold
+        require(
+            totalWeight >= lastCheckpointThresholdWeight,
+            "Not enough operator weight"
+        );
+    }
+
+    /**
+     * @dev Validates that operators are sorted in ascending byte order
+     * @param operators Array of operator addresses
+     * @return True if the operators are properly sorted
+     */
+    function _validateOperatorSorting(
+        address[] calldata operators
+    ) internal pure returns (bool) {
+        // Empty array or single element is always sorted
+        if (operators.length <= 1) {
+            return true;
+        }
+
+        // Check that each address is greater than the previous one
+        for (uint256 i = 1; i < operators.length; i++) {
+            if (operators[i] <= operators[i - 1]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     function getServiceURI() external view returns (string memory) {
         return serviceURI;
     }
 
-    /**
-     * @param _serviceURI The service URI to update.
-     */
     function setServiceURI(string calldata _serviceURI) external {
         serviceURI = _serviceURI;
         emit ServiceURIUpdated(_serviceURI);
     }
 
+    function setOperatorWeight(address operator, uint256 weight) external {
+        operatorWeights[operator] = weight;
+    }
+
+    function setLastCheckpointThresholdWeight(uint256 weight) external {
+        lastCheckpointThresholdWeight = weight;
+    }
+
+    function setLastCheckpointTotalWeight(uint256 weight) external {
+        lastCheckpointTotalWeight = weight;
+    }
+
     function getOperatorWeight(
-        address /* operator */
-    ) external pure override returns (uint256) {
-        return 1; // hard-coded at 1 for demo purposes
+        address operator
+    ) external view returns (uint256) {
+        return operatorWeights[operator];
     }
 
     function getLastCheckpointThresholdWeight()
         external
-        pure
-        override
+        view
         returns (uint256)
     {
-        return 3; // hard-coded at 3 for demo purposes
+        return lastCheckpointThresholdWeight;
     }
 
-    function getLastCheckpointTotalWeight() external pure override returns (uint256) {
-        return 5; // hard-coded at 5 for demo purposes
+    function getLastCheckpointTotalWeight() external view returns (uint256) {
+        return lastCheckpointTotalWeight;
     }
 }

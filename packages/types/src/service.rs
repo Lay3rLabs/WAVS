@@ -190,9 +190,9 @@ pub enum Trigger {
     Cron {
         /// A cron expression defining the schedule for execution.
         schedule: String,
-        /// Optional start time (timestamp in seconds) indicating when the schedule begins.
+        /// Optional start time (timestamp in nanoseconds) indicating when the schedule begins.
         start_time: Option<Timestamp>,
-        /// Optional end time (timestamp in seconds) indicating when the schedule ends.
+        /// Optional end time (timestamp in nanoseconds) indicating when the schedule ends.
         end_time: Option<Timestamp>,
     },
     // not a real trigger, just for testing

@@ -3,20 +3,41 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use utils::{
     async_transaction::AsyncTransaction,
     config::EvmChainConfig,
     evm_client::EvmSigningClient,
-    storage::db::{DBError, RedbStorage, Table, JSON},
+    storage::db::{RedbStorage, Table, JSON},
 };
-use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service};
+use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service, ServiceID};
 
-use crate::config::Config;
+use crate::{
+    config::Config,
+    error::{AggregatorError, AggregatorResult},
+};
 
-// key is EventId
+// key is PacketQueueId
 const PACKET_QUEUES: Table<&[u8], JSON<PacketQueue>> = Table::new("packet_queues");
+
+#[derive(
+    Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode,
+)]
+pub struct PacketQueueId {
+    pub event_id: EventId,
+    pub service_id: ServiceID,
+    pub aggregator_index: usize,
+}
+
+impl PacketQueueId {
+    pub fn to_bytes(&self) -> AggregatorResult<Vec<u8>> {
+        Ok(bincode::encode_to_vec(self, bincode::config::standard())?)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> AggregatorResult<Self> {
+        Ok(bincode::borrow_decode_from_slice(bytes, bincode::config::standard())?.0)
+    }
+}
 
 // key is ServiceId
 const SERVICES: Table<&str, JSON<Service>> = Table::new("services");
@@ -39,14 +60,14 @@ pub struct QueuedPacket {
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
-    pub event_transaction: AsyncTransaction<EventId>,
+    pub queue_transaction: AsyncTransaction<PacketQueueId>,
     storage: Arc<RedbStorage>,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
 }
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
-    pub fn new(config: Config) -> anyhow::Result<Self> {
+    pub fn new(config: Config) -> AggregatorResult<Self> {
         let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
 
@@ -54,11 +75,14 @@ impl HttpState {
             config,
             storage,
             evm_clients,
-            event_transaction: AsyncTransaction::new(false),
+            queue_transaction: AsyncTransaction::new(false),
         })
     }
 
-    pub async fn get_evm_client(&self, chain_name: &ChainName) -> anyhow::Result<EvmSigningClient> {
+    pub async fn get_evm_client(
+        &self,
+        chain_name: &ChainName,
+    ) -> AggregatorResult<EvmSigningClient> {
         {
             let lock = self.evm_clients.read().unwrap();
 
@@ -71,7 +95,7 @@ impl HttpState {
             .config
             .chains
             .get_chain(chain_name)?
-            .context(format!("chain not found for {}", chain_name))?;
+            .ok_or(AggregatorError::ChainNotFound(chain_name.clone()))?;
 
         let chain_config = EvmChainConfig::try_from(chain_config)?;
 
@@ -79,10 +103,12 @@ impl HttpState {
             self.config
                 .credential
                 .clone()
-                .context("missing evm_credential")?,
+                .ok_or(AggregatorError::MissingEvmCredential)?,
         )?;
 
-        let evm_client = EvmSigningClient::new(client_config).await?;
+        let evm_client = EvmSigningClient::new(client_config)
+            .await
+            .map_err(AggregatorError::CreateEvmClient)?;
 
         self.evm_clients
             .write()
@@ -92,45 +118,43 @@ impl HttpState {
         Ok(evm_client)
     }
 
-    pub fn get_packet_queue(&self, event_id: &EventId) -> anyhow::Result<PacketQueue> {
-        match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
+    pub fn get_packet_queue(&self, id: &PacketQueueId) -> AggregatorResult<PacketQueue> {
+        match self.storage.get(PACKET_QUEUES, &id.to_bytes()?)? {
             Some(queue) => Ok(queue.value()),
             None => Ok(PacketQueue::Alive(Vec::new())),
         }
     }
 
-    pub fn get_live_packet_queue(&self, event_id: &EventId) -> anyhow::Result<Vec<QueuedPacket>> {
-        match self.storage.get(PACKET_QUEUES, event_id.as_ref())? {
-            Some(queue) => match queue.value() {
-                PacketQueue::Alive(queue) => Ok(queue),
-                PacketQueue::Burned => Err(anyhow::anyhow!("Packet queue {event_id} is burned")),
-            },
-            None => Ok(Vec::new()),
-        }
+    pub fn save_packet_queue(
+        &self,
+        id: &PacketQueueId,
+        queue: PacketQueue,
+    ) -> AggregatorResult<()> {
+        Ok(self.storage.set(PACKET_QUEUES, &id.to_bytes()?, &queue)?)
     }
 
-    pub fn save_packet_queue(&self, event_id: &EventId, queue: PacketQueue) -> Result<(), DBError> {
-        self.storage.set(PACKET_QUEUES, event_id.as_ref(), &queue)
-    }
-
-    pub fn get_service(&self, route: &PacketRoute) -> anyhow::Result<Service> {
+    pub fn get_service(&self, route: &PacketRoute) -> AggregatorResult<Service> {
         match self.storage.get(SERVICES, &route.service_id)? {
             Some(destination) => Ok(destination.value()),
-            None => Err(anyhow::anyhow!(
-                "Service {} is not registered",
-                route.service_id
-            )),
+            None => Err(AggregatorError::MissingService(route.service_id.clone())),
         }
     }
 
-    pub fn register_service(&self, service: &Service) -> anyhow::Result<()> {
+    pub fn register_service(&self, service: &Service) -> AggregatorResult<()> {
         if self.storage.get(SERVICES, &service.id)?.is_none() {
             tracing::info!("Registering aggregator for service {}", service.id);
 
             self.storage.set(SERVICES, &service.id, service)?;
         } else {
-            bail!("{} already registered", service.id);
+            return Err(AggregatorError::RepeatService(service.id.clone()));
         }
+
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn unchecked_save_service(&self, service: &Service) -> AggregatorResult<()> {
+        self.storage.set(SERVICES, &service.id, service)?;
 
         Ok(())
     }

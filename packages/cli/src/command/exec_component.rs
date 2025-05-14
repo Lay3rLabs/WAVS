@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Instant};
 
 use anyhow::{Context, Result};
 use utils::config::WAVS_ENV_PREFIX;
@@ -17,12 +17,15 @@ use crate::{
 pub struct ExecComponent {
     pub wasm_response: Option<WasmResponse>,
     pub fuel_used: u64,
+    pub time_elapsed: u128,
 }
 
 impl std::fmt::Display for ExecComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Fuel used: \n{}", self.fuel_used)?;
-
+        if self.time_elapsed > 0 {
+            write!(f, "\n\nTime elapsed (ms): \n{}", self.time_elapsed)?;
+        }
         match &self.wasm_response {
             Some(wasm_response) => {
                 write!(
@@ -52,6 +55,7 @@ pub struct ExecComponentArgs {
     pub component_path: String,
     pub input: ComponentInput,
     pub fuel_limit: Option<u64>,
+    pub time_limit: Option<u64>,
     pub config: BTreeMap<String, String>,
 }
 
@@ -62,6 +66,7 @@ impl ExecComponent {
             component_path,
             input,
             fuel_limit,
+            time_limit,
             config,
         }: ExecComponentArgs,
     ) -> Result<Self> {
@@ -105,7 +110,7 @@ impl ExecComponent {
                     file_system: true,
                 },
                 fuel_limit,
-                time_limit_seconds: None,
+                time_limit_seconds: time_limit,
                 config,
                 env_keys,
             },
@@ -119,11 +124,11 @@ impl ExecComponent {
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
             engine: &engine,
-            data_dir: tempfile::tempdir()?.into_path(),
+            data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains,
             log: log_wasi,
-            max_execution_seconds: None,
-            max_wasm_fuel: None,
+            max_execution_seconds: Some(u64::MAX),
+            max_wasm_fuel: Some(u64::MAX),
         }
         .build()
         .context("Failed to build instance dependencies for component execution")?;
@@ -132,6 +137,7 @@ impl ExecComponent {
             .store
             .get_fuel()
             .context("Failed to get initial fuel value from the instance store")?;
+        let start_time = Instant::now();
         let wasm_response = wavs_engine::execute(&mut instance_deps, trigger_action)
             .await
             .context("Failed to execute component with the provided input")?;
@@ -141,6 +147,7 @@ impl ExecComponent {
         Ok(ExecComponent {
             wasm_response,
             fuel_used,
+            time_elapsed: start_time.elapsed().as_millis(),
         })
     }
 }
@@ -186,6 +193,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("hello world".to_string()),
             fuel_limit: None,
+            time_limit: None,
             config: BTreeMap::default(),
         };
 
@@ -199,6 +207,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("0x68656C6C6F20776F726C64".to_string()),
             fuel_limit: None,
+            time_limit: None,
             config: BTreeMap::default(),
         };
 
@@ -212,6 +221,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("68656C6C6F20776F726C64".to_string()),
             fuel_limit: None,
+            time_limit: None,
             config: BTreeMap::default(),
         };
 
@@ -232,6 +242,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new(format!("@{}", file.path().to_string_lossy())),
             fuel_limit: None,
+            time_limit: None,
             config: BTreeMap::default(),
         };
 
@@ -248,6 +259,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new("configvar:my_config_key".to_string()),
             fuel_limit: None,
+            time_limit: None,
             config: config_map,
         };
 
@@ -264,6 +276,7 @@ mod test {
             component_path: component_path.clone(),
             input: ComponentInput::new(format!("envvar:{}", var)),
             fuel_limit: None,
+            time_limit: None,
             config: BTreeMap::default(),
         };
 

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use utils::error::EvmClientError;
-use wavs_types::{ChainName, Envelope, PacketRoute, Service, ServiceID, Submit};
+use wavs_types::{ChainName, Envelope, EnvelopeError, PacketRoute, Service, ServiceID, Submit};
 
 use crate::AppContext;
 
@@ -82,4 +82,6 @@ pub enum SubmissionError {
     FailedToCreateEvmSigner(ServiceID, anyhow::Error),
     #[error("missing EVM signing client for chain {0}")]
     MissingEvmSendingClient(ChainName),
+    #[error("envelope {0:?}")]
+    Envelope(#[from] EnvelopeError),
 }

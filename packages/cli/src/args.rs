@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{num::NonZeroU32, path::PathBuf};
 
 use clap::{arg, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainName, Digest, ServiceID, WorkflowID};
+use wavs_types::{ChainName, Digest, ServiceID, Timestamp, WorkflowID};
 
 use crate::config::Config;
 
@@ -66,6 +66,10 @@ pub enum Command {
         /// Optional fuel limit for component execution
         #[clap(long)]
         fuel_limit: Option<u64>,
+
+        /// Optional time limit (seconds) for component execution
+        #[clap(long)]
+        time_limit: Option<u64>,
 
         /// Component config in KEY=VALUE format, comma-separated: --config a=1,b=2
         #[clap(long, value_delimiter = ',')]
@@ -222,7 +226,7 @@ pub enum ManagerCommand {
         #[clap(long)]
         chain_name: ChainName,
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
     },
 }
 
@@ -247,7 +251,7 @@ pub enum TriggerCommand {
     SetEvm {
         /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
 
         /// The chain name (e.g., "ethereum-mainnet")
         #[clap(long)]
@@ -257,6 +261,29 @@ pub enum TriggerCommand {
         #[clap(long)]
         event_hash: String,
     },
+
+    /// Set a block interval trigger for a workflow
+    SetBlockInterval {
+        #[clap(long)]
+        chain_name: ChainName,
+        #[clap(long)]
+        n_blocks: NonZeroU32,
+    },
+
+    /// Set a cron trigger for a workflow
+    SetCron {
+        /// A cron expression defining the schedule for execution.
+        #[clap(long)]
+        schedule: cron::Schedule,
+
+        /// Optional start time (timestamp in nanoseconds)
+        #[clap(long)]
+        start_time: Option<Timestamp>,
+
+        /// Optional end time (timestamp in nanoseconds)
+        #[clap(long)]
+        end_time: Option<Timestamp>,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
@@ -265,7 +292,7 @@ pub enum SubmitCommand {
     SetEvm {
         /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
 
         /// The chain name (e.g., "ethereum-mainnet")
         #[clap(long)]
@@ -283,7 +310,7 @@ pub enum SubmitCommand {
 
         /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
-        address: String,
+        address: alloy_primitives::Address,
 
         /// The chain name (e.g., "ethereum-mainnet")
         #[clap(long)]

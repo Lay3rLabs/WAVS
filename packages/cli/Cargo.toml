@@ -33,3 +33,4 @@ cfg-if = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 alloy-json-abi = { workspace = true }
+cron = { workspace = true }

@@ -112,14 +112,12 @@ impl CoreSubmission {
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
+        let signature_data = packet
+            .envelope
+            .signature_data(vec![packet.signature], block_height)?;
+
         let _tx_receipt = client
-            .send_envelope_signatures(
-                packet.envelope,
-                vec![packet.signature],
-                block_height,
-                address,
-                max_gas,
-            )
+            .send_envelope_signatures(packet.envelope, signature_data, address, max_gas)
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
@@ -164,6 +162,14 @@ impl CoreSubmission {
                 }
                 AddPacketResponse::Aggregated { count } => {
                     tracing::debug!("Aggregated with current payload count {}", count);
+                }
+
+                AddPacketResponse::Error { reason } => {
+                    tracing::error!("Aggregator errored: {}", reason);
+                }
+
+                AddPacketResponse::Burned => {
+                    tracing::debug!("Aggregator queue is burned");
                 }
             }
 
