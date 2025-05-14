@@ -258,8 +258,8 @@ mod test {
 
         let signer_1 = mock_signer();
         let signer_2 = mock_signer();
-        let envelope_1 = mock_envelope([1, 2, 3]);
-        let envelope_2 = mock_envelope([4, 5, 6]);
+        let envelope_1 = mock_envelope(1, [1, 2, 3]);
+        let envelope_2 = mock_envelope(2, [4, 5, 6]);
 
         let packet_1 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap());
 
@@ -302,6 +302,98 @@ mod test {
     #[tokio::test]
     async fn process_many_packets_concurrent() {
         process_many_packets(true).await;
+    }
+
+    #[tokio::test]
+    async fn process_mixed_responses() {
+        let deps = TestDeps::new().await;
+
+        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_handler = deps
+            .deploy_simple_service_handler(*service_manager.address())
+            .await;
+
+        let _service = deps
+            .create_service(
+                "service-2".parse().unwrap(),
+                *service_manager.address(),
+                vec![*service_handler.address()],
+            )
+            .await;
+
+        let mut signers = Vec::new();
+        const NUM_SIGNERS: usize = 3;
+        const NUM_THRESHOLD: usize = 2;
+
+        service_manager
+            .setLastCheckpointTotalWeight(U256::from(NUM_SIGNERS as u64))
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        service_manager
+            .setLastCheckpointThresholdWeight(U256::from(NUM_THRESHOLD as u64))
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        for _ in 0..NUM_SIGNERS {
+            let signer = mock_signer();
+            service_manager
+                .setOperatorWeight(signer.address(), U256::ONE)
+                .send()
+                .await
+                .unwrap()
+                .watch()
+                .await
+                .unwrap();
+            signers.push(signer);
+        }
+
+        let deps = TestDeps::new().await;
+
+        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_handler = deps
+            .deploy_simple_service_handler(*service_manager.address())
+            .await;
+        let service = deps
+            .create_service(
+                "service-2".parse().unwrap(),
+                *service_manager.address(),
+                vec![*service_handler.address(), Address::ZERO],
+            )
+            .await;
+
+        let envelope = mock_envelope(1, [1, 2, 3]);
+
+
+        let mut all_results = Vec::new();
+
+        for signer in signers.iter().take(NUM_THRESHOLD) {
+            let packet = mock_packet(signer, &envelope, service.id.clone());
+            let state = deps.state.clone();
+            let results = process_packet(state.clone(), &packet).await.unwrap();
+            all_results.push(results);
+        }
+
+        let final_results = all_results.pop().unwrap();
+        for (index, result) in final_results.into_iter().enumerate() {
+            match index {
+                0 => {
+                    assert!(matches!(result, AddPacketResponse::Aggregated { count: 1, .. }));
+                }
+                1 => {
+                    assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
+                }
+                _ => panic!("Unexpected result"),
+            }
+        }
     }
 
     async fn process_many_packets(concurrent: bool) {
@@ -354,7 +446,7 @@ mod test {
             signers.push(signer);
         }
 
-        let envelope = mock_envelope([1, 2, 3]);
+        let envelope = mock_envelope(1, [1, 2, 3]);
 
         let seen_count: Arc<Mutex<HashSet<usize>>> = Arc::new(Mutex::new(HashSet::new()));
 
@@ -486,10 +578,10 @@ mod test {
             .unwrap()
     }
 
-    fn mock_envelope(data: impl Into<Bytes>) -> Envelope {
+    fn mock_envelope(trigger_id: u64, data: impl Into<Bytes>) -> Envelope {
         // SimpleSubmit has its own data format, so we need to encode it
         let payload = DataWithId {
-            triggerId: 0u64,
+            triggerId: trigger_id,
             data: data.into(),
         };
         Envelope {
