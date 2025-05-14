@@ -207,8 +207,15 @@ mod test {
     use alloy_provider::DynProvider;
     use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
     use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
-    use alloy_sol_types::sol;
+    use alloy_sol_types::SolValue;
     use futures::{stream::FuturesUnordered, StreamExt};
+    use service_handler::{
+        ISimpleSubmit::DataWithId,
+        SimpleSubmit::{
+            self as SimpleServiceHandler, SimpleSubmitInstance as SimpleServiceHandlerInstance,
+        },
+    };
+    use service_manager::SimpleServiceManager::{self, SimpleServiceManagerInstance};
     use std::{
         collections::{BTreeMap, HashSet},
         sync::{Arc, Mutex},
@@ -222,14 +229,28 @@ mod test {
     use wavs_types::{
         ChainName, Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute, Service, ServiceID,
     };
-    use SimpleServiceManager::SimpleServiceManagerInstance;
 
-    sol!(
-        #[allow(missing_docs)]
-        #[sol(rpc)]
-        SimpleServiceManager,
-        "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
-    );
+    mod service_manager {
+        use alloy_sol_types::sol;
+
+        sol!(
+            #[allow(missing_docs)]
+            #[sol(rpc)]
+            SimpleServiceManager,
+            "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
+        );
+    }
+
+    mod service_handler {
+        use alloy_sol_types::sol;
+
+        sol!(
+            #[allow(missing_docs)]
+            #[sol(rpc)]
+            SimpleSubmit,
+            "../../examples/contracts/solidity/abi/SimpleSubmit.sol/SimpleSubmit.json"
+        );
+    }
 
     #[test]
     fn packet_validation() {
@@ -287,8 +308,15 @@ mod test {
         let deps = TestDeps::new().await;
 
         let service_manager = deps.deploy_simple_service_manager().await;
+        let service_handler = deps
+            .deploy_simple_service_handler(*service_manager.address())
+            .await;
         let service = deps
-            .create_service("service-2".parse().unwrap(), *service_manager.address())
+            .create_service(
+                "service-2".parse().unwrap(),
+                *service_manager.address(),
+                vec![*service_handler.address()],
+            )
             .await;
 
         let mut signers = Vec::new();
@@ -395,10 +423,11 @@ mod test {
         }
     }
 
-    fn mock_service(
+    async fn mock_service(
         chain_name: ChainName,
         service_id: ServiceID,
         service_manager_address: Address,
+        service_handler_addresses: Vec<Address>,
     ) -> wavs_types::Service {
         let mut workflows = BTreeMap::new();
         workflows.insert(
@@ -409,13 +438,16 @@ mod test {
                     wavs_types::Digest::new(&[0; 32]),
                 )),
                 submit: wavs_types::Submit::None,
-                aggregators: vec![wavs_types::Aggregator::Evm(
-                    wavs_types::EvmContractSubmission {
-                        chain_name: chain_name.clone(),
-                        address: FixedBytes([2; 20]).into(),
-                        max_gas: None,
-                    },
-                )],
+                aggregators: service_handler_addresses
+                    .into_iter()
+                    .map(|address| {
+                        wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
+                            chain_name: chain_name.clone(),
+                            address,
+                            max_gas: None,
+                        })
+                    })
+                    .collect(),
             },
         );
 
@@ -454,9 +486,14 @@ mod test {
             .unwrap()
     }
 
-    fn mock_envelope(payload: impl Into<Bytes>) -> Envelope {
+    fn mock_envelope(data: impl Into<Bytes>) -> Envelope {
+        // SimpleSubmit has its own data format, so we need to encode it
+        let payload = DataWithId {
+            triggerId: 0u64,
+            data: data.into(),
+        };
         Envelope {
-            payload: payload.into(),
+            payload: payload.abi_encode().into(),
             eventId: FixedBytes([0; 20]),
             ordering: FixedBytes([0; 12]),
         }
@@ -526,15 +563,30 @@ mod test {
             &self,
             service_id: ServiceID,
             service_manager_address: Address,
+            service_handler_addresses: Vec<Address>,
         ) -> Service {
-            let service =
-                mock_service(self.chain_name.clone(), service_id, service_manager_address);
+            let service = mock_service(
+                self.chain_name.clone(),
+                service_id,
+                service_manager_address,
+                service_handler_addresses,
+            )
+            .await;
             self.state.register_service(&service).unwrap();
             service
         }
 
         async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
             SimpleServiceManager::deploy(self.client.provider.clone())
+                .await
+                .unwrap()
+        }
+
+        async fn deploy_simple_service_handler(
+            &self,
+            service_manager_address: Address,
+        ) -> SimpleServiceHandlerInstance<DynProvider> {
+            SimpleServiceHandler::deploy(self.client.provider.clone(), service_manager_address)
                 .await
                 .unwrap()
         }
