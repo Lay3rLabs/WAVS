@@ -1,8 +1,8 @@
-name: Publish wavs-types to crates.io
+name: Publish Tag
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 env:
   CRATE_NAME: wavs-types
@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
-      
+
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -29,13 +29,13 @@ jobs:
         run: |
           # Extract version from Cargo.toml using cargo read-manifest and jq
           VERSION=$(cargo read-manifest --manifest-path ${{ env.CRATE_PATH }}/Cargo.toml | jq -r .version)
-          
+
           # Ensure the tag name matches the version from Cargo.toml
           if [ "v$VERSION" != "${{ github.ref_name }}" ]; then
               echo "Error: Tag name '${{ github.ref_name }}' does not match version '$VERSION' from Cargo.toml"
               exit 1
           fi
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Check if crate exists
@@ -46,7 +46,7 @@ jobs:
           # We expect either 200 (exists) or 404 (doesn't exist)
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             https://crates.io/api/v1/crates/${{ env.CRATE_NAME }}/${{ steps.version.outputs.version }})
-          
+
           # Handle status codes appropriately
           if [ "$HTTP_STATUS" = "200" ]; then
             # Crate exists
@@ -66,14 +66,14 @@ jobs:
         run: |
           echo "Publishing version: ${{ steps.version.outputs.version }}"
           echo "Crate exists on crates.io: ${{ steps.crate_exists.outputs.exists }}"
-      
+
       - name: Run cargo package
         if: steps.crate_exists.outputs.exists == 'false'
         uses: actions-rs/cargo@v1
         with:
           command: package
           args: --manifest-path ${{ env.CRATE_PATH }}/Cargo.toml
-      
+
       - name: Publish to crates.io
         if: steps.crate_exists.outputs.exists == 'false'
         uses: actions-rs/cargo@v1
