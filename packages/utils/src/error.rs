@@ -11,6 +11,12 @@ pub enum EvmClientError {
     #[error("Contract not deployed {0}")]
     ContractNotDeployed(alloy_primitives::Address),
 
+    #[error("Address is not a contract: {0}")]
+    NotContract(alloy_primitives::Address),
+
+    #[error("Could not get contract code at {0}: {1:?}")]
+    FailedGetCode(alloy_primitives::Address, anyhow::Error),
+
     #[error("Send Transaction Error: {0}")]
     SendTransaction(anyhow::Error),
 

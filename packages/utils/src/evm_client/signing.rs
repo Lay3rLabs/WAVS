@@ -1,4 +1,5 @@
 use alloy_primitives::Address;
+use alloy_provider::Provider;
 use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_signer::k256::SecretKey;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
@@ -37,6 +38,16 @@ impl EvmSigningClient {
         service_handler: Address,
         max_gas: Option<u64>,
     ) -> Result<TransactionReceipt, EvmClientError> {
+        if self
+            .provider
+            .get_code_at(service_handler)
+            .await
+            .map_err(|e| EvmClientError::FailedGetCode(service_handler, e.into()))?
+            .is_empty()
+        {
+            return Err(EvmClientError::NotContract(service_handler));
+        }
+
         let gas = match max_gas {
             None => {
                 let gas_estimate = self
