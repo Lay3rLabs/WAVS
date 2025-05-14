@@ -9299,6 +9299,7 @@ dependencies = [
  "alloy-sol-types",
  "anyhow",
  "axum",
+ "bincode",
  "clap 4.5.38",
  "ctrlc",
  "futures",
