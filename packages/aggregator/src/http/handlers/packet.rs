@@ -447,7 +447,6 @@ mod test {
                     }
                     // second signer on invalid chain errors
                     (1, 1) => {
-                        assert_eq!(agg_index, 1);
                         assert!(matches!(result, AddPacketResponse::Error { .. }));
                     }
                     _ => {
@@ -485,7 +484,6 @@ mod test {
                     }
                     // second signer on invalid chain errors
                     (1, 1) => {
-                        assert_eq!(agg_index, 1);
                         assert!(matches!(result, AddPacketResponse::Error { .. }));
                     }
                     _ => {
@@ -539,7 +537,6 @@ mod test {
                     }
                     // second signer on previously-invalid chain now sends properly!!
                     (1, 1) => {
-                        assert_eq!(agg_index, 1);
                         assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
                     }
                     _ => {
