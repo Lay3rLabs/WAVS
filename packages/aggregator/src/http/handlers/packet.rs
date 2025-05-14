@@ -164,8 +164,9 @@ impl AggregatorProcess<'_> {
                             .map(|queued| queued.packet.signature.clone())
                             .collect();
 
+                        // TODO: anvil specific? InvalidReferenceBlock()
                         let signature_data =
-                            packet.envelope.signature_data(signatures, block_height)?;
+                            packet.envelope.signature_data(signatures, block_height-1)?;
 
                         // validate the potential quorum on-chain
                         // we'll get an error if quorum is not met, but may get other errors as well
