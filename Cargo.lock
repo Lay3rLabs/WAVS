@@ -1718,7 +1718,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-network",
  "anyhow",
@@ -2066,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -2983,28 +2983,28 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-cron-interval"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-raw"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3182,7 +3182,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -4481,7 +4481,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5496,7 +5496,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "permissions"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -6408,9 +6408,9 @@ checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
 name = "rust-embed"
-version = "8.7.1"
+version = "8.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60e425e204264b144d4c929d126d0de524b40a961686414bab5040f7465c71be"
+checksum = "025908b8682a26ba8d12f6f2d66b987584a4a87bc024abc5bbc12553a8cd178a"
 dependencies = [
  "rust-embed-impl",
  "rust-embed-utils",
@@ -6419,9 +6419,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-impl"
-version = "8.7.0"
+version = "8.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bf418c9a2e3f6663ca38b8a7134cc2c2167c9d69688860e8961e3faa731702e"
+checksum = "6065f1a4392b71819ec1ea1df1120673418bf386f50de1d6f54204d836d4349c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6432,9 +6432,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-utils"
-version = "8.7.0"
+version = "8.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d55b95147fe01265d06b3955db798bdaed52e60e2211c41137701b3aba8e21"
+checksum = "f6cc0c81648b20b70c491ff8cce00c1c3b223bb8ed2b5d41f0e54c6c4c0a3594"
 dependencies = [
  "sha2 0.10.9",
  "walkdir",
@@ -7209,7 +7209,7 @@ checksum = "3b9b39299b249ad65f3b7e96443bad61c02ca5cd3589f46cb6d610a0fd6c0d6a"
 
 [[package]]
 name = "square"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "example-helpers",
  "serde",
@@ -8267,7 +8267,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-network",
  "alloy-node-bindings",
@@ -9234,7 +9234,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -9288,7 +9288,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9319,7 +9319,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -9349,7 +9349,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -9365,7 +9365,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
