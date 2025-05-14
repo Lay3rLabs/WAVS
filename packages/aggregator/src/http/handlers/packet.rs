@@ -143,7 +143,7 @@ impl AggregatorProcess<'_> {
                     .run(queue_id.clone(), move || async move {
                         let queue = match state.get_packet_queue(&queue_id)? {
                             PacketQueue::Alive(queue) => {
-                                // this will also locally validate the packet (i.e. no repeat signers, etc.)
+                                // this will also locally validate the packet
                                 add_packet_to_queue(packet, queue, signer)?
                             }
                             PacketQueue::Burned => {
