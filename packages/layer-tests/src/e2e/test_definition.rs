@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 
-use std::time::Duration;
-
 use wavs_types::{ChainName, Service, Submit, Trigger};
 
 use crate::e2e::components::ComponentName;
@@ -32,9 +30,6 @@ pub struct TestDefinition {
 
     /// Expected output to verify
     pub expected_output: ExpectedOutput,
-
-    /// Timeout for this test
-    pub timeout: Duration,
 
     /// Whether to test with multiple triggers
     pub use_multi_trigger: bool,
@@ -182,7 +177,6 @@ impl TestBuilder {
                 },
                 input_data: InputData::None,
                 expected_output: ExpectedOutput::Any,
-                timeout: Duration::from_secs(5),
                 use_multi_trigger: false,
                 service: None,
                 multi_trigger_service: None,
@@ -314,12 +308,6 @@ impl TestBuilder {
     /// Expect output to be the same as the input
     pub fn expect_same_output(mut self) -> Self {
         self.definition.expected_output = ExpectedOutput::SameAsInput;
-        self
-    }
-
-    /// Set test timeout
-    pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.definition.timeout = timeout;
         self
     }
 

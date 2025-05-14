@@ -1,6 +1,5 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use std::time::Duration;
 
 use utils::config::ChainConfigs;
 use wavs_types::ChainName;
@@ -355,7 +354,6 @@ impl TestRegistry {
                 .component(ComponentName::EchoBlockInterval)
                 .block_interval_trigger(chain.as_ref(), 1)
                 .evm_submit(chain.as_ref())
-                .timeout(Duration::from_secs(15))
                 .build(),
         )
     }
@@ -367,7 +365,6 @@ impl TestRegistry {
                 .component(ComponentName::EchoCronInterval)
                 .cron_trigger("* * * * * *")
                 .evm_submit(chain.as_ref())
-                .timeout(Duration::from_secs(15))
                 .build(),
         )
     }
@@ -476,7 +473,6 @@ impl TestRegistry {
                 .component(ComponentName::EchoBlockInterval)
                 .block_interval_trigger(cosmos_chain.as_ref(), 1)
                 .evm_submit(evm_chain.as_ref())
-                .timeout(Duration::from_secs(15))
                 .build(),
         )
     }
@@ -492,7 +488,6 @@ impl TestRegistry {
                 .component(ComponentName::EchoCronInterval)
                 .cron_trigger("* * * * * *")
                 .evm_submit(evm_chain.as_ref())
-                .timeout(Duration::from_secs(15))
                 .build(),
         )
     }
