@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning].
 - test components published to wa.dev
 - Middleware repo for Eigenlayer-specific code
 - CI-based deploy for cargo packages
+- Multi-aggregator support for services (with retry and distinct responses)
 
 
 ### Changed 
