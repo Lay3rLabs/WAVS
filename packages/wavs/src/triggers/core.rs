@@ -44,7 +44,7 @@ struct LookupMaps {
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
     /// lookup by chain_name -> n_blocks
-    pub triggers_by_block_interval: Arc<RwLock<HashMap<ChainName, Vec<(u32, LookupId)>>>>,
+    pub triggers_by_block_interval: Arc<RwLock<HashMap<ChainName, Vec<BlockIntervalSchedule>>>>,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -52,6 +52,21 @@ struct LookupMaps {
     pub lookup_id: Arc<AtomicUsize>,
     /// cron scheduler
     pub cron_scheduler: CronScheduler,
+}
+
+struct BlockIntervalSchedule {
+    /// countdown to the next trigger
+    countdown: u32,
+    /// lookup id
+    lookup_id: LookupId,
+}
+impl BlockIntervalSchedule {
+    fn new(lookup_id: LookupId, countdown: u32) -> Self {
+        Self {
+            countdown,
+            lookup_id,
+        }
+    }
 }
 
 impl LookupMaps {
@@ -426,28 +441,68 @@ impl CoreTriggerManager {
     }
 
     fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
-        let mut triggers_by_block_interval_lock =
-            self.lookup_maps.triggers_by_block_interval.write().unwrap();
-        let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-
+        let mut finished = Vec::new();
+        let mut explicit_started = Vec::new();
         let mut trigger_actions = vec![];
+        {
+            let mut triggers_by_block_interval_lock =
+                self.lookup_maps.triggers_by_block_interval.write().unwrap();
+            let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
 
-        if let Some(triggers) = triggers_by_block_interval_lock.get_mut(&chain_name) {
-            // Since we don't remove the trigger data when the trigger config is removed,
-            // for efficiency we want to do it here.
+            if let Some(triggers) = triggers_by_block_interval_lock.get_mut(&chain_name) {
+                // Since we don't remove the trigger data when the trigger config is removed,
+                // for efficiency we want to do it here.
 
-            triggers.retain(|(_, lookup_id)| trigger_configs_lock.contains_key(lookup_id));
+                triggers.retain(|interval| trigger_configs_lock.contains_key(&interval.lookup_id));
 
-            // now we can iterate again on the active triggers
-            for (countdown, lookup_id) in triggers.iter_mut() {
-                // decrement the countdown
-                *countdown -= 1;
+                // now we can iterate again on the active triggers
+                for interval in triggers.iter_mut() {
+                    // safe - we just ensured that the trigger config exists
+                    let trigger_config = trigger_configs_lock.get(&interval.lookup_id).unwrap();
 
-                if *countdown == 0 {
-                    if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
-                        if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
+                    if let Trigger::BlockInterval {
+                        n_blocks,
+                        start_block,
+                        end_block,
+                        ..
+                    } = trigger_config.trigger
+                    {
+                        if let Some(start_block) = start_block {
+                            let start_block: u64 = start_block.into();
+                            match block_height.cmp(&start_block) {
+                                std::cmp::Ordering::Less => {
+                                    // we haven't started yet
+                                    continue;
+                                }
+                                std::cmp::Ordering::Greater => {
+                                    // missed the window somehow :(
+                                    tracing::error!("Block interval trigger {} missed the window! start block is {} but current block is {}",
+                                        interval.lookup_id, start_block, block_height);
+                                    finished.push(interval.lookup_id);
+                                    continue;
+                                }
+                                std::cmp::Ordering::Equal => {
+                                    // we've hit the target block
+                                    // go ahead and start it, and we'll set the start block to None
+                                    // so that we can catch errors for missed windows
+                                    explicit_started.push(interval.lookup_id);
+                                }
+                            }
+                        }
+
+                        if let Some(end_block) = end_block {
+                            if block_height >= end_block.into() {
+                                finished.push(interval.lookup_id);
+                                continue;
+                            }
+                        }
+
+                        // decrement the countdown
+                        interval.countdown -= 1;
+
+                        if interval.countdown == 0 {
                             // reset the countdown to n_blocks
-                            *countdown = (*n_blocks).into();
+                            interval.countdown = n_blocks.into();
                             trigger_actions.push(TriggerAction {
                                 data: TriggerData::BlockInterval {
                                     chain_name: chain_name.clone(),
@@ -458,6 +513,24 @@ impl CoreTriggerManager {
                         }
                     }
                 }
+            }
+        }
+
+        // we've dropped the read lock on trigger configs by here, so we can manipulate the table
+        // no need to proactively remove them from the interval table, however, that'll happen naturally like explicit remove
+        if !finished.is_empty() || !explicit_started.is_empty() {
+            let mut lock = self.lookup_maps.trigger_configs.write().unwrap();
+            // these have now started, so we can remove the start block
+            for id in explicit_started.drain(..) {
+                if let Trigger::BlockInterval { start_block, .. } =
+                    &mut lock.get_mut(&id).unwrap().trigger
+                {
+                    *start_block = None;
+                }
+            }
+            // these are done, so we can remove them
+            for id in finished.drain(..) {
+                lock.remove(&id);
             }
         }
 
@@ -534,13 +607,16 @@ impl TriggerManager for CoreTriggerManager {
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks,
+                start_block: _,
+                end_block: _,
             } => {
-                let mut lock = self.lookup_maps.triggers_by_block_interval.write().unwrap();
-                let key = chain_name.clone();
-
-                lock.entry(key)
+                self.lookup_maps
+                    .triggers_by_block_interval
+                    .write()
+                    .unwrap()
+                    .entry(chain_name.clone())
                     .or_default()
-                    .push((n_blocks.into(), lookup_id));
+                    .push(BlockIntervalSchedule::new(lookup_id, n_blocks.into()));
             }
             Trigger::Cron {
                 schedule,
