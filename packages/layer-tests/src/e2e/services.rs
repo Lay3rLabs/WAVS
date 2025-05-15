@@ -259,7 +259,10 @@ async fn deploy_service_simple(
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
                 start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
-                end_block: Some(NonZeroU64::new(current_block + 10).unwrap()),
+                // stop it 1 block after the start, so we can test the result explicitly
+                // (otherwise it will trigger multiple times and may be any block after the start)
+                // this also means we're testing that it was removed after the end too
+                end_block: Some(NonZeroU64::new(current_block + 6).unwrap()),
             }
         }
         AnyService::Evm(EvmService::CronInterval) => Trigger::Cron {
@@ -308,7 +311,10 @@ async fn deploy_service_simple(
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
                 start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
-                end_block: Some(NonZeroU64::new(current_block + 10).unwrap()),
+                // stop it 1 block after the start, so we can test the result explicitly
+                // (otherwise it will trigger multiple times and may be any block after the start)
+                // this also means we're testing that it was removed after the end too
+                end_block: Some(NonZeroU64::new(current_block + 6).unwrap()),
             }
         }
         AnyService::Cosmos(_) | AnyService::CrossChain(_) => {
