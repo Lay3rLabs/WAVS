@@ -114,8 +114,10 @@ impl Services {
         // alternatively, if we set the start_block too far in the future, we wait too long for the trigger
         let mut ordered_services = Vec::new();
         all_services.retain(|s| {
-            if matches!(s, AnyService::Evm(EvmService::BlockIntervalStartStop)) || matches!(s, AnyService::Cosmos(CosmosService::BlockIntervalStartStop)) {
-                ordered_services.push(s.clone());
+            if matches!(s, AnyService::Evm(EvmService::BlockIntervalStartStop))
+                || matches!(s, AnyService::Cosmos(CosmosService::BlockIntervalStartStop))
+            {
+                ordered_services.push(*s);
                 false
             } else {
                 true
@@ -125,7 +127,6 @@ impl Services {
         let lookup = Arc::new(Mutex::new(BTreeMap::default()));
 
         for service_kind in ordered_services {
-
             let lookup = lookup.clone();
             let chain_names = chain_names.clone();
 
@@ -143,8 +144,6 @@ impl Services {
                 lookup.lock().unwrap().insert(service_kind, (service, None));
             });
         }
-
-
 
         let mut concurrent_futures = FuturesUnordered::new();
 
