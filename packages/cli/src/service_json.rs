@@ -264,6 +264,31 @@ pub fn validate_block_interval_config(
     Ok(())
 }
 
+pub fn validate_block_interval_config_on_chain(
+    start_block: Option<NonZeroU64>,
+    end_block: Option<NonZeroU64>,
+    current_block: u64,
+) -> Result<(), String> {
+    validate_block_interval_config(start_block, end_block)?;
+
+    if let Some(start) = start_block {
+        if current_block > start.get() {
+            return Err(format!("cannot start an interval in the past (current block is {}, explicit start_block is {})", current_block, start));
+        }
+    }
+
+    if let Some(end) = end_block {
+        if current_block > end.get() {
+            return Err(format!(
+                "cannot end an interval in the past (current block is {}, end_block is {})",
+                current_block, end
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct WorkflowJson {
