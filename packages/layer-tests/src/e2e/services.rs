@@ -24,7 +24,7 @@ use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
-use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
+use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SaveServiceArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
     Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
@@ -206,13 +206,14 @@ impl Services {
                     // now we've patched it - just call the CLI command directly
                     DeployService::run(
                         &clients.cli_ctx,
-                        clients
-                            .get_evm_client(service.manager.chain_name())
-                            .provider
-                            .clone(),
                         DeployServiceArgs {
                             service: additional_service.clone(),
-                            service_url: None,
+                            save_service_args: Some(SaveServiceArgs {
+                                provider: clients
+                                    .get_evm_client(service.manager.chain_name())
+                                    .provider,
+                                service_url: None,
+                            }),
                         },
                     )
                     .await
@@ -475,10 +476,12 @@ async fn deploy_service_simple(
     let submit_client = clients.get_evm_client(service.manager.chain_name());
     DeployService::run(
         &clients.cli_ctx,
-        submit_client.provider.clone(),
         DeployServiceArgs {
             service: service.clone(),
-            service_url: None,
+            save_service_args: Some(SaveServiceArgs {
+                provider: submit_client.provider.clone(),
+                service_url: None,
+            }),
         },
     )
     .await
@@ -566,13 +569,15 @@ async fn deploy_service_raw(
 
     DeployService::run(
         &clients.cli_ctx,
-        clients
-            .get_evm_client(service.manager.chain_name())
-            .provider
-            .clone(),
         DeployServiceArgs {
             service: service.clone(),
-            service_url: None,
+            save_service_args: Some(SaveServiceArgs {
+                provider: clients
+                    .get_evm_client(service.manager.chain_name())
+                    .provider
+                    .clone(),
+                service_url: None,
+            }),
         },
     )
     .await
