@@ -276,7 +276,7 @@ pub enum TriggerCommand {
         #[clap(long)]
         start_block: Option<NonZeroU64>,
 
-        /// Optional end time (timestamp in nanoseconds)
+        /// Optional end block height
         #[clap(long)]
         end_block: Option<NonZeroU64>,
     },
