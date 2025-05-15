@@ -124,7 +124,7 @@ update-submodules:
 lint:
     cargo fmt --all -- --check
     cargo fix --allow-dirty --allow-staged
-    cargo clippy --all-targets -- -D warnings -A clippy::result_large_err -A clippy::large_enum_variant
+    cargo clippy --all-targets -- -D warnings
 
 # waiting on: https://github.com/casey/just/issues/626
 start-all:

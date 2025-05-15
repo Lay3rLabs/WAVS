@@ -124,4 +124,4 @@ jobs:
         with:
           toolchain: 1.85.0
           command: clippy
-          args: --all-targets -- -D warnings -A clippy::result_large_err -A clippy::large_enum_variant
+          args: --all-targets -- -D warnings
