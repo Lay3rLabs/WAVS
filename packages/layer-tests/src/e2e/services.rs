@@ -100,7 +100,7 @@ impl Services {
             None
         };
 
-        let all_services = configs
+        let mut all_services = configs
             .matrix
             .evm
             .iter()
@@ -109,7 +109,42 @@ impl Services {
             .chain(configs.matrix.cross_chain.iter().map(|s| (*s).into()))
             .collect::<Vec<AnyService>>();
 
+        // We want to deploy these first, so we can be sure the start block is close enough to the deploy block
+        // otherwise it may get pushed off too far by other deployments and miss the start_block window
+        // alternatively, if we set the start_block too far in the future, we wait too long for the trigger
+        let mut ordered_services = Vec::new();
+        all_services.retain(|s| {
+            if matches!(s, AnyService::Evm(EvmService::BlockIntervalStartStop)) || matches!(s, AnyService::Cosmos(CosmosService::BlockIntervalStartStop)) {
+                ordered_services.push(s.clone());
+                false
+            } else {
+                true
+            }
+        });
+
         let lookup = Arc::new(Mutex::new(BTreeMap::default()));
+
+        for service_kind in ordered_services {
+
+            let lookup = lookup.clone();
+            let chain_names = chain_names.clone();
+
+            ctx.rt.block_on(async move {
+                let service = deploy_service_simple(
+                    service_kind,
+                    configs,
+                    clients,
+                    component_sources,
+                    &chain_names,
+                    cosmos_code_id,
+                )
+                .await;
+
+                lookup.lock().unwrap().insert(service_kind, (service, None));
+            });
+        }
+
+
 
         let mut concurrent_futures = FuturesUnordered::new();
 

@@ -299,7 +299,6 @@ async fn verify_signed_data(
                     panic!("Expected block interval trigger");
                 }
 
-                eprintln!("{}", resp);
                 None
             }
             EvmService::CronInterval => Some(b"cron-interval data".to_vec()),
@@ -343,7 +342,6 @@ async fn verify_signed_data(
                     panic!("Expected block interval trigger");
                 }
 
-                eprintln!("{}", resp);
                 None
             }
             CosmosService::CronInterval => Some(b"cron-interval data".to_vec()),
