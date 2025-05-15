@@ -11,7 +11,7 @@ fc878eece588c309e9b16379c8c24195ebcb78886c0504d7c12e558001b7772d  ./examples/bui
 =======
 ce5975310d47e680f30920f005ecebfad07e66931239e6c2549822be797b779d  ./examples/build/components/chain_trigger_lookup.wasm
 d048fec55cb95271a52a37b45388c72aff5ba16cfdfef12100693dfe052d777e  ./examples/build/components/cosmos_query.wasm
-cf2e19155745fac68abf7f5090cde1b9d7f5dc6d28de699bdfe078b6d8870112  ./examples/build/components/echo_block_interval.wasm
+72be6ae120429fa547319a0d8877ccc32e1e97929ea39b04b7564032906e18ff  ./examples/build/components/echo_block_interval.wasm
 7e7044c4ddfe2aeb7535265cec4f476ef186cc4844d3f3f1121902a98ea00b5f  ./examples/build/components/echo_cron_interval.wasm
 895138717f982c7f3698da7fc6e6fe94963a99d906f386e599ed824656663f52  ./examples/build/components/echo_data.wasm
 5db1f16c4cc612919a49042d1786cbebb7487223a6ee01823de3686c628aea60  ./examples/build/components/echo_raw.wasm
