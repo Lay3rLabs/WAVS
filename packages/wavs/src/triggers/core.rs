@@ -55,7 +55,8 @@ struct LookupMaps {
 }
 
 struct BlockIntervalSchedule {
-    /// countdown to the next trigger
+    /// Represents the remaining blocks until the next trigger execution.
+    /// This value is reset to the configured `n_blocks` after the trigger fires.
     countdown: u32,
     /// lookup id
     lookup_id: LookupId,
