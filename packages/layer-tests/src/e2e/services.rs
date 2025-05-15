@@ -1,6 +1,5 @@
 use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
+    collections::BTreeMap, num::NonZeroU64, sync::{Arc, Mutex}
 };
 
 use crate::{
@@ -19,7 +18,7 @@ use super::{
 };
 use crate::example_evm_client::{example_submit::SimpleSubmit, SimpleEvmTriggerClient};
 use alloy_primitives::Address;
-use alloy_provider::ext::AnvilApi;
+use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
@@ -248,6 +247,19 @@ async fn deploy_service_simple(
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                start_block: None,
+                end_block: None,
+            }
+        }
+        AnyService::Evm(EvmService::BlockIntervalStartStop) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            let client = clients.get_evm_client(&chain_name);
+            let current_block = client.provider.get_block_number().await.unwrap();
+            Trigger::BlockInterval { 
+                chain_name,
+                n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
+                end_block: Some(NonZeroU64::new(current_block + 10).unwrap()),
             }
         }
         AnyService::Evm(EvmService::CronInterval) => Trigger::Cron {
@@ -284,6 +296,19 @@ async fn deploy_service_simple(
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                start_block: None,
+                end_block: None,
+            }
+        }
+        AnyService::Cosmos(CosmosService::BlockIntervalStartStop) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            let client = clients.get_cosmos_client(&chain_name).await;
+            let current_block = client.querier.block_height().await.unwrap();
+            Trigger::BlockInterval { 
+                chain_name,
+                n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
+                end_block: Some(NonZeroU64::new(current_block + 10).unwrap()),
             }
         }
         AnyService::Cosmos(_) | AnyService::CrossChain(_) => {

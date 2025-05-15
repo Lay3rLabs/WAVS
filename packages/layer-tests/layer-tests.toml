@@ -2,8 +2,11 @@
 log_level = ["info", "wavs=debug"]
 
 [layer-tests]
+mode = {"isolated" = [
+    {evm = "block_interval_start_stop"},
+]}
 # Run all tests
-mode = "all"
+# mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"

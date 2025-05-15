@@ -11,7 +11,7 @@ use tokio::time::Instant;
 use utils::context::AppContext;
 use wavs_types::{
     ChainName, Envelope, EnvelopeExt, EnvelopeSignature, EvmContractSubmission, Service,
-    SigningKeyResponse, Submit,
+    SigningKeyResponse, Submit, Trigger,
 };
 
 use crate::{
@@ -202,7 +202,7 @@ fn get_input_for_service(
                 _ => unimplemented!(),
             },
             EvmService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
-            EvmService::CronInterval | EvmService::BlockInterval => Vec::new(),
+            EvmService::CronInterval | EvmService::BlockInterval | EvmService::BlockIntervalStartStop => Vec::new(),
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
@@ -213,7 +213,7 @@ fn get_input_for_service(
             CosmosService::EchoData => b"on brink".to_vec(),
             CosmosService::Permissions => permissions_req(),
             CosmosService::Square => SquareRequest { x: 3 }.to_vec(),
-            CosmosService::CronInterval | CosmosService::BlockInterval => Vec::new(),
+            CosmosService::CronInterval | CosmosService::BlockInterval | CosmosService::BlockIntervalStartStop => Vec::new(),
         },
         AnyService::CrossChain(name) => match name {
             CrossChainService::CosmosToEvmEchoData => b"hello EVM world from cosmos".to_vec(),
@@ -241,6 +241,8 @@ async fn verify_signed_data(
         get_input_for_service(name, service, configs, workflow_index)
             .expect("expected input data to be present for this test")
     };
+
+    const BLOCK_INTERVAL_PREFIX: &str = "block-interval-data-";
 
     let expected_data = match name {
         AnyService::Evm(evm_name) => match evm_name {
@@ -270,7 +272,30 @@ async fn verify_signed_data(
                 tracing::info!("Response: {:?}", resp);
                 None
             }
-            EvmService::BlockInterval => Some(b"block-interval data".to_vec()),
+            EvmService::BlockInterval => {
+                let resp = String::from_utf8(data.to_vec()).unwrap();
+                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
+                None
+            }
+            EvmService::BlockIntervalStartStop => {
+                let resp = String::from_utf8(data.to_vec()).unwrap();
+                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
+
+                let block = resp
+                    .strip_prefix(BLOCK_INTERVAL_PREFIX)
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap();
+
+                if let Trigger::BlockInterval{start_block, ..} = service.workflows.values().next().unwrap().trigger {
+                    assert_eq!(block, u64::from(start_block.unwrap()));
+                } else {
+                    panic!("Expected block interval trigger");
+                }
+
+                eprintln!("{}", resp);
+                None
+            }
             EvmService::CronInterval => Some(b"cron-interval data".to_vec()),
         },
         AnyService::Cosmos(cosmos_name) => match cosmos_name {
@@ -289,7 +314,30 @@ async fn verify_signed_data(
                 tracing::info!("Response: {:?}", resp);
                 None
             }
-            CosmosService::BlockInterval => Some(b"block-interval data".to_vec()),
+            CosmosService::BlockInterval => {
+                let resp = String::from_utf8(data.to_vec()).unwrap();
+                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
+                None
+            }
+            CosmosService::BlockIntervalStartStop => {
+                let resp = String::from_utf8(data.to_vec()).unwrap();
+                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
+
+                let block = resp
+                    .strip_prefix(BLOCK_INTERVAL_PREFIX)
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap();
+
+                if let Trigger::BlockInterval{start_block, ..} = service.workflows.values().next().unwrap().trigger {
+                    assert_eq!(block, u64::from(start_block.unwrap()));
+                } else {
+                    panic!("Expected block interval trigger");
+                }
+
+                eprintln!("{}", resp);
+                None
+            }
             CosmosService::CronInterval => Some(b"cron-interval data".to_vec()),
         },
         AnyService::CrossChain(crosschain_name) => match crosschain_name {
