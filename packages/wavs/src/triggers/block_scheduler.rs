@@ -242,6 +242,10 @@ impl BlockScheduler {
     pub fn len(&self) -> usize {
         self.trigger_status.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// Manages multiple block schedulers, one per chain, with fine-grained locking.

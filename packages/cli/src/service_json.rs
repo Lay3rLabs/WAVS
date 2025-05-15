@@ -347,7 +347,6 @@ pub enum Json {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", untagged)]
-#[allow(clippy::large_enum_variant)]
 pub enum ComponentJson {
     Component(Component),
     Json(Json),

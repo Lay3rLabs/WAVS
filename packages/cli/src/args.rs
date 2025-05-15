@@ -16,7 +16,6 @@ use crate::config::Config;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-#[allow(clippy::large_enum_variant)]
 pub enum Command {
     /// Uploads a WASI component
     UploadComponent {
