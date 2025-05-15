@@ -194,7 +194,7 @@ download-solidity branch="dev":
     # Clean up
     rm -rf temp_clone
 
-wasi-publish component="*" version="0.4.0-beta.1" flags="":
+wasi-publish version component="*" flags="":
 	if [ "{{component}}" = "*" ]; then \
 	    awk '{print $2}' checksums.txt | while read path; do \
 	        id=$(basename "$path"); \
