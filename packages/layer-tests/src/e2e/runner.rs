@@ -202,7 +202,9 @@ fn get_input_for_service(
                 _ => unimplemented!(),
             },
             EvmService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
-            EvmService::CronInterval | EvmService::BlockInterval | EvmService::BlockIntervalStartStop => Vec::new(),
+            EvmService::CronInterval
+            | EvmService::BlockInterval
+            | EvmService::BlockIntervalStartStop => Vec::new(),
         },
         AnyService::Cosmos(name) => match name {
             CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
@@ -213,7 +215,9 @@ fn get_input_for_service(
             CosmosService::EchoData => b"on brink".to_vec(),
             CosmosService::Permissions => permissions_req(),
             CosmosService::Square => SquareRequest { x: 3 }.to_vec(),
-            CosmosService::CronInterval | CosmosService::BlockInterval | CosmosService::BlockIntervalStartStop => Vec::new(),
+            CosmosService::CronInterval
+            | CosmosService::BlockInterval
+            | CosmosService::BlockIntervalStartStop => Vec::new(),
         },
         AnyService::CrossChain(name) => match name {
             CrossChainService::CosmosToEvmEchoData => b"hello EVM world from cosmos".to_vec(),
@@ -287,7 +291,9 @@ async fn verify_signed_data(
                     .parse::<u64>()
                     .unwrap();
 
-                if let Trigger::BlockInterval{start_block, ..} = service.workflows.values().next().unwrap().trigger {
+                if let Trigger::BlockInterval { start_block, .. } =
+                    service.workflows.values().next().unwrap().trigger
+                {
                     assert_eq!(block, u64::from(start_block.unwrap()));
                 } else {
                     panic!("Expected block interval trigger");
@@ -329,7 +335,9 @@ async fn verify_signed_data(
                     .parse::<u64>()
                     .unwrap();
 
-                if let Trigger::BlockInterval{start_block, ..} = service.workflows.values().next().unwrap().trigger {
+                if let Trigger::BlockInterval { start_block, .. } =
+                    service.workflows.values().next().unwrap().trigger
+                {
                     assert_eq!(block, u64::from(start_block.unwrap()));
                 } else {
                     panic!("Expected block interval trigger");

@@ -1,5 +1,7 @@
 use std::{
-    collections::BTreeMap, num::NonZeroU64, sync::{Arc, Mutex}
+    collections::BTreeMap,
+    num::NonZeroU64,
+    sync::{Arc, Mutex},
 };
 
 use crate::{
@@ -255,7 +257,7 @@ async fn deploy_service_simple(
             let chain_name = trigger_chain.as_ref().unwrap().clone();
             let client = clients.get_evm_client(&chain_name);
             let current_block = client.provider.get_block_number().await.unwrap();
-            Trigger::BlockInterval { 
+            Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
                 start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
@@ -307,7 +309,7 @@ async fn deploy_service_simple(
             let chain_name = trigger_chain.as_ref().unwrap().clone();
             let client = clients.get_cosmos_client(&chain_name).await;
             let current_block = client.querier.block_height().await.unwrap();
-            Trigger::BlockInterval { 
+            Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
                 start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
