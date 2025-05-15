@@ -76,6 +76,7 @@ rayon = "1.10.0"
 ctrlc = "3.4.6"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.88"
+dashmap = "6.1.0"
 
 # fs
 tempfile = "3.19.1"
