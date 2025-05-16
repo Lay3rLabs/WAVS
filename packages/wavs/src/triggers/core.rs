@@ -492,7 +492,7 @@ impl CoreTriggerManager {
                         }
 
                         if let Some(end_block) = end_block {
-                            if block_height >= end_block.into() {
+                            if block_height > end_block.into() {
                                 finished.push(interval.lookup_id);
                                 continue;
                             }
