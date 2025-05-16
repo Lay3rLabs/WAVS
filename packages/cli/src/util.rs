@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
+#[cfg(debug_assertions)]
 use utils::filesystem::workspace_path;
 
 //A wrapper type that will:
