@@ -39,10 +39,14 @@ pub enum Command {
     ///
     /// # Parameters
     /// * `service_url`: URL pointing to the JSON service definition
+    /// * `set_url`: Boolean indicating whether to also set the URL on the service manager
     /// * `args`: Additional CLI arguments for the deployment operation
     DeployService {
         #[clap(long)]
         service_url: String,
+
+        #[clap(long)]
+        set_url: bool,
 
         #[clap(flatten)]
         args: CliArgs,
