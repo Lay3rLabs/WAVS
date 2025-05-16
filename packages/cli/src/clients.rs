@@ -1,10 +1,12 @@
-use alloy_provider::Provider;
+use alloy_provider::DynProvider;
 use anyhow::Result;
 use layer_climb::prelude::*;
 use wavs_types::{
     AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
     ServiceID, SigningKeyResponse, UploadComponentResponse,
 };
+
+use crate::command::deploy_service::SetServiceUrlArgs;
 
 #[derive(Clone)]
 pub struct HttpClient {
@@ -43,37 +45,19 @@ impl HttpClient {
         Ok(response.digest.into())
     }
 
-    pub async fn create_service<T: Provider>(
+    pub async fn create_service(
         &self,
-        provider: T,
         service: Service,
-        service_url: Option<String>,
+        save_service_args: Option<SetServiceUrlArgs>,
     ) -> Result<()> {
-        let service_url = match service_url {
-            Some(url) => url,
-            None => {
-                let body = serde_json::to_string(&service)?;
-
-                self.inner
-                    .post(format!("{}/save-service", self.endpoint))
-                    .header("Content-Type", "application/json")
-                    .body(body)
-                    .send()
-                    .await?
-                    .error_for_status()?;
-
-                format!("{}/service/{}", self.endpoint, service.id)
-            }
-        };
-
-        let contract =
-            IWavsServiceManagerInstance::new(service.manager.evm_address_unchecked(), provider);
-        contract
-            .setServiceURI(service_url)
-            .send()
-            .await?
-            .watch()
+        if let Some(save_service) = save_service_args {
+            self.set_service_url(
+                save_service.provider,
+                service.manager.evm_address_unchecked(),
+                save_service.service_url,
+            )
             .await?;
+        }
 
         let body: String = serde_json::to_string(&AddServiceRequest {
             chain_name: service.manager.chain_name().clone(),
@@ -89,6 +73,37 @@ impl HttpClient {
             .error_for_status()?;
 
         Ok(())
+    }
+
+    pub async fn set_service_url(
+        &self,
+        provider: DynProvider,
+        service_manager_address: alloy_primitives::Address,
+        service_url: String,
+    ) -> Result<()> {
+        let contract = IWavsServiceManagerInstance::new(service_manager_address, provider);
+        contract
+            .setServiceURI(service_url)
+            .send()
+            .await?
+            .watch()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn save_service(&self, service: &Service) -> Result<String> {
+        let body = serde_json::to_string(service)?;
+
+        self.inner
+            .post(format!("{}/save-service", self.endpoint))
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(format!("{}/service/{}", self.endpoint, service.id))
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {

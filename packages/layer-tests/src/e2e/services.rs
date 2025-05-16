@@ -24,7 +24,7 @@ use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
-use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
+use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
     Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
@@ -204,15 +204,20 @@ impl Services {
                     }
 
                     // now we've patched it - just call the CLI command directly
+                    let service_url =
+                        DeployService::save_service(&clients.cli_ctx, &additional_service)
+                            .await
+                            .unwrap();
                     DeployService::run(
                         &clients.cli_ctx,
-                        clients
-                            .get_evm_client(service.manager.chain_name())
-                            .provider
-                            .clone(),
                         DeployServiceArgs {
                             service: additional_service.clone(),
-                            service_url: None,
+                            set_service_url_args: Some(SetServiceUrlArgs {
+                                provider: clients
+                                    .get_evm_client(service.manager.chain_name())
+                                    .provider,
+                                service_url,
+                            }),
                         },
                     )
                     .await
@@ -294,11 +299,13 @@ async fn deploy_service_simple(
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
-                start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
-                // stop it 1 block after the start, so we can test the result explicitly
+                // the start block is set far enough to give it a chance to land
+                // but early enough to not tie up tests too long
+                start_block: Some(NonZeroU64::new(current_block + 4).unwrap()),
+                // Only let it run for 1 block, so we can test the result explicitly
                 // (otherwise it will trigger multiple times and may be any block after the start)
                 // this also means we're testing that it was removed after the end too
-                end_block: Some(NonZeroU64::new(current_block + 6).unwrap()),
+                end_block: Some(NonZeroU64::new(current_block + 4).unwrap()),
             }
         }
         AnyService::Evm(EvmService::CronInterval) => Trigger::Cron {
@@ -346,11 +353,13 @@ async fn deploy_service_simple(
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
-                start_block: Some(NonZeroU64::new(current_block + 5).unwrap()),
-                // stop it 1 block after the start, so we can test the result explicitly
+                // the start block is set far enough to give it a chance to land
+                // but early enough to not tie up tests too long
+                start_block: Some(NonZeroU64::new(current_block + 3).unwrap()),
+                // Only let it run for 1 block, so we can test the result explicitly
                 // (otherwise it will trigger multiple times and may be any block after the start)
                 // this also means we're testing that it was removed after the end too
-                end_block: Some(NonZeroU64::new(current_block + 6).unwrap()),
+                end_block: Some(NonZeroU64::new(current_block + 3).unwrap()),
             }
         }
         AnyService::Cosmos(_) | AnyService::CrossChain(_) => {
@@ -466,15 +475,19 @@ async fn deploy_service_simple(
         submit_chain.as_deref().unwrap_or("none")
     );
 
-    // Deploy using DeployServiceRaw instead of DeployService
-
-    let submit_client = clients.get_evm_client(service.manager.chain_name());
+    let service_url = DeployService::save_service(&clients.cli_ctx, &service)
+        .await
+        .unwrap();
     DeployService::run(
         &clients.cli_ctx,
-        submit_client.provider.clone(),
         DeployServiceArgs {
             service: service.clone(),
-            service_url: None,
+            set_service_url_args: Some(SetServiceUrlArgs {
+                provider: clients
+                    .get_evm_client(service.manager.chain_name())
+                    .provider,
+                service_url,
+            }),
         },
     )
     .await
@@ -560,15 +573,19 @@ async fn deploy_service_raw(
         },
     };
 
+    let service_url = DeployService::save_service(&clients.cli_ctx, &service)
+        .await
+        .unwrap();
     DeployService::run(
         &clients.cli_ctx,
-        clients
-            .get_evm_client(service.manager.chain_name())
-            .provider
-            .clone(),
         DeployServiceArgs {
             service: service.clone(),
-            service_url: None,
+            set_service_url_args: Some(SetServiceUrlArgs {
+                provider: clients
+                    .get_evm_client(service.manager.chain_name())
+                    .provider,
+                service_url,
+            }),
         },
     )
     .await
