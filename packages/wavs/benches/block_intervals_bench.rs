@@ -103,7 +103,7 @@ pub fn benchmark_trigger_system(c: &mut Criterion) {
                 let mut action_count = 0;
                 let start_time = std::time::Instant::now();
 
-                // Run for a fixed time and count actions
+                // Run for a fixed # of count actions
                 while let Some(action) = action_stream.next().await {
                     black_box(action);
                     action_count += 1;
