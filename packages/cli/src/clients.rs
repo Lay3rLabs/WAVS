@@ -51,7 +51,7 @@ impl HttpClient {
         save_service_args: Option<SaveServiceArgs>,
     ) -> Result<()> {
         if let Some(save_service) = save_service_args {
-            self.save_service(save_service.provider, &service, save_service.service_url)
+            self.set_service_url(save_service.provider, &service, save_service.service_url)
                 .await?;
         }
 
@@ -71,7 +71,7 @@ impl HttpClient {
         Ok(())
     }
 
-    pub async fn save_service(
+    pub async fn set_service_url(
         &self,
         provider: DynProvider,
         service: &Service,
@@ -80,6 +80,7 @@ impl HttpClient {
         let service_url = match service_url {
             Some(url) => url,
             None => {
+                // This case is only expected during e2e tests, because the CLI args require service_url to be specified
                 let body = serde_json::to_string(service)?;
 
                 self.inner
