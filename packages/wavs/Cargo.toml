@@ -67,3 +67,7 @@ criterion = { workspace = true }
 [[bench]]
 name = "mock_bench"
 harness = false
+
+[[bench]]
+name = "block_intervals_bench"
+harness = false
