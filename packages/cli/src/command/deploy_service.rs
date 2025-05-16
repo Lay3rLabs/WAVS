@@ -10,7 +10,7 @@ pub struct DeployService {
 impl std::fmt::Display for DeployService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "New Service deployed to wavs")?;
-        if let Some(save_service_args) = &self.args.save_service_args {
+        if let Some(save_service_args) = &self.args.set_service_url_args {
             write!(f, "\n\n{:#?}", save_service_args.service_url)?;
         }
         write!(f, "\n\n{:#?}", self.args.service)
@@ -28,13 +28,13 @@ impl CommandDeployResult for DeployService {
 #[derive(Clone)]
 pub struct DeployServiceArgs {
     pub service: Service,
-    pub save_service_args: Option<SaveServiceArgs>,
+    pub set_service_url_args: Option<SetServiceUrlArgs>,
 }
 
 #[derive(Clone)]
-pub struct SaveServiceArgs {
+pub struct SetServiceUrlArgs {
     pub provider: DynProvider,
-    pub service_url: Option<String>,
+    pub service_url: String,
 }
 
 impl DeployService {
@@ -45,7 +45,7 @@ impl DeployService {
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
         http_client
-            .create_service(service, args.save_service_args.clone())
+            .create_service(service, args.set_service_url_args.clone())
             .await
             .context(format!(
                 "Failed to deploy service with ID '{}' to endpoint '{}'",
@@ -57,5 +57,11 @@ impl DeployService {
         _self.update_deployment(&mut ctx.deployment.lock().unwrap());
 
         Ok(_self)
+    }
+
+    pub async fn save_service(ctx: &CliContext, service: &Service) -> Result<String> {
+        let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
+
+        http_client.save_service(service).await
     }
 }

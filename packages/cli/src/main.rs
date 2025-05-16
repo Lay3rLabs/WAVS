@@ -4,7 +4,7 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::service::fetch_service;
 use utils::{config::ConfigExt, evm_client::EvmSigningClient};
-use wavs_cli::command::deploy_service::SaveServiceArgs;
+use wavs_cli::command::deploy_service::SetServiceUrlArgs;
 use wavs_cli::{
     args::Command,
     command::{
@@ -78,14 +78,14 @@ async fn main() {
                 ))
                 .unwrap();
 
-            let save_service_args = if set_url {
+            let set_service_url_args = if set_url {
                 let provider = new_evm_client(&ctx, service.manager.chain_name())
                     .await
                     .unwrap()
                     .provider;
-                Some(SaveServiceArgs {
+                Some(SetServiceUrlArgs {
                     provider,
-                    service_url: Some(service_url),
+                    service_url,
                 })
             } else {
                 None
@@ -95,7 +95,7 @@ async fn main() {
                 &ctx,
                 DeployServiceArgs {
                     service,
-                    save_service_args,
+                    set_service_url_args,
                 },
             )
             .await

@@ -6,7 +6,7 @@ use wavs_types::{
     ServiceID, SigningKeyResponse, UploadComponentResponse,
 };
 
-use crate::command::deploy_service::SaveServiceArgs;
+use crate::command::deploy_service::SetServiceUrlArgs;
 
 #[derive(Clone)]
 pub struct HttpClient {
@@ -48,11 +48,15 @@ impl HttpClient {
     pub async fn create_service(
         &self,
         service: Service,
-        save_service_args: Option<SaveServiceArgs>,
+        save_service_args: Option<SetServiceUrlArgs>,
     ) -> Result<()> {
         if let Some(save_service) = save_service_args {
-            self.set_service_url(save_service.provider, &service, save_service.service_url)
-                .await?;
+            self.set_service_url(
+                save_service.provider,
+                service.manager.evm_address_unchecked(),
+                save_service.service_url,
+            )
+            .await?;
         }
 
         let body: String = serde_json::to_string(&AddServiceRequest {
@@ -74,29 +78,10 @@ impl HttpClient {
     pub async fn set_service_url(
         &self,
         provider: DynProvider,
-        service: &Service,
-        service_url: Option<String>,
+        service_manager_address: alloy_primitives::Address,
+        service_url: String,
     ) -> Result<()> {
-        let service_url = match service_url {
-            Some(url) => url,
-            None => {
-                // This case is only expected during e2e tests, because the CLI args require service_url to be specified
-                let body = serde_json::to_string(service)?;
-
-                self.inner
-                    .post(format!("{}/save-service", self.endpoint))
-                    .header("Content-Type", "application/json")
-                    .body(body)
-                    .send()
-                    .await?
-                    .error_for_status()?;
-
-                format!("{}/service/{}", self.endpoint, service.id)
-            }
-        };
-
-        let contract =
-            IWavsServiceManagerInstance::new(service.manager.evm_address_unchecked(), provider);
+        let contract = IWavsServiceManagerInstance::new(service_manager_address, provider);
         contract
             .setServiceURI(service_url)
             .send()
@@ -105,6 +90,20 @@ impl HttpClient {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn save_service(&self, service: &Service) -> Result<String> {
+        let body = serde_json::to_string(service)?;
+
+        self.inner
+            .post(format!("{}/save-service", self.endpoint))
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(format!("{}/service/{}", self.endpoint, service.id))
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
