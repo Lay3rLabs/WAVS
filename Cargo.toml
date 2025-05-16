@@ -121,7 +121,7 @@ wit-bindgen = "0.42.1"
 wavs-wasi-utils = "0.4.0-beta.4"
 
 # benchmarking
-criterion = "0.5.1"
+criterion = { version = "0.5.1", features = ["async_tokio"] }
 
 # serialization
 bincode = { version = "2.0.1", features = ["serde"] }
