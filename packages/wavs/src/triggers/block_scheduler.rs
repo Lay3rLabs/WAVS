@@ -153,7 +153,7 @@ impl BlockScheduler {
 
                     // Handle end_block expiration
                     if let Some(end_block) = config.end_block {
-                        if block_height >= end_block.get() {
+                        if block_height > end_block.get() {
                             continue; // expired
                         }
                     }
