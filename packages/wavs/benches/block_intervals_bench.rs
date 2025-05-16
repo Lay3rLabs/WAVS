@@ -24,6 +24,7 @@ pub fn benchmark_trigger_system(c: &mut Criterion) {
     let base_port = 8545;
     let num_chains = 10;
     let triggers_per_chain = 1000;
+    let action_limit = 10000;
 
     // Spawn Anvil instances and create configs simultaneously
     println!("Starting Anvil instances...");
@@ -103,12 +104,12 @@ pub fn benchmark_trigger_system(c: &mut Criterion) {
                 let mut action_count = 0;
                 let start_time = std::time::Instant::now();
 
-                // Run for a fixed time and count actions
+                // Run for a fixed # of actions
                 while let Some(action) = action_stream.next().await {
                     black_box(action);
                     action_count += 1;
 
-                    if action_count >= 10000 {
+                    if action_count >= action_limit {
                         break;
                     }
                 }
