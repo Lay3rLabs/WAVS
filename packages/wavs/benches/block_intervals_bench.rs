@@ -35,7 +35,7 @@ pub fn benchmark_trigger_system(c: &mut Criterion) {
 
             // Spawn Anvil instance with auto-mining every 1 second
             let anvil = spawn_anvil(port, chain_id)
-                .expect(&format!("Failed to spawn Anvil instance {}", i));
+                .unwrap_or_else(|_| panic!("Failed to spawn Anvil instance {}", i));
             anvil_processes.push(anvil);
 
             // Create config for this chain
@@ -91,10 +91,8 @@ pub fn benchmark_trigger_system(c: &mut Criterion) {
                 )
                 .expect("Failed to setup triggers");
 
-                let receiver = trigger_manager.start(app_context.clone()).unwrap();
-
                 // Return what we need for the benchmark
-                receiver
+                trigger_manager.start(app_context.clone()).unwrap()
             },
             // Async benchmark function
             |receiver| async move {
@@ -148,7 +146,7 @@ pub fn benchmark_trigger_system(c: &mut Criterion) {
 /// Spawn an Anvil instance with specific port and chain ID
 fn spawn_anvil(port: usize, chain_id: usize) -> Result<Child> {
     Command::new("anvil")
-        .args(&[
+        .args([
             "--port",
             &port.to_string(),
             "--chain-id",
