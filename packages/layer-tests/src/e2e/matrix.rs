@@ -27,6 +27,7 @@ pub enum EvmService {
     MultiWorkflow,
     MultiTrigger,
     BlockInterval,
+    BlockIntervalStartStop,
     CronInterval,
 }
 
@@ -41,6 +42,7 @@ pub enum CosmosService {
     Permissions,
     Square,
     BlockInterval,
+    BlockIntervalStartStop,
     CronInterval,
 }
 
@@ -115,6 +117,7 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::MultiWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
             EvmService::MultiTrigger => vec![ComponentName::EchoData],
             EvmService::BlockInterval => vec![ComponentName::EchoBlockInterval],
+            EvmService::BlockIntervalStartStop => vec![ComponentName::EchoBlockInterval],
             EvmService::CronInterval => vec![ComponentName::EchoCronInterval],
         }
     }
@@ -129,6 +132,7 @@ impl From<CosmosService> for Vec<ComponentName> {
             CosmosService::Permissions => ComponentName::Permissions,
             CosmosService::Square => ComponentName::Square,
             CosmosService::BlockInterval => ComponentName::EchoBlockInterval,
+            CosmosService::BlockIntervalStartStop => ComponentName::EchoBlockInterval,
             CosmosService::CronInterval => ComponentName::EchoCronInterval,
         }]
     }

@@ -1,4 +1,7 @@
-use std::{num::NonZeroU32, path::PathBuf};
+use std::{
+    num::{NonZeroU32, NonZeroU64},
+    path::PathBuf,
+};
 
 use clap::{arg, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -268,6 +271,14 @@ pub enum TriggerCommand {
         chain_name: ChainName,
         #[clap(long)]
         n_blocks: NonZeroU32,
+
+        /// Optional start block
+        #[clap(long)]
+        start_block: Option<NonZeroU64>,
+
+        /// Optional end block height
+        #[clap(long)]
+        end_block: Option<NonZeroU64>,
     },
 
     /// Set a cron trigger for a workflow

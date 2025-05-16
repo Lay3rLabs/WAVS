@@ -1,4 +1,4 @@
-package wavs:worker@0.4.0-beta.1;
+package wavs:worker@0.4.0-beta.4;
 
 use wasi:io/poll@0.2.0;
 use wasi:clocks/monotonic-clock@0.2.0;
@@ -83,7 +83,9 @@ interface layer-types {
 
   record block-interval-source {
     chain-name: string,
-    n-blocks: u32
+    n-blocks: u32,
+    start-block: option<u64>,
+    end-block: option<u64>
   }
 
   record trigger-source-cron {

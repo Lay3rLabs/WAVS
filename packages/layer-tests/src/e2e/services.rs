@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    num::NonZeroU64,
     sync::{Arc, Mutex},
 };
 
@@ -19,7 +20,7 @@ use super::{
 };
 use crate::example_evm_client::{example_submit::SimpleSubmit, SimpleEvmTriggerClient};
 use alloy_primitives::Address;
-use alloy_provider::ext::AnvilApi;
+use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::{context::AppContext, filesystem::workspace_path};
@@ -99,7 +100,7 @@ impl Services {
             None
         };
 
-        let all_services = configs
+        let mut all_services = configs
             .matrix
             .evm
             .iter()
@@ -108,7 +109,41 @@ impl Services {
             .chain(configs.matrix.cross_chain.iter().map(|s| (*s).into()))
             .collect::<Vec<AnyService>>();
 
+        // We want to deploy these first, so we can be sure the start block is close enough to the deploy block
+        // otherwise it may get pushed off too far by other deployments and miss the start_block window
+        // alternatively, if we set the start_block too far in the future, we wait too long for the trigger
+        let mut ordered_services = Vec::new();
+        all_services.retain(|s| {
+            if matches!(s, AnyService::Evm(EvmService::BlockIntervalStartStop))
+                || matches!(s, AnyService::Cosmos(CosmosService::BlockIntervalStartStop))
+            {
+                ordered_services.push(*s);
+                false
+            } else {
+                true
+            }
+        });
+
         let lookup = Arc::new(Mutex::new(BTreeMap::default()));
+
+        for service_kind in ordered_services {
+            let lookup = lookup.clone();
+            let chain_names = chain_names.clone();
+
+            ctx.rt.block_on(async move {
+                let service = deploy_service_simple(
+                    service_kind,
+                    configs,
+                    clients,
+                    component_sources,
+                    &chain_names,
+                    cosmos_code_id,
+                )
+                .await;
+
+                lookup.lock().unwrap().insert(service_kind, (service, None));
+            });
+        }
 
         let mut concurrent_futures = FuturesUnordered::new();
 
@@ -248,6 +283,24 @@ async fn deploy_service_simple(
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                start_block: None,
+                end_block: None,
+            }
+        }
+        AnyService::Evm(EvmService::BlockIntervalStartStop) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            let client = clients.get_evm_client(&chain_name);
+            let current_block = client.provider.get_block_number().await.unwrap();
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                // the start block is set far enough to give it a chance to land
+                // but early enough to not tie up tests too long
+                start_block: Some(NonZeroU64::new(current_block + 4).unwrap()),
+                // Only let it run for 1 block, so we can test the result explicitly
+                // (otherwise it will trigger multiple times and may be any block after the start)
+                // this also means we're testing that it was removed after the end too
+                end_block: Some(NonZeroU64::new(current_block + 4).unwrap()),
             }
         }
         AnyService::Evm(EvmService::CronInterval) => Trigger::Cron {
@@ -284,6 +337,24 @@ async fn deploy_service_simple(
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                start_block: None,
+                end_block: None,
+            }
+        }
+        AnyService::Cosmos(CosmosService::BlockIntervalStartStop) => {
+            let chain_name = trigger_chain.as_ref().unwrap().clone();
+            let client = clients.get_cosmos_client(&chain_name).await;
+            let current_block = client.querier.block_height().await.unwrap();
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks: std::num::NonZeroU32::new(1).unwrap(),
+                // the start block is set far enough to give it a chance to land
+                // but early enough to not tie up tests too long
+                start_block: Some(NonZeroU64::new(current_block + 3).unwrap()),
+                // Only let it run for 1 block, so we can test the result explicitly
+                // (otherwise it will trigger multiple times and may be any block after the start)
+                // this also means we're testing that it was removed after the end too
+                end_block: Some(NonZeroU64::new(current_block + 3).unwrap()),
             }
         }
         AnyService::Cosmos(_) | AnyService::CrossChain(_) => {
