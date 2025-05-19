@@ -24,7 +24,7 @@ use wavs_types::{
 };
 
 use super::{
-    block_scheduler::{BlockIntervalState, BlockScheduler, BlockSchedulers},
+    block_scheduler::{BlockIntervalState, BlockSchedulers},
     cron_scheduler::CronScheduler,
 };
 
@@ -550,7 +550,7 @@ impl TriggerManager for CoreTriggerManager {
                 self.lookup_maps
                     .block_schedulers
                     .entry(chain_name.clone())
-                    .or_insert_with(BlockScheduler::new)
+                    .or_default()
                     .add_trigger(BlockIntervalState::new(
                         lookup_id,
                         n_blocks,

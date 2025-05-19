@@ -31,6 +31,12 @@ pub trait IntervalState: Clone {
     fn end_time(&self) -> Option<Self::Time>;
 }
 
+impl<T: IntervalTime, S: IntervalState<Time = T>> Default for IntervalScheduler<T, S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
     pub fn new() -> Self {
         Self {
@@ -43,6 +49,10 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
 
     pub fn len(&self) -> usize {
         self.triggers.len() + self.unadded_triggers.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.triggers.is_empty() && self.unadded_triggers.is_empty()
     }
 
     /// Add a trigger, return `true` if it was added
@@ -81,8 +91,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
             false
         });
 
-        return self
-            .triggers
+        self.triggers
             .iter()
             .filter_map(|state| {
                 let kickoff_time = *self.kickoff_time.get(&state.lookup_id()).unwrap();
@@ -94,7 +103,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
                     None
                 }
             })
-            .collect();
+            .collect()
     }
 
     /// Remove a trigger early
