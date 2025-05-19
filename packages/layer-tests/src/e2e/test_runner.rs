@@ -3,7 +3,7 @@
 use alloy_provider::Provider;
 use anyhow::{Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -68,43 +68,18 @@ impl TestRunner {
             chain_grouped_tests.len()
         );
 
-        // Use a buffer to control maximum concurrency
-        let concurrency_limit = std::thread::available_parallelism()
-            .map(|p| p.get())
-            .unwrap_or(4);
+        self.ctx.rt.block_on(async {
+            let mut futures = FuturesUnordered::new();
 
-        let mut concurrent_futures = FuturesUnordered::new();
-
-        // Prepare a flattened list of tests, prioritizing by chain for better locality
-        let mut remaining_tests = VecDeque::new();
-        for (_, chain_tests) in chain_grouped_tests {
-            remaining_tests.extend(chain_tests);
-        }
-
-        self.ctx.rt.block_on(async move {
-            tracing::info!(
-                "\n\n Running concurrent tests (max: {}) from TestDefinitions...",
-                concurrency_limit
-            );
-
-            // Initial batch of tests
-            for test in
-                remaining_tests.drain(..std::cmp::min(concurrency_limit, remaining_tests.len()))
-            {
-                concurrent_futures.push(self.execute_test(test, self.clients.clone()));
-            }
-
-            // Process results and add more tests as capacity allows
-            while let Some(_result) = concurrent_futures.next().await {
-                // Add another test to the queue if available
-                if !remaining_tests.is_empty() {
-                    let next_test = remaining_tests.remove(0);
-                    if let Some(test) = next_test {
-                        tracing::info!("Running test: {}", test.name);
-                        concurrent_futures.push(self.execute_test(test, self.clients.clone()));
-                    }
+            // Flatten and submit all tests at once
+            for chain_tests in chain_grouped_tests.values() {
+                for test in chain_tests {
+                    tracing::info!("Running test: {}", test.name);
+                    futures.push(self.execute_test(test, self.clients.clone()));
                 }
             }
+
+            while let Some(_result) = futures.next().await {}
 
             tracing::info!("All tests completed");
         });

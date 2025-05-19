@@ -1,14 +1,18 @@
 use anyhow::Result;
-use std::collections::HashMap;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+use reqwest::Client;
+use std::collections::{HashMap, HashSet};
+use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::ChainName;
+use wavs_types::{ChainName, Service, Submit};
 
 use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
-use super::test_definition::{ExpectedOutput, TestBuilder, TestDefinition};
+use super::test_definition::{ExpectedOutput, SubmitConfig, TestBuilder, TestDefinition};
 use super::types::SquareResponse;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
@@ -71,21 +75,69 @@ impl TestRegistry {
         self.tests.values().collect()
     }
 
-    /// Deploy services for all tests
+    /// Deploy services for all tests concurrently
     pub async fn deploy_services(
         &mut self,
         clients: &Clients,
         component_sources: &ComponentSources,
     ) -> Result<()> {
-        // Process each test one at a time
-        for test in self.tests.values_mut() {
-            // Deploy service for this test
-            let (service, multi_trigger_service) =
-                helpers::deploy_service_for_test(test, clients, component_sources).await?;
+        let mut futures = FuturesUnordered::new();
 
-            // If deployment was successful, attach services to the test
-            test.service = Some(service);
-            test.multi_trigger_service = multi_trigger_service;
+        // Prepare all futures first
+        for test in self.tests.values_mut() {
+            // We need to temporarily take ownership of `test` fields
+            let clients = clients.clone();
+            let component_sources = component_sources.clone();
+
+            futures.push(async move {
+                let (service, multi_trigger_service) =
+                    helpers::deploy_service_for_test(test, &clients, &component_sources).await?;
+
+                if let SubmitConfig::Aggregator { .. } = &test.submit {
+                    TestRegistry::register_to_all_aggregators(&service).await?;
+                }
+
+                test.service = Some(service);
+                test.multi_trigger_service = multi_trigger_service;
+
+                Ok::<(), anyhow::Error>(())
+            });
+        }
+
+        // Execute all futures
+        while let Some(_result) = futures.next().await {}
+
+        Ok(())
+    }
+
+    /// Registers a service to all unique aggregator URLs across its workflows
+    pub async fn register_to_all_aggregators(service: &Service) -> Result<()> {
+        let http_client = Client::new();
+        let mut seen_urls = HashSet::new();
+
+        for workflow in service.workflows.values() {
+            if let Submit::Aggregator { url, .. } = &workflow.submit {
+                if seen_urls.insert(url.clone()) {
+                    // First time seeing this aggregator URL
+                    let endpoint = format!("{}/register_service", url);
+                    let payload = RegisterServiceRequest {
+                        service: service.clone(),
+                    };
+
+                    tracing::info!(
+                        "Registering service {} with aggregator at {}",
+                        service.id,
+                        endpoint
+                    );
+
+                    http_client
+                        .post(&endpoint)
+                        .json(&payload)
+                        .send()
+                        .await?
+                        .error_for_status()?;
+                }
+            }
         }
 
         Ok(())

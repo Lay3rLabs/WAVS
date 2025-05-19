@@ -1,4 +1,3 @@
-use alloy_provider::ext::AnvilApi;
 use alloy_sol_types::SolEvent;
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -138,10 +137,6 @@ pub async fn deploy_service_for_test(
     let submit_client = clients.get_evm_client(&service_manager_chain);
 
     tracing::info!("[{}] Deploying service: {}", test.name, service.id);
-    // Set mining rate to ensure blocks are being generated
-    if let Err(e) = submit_client.provider.evm_mine(None).await {
-        tracing::warn!("Failed to mine block: {:?}", e);
-    }
 
     // Deploy the service
     DeployService::run(
