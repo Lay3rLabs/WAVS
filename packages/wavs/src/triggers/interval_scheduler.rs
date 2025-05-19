@@ -136,7 +136,6 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         self.triggers.retain(|state| state.lookup_id() != id);
         self.unadded_triggers
             .retain(|state| state.lookup_id() != id);
-        self.trigger_ids.remove(&id);
         self.kickoff_time.remove(&id);
 
         existed
