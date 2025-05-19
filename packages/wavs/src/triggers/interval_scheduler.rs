@@ -129,7 +129,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         hits
     }
 
-    /// Remove a trigger early
+    /// Totally remove a trigger (called from the TriggerManager, as opposed to local expirey)
     pub fn remove_trigger(&mut self, id: LookupId) -> bool {
         let existed = self.trigger_ids.remove(&id);
 
