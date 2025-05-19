@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::apis::trigger::TriggerError;
+
 use super::core::LookupId;
 
 // This is for some sort of scheduler that runs on an interval.
@@ -17,14 +19,14 @@ pub struct IntervalScheduler<T: IntervalTime, S: IntervalState<Time = T>> {
 
 pub trait IntervalTime: Ord + Copy {}
 
-pub trait IntervalState: Clone {
+pub trait IntervalState {
     /// The unit of time this scheduler works in
     type Time: IntervalTime;
 
     fn lookup_id(&self) -> LookupId;
 
     // this is usually just `if (now - kickoff_time) % interval == 0`
-    fn interval_hit(&self, kickoff_time: Self::Time, now: Self::Time) -> bool;
+    fn interval_hit(&mut self, kickoff_time: Self::Time, now: Self::Time) -> bool;
 
     fn start_time(&self) -> Option<Self::Time>;
 
@@ -56,26 +58,34 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
     }
 
     /// Add a trigger, return `true` if it was added
-    pub fn add_trigger(&mut self, state: S) -> bool {
+    pub fn add_trigger(&mut self, state: S) -> std::result::Result<bool, TriggerError> {
+        if let (Some(start), Some(end)) = (state.start_time(), state.end_time()) {
+            if start > end {
+                return Err(TriggerError::IntervalStartAfterEnd);
+            }
+        }
+
         let id = state.lookup_id();
         if self.trigger_ids.contains(&id) {
-            false
+            Ok(false)
         } else {
             self.unadded_triggers.push(state);
-            true
+            Ok(true)
         }
     }
 
     /// Call this on each “tick”
     pub fn tick(&mut self, now: T) -> Vec<LookupId> {
+        let mut still_unadded = Vec::new();
         // first add any new triggers whose start time has arrived
         // or, if they don't have a start time, add them immediately
-        self.unadded_triggers.retain(|state| {
+        for state in self.unadded_triggers.drain(..) {
             let kickoff_time = match state.start_time() {
                 Some(st) => {
                     if st < now {
                         // hasn't started yet, just keep it and try again next time
-                        return true;
+                        still_unadded.push(state);
+                        continue;
                     } else {
                         st
                     }
@@ -87,12 +97,13 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
             };
 
             self.kickoff_time.insert(state.lookup_id(), kickoff_time);
-            self.triggers.push(state.clone());
-            false
-        });
+            self.triggers.push(state);
+        }
+
+        self.unadded_triggers = still_unadded;
 
         self.triggers
-            .iter()
+            .iter_mut()
             .filter_map(|state| {
                 let kickoff_time = *self.kickoff_time.get(&state.lookup_id()).unwrap();
                 if state.interval_hit(kickoff_time, now) {

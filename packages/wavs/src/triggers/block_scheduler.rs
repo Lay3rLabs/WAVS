@@ -23,7 +23,7 @@ impl From<NonZeroU64> for BlockHeight {
 
 impl IntervalTime for BlockHeight {}
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BlockIntervalState {
     pub interval: NonZeroU32,
     _lookup_id: LookupId,
@@ -54,7 +54,7 @@ impl IntervalState for BlockIntervalState {
         self._lookup_id
     }
 
-    fn interval_hit(&self, kickoff_time: Self::Time, now: Self::Time) -> bool {
+    fn interval_hit(&mut self, kickoff_time: Self::Time, now: Self::Time) -> bool {
         (now.0.get() - kickoff_time.0.get()) % self.interval.get() as u64 == 0
     }
 

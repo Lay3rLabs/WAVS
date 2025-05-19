@@ -25,7 +25,7 @@ use wavs_types::{
 
 use super::{
     block_scheduler::{BlockIntervalState, BlockSchedulers},
-    cron_scheduler::CronScheduler,
+    cron_scheduler::{CronIntervalState, CronScheduler},
 };
 
 #[derive(Clone)]
@@ -262,7 +262,7 @@ impl CoreTriggerManager {
         // Process cron triggers on each interval tick
         let cron_stream = Box::pin(interval_stream.map(move |_| {
             let trigger_time = Timestamp::now();
-            let lookup_ids = cron_scheduler.process_due_triggers(trigger_time);
+            let lookup_ids = cron_scheduler.lock().unwrap().tick(trigger_time);
 
             Ok(StreamTriggers::Cron {
                 lookup_ids,
@@ -556,7 +556,7 @@ impl TriggerManager for CoreTriggerManager {
                         n_blocks,
                         start_block.map(Into::into),
                         end_block.map(Into::into),
-                    ));
+                    ))?;
             }
             Trigger::Cron {
                 schedule,
@@ -566,7 +566,11 @@ impl TriggerManager for CoreTriggerManager {
                 // Add directly to the cron scheduler
                 self.lookup_maps
                     .cron_scheduler
-                    .add_trigger(lookup_id, schedule, start_time, end_time)?;
+                    .lock()
+                    .unwrap()
+                    .add_trigger(CronIntervalState::new(
+                        lookup_id, &schedule, start_time, end_time,
+                    )?)?;
             }
             Trigger::Manual => {}
         }
@@ -666,7 +670,11 @@ impl TriggerManager for CoreTriggerManager {
                 }
                 Trigger::Cron { .. } => {
                     // Remove from cron scheduler
-                    self.lookup_maps.cron_scheduler.remove_trigger(lookup_id)?;
+                    self.lookup_maps
+                        .cron_scheduler
+                        .lock()
+                        .unwrap()
+                        .remove_trigger(lookup_id);
                 }
                 Trigger::Manual => {}
             }
@@ -761,8 +769,11 @@ impl TriggerManager for CoreTriggerManager {
                         }
                     }
                     Trigger::Cron { .. } => {
-                        // Remove from cron scheduler - ignore errors for non-existent triggers
-                        let _ = self.lookup_maps.cron_scheduler.remove_trigger(*lookup_id);
+                        self.lookup_maps
+                            .cron_scheduler
+                            .lock()
+                            .unwrap()
+                            .remove_trigger(*lookup_id);
                     }
                     Trigger::Manual => {}
                 }
@@ -1123,7 +1134,9 @@ mod tests {
         let lookup_ids = manager
             .lookup_maps
             .cron_scheduler
-            .process_due_triggers(future_time);
+            .lock()
+            .unwrap()
+            .tick(future_time);
 
         // Verify both triggers fire
         assert_eq!(lookup_ids.len(), 2, "Expected 2 triggers to fire");
@@ -1139,7 +1152,9 @@ mod tests {
         let lookup_ids = manager
             .lookup_maps
             .cron_scheduler
-            .process_due_triggers(future_time);
+            .lock()
+            .unwrap()
+            .tick(future_time);
 
         // Verify only one trigger fires now
         assert_eq!(
@@ -1159,7 +1174,9 @@ mod tests {
         let lookup_ids = manager
             .lookup_maps
             .cron_scheduler
-            .process_due_triggers(future_time);
+            .lock()
+            .unwrap()
+            .tick(future_time);
 
         // Verify no triggers fire
         assert!(
