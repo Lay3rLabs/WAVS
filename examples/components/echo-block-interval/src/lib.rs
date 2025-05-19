@@ -10,9 +10,13 @@ impl Guest for Component {
         // hardcoding this because our tests are mostly about event-based triggers
         // but this component is not event-based
         let trigger_id = 1337;
-        let return_data = b"block-interval data";
-        if let TriggerData::BlockInterval(_data) = trigger_action.data {
-            Ok(Some(encode_trigger_output(trigger_id, return_data)))
+
+        if let TriggerData::BlockInterval(data) = trigger_action.data {
+            let return_data = format!("block-interval-data-{}", data.block_height);
+            Ok(Some(encode_trigger_output(
+                trigger_id,
+                return_data.as_bytes(),
+            )))
         } else {
             Err("Invalid trigger data".to_string())
         }

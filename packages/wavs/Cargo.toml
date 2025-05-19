@@ -60,10 +60,15 @@ axum-tracing-opentelemetry = { workspace = true }
 opentelemetry = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
+dashmap = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 
 [[bench]]
 name = "mock_bench"
+harness = false
+
+[[bench]]
+name = "block_intervals_bench"
 harness = false

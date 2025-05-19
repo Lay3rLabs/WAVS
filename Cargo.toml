@@ -17,7 +17,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.4.0-beta.4"
+version = "0.4.0-beta.5"
 license = "MIT"
 authors = ["Lay3r Labs Team"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -76,6 +76,7 @@ rayon = "1.10.0"
 ctrlc = "3.4.6"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.88"
+dashmap = "6.1.0"
 
 # fs
 tempfile = "3.19.1"
@@ -118,10 +119,10 @@ wasmtime = { version = "32.0.0", features = [
 wasmtime-wasi = { version = "32.0.0", default-features = true }
 wasmtime-wasi-http = "32.0.0"
 wit-bindgen = "0.42.1"
-wavs-wasi-utils = "0.4.0-beta.2"
+wavs-wasi-utils = "0.4.0-beta.4"
 
 # benchmarking
-criterion = "0.5.1"
+criterion = { version = "0.5.1", features = ["async_tokio"] }
 
 # serialization
 bincode = { version = "2.0.1", features = ["serde"] }

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
@@ -122,8 +122,19 @@ impl ServiceJson {
                         Trigger::BlockInterval {
                             chain_name: _,
                             n_blocks: _,
+                            start_block,
+                            end_block,
+                        } => {
+                            if let Err(err) =
+                                validate_block_interval_config(*start_block, *end_block)
+                            {
+                                errors.push(format!(
+                                    "Workflow '{}' has an invalid block-interval trigger: {}",
+                                    workflow_id, err
+                                ));
+                            }
                         }
-                        | Trigger::Manual => {
+                        Trigger::Manual => {
                             // Manual and block interval triggers are valid
                         }
                     }
@@ -239,6 +250,45 @@ pub fn validate_cron_config(
     Ok(())
 }
 
+pub fn validate_block_interval_config(
+    start_block: Option<NonZeroU64>,
+    end_block: Option<NonZeroU64>,
+) -> Result<(), String> {
+    // Ensure start_block <= end_block if both are provided
+    if let (Some(start), Some(end)) = (start_block, end_block) {
+        if start > end {
+            return Err("start_block must be before or equal to end_block".to_string());
+        }
+    }
+
+    Ok(())
+}
+
+pub fn validate_block_interval_config_on_chain(
+    start_block: Option<NonZeroU64>,
+    end_block: Option<NonZeroU64>,
+    current_block: u64,
+) -> Result<(), String> {
+    validate_block_interval_config(start_block, end_block)?;
+
+    if let Some(start) = start_block {
+        if current_block > start.get() {
+            return Err(format!("cannot start an interval in the past (current block is {}, explicit start_block is {})", current_block, start));
+        }
+    }
+
+    if let Some(end) = end_block {
+        if current_block > end.get() {
+            return Err(format!(
+                "cannot end an interval in the past (current block is {}, end_block is {})",
+                current_block, end
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct WorkflowJson {
@@ -297,7 +347,6 @@ pub enum Json {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", untagged)]
-#[allow(clippy::large_enum_variant)]
 pub enum ComponentJson {
     Component(Component),
     Json(Json),

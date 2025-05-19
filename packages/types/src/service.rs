@@ -2,7 +2,7 @@ use alloy_primitives::LogData;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroU64};
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
@@ -183,9 +183,17 @@ pub enum Trigger {
         event_hash: ByteArray<32>,
     },
     BlockInterval {
+        /// The name of the chain to use for the block interval
         chain_name: ChainName,
+        /// Number of blocks to wait between each execution
         #[schema(value_type = u32)]
         n_blocks: NonZeroU32,
+        /// Optional start block height indicating when the interval begins.
+        #[schema(value_type = Option<u64>)]
+        start_block: Option<NonZeroU64>,
+        /// Optional end block height indicating when the interval begins.
+        #[schema(value_type = Option<u64>)]
+        end_block: Option<NonZeroU64>,
     },
     Cron {
         /// A cron expression defining the schedule for execution.
@@ -445,6 +453,8 @@ mod test_ext {
                 trigger: Trigger::BlockInterval {
                     chain_name: chain_name.into(),
                     n_blocks,
+                    start_block: None,
+                    end_block: None,
                 },
             })
         }

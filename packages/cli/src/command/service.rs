@@ -11,10 +11,13 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     path::{Path, PathBuf},
 };
-use utils::{config::WAVS_ENV_PREFIX, wkg::WkgClient};
+use utils::{
+    config::{AnyChainConfig, WAVS_ENV_PREFIX},
+    wkg::WkgClient,
+};
 use uuid::Uuid;
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
@@ -30,6 +33,7 @@ use crate::{
     },
     context::CliContext,
     service_json::{
+        validate_block_interval_config, validate_block_interval_config_on_chain,
         validate_cron_config, ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson,
         TriggerJson, WorkflowJson,
     },
@@ -155,8 +159,17 @@ pub async fn handle_service_command(
                 TriggerCommand::SetBlockInterval {
                     chain_name,
                     n_blocks,
+                    start_block,
+                    end_block,
                 } => {
-                    let result = set_block_interval_trigger(&file, id, chain_name, n_blocks)?;
+                    let result = set_block_interval_trigger(
+                        &file,
+                        id,
+                        chain_name,
+                        n_blocks,
+                        start_block,
+                        end_block,
+                    )?;
                     display_result(ctx, result, json)?;
                 }
                 TriggerCommand::SetCron {
@@ -371,10 +384,22 @@ impl std::fmt::Display for WorkflowTriggerResult {
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks,
+                start_block,
+                end_block,
             } => {
                 writeln!(f, "  Trigger Type: Block Interval")?;
                 writeln!(f, "    Chain:      {}", chain_name)?;
                 writeln!(f, "    Interval:   {} blocks", n_blocks)?;
+                if let Some(start) = start_block {
+                    writeln!(f, "    Start Block: {}", u64::from(*start))?;
+                } else {
+                    writeln!(f, "    Start Block: None")?;
+                }
+                if let Some(end) = end_block {
+                    writeln!(f, "    End Block:   {}", u64::from(*end))?;
+                } else {
+                    writeln!(f, "    End Block:   None")?;
+                }
             }
             Trigger::Cron {
                 schedule,
@@ -895,15 +920,21 @@ pub fn set_block_interval_trigger(
     workflow_id: WorkflowID,
     chain_name: ChainName,
     n_blocks: NonZeroU32,
+    start_block: Option<NonZeroU64>,
+    end_block: Option<NonZeroU64>,
 ) -> Result<WorkflowTriggerResult> {
     modify_service_file(file_path, |mut service| {
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
         })?;
 
+        validate_block_interval_config(start_block, end_block).map_err(|e| anyhow!(e))?;
+
         let trigger = Trigger::BlockInterval {
             chain_name,
             n_blocks,
+            start_block,
+            end_block,
         };
         workflow.trigger = TriggerJson::Trigger(trigger.clone());
 
@@ -1347,6 +1378,47 @@ pub async fn validate_service(
                     Trigger::EvmContractEvent { chain_name, .. } => {
                         chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
                     }
+                    Trigger::BlockInterval {
+                        chain_name,
+                        start_block,
+                        end_block,
+                        ..
+                    } => match ctx.config.chains.get_chain(chain_name).unwrap() {
+                        None => {
+                            errors.push(format!(
+                                    "Workflow '{}' uses chain '{}' in BlockInterval trigger, but chain is missing",
+                                    workflow_id, chain_name
+                                ));
+                        }
+                        Some(AnyChainConfig::Cosmos(_)) => {
+                            let cosmos_client = ctx.new_cosmos_client(chain_name).await?;
+                            let block_height = cosmos_client.querier.block_height().await?;
+                            if let Err(err) = validate_block_interval_config_on_chain(
+                                *start_block,
+                                *end_block,
+                                block_height,
+                            ) {
+                                errors.push(format!(
+                                    "Workflow '{}' has invalid block interval configuration: {}",
+                                    workflow_id, err
+                                ));
+                            }
+                        }
+                        Some(AnyChainConfig::Evm(_)) => {
+                            let evm_client = ctx.new_evm_client(chain_name).await?;
+                            let block_height = evm_client.provider.get_block_number().await?;
+                            if let Err(err) = validate_block_interval_config_on_chain(
+                                *start_block,
+                                *end_block,
+                                block_height,
+                            ) {
+                                errors.push(format!(
+                                    "Workflow '{}' has invalid block interval configuration: {}",
+                                    workflow_id, err
+                                ));
+                            }
+                        }
+                    },
                     _ => {}
                 }
 
@@ -2532,6 +2604,8 @@ mod tests {
             workflow_id.clone(),
             interval_chain.clone(),
             n_blocks,
+            Some(NonZeroU64::new(42).unwrap()),
+            None,
         )
         .unwrap();
 
@@ -2539,10 +2613,14 @@ mod tests {
         if let Trigger::BlockInterval {
             chain_name,
             n_blocks: blocks,
+            start_block,
+            end_block,
         } = &block_interval_result.trigger
         {
             assert_eq!(chain_name, &interval_chain);
             assert_eq!(*blocks, n_blocks);
+            assert_eq!(*start_block, Some(NonZeroU64::new(42).unwrap()));
+            assert_eq!(*end_block, None);
         } else {
             panic!("Expected BlockInterval trigger");
         }

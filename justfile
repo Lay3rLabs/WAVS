@@ -194,14 +194,14 @@ download-solidity branch="dev":
     # Clean up
     rm -rf temp_clone
 
-wasi-publish component="*" version="0.4.0-beta.1":
+wasi-publish version component="*" flags="":
 	if [ "{{component}}" = "*" ]; then \
 	    awk '{print $2}' checksums.txt | while read path; do \
 	        id=$(basename "$path"); \
 	        id="${id%.wasm}"; \
 	        id=$(echo "$id" | sed 's/_/-/g'); \
 	        echo "Publishing $path at wavs-tests:$id@{{version}}"; \
-	        wkg publish "$path" --package="wavs-tests:$id@{{version}}"; \
+	        wkg publish "$path" --package="wavs-tests:$id@{{version}}" {{flags}}; \
 	    done; \
 	else \
 	    awk '{print $2}' checksums.txt | while read path; do \
@@ -210,7 +210,7 @@ wasi-publish component="*" version="0.4.0-beta.1":
 	        id=$(echo "$id" | sed 's/_/-/g'); \
 	        if [ "$id" = "{{component}}" ]; then \
 	            echo "Publishing $path at wavs-tests:$id@{{version}}"; \
-	            wkg publish "$path" --package="wavs-tests:$id@{{version}}"; \
+	            wkg publish "$path" --package="wavs-tests:$id@{{version}}" {{flags}}; \
 	        fi; \
 	    done; \
 	fi

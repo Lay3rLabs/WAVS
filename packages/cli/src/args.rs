@@ -1,4 +1,7 @@
-use std::{num::NonZeroU32, path::PathBuf};
+use std::{
+    num::{NonZeroU32, NonZeroU64},
+    path::PathBuf,
+};
 
 use clap::{arg, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -13,7 +16,6 @@ use crate::config::Config;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-#[allow(clippy::large_enum_variant)]
 pub enum Command {
     /// Uploads a WASI component
     UploadComponent {
@@ -36,10 +38,14 @@ pub enum Command {
     ///
     /// # Parameters
     /// * `service_url`: URL pointing to the JSON service definition
+    /// * `set_url`: Boolean indicating whether to also set the URL on the service manager
     /// * `args`: Additional CLI arguments for the deployment operation
     DeployService {
         #[clap(long)]
         service_url: String,
+
+        #[clap(long)]
+        set_url: bool,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -268,6 +274,14 @@ pub enum TriggerCommand {
         chain_name: ChainName,
         #[clap(long)]
         n_blocks: NonZeroU32,
+
+        /// Optional start block
+        #[clap(long)]
+        start_block: Option<NonZeroU64>,
+
+        /// Optional end block height
+        #[clap(long)]
+        end_block: Option<NonZeroU64>,
     },
 
     /// Set a cron trigger for a workflow

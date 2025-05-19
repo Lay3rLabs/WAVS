@@ -10,6 +10,7 @@ use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    num::NonZero,
     pin::Pin,
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
@@ -22,7 +23,10 @@ use wavs_types::{
     WorkflowID,
 };
 
-use super::cron_scheduler::CronScheduler;
+use super::{
+    block_scheduler::{BlockTriggerConfig, MultiChainBlockScheduler},
+    cron_scheduler::CronScheduler,
+};
 
 #[derive(Clone)]
 pub struct CoreTriggerManager {
@@ -43,8 +47,8 @@ struct LookupMaps {
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
-    /// lookup by chain_name -> n_blocks
-    pub triggers_by_block_interval: Arc<RwLock<HashMap<ChainName, Vec<(u32, LookupId)>>>>,
+    /// Efficient block scheduler for block interval triggers
+    pub block_scheduler: MultiChainBlockScheduler,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -61,7 +65,7 @@ impl LookupMaps {
             lookup_id: Arc::new(AtomicUsize::new(0)),
             triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
-            triggers_by_block_interval: Arc::new(RwLock::new(HashMap::new())),
+            block_scheduler: MultiChainBlockScheduler::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
             cron_scheduler: CronScheduler::default(),
         }
@@ -425,38 +429,33 @@ impl CoreTriggerManager {
         Ok(())
     }
 
+    /// Process blocks and return trigger actions for any triggers that should fire
     fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
-        let mut triggers_by_block_interval_lock =
-            self.lookup_maps.triggers_by_block_interval.write().unwrap();
-        let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-
         let mut trigger_actions = vec![];
 
-        if let Some(triggers) = triggers_by_block_interval_lock.get_mut(&chain_name) {
-            // Since we don't remove the trigger data when the trigger config is removed,
-            // for efficiency we want to do it here.
+        // Get the triggers that should fire at this block height
+        let firing_lookup_ids = self
+            .lookup_maps
+            .block_scheduler
+            .process_block(&chain_name, block_height);
 
-            triggers.retain(|(_, lookup_id)| trigger_configs_lock.contains_key(lookup_id));
+        // Convert lookup_ids to TriggerActions
+        if !firing_lookup_ids.is_empty() {
+            let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
 
-            // now we can iterate again on the active triggers
-            for (countdown, lookup_id) in triggers.iter_mut() {
-                // decrement the countdown
-                *countdown -= 1;
-
-                if *countdown == 0 {
-                    if let Some(trigger_config) = trigger_configs_lock.get(lookup_id) {
-                        if let Trigger::BlockInterval { n_blocks, .. } = &trigger_config.trigger {
-                            // reset the countdown to n_blocks
-                            *countdown = (*n_blocks).into();
-                            trigger_actions.push(TriggerAction {
-                                data: TriggerData::BlockInterval {
-                                    chain_name: chain_name.clone(),
-                                    block_height,
-                                },
-                                config: trigger_config.clone(),
-                            });
-                        }
-                    }
+            for lookup_id in firing_lookup_ids {
+                if let Some(trigger_config) = trigger_configs_lock.get(&lookup_id) {
+                    trigger_actions.push(TriggerAction {
+                        data: TriggerData::BlockInterval {
+                            chain_name: chain_name.clone(),
+                            block_height,
+                        },
+                        config: trigger_config.clone(),
+                    });
+                } else {
+                    self.metrics
+                        .increment_total_errors("block interval trigger config not found");
+                    tracing::warn!("Missing trigger config for block interval id {}", lookup_id);
                 }
             }
         }
@@ -534,13 +533,22 @@ impl TriggerManager for CoreTriggerManager {
             Trigger::BlockInterval {
                 chain_name,
                 n_blocks,
+                start_block,
+                end_block,
             } => {
-                let mut lock = self.lookup_maps.triggers_by_block_interval.write().unwrap();
-                let key = chain_name.clone();
+                // Create configuration object for the block scheduler
+                let block_config = BlockTriggerConfig {
+                    n_blocks,
+                    start_block: start_block.map(|b| NonZero::new(b.into()).unwrap()),
+                    end_block: end_block.map(|b| NonZero::new(b.into()).unwrap()),
+                };
 
-                lock.entry(key)
-                    .or_default()
-                    .push((n_blocks.into(), lookup_id));
+                // Schedule the trigger without needing current block height
+                self.lookup_maps.block_scheduler.schedule_trigger(
+                    &chain_name,
+                    lookup_id,
+                    block_config,
+                );
             }
             Trigger::Cron {
                 schedule,
@@ -593,21 +601,73 @@ impl TriggerManager for CoreTriggerManager {
             .remove(&workflow_id)
             .ok_or(TriggerError::NoSuchWorkflow(service_id, workflow_id))?;
 
-        remove_trigger_data(
-            &mut self.lookup_maps.trigger_configs.write().unwrap(),
-            &mut self
-                .lookup_maps
-                .triggers_by_evm_contract_event
-                .write()
-                .unwrap(),
-            &mut self
-                .lookup_maps
-                .triggers_by_cosmos_contract_event
-                .write()
-                .unwrap(),
-            &self.lookup_maps.cron_scheduler,
-            lookup_id,
-        )?;
+        // Get the trigger type to know which scheduler to remove from
+        let trigger_type = {
+            let trigger_configs = self.lookup_maps.trigger_configs.read().unwrap();
+            trigger_configs
+                .get(&lookup_id)
+                .map(|config| config.trigger.clone())
+        };
+
+        // Remove from the appropriate collection based on trigger type
+        if let Some(trigger) = trigger_type {
+            match trigger {
+                Trigger::EvmContractEvent {
+                    address,
+                    chain_name,
+                    event_hash,
+                } => {
+                    let mut lock = self
+                        .lookup_maps
+                        .triggers_by_evm_contract_event
+                        .write()
+                        .unwrap();
+                    if let Some(set) = lock.get_mut(&(chain_name.clone(), address, event_hash)) {
+                        set.remove(&lookup_id);
+                        if set.is_empty() {
+                            lock.remove(&(chain_name, address, event_hash));
+                        }
+                    }
+                }
+                Trigger::CosmosContractEvent {
+                    address,
+                    chain_name,
+                    event_type,
+                } => {
+                    let mut lock = self
+                        .lookup_maps
+                        .triggers_by_cosmos_contract_event
+                        .write()
+                        .unwrap();
+                    if let Some(set) =
+                        lock.get_mut(&(chain_name.clone(), address.clone(), event_type.clone()))
+                    {
+                        set.remove(&lookup_id);
+                        if set.is_empty() {
+                            lock.remove(&(chain_name, address, event_type));
+                        }
+                    }
+                }
+                Trigger::BlockInterval { chain_name, .. } => {
+                    // Remove from block scheduler
+                    self.lookup_maps
+                        .block_scheduler
+                        .remove_trigger(&chain_name, lookup_id);
+                }
+                Trigger::Cron { .. } => {
+                    // Remove from cron scheduler
+                    self.lookup_maps.cron_scheduler.remove_trigger(lookup_id)?;
+                }
+                Trigger::Manual => {}
+            }
+        }
+
+        // Remove from trigger_configs
+        self.lookup_maps
+            .trigger_configs
+            .write()
+            .unwrap()
+            .remove(&lookup_id);
 
         Ok(())
     }
@@ -635,17 +695,74 @@ impl TriggerManager for CoreTriggerManager {
             .get(&service_id)
             .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
 
-        for lookup_id in workflow_map.values() {
-            remove_trigger_data(
-                &mut trigger_configs,
-                &mut triggers_by_evm_contract_event,
-                &mut triggers_by_cosmos_contract_event,
-                &self.lookup_maps.cron_scheduler,
-                *lookup_id,
-            )?;
+        // Collect all lookup IDs to be removed
+        let lookup_ids: Vec<LookupId> = workflow_map.values().copied().collect();
+
+        // Remove triggers from all collections
+        for lookup_id in &lookup_ids {
+            if let Some(config) = trigger_configs.get(lookup_id) {
+                match &config.trigger {
+                    Trigger::EvmContractEvent {
+                        address,
+                        chain_name,
+                        event_hash,
+                    } => {
+                        if let Some(set) = triggers_by_evm_contract_event.get_mut(&(
+                            chain_name.clone(),
+                            *address,
+                            *event_hash,
+                        )) {
+                            set.remove(lookup_id);
+                            if set.is_empty() {
+                                triggers_by_evm_contract_event.remove(&(
+                                    chain_name.clone(),
+                                    *address,
+                                    *event_hash,
+                                ));
+                            }
+                        }
+                    }
+                    Trigger::CosmosContractEvent {
+                        address,
+                        chain_name,
+                        event_type,
+                    } => {
+                        if let Some(set) = triggers_by_cosmos_contract_event.get_mut(&(
+                            chain_name.clone(),
+                            address.clone(),
+                            event_type.clone(),
+                        )) {
+                            set.remove(lookup_id);
+                            if set.is_empty() {
+                                triggers_by_cosmos_contract_event.remove(&(
+                                    chain_name.clone(),
+                                    address.clone(),
+                                    event_type.clone(),
+                                ));
+                            }
+                        }
+                    }
+                    Trigger::BlockInterval { chain_name, .. } => {
+                        // Remove from block scheduler
+                        self.lookup_maps
+                            .block_scheduler
+                            .remove_trigger(chain_name, *lookup_id);
+                    }
+                    Trigger::Cron { .. } => {
+                        // Remove from cron scheduler - ignore errors for non-existent triggers
+                        let _ = self.lookup_maps.cron_scheduler.remove_trigger(*lookup_id);
+                    }
+                    Trigger::Manual => {}
+                }
+            }
         }
 
-        // 3. remove from service_workflow_lookup_map
+        // Remove all trigger configs
+        for lookup_id in &lookup_ids {
+            trigger_configs.remove(lookup_id);
+        }
+
+        // Remove from service_workflow_lookup_map
         triggers_by_service_workflow_lock.remove(&service_id);
 
         Ok(())
@@ -675,62 +792,6 @@ impl TriggerManager for CoreTriggerManager {
 
         Ok(triggers)
     }
-}
-
-fn remove_trigger_data(
-    trigger_configs: &mut BTreeMap<usize, TriggerConfig>,
-    triggers_by_evm_contract_address: &mut HashMap<
-        (ChainName, alloy_primitives::Address, ByteArray<32>),
-        HashSet<LookupId>,
-    >,
-    triggers_by_cosmos_contract_address: &mut HashMap<
-        (ChainName, layer_climb::prelude::Address, String),
-        HashSet<LookupId>,
-    >,
-    cron_scheduler: &CronScheduler,
-    lookup_id: LookupId,
-) -> Result<(), TriggerError> {
-    // 1. remove from triggers
-    let trigger_data = trigger_configs
-        .remove(&lookup_id)
-        .ok_or(TriggerError::NoSuchTriggerData(lookup_id))?;
-
-    // 2. remove from contracts
-    match trigger_data.trigger {
-        Trigger::EvmContractEvent {
-            address,
-            chain_name,
-            event_hash,
-        } => {
-            triggers_by_evm_contract_address
-                .remove(&(chain_name.clone(), address, event_hash))
-                .ok_or(TriggerError::NoSuchEvmContractEvent(
-                    chain_name, address, event_hash,
-                ))?;
-        }
-        Trigger::CosmosContractEvent {
-            address,
-            chain_name,
-            event_type,
-        } => {
-            triggers_by_cosmos_contract_address
-                .remove(&(chain_name.clone(), address.clone(), event_type.clone()))
-                .ok_or(TriggerError::NoSuchCosmosContractEvent(
-                    chain_name, address, event_type,
-                ))?;
-        }
-        Trigger::BlockInterval { .. } => {
-            // after being removed from the trigger config, actual trigger is deleted
-            // during the block processing
-        }
-        Trigger::Cron { .. } => {
-            // Remove from cron scheduler - errors are already handled inside
-            cron_scheduler.remove_trigger(lookup_id)?;
-        }
-        Trigger::Manual => {}
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -951,17 +1012,10 @@ mod tests {
         .unwrap();
         manager.add_trigger(trigger.clone()).unwrap();
 
-        // verify that triggers exist in the lookup maps
-        {
-            let triggers_by_block_interval_lock = manager
-                .lookup_maps
-                .triggers_by_block_interval
-                .read()
-                .unwrap();
-            let countdowns = triggers_by_block_interval_lock.get(&chain_name).unwrap();
-            assert_eq!(countdowns.len(), 2);
-        }
+        // Verify we have two scheduled triggers
+        assert_eq!(manager.lookup_maps.block_scheduler.total_triggers(), 2);
 
+        // Remove one trigger and verify we have one left
         manager
             .remove_trigger(service_id.clone(), workflow_id.clone())
             .unwrap();
@@ -970,38 +1024,18 @@ mod tests {
 
         // verify only one trigger action is generated
         assert_eq!(trigger_actions.len(), 1);
-
-        // verify the trigger data is removed from the lookup maps
-        {
-            let triggers_by_block_interval_lock = manager
-                .lookup_maps
-                .triggers_by_block_interval
-                .read()
-                .unwrap();
-            let countdowns = triggers_by_block_interval_lock.get(&chain_name).unwrap();
-            assert_eq!(countdowns.len(), 1);
-        }
+        assert_eq!(manager.lookup_maps.block_scheduler.total_triggers(), 1);
 
         // remove the last trigger config
         manager
             .remove_trigger(service_id2.clone(), workflow_id.clone())
             .unwrap();
 
-        let trigger_actions = manager.process_blocks(chain_name.clone(), 10);
+        let trigger_actions = manager.process_blocks(chain_name.clone(), 20);
 
         // verify no trigger action is generated this time
         assert!(trigger_actions.is_empty());
-
-        // verify the trigger data is now empty
-        {
-            let triggers_by_block_interval_lock = manager
-                .lookup_maps
-                .triggers_by_block_interval
-                .read()
-                .unwrap();
-            let countdowns = triggers_by_block_interval_lock.get(&chain_name).unwrap();
-            assert!(countdowns.is_empty());
-        }
+        assert_eq!(manager.lookup_maps.block_scheduler.total_triggers(), 0);
     }
 
     #[tokio::test]
