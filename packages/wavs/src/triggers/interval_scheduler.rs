@@ -102,19 +102,29 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
 
         self.unadded_triggers = still_unadded;
 
-        self.triggers
-            .iter_mut()
-            .filter_map(|state| {
-                let kickoff_time = *self.kickoff_time.get(&state.lookup_id()).unwrap();
-                if state.interval_hit(kickoff_time, now) {
-                    // this trigger is ready to fire
-                    Some(state.lookup_id())
-                } else {
-                    // this trigger is not ready yet
-                    None
+        let mut hits = Vec::new();
+
+        self.triggers.retain_mut(|state| {
+            if let Some(end_time) = state.end_time() {
+                // if the trigger has ended, remove it
+                // we don't remove it from the TriggerManager
+                // since this is more about expirey than full-on removal
+                // and we may still want to look the trigger up by ID
+                // in the manager for debugging etc.
+                if now >= end_time {
+                    return false;
                 }
-            })
-            .collect()
+            }
+
+            let kickoff_time = *self.kickoff_time.get(&state.lookup_id()).unwrap();
+            if state.interval_hit(kickoff_time, now) {
+                // this trigger is ready to fire
+                hits.push(state.lookup_id());
+            }
+            true
+        });
+
+        hits
     }
 
     /// Remove a trigger early
