@@ -25,9 +25,13 @@ impl WkgClient {
         let config_toml = &format!(
             r#"default_registry = "{domain}"
 
+[registry."wa.dev"]
+type = "warg"
+[registry."wa.dev".warg]
+url = "https://wa.dev"
+
 [registry."localhost:8090"]
 type = "warg"
-
 [registry."localhost:8090".warg]
 url = "http://localhost:8090"
 "#
