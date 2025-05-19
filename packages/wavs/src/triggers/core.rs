@@ -10,7 +10,7 @@ use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    num::NonZero,
+    num::NonZeroU64,
     pin::Pin,
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
@@ -24,7 +24,7 @@ use wavs_types::{
 };
 
 use super::{
-    block_scheduler::{BlockTriggerConfig, MultiChainBlockScheduler},
+    block_scheduler::{BlockIntervalState, BlockScheduler, BlockSchedulers},
     cron_scheduler::CronScheduler,
 };
 
@@ -48,8 +48,8 @@ struct LookupMaps {
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
-    /// Efficient block scheduler for block interval triggers
-    pub block_scheduler: MultiChainBlockScheduler,
+    /// Efficient block schedulers (one per chain) for block interval triggers
+    pub block_schedulers: BlockSchedulers,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
         Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
@@ -66,7 +66,7 @@ impl LookupMaps {
             lookup_id: Arc::new(AtomicUsize::new(0)),
             triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
-            block_scheduler: MultiChainBlockScheduler::default(),
+            block_schedulers: BlockSchedulers::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
             cron_scheduler: CronScheduler::default(),
         }
@@ -433,25 +433,32 @@ impl CoreTriggerManager {
     }
 
     /// Process blocks and return trigger actions for any triggers that should fire
-    pub fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
-        let mut trigger_actions = vec![];
-
+    fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
+        let block_height = match NonZeroU64::new(block_height) {
+            Some(height) => height,
+            None => {
+                self.metrics.increment_total_errors("block height is zero");
+                return Vec::new();
+            }
+        };
         // Get the triggers that should fire at this block height
-        let firing_lookup_ids = self
-            .lookup_maps
-            .block_scheduler
-            .process_block(&chain_name, block_height);
+        let firing_lookup_ids = match self.lookup_maps.block_schedulers.get_mut(&chain_name) {
+            Some(mut scheduler) => scheduler.tick(block_height.into()),
+            None => Vec::new(),
+        };
 
         // Convert lookup_ids to TriggerActions
         if !firing_lookup_ids.is_empty() {
             let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
+
+            let mut trigger_actions = Vec::with_capacity(firing_lookup_ids.len());
 
             for lookup_id in firing_lookup_ids {
                 if let Some(trigger_config) = trigger_configs_lock.get(&lookup_id) {
                     trigger_actions.push(TriggerAction {
                         data: TriggerData::BlockInterval {
                             chain_name: chain_name.clone(),
-                            block_height,
+                            block_height: block_height.get(),
                         },
                         config: trigger_config.clone(),
                     });
@@ -461,9 +468,11 @@ impl CoreTriggerManager {
                     tracing::warn!("Missing trigger config for block interval id {}", lookup_id);
                 }
             }
-        }
 
-        trigger_actions
+            trigger_actions
+        } else {
+            Vec::new()
+        }
     }
 }
 
@@ -538,19 +547,16 @@ impl TriggerManager for CoreTriggerManager {
                 start_block,
                 end_block,
             } => {
-                // Create configuration object for the block scheduler
-                let block_config = BlockTriggerConfig {
-                    n_blocks,
-                    start_block: start_block.map(|b| NonZero::new(b.into()).unwrap()),
-                    end_block: end_block.map(|b| NonZero::new(b.into()).unwrap()),
-                };
-
-                // Schedule the trigger without needing current block height
-                self.lookup_maps.block_scheduler.schedule_trigger(
-                    &chain_name,
-                    lookup_id,
-                    block_config,
-                );
+                self.lookup_maps
+                    .block_schedulers
+                    .entry(chain_name.clone())
+                    .or_insert_with(BlockScheduler::new)
+                    .add_trigger(BlockIntervalState::new(
+                        lookup_id,
+                        n_blocks,
+                        start_block.map(Into::into),
+                        end_block.map(Into::into),
+                    ));
             }
             Trigger::Cron {
                 schedule,
@@ -652,9 +658,11 @@ impl TriggerManager for CoreTriggerManager {
                 }
                 Trigger::BlockInterval { chain_name, .. } => {
                     // Remove from block scheduler
-                    self.lookup_maps
-                        .block_scheduler
-                        .remove_trigger(&chain_name, lookup_id);
+                    if let Some(mut scheduler) =
+                        self.lookup_maps.block_schedulers.get_mut(&chain_name)
+                    {
+                        scheduler.remove_trigger(lookup_id);
+                    }
                 }
                 Trigger::Cron { .. } => {
                     // Remove from cron scheduler
@@ -746,9 +754,11 @@ impl TriggerManager for CoreTriggerManager {
                     }
                     Trigger::BlockInterval { chain_name, .. } => {
                         // Remove from block scheduler
-                        self.lookup_maps
-                            .block_scheduler
-                            .remove_trigger(chain_name, *lookup_id);
+                        if let Some(mut scheduler) =
+                            self.lookup_maps.block_schedulers.get_mut(chain_name)
+                        {
+                            scheduler.remove_trigger(*lookup_id);
+                        }
                     }
                     Trigger::Cron { .. } => {
                         // Remove from cron scheduler - ignore errors for non-existent triggers
@@ -1015,7 +1025,15 @@ mod tests {
         manager.add_trigger(trigger.clone()).unwrap();
 
         // Verify we have two scheduled triggers
-        assert_eq!(manager.lookup_maps.block_scheduler.total_triggers(), 2);
+        assert_eq!(
+            manager
+                .lookup_maps
+                .block_schedulers
+                .get(&chain_name)
+                .unwrap()
+                .len(),
+            2
+        );
 
         // Remove one trigger and verify we have one left
         manager
@@ -1026,7 +1044,15 @@ mod tests {
 
         // verify only one trigger action is generated
         assert_eq!(trigger_actions.len(), 1);
-        assert_eq!(manager.lookup_maps.block_scheduler.total_triggers(), 1);
+        assert_eq!(
+            manager
+                .lookup_maps
+                .block_schedulers
+                .get(&chain_name)
+                .unwrap()
+                .len(),
+            1
+        );
 
         // remove the last trigger config
         manager
@@ -1037,7 +1063,15 @@ mod tests {
 
         // verify no trigger action is generated this time
         assert!(trigger_actions.is_empty());
-        assert_eq!(manager.lookup_maps.block_scheduler.total_triggers(), 0);
+        assert_eq!(
+            manager
+                .lookup_maps
+                .block_schedulers
+                .get(&chain_name)
+                .unwrap()
+                .len(),
+            0
+        );
     }
 
     #[tokio::test]

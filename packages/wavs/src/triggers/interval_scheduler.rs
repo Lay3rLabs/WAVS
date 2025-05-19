@@ -2,28 +2,28 @@ use std::collections::{HashMap, HashSet};
 
 use super::core::LookupId;
 
-// This is for some sort-of scheduler that runs on an interval.
+// This is for some sort of scheduler that runs on an interval.
 // It's used in WAVS for the cron and block interval triggers
 // just need to give it an `impl Interval`
 pub struct IntervalScheduler<T: IntervalTime, S: IntervalState<Time = T>> {
     // a flat vec so we can quickly iterate over it
-    pub triggers: Vec<S>,
-    pub unadded_triggers: Vec<S>,
+    triggers: Vec<S>,
+    unadded_triggers: Vec<S>,
     // just to make sure we don't have duplicates
-    pub trigger_ids: HashSet<LookupId>, 
+    trigger_ids: HashSet<LookupId>,
     // the time from which we kick off the interval loop for each trigger
-    pub kickoff_time: HashMap<LookupId, T>, 
+    kickoff_time: HashMap<LookupId, T>,
 }
 
 pub trait IntervalTime: Ord + Copy {}
 
 pub trait IntervalState: Clone {
     /// The unit of time this scheduler works in
-    type Time: IntervalTime; 
+    type Time: IntervalTime;
 
     fn lookup_id(&self) -> LookupId;
 
-    // this is usually just `if (now - kickoff_time) % 0`
+    // this is usually just `if (now - kickoff_time) % interval == 0`
     fn interval_hit(&self, kickoff_time: Self::Time, now: Self::Time) -> bool;
 
     fn start_time(&self) -> Option<Self::Time>;
@@ -41,11 +41,12 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.triggers.len() + self.unadded_triggers.len()
+    }
+
     /// Add a trigger, return `true` if it was added
-    pub fn add_trigger(
-        &mut self,
-        state: S,
-    ) -> bool {
+    pub fn add_trigger(&mut self, state: S) -> bool {
         let id = state.lookup_id();
         if self.trigger_ids.contains(&id) {
             false
@@ -72,7 +73,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
                 None => {
                     // no start time, make it now
                     now
-                },
+                }
             };
 
             self.kickoff_time.insert(state.lookup_id(), kickoff_time);
@@ -93,7 +94,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
                     None
                 }
             })
-            .collect()
+            .collect();
     }
 
     /// Remove a trigger early
@@ -101,7 +102,8 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         let existed = self.trigger_ids.remove(&id);
 
         self.triggers.retain(|state| state.lookup_id() != id);
-        self.unadded_triggers.retain(|state| state.lookup_id() != id);
+        self.unadded_triggers
+            .retain(|state| state.lookup_id() != id);
         self.trigger_ids.remove(&id);
         self.kickoff_time.remove(&id);
 
