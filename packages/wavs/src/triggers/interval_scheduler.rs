@@ -105,6 +105,14 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         let mut hits = Vec::new();
 
         self.triggers.retain_mut(|state| {
+            let kickoff_time = *self.kickoff_time.get(&state.lookup_id()).unwrap();
+            if state.interval_hit(kickoff_time, now) {
+                // this trigger is ready to fire
+                hits.push(state.lookup_id());
+            }
+
+            // remove the trigger if it has an end time and it's past that time
+            // but only AFTER checking if we hit the interval
             if let Some(end_time) = state.end_time() {
                 // if the trigger has ended, remove it
                 // we don't remove it from the TriggerManager
@@ -114,12 +122,6 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
                 if now >= end_time {
                     return false;
                 }
-            }
-
-            let kickoff_time = *self.kickoff_time.get(&state.lookup_id()).unwrap();
-            if state.interval_hit(kickoff_time, now) {
-                // this trigger is ready to fire
-                hits.push(state.lookup_id());
             }
             true
         });

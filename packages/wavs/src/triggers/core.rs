@@ -1128,6 +1128,19 @@ mod tests {
         };
         manager.add_trigger(trigger2).unwrap();
 
+        // first tick is now
+        let lookup_ids = manager
+            .lookup_maps
+            .cron_scheduler
+            .lock()
+            .unwrap()
+            .tick(Timestamp::from_datetime(chrono::Utc::now()).unwrap());
+        assert_eq!(
+            lookup_ids.len(),
+            0,
+            "Expected first tick to have no triggers"
+        );
+
         // Use a future time to process triggers
         let future_time =
             Timestamp::from_datetime(chrono::Utc::now() + chrono::Duration::seconds(10)).unwrap();
