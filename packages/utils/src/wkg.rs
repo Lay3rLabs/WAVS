@@ -22,7 +22,6 @@ struct InnerWkgClient {
 
 impl WkgClient {
     pub fn new(domain: String) -> Result<Self> {
-        // let config_toml = &format!("default_registry = \"{domain}\"");
         let config_toml = &format!(
             r#"default_registry = "{domain}"
 
@@ -33,7 +32,6 @@ type = "warg"
 url = "http://localhost:8090"
 "#
         );
-        println!("WkgClient Config: {}", config_toml);
         let config = Config::from_toml(config_toml)?;
         let inner = Arc::new(tokio::sync::Mutex::new(InnerWkgClient {
             client: None,
