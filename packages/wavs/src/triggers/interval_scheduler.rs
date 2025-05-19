@@ -81,14 +81,14 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         // or, if they don't have a start time, add them immediately
         for state in self.unadded_triggers.drain(..) {
             let kickoff_time = match state.start_time() {
+                Some(st) if st > now => {
+                    // hasn't started yet, just keep it and try again next time
+                    still_unadded.push(state);
+                    continue;
+                }
                 Some(st) => {
-                    if st < now {
-                        // hasn't started yet, just keep it and try again next time
-                        still_unadded.push(state);
-                        continue;
-                    } else {
-                        st
-                    }
+                    // start time is in the past, so we can add it now
+                    st
                 }
                 None => {
                     // no start time, make it now
