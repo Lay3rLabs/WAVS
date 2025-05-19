@@ -25,10 +25,12 @@ impl WkgClient {
         // let config_toml = &format!("default_registry = \"{domain}\"");
         let config_toml = &format!(
             r#"default_registry = "{domain}"
-[registry."localhost:5000"]
-type = "oci"
-[registry."localhost:5000".oci]
-protocol = "http"
+
+[registry."localhost:8090"]
+type = "warg"
+
+[registry."localhost:8090".warg]
+url = "http://localhost:8090"
 "#
         );
         println!("WkgClient Config: {}", config_toml);
