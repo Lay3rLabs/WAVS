@@ -3,6 +3,7 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use reqwest::Client;
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroU32;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
@@ -404,7 +405,7 @@ impl TestRegistry {
             TestBuilder::new("evm_block_interval")
                 .description("Tests the block interval trigger on EVM chain")
                 .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(chain.as_ref(), 1)
+                .block_interval_trigger(chain.as_ref(), NonZeroU32::new(1).unwrap(), None, None)
                 .evm_submit(chain.as_ref())
                 .build(),
         )
@@ -415,7 +416,7 @@ impl TestRegistry {
             TestBuilder::new("evm_cron_interval")
                 .description("Tests the cron interval trigger")
                 .component(ComponentName::EchoCronInterval)
-                .cron_trigger("* * * * * *")
+                .cron_trigger("* * * * * *", None, None)
                 .evm_submit(chain.as_ref())
                 .build(),
         )
@@ -523,7 +524,12 @@ impl TestRegistry {
             TestBuilder::new("cosmos_block_interval")
                 .description("Tests the block interval trigger on Cosmos chain")
                 .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(cosmos_chain.as_ref(), 1)
+                .block_interval_trigger(
+                    cosmos_chain.as_ref(),
+                    NonZeroU32::new(1).unwrap(),
+                    None,
+                    None,
+                )
                 .evm_submit(evm_chain.as_ref())
                 .build(),
         )
@@ -538,7 +544,7 @@ impl TestRegistry {
             TestBuilder::new("cosmos_cron_interval")
                 .description("Tests the cron interval trigger on Cosmos chain")
                 .component(ComponentName::EchoCronInterval)
-                .cron_trigger("* * * * * *")
+                .cron_trigger("* * * * * *", None, None)
                 .evm_submit(evm_chain.as_ref())
                 .build(),
         )

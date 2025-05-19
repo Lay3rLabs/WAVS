@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use wavs_types::{ChainName, Service, Submit, Trigger};
+use std::num::{NonZeroU32, NonZeroU64};
+
+use wavs_types::{ChainName, Service, Submit, Timestamp, Trigger};
 
 use crate::e2e::components::ComponentName;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
@@ -45,22 +47,13 @@ pub struct TestDefinition {
 #[derive(Clone, Debug)]
 pub enum TriggerConfig {
     /// EVM contract event trigger
-    EvmContract { chain_name: ChainName },
+    NewEvmContract { chain_name: ChainName },
 
     /// Cosmos contract event trigger
-    CosmosContract { chain_name: ChainName },
-
-    /// Block interval trigger
-    BlockInterval {
-        chain_name: ChainName,
-        n_blocks: u32,
-    },
-
-    /// Cron trigger
-    Cron { schedule: String },
+    NewCosmosContract { chain_name: ChainName },
 
     /// Use an existing trigger
-    UseExisting(Trigger),
+    Trigger(Trigger),
 }
 
 /// Configuration for a submit
@@ -169,7 +162,7 @@ impl TestBuilder {
                 name: name.to_string(),
                 description: None,
                 components: Vec::new(),
-                trigger: TriggerConfig::EvmContract {
+                trigger: TriggerConfig::NewEvmContract {
                     chain_name: ChainName::new("31337").unwrap(),
                 },
                 submit: SubmitConfig::EvmContract {
@@ -204,7 +197,7 @@ impl TestBuilder {
 
     /// Configure an EVM contract trigger
     pub fn evm_trigger(mut self, chain_name: &str) -> Self {
-        self.definition.trigger = TriggerConfig::EvmContract {
+        self.definition.trigger = TriggerConfig::NewEvmContract {
             chain_name: ChainName::new(chain_name).unwrap(),
         };
         self
@@ -212,26 +205,41 @@ impl TestBuilder {
 
     /// Configure a Cosmos contract trigger
     pub fn cosmos_trigger(mut self, chain_name: &str) -> Self {
-        self.definition.trigger = TriggerConfig::CosmosContract {
+        self.definition.trigger = TriggerConfig::NewCosmosContract {
             chain_name: ChainName::new(chain_name).unwrap(),
         };
         self
     }
 
     /// Configure a block interval trigger
-    pub fn block_interval_trigger(mut self, chain_name: &str, n_blocks: u32) -> Self {
-        self.definition.trigger = TriggerConfig::BlockInterval {
+    pub fn block_interval_trigger(
+        mut self,
+        chain_name: &str,
+        n_blocks: NonZeroU32,
+        start_block: Option<NonZeroU64>,
+        end_block: Option<NonZeroU64>,
+    ) -> Self {
+        self.definition.trigger = TriggerConfig::Trigger(Trigger::BlockInterval {
             chain_name: ChainName::new(chain_name).unwrap(),
             n_blocks,
-        };
+            start_block,
+            end_block,
+        });
         self
     }
 
     /// Configure a cron trigger
-    pub fn cron_trigger(mut self, schedule: &str) -> Self {
-        self.definition.trigger = TriggerConfig::Cron {
+    pub fn cron_trigger(
+        mut self,
+        schedule: &str,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>,
+    ) -> Self {
+        self.definition.trigger = TriggerConfig::Trigger(Trigger::Cron {
             schedule: schedule.to_string(),
-        };
+            start_time,
+            end_time,
+        });
         self
     }
 

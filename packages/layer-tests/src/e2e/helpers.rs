@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use utils::filesystem::workspace_path;
 use uuid::Uuid;
 
-use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
+use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
     Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
@@ -139,12 +139,17 @@ pub async fn deploy_service_for_test(
     tracing::info!("[{}] Deploying service: {}", test.name, service.id);
 
     // Deploy the service
+    let service_url = DeployService::save_service(&clients.cli_ctx, &service)
+        .await
+        .unwrap();
     DeployService::run(
         &clients.cli_ctx,
-        submit_client.provider.clone(),
         DeployServiceArgs {
             service: service.clone(),
-            service_url: None,
+            set_service_url_args: Some(SetServiceUrlArgs {
+                provider: submit_client.provider.clone(),
+                service_url,
+            }),
         },
     )
     .await
@@ -198,16 +203,21 @@ pub async fn deploy_service_for_test(
             test.name,
             multi_service.id
         );
+        let service_url = DeployService::save_service(&clients.cli_ctx, &multi_service)
+            .await
+            .unwrap();
         DeployService::run(
             &clients.cli_ctx,
-            submit_client.provider.clone(),
             DeployServiceArgs {
-                service: multi_service.clone(),
-                service_url: None,
+                service: service.clone(),
+                set_service_url_args: Some(SetServiceUrlArgs {
+                    provider: submit_client.provider.clone(),
+                    service_url,
+                }),
             },
         )
         .await
-        .context("Failed to deploy multi-trigger service")?;
+        .context("Failed to deploy service")?;
 
         Some(multi_service)
     } else {
@@ -223,7 +233,7 @@ pub async fn create_trigger_from_config(
     clients: &Clients,
 ) -> Result<Trigger> {
     match trigger_config {
-        TriggerConfig::EvmContract { chain_name } => {
+        TriggerConfig::NewEvmContract { chain_name } => {
             let client = clients.get_evm_client(chain_name);
 
             // Deploy a new EVM trigger contract
@@ -243,7 +253,7 @@ pub async fn create_trigger_from_config(
                 event_hash: ByteArray::new(event_hash),
             })
         }
-        TriggerConfig::CosmosContract { chain_name } => {
+        TriggerConfig::NewCosmosContract { chain_name } => {
             let client = clients.get_cosmos_client(chain_name).await;
 
             // Get the code ID with better error handling
@@ -284,20 +294,7 @@ pub async fn create_trigger_from_config(
                 event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
             })
         }
-        TriggerConfig::BlockInterval {
-            chain_name,
-            n_blocks,
-        } => Ok(Trigger::BlockInterval {
-            chain_name: chain_name.clone(),
-            n_blocks: std::num::NonZeroU32::new(*n_blocks)
-                .unwrap_or(std::num::NonZeroU32::new(1).unwrap()),
-        }),
-        TriggerConfig::Cron { schedule } => Ok(Trigger::Cron {
-            schedule: schedule.clone(),
-            start_time: None,
-            end_time: None,
-        }),
-        TriggerConfig::UseExisting(trigger) => Ok(trigger.clone()),
+        TriggerConfig::Trigger(trigger) => Ok(trigger.clone()),
     }
 }
 

@@ -138,7 +138,6 @@ pub async fn add_task(
     }
 }
 
-// The new optimized version of wait_for_task_to_land with exponential backoff
 pub async fn wait_for_task_to_land(
     evm_submit_client: EvmSigningClient,
     address: alloy_primitives::Address,
