@@ -13,9 +13,7 @@ use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
-use super::test_definition::{
-    AggregatorConfig, ExpectedOutput, SubmitConfig, TestBuilder, TestDefinition,
-};
+use super::test_definition::{ExpectedOutput, SubmitConfig, TestBuilder, TestDefinition};
 use super::types::SquareResponse;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
@@ -313,12 +311,7 @@ impl TestRegistry {
                 .description("Tests the EchoData component using an aggregator")
                 .component(ComponentName::EchoData)
                 .evm_trigger(aggregator_chain)
-                .aggregator_submit(
-                    url,
-                    AggregatorConfig::NewEvmContract {
-                        chain_name: aggregator_chain.clone(),
-                    },
-                )
+                .aggregator_submit(url)
                 .input_text("Chancellor")
                 .expect_same_output()
                 .build(),

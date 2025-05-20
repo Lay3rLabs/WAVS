@@ -16,7 +16,7 @@ use crate::{
         test_definition::TestDefinition,
         test_registry::TestRegistry,
     },
-    example_evm_client::{example_submit::ISimpleSubmit::SignedData, TriggerId},
+    example_evm_client::TriggerId,
 };
 
 /// Simplified test runner that leverages services directly attached to test definitions
@@ -147,45 +147,26 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
     let submit_client = clients.get_evm_client(service.manager.chain_name());
     let submit_start_block = submit_client.provider.get_block_number().await?;
 
-    // For multi-task tests that don't require sequential execution, run them concurrently
-    if !test.use_multi_trigger {
-        // Run tasks concurrently for faster execution
-        let mut task_futures = FuturesUnordered::new();
-
+    // Run tasks sequentially according to test definition
+    for task_number in 0..test.components.len() {
+        let is_final = task_number == test.components.len() - 1;
         let input_data = test.input_data.to_bytes();
-        let service_id_clone = service_id.clone();
-        let workflow_id_clone = workflow_id.to_string();
-        let submit_client_clone = submit_client.clone();
-        let clients_clone = clients.clone();
 
-        task_futures.push(async move {
-            add_task(
-                &clients_clone,
-                service_id_clone,
-                Some(workflow_id_clone),
-                input_data,
-                submit_client_clone,
-                submit_start_block,
-                true,
-            )
-            .await
-        });
+        let (trigger_id, signed_data) = add_task(
+            clients,
+            service_id.clone(),
+            Some(workflow_id.to_string()),
+            input_data,
+            submit_client.clone(),
+            submit_start_block,
+            is_final,
+        )
+        .await?;
 
-        // Process results
-        let mut final_result: Option<(TriggerId, SignedData)> = None;
-        while let Some(result) = task_futures.next().await {
-            match result {
-                Ok((trigger_id, Some(signed_data))) => {
-                    final_result = Some((trigger_id, signed_data));
-                }
-                Ok(_) => {} // Non-final task, no validation needed
-                Err(e) => return Err(e),
-            }
-        }
+        if is_final {
+            let signed_data = signed_data.context("no signed data returned")?;
 
-        // Validate the final result
-        if let Some((trigger_id, signed_data)) = final_result {
-            // Verify output
+            // Verify the output
             if !test
                 .expected_output
                 .matches(&signed_data.data, &test.input_data)
@@ -197,52 +178,8 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
             }
 
             // Handle multi-trigger service if specified
-            if test.use_multi_trigger && test.multi_trigger_service.is_some() {
+            if test.multi_trigger_service.is_some() {
                 handle_multi_trigger(test, &submit_client, trigger_id, submit_start_block).await?;
-            }
-        } else {
-            return Err(anyhow::anyhow!(
-                "No final result received for test: {}",
-                test.name
-            ));
-        }
-    } else {
-        // For tests that require sequential execution
-        // Run tasks sequentially according to test definition
-        for task_number in 0..test.components.len() {
-            let is_final = task_number == test.components.len() - 1;
-            let input_data = test.input_data.to_bytes();
-
-            let (trigger_id, signed_data) = add_task(
-                clients,
-                service_id.clone(),
-                Some(workflow_id.to_string()),
-                input_data,
-                submit_client.clone(),
-                submit_start_block,
-                is_final,
-            )
-            .await?;
-
-            if is_final {
-                let signed_data = signed_data.context("no signed data returned")?;
-
-                // Verify the output
-                if !test
-                    .expected_output
-                    .matches(&signed_data.data, &test.input_data)
-                {
-                    return Err(anyhow::anyhow!(
-                        "Output does not match expected output for test: {}",
-                        test.name
-                    ));
-                }
-
-                // Handle multi-trigger service if specified
-                if test.multi_trigger_service.is_some() {
-                    handle_multi_trigger(test, &submit_client, trigger_id, submit_start_block)
-                        .await?;
-                }
             }
         }
     }

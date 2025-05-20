@@ -15,7 +15,7 @@ use crate::{
     e2e::{
         clients::Clients,
         components::ComponentSources,
-        test_definition::{AggregatorConfig, SubmitConfig, TestDefinition, TriggerConfig},
+        test_definition::{SubmitConfig, TestDefinition, TriggerConfig},
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::example_trigger::SimpleTrigger,
@@ -116,28 +116,11 @@ pub async fn deploy_service_for_test(
         .await
         .context("Failed to create submit")?;
 
-    let mut aggregators = vec![];
-    for aggregator in test.aggregators.iter() {
-        match aggregator {
-            AggregatorConfig::NewEvmContract { chain_name } => {
-                let submit = create_submit_from_config(
-                    &SubmitConfig::NewEvmContract {
-                        chain_name: chain_name.clone(),
-                    },
-                    clients,
-                    service_manager_address,
-                )
-                .await?;
-
-                if let Submit::EvmContract(evm_contract_submission) = submit {
-                    aggregators.push(Aggregator::Evm(evm_contract_submission));
-                }
-            }
-            AggregatorConfig::EvmContractSubmission(evm_contract_submission) => {
-                aggregators.push(Aggregator::Evm(evm_contract_submission.clone()))
-            }
-        };
-    }
+    let aggregators = vec![Aggregator::Evm(EvmContractSubmission {
+        chain_name: service_manager_chain.clone(),
+        address: service_manager_address,
+        max_gas: None,
+    })];
 
     // Create service workflows
     let workflow_id = WorkflowID::new("default")?;

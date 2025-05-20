@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 use std::num::{NonZeroU32, NonZeroU64};
 
-use wavs_types::{ChainName, EvmContractSubmission, Service, Submit, Timestamp, Trigger};
+use wavs_types::{ChainName, Service, Submit, Timestamp, Trigger};
 
 use crate::e2e::components::ComponentName;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
@@ -27,9 +27,6 @@ pub struct TestDefinition {
 
     /// Submit configuration
     pub submit: SubmitConfig,
-
-    /// Aggregator configuration - required when submit is aggregator
-    pub aggregators: Vec<AggregatorConfig>,
 
     /// Input data to send to the trigger
     pub input_data: InputData,
@@ -106,14 +103,6 @@ pub enum SubmitConfig {
 
     /// Use an existing submit
     Submit(Submit),
-}
-
-// Configuration for an aggregator config
-#[derive(Clone, Debug)]
-pub enum AggregatorConfig {
-    NewEvmContract { chain_name: ChainName },
-
-    EvmContractSubmission(EvmContractSubmission),
 }
 
 /// Different types of input data
@@ -209,7 +198,6 @@ impl TestBuilder {
                 submit: SubmitConfig::NewEvmContract {
                     chain_name: ChainName::new("31337").unwrap(),
                 },
-                aggregators: vec![],
                 input_data: InputData::None,
                 expected_output: ExpectedOutput::Any,
                 use_multi_trigger: false,
@@ -294,11 +282,10 @@ impl TestBuilder {
     }
 
     /// Configure an aggregator submit
-    pub fn aggregator_submit(mut self, url: &str, aggregator: AggregatorConfig) -> Self {
+    pub fn aggregator_submit(mut self, url: &str) -> Self {
         self.definition.submit = SubmitConfig::Submit(Submit::Aggregator {
             url: url.to_string(),
         });
-        self.definition.aggregators.push(aggregator);
         self
     }
 
