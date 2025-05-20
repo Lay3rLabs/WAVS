@@ -116,11 +116,12 @@ impl CoreSubmission {
             .envelope
             .signature_data(vec![packet.signature], block_height)?;
 
-        let _tx_receipt = client
+        let tx_receipt = client
             .send_envelope_signatures(packet.envelope, signature_data, address, max_gas)
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
+        tracing::info!("Submitting data for service to contract {} with hash {}", address, tx_receipt.transaction_hash);
         self.metrics.increment_total_processed_messages("to_evm");
 
         Ok(())
@@ -132,6 +133,8 @@ impl CoreSubmission {
         url: String,
         packet: Packet,
     ) -> Result<(), SubmissionError> {
+        tracing::info!("Submitting data for service to aggregator {}", url);
+
         let response = self
             .http_client
             .post(format!("{url}/packet"))

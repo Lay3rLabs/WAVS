@@ -50,6 +50,8 @@ async fn process_packet(
     let event_id = packet.event_id();
     let route = packet.route.clone();
 
+    tracing::info!("Aggregator received packet for service {} workflow {}", route.service_id, route.workflow_id);
+
     let service = state.get_service(&packet.route)?;
     let aggregators = &service.workflows[&packet.route.workflow_id].aggregators;
 

@@ -79,6 +79,8 @@ impl EvmSigningClient {
             .await
             .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
 
+        tracing::info!("Submitted transaction to contract {} with hash {}", service_handler, receipt.transaction_hash);
+
         match receipt.status() {
             true => Ok(receipt),
             false => Err(EvmClientError::TransactionWithReceipt(Box::new(receipt))),
