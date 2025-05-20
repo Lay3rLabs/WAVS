@@ -204,11 +204,104 @@ mod tests {
         }
     }
 
+    // A test trigger that tracks when it's been processed but does NOT reschedule itself
+    #[derive(Clone)]
+    struct OneShotTrigger {
+        id: LookupId,
+        next_time: u32,
+        processed: bool,
+    }
+
+    impl IntervalState for OneShotTrigger {
+        type Time = u32;
+
+        fn lookup_id(&self) -> LookupId {
+            self.id
+        }
+
+        fn interval_hit(&mut self, _now: u32) -> Option<Option<u32>> {
+            self.processed = true;
+            Some(None) // Do not reschedule
+        }
+
+        fn initialize(&mut self, _kickoff_time: u32) -> Option<u32> {
+            Some(self.next_time)
+        }
+
+        fn start_time(&self) -> Option<u32> {
+            None
+        }
+
+        fn end_time(&self) -> Option<u32> {
+            None
+        }
+    }
+
     #[test]
     fn no_duplicate_adds() {
         let mut sched = IntervalScheduler::<u32, Dummy>::new();
         let t1 = Dummy(42);
         assert!(sched.add_trigger(t1.clone()).unwrap());
         assert!(!sched.add_trigger(t1).unwrap());
+    }
+
+    #[test]
+    fn tick_only_processes_up_to_current_time() {
+        let mut sched = IntervalScheduler::<u32, OneShotTrigger>::new();
+
+        // Add triggers at different time points
+        let t1 = OneShotTrigger {
+            id: 1,
+            next_time: 10,
+            processed: false,
+        };
+        let t2 = OneShotTrigger {
+            id: 2,
+            next_time: 20,
+            processed: false,
+        };
+        let t3 = OneShotTrigger {
+            id: 3,
+            next_time: 30,
+            processed: false,
+        };
+        let t4 = OneShotTrigger {
+            id: 4,
+            next_time: 100,
+            processed: false,
+        };
+
+        sched.add_trigger(t1).unwrap();
+        sched.add_trigger(t2).unwrap();
+        sched.add_trigger(t3).unwrap();
+        sched.add_trigger(t4).unwrap(); // This trigger should never be processed in this test
+
+        // Move all unadded triggers to the BTreeMap by ticking at time 0
+        let hits = sched.tick(0);
+        assert!(hits.is_empty(), "No hits should occur at time 0");
+
+        // Tick at time 15, which should only process t1 (scheduled for time 10)
+        let hits = sched.tick(15);
+        assert_eq!(hits, vec![1], "Only trigger 1 should hit at time 15");
+
+        // Tick at time 25, which should only process t2 (scheduled for time 20)
+        let hits = sched.tick(25);
+        assert_eq!(hits, vec![2], "Only trigger 2 should hit at time 25");
+
+        // Tick at time 35, which should only process t3 (scheduled for time 30)
+        let hits = sched.tick(35);
+        assert_eq!(hits, vec![3], "Only trigger 3 should hit at time 35");
+
+        // Tick at time 50, which should not process any triggers
+        // (t4 is scheduled for time 100, which is beyond the current time)
+        let hits = sched.tick(50);
+        assert!(hits.is_empty(), "No triggers should hit at time 50");
+
+        // Tick at time 150, which should process t4 (scheduled for time 100)
+        let hits = sched.tick(150);
+        assert_eq!(hits, vec![4], "Only trigger 4 should hit at time 150");
+
+        // This demonstrates that the scheduler only processes triggers up to the current time
+        // and doesn't walk the entire BTreeMap
     }
 }
