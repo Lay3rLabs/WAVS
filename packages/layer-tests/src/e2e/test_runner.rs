@@ -104,7 +104,6 @@ impl TestRunner {
     // Execute a single test with timings
     async fn execute_test(&self, test: &TestDefinition, clients: Arc<Clients>) -> Result<()> {
         let test_name = test.name.clone();
-        tracing::info!("Running test: {}", test_name);
         let start_time = Instant::now();
 
         match run_test(test, &clients).await {
