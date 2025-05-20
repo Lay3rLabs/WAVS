@@ -6,7 +6,7 @@ use super::core::LookupId;
 
 // This is for some sort of scheduler that runs on an interval.
 // It's used in WAVS for the cron and block interval triggers
-// just need to give it an `impl Interval`
+// just need to give it an `impl IntervalState`
 pub struct IntervalScheduler<T: IntervalTime, S: IntervalState<Time = T>> {
     // Key is the next time to run the trigger
     // and the value is a list of triggers that will run at that time
