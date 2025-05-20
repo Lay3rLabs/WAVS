@@ -42,10 +42,10 @@ impl HttpClient {
                         } else {
                             format!("{}: {}", status, body)
                         }
-                    },
+                    }
                     Err(_) => format!("{}: {}", status, body),
                 }
-            },
+            }
             Err(_) => format!("{}", status),
         };
 
@@ -53,7 +53,10 @@ impl HttpClient {
     }
 
     /// Helper method to parse JSON responses with appropriate error context
-    async fn parse_json<T: serde::de::DeserializeOwned>(response: Response, context: &str) -> Result<T> {
+    async fn parse_json<T: serde::de::DeserializeOwned>(
+        response: Response,
+        context: &str,
+    ) -> Result<T> {
         response
             .json()
             .await
@@ -61,7 +64,8 @@ impl HttpClient {
     }
 
     pub async fn get_config(&self) -> Result<serde_json::Value> {
-        let response = self.inner
+        let response = self
+            .inner
             .get(format!("{}/config", self.endpoint))
             .send()
             .await?;
@@ -79,7 +83,8 @@ impl HttpClient {
             .await?;
 
         let response = Self::handle_error_response(response, "Failed to upload component").await?;
-        let upload_response: UploadComponentResponse = Self::parse_json(response, "upload component").await?;
+        let upload_response: UploadComponentResponse =
+            Self::parse_json(response, "upload component").await?;
 
         Ok(upload_response.digest.into())
     }
@@ -103,7 +108,8 @@ impl HttpClient {
             address: Address::Evm(service.manager.evm_address_unchecked().into()),
         })?;
 
-        let response = self.inner
+        let response = self
+            .inner
             .post(format!("{}/app", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
@@ -134,7 +140,8 @@ impl HttpClient {
     pub async fn save_service(&self, service: &Service) -> Result<String> {
         let body = serde_json::to_string(service)?;
 
-        let response = self.inner
+        let response = self
+            .inner
             .post(format!("{}/save-service", self.endpoint))
             .header("Content-Type", "application/json")
             .body(body)
@@ -146,7 +153,8 @@ impl HttpClient {
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
-        let response = self.inner
+        let response = self
+            .inner
             .get(format!("{}/service-key/{service_id}", self.endpoint))
             .send()
             .await?;

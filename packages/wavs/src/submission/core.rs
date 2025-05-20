@@ -121,7 +121,11 @@ impl CoreSubmission {
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
 
-        tracing::info!("Submitting data for service to contract {} with hash {}", address, tx_receipt.transaction_hash);
+        tracing::info!(
+            "Submitting data for service to contract {} with hash {}",
+            address,
+            tx_receipt.transaction_hash
+        );
         self.metrics.increment_total_processed_messages("to_evm");
 
         Ok(())
