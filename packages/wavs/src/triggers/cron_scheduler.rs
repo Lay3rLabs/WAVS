@@ -47,8 +47,17 @@ impl CronIntervalState {
 
     pub fn set_next_trigger_time(&mut self) {
         if let Some(iterator) = self.iterator.as_mut() {
+            // Try to get the next time from the iterator
             match iterator.next().map(Timestamp::from_datetime) {
                 Some(Ok(time)) => {
+                    // Make sure the next time respects end_time if set
+                    if let Some(end_time) = self._end_time {
+                        if time > end_time {
+                            // Next time would be past the end time, so no more times
+                            self.next_trigger_time = None;
+                            return;
+                        }
+                    }
                     self.next_trigger_time = Some(time);
                 }
                 Some(Err(e)) => {
@@ -60,6 +69,9 @@ impl CronIntervalState {
                     self.next_trigger_time = None;
                 }
             }
+        } else {
+            // Iterator not initialized
+            self.next_trigger_time = None;
         }
     }
 }
@@ -71,20 +83,34 @@ impl IntervalState for CronIntervalState {
         self._lookup_id
     }
 
-    fn interval_hit(&mut self, kickoff_time: Self::Time, now: Self::Time) -> bool {
-        if self.iterator.is_none() {
-            self.iterator = Some(self.schedule.after_owned(kickoff_time.into_datetime()));
-            self.set_next_trigger_time();
-        }
+    fn initialize(&mut self, now: Self::Time) -> Option<Self::Time> {
+        // Handle start_time by using the later of now or start_time
+        let effective_now = if let Some(start_time) = self._start_time {
+            if start_time > now {
+                start_time.into_datetime()
+            } else {
+                now.into_datetime()
+            }
+        } else {
+            now.into_datetime()
+        };
 
+        // Set up iterator for upcoming events
+        self.iterator = Some(self.schedule.after_owned(effective_now));
+        self.set_next_trigger_time();
+        self.next_trigger_time.clone()
+    }
+
+    fn interval_hit(&mut self, now: Self::Time) -> Option<Option<Self::Time>> {
         if let Some(next_trigger_time) = self.next_trigger_time {
             if now >= next_trigger_time {
+                // We've hit this trigger time, calculate the next one
                 self.set_next_trigger_time();
-                return true;
+                return Some(self.next_trigger_time.clone());
             }
         }
 
-        false
+        None
     }
 
     fn start_time(&self) -> Option<Self::Time> {
