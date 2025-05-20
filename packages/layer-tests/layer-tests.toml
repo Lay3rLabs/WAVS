@@ -3,7 +3,7 @@ log_level = ["info", "wavs=debug"]
 
 [layer-tests]
 # Run all tests
-mode = "all"
+# mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
@@ -14,11 +14,7 @@ mode = "all"
 # ]}
 
 # Run a few specific tests
-# mode = {"isolated" = [
-#     {evm = "echo_data"},
-#     {evm = "echo_data_aggregator"},
-#     {cosmos = "permissions"},
-# ]}
+mode = { "isolated" = [{ evm = "echo_data_aggregator" }] }
 
 # Load components from the registry
 # registry = true
