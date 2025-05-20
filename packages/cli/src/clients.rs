@@ -1,7 +1,7 @@
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
-use reqwest::{Response, StatusCode};
+use reqwest::Response;
 use wavs_types::{
     AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
     ServiceID, SigningKeyResponse, UploadComponentResponse,

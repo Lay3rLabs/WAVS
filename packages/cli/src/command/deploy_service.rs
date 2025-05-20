@@ -1,6 +1,6 @@
 use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResult};
 use alloy_provider::DynProvider;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use wavs_types::Service;
 
 pub struct DeployService {
