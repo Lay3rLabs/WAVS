@@ -98,7 +98,7 @@ impl IntervalState for CronIntervalState {
         // Set up iterator for upcoming events
         self.iterator = Some(self.schedule.after_owned(effective_now));
         self.set_next_trigger_time();
-        self.next_trigger_time.clone()
+        self.next_trigger_time
     }
 
     fn interval_hit(&mut self, now: Self::Time) -> Option<Option<Self::Time>> {
@@ -106,7 +106,7 @@ impl IntervalState for CronIntervalState {
             if now >= next_trigger_time {
                 // We've hit this trigger time, calculate the next one
                 self.set_next_trigger_time();
-                return Some(self.next_trigger_time.clone());
+                return Some(self.next_trigger_time);
             }
         }
 

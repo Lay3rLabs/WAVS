@@ -74,7 +74,7 @@ impl IntervalState for BlockIntervalState {
         //   start = 2, now = 4, interval = 3 => periods = 1
         //   start = 2, now = 5, interval = 3 => periods = 1
         //   start = 2, now = 6, interval = 3 => periods = 2
-        let periods = (delta + interval - 1) / interval;
+        let periods = delta.div_ceil(interval);
 
         // Finally, real next firing point
         // Examples:

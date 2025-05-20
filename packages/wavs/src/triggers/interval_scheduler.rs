@@ -190,7 +190,7 @@ mod tests {
     fn no_duplicate_adds() {
         let mut sched = IntervalScheduler::<u32, Dummy>::new();
         let t1 = Dummy(42);
-        assert_eq!(sched.add_trigger(t1.clone()).unwrap(), true);
-        assert_eq!(sched.add_trigger(t1).unwrap(), false);
+        assert!(sched.add_trigger(t1.clone()).unwrap());
+        assert!(!sched.add_trigger(t1).unwrap());
     }
 }

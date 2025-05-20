@@ -54,7 +54,7 @@ fn test_initialization() {
 fn test_initialization_with_start_time() {
     // Create a state with a start time in the future
     let start_time = make_timestamp_from_now_plus_seconds(60);
-    let mut state = make_state(1, "* * * * * *", Some(start_time.clone()), None).unwrap();
+    let mut state = make_state(1, "* * * * * *", Some(start_time), None).unwrap();
 
     // Initialize with current time
     let now = make_timestamp(Utc::now());
@@ -86,7 +86,7 @@ fn test_interval_hit() {
     assert!(hit.is_none(), "Should not trigger before scheduled time");
 
     // Try to hit at the scheduled time
-    let hit = state.interval_hit(next_time.clone());
+    let hit = state.interval_hit(next_time);
     assert!(hit.is_some(), "Should trigger at scheduled time");
 
     // The hit should contain the next scheduled time
@@ -111,7 +111,7 @@ fn test_multiple_hits() {
     let first_time = state.initialize(now).unwrap();
 
     // First hit
-    let hit1 = state.interval_hit(first_time.clone());
+    let hit1 = state.interval_hit(first_time);
     assert!(hit1.is_some(), "First hit should be successful");
     let second_time_option = hit1.unwrap();
     assert!(
@@ -121,7 +121,7 @@ fn test_multiple_hits() {
     let second_time = second_time_option.unwrap();
 
     // Second hit
-    let hit2 = state.interval_hit(second_time.clone());
+    let hit2 = state.interval_hit(second_time);
     assert!(hit2.is_some(), "Second hit should be successful");
     let third_time_option = hit2.unwrap();
     assert!(
@@ -147,13 +147,13 @@ fn test_with_end_time() {
     let now = make_timestamp(Utc::now());
     let end_time = make_timestamp_from_now_plus_seconds(60);
 
-    let mut state = make_state(1, "* * * * * *", None, Some(end_time.clone())).unwrap();
+    let mut state = make_state(1, "* * * * * *", None, Some(end_time)).unwrap();
 
     // Initialize the state
     let next_time = state.initialize(now).unwrap();
 
     // Hit at the scheduled time
-    let hit = state.interval_hit(next_time.clone());
+    let hit = state.interval_hit(next_time);
     assert!(hit.is_some(), "Should have a hit at the scheduled time");
 
     // Check end_time - it should be what we set
