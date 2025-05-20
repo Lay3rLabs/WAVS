@@ -7,14 +7,15 @@ use std::num::NonZeroU32;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::{ChainName, Service, Submit};
+use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
 
 use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
-use super::test_definition::{ExpectedOutput, SubmitConfig, TestBuilder, TestDefinition};
-use super::types::SquareResponse;
+use super::test_definition::{
+    AggregatorConfig, OutputStructure, SubmitConfig, TestBuilder, TestDefinition, WorkflowBuilder,
+};
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
 /// Registry for managing test definitions and their deployed services
@@ -96,15 +97,16 @@ impl TestRegistry {
             let component_sources = component_sources.clone();
 
             futures.push(async move {
-                let (service, multi_trigger_service) =
+                let service =
                     helpers::deploy_service_for_test(test, &clients, &component_sources).await?;
 
-                if let SubmitConfig::Submit(Submit::Aggregator { url }) = &test.submit {
-                    TestRegistry::register_to_aggregator(url, &service).await?;
+                for workflow in test.workflows.values() {
+                    if let SubmitConfig::Submit(Submit::Aggregator { url }) = &workflow.submit {
+                        TestRegistry::register_to_aggregator(url, &service).await?;
+                    }
                 }
 
                 test.service = Some(service);
-                test.multi_trigger_service = multi_trigger_service;
 
                 Ok::<(), anyhow::Error>(())
             });
@@ -149,7 +151,7 @@ impl TestRegistry {
     pub fn from_test_mode(
         test_mode: &crate::config::TestMode,
         chain_configs: &ChainConfigs,
-    ) -> Self {
+    ) -> Result<Self> {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.clone().into();
 
@@ -164,35 +166,31 @@ impl TestRegistry {
 
             // Basic EVM chain tests
             if matrix.evm.contains(&EvmService::EchoData) {
-                registry.register_evm_echo_data_test(evm_chain);
+                registry.register_evm_echo_data_test(evm_chain)?;
             }
 
             if matrix.evm.contains(&EvmService::Square) {
-                registry.register_evm_square_test(evm_chain);
+                registry.register_evm_square_test(evm_chain)?;
             }
 
             if matrix.evm.contains(&EvmService::ChainTriggerLookup) {
-                registry.register_evm_chain_trigger_lookup_test(evm_chain);
+                registry.register_evm_chain_trigger_lookup_test(evm_chain)?;
             }
 
             if matrix.evm.contains(&EvmService::Permissions) {
-                registry.register_evm_permissions_test(evm_chain);
+                registry.register_evm_permissions_test(evm_chain)?;
             }
 
             if matrix.evm.contains(&EvmService::MultiWorkflow) {
-                registry.register_evm_multi_workflow_test(evm_chain);
-            }
-
-            if matrix.evm.contains(&EvmService::MultiTrigger) {
-                registry.register_evm_multi_trigger_test(evm_chain);
+                registry.register_evm_multi_workflow_test(evm_chain)?;
             }
 
             if matrix.evm.contains(&EvmService::BlockInterval) {
-                registry.register_evm_block_interval_test(evm_chain);
+                registry.register_evm_block_interval_test(evm_chain)?;
             }
 
             if matrix.evm.contains(&EvmService::CronInterval) {
-                registry.register_evm_cron_interval_test(evm_chain);
+                registry.register_evm_cron_interval_test(evm_chain)?;
             }
         }
 
@@ -203,7 +201,7 @@ impl TestRegistry {
 
             if matrix.evm.contains(&EvmService::EchoDataSecondaryChain) {
                 registry
-                    .register_evm_echo_data_secondary_chain_test(trigger_chain, secondary_chain);
+                    .register_evm_echo_data_secondary_chain_test(trigger_chain, secondary_chain)?;
             }
         }
 
@@ -212,7 +210,7 @@ impl TestRegistry {
             let (aggregator_chain, url) = &chain_names.evm_aggregator[0];
 
             if matrix.evm.contains(&EvmService::EchoDataAggregator) {
-                registry.register_evm_echo_data_aggregator_test(aggregator_chain, url);
+                registry.register_evm_echo_data_aggregator_test(aggregator_chain, url)?;
             }
         }
 
@@ -226,36 +224,36 @@ impl TestRegistry {
 
             // EVM tests that need Cosmos
             if matrix.evm.contains(&EvmService::CosmosQuery) {
-                registry.register_evm_cosmos_query_test(evm_chain, cosmos_chain);
+                registry.register_evm_cosmos_query_test(evm_chain, cosmos_chain)?;
             }
 
             // Cosmos tests
             if matrix.cosmos.contains(&CosmosService::EchoData) {
-                registry.register_cosmos_echo_data_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_echo_data_test(cosmos_chain, evm_chain)?;
             }
 
             if matrix.cosmos.contains(&CosmosService::Square) {
-                registry.register_cosmos_square_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_square_test(cosmos_chain, evm_chain)?;
             }
 
             if matrix.cosmos.contains(&CosmosService::ChainTriggerLookup) {
-                registry.register_cosmos_chain_trigger_lookup_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_chain_trigger_lookup_test(cosmos_chain, evm_chain)?;
             }
 
             if matrix.cosmos.contains(&CosmosService::CosmosQuery) {
-                registry.register_cosmos_cosmos_query_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_cosmos_query_test(cosmos_chain, evm_chain)?;
             }
 
             if matrix.cosmos.contains(&CosmosService::Permissions) {
-                registry.register_cosmos_permissions_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_permissions_test(cosmos_chain, evm_chain)?;
             }
 
             if matrix.cosmos.contains(&CosmosService::BlockInterval) {
-                registry.register_cosmos_block_interval_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_block_interval_test(cosmos_chain, evm_chain)?;
             }
 
             if matrix.cosmos.contains(&CosmosService::CronInterval) {
-                registry.register_cosmos_cron_interval_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_cron_interval_test(cosmos_chain, evm_chain)?;
             }
 
             // Cross-chain tests
@@ -263,174 +261,245 @@ impl TestRegistry {
                 .cross_chain
                 .contains(&CrossChainService::CosmosToEvmEchoData)
             {
-                registry.register_cosmos_to_evm_echo_data_test(cosmos_chain, evm_chain);
+                registry.register_cosmos_to_evm_echo_data_test(cosmos_chain, evm_chain)?;
             }
         }
 
-        registry
+        Ok(registry)
     }
 
     // Individual test registration methods (same as before)
-    fn register_evm_echo_data_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
+    fn register_evm_echo_data_test(&mut self, chain: &ChainName) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_echo_data")
                 .description("Tests the EchoData component on the primary EVM chain")
-                .component(ComponentName::EchoData)
-                .evm_trigger(chain)
-                .evm_submit(chain)
-                .input_text("The times")
-                .expect_same_output()
+                .add_workflow(
+                    WorkflowID::new("echo_data").unwrap(),
+                    WorkflowBuilder::new()
+                        .evm_trigger(chain)
+                        .evm_submit(chain)
+                        .component(ComponentName::EchoData)
+                        .input_text("The times")
+                        .expect_same_output()
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_evm_echo_data_secondary_chain_test(
         &mut self,
         trigger_chain: &ChainName,
         chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_echo_data_secondary_chain")
                 .description("Tests the EchoData component on the secondary EVM chain")
-                .component(ComponentName::EchoData)
-                .evm_trigger(trigger_chain)
-                .evm_submit(chain)
-                .input_text("collapse")
-                .expect_same_output()
+                .add_workflow(
+                    WorkflowID::new("echo_data_secondary").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoData)
+                        .evm_trigger(trigger_chain)
+                        .evm_submit(chain)
+                        .input_text("collapse")
+                        .expect_same_output()
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_evm_echo_data_aggregator_test(
         &mut self,
         aggregator_chain: &ChainName,
         url: &str,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_echo_data_aggregator")
                 .description("Tests the EchoData component using an aggregator")
-                .component(ComponentName::EchoData)
-                .evm_trigger(aggregator_chain)
-                .aggregator_submit(url)
-                .input_text("Chancellor")
-                .expect_same_output()
+                .add_workflow(
+                    WorkflowID::new("echo_data_aggregator").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoData)
+                        .evm_trigger(aggregator_chain)
+                        .aggregator_submit(url)
+                        .add_aggregator(AggregatorConfig::NewEvmAggregatorSubmit {
+                            chain_name: aggregator_chain.clone(),
+                        })
+                        .input_text("Chancellor")
+                        .expect_same_output()
+                        .build()?,
+                )?
+                .service_manager_chain(aggregator_chain)
                 .build(),
-        )
+        ))
     }
 
-    fn register_evm_square_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
+    fn register_evm_square_test(&mut self, chain: &ChainName) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_square")
                 .description("Tests the Square component on EVM chain")
-                .component(ComponentName::Square)
-                .evm_trigger(chain)
-                .evm_submit(chain)
-                .input_square(3)
-                .expect_square(9)
+                .add_workflow(
+                    WorkflowID::new("square").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::Square)
+                        .evm_trigger(chain)
+                        .evm_submit(chain)
+                        .input_square(3)
+                        .expect_square(9)
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
-    fn register_evm_chain_trigger_lookup_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
+    fn register_evm_chain_trigger_lookup_test(&mut self, chain: &ChainName) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_chain_trigger_lookup")
                 .description("Tests the ChainTriggerLookup component on EVM chain")
-                .component(ComponentName::ChainTriggerLookup)
-                .evm_trigger(chain)
-                .evm_submit(chain)
-                .input_text("satoshi")
-                .expect_same_output()
+                .add_workflow(
+                    WorkflowID::new("chain_trigger_lookup").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::ChainTriggerLookup)
+                        .evm_trigger(chain)
+                        .evm_submit(chain)
+                        .input_text("satoshi")
+                        .expect_same_output()
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_evm_cosmos_query_test(
         &mut self,
         evm_chain: &ChainName,
         cosmos_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_cosmos_query")
                 .description("Tests the CosmosQuery component from EVM to Cosmos")
-                .component(ComponentName::CosmosQuery)
-                .evm_trigger(evm_chain)
-                .evm_submit(evm_chain)
-                .input_cosmos_query(CosmosQueryRequest::BlockHeight {
-                    chain_name: cosmos_chain.clone(),
-                })
-                .expect_output_structure(ExpectedOutput::StructureOnly(
-                    super::test_definition::OutputStructure::CosmosQueryResponse,
-                ))
+                .add_workflow(
+                    WorkflowID::new("cosmos_query").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::CosmosQuery)
+                        .evm_trigger(evm_chain)
+                        .evm_submit(evm_chain)
+                        .input_cosmos_query(CosmosQueryRequest::BlockHeight {
+                            chain_name: cosmos_chain.clone(),
+                        })
+                        .expect_output_structure(OutputStructure::CosmosQueryResponse)
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
-    fn register_evm_permissions_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
+    fn register_evm_permissions_test(&mut self, chain: &ChainName) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_permissions")
                 .description("Tests permissions for HTTP and file system access on EVM chain")
-                .component(ComponentName::Permissions)
-                .evm_trigger(chain)
-                .evm_submit(chain)
-                .input_permissions(create_permissions_request())
-                .expect_output_structure(ExpectedOutput::StructureOnly(
-                    super::test_definition::OutputStructure::PermissionsResponse,
-                ))
+                .add_workflow(
+                    WorkflowID::new("permissions").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::Permissions)
+                        .evm_trigger(chain)
+                        .evm_submit(chain)
+                        .input_permissions(create_permissions_request())
+                        .expect_output_structure(OutputStructure::PermissionsResponse)
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
-    fn register_evm_multi_workflow_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
-            TestBuilder::new("evm_multi_workflow")
-                .description("Tests multiple workflows in a single service on EVM chain")
-                .components(vec![ComponentName::Square, ComponentName::EchoData])
+    fn register_evm_multi_workflow_test(&mut self, chain: &ChainName) -> Result<&mut Self> {
+        // This requires multiple workflows in a single test
+        let test_builder = TestBuilder::new("evm_multi_workflow")
+            .description("Tests multiple workflows in a single service on EVM chain");
+
+        // Add first workflow (Square)
+        let test_builder = test_builder.add_workflow(
+            WorkflowID::new("square_workflow").unwrap(),
+            WorkflowBuilder::new()
+                .component(ComponentName::Square)
+                .evm_trigger(chain)
+                .evm_submit(chain)
                 .input_square(10)
-                .expect_output(
-                    serde_json::to_string(&SquareResponse { y: 100 })
-                        .unwrap()
-                        .into(),
-                )
-                .evm_trigger(chain)
-                .evm_submit(chain)
-                .build(),
-        )
-    }
+                .expect_square(10)
+                .build()?,
+        )?;
 
-    fn register_evm_multi_trigger_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
-            TestBuilder::new("evm_multi_trigger")
-                .description("Tests multiple services triggered by the same event on EVM chain")
+        // Add second workflow (EchoData)
+        let test_builder = test_builder.add_workflow(
+            WorkflowID::new("echo_data_workflow").unwrap(),
+            WorkflowBuilder::new()
                 .component(ComponentName::EchoData)
                 .evm_trigger(chain)
                 .evm_submit(chain)
-                .input_text("tttrrrrriiiigggeerrr")
+                .input_square(10)
                 .expect_same_output()
-                .with_multi_trigger()
-                .build(),
-        )
+                .build()?,
+        )?;
+
+        // Complete the test definition
+        Ok(self.register(test_builder.build()))
     }
 
-    fn register_evm_block_interval_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
+    fn register_evm_multi_trigger_test(
+        &mut self,
+        chain: &ChainName,
+        trigger: Trigger,
+    ) -> Result<&mut Self> {
+        Ok(self.register(
+            TestBuilder::new("evm_multi_trigger")
+                .description("Tests multiple services triggered by the same event on EVM chain")
+                .add_workflow(
+                    WorkflowID::new("evm_multi_trigger").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoData)
+                        .trigger(trigger)
+                        .evm_submit(chain)
+                        .input_text("tttrrrrriiiigggeerrr")
+                        .expect_same_output()
+                        .build()?,
+                )?
+                .build(),
+        ))
+    }
+
+    fn register_evm_block_interval_test(&mut self, chain: &ChainName) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_block_interval")
                 .description("Tests the block interval trigger on EVM chain")
-                .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(chain, NonZeroU32::new(1).unwrap(), None, None)
-                .evm_submit(chain)
+                .add_workflow(
+                    WorkflowID::new("block_interval").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoBlockInterval)
+                        .block_interval_trigger(chain, NonZeroU32::new(1).unwrap(), None, None)
+                        .evm_submit(chain)
+                        .expect_text("block-interval data")
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
-    fn register_evm_cron_interval_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
+    fn register_evm_cron_interval_test(&mut self, chain: &ChainName) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("evm_cron_interval")
                 .description("Tests the cron interval trigger")
-                .component(ComponentName::EchoCronInterval)
-                .cron_trigger("* * * * * *", None, None)
-                .evm_submit(chain)
+                .add_workflow(
+                    WorkflowID::new("cron_interval").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoCronInterval)
+                        .cron_trigger("* * * * * *", None, None)
+                        .evm_submit(chain)
+                        .expect_text("cron-interval data")
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     // Cosmos test registrations
@@ -439,121 +508,159 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cosmos_echo_data")
                 .description("Tests the EchoData component on Cosmos chain")
-                .component(ComponentName::EchoData)
-                .cosmos_trigger(cosmos_chain)
-                .evm_submit(evm_chain)
-                .input_text("on brink")
-                .expect_same_output()
+                .add_workflow(
+                    WorkflowID::new("cosmos_echo_data").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoData)
+                        .cosmos_trigger(cosmos_chain)
+                        .evm_submit(evm_chain)
+                        .input_text("on brink")
+                        .expect_same_output()
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_cosmos_square_test(
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cosmos_square")
                 .description("Tests the Square component on Cosmos chain")
-                .component(ComponentName::Square)
-                .cosmos_trigger(cosmos_chain)
-                .evm_submit(evm_chain)
-                .input_square(3)
-                .expect_square(9)
+                .add_workflow(
+                    WorkflowID::new("cosmos_square").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::Square)
+                        .cosmos_trigger(cosmos_chain)
+                        .evm_submit(evm_chain)
+                        .input_square(3)
+                        .expect_square(9)
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_cosmos_chain_trigger_lookup_test(
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cosmos_chain_trigger_lookup")
                 .description("Tests the ChainTriggerLookup component on Cosmos chain")
-                .component(ComponentName::ChainTriggerLookup)
-                .cosmos_trigger(cosmos_chain)
-                .evm_submit(evm_chain)
-                .input_text("nakamoto")
-                .expect_same_output()
+                .add_workflow(
+                    WorkflowID::new("cosmos_chain_trigger_lookup").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::ChainTriggerLookup)
+                        .cosmos_trigger(cosmos_chain)
+                        .evm_submit(evm_chain)
+                        .input_text("nakamoto")
+                        .expect_same_output()
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_cosmos_cosmos_query_test(
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cosmos_cosmos_query")
                 .description("Tests the CosmosQuery component on Cosmos chain")
-                .component(ComponentName::CosmosQuery)
-                .cosmos_trigger(cosmos_chain)
-                .evm_submit(evm_chain)
-                .input_cosmos_query(CosmosQueryRequest::BlockHeight {
-                    chain_name: cosmos_chain.clone(),
-                })
-                .expect_output_structure(ExpectedOutput::StructureOnly(
-                    super::test_definition::OutputStructure::CosmosQueryResponse,
-                ))
+                .add_workflow(
+                    WorkflowID::new("cosmos_cosmos_query").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::CosmosQuery)
+                        .cosmos_trigger(cosmos_chain)
+                        .evm_submit(evm_chain)
+                        .input_cosmos_query(CosmosQueryRequest::BlockHeight {
+                            chain_name: cosmos_chain.clone(),
+                        })
+                        .expect_output_structure(OutputStructure::CosmosQueryResponse)
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_cosmos_permissions_test(
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cosmos_permissions")
                 .description("Tests permissions for HTTP and file system access on Cosmos chain")
-                .component(ComponentName::Permissions)
-                .cosmos_trigger(cosmos_chain)
-                .evm_submit(evm_chain)
-                .input_permissions(create_permissions_request())
-                .expect_output_structure(ExpectedOutput::StructureOnly(
-                    super::test_definition::OutputStructure::PermissionsResponse,
-                ))
+                .add_workflow(
+                    WorkflowID::new("cosmos_permissions").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::Permissions)
+                        .cosmos_trigger(cosmos_chain)
+                        .evm_submit(evm_chain)
+                        .input_permissions(create_permissions_request())
+                        .expect_output_structure(OutputStructure::PermissionsResponse)
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_cosmos_block_interval_test(
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cosmos_block_interval")
                 .description("Tests the block interval trigger on Cosmos chain")
-                .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(cosmos_chain, NonZeroU32::new(1).unwrap(), None, None)
-                .evm_submit(evm_chain)
+                .add_workflow(
+                    WorkflowID::new("cosmos_block_interval").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoBlockInterval)
+                        .block_interval_trigger(
+                            cosmos_chain,
+                            NonZeroU32::new(1).unwrap(),
+                            None,
+                            None,
+                        )
+                        .evm_submit(evm_chain)
+                        .expect_text("block-interval data")
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     fn register_cosmos_cron_interval_test(
         &mut self,
         _cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cosmos_cron_interval")
                 .description("Tests the cron interval trigger on Cosmos chain")
-                .component(ComponentName::EchoCronInterval)
-                .cron_trigger("* * * * * *", None, None)
-                .evm_submit(evm_chain)
+                .add_workflow(
+                    WorkflowID::new("cosmos_cron_interval").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoCronInterval)
+                        .cron_trigger("* * * * * *", None, None)
+                        .evm_submit(evm_chain)
+                        .expect_text("cron-interval data")
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 
     // Cross-chain test registrations
@@ -562,17 +669,22 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
-    ) -> &mut Self {
-        self.register(
+    ) -> Result<&mut Self> {
+        Ok(self.register(
             TestBuilder::new("cross_chain_cosmos_to_evm_echo_data")
                 .description("Tests the EchoData component from Cosmos to EVM")
-                .component(ComponentName::EchoData)
-                .cosmos_trigger(cosmos_chain)
-                .evm_submit(evm_chain)
-                .input_text("hello EVM world from cosmos")
-                .expect_same_output()
+                .add_workflow(
+                    WorkflowID::new("cross_chain_echo_data").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoData)
+                        .cosmos_trigger(cosmos_chain)
+                        .evm_submit(evm_chain)
+                        .input_text("hello EVM world from cosmos")
+                        .expect_same_output()
+                        .build()?,
+                )?
                 .build(),
-        )
+        ))
     }
 }
 
@@ -586,23 +698,5 @@ fn create_permissions_request() -> PermissionsRequest {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
-    }
-}
-
-// Add extension trait for TestBuilder to support output structure expectation
-pub trait TestBuilderExt {
-    fn expect_output_structure(self, structure: ExpectedOutput) -> Self;
-}
-
-impl TestBuilderExt for TestBuilder {
-    fn expect_output_structure(mut self, structure: ExpectedOutput) -> Self {
-        match structure {
-            ExpectedOutput::StructureOnly(_) => {
-                // We can assign directly since we're checking it's the right variant
-                self.definition.expected_output = structure;
-                self
-            }
-            _ => panic!("expect_output_structure can only be used with StructureOnly variant"),
-        }
     }
 }

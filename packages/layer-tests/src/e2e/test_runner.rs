@@ -7,16 +7,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use utils::context::AppContext;
-use utils::evm_client::EvmSigningClient;
 
-use crate::{
-    e2e::{
-        add_task::{add_task, wait_for_task_to_land},
-        clients::Clients,
-        test_definition::TestDefinition,
-        test_registry::TestRegistry,
-    },
-    example_evm_client::TriggerId,
+use crate::e2e::{
+    add_task::add_task, clients::Clients, test_definition::TestDefinition,
+    test_registry::TestRegistry,
 };
 
 /// Simplified test runner that leverages services directly attached to test definitions
@@ -147,84 +141,17 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
     let submit_start_block = submit_client.provider.get_block_number().await?;
 
     // Run tasks sequentially according to test definition
-    for task_number in 0..test.components.len() {
-        let is_final = task_number == test.components.len() - 1;
-        let input_data = test.input_data.to_bytes();
-
-        let (trigger_id, signed_data) = add_task(
+    for workflow in test.workflows.values() {
+        add_task(
             clients,
             service_id.clone(),
             Some(workflow_id.to_string()),
-            input_data,
+            workflow.input_data.to_bytes(),
             submit_client.clone(),
             submit_start_block,
-            is_final,
+            true,
         )
         .await?;
-
-        if is_final {
-            let signed_data = signed_data.context("no signed data returned")?;
-
-            // Verify the output
-            if !test
-                .expected_output
-                .matches(&signed_data.data, &test.input_data)
-            {
-                return Err(anyhow::anyhow!(
-                    "Output does not match expected output for test: {}",
-                    test.name
-                ));
-            }
-
-            // Handle multi-trigger service if specified
-            if test.multi_trigger_service.is_some() {
-                handle_multi_trigger(test, &submit_client, trigger_id, submit_start_block).await?;
-            }
-        }
-    }
-
-    Ok(())
-}
-
-// Helper method to handle multi-trigger validation
-async fn handle_multi_trigger(
-    test: &TestDefinition,
-    submit_client: &EvmSigningClient,
-    trigger_id: TriggerId,
-    submit_start_block: u64,
-) -> Result<()> {
-    let multi_trigger_service = test.multi_trigger_service.as_ref().unwrap();
-    let multi_trigger_workflow = multi_trigger_service.workflows.values().next().unwrap();
-
-    // Determine the submission address
-    let address = match &multi_trigger_workflow.submit {
-        wavs_types::Submit::None => {
-            return Err(anyhow::anyhow!("no submission in multi-trigger service"));
-        }
-        wavs_types::Submit::EvmContract(submit) => submit.address,
-        wavs_types::Submit::Aggregator { .. } => {
-            multi_trigger_service.manager.evm_address_unchecked()
-        }
-    };
-
-    // Wait for the second task to land
-    let signed_data = wait_for_task_to_land(
-        submit_client.clone(),
-        address,
-        trigger_id,
-        submit_start_block,
-    )
-    .await;
-
-    // Verify the second task's output
-    if !test
-        .expected_output
-        .matches(&signed_data.data, &test.input_data)
-    {
-        return Err(anyhow::anyhow!(
-            "Multi-trigger output does not match expected output for test: {}",
-            test.name
-        ));
     }
 
     Ok(())

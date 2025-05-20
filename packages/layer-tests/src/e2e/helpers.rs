@@ -8,14 +8,13 @@ use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetSer
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
     Permissions, Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow,
-    WorkflowID,
 };
 
 use crate::{
     e2e::{
         clients::Clients,
         components::ComponentSources,
-        test_definition::{SubmitConfig, TestDefinition, TriggerConfig},
+        test_definition::{AggregatorConfig, SubmitConfig, TestDefinition, TriggerConfig},
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::example_trigger::SimpleTrigger,
@@ -26,21 +25,31 @@ pub async fn deploy_service_for_test(
     test: &TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
-) -> Result<(Service, Option<Service>)> {
+) -> Result<Service> {
     tracing::info!("Deploying service for test: {}", test.name);
 
     // Create unique service ID
     let service_id = ServiceID::new(Uuid::now_v7().as_hyphenated().to_string())?;
+    let mut workflows = BTreeMap::new();
 
-    // Create components from test definition
-    let mut components = Vec::new();
-    for component_name in &test.components {
+    // Deploy the service manager contract
+    tracing::info!(
+        "[{}] Deploying service manager on chain {}",
+        test.name,
+        test.service_manager_chain
+    );
+    let service_manager_address = deploy_service_manager(clients, &test.service_manager_chain)
+        .await
+        .context("Failed to deploy service manager")?;
+
+    for (workflow_id, workflow) in &test.workflows {
+        // Create components from test definition
         let component_source = component_sources
             .lookup
-            .get(component_name)
+            .get(&workflow.component)
             .context(format!(
                 "Component source not found for {:?}",
-                component_name
+                workflow.component
             ))?
             .clone();
 
@@ -50,89 +59,48 @@ pub async fn deploy_service_for_test(
             file_system: true,
         };
 
-        components.push(component);
+        tracing::info!("[{}] Creating trigger from config", test.name);
+        // Create the trigger based on test configuration
+        let trigger = create_trigger_from_config(&workflow.trigger, clients)
+            .await
+            .context("Failed to create trigger")?;
+
+        tracing::info!("[{}] Creating submit from config", test.name);
+
+        // Create the submit based on test configuration
+        let submit = create_submit_from_config(&workflow.submit, clients, service_manager_address)
+            .await
+            .context("Failed to create submit")?;
+
+        let mut aggregators = vec![];
+        for aggregator in &workflow.aggregators {
+            let aggregator = match aggregator {
+                AggregatorConfig::NewEvmAggregatorSubmit { chain_name } => {
+                    let submit =
+                        deploy_submit(clients, chain_name, service_manager_address).await?;
+
+                    if let Submit::EvmContract(evm_contract_submission) = submit {
+                        Aggregator::Evm(evm_contract_submission)
+                    } else {
+                        bail!("EVM contract submission is expected from deploy a new evem aggregator submit")
+                    }
+                }
+                AggregatorConfig::Aggregator(aggregator) => aggregator.clone(),
+            };
+
+            aggregators.push(aggregator);
+        }
+
+        // Create service workflows
+        let workflow = Workflow {
+            trigger: trigger.clone(), // Clone for possible use in multi-trigger service
+            component,
+            submit: submit.clone(),
+            aggregators,
+        };
+
+        workflows.insert(workflow_id.clone(), workflow);
     }
-
-    // Make sure we have at least one component
-    if components.is_empty() {
-        bail!("No components specified for test: {}", test.name);
-    }
-
-    tracing::info!("[{}] Creating trigger from config", test.name);
-    // Create the trigger based on test configuration
-    let trigger = create_trigger_from_config(&test.trigger, clients)
-        .await
-        .context("Failed to create trigger")?;
-
-    // Determine the best chain to use for service manager
-    let service_manager_chain = match &test.submit {
-        SubmitConfig::NewEvmContract { chain_name } => chain_name.clone(),
-        SubmitConfig::Submit(submit) => match submit {
-            Submit::EvmContract(EvmContractSubmission { chain_name, .. }) => chain_name.clone(),
-            Submit::Aggregator { url } => {
-                clients
-                    .cli_ctx
-                    .config
-                    .chains
-                    .evm
-                    .iter()
-                    .find(|(_, chain_config)| {
-                        chain_config
-                        .aggregator_endpoint
-                        .as_deref() // Converts &Option<String> to Option<&str> for comparison
-                        == Some(url.as_str())
-                    })
-                    .unwrap_or_else(|| {
-                        panic!("No chain configured with the aggregator url: {}", url)
-                    })
-                    .0
-                    .clone()
-            }
-            _ => clients
-                .cli_ctx
-                .config
-                .chains
-                .evm
-                .keys()
-                .next()
-                .cloned()
-                .context("No EVM chains available for service manager")?,
-        },
-    };
-
-    tracing::info!(
-        "[{}] Deploying service manager on chain {}",
-        test.name,
-        service_manager_chain
-    );
-    // Deploy the service manager contract
-    let service_manager_address = deploy_service_manager(clients, &service_manager_chain)
-        .await
-        .context("Failed to deploy service manager")?;
-
-    tracing::info!("[{}] Creating submit from config", test.name);
-    // Create the submit based on test configuration
-    let submit = create_submit_from_config(&test.submit, clients, service_manager_address)
-        .await
-        .context("Failed to create submit")?;
-
-    let aggregators = vec![Aggregator::Evm(EvmContractSubmission {
-        chain_name: service_manager_chain.clone(),
-        address: service_manager_address,
-        max_gas: None,
-    })];
-
-    // Create service workflows
-    let workflow_id = WorkflowID::new("default")?;
-    let workflow = Workflow {
-        trigger: trigger.clone(), // Clone for possible use in multi-trigger service
-        component: components[0].clone(),
-        submit: submit.clone(),
-        aggregators,
-    };
-
-    let mut workflows = BTreeMap::new();
-    workflows.insert(workflow_id, workflow);
 
     // Create the service
     let service = Service {
@@ -141,13 +109,13 @@ pub async fn deploy_service_for_test(
         workflows,
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: service_manager_chain.clone(),
+            chain_name: test.service_manager_chain.clone(),
             address: service_manager_address,
         },
     };
 
     // Deploy the service using the CLI
-    let submit_client = clients.get_evm_client(&service_manager_chain);
+    let submit_client = clients.get_evm_client(&test.service_manager_chain);
 
     tracing::info!("[{}] Deploying service: {}", test.name, service.id);
 
@@ -168,76 +136,7 @@ pub async fn deploy_service_for_test(
     .await
     .context("Failed to deploy service")?;
 
-    // If this test uses multiple triggers, create a second service
-    let multi_trigger_service = if test.use_multi_trigger {
-        tracing::info!("[{}] Creating multi-trigger service", test.name);
-        let multi_service_id = ServiceID::new(Uuid::now_v7().as_simple().to_string())?;
-
-        // Deploy a new service manager for the multi-trigger service
-        let multi_service_manager_address = deploy_service_manager(clients, &service_manager_chain)
-            .await
-            .context("Failed to deploy service manager for multi-trigger")?;
-
-        // Create a new submit for the multi-trigger service
-        let multi_submit = deploy_submit(
-            clients,
-            &service_manager_chain,
-            multi_service_manager_address,
-        )
-        .await
-        .context("Failed to deploy submit for multi-trigger")?;
-
-        // Create workflow for multi-trigger service (using same trigger)
-        let multi_workflow_id = WorkflowID::new("multi")?;
-        let multi_workflow = Workflow {
-            trigger: trigger.clone(),
-            component: components[0].clone(),
-            submit: multi_submit,
-            aggregators: Vec::new(),
-        };
-
-        let mut multi_workflows = BTreeMap::new();
-        multi_workflows.insert(multi_workflow_id, multi_workflow);
-
-        let multi_service = Service {
-            id: multi_service_id,
-            name: format!("{}_multi", test.name),
-            workflows: multi_workflows,
-            status: ServiceStatus::Active,
-            manager: ServiceManager::Evm {
-                chain_name: service_manager_chain.clone(),
-                address: multi_service_manager_address,
-            },
-        };
-
-        // Deploy the multi-trigger service
-        tracing::info!(
-            "[{}] Deploying multi-trigger service: {}",
-            test.name,
-            multi_service.id
-        );
-        let service_url = DeployService::save_service(&clients.cli_ctx, &multi_service)
-            .await
-            .unwrap();
-        DeployService::run(
-            &clients.cli_ctx,
-            DeployServiceArgs {
-                service: service.clone(),
-                set_service_url_args: Some(SetServiceUrlArgs {
-                    provider: submit_client.provider.clone(),
-                    service_url,
-                }),
-            },
-        )
-        .await
-        .context("Failed to deploy service")?;
-
-        Some(multi_service)
-    } else {
-        None
-    };
-
-    Ok((service, multi_trigger_service))
+    Ok(service)
 }
 
 /// Create a trigger based on test configuration
