@@ -1,7 +1,8 @@
+use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{bail, Context, Result};
-use std::collections::BTreeMap;
-use utils::filesystem::workspace_path;
+use std::{collections::BTreeMap, time::Duration};
+use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
@@ -17,7 +18,10 @@ use crate::{
         test_definition::{AggregatorConfig, SubmitConfig, TestDefinition, TriggerConfig},
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
-    example_evm_client::example_trigger::SimpleTrigger,
+    example_evm_client::{
+        example_submit::ISimpleSubmit::SignedData, example_trigger::SimpleTrigger,
+        SimpleEvmSubmitClient, TriggerId,
+    },
 };
 
 /// Helper function to deploy a service for a test
@@ -321,4 +325,46 @@ pub async fn get_cosmos_code_id(clients: &Clients, chain_name: &ChainName) -> Re
     );
 
     Ok(code_id)
+}
+
+pub async fn wait_for_task_to_land(
+    evm_submit_client: EvmSigningClient,
+    address: alloy_primitives::Address,
+    trigger_id: TriggerId,
+    submit_start_block: u64,
+) -> SignedData {
+    let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
+
+    tokio::time::timeout(Duration::from_secs(5), async move {
+        loop {
+            if submit_client
+                .evm_client
+                .provider
+                .get_block_number()
+                .await
+                .unwrap()
+                == submit_start_block
+            {
+                submit_client
+                    .evm_client
+                    .provider
+                    .evm_mine(None)
+                    .await
+                    .unwrap();
+            }
+            match submit_client.trigger_validated(trigger_id).await {
+                true => {
+                    return submit_client.signed_data(trigger_id).await.unwrap();
+                }
+                false => {
+                    tracing::debug!("Waiting for task response on trigger {}", trigger_id);
+                }
+            }
+
+            // still open, waiting...
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .unwrap()
 }

@@ -1,4 +1,3 @@
-mod add_task;
 mod clients;
 mod components;
 mod config;

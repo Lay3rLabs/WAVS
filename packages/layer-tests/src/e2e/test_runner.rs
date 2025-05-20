@@ -1,17 +1,21 @@
 // src/e2e/test_runner.rs
 
 use alloy_provider::Provider;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::sync::Arc;
 use std::time::Instant;
+use wavs_types::{EvmContractSubmission, Submit, Trigger};
 
 use utils::context::AppContext;
 
-use crate::e2e::{
-    add_task::add_task, clients::Clients, test_definition::TestDefinition,
-    test_registry::TestRegistry,
+use crate::{
+    e2e::{clients::Clients, test_definition::TestDefinition, test_registry::TestRegistry},
+    example_cosmos_client::SimpleCosmosTriggerClient,
+    example_evm_client::{SimpleEvmTriggerClient, TriggerId},
 };
+
+use super::helpers::wait_for_task_to_land;
 
 /// Simplified test runner that leverages services directly attached to test definitions
 pub struct TestRunner {
@@ -128,30 +132,101 @@ impl TestRunner {
 async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
     // Get the service from the test
     let service = test.get_service();
-    let service_id = service.id.to_string();
-
-    // For this example, we'll assume we're testing the first workflow
-    let (workflow_id, _workflow) = service
-        .workflows
-        .iter()
-        .next()
-        .context("No workflows found in service")?;
 
     let submit_client = clients.get_evm_client(service.manager.chain_name());
     let submit_start_block = submit_client.provider.get_block_number().await?;
 
     // Run tasks sequentially according to test definition
-    for workflow in test.workflows.values() {
-        add_task(
-            clients,
-            service_id.clone(),
-            Some(workflow_id.to_string()),
-            workflow.input_data.to_bytes(),
-            submit_client.clone(),
-            submit_start_block,
-            true,
-        )
-        .await?;
+    for (workflow_id, workflow) in service.workflows.iter() {
+        let trigger_id = match &workflow.trigger {
+            Trigger::EvmContractEvent {
+                chain_name,
+                address,
+                event_hash: _,
+            } => {
+                let evm_client = clients.get_evm_client(&chain_name);
+                let client = SimpleEvmTriggerClient::new(evm_client, *address);
+
+                client
+                    .add_trigger(
+                        test.workflows
+                            .get(&workflow_id)
+                            .expect("Could not get workflow")
+                            .input_data
+                            .to_bytes()
+                            .expect("Expected input for EVM contract trigger"),
+                    )
+                    .await?
+            }
+            Trigger::CosmosContractEvent {
+                chain_name,
+                address,
+                event_type: _,
+            } => {
+                let client = SimpleCosmosTriggerClient::new(
+                    clients.get_cosmos_client(&chain_name).await,
+                    address.clone(),
+                );
+                let trigger_id = client
+                    .add_trigger(
+                        test.workflows
+                            .get(&workflow_id)
+                            .expect("Could not get workflow")
+                            .input_data
+                            .to_bytes()
+                            .expect("Expected input for EVM contract trigger"),
+                    )
+                    .await?;
+
+                TriggerId::new(trigger_id.u64())
+            }
+            Trigger::BlockInterval {
+                chain_name: _,
+                n_blocks: _,
+                ..
+            } => {
+                // Hardcoded id since the current flow expects it to come from the event
+                TriggerId::new(1337)
+            }
+            Trigger::Cron { .. } => TriggerId::new(1338),
+            Trigger::Manual => unimplemented!(),
+        };
+
+        match &workflow.submit {
+            Submit::EvmContract(EvmContractSubmission {
+                chain_name,
+                address,
+                max_gas: _,
+            }) => {
+                wait_for_task_to_land(
+                    clients.get_evm_client(&chain_name),
+                    *address,
+                    trigger_id.clone(),
+                    submit_start_block,
+                )
+                .await;
+            }
+            Submit::Aggregator { .. } => {
+                for aggregator in workflow.aggregators.iter() {
+                    match aggregator {
+                        wavs_types::Aggregator::Evm(EvmContractSubmission {
+                            chain_name,
+                            address,
+                            ..
+                        }) => {
+                            wait_for_task_to_land(
+                                clients.get_evm_client(&chain_name),
+                                *address,
+                                trigger_id.clone(),
+                                submit_start_block,
+                            )
+                            .await;
+                        }
+                    }
+                }
+            }
+            Submit::None => unimplemented!(),
+        }
     }
 
     Ok(())
