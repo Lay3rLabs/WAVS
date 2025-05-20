@@ -44,13 +44,20 @@ impl DeployService {
 
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
-        http_client
+        match http_client
             .create_service(service, args.set_service_url_args.clone())
             .await
-            .context(format!(
-                "Failed to deploy service with ID '{}' to endpoint '{}'",
-                service_id, ctx.config.wavs_endpoint
-            ))?;
+        {
+            Ok(_) => {}
+            Err(err) => {
+                // Extract the underlying error message for better context
+                let error_context = format!(
+                    "Failed to deploy service with ID '{}' to endpoint '{}'\nReason: {}",
+                    service_id, ctx.config.wavs_endpoint, err
+                );
+                return Err(anyhow::anyhow!(error_context));
+            }
+        };
 
         let _self = Self { args };
 
