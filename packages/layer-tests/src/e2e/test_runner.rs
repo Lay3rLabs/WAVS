@@ -144,13 +144,13 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
                 address,
                 event_hash: _,
             } => {
-                let evm_client = clients.get_evm_client(&chain_name);
+                let evm_client = clients.get_evm_client(chain_name);
                 let client = SimpleEvmTriggerClient::new(evm_client, *address);
 
                 client
                     .add_trigger(
                         test.workflows
-                            .get(&workflow_id)
+                            .get(workflow_id)
                             .expect("Could not get workflow")
                             .input_data
                             .to_bytes()
@@ -164,13 +164,13 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
                 event_type: _,
             } => {
                 let client = SimpleCosmosTriggerClient::new(
-                    clients.get_cosmos_client(&chain_name).await,
+                    clients.get_cosmos_client(chain_name).await,
                     address.clone(),
                 );
                 let trigger_id = client
                     .add_trigger(
                         test.workflows
-                            .get(&workflow_id)
+                            .get(workflow_id)
                             .expect("Could not get workflow")
                             .input_data
                             .to_bytes()
@@ -199,12 +199,12 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
                 max_gas: _,
             }) => {
                 wait_for_task_to_land(
-                    clients.get_evm_client(&chain_name),
+                    clients.get_evm_client(chain_name),
                     *address,
-                    trigger_id.clone(),
+                    trigger_id,
                     submit_start_block,
                 )
-                .await;
+                .await?;
             }
             Submit::Aggregator { .. } => {
                 for aggregator in workflow.aggregators.iter() {
@@ -215,12 +215,12 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
                             ..
                         }) => {
                             wait_for_task_to_land(
-                                clients.get_evm_client(&chain_name),
+                                clients.get_evm_client(chain_name),
                                 *address,
-                                trigger_id.clone(),
+                                trigger_id,
                                 submit_start_block,
                             )
-                            .await;
+                            .await?;
                         }
                     }
                 }

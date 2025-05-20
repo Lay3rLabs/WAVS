@@ -3,7 +3,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::num::{NonZeroU32, NonZeroU64};
-use std::u64;
 
 use anyhow::{bail, ensure, Context};
 use wavs_types::{Aggregator, ChainName, Service, Submit, Timestamp, Trigger, WorkflowID};
@@ -113,7 +112,7 @@ pub enum SubmitConfig {
 }
 
 /// Different types of input data
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum InputData {
     /// Raw bytes
     Raw(Vec<u8>),
@@ -131,6 +130,7 @@ pub enum InputData {
     Permissions(PermissionsRequest),
 
     /// No input data
+    #[default]
     None,
 }
 
@@ -243,7 +243,7 @@ pub struct WorkflowBuilder {
     trigger: Option<TriggerConfig>,
     submit: Option<SubmitConfig>,
     aggregators: Vec<AggregatorConfig>,
-    input_data: Option<InputData>,
+    input_data: InputData,
     expected_output: Option<ExpectedOutput>,
 }
 
@@ -351,7 +351,6 @@ impl WorkflowBuilder {
         let components = self.components.context("Components not set")?;
         let trigger = self.trigger.context("Trigger not set")?;
         let submit = self.submit.context("Submit not set")?;
-        let input_data = self.input_data.context("Input data not set")?;
         let expected_output = self.expected_output.context("Expected output not set")?;
 
         if let SubmitConfig::Submit(Submit::Aggregator { .. }) = submit {
@@ -366,38 +365,38 @@ impl WorkflowBuilder {
             trigger,
             submit,
             aggregators: self.aggregators,
-            input_data,
+            input_data: self.input_data,
             expected_output,
         })
     }
 
     /// Set raw input data
     pub fn input_data(mut self, data: Vec<u8>) -> Self {
-        self.input_data = Some(InputData::Raw(data));
+        self.input_data = InputData::Raw(data);
         self
     }
 
     /// Set text input data
     pub fn input_text(mut self, text: &str) -> Self {
-        self.input_data = Some(InputData::Text(text.to_string()));
+        self.input_data = InputData::Text(text.to_string());
         self
     }
 
     /// Set square input data
     pub fn input_square(mut self, x: u64) -> Self {
-        self.input_data = Some(InputData::Square { x });
+        self.input_data = InputData::Square { x };
         self
     }
 
     /// Set cosmos query input data
     pub fn input_cosmos_query(mut self, request: CosmosQueryRequest) -> Self {
-        self.input_data = Some(InputData::CosmosQuery(request));
+        self.input_data = InputData::CosmosQuery(request);
         self
     }
 
     /// Set permissions input data
     pub fn input_permissions(mut self, request: PermissionsRequest) -> Self {
-        self.input_data = Some(InputData::Permissions(request));
+        self.input_data = InputData::Permissions(request);
         self
     }
 

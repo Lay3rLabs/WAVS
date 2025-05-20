@@ -332,7 +332,7 @@ pub async fn wait_for_task_to_land(
     address: alloy_primitives::Address,
     trigger_id: TriggerId,
     submit_start_block: u64,
-) -> SignedData {
+) -> Result<SignedData> {
     let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
 
     tokio::time::timeout(Duration::from_secs(5), async move {
@@ -366,5 +366,5 @@ pub async fn wait_for_task_to_land(
         }
     })
     .await
-    .unwrap()
+    .context("Timeout when waiting for task to land")
 }

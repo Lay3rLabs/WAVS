@@ -446,6 +446,7 @@ impl TestRegistry {
         Ok(self.register(test_builder.build()))
     }
 
+    #[allow(dead_code)]
     fn register_evm_multi_trigger_test(
         &mut self,
         chain: &ChainName,
