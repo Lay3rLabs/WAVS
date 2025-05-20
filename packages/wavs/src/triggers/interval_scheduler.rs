@@ -81,10 +81,10 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         }
     }
 
+    // This is called lazily to move triggers from "unadded" to "added"
+    // when their start time has arrived
     fn move_unadded_triggers(&mut self, now: T) {
         let mut still_unadded = Vec::new();
-        // first add any new triggers whose start time has arrived
-        // or, if they don't have a start time, add them immediately
         for mut state in self.unadded_triggers.drain(..) {
             // if start_time is in the future, hold off…
             if let Some(st) = state.start_time() {
@@ -94,8 +94,8 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
                 }
             }
             // otherwise kick off at the true "now"
-            // even if that's not the exact start time
-            // and it's up to the specific scheduler to manage its
+            // even if that's not the configured start time
+            // it's up to the specific scheduler to manage its
             // exact interval timing
             if let Some(next_time) = state.initialize(now) {
                 self.triggers.entry(next_time).or_default().push(state);
@@ -111,20 +111,38 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
 
         let mut hits = Vec::new();
         let mut re_add = Vec::new();
+
+        // pop all the triggers that are due
+        // but stop iterating when we hit a trigger that isn't due
         while let Some((next_time, _)) = self.triggers.iter().next() {
             if *next_time > now {
                 break;
             }
             let (next_time, mut states) = self.triggers.pop_first().unwrap();
+
+            // this is a bit of a wasteful allocation
+            // in the case where the trigger has not been hit
+            // but moving/re-adding *all* the potential states
+            // gives us "clear empty keys" in the BTreeMap as well
+            // which is likely a bigger performance win overall
             for mut state in states.drain(..) {
                 let mut re_insert_time = match state.interval_hit(now) {
                     Some(new_next_time) => {
                         hits.push(state.lookup_id());
+                        // this is the new next time as determined by the scheduler
+                        // and it may be None if the trigger has ended
                         new_next_time
                     }
-                    None => Some(next_time),
+                    None => {
+                        // yes, we are re-adding the trigger exactly as-is
+                        // unless it has ended
+                        Some(next_time)
+                    }
                 };
 
+                // we can use the same semantics of re_insert_time
+                // to denote whether the trigger has ended due to expiry
+                // (this must be _after_ the interval_hit call, since we still add the hit)
                 if let Some(end_time) = state.end_time() {
                     if now >= end_time {
                         re_insert_time = None;
@@ -132,7 +150,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
                 }
 
                 if let Some(next_time) = re_insert_time {
-                    // if the trigger has a new next time, re-insert it
+                    // if the trigger has any next time, re-insert it
                     re_add.push((next_time, state));
                 }
             }
