@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
+use std::cmp::Ordering;
 use std::num::{NonZeroU32, NonZeroU64};
 
-use wavs_types::{ChainName, Service, Submit, Timestamp, Trigger};
+use wavs_types::{ChainName, EvmContractSubmission, Service, Submit, Timestamp, Trigger};
 
 use crate::e2e::components::ComponentName;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
@@ -27,6 +28,9 @@ pub struct TestDefinition {
     /// Submit configuration
     pub submit: SubmitConfig,
 
+    /// Aggregator configuration - required when submit is aggregator
+    pub aggregators: Vec<AggregatorConfig>,
+
     /// Input data to send to the trigger
     pub input_data: InputData,
 
@@ -41,6 +45,44 @@ pub struct TestDefinition {
 
     /// Reference to the multi-trigger service (populated during test execution)
     pub multi_trigger_service: Option<Service>,
+}
+
+impl TestDefinition {
+    fn block_interval(&self) -> u64 {
+        match &self.trigger {
+            TriggerConfig::Trigger(Trigger::BlockInterval { n_blocks, .. }) => {
+                n_blocks.get() as u64
+            }
+            _ => u64::MAX, // Sorts last
+        }
+    }
+}
+
+impl PartialEq for TestDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.block_interval().eq(&other.block_interval()) && self.name.eq(&other.name)
+    }
+}
+
+impl Eq for TestDefinition {}
+
+impl PartialOrd for TestDefinition {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TestDefinition {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // First compare block interval
+        let by_interval = self.block_interval().cmp(&other.block_interval());
+        if by_interval != Ordering::Equal {
+            return by_interval;
+        }
+
+        // Then use name as a stable tiebreaker
+        self.name.cmp(&other.name)
+    }
 }
 
 /// Configuration for a trigger
@@ -60,16 +102,18 @@ pub enum TriggerConfig {
 #[derive(Clone, Debug)]
 pub enum SubmitConfig {
     /// EVM contract submission
-    EvmContract { chain_name: ChainName },
-
-    /// Aggregator submission
-    Aggregator { chain_name: ChainName },
-
-    /// No submission
-    None,
+    NewEvmContract { chain_name: ChainName },
 
     /// Use an existing submit
-    UseExisting(Submit),
+    Submit(Submit),
+}
+
+// Configuration for an aggregator config
+#[derive(Clone, Debug)]
+pub enum AggregatorConfig {
+    NewEvmContract { chain_name: ChainName },
+
+    EvmContractSubmission(EvmContractSubmission),
 }
 
 /// Different types of input data
@@ -140,12 +184,9 @@ pub enum OutputStructure {
 impl TestDefinition {
     /// Gets the service for this test, panicking if none is set
     pub fn get_service(&self) -> &Service {
-        self.service.as_ref().expect("Service not set for test")
-    }
-
-    /// Checks if this test has a service
-    pub fn has_service(&self) -> bool {
-        self.service.is_some()
+        self.service
+            .as_ref()
+            .unwrap_or_else(|| panic!("Service not set for test: {}", self.name))
     }
 }
 
@@ -165,9 +206,10 @@ impl TestBuilder {
                 trigger: TriggerConfig::NewEvmContract {
                     chain_name: ChainName::new("31337").unwrap(),
                 },
-                submit: SubmitConfig::EvmContract {
+                submit: SubmitConfig::NewEvmContract {
                     chain_name: ChainName::new("31337").unwrap(),
                 },
+                aggregators: vec![],
                 input_data: InputData::None,
                 expected_output: ExpectedOutput::Any,
                 use_multi_trigger: false,
@@ -196,17 +238,17 @@ impl TestBuilder {
     }
 
     /// Configure an EVM contract trigger
-    pub fn evm_trigger(mut self, chain_name: &str) -> Self {
+    pub fn evm_trigger(mut self, chain_name: &ChainName) -> Self {
         self.definition.trigger = TriggerConfig::NewEvmContract {
-            chain_name: ChainName::new(chain_name).unwrap(),
+            chain_name: chain_name.clone(),
         };
         self
     }
 
     /// Configure a Cosmos contract trigger
-    pub fn cosmos_trigger(mut self, chain_name: &str) -> Self {
+    pub fn cosmos_trigger(mut self, chain_name: &ChainName) -> Self {
         self.definition.trigger = TriggerConfig::NewCosmosContract {
-            chain_name: ChainName::new(chain_name).unwrap(),
+            chain_name: chain_name.clone(),
         };
         self
     }
@@ -245,23 +287,24 @@ impl TestBuilder {
 
     /// Configure an EVM contract submit
     pub fn evm_submit(mut self, chain_name: &str) -> Self {
-        self.definition.submit = SubmitConfig::EvmContract {
+        self.definition.submit = SubmitConfig::NewEvmContract {
             chain_name: ChainName::new(chain_name).unwrap(),
         };
         self
     }
 
     /// Configure an aggregator submit
-    pub fn aggregator_submit(mut self, chain_name: &str) -> Self {
-        self.definition.submit = SubmitConfig::Aggregator {
-            chain_name: ChainName::new(chain_name).unwrap(),
-        };
+    pub fn aggregator_submit(mut self, url: &str, aggregator: AggregatorConfig) -> Self {
+        self.definition.submit = SubmitConfig::Submit(Submit::Aggregator {
+            url: url.to_string(),
+        });
+        self.definition.aggregators.push(aggregator);
         self
     }
 
     /// Configure with no submit
     pub fn no_submit(mut self) -> Self {
-        self.definition.submit = SubmitConfig::None;
+        self.definition.submit = SubmitConfig::Submit(Submit::None);
         self
     }
 

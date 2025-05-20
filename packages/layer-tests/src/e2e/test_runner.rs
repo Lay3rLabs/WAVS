@@ -3,7 +3,6 @@
 use alloy_provider::Provider;
 use anyhow::{Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -39,47 +38,31 @@ impl TestRunner {
     /// Run all tests in the registry
     pub fn run_tests(&self) {
         // Collect tests that have services attached
-        let tests: Vec<_> = self
-            .registry
-            .list_all()
-            .into_iter()
-            .filter(|test| test.has_service())
-            .collect();
+        let tests = self.registry.list_all();
 
-        if tests.is_empty() {
-            tracing::warn!("No runnable tests found with attached services");
-            return;
-        }
-
-        // Group tests by chain to minimize chain switching
-        let mut chain_grouped_tests: HashMap<String, Vec<&TestDefinition>> = HashMap::new();
-        for test in tests {
-            let chain_name = test.get_service().manager.chain_name().to_string();
-            chain_grouped_tests
-                .entry(chain_name)
-                .or_default()
-                .push(test);
-        }
-
-        let total_tests = chain_grouped_tests.values().map(|v| v.len()).sum::<usize>();
-        tracing::info!(
-            "Running {} tests across {} chains",
-            total_tests,
-            chain_grouped_tests.len()
-        );
+        tracing::info!("Running {} tests", tests.len());
 
         self.ctx.rt.block_on(async {
             let mut futures = FuturesUnordered::new();
 
             // Flatten and submit all tests at once
-            for chain_tests in chain_grouped_tests.values() {
-                for test in chain_tests {
-                    tracing::info!("Running test: {}", test.name);
-                    futures.push(self.execute_test(test, self.clients.clone()));
+            for test in tests {
+                tracing::info!("Running test: {}", test.name);
+                futures.push(self.execute_test(test, self.clients.clone()));
+            }
+
+            let mut failures = Vec::new();
+            while let Some(result) = futures.next().await {
+                if let Err(err) = result {
+                    tracing::error!("Test failed: {:?}", err);
+                    failures.push(err);
                 }
             }
 
-            while let Some(_result) = futures.next().await {}
+            if !failures.is_empty() {
+                tracing::error!("{} test(s) failed", failures.len());
+                std::process::exit(1);
+            }
 
             tracing::info!("All tests completed");
         });
@@ -91,10 +74,6 @@ impl TestRunner {
             .registry
             .get(name)
             .ok_or_else(|| anyhow::anyhow!("Test not found: {}", name))?;
-
-        if !test.has_service() {
-            return Err(anyhow::anyhow!("Test {} has no attached service", name));
-        }
 
         let clients = self.clients.clone();
 

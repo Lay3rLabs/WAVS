@@ -6,15 +6,16 @@ use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
-    Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
+    Permissions, Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow,
+    WorkflowID,
 };
 
 use crate::{
     e2e::{
         clients::Clients,
         components::ComponentSources,
-        test_definition::{SubmitConfig, TestDefinition, TriggerConfig},
+        test_definition::{AggregatorConfig, SubmitConfig, TestDefinition, TriggerConfig},
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::example_trigger::SimpleTrigger,
@@ -65,22 +66,28 @@ pub async fn deploy_service_for_test(
 
     // Determine the best chain to use for service manager
     let service_manager_chain = match &test.submit {
-        SubmitConfig::EvmContract { chain_name } => chain_name.clone(),
-        SubmitConfig::Aggregator { chain_name } => chain_name.clone(),
-        SubmitConfig::None => {
-            // Find first available EVM chain
-            clients
-                .cli_ctx
-                .config
-                .chains
-                .evm
-                .keys()
-                .next()
-                .cloned()
-                .context("No EVM chains available for service manager")?
-        }
-        SubmitConfig::UseExisting(submit) => match submit {
+        SubmitConfig::NewEvmContract { chain_name } => chain_name.clone(),
+        SubmitConfig::Submit(submit) => match submit {
             Submit::EvmContract(EvmContractSubmission { chain_name, .. }) => chain_name.clone(),
+            Submit::Aggregator { url } => {
+                clients
+                    .cli_ctx
+                    .config
+                    .chains
+                    .evm
+                    .iter()
+                    .find(|(_, chain_config)| {
+                        chain_config
+                        .aggregator_endpoint
+                        .as_deref() // Converts &Option<String> to Option<&str> for comparison
+                        == Some(url.as_str())
+                    })
+                    .unwrap_or_else(|| {
+                        panic!("No chain configured with the aggregator url: {}", url)
+                    })
+                    .0
+                    .clone()
+            }
             _ => clients
                 .cli_ctx
                 .config
@@ -109,13 +116,36 @@ pub async fn deploy_service_for_test(
         .await
         .context("Failed to create submit")?;
 
+    let mut aggregators = vec![];
+    for aggregator in test.aggregators.iter() {
+        match aggregator {
+            AggregatorConfig::NewEvmContract { chain_name } => {
+                let submit = create_submit_from_config(
+                    &SubmitConfig::NewEvmContract {
+                        chain_name: chain_name.clone(),
+                    },
+                    clients,
+                    service_manager_address,
+                )
+                .await?;
+
+                if let Submit::EvmContract(evm_contract_submission) = submit {
+                    aggregators.push(Aggregator::Evm(evm_contract_submission));
+                }
+            }
+            AggregatorConfig::EvmContractSubmission(evm_contract_submission) => {
+                aggregators.push(Aggregator::Evm(evm_contract_submission.clone()))
+            }
+        };
+    }
+
     // Create service workflows
     let workflow_id = WorkflowID::new("default")?;
     let workflow = Workflow {
         trigger: trigger.clone(), // Clone for possible use in multi-trigger service
         component: components[0].clone(),
         submit: submit.clone(),
-        aggregators: Vec::new(),
+        aggregators,
     };
 
     let mut workflows = BTreeMap::new();
@@ -305,35 +335,10 @@ pub async fn create_submit_from_config(
     service_manager_address: alloy_primitives::Address,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitConfig::EvmContract { chain_name } => {
+        SubmitConfig::NewEvmContract { chain_name } => {
             deploy_submit(clients, chain_name, service_manager_address).await
         }
-        SubmitConfig::Aggregator { chain_name } => {
-            // Check if the aggregator configuration exists
-            let aggregator_config = clients
-                .cli_ctx
-                .config
-                .chains
-                .evm
-                .get(chain_name)
-                .and_then(|chain| chain.aggregator_endpoint.clone());
-
-            let url = match aggregator_config {
-                Some(endpoint) => endpoint,
-                None => {
-                    // Use a default endpoint as fallback
-                    tracing::warn!(
-                        "No aggregator endpoint configured for chain {}, using default URL",
-                        chain_name
-                    );
-                    "http://127.0.0.1:8001".to_string()
-                }
-            };
-
-            Ok(Submit::Aggregator { url })
-        }
-        SubmitConfig::None => Ok(Submit::None),
-        SubmitConfig::UseExisting(submit) => Ok(submit.clone()),
+        SubmitConfig::Submit(submit) => Ok(submit.clone()),
     }
 }
 

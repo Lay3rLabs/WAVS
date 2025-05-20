@@ -2,7 +2,7 @@ use anyhow::Result;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use reqwest::Client;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroU32;
 use wavs_types::aggregator::RegisterServiceRequest;
 
@@ -13,7 +13,9 @@ use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
-use super::test_definition::{ExpectedOutput, SubmitConfig, TestBuilder, TestDefinition};
+use super::test_definition::{
+    AggregatorConfig, ExpectedOutput, SubmitConfig, TestBuilder, TestDefinition,
+};
 use super::types::SquareResponse;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
@@ -26,7 +28,7 @@ pub struct TestRegistry {
 #[derive(Debug, Default, Clone)]
 struct ChainNames {
     evm: Vec<ChainName>,
-    evm_aggregator: Vec<ChainName>,
+    evm_aggregator: Vec<(ChainName, String)>,
     cosmos: Vec<ChainName>,
 }
 
@@ -38,7 +40,13 @@ impl ChainNames {
         // Categorize EVM chains
         for (chain_name, chain) in chain_configs.evm.iter() {
             if chain.aggregator_endpoint.is_some() {
-                chain_names.evm_aggregator.push(chain_name.clone());
+                chain_names.evm_aggregator.push((
+                    chain_name.clone(),
+                    chain
+                        .aggregator_endpoint
+                        .clone()
+                        .expect("Aggregator URL is expected"),
+                ));
             } else {
                 chain_names.evm.push(chain_name.clone());
             }
@@ -72,7 +80,7 @@ impl TestRegistry {
     }
 
     /// Get all test definitions
-    pub fn list_all(&self) -> Vec<&TestDefinition> {
+    pub fn list_all(&self) -> BTreeSet<&TestDefinition> {
         self.tests.values().collect()
     }
 
@@ -86,7 +94,6 @@ impl TestRegistry {
 
         // Prepare all futures first
         for test in self.tests.values_mut() {
-            // We need to temporarily take ownership of `test` fields
             let clients = clients.clone();
             let component_sources = component_sources.clone();
 
@@ -94,8 +101,8 @@ impl TestRegistry {
                 let (service, multi_trigger_service) =
                     helpers::deploy_service_for_test(test, &clients, &component_sources).await?;
 
-                if let SubmitConfig::Aggregator { .. } = &test.submit {
-                    TestRegistry::register_to_all_aggregators(&service).await?;
+                if let SubmitConfig::Submit(Submit::Aggregator { url }) = &test.submit {
+                    TestRegistry::register_to_aggregator(url, &service).await?;
                 }
 
                 test.service = Some(service);
@@ -106,40 +113,36 @@ impl TestRegistry {
         }
 
         // Execute all futures
-        while let Some(_result) = futures.next().await {}
+        while let Some(result) = futures.next().await {
+            if let Err(err) = result {
+                tracing::error!("Test failed: {:?}", err);
+            }
+        }
 
         Ok(())
     }
 
-    /// Registers a service to all unique aggregator URLs across its workflows
-    pub async fn register_to_all_aggregators(service: &Service) -> Result<()> {
+    /// Registers a service on the aggregator
+    pub async fn register_to_aggregator(url: &str, service: &Service) -> Result<()> {
         let http_client = Client::new();
-        let mut seen_urls = HashSet::new();
 
-        for workflow in service.workflows.values() {
-            if let Submit::Aggregator { url, .. } = &workflow.submit {
-                if seen_urls.insert(url.clone()) {
-                    // First time seeing this aggregator URL
-                    let endpoint = format!("{}/register_service", url);
-                    let payload = RegisterServiceRequest {
-                        service: service.clone(),
-                    };
+        let endpoint = format!("{}/register-service", url);
+        let payload = RegisterServiceRequest {
+            service: service.clone(),
+        };
 
-                    tracing::info!(
-                        "Registering service {} with aggregator at {}",
-                        service.id,
-                        endpoint
-                    );
+        tracing::info!(
+            "Registering service {} with aggregator at {}",
+            service.id,
+            endpoint
+        );
 
-                    http_client
-                        .post(&endpoint)
-                        .json(&payload)
-                        .send()
-                        .await?
-                        .error_for_status()?;
-                }
-            }
-        }
+        http_client
+            .post(&endpoint)
+            .json(&payload)
+            .send()
+            .await?
+            .error_for_status()?;
 
         Ok(())
     }
@@ -197,19 +200,21 @@ impl TestRegistry {
 
         // Secondary chain tests
         if matrix.evm_secondary_chain_enabled() && chain_names.evm.len() > 1 {
+            let trigger_chain = &chain_names.evm[0];
             let secondary_chain = &chain_names.evm[1];
 
             if matrix.evm.contains(&EvmService::EchoDataSecondaryChain) {
-                registry.register_evm_echo_data_secondary_chain_test(secondary_chain);
+                registry
+                    .register_evm_echo_data_secondary_chain_test(trigger_chain, secondary_chain);
             }
         }
 
         // Aggregator chain tests
-        if matrix.evm_aggregator_chain_enabled() && !chain_names.evm_aggregator.is_empty() {
-            let aggregator_chain = &chain_names.evm_aggregator[0];
+        if matrix.evm_aggregator_chain_enabled() {
+            let (aggregator_chain, url) = &chain_names.evm_aggregator[0];
 
             if matrix.evm.contains(&EvmService::EchoDataAggregator) {
-                registry.register_evm_echo_data_aggregator_test(aggregator_chain);
+                registry.register_evm_echo_data_aggregator_test(aggregator_chain, url);
             }
         }
 
@@ -273,34 +278,47 @@ impl TestRegistry {
             TestBuilder::new("evm_echo_data")
                 .description("Tests the EchoData component on the primary EVM chain")
                 .component(ComponentName::EchoData)
-                .evm_trigger(chain.as_ref())
-                .evm_submit(chain.as_ref())
+                .evm_trigger(chain)
+                .evm_submit(chain)
                 .input_text("The times")
                 .expect_same_output()
                 .build(),
         )
     }
 
-    fn register_evm_echo_data_secondary_chain_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_echo_data_secondary_chain_test(
+        &mut self,
+        trigger_chain: &ChainName,
+        chain: &ChainName,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data_secondary_chain")
                 .description("Tests the EchoData component on the secondary EVM chain")
                 .component(ComponentName::EchoData)
-                .evm_trigger(chain.as_ref())
-                .evm_submit(chain.as_ref())
+                .evm_trigger(trigger_chain)
+                .evm_submit(chain)
                 .input_text("collapse")
                 .expect_same_output()
                 .build(),
         )
     }
 
-    fn register_evm_echo_data_aggregator_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_echo_data_aggregator_test(
+        &mut self,
+        aggregator_chain: &ChainName,
+        url: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data_aggregator")
                 .description("Tests the EchoData component using an aggregator")
                 .component(ComponentName::EchoData)
-                .evm_trigger(chain.as_ref())
-                .aggregator_submit(chain.as_ref())
+                .evm_trigger(aggregator_chain)
+                .aggregator_submit(
+                    url,
+                    AggregatorConfig::NewEvmContract {
+                        chain_name: aggregator_chain.clone(),
+                    },
+                )
                 .input_text("Chancellor")
                 .expect_same_output()
                 .build(),
@@ -312,8 +330,8 @@ impl TestRegistry {
             TestBuilder::new("evm_square")
                 .description("Tests the Square component on EVM chain")
                 .component(ComponentName::Square)
-                .evm_trigger(chain.as_ref())
-                .evm_submit(chain.as_ref())
+                .evm_trigger(chain)
+                .evm_submit(chain)
                 .input_square(3)
                 .expect_square(9)
                 .build(),
@@ -325,8 +343,8 @@ impl TestRegistry {
             TestBuilder::new("evm_chain_trigger_lookup")
                 .description("Tests the ChainTriggerLookup component on EVM chain")
                 .component(ComponentName::ChainTriggerLookup)
-                .evm_trigger(chain.as_ref())
-                .evm_submit(chain.as_ref())
+                .evm_trigger(chain)
+                .evm_submit(chain)
                 .input_text("satoshi")
                 .expect_same_output()
                 .build(),
@@ -342,8 +360,8 @@ impl TestRegistry {
             TestBuilder::new("evm_cosmos_query")
                 .description("Tests the CosmosQuery component from EVM to Cosmos")
                 .component(ComponentName::CosmosQuery)
-                .evm_trigger(evm_chain.as_ref())
-                .evm_submit(evm_chain.as_ref())
+                .evm_trigger(evm_chain)
+                .evm_submit(evm_chain)
                 .input_cosmos_query(CosmosQueryRequest::BlockHeight {
                     chain_name: cosmos_chain.clone(),
                 })
@@ -359,8 +377,8 @@ impl TestRegistry {
             TestBuilder::new("evm_permissions")
                 .description("Tests permissions for HTTP and file system access on EVM chain")
                 .component(ComponentName::Permissions)
-                .evm_trigger(chain.as_ref())
-                .evm_submit(chain.as_ref())
+                .evm_trigger(chain)
+                .evm_submit(chain)
                 .input_permissions(create_permissions_request())
                 .expect_output_structure(ExpectedOutput::StructureOnly(
                     super::test_definition::OutputStructure::PermissionsResponse,
@@ -380,8 +398,8 @@ impl TestRegistry {
                         .unwrap()
                         .into(),
                 )
-                .evm_trigger(chain.as_ref())
-                .evm_submit(chain.as_ref())
+                .evm_trigger(chain)
+                .evm_submit(chain)
                 .build(),
         )
     }
@@ -391,8 +409,8 @@ impl TestRegistry {
             TestBuilder::new("evm_multi_trigger")
                 .description("Tests multiple services triggered by the same event on EVM chain")
                 .component(ComponentName::EchoData)
-                .evm_trigger(chain.as_ref())
-                .evm_submit(chain.as_ref())
+                .evm_trigger(chain)
+                .evm_submit(chain)
                 .input_text("tttrrrrriiiigggeerrr")
                 .expect_same_output()
                 .with_multi_trigger()
@@ -405,8 +423,8 @@ impl TestRegistry {
             TestBuilder::new("evm_block_interval")
                 .description("Tests the block interval trigger on EVM chain")
                 .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(chain.as_ref(), NonZeroU32::new(1).unwrap(), None, None)
-                .evm_submit(chain.as_ref())
+                .block_interval_trigger(chain, NonZeroU32::new(1).unwrap(), None, None)
+                .evm_submit(chain)
                 .build(),
         )
     }
@@ -417,7 +435,7 @@ impl TestRegistry {
                 .description("Tests the cron interval trigger")
                 .component(ComponentName::EchoCronInterval)
                 .cron_trigger("* * * * * *", None, None)
-                .evm_submit(chain.as_ref())
+                .evm_submit(chain)
                 .build(),
         )
     }
@@ -433,8 +451,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_echo_data")
                 .description("Tests the EchoData component on Cosmos chain")
                 .component(ComponentName::EchoData)
-                .cosmos_trigger(cosmos_chain.as_ref())
-                .evm_submit(evm_chain.as_ref())
+                .cosmos_trigger(cosmos_chain)
+                .evm_submit(evm_chain)
                 .input_text("on brink")
                 .expect_same_output()
                 .build(),
@@ -450,8 +468,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_square")
                 .description("Tests the Square component on Cosmos chain")
                 .component(ComponentName::Square)
-                .cosmos_trigger(cosmos_chain.as_ref())
-                .evm_submit(evm_chain.as_ref())
+                .cosmos_trigger(cosmos_chain)
+                .evm_submit(evm_chain)
                 .input_square(3)
                 .expect_square(9)
                 .build(),
@@ -467,8 +485,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_chain_trigger_lookup")
                 .description("Tests the ChainTriggerLookup component on Cosmos chain")
                 .component(ComponentName::ChainTriggerLookup)
-                .cosmos_trigger(cosmos_chain.as_ref())
-                .evm_submit(evm_chain.as_ref())
+                .cosmos_trigger(cosmos_chain)
+                .evm_submit(evm_chain)
                 .input_text("nakamoto")
                 .expect_same_output()
                 .build(),
@@ -484,8 +502,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_cosmos_query")
                 .description("Tests the CosmosQuery component on Cosmos chain")
                 .component(ComponentName::CosmosQuery)
-                .cosmos_trigger(cosmos_chain.as_ref())
-                .evm_submit(evm_chain.as_ref())
+                .cosmos_trigger(cosmos_chain)
+                .evm_submit(evm_chain)
                 .input_cosmos_query(CosmosQueryRequest::BlockHeight {
                     chain_name: cosmos_chain.clone(),
                 })
@@ -505,8 +523,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_permissions")
                 .description("Tests permissions for HTTP and file system access on Cosmos chain")
                 .component(ComponentName::Permissions)
-                .cosmos_trigger(cosmos_chain.as_ref())
-                .evm_submit(evm_chain.as_ref())
+                .cosmos_trigger(cosmos_chain)
+                .evm_submit(evm_chain)
                 .input_permissions(create_permissions_request())
                 .expect_output_structure(ExpectedOutput::StructureOnly(
                     super::test_definition::OutputStructure::PermissionsResponse,
@@ -524,13 +542,8 @@ impl TestRegistry {
             TestBuilder::new("cosmos_block_interval")
                 .description("Tests the block interval trigger on Cosmos chain")
                 .component(ComponentName::EchoBlockInterval)
-                .block_interval_trigger(
-                    cosmos_chain.as_ref(),
-                    NonZeroU32::new(1).unwrap(),
-                    None,
-                    None,
-                )
-                .evm_submit(evm_chain.as_ref())
+                .block_interval_trigger(cosmos_chain, NonZeroU32::new(1).unwrap(), None, None)
+                .evm_submit(evm_chain)
                 .build(),
         )
     }
@@ -545,7 +558,7 @@ impl TestRegistry {
                 .description("Tests the cron interval trigger on Cosmos chain")
                 .component(ComponentName::EchoCronInterval)
                 .cron_trigger("* * * * * *", None, None)
-                .evm_submit(evm_chain.as_ref())
+                .evm_submit(evm_chain)
                 .build(),
         )
     }
@@ -561,8 +574,8 @@ impl TestRegistry {
             TestBuilder::new("cross_chain_cosmos_to_evm_echo_data")
                 .description("Tests the EchoData component from Cosmos to EVM")
                 .component(ComponentName::EchoData)
-                .cosmos_trigger(cosmos_chain.as_ref())
-                .evm_submit(evm_chain.as_ref())
+                .cosmos_trigger(cosmos_chain)
+                .evm_submit(evm_chain)
                 .input_text("hello EVM world from cosmos")
                 .expect_same_output()
                 .build(),
