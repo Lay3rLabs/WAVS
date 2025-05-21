@@ -9,7 +9,7 @@ use utils::{context::AppContext, telemetry::Metrics};
 use wavs::{apis::trigger::TriggerManager, triggers::core::CoreTriggerManager};
 use wavs_types::{ChainName, Trigger, TriggerAction, TriggerConfig};
 
-pub static APP_CONTEXT: LazyLock<AppContext> = LazyLock::new(|| AppContext::new());
+pub static APP_CONTEXT: LazyLock<AppContext> = LazyLock::new(AppContext::new);
 
 // This is a convenience struct to initialize stuff and make it easier to pass around
 pub struct Handle {
