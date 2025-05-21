@@ -67,13 +67,13 @@ pub struct WorkflowConfig {
     pub component: ComponentName,
 
     /// Trigger configuration
-    pub trigger: TriggerConfig,
+    pub trigger: TriggerDefinition,
 
     /// Submit configuration
-    pub submit: SubmitConfig,
+    pub submit: SubmitDefinition,
 
     /// Aggregators configuration
-    pub aggregators: Vec<AggregatorConfig>,
+    pub aggregators: Vec<AggregatorDefinition>,
 
     /// Input data to send to the trigger
     pub input_data: InputData,
@@ -83,27 +83,35 @@ pub struct WorkflowConfig {
 }
 
 #[derive(Clone, Debug)]
-pub enum AggregatorConfig {
+pub enum AggregatorDefinition {
     NewEvmAggregatorSubmit { chain_name: ChainName },
     Aggregator(Aggregator),
 }
 
 /// Configuration for a trigger
 #[derive(Clone, Debug)]
-pub enum TriggerConfig {
-    /// EVM contract event trigger
-    NewEvmContract { chain_name: ChainName },
+pub enum TriggerDefinition {
+    Evm(EvmTriggerDefinition),
 
-    /// Cosmos contract event trigger
-    NewCosmosContract { chain_name: ChainName },
+    Cosmos(CosmosTriggerDefinition),
 
     /// Use an existing trigger
     Trigger(Trigger),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum CosmosTriggerDefinition {
+    Simple { chain_name: ChainName },
+}
+
+#[derive(Clone, Debug)]
+pub enum EvmTriggerDefinition {
+    Simple { chain_name: ChainName },
+}
+
 /// Configuration for a submit
 #[derive(Clone, Debug)]
-pub enum SubmitConfig {
+pub enum SubmitDefinition {
     /// EVM contract submission
     NewEvmContract { chain_name: ChainName },
 
@@ -240,9 +248,9 @@ impl TestBuilder {
 #[derive(Default)]
 pub struct WorkflowBuilder {
     components: Option<ComponentName>,
-    trigger: Option<TriggerConfig>,
-    submit: Option<SubmitConfig>,
-    aggregators: Vec<AggregatorConfig>,
+    trigger: Option<TriggerDefinition>,
+    submit: Option<SubmitDefinition>,
+    aggregators: Vec<AggregatorDefinition>,
     input_data: InputData,
     expected_output: Option<ExpectedOutput>,
 }
@@ -260,24 +268,20 @@ impl WorkflowBuilder {
     }
 
     /// Configure an EVM contract trigger
-    pub fn evm_trigger(mut self, chain_name: &ChainName) -> Self {
-        self.trigger = Some(TriggerConfig::NewEvmContract {
-            chain_name: chain_name.clone(),
-        });
+    pub fn evm_trigger(mut self, evm_trigger: EvmTriggerDefinition) -> Self {
+        self.trigger = Some(TriggerDefinition::Evm(evm_trigger));
         self
     }
 
     /// Use the previous workflow's trigger
     pub fn trigger(mut self, trigger: Trigger) -> Self {
-        self.trigger = Some(TriggerConfig::Trigger(trigger));
+        self.trigger = Some(TriggerDefinition::Trigger(trigger));
         self
     }
 
     /// Configure a Cosmos contract trigger
-    pub fn cosmos_trigger(mut self, chain_name: &ChainName) -> Self {
-        self.trigger = Some(TriggerConfig::NewCosmosContract {
-            chain_name: chain_name.clone(),
-        });
+    pub fn cosmos_trigger(mut self, cosmos_trigger: CosmosTriggerDefinition) -> Self {
+        self.trigger = Some(TriggerDefinition::Cosmos(cosmos_trigger));
         self
     }
 
@@ -289,7 +293,7 @@ impl WorkflowBuilder {
         start_block: Option<NonZeroU64>,
         end_block: Option<NonZeroU64>,
     ) -> Self {
-        self.trigger = Some(TriggerConfig::Trigger(Trigger::BlockInterval {
+        self.trigger = Some(TriggerDefinition::Trigger(Trigger::BlockInterval {
             chain_name: chain_name.clone(),
             n_blocks,
             start_block,
@@ -305,7 +309,7 @@ impl WorkflowBuilder {
         start_time: Option<Timestamp>,
         end_time: Option<Timestamp>,
     ) -> Self {
-        self.trigger = Some(TriggerConfig::Trigger(Trigger::Cron {
+        self.trigger = Some(TriggerDefinition::Trigger(Trigger::Cron {
             schedule: schedule.to_string(),
             start_time,
             end_time,
@@ -315,7 +319,7 @@ impl WorkflowBuilder {
 
     /// Configure an EVM contract submit
     pub fn evm_submit(mut self, chain_name: &ChainName) -> Self {
-        self.submit = Some(SubmitConfig::NewEvmContract {
+        self.submit = Some(SubmitDefinition::NewEvmContract {
             chain_name: chain_name.clone(),
         });
         self
@@ -323,7 +327,7 @@ impl WorkflowBuilder {
 
     /// Configure an aggregator submit
     pub fn aggregator_submit(mut self, url: &str) -> Self {
-        self.submit = Some(SubmitConfig::Submit(Submit::Aggregator {
+        self.submit = Some(SubmitDefinition::Submit(Submit::Aggregator {
             url: url.to_string(),
         }));
         self
@@ -331,12 +335,12 @@ impl WorkflowBuilder {
 
     /// Configure with no submit
     pub fn no_submit(mut self) -> Self {
-        self.submit = Some(SubmitConfig::Submit(Submit::None));
+        self.submit = Some(SubmitDefinition::Submit(Submit::None));
         self
     }
 
     /// Add an aggregator
-    pub fn add_aggregator(mut self, aggregator: AggregatorConfig) -> Self {
+    pub fn add_aggregator(mut self, aggregator: AggregatorDefinition) -> Self {
         self.aggregators.push(aggregator);
         self
     }
@@ -353,7 +357,7 @@ impl WorkflowBuilder {
         let submit = self.submit.context("Submit not set")?;
         let expected_output = self.expected_output.context("Expected output not set")?;
 
-        if let SubmitConfig::Submit(Submit::Aggregator { .. }) = submit {
+        if let SubmitDefinition::Submit(Submit::Aggregator { .. }) = submit {
             ensure!(
                 !self.aggregators.is_empty(),
                 "No aggregators set when submit is aggregator"
