@@ -7,11 +7,12 @@ use crate::handle::{Handle, HandleConfig, APP_CONTEXT};
 
 pub fn benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("block intervals");
-    group.measurement_time(std::time::Duration::from_secs(60));
+    group.measurement_time(std::time::Duration::from_secs(180));
     group.sample_size(10);
 
     let config = HandleConfig {
-        n_blocks: 10000,
+        n_chains: 7,
+        n_blocks: 1000,
         triggers_per_block: 100,
         cycles: 5,
     };
@@ -56,16 +57,18 @@ fn run_simulation(handle: Arc<Handle>) {
         move || {
             APP_CONTEXT.rt.block_on(async move {
                 for block_height in 0..=handle.config.total_blocks() {
-                    let actions = handle
-                        .trigger_manager
-                        .process_blocks(handle.chain_name.clone(), block_height);
-                    for action in actions {
-                        handle
+                    for chain_name in handle.chain_names.clone() {
+                        let actions = handle
                             .trigger_manager
-                            .action_sender
-                            .send(action)
-                            .await
-                            .unwrap();
+                            .process_blocks(chain_name, block_height);
+                        for action in actions {
+                            handle
+                                .trigger_manager
+                                .action_sender
+                                .send(action)
+                                .await
+                                .unwrap();
+                        }
                     }
                 }
             });
@@ -81,5 +84,5 @@ fn run_simulation(handle: Arc<Handle>) {
 
     assert_eq!(received_count, total_triggers);
 
-    println!("Received {} actions", received_count);
+    println!("Processed {} triggers", received_count);
 }

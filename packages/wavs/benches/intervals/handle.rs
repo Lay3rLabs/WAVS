@@ -13,15 +13,17 @@ pub static APP_CONTEXT: LazyLock<AppContext> = LazyLock::new(|| AppContext::new(
 
 // This is a convenience struct to initialize stuff and make it easier to pass around
 pub struct Handle {
+    pub chain_names: Vec<ChainName>,
     pub trigger_manager: CoreTriggerManager,
     pub action_receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
-    pub chain_name: ChainName,
     pub config: HandleConfig,
 }
 
 #[derive(Clone, Copy)]
 pub struct HandleConfig {
-    // how many blocks to launch triggers in
+    // how many chains
+    pub n_chains: u64,
+    // how many blocks to launch triggers in per-chain
     pub n_blocks: u64,
     // how many triggers to launch in each block
     pub triggers_per_block: u64,
@@ -32,8 +34,12 @@ pub struct HandleConfig {
 impl HandleConfig {
     pub fn description(&self) -> String {
         format!(
-            "blocks: {}, triggers per block: {}, cycles: {}",
-            self.n_blocks, self.triggers_per_block, self.cycles
+            "total triggers: {} (chains: {}, blocks: {}, triggers per block: {}, cycles: {})",
+            self.total_triggers(),
+            self.n_chains,
+            self.n_blocks,
+            self.triggers_per_block,
+            self.cycles
         )
     }
     pub fn total_blocks(&self) -> u64 {
@@ -41,50 +47,55 @@ impl HandleConfig {
     }
 
     pub fn total_triggers(&self) -> u64 {
-        self.total_blocks() * self.triggers_per_block
+        self.n_chains * self.total_blocks() * self.triggers_per_block
     }
 }
 
 impl Handle {
     pub fn new(handle_config: HandleConfig) -> Arc<Self> {
-        let chain_name = ChainName::new("wavs-benchmark").unwrap();
-
         let config = wavs::config::Config::default();
         let metrics = Metrics::new(&meter("wavs-benchmark"));
 
         let trigger_manager = CoreTriggerManager::new(&config, metrics.wavs.trigger).unwrap();
         let receiver = trigger_manager.start(APP_CONTEXT.clone()).unwrap();
 
-        let mut trigger_id = 1;
-        for block in 1..=handle_config.n_blocks {
-            for _ in 0..handle_config.triggers_per_block {
-                trigger_manager
-                    .add_trigger(TriggerConfig {
-                        service_id: wavs_types::ServiceID::new(format!(
-                            "wavs-benchmark-{trigger_id}"
-                        ))
-                        .unwrap(),
-                        workflow_id: wavs_types::WorkflowID::new(format!(
-                            "wavs-benchmark-{trigger_id}"
-                        ))
-                        .unwrap(),
-                        trigger: Trigger::BlockInterval {
-                            chain_name: chain_name.clone(),
-                            n_blocks: NonZero::new(handle_config.n_blocks as u32).unwrap(),
-                            start_block: Some(NonZero::new(block).unwrap()),
-                            end_block: None,
-                        },
-                    })
-                    .unwrap();
+        let mut chain_names = Vec::with_capacity(handle_config.n_chains as usize);
 
-                trigger_id += 1;
+        let mut trigger_id = 1;
+        for chain in 1..=handle_config.n_chains {
+            let chain_name = ChainName::new(format!("wavs-benchmark-{chain}")).unwrap();
+            for block in 1..=handle_config.n_blocks {
+                for _ in 0..handle_config.triggers_per_block {
+                    trigger_manager
+                        .add_trigger(TriggerConfig {
+                            service_id: wavs_types::ServiceID::new(format!(
+                                "wavs-benchmark-{trigger_id}"
+                            ))
+                            .unwrap(),
+                            workflow_id: wavs_types::WorkflowID::new(format!(
+                                "wavs-benchmark-{trigger_id}"
+                            ))
+                            .unwrap(),
+                            trigger: Trigger::BlockInterval {
+                                chain_name: chain_name.clone(),
+                                n_blocks: NonZero::new(handle_config.n_blocks as u32).unwrap(),
+                                start_block: Some(NonZero::new(block).unwrap()),
+                                end_block: None,
+                            },
+                        })
+                        .unwrap();
+
+                    trigger_id += 1;
+                }
             }
+
+            chain_names.push(chain_name);
         }
 
         Arc::new(Handle {
             trigger_manager,
             action_receiver: Mutex::new(Some(receiver)),
-            chain_name,
+            chain_names,
             config: handle_config,
         })
     }
