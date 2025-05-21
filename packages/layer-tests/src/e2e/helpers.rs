@@ -1,7 +1,8 @@
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{bail, Context, Result};
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use tokio::sync::Mutex;
 use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 
@@ -15,7 +16,9 @@ use crate::{
     e2e::{
         clients::Clients,
         components::ComponentSources,
-        test_definition::{AggregatorConfig, SubmitConfig, TestDefinition, TriggerConfig},
+        test_definition::{
+            AggregatorDefinition, SubmitDefinition, TestDefinition, TriggerDefinition,
+        },
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
@@ -24,11 +27,17 @@ use crate::{
     },
 };
 
+use super::{
+    test_definition::{CosmosTriggerDefinition, EvmTriggerDefinition},
+    test_registry::CosmosCodeMap,
+};
+
 /// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
     test: &TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
+    cosmos_triggers: CosmosCodeMap,
 ) -> Result<Service> {
     tracing::info!("Deploying service for test: {}", test.name);
 
@@ -65,9 +74,10 @@ pub async fn deploy_service_for_test(
 
         tracing::info!("[{}] Creating trigger from config", test.name);
         // Create the trigger based on test configuration
-        let trigger = create_trigger_from_config(&workflow.trigger, clients)
-            .await
-            .context("Failed to create trigger")?;
+        let trigger =
+            create_trigger_from_config(&workflow.trigger, clients, cosmos_triggers.clone())
+                .await
+                .context("Failed to create trigger")?;
 
         tracing::info!("[{}] Creating submit from config", test.name);
 
@@ -79,7 +89,7 @@ pub async fn deploy_service_for_test(
         let mut aggregators = vec![];
         for aggregator in &workflow.aggregators {
             let aggregator = match aggregator {
-                AggregatorConfig::NewEvmAggregatorSubmit { chain_name } => {
+                AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
                     let submit =
                         deploy_submit(clients, chain_name, service_manager_address).await?;
 
@@ -89,7 +99,7 @@ pub async fn deploy_service_for_test(
                         bail!("EVM contract submission is expected from deploy a new evem aggregator submit")
                     }
                 }
-                AggregatorConfig::Aggregator(aggregator) => aggregator.clone(),
+                AggregatorDefinition::Aggregator(aggregator) => aggregator.clone(),
             };
 
             aggregators.push(aggregator);
@@ -145,86 +155,93 @@ pub async fn deploy_service_for_test(
 
 /// Create a trigger based on test configuration
 pub async fn create_trigger_from_config(
-    trigger_config: &TriggerConfig,
+    trigger_config: &TriggerDefinition,
     clients: &Clients,
+    cosmos_code_map: CosmosCodeMap,
 ) -> Result<Trigger> {
     match trigger_config {
-        TriggerConfig::NewEvmContract { chain_name } => {
-            let client = clients.get_evm_client(chain_name);
+        TriggerDefinition::Evm(evm_trigger_definition) => match evm_trigger_definition {
+            EvmTriggerDefinition::Simple { chain_name } => {
+                let client = clients.get_evm_client(chain_name);
 
-            // Deploy a new EVM trigger contract
-            tracing::info!("Deploying EVM trigger contract on chain {}", chain_name);
-            let contract = SimpleTrigger::deploy(client.provider.clone())
-                .await
-                .context("Failed to deploy EVM trigger contract")?;
-            let address = *contract.address();
+                // Deploy a new EVM trigger contract
+                tracing::info!("Deploying EVM trigger contract on chain {}", chain_name);
+                let contract = SimpleTrigger::deploy(client.provider.clone())
+                    .await
+                    .context("Failed to deploy EVM trigger contract")?;
+                let address = *contract.address();
 
-            // Get the event hash
-            let event_hash =
-                *crate::example_evm_client::example_trigger::NewTrigger::SIGNATURE_HASH;
+                // Get the event hash
+                let event_hash =
+                    *crate::example_evm_client::example_trigger::NewTrigger::SIGNATURE_HASH;
 
-            Ok(Trigger::EvmContractEvent {
-                chain_name: chain_name.clone(),
-                address,
-                event_hash: ByteArray::new(event_hash),
-            })
-        }
-        TriggerConfig::NewCosmosContract { chain_name } => {
-            let client = clients.get_cosmos_client(chain_name).await;
+                Ok(Trigger::EvmContractEvent {
+                    chain_name: chain_name.clone(),
+                    address,
+                    event_hash: ByteArray::new(event_hash),
+                })
+            }
+        },
+        TriggerDefinition::Cosmos(cosmos_trigger_definition) => match cosmos_trigger_definition {
+            CosmosTriggerDefinition::Simple { chain_name } => {
+                let client = clients.get_cosmos_client(chain_name).await;
 
-            // Get the code ID with better error handling
-            tracing::info!("Getting cosmos code ID for chain {}", chain_name);
-            let code_id = get_cosmos_code_id(clients, chain_name)
-                .await
-                .context(format!(
-                    "Failed to get cosmos code ID for chain {}",
+                // Get the code ID with better error handling
+                tracing::info!("Getting cosmos code ID for chain {}", chain_name);
+                let code_id =
+                    get_cosmos_code_id(clients, cosmos_trigger_definition, cosmos_code_map)
+                        .await
+                        .context(format!(
+                            "Failed to get cosmos code ID for chain {}",
+                            chain_name
+                        ))?;
+
+                tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
+
+                // Deploy a new Cosmos trigger contract with better error handling
+                let contract_name = format!("simple_trigger_{}", Uuid::now_v7());
+                tracing::info!(
+                    "Instantiating new contract '{}' with code ID {} on chain {}",
+                    contract_name,
+                    code_id,
                     chain_name
-                ))?;
+                );
 
-            tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
+                let contract =
+                    SimpleCosmosTriggerClient::new_code_id(client, code_id, &contract_name)
+                        .await
+                        .context(format!(
+                            "Failed to instantiate cosmos contract with code ID {} on chain {}",
+                            code_id, chain_name
+                        ))?;
 
-            // Deploy a new Cosmos trigger contract with better error handling
-            let contract_name = format!("simple_trigger_{}", Uuid::now_v7());
-            tracing::info!(
-                "Instantiating new contract '{}' with code ID {} on chain {}",
-                contract_name,
-                code_id,
-                chain_name
-            );
+                tracing::info!(
+                    "Successfully deployed cosmos contract at address: {}",
+                    contract.contract_address
+                );
 
-            let contract = SimpleCosmosTriggerClient::new_code_id(client, code_id, &contract_name)
-                .await
-                .context(format!(
-                    "Failed to instantiate cosmos contract with code ID {} on chain {}",
-                    code_id, chain_name
-                ))?;
-
-            tracing::info!(
-                "Successfully deployed cosmos contract at address: {}",
-                contract.contract_address
-            );
-
-            Ok(Trigger::CosmosContractEvent {
-                chain_name: chain_name.clone(),
-                address: contract.contract_address,
-                event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
-            })
-        }
-        TriggerConfig::Trigger(trigger) => Ok(trigger.clone()),
+                Ok(Trigger::CosmosContractEvent {
+                    chain_name: chain_name.clone(),
+                    address: contract.contract_address,
+                    event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
+                })
+            }
+        },
+        TriggerDefinition::Trigger(trigger) => Ok(trigger.clone()),
     }
 }
 
 /// Create a submit based on test configuration
 pub async fn create_submit_from_config(
-    submit_config: &SubmitConfig,
+    submit_config: &SubmitDefinition,
     clients: &Clients,
     service_manager_address: alloy_primitives::Address,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitConfig::NewEvmContract { chain_name } => {
+        SubmitDefinition::NewEvmContract { chain_name } => {
             deploy_submit(clients, chain_name, service_manager_address).await
         }
-        SubmitConfig::Submit(submit) => Ok(submit.clone()),
+        SubmitDefinition::Submit(submit) => Ok(submit.clone()),
     }
 }
 
@@ -282,23 +299,45 @@ pub async fn deploy_submit(
     }))
 }
 
-pub async fn get_cosmos_code_id(clients: &Clients, chain_name: &ChainName) -> Result<u64> {
-    // Check if the WASM file exists
-    let wasm_path = workspace_path()
-        .join("examples")
-        .join("build")
-        .join("contracts")
-        .join("simple_example.wasm");
+/// Deploy submit contract and create a Submit from it
+pub async fn get_cosmos_code_id(
+    clients: &Clients,
+    cosmos_trigger_definition: &CosmosTriggerDefinition,
+    cosmos_triggers: CosmosCodeMap,
+) -> Result<u64> {
+    // Get or insert the entry
+    let entry = cosmos_triggers
+        .entry(cosmos_trigger_definition.clone())
+        .or_insert_with(|| Arc::new(Mutex::new(None)))
+        .clone();
 
-    if !wasm_path.exists() {
-        return Err(anyhow::anyhow!(
-            "Cosmos contract WASM file not found at: {}",
-            wasm_path.display()
-        ));
+    // Lock the entry
+    let mut guard = entry.lock().await;
+
+    // If already uploaded, return the result
+    if let Some(code_id) = *guard {
+        return Ok(code_id);
     }
 
-    // Read the WASM bytecode
-    let cosmos_bytecode = tokio::fs::read(&wasm_path).await?;
+    // Upload since not cached
+    let (chain_name, cosmos_bytecode) = match cosmos_trigger_definition {
+        CosmosTriggerDefinition::Simple { chain_name } => {
+            let wasm_path = workspace_path()
+                .join("examples")
+                .join("build")
+                .join("contracts")
+                .join("simple_example.wasm");
+
+            if !wasm_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Cosmos contract WASM file not found at: {}",
+                    wasm_path.display()
+                ));
+            }
+
+            (chain_name, tokio::fs::read(&wasm_path).await?)
+        }
+    };
 
     tracing::info!(
         "Uploading cosmos wasm byte code ({} bytes) to chain {}",
@@ -306,10 +345,8 @@ pub async fn get_cosmos_code_id(clients: &Clients, chain_name: &ChainName) -> Re
         chain_name
     );
 
-    // Get a cosmos client for the chain
     let client = clients.get_cosmos_client(chain_name).await;
 
-    // Upload the contract and get the real code ID
     let (code_id, _) = client
         .contract_upload_file(cosmos_bytecode, None)
         .await
@@ -324,6 +361,8 @@ pub async fn get_cosmos_code_id(clients: &Clients, chain_name: &ChainName) -> Re
         code_id
     );
 
+    // Cache result and return
+    *guard = Some(code_id);
     Ok(code_id)
 }
 

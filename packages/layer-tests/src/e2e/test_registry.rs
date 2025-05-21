@@ -1,9 +1,12 @@
 use anyhow::Result;
+use dashmap::DashMap;
 use futures::stream::{self};
 use futures::StreamExt;
 use reqwest::Client;
 use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroU32;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
@@ -14,11 +17,15 @@ use super::components::{ComponentName, ComponentSources};
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
-    AggregatorConfig, OutputStructure, SubmitConfig, TestBuilder, TestDefinition, WorkflowBuilder,
+    AggregatorDefinition, CosmosTriggerDefinition, EvmTriggerDefinition, OutputStructure,
+    SubmitDefinition, TestBuilder, TestDefinition, WorkflowBuilder,
 };
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
+pub type CosmosCodeMap = Arc<DashMap<CosmosTriggerDefinition, Arc<Mutex<Option<u64>>>>>;
+
 /// Registry for managing test definitions and their deployed services
+#[derive(Default)]
 pub struct TestRegistry {
     tests: HashMap<String, TestDefinition>,
 }
@@ -61,9 +68,7 @@ impl ChainNames {
 impl TestRegistry {
     /// Create a new empty test registry
     pub fn new() -> Self {
-        Self {
-            tests: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Register a test definition
@@ -90,17 +95,23 @@ impl TestRegistry {
         component_sources: &ComponentSources,
     ) -> Result<()> {
         let max_parallel = num_cpus::get();
+        let cosmos_code_map = CosmosCodeMap::new(DashMap::new());
 
         let tests_iter = self.tests.iter_mut().map(|(_, test)| {
             let clients = clients.clone();
             let component_sources = component_sources.clone();
-
+            let cosmos_triggers = cosmos_code_map.clone();
             async move {
-                let service =
-                    helpers::deploy_service_for_test(test, &clients, &component_sources).await?;
+                let service = helpers::deploy_service_for_test(
+                    test,
+                    &clients,
+                    &component_sources,
+                    cosmos_triggers,
+                )
+                .await?;
 
                 for workflow in test.workflows.values() {
-                    if let SubmitConfig::Submit(Submit::Aggregator { url }) = &workflow.submit {
+                    if let SubmitDefinition::Submit(Submit::Aggregator { url }) = &workflow.submit {
                         TestRegistry::register_to_aggregator(url, &service).await?;
                     }
                 }
@@ -278,7 +289,9 @@ impl TestRegistry {
                 .add_workflow(
                     WorkflowID::new("echo_data").unwrap(),
                     WorkflowBuilder::new()
-                        .evm_trigger(chain)
+                        .evm_trigger(EvmTriggerDefinition::Simple {
+                            chain_name: chain.clone(),
+                        })
                         .evm_submit(chain)
                         .component(ComponentName::EchoData)
                         .input_text("The times")
@@ -301,7 +314,9 @@ impl TestRegistry {
                     WorkflowID::new("echo_data_secondary").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
-                        .evm_trigger(trigger_chain)
+                        .evm_trigger(EvmTriggerDefinition::Simple {
+                            chain_name: trigger_chain.clone(),
+                        })
                         .evm_submit(chain)
                         .input_text("collapse")
                         .expect_same_output()
@@ -324,9 +339,11 @@ impl TestRegistry {
                     WorkflowID::new("echo_data_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
-                        .evm_trigger(aggregator_chain)
+                        .evm_trigger(EvmTriggerDefinition::Simple {
+                            chain_name: aggregator_chain.clone(),
+                        })
                         .aggregator_submit(url)
-                        .add_aggregator(AggregatorConfig::NewEvmAggregatorSubmit {
+                        .add_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: aggregator_chain.clone(),
                         })
                         .input_text("Chancellor")
@@ -346,7 +363,9 @@ impl TestRegistry {
                     WorkflowID::new("square").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::Square)
-                        .evm_trigger(chain)
+                        .evm_trigger(EvmTriggerDefinition::Simple {
+                            chain_name: chain.clone(),
+                        })
                         .evm_submit(chain)
                         .input_square(3)
                         .expect_square(9)
@@ -364,7 +383,9 @@ impl TestRegistry {
                     WorkflowID::new("chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::ChainTriggerLookup)
-                        .evm_trigger(chain)
+                        .evm_trigger(EvmTriggerDefinition::Simple {
+                            chain_name: chain.clone(),
+                        })
                         .evm_submit(chain)
                         .input_text("satoshi")
                         .expect_same_output()
@@ -386,7 +407,9 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::CosmosQuery)
-                        .evm_trigger(evm_chain)
+                        .evm_trigger(EvmTriggerDefinition::Simple {
+                            chain_name: evm_chain.clone(),
+                        })
                         .evm_submit(evm_chain)
                         .input_cosmos_query(CosmosQueryRequest::BlockHeight {
                             chain_name: cosmos_chain.clone(),
@@ -406,7 +429,9 @@ impl TestRegistry {
                     WorkflowID::new("permissions").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::Permissions)
-                        .evm_trigger(chain)
+                        .evm_trigger(EvmTriggerDefinition::Simple {
+                            chain_name: chain.clone(),
+                        })
                         .evm_submit(chain)
                         .input_permissions(create_permissions_request())
                         .expect_output_structure(OutputStructure::PermissionsResponse)
@@ -426,7 +451,9 @@ impl TestRegistry {
             WorkflowID::new("square_workflow").unwrap(),
             WorkflowBuilder::new()
                 .component(ComponentName::Square)
-                .evm_trigger(chain)
+                .evm_trigger(EvmTriggerDefinition::Simple {
+                    chain_name: chain.clone(),
+                })
                 .evm_submit(chain)
                 .input_square(10)
                 .expect_square(10)
@@ -438,7 +465,9 @@ impl TestRegistry {
             WorkflowID::new("echo_data_workflow").unwrap(),
             WorkflowBuilder::new()
                 .component(ComponentName::EchoData)
-                .evm_trigger(chain)
+                .evm_trigger(EvmTriggerDefinition::Simple {
+                    chain_name: chain.clone(),
+                })
                 .evm_submit(chain)
                 .input_square(10)
                 .expect_same_output()
@@ -520,7 +549,9 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
-                        .cosmos_trigger(cosmos_chain)
+                        .cosmos_trigger(CosmosTriggerDefinition::Simple {
+                            chain_name: cosmos_chain.clone(),
+                        })
                         .evm_submit(evm_chain)
                         .input_text("on brink")
                         .expect_same_output()
@@ -542,7 +573,9 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_square").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::Square)
-                        .cosmos_trigger(cosmos_chain)
+                        .cosmos_trigger(CosmosTriggerDefinition::Simple {
+                            chain_name: cosmos_chain.clone(),
+                        })
                         .evm_submit(evm_chain)
                         .input_square(3)
                         .expect_square(9)
@@ -564,7 +597,9 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::ChainTriggerLookup)
-                        .cosmos_trigger(cosmos_chain)
+                        .cosmos_trigger(CosmosTriggerDefinition::Simple {
+                            chain_name: cosmos_chain.clone(),
+                        })
                         .evm_submit(evm_chain)
                         .input_text("nakamoto")
                         .expect_same_output()
@@ -586,7 +621,9 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::CosmosQuery)
-                        .cosmos_trigger(cosmos_chain)
+                        .cosmos_trigger(CosmosTriggerDefinition::Simple {
+                            chain_name: cosmos_chain.clone(),
+                        })
                         .evm_submit(evm_chain)
                         .input_cosmos_query(CosmosQueryRequest::BlockHeight {
                             chain_name: cosmos_chain.clone(),
@@ -610,7 +647,9 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_permissions").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::Permissions)
-                        .cosmos_trigger(cosmos_chain)
+                        .cosmos_trigger(CosmosTriggerDefinition::Simple {
+                            chain_name: cosmos_chain.clone(),
+                        })
                         .evm_submit(evm_chain)
                         .input_permissions(create_permissions_request())
                         .expect_output_structure(OutputStructure::PermissionsResponse)
@@ -681,7 +720,9 @@ impl TestRegistry {
                     WorkflowID::new("cross_chain_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
-                        .cosmos_trigger(cosmos_chain)
+                        .cosmos_trigger(CosmosTriggerDefinition::Simple {
+                            chain_name: cosmos_chain.clone(),
+                        })
                         .evm_submit(evm_chain)
                         .input_text("hello EVM world from cosmos")
                         .expect_same_output()
