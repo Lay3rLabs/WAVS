@@ -22,7 +22,7 @@ pub struct TestDefinition {
     pub description: Option<String>,
 
     /// The workflows of this test
-    pub workflows: BTreeMap<WorkflowID, WorkflowConfig>,
+    pub workflows: BTreeMap<WorkflowID, WorkflowDefinition>,
 
     /// Service manager chain
     pub service_manager_chain: ChainName,
@@ -62,7 +62,7 @@ impl Ord for TestDefinition {
 }
 
 #[derive(Clone, Debug)]
-pub struct WorkflowConfig {
+pub struct WorkflowDefinition {
     /// Components used in this test
     pub component: ComponentName,
 
@@ -229,7 +229,7 @@ impl TestBuilder {
     pub fn add_workflow(
         mut self,
         workflow_id: WorkflowID,
-        workflow: WorkflowConfig,
+        workflow: WorkflowDefinition,
     ) -> anyhow::Result<Self> {
         if self.definition.workflows.contains_key(&workflow_id) {
             bail!("Workflow id {} is already in use", workflow_id)
@@ -356,7 +356,7 @@ impl WorkflowBuilder {
     }
 
     /// Build the workflow configuration
-    pub fn build(self) -> anyhow::Result<WorkflowConfig> {
+    pub fn build(self) -> anyhow::Result<WorkflowDefinition> {
         let components = self.components.context("Components not set")?;
         let trigger = self.trigger.context("Trigger not set")?;
         let submit = self.submit.context("Submit not set")?;
@@ -369,7 +369,7 @@ impl WorkflowBuilder {
             )
         }
 
-        Ok(WorkflowConfig {
+        Ok(WorkflowDefinition {
             component: components,
             trigger,
             submit,
