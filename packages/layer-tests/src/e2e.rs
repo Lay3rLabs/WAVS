@@ -75,10 +75,11 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     let mut registry = test_registry::TestRegistry::from_test_mode(&mode, &configs.chains).unwrap();
 
     // Deploy services for tests
-    match ctx.rt.block_on(async {
+    let deploy_result = ctx.rt.block_on(async {
         tracing::info!("Deploying services for tests...");
         registry.deploy_services(&clients, &component_sources).await
-    }) {
+    });
+    match deploy_result {
         Ok(_) => {
             // Create and run the test runner
             let test_runner = test_runner::TestRunner::new(ctx.clone(), clients, registry);
@@ -92,7 +93,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
                 }
             } else {
                 // Otherwise run all tests
-                test_runner.run_tests();
+                test_runner.run_tests().unwrap();
             }
         }
         Err(e) => {

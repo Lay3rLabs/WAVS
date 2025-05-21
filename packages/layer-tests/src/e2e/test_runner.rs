@@ -37,7 +37,7 @@ impl TestRunner {
     }
 
     /// Run all tests in the registry
-    pub fn run_tests(&self) {
+    pub fn run_tests(&self) -> Result<(), Vec<anyhow::Error>> {
         let tests = self.registry.list_all();
         tracing::info!("Running {} tests", tests.len());
 
@@ -46,10 +46,7 @@ impl TestRunner {
 
             let stream = stream::iter(tests.into_iter().map(|test| {
                 let clients = self.clients.clone();
-                async move {
-                    tracing::info!("Running test: {}", test.name);
-                    self.execute_test(test, clients).await
-                }
+                async move { self.execute_test(test, clients).await }
             }))
             .buffer_unordered(max_parallel);
 
@@ -58,18 +55,20 @@ impl TestRunner {
 
             while let Some(result) = stream.next().await {
                 if let Err(err) = result {
-                    tracing::error!("Test failed: {:?}", err);
                     failures.push(err);
                 }
             }
 
             if !failures.is_empty() {
                 tracing::error!("{} test(s) failed", failures.len());
+                return Err(failures);
             }
 
             tracing::info!("All tests completed");
-        });
+            Ok(())
+        })
     }
+
     /// Run a specific test by name
     pub fn run_test_by_name(&self, name: &str) -> Result<()> {
         let test = self
