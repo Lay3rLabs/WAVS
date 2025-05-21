@@ -6,9 +6,9 @@ use futures::{
     stream::{self},
     StreamExt,
 };
-use std::sync::Arc;
 use std::time::Instant;
-use wavs_types::{EvmContractSubmission, Submit, Trigger};
+use std::{collections::HashMap, sync::Arc};
+use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
 
 use utils::context::AppContext;
 
@@ -106,9 +106,32 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
     let submit_client = clients.get_evm_client(service.manager.chain_name());
     let submit_start_block = submit_client.provider.get_block_number().await?;
 
-    // Run tasks sequentially according to test definition
+    // Group workflows by trigger to handle multi-triggers
+    let mut trigger_groups: HashMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = HashMap::new();
+
     for (workflow_id, workflow) in service.workflows.iter() {
-        let trigger_id = match &workflow.trigger {
+        trigger_groups
+            .entry(&workflow.trigger)
+            .or_default()
+            .push((workflow_id, workflow));
+    }
+
+    // Process each unique trigger once, then validate all associated workflows
+    for (trigger, workflows_group) in trigger_groups.iter() {
+        // Use the first workflow to execute the trigger
+        let (first_workflow_id, _) = workflows_group[0];
+
+        // Get the workflow data safely
+        let first_workflow_data = test
+            .workflows
+            .get(first_workflow_id)
+            .ok_or_else(|| anyhow::anyhow!("Workflow not found: {:?}", first_workflow_id))?;
+
+        // Convert input data to bytes safely
+        let input_bytes = first_workflow_data.input_data.to_bytes();
+
+        // Execute the trigger once
+        let trigger_id = match trigger {
             Trigger::EvmContractEvent {
                 chain_name,
                 address,
@@ -119,12 +142,8 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
 
                 client
                     .add_trigger(
-                        test.workflows
-                            .get(workflow_id)
-                            .expect("Could not get workflow")
-                            .input_data
-                            .to_bytes()
-                            .expect("Expected input for EVM contract trigger"),
+                        input_bytes
+                            .ok_or_else(|| anyhow::anyhow!("EVM triggers require an input"))?,
                     )
                     .await?
             }
@@ -139,12 +158,8 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
                 );
                 let trigger_id = client
                     .add_trigger(
-                        test.workflows
-                            .get(workflow_id)
-                            .expect("Could not get workflow")
-                            .input_data
-                            .to_bytes()
-                            .expect("Expected input for EVM contract trigger"),
+                        input_bytes
+                            .ok_or_else(|| anyhow::anyhow!("Cosmos triggers require an input"))?,
                     )
                     .await?;
 
@@ -154,48 +169,50 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
                 chain_name: _,
                 n_blocks: _,
                 ..
-            } => {
-                // Hardcoded id since the current flow expects it to come from the event
-                TriggerId::new(1337)
-            }
+            } => TriggerId::new(1337),
             Trigger::Cron { .. } => TriggerId::new(1338),
-            Trigger::Manual => unimplemented!(),
+            Trigger::Manual => {
+                return Err(anyhow::anyhow!("Manual trigger type is not implemented"))
+            }
         };
 
-        match &workflow.submit {
-            Submit::EvmContract(EvmContractSubmission {
-                chain_name,
-                address,
-                max_gas: _,
-            }) => {
-                wait_for_task_to_land(
-                    clients.get_evm_client(chain_name),
-                    *address,
-                    trigger_id,
-                    submit_start_block,
-                )
-                .await?;
-            }
-            Submit::Aggregator { .. } => {
-                for aggregator in workflow.aggregators.iter() {
-                    match aggregator {
-                        wavs_types::Aggregator::Evm(EvmContractSubmission {
-                            chain_name,
-                            address,
-                            ..
-                        }) => {
-                            wait_for_task_to_land(
-                                clients.get_evm_client(chain_name),
-                                *address,
-                                trigger_id,
-                                submit_start_block,
-                            )
-                            .await?;
+        // Validate all workflows associated with this trigger
+        for (_, workflow) in workflows_group {
+            match &workflow.submit {
+                Submit::EvmContract(EvmContractSubmission {
+                    chain_name,
+                    address,
+                    max_gas: _,
+                }) => {
+                    wait_for_task_to_land(
+                        clients.get_evm_client(chain_name),
+                        *address,
+                        trigger_id,
+                        submit_start_block,
+                    )
+                    .await?;
+                }
+                Submit::Aggregator { .. } => {
+                    for aggregator in workflow.aggregators.iter() {
+                        match aggregator {
+                            wavs_types::Aggregator::Evm(EvmContractSubmission {
+                                chain_name,
+                                address,
+                                ..
+                            }) => {
+                                wait_for_task_to_land(
+                                    clients.get_evm_client(chain_name),
+                                    *address,
+                                    trigger_id,
+                                    submit_start_block,
+                                )
+                                .await?;
+                            }
                         }
                     }
                 }
+                Submit::None => return Err(anyhow::anyhow!("Submit::None is not implemented")),
             }
-            Submit::None => unimplemented!(),
         }
     }
 
