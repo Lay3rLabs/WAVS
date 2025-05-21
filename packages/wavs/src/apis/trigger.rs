@@ -58,4 +58,6 @@ pub enum TriggerError {
     WorkflowAlreadyExists(ServiceID, WorkflowID),
     #[error("Cron scheduling error: {expression} / {reason}")]
     Cron { expression: String, reason: String },
+    #[error("Interval start time cannot be after end time")]
+    IntervalStartAfterEnd,
 }

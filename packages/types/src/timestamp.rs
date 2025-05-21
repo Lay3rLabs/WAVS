@@ -1,7 +1,7 @@
 use std::{num::ParseIntError, str::FromStr};
 
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -28,6 +28,10 @@ impl Timestamp {
         }
 
         Ok(Timestamp(nanos as u64))
+    }
+
+    pub fn into_datetime(self) -> DateTime<Utc> {
+        Utc.timestamp_nanos(self.0 as i64)
     }
 
     // Get the nanosecond value
