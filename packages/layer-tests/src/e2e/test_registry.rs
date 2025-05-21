@@ -132,115 +132,111 @@ impl TestRegistry {
         chain_configs: &ChainConfigs,
     ) -> Result<Self> {
         // Convert TestMode to TestMatrix
-        let matrix: TestMatrix = test_mode.clone().into();
+        let matrix: TestMatrix = test_mode.into();
 
         // Get chain names
         let chain_names = ChainNames::from_config(chain_configs);
 
         let mut registry = Self::new();
 
-        // Register EVM tests
-        if matrix.evm_regular_chain_enabled() && !chain_names.evm.is_empty() {
-            let evm_chain = &chain_names.evm[0];
-
-            // Basic EVM chain tests
-            if matrix.evm.contains(&EvmService::EchoData) {
-                registry.register_evm_echo_data_test(evm_chain)?;
-            }
-
-            if matrix.evm.contains(&EvmService::Square) {
-                registry.register_evm_square_test(evm_chain)?;
-            }
-
-            if matrix.evm.contains(&EvmService::ChainTriggerLookup) {
-                registry.register_evm_chain_trigger_lookup_test(evm_chain)?;
-            }
-
-            if matrix.evm.contains(&EvmService::Permissions) {
-                registry.register_evm_permissions_test(evm_chain)?;
-            }
-
-            if matrix.evm.contains(&EvmService::MultiWorkflow) {
-                registry.register_evm_multi_workflow_test(evm_chain)?;
-            }
-
-            if matrix.evm.contains(&EvmService::BlockInterval) {
-                registry.register_evm_block_interval_test(evm_chain)?;
-            }
-
-            if matrix.evm.contains(&EvmService::CronInterval) {
-                registry.register_evm_cron_interval_test(evm_chain)?;
+        // Process EVM services
+        for service in &matrix.evm {
+            match service {
+                EvmService::EchoData => {
+                    let chain = chain_names.primary_evm()?;
+                    registry.register_evm_echo_data_test(chain)?;
+                }
+                EvmService::EchoDataSecondaryChain => {
+                    let primary = chain_names.primary_evm()?;
+                    let secondary = chain_names.secondary_evm()?;
+                    registry.register_evm_echo_data_secondary_chain_test(primary, secondary)?;
+                }
+                EvmService::EchoDataAggregator => {
+                    let (chain, url) = chain_names.first_aggregator()?;
+                    registry.register_evm_echo_data_aggregator_test(chain, url)?;
+                }
+                EvmService::Square => {
+                    let chain = chain_names.primary_evm()?;
+                    registry.register_evm_square_test(chain)?;
+                }
+                EvmService::ChainTriggerLookup => {
+                    let chain = chain_names.primary_evm()?;
+                    registry.register_evm_chain_trigger_lookup_test(chain)?;
+                }
+                EvmService::CosmosQuery => {
+                    let evm = chain_names.primary_evm()?;
+                    let cosmos = chain_names.primary_cosmos()?;
+                    registry.register_evm_cosmos_query_test(evm, cosmos)?;
+                }
+                EvmService::Permissions => {
+                    let chain = chain_names.primary_evm()?;
+                    registry.register_evm_permissions_test(chain)?;
+                }
+                EvmService::MultiWorkflow => {
+                    let chain = chain_names.primary_evm()?;
+                    registry.register_evm_multi_workflow_test(chain)?;
+                }
+                EvmService::MultiTrigger => {
+                    tracing::warn!("MultiTrigger service is enabled but not implemented");
+                }
+                EvmService::BlockInterval => {
+                    let chain = chain_names.primary_evm()?;
+                    registry.register_evm_block_interval_test(chain)?;
+                }
+                EvmService::BlockIntervalStartStop => {
+                    tracing::warn!("BlockIntervalStartStop service is enabled but not implemented");
+                }
+                EvmService::CronInterval => {
+                    let chain = chain_names.primary_evm()?;
+                    registry.register_evm_cron_interval_test(chain)?;
+                }
             }
         }
 
-        // Secondary chain tests
-        if matrix.evm_secondary_chain_enabled() && chain_names.evm.len() > 1 {
-            let trigger_chain = &chain_names.evm[0];
-            let secondary_chain = &chain_names.evm[1];
+        // Process Cosmos services
+        for service in &matrix.cosmos {
+            let cosmos = chain_names.primary_cosmos()?;
+            let evm = chain_names.primary_evm()?;
 
-            if matrix.evm.contains(&EvmService::EchoDataSecondaryChain) {
-                registry
-                    .register_evm_echo_data_secondary_chain_test(trigger_chain, secondary_chain)?;
+            match service {
+                CosmosService::EchoData => {
+                    registry.register_cosmos_echo_data_test(cosmos, evm)?;
+                }
+                CosmosService::Square => {
+                    registry.register_cosmos_square_test(cosmos, evm)?;
+                }
+                CosmosService::ChainTriggerLookup => {
+                    registry.register_cosmos_chain_trigger_lookup_test(cosmos, evm)?;
+                }
+                CosmosService::CosmosQuery => {
+                    registry.register_cosmos_cosmos_query_test(cosmos, evm)?;
+                }
+                CosmosService::Permissions => {
+                    registry.register_cosmos_permissions_test(cosmos, evm)?;
+                }
+                CosmosService::BlockInterval => {
+                    registry.register_cosmos_block_interval_test(cosmos, evm)?;
+                }
+                CosmosService::BlockIntervalStartStop => {
+                    tracing::warn!(
+                        "Cosmos BlockIntervalStartStop service is enabled but not implemented"
+                    );
+                }
+                CosmosService::CronInterval => {
+                    registry.register_cosmos_cron_interval_test(cosmos, evm)?;
+                }
             }
         }
 
-        // Aggregator chain tests
-        if matrix.evm_aggregator_chain_enabled() {
-            let (aggregator_chain, url) = &chain_names.evm_aggregator[0];
+        // Process Cross-Chain services
+        for service in &matrix.cross_chain {
+            let cosmos = chain_names.primary_cosmos()?;
+            let evm = chain_names.primary_evm()?;
 
-            if matrix.evm.contains(&EvmService::EchoDataAggregator) {
-                registry.register_evm_echo_data_aggregator_test(aggregator_chain, url)?;
-            }
-        }
-
-        // Cosmos-related tests
-        if matrix.cosmos_regular_chain_enabled()
-            && !chain_names.cosmos.is_empty()
-            && !chain_names.evm.is_empty()
-        {
-            let cosmos_chain = &chain_names.cosmos[0];
-            let evm_chain = &chain_names.evm[0];
-
-            // EVM tests that need Cosmos
-            if matrix.evm.contains(&EvmService::CosmosQuery) {
-                registry.register_evm_cosmos_query_test(evm_chain, cosmos_chain)?;
-            }
-
-            // Cosmos tests
-            if matrix.cosmos.contains(&CosmosService::EchoData) {
-                registry.register_cosmos_echo_data_test(cosmos_chain, evm_chain)?;
-            }
-
-            if matrix.cosmos.contains(&CosmosService::Square) {
-                registry.register_cosmos_square_test(cosmos_chain, evm_chain)?;
-            }
-
-            if matrix.cosmos.contains(&CosmosService::ChainTriggerLookup) {
-                registry.register_cosmos_chain_trigger_lookup_test(cosmos_chain, evm_chain)?;
-            }
-
-            if matrix.cosmos.contains(&CosmosService::CosmosQuery) {
-                registry.register_cosmos_cosmos_query_test(cosmos_chain, evm_chain)?;
-            }
-
-            if matrix.cosmos.contains(&CosmosService::Permissions) {
-                registry.register_cosmos_permissions_test(cosmos_chain, evm_chain)?;
-            }
-
-            if matrix.cosmos.contains(&CosmosService::BlockInterval) {
-                registry.register_cosmos_block_interval_test(cosmos_chain, evm_chain)?;
-            }
-
-            if matrix.cosmos.contains(&CosmosService::CronInterval) {
-                registry.register_cosmos_cron_interval_test(cosmos_chain, evm_chain)?;
-            }
-
-            // Cross-chain tests
-            if matrix
-                .cross_chain
-                .contains(&CrossChainService::CosmosToEvmEchoData)
-            {
-                registry.register_cosmos_to_evm_echo_data_test(cosmos_chain, evm_chain)?;
+            match service {
+                CrossChainService::CosmosToEvmEchoData => {
+                    registry.register_cosmos_to_evm_echo_data_test(cosmos, evm)?;
+                }
             }
         }
 
