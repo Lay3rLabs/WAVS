@@ -220,6 +220,11 @@ impl TestBuilder {
         self
     }
 
+    pub fn priority(mut self, priority: u64) -> Self {
+        self.definition.priority = priority;
+        self
+    }
+
     /// Add a workflow
     pub fn add_workflow(
         mut self,

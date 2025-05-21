@@ -162,7 +162,7 @@ impl TestRegistry {
 
     /// Create a registry based on the test mode
     pub fn from_test_mode(
-        test_mode: &crate::config::TestMode,
+        test_mode: crate::config::TestMode,
         chain_configs: &ChainConfigs,
     ) -> Result<Self> {
         // Convert TestMode to TestMatrix
@@ -514,6 +514,7 @@ impl TestRegistry {
                         .expect_text("block-interval data")
                         .build()?,
                 )?
+                .priority(0)
                 .build(),
         ))
     }
@@ -531,6 +532,7 @@ impl TestRegistry {
                         .expect_text("cron-interval data")
                         .build()?,
                 )?
+                .priority(1)
                 .build(),
         ))
     }
@@ -681,6 +683,7 @@ impl TestRegistry {
                         .expect_text("block-interval data")
                         .build()?,
                 )?
+                .priority(0)
                 .build(),
         ))
     }
@@ -702,6 +705,7 @@ impl TestRegistry {
                         .expect_text("cron-interval data")
                         .build()?,
                 )?
+                .priority(1)
                 .build(),
         ))
     }

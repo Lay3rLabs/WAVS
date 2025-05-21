@@ -72,7 +72,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     let component_sources = ComponentSources::new(ctx.clone(), &configs, &clients.http_client);
 
     // Create test registry from test mode
-    let mut registry = test_registry::TestRegistry::from_test_mode(&mode, &configs.chains).unwrap();
+    let mut registry = test_registry::TestRegistry::from_test_mode(mode, &configs.chains).unwrap();
 
     // Deploy services for tests
     let deploy_result = ctx.rt.block_on(async {
