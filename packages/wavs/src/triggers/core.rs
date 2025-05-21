@@ -31,7 +31,7 @@ use super::{
 #[derive(Clone)]
 pub struct CoreTriggerManager {
     pub chain_configs: HashMap<ChainName, AnyChainConfig>,
-    pub action_sender: mpsc::Sender<TriggerAction>,
+    pub action_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TriggerAction>>>>,
     action_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<TriggerAction>>>>,
     lookup_maps: Arc<LookupMaps>,
     metrics: TriggerMetrics,
@@ -114,7 +114,7 @@ impl CoreTriggerManager {
         Ok(Self {
             chain_configs: config.active_trigger_chain_configs(),
             lookup_maps: Arc::new(LookupMaps::new()),
-            action_sender,
+            action_sender: Arc::new(std::sync::Mutex::new(Some(action_sender))),
             action_receiver: Arc::new(std::sync::Mutex::new(Some(action_receiver))),
             metrics,
         })
@@ -421,8 +421,9 @@ impl CoreTriggerManager {
                 }
             }
 
+            let action_sender = self.action_sender.lock().unwrap().clone().unwrap();
             for action in trigger_actions {
-                self.action_sender.send(action).await.unwrap();
+                action_sender.send(action).await.unwrap();
             }
         }
 
@@ -469,6 +470,8 @@ impl CoreTriggerManager {
 impl TriggerManager for CoreTriggerManager {
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+        let action_receiver = self.action_receiver.lock().unwrap().take().unwrap();
+
         ctx.rt.clone().spawn({
             let _self = self.clone();
             let mut kill_receiver = ctx.get_kill_receiver();
@@ -476,6 +479,8 @@ impl TriggerManager for CoreTriggerManager {
                 tokio::select! {
                     _ = kill_receiver.recv() => {
                         tracing::debug!("Trigger Manager shutting down");
+                        // see the note in dispatcher about the channel automatically closing
+                        _self.action_sender.lock().unwrap().take();
                     },
                     res = _self.start_watcher() => {
                         if let Err(err) = res {
@@ -487,7 +492,7 @@ impl TriggerManager for CoreTriggerManager {
             }
         });
 
-        Ok(self.action_receiver.lock().unwrap().take().unwrap())
+        Ok(action_receiver)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]

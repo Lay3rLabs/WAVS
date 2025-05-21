@@ -54,6 +54,13 @@ fn run_simulation(handle: Arc<Handle>) {
     // and send the actions to the action receiver
     std::thread::spawn({
         let handle = handle.clone();
+        let action_sender = handle
+            .trigger_manager
+            .action_sender
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap();
         move || {
             APP_CONTEXT.rt.block_on(async move {
                 for block_height in 0..=handle.config.total_blocks() {
@@ -62,12 +69,7 @@ fn run_simulation(handle: Arc<Handle>) {
                             .trigger_manager
                             .process_blocks(chain_name, block_height);
                         for action in actions {
-                            handle
-                                .trigger_manager
-                                .action_sender
-                                .send(action)
-                                .await
-                                .unwrap();
+                            action_sender.send(action).await.unwrap();
                         }
                     }
                 }
