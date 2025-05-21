@@ -81,19 +81,11 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         }
     }
 
-    // This is called lazily to move triggers from "unadded" to "added"
-    // when their start time has arrived
-    fn move_unadded_triggers(&mut self, now: T) {
-        let mut still_unadded = Vec::new();
+    /// Call this on each “tick”
+    pub fn tick(&mut self, now: T) -> Vec<LookupId> {
+        // Add all the unadded triggers to the scheduler
         for mut state in self.unadded_triggers.drain(..) {
-            // if start_time is in the future, hold off…
-            if let Some(st) = state.start_time() {
-                if st > now {
-                    still_unadded.push(state);
-                    continue;
-                }
-            }
-            // otherwise kick off at the true "now"
+            // initialization is time is "now"
             // even if that's not the configured start time
             // it's up to the specific scheduler to manage its
             // exact interval timing
@@ -101,13 +93,6 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
                 self.triggers.entry(next_time).or_default().push(state);
             }
         }
-
-        self.unadded_triggers = still_unadded;
-    }
-
-    /// Call this on each “tick”
-    pub fn tick(&mut self, now: T) -> Vec<LookupId> {
-        self.move_unadded_triggers(now);
 
         let mut hits = Vec::new();
         let mut re_add = Vec::new();
