@@ -1,5 +1,5 @@
 use anyhow::Result;
-use futures::stream::FuturesUnordered;
+use futures::stream::{self};
 use futures::StreamExt;
 use reqwest::Client;
 use std::collections::{BTreeSet, HashMap};
@@ -89,14 +89,13 @@ impl TestRegistry {
         clients: &Clients,
         component_sources: &ComponentSources,
     ) -> Result<()> {
-        let mut futures = FuturesUnordered::new();
+        let max_parallel = num_cpus::get();
 
-        // Prepare all futures first
-        for test in self.tests.values_mut() {
+        let tests_iter = self.tests.iter_mut().map(|(_, test)| {
             let clients = clients.clone();
             let component_sources = component_sources.clone();
 
-            futures.push(async move {
+            async move {
                 let service =
                     helpers::deploy_service_for_test(test, &clients, &component_sources).await?;
 
@@ -109,11 +108,14 @@ impl TestRegistry {
                 test.service = Some(service);
 
                 Ok::<(), anyhow::Error>(())
-            });
-        }
+            }
+        });
 
-        // Execute all futures
-        while let Some(result) = futures.next().await {
+        let stream = stream::iter(tests_iter).buffer_unordered(max_parallel);
+
+        tokio::pin!(stream);
+
+        while let Some(result) = stream.next().await {
             if let Err(err) = result {
                 tracing::error!("Test failed: {:?}", err);
             }

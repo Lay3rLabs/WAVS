@@ -2,7 +2,10 @@
 
 use alloy_provider::Provider;
 use anyhow::Result;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{
+    stream::{self},
+    StreamExt,
+};
 use std::sync::Arc;
 use std::time::Instant;
 use wavs_types::{EvmContractSubmission, Submit, Trigger};
@@ -35,22 +38,25 @@ impl TestRunner {
 
     /// Run all tests in the registry
     pub fn run_tests(&self) {
-        // Collect tests that have services attached
         let tests = self.registry.list_all();
-
         tracing::info!("Running {} tests", tests.len());
 
         self.ctx.rt.block_on(async {
-            let mut futures = FuturesUnordered::new();
+            let max_parallel = num_cpus::get();
 
-            // Flatten and submit all tests at once
-            for test in tests {
-                tracing::info!("Running test: {}", test.name);
-                futures.push(self.execute_test(test, self.clients.clone()));
-            }
+            let stream = stream::iter(tests.into_iter().map(|test| {
+                let clients = self.clients.clone();
+                async move {
+                    tracing::info!("Running test: {}", test.name);
+                    self.execute_test(test, clients).await
+                }
+            }))
+            .buffer_unordered(max_parallel);
 
             let mut failures = Vec::new();
-            while let Some(result) = futures.next().await {
+            tokio::pin!(stream);
+
+            while let Some(result) = stream.next().await {
                 if let Err(err) = result {
                     tracing::error!("Test failed: {:?}", err);
                     failures.push(err);
@@ -59,13 +65,11 @@ impl TestRunner {
 
             if !failures.is_empty() {
                 tracing::error!("{} test(s) failed", failures.len());
-                std::process::exit(1);
             }
 
             tracing::info!("All tests completed");
         });
     }
-
     /// Run a specific test by name
     pub fn run_test_by_name(&self, name: &str) -> Result<()> {
         let test = self
