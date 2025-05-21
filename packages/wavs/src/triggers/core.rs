@@ -433,7 +433,7 @@ impl CoreTriggerManager {
     }
 
     /// Process blocks and return trigger actions for any triggers that should fire
-    fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
+    pub fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
         let block_height = match NonZeroU64::new(block_height) {
             Some(height) => height,
             None => {
