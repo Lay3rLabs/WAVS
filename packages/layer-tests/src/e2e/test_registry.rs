@@ -307,6 +307,7 @@ impl TestRegistry {
                         .expect_same_output()
                         .build()?,
                 )?
+                .service_manager_chain(chain)
                 .build(),
         ))
     }
