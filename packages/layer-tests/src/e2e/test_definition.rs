@@ -186,11 +186,11 @@ pub enum OutputStructure {
 }
 
 impl TestDefinition {
-    /// Gets the service for this test, panicking if none is set
-    pub fn get_service(&self) -> &Service {
+    /// Gets the service for this test
+    pub fn get_service(&self) -> anyhow::Result<&Service> {
         self.service
             .as_ref()
-            .unwrap_or_else(|| panic!("Service not set for test: {}", self.name))
+            .ok_or_else(|| anyhow::anyhow!("Service not set for test: {}", self.name))
     }
 }
 

@@ -101,7 +101,7 @@ impl TestRunner {
 /// Optimized implementation of running a single test
 async fn run_test(test: &TestDefinition, clients: &Clients) -> Result<()> {
     // Get the service from the test
-    let service = test.get_service();
+    let service = test.get_service()?;
 
     let submit_client = clients.get_evm_client(service.manager.chain_name());
     let submit_start_block = submit_client.provider.get_block_number().await?;
