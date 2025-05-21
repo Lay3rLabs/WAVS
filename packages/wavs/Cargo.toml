@@ -70,5 +70,5 @@ name = "mock_bench"
 harness = false
 
 [[bench]]
-name = "block_intervals_bench"
+name = "intervals"
 harness = false

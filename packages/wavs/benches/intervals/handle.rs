@@ -1,0 +1,91 @@
+use std::{
+    num::NonZero,
+    sync::{Arc, LazyLock, Mutex},
+};
+
+use opentelemetry::global::meter;
+use tokio::sync::mpsc;
+use utils::{context::AppContext, telemetry::Metrics};
+use wavs::{apis::trigger::TriggerManager, triggers::core::CoreTriggerManager};
+use wavs_types::{ChainName, Trigger, TriggerAction, TriggerConfig};
+
+pub static APP_CONTEXT: LazyLock<AppContext> = LazyLock::new(|| AppContext::new());
+
+// This is a convenience struct to initialize stuff and make it easier to pass around
+pub struct Handle {
+    pub trigger_manager: CoreTriggerManager,
+    pub action_receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
+    pub chain_name: ChainName,
+    pub config: HandleConfig,
+}
+
+#[derive(Clone, Copy)]
+pub struct HandleConfig {
+    // how many blocks to launch triggers in
+    pub n_blocks: u64,
+    // how many triggers to launch in each block
+    pub triggers_per_block: u64,
+    // how many cycles to let the intervals run
+    pub cycles: u64,
+}
+
+impl HandleConfig {
+    pub fn description(&self) -> String {
+        format!(
+            "blocks: {}, triggers per block: {}, cycles: {}",
+            self.n_blocks, self.triggers_per_block, self.cycles
+        )
+    }
+    pub fn total_blocks(&self) -> u64 {
+        self.n_blocks * self.cycles
+    }
+
+    pub fn total_triggers(&self) -> u64 {
+        self.total_blocks() * self.triggers_per_block
+    }
+}
+
+impl Handle {
+    pub fn new(handle_config: HandleConfig) -> Arc<Self> {
+        let chain_name = ChainName::new("wavs-benchmark").unwrap();
+
+        let config = wavs::config::Config::default();
+        let metrics = Metrics::new(&meter("wavs-benchmark"));
+
+        let trigger_manager = CoreTriggerManager::new(&config, metrics.wavs.trigger).unwrap();
+        let receiver = trigger_manager.start(APP_CONTEXT.clone()).unwrap();
+
+        let mut trigger_id = 1;
+        for block in 1..=handle_config.n_blocks {
+            for _ in 0..handle_config.triggers_per_block {
+                trigger_manager
+                    .add_trigger(TriggerConfig {
+                        service_id: wavs_types::ServiceID::new(format!(
+                            "wavs-benchmark-{trigger_id}"
+                        ))
+                        .unwrap(),
+                        workflow_id: wavs_types::WorkflowID::new(format!(
+                            "wavs-benchmark-{trigger_id}"
+                        ))
+                        .unwrap(),
+                        trigger: Trigger::BlockInterval {
+                            chain_name: chain_name.clone(),
+                            n_blocks: NonZero::new(handle_config.n_blocks as u32).unwrap(),
+                            start_block: Some(NonZero::new(block).unwrap()),
+                            end_block: None,
+                        },
+                    })
+                    .unwrap();
+
+                trigger_id += 1;
+            }
+        }
+
+        Arc::new(Handle {
+            trigger_manager,
+            action_receiver: Mutex::new(Some(receiver)),
+            chain_name,
+            config: handle_config,
+        })
+    }
+}
