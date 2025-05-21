@@ -37,7 +37,7 @@ fn run_simulation(handle: Arc<Handle>) {
                 // take out the action receiver so we can listen to it
                 let mut receiver = handle.action_receiver.lock().unwrap().take().unwrap();
 
-                while let Some(_) = receiver.recv().await {
+                while receiver.recv().await.is_some() {
                     count += 1;
                     if count == handle.config.total_triggers() {
                         // all done, send the finished signal!
