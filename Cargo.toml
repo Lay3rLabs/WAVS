@@ -14,6 +14,13 @@ members = [
 ]
 resolver = "2"
 
+[profile.dev]
+debug = 1
+split-debuginfo = "unpacked"
+
+[profile.test]
+debug = 1
+split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
