@@ -69,39 +69,6 @@ impl TestRunner {
         })
     }
 
-    /// Run a specific test by name
-    pub fn run_test_by_name(&self, name: &str) -> Result<()> {
-        let test = self
-            .registry
-            .get(name)
-            .ok_or_else(|| anyhow::anyhow!("Test not found: {}", name))?;
-
-        let clients = self.clients.clone();
-
-        self.ctx.rt.block_on(async move {
-            let start_time = Instant::now();
-
-            let result = self.execute_test(test, clients).await;
-            match result {
-                Ok(_) => {
-                    let duration = start_time.elapsed();
-                    tracing::info!("Test {} passed (ran for {}ms)", name, duration.as_millis());
-                    Ok(())
-                }
-                Err(e) => {
-                    let duration = start_time.elapsed();
-                    tracing::error!(
-                        "Test {} failed after {}ms: {:?}",
-                        name,
-                        duration.as_millis(),
-                        e
-                    );
-                    Err(e)
-                }
-            }
-        })
-    }
-
     // Execute a single test with timings
     async fn execute_test(&self, test: &TestDefinition, clients: Arc<Clients>) -> Result<()> {
         let test_name = test.name.clone();

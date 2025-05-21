@@ -14,6 +14,7 @@ use components::ComponentSources;
 use config::Configs;
 use handles::AppHandles;
 pub use matrix::*;
+use test_runner::TestRunner;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
@@ -24,7 +25,6 @@ use utils::{
 use crate::{args::TestArgs, config::TestConfig};
 
 pub fn run(args: TestArgs, ctx: AppContext) {
-    let isolated = args.isolated.clone();
     let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
     let mode = config.mode.clone();
 
@@ -73,30 +73,24 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let component_sources = ComponentSources::new(ctx.clone(), &configs, &clients.http_client);
 
-    // Create test registry from test mode
-    let mut registry = test_registry::TestRegistry::from_test_mode(mode, &configs.chains).unwrap();
-
     // Deploy services for tests
     let deploy_result = ctx.rt.block_on(async {
+        // Create test registry from test mode
+        let mut registry =
+            test_registry::TestRegistry::from_test_mode(mode, &configs.chains, &clients).await?;
         tracing::info!("Deploying services for tests...");
-        registry.deploy_services(&clients, &component_sources).await
+        registry
+            .deploy_services(&clients, &component_sources)
+            .await?;
+
+        Ok::<_, anyhow::Error>(registry)
     });
     match deploy_result {
-        Ok(_) => {
+        Ok(registry) => {
             // Create and run the test runner
-            let test_runner = test_runner::TestRunner::new(ctx.clone(), clients, registry);
-
-            // If a specific test is requested, run just that test
-            if let Some(test_name) = &isolated {
-                tracing::info!("Running isolated test: {}", test_name);
-                match test_runner.run_test_by_name(test_name) {
-                    Ok(_) => tracing::info!("Isolated test {} passed", test_name),
-                    Err(e) => tracing::error!("Isolated test {} failed: {:?}", test_name, e),
-                }
-            } else {
-                // Otherwise run all tests
-                test_runner.run_tests().unwrap();
-            }
+            TestRunner::new(ctx.clone(), clients, registry)
+                .run_tests()
+                .unwrap();
         }
         Err(e) => {
             tracing::error!("Failed to deploy services for tests: {:?}", e);

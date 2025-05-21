@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use futures::stream::{self};
 use futures::StreamExt;
 use reqwest::Client;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -19,7 +19,7 @@ use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
     AggregatorDefinition, CosmosTriggerDefinition, EvmTriggerDefinition, OutputStructure,
-    SubmitDefinition, TestBuilder, TestDefinition, WorkflowBuilder,
+    SubmitDefinition, TestBuilder, TestDefinition, TriggerDefinition, WorkflowBuilder,
 };
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
@@ -28,7 +28,7 @@ pub type CosmosCodeMap = Arc<DashMap<CosmosTriggerDefinition, Arc<Mutex<Option<u
 /// Registry for managing test definitions and their deployed services
 #[derive(Default)]
 pub struct TestRegistry {
-    tests: HashMap<String, TestDefinition>,
+    tests: Vec<TestDefinition>,
 }
 
 impl TestRegistry {
@@ -40,18 +40,13 @@ impl TestRegistry {
     /// Register a test definition
     pub fn register(&mut self, test: TestDefinition) -> &mut Self {
         // Store the test
-        self.tests.insert(test.name.clone(), test);
+        self.tests.push(test);
         self
-    }
-
-    /// Get a test definition by name
-    pub fn get(&self, name: &str) -> Option<&TestDefinition> {
-        self.tests.get(name)
     }
 
     /// Get all test definitions
     pub fn list_all(&self) -> BTreeSet<&TestDefinition> {
-        self.tests.values().collect()
+        self.tests.iter().collect()
     }
 
     /// Deploy services for all tests concurrently
@@ -63,7 +58,7 @@ impl TestRegistry {
         let max_parallel = num_cpus::get();
         let cosmos_code_map = CosmosCodeMap::new(DashMap::new());
 
-        let tests_iter = self.tests.iter_mut().map(|(_, test)| {
+        let tests_iter = self.tests.iter_mut().map(|test| {
             let clients = clients.clone();
             let component_sources = component_sources.clone();
             let cosmos_triggers = cosmos_code_map.clone();
@@ -127,9 +122,10 @@ impl TestRegistry {
     }
 
     /// Create a registry based on the test mode
-    pub fn from_test_mode(
+    pub async fn from_test_mode(
         test_mode: crate::config::TestMode,
         chain_configs: &ChainConfigs,
+        clients: &Clients,
     ) -> Result<Self> {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -177,7 +173,18 @@ impl TestRegistry {
                     registry.register_evm_multi_workflow_test(chain)?;
                 }
                 EvmService::MultiTrigger => {
-                    tracing::warn!("MultiTrigger service is enabled but not implemented");
+                    let chain = chain_names.primary_evm()?;
+
+                    let trigger = helpers::create_trigger_from_config(
+                        &TriggerDefinition::Evm(EvmTriggerDefinition::Simple {
+                            chain_name: chain.clone(),
+                        }),
+                        clients,
+                        CosmosCodeMap::new(DashMap::new()),
+                    )
+                    .await?;
+
+                    registry.register_evm_multi_trigger_test(chain, trigger)?;
                 }
                 EvmService::BlockInterval => {
                     let chain = chain_names.primary_evm()?;
@@ -440,7 +447,6 @@ impl TestRegistry {
         Ok(self.register(test_builder.build()))
     }
 
-    #[allow(dead_code)]
     fn register_evm_multi_trigger_test(
         &mut self,
         chain: &ChainName,
@@ -451,6 +457,16 @@ impl TestRegistry {
                 .description("Tests multiple services triggered by the same event on EVM chain")
                 .add_workflow(
                     WorkflowID::new("evm_multi_trigger").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoData)
+                        .trigger(trigger.clone())
+                        .evm_submit(chain)
+                        .input_text("tttrrrrriiiigggeerrr")
+                        .expect_same_output()
+                        .build()?,
+                )?
+                .add_workflow(
+                    WorkflowID::new("evm_multi_trigger_2").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
                         .trigger(trigger)
