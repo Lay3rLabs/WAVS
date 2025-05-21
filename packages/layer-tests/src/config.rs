@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 use utils::config::ConfigExt;
 
-use crate::e2e::matrix::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
+use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):

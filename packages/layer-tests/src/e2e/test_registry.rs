@@ -12,6 +12,7 @@ use wavs_types::aggregator::RegisterServiceRequest;
 use utils::config::ChainConfigs;
 use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
 
+use super::chain_names::ChainNames;
 use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
 use super::helpers;
@@ -28,41 +29,6 @@ pub type CosmosCodeMap = Arc<DashMap<CosmosTriggerDefinition, Arc<Mutex<Option<u
 #[derive(Default)]
 pub struct TestRegistry {
     tests: HashMap<String, TestDefinition>,
-}
-
-/// Structure to hold the different chain names for test configuration
-#[derive(Debug, Default, Clone)]
-struct ChainNames {
-    evm: Vec<ChainName>,
-    evm_aggregator: Vec<(ChainName, String)>,
-    cosmos: Vec<ChainName>,
-}
-
-impl ChainNames {
-    /// Create a new ChainNames by categorizing chains from the config
-    fn from_config(chain_configs: &ChainConfigs) -> Self {
-        let mut chain_names = Self::default();
-
-        // Categorize EVM chains
-        for (chain_name, chain) in chain_configs.evm.iter() {
-            if chain.aggregator_endpoint.is_some() {
-                chain_names.evm_aggregator.push((
-                    chain_name.clone(),
-                    chain
-                        .aggregator_endpoint
-                        .clone()
-                        .expect("Aggregator URL is expected"),
-                ));
-            } else {
-                chain_names.evm.push(chain_name.clone());
-            }
-        }
-
-        // Collect Cosmos chains
-        chain_names.cosmos = chain_configs.cosmos.keys().cloned().collect::<Vec<_>>();
-
-        chain_names
-    }
 }
 
 impl TestRegistry {

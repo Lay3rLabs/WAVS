@@ -1,9 +1,10 @@
+mod chain_names;
 mod clients;
 mod components;
 mod config;
 mod handles;
 mod helpers;
-pub mod matrix;
+mod matrix;
 mod test_definition;
 mod test_registry;
 mod test_runner;
@@ -12,6 +13,7 @@ mod types;
 use components::ComponentSources;
 use config::Configs;
 use handles::AppHandles;
+pub use matrix::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
