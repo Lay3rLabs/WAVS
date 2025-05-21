@@ -1,6 +1,6 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
-use super::{
+use wavs::triggers::{
     block_scheduler::{BlockHeight, BlockIntervalState},
     core::LookupId,
     interval_scheduler::IntervalState,

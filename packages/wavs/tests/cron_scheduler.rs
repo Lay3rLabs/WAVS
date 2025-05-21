@@ -1,7 +1,12 @@
 use chrono::{DateTime, Duration, Timelike, Utc};
 use wavs_types::Timestamp;
 
-use super::{core::LookupId, cron_scheduler::CronIntervalState, interval_scheduler::IntervalState};
+use wavs::{
+    apis::trigger::TriggerError,
+    triggers::{
+        core::LookupId, cron_scheduler::CronIntervalState, interval_scheduler::IntervalState,
+    },
+};
 
 // Helper function to create a timestamp from a datetime
 fn make_timestamp(dt: DateTime<Utc>) -> Timestamp {
@@ -21,7 +26,7 @@ fn make_state(
     cron_expr: &str,
     start_time: Option<Timestamp>,
     end_time: Option<Timestamp>,
-) -> Result<CronIntervalState, crate::apis::trigger::TriggerError> {
+) -> Result<CronIntervalState, TriggerError> {
     CronIntervalState::new(lookup_id, cron_expr, start_time, end_time)
 }
 

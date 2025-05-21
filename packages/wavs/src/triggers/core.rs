@@ -73,7 +73,7 @@ impl LookupMaps {
     }
 }
 
-pub(crate) type LookupId = usize;
+pub type LookupId = usize;
 
 // *potential* triggers that we can react to
 // this is just a local encapsulation, not a full trigger
