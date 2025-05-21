@@ -31,7 +31,8 @@ use super::{
 #[derive(Clone)]
 pub struct CoreTriggerManager {
     pub chain_configs: HashMap<ChainName, AnyChainConfig>,
-    pub channel_bound: usize,
+    pub action_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TriggerAction>>>>,
+    action_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<TriggerAction>>>>,
     lookup_maps: Arc<LookupMaps>,
     metrics: TriggerMetrics,
 }
@@ -107,19 +108,20 @@ impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
+        // TODO - discuss unbounded, crossbeam, etc.
+        let (action_sender, action_receiver) = mpsc::channel(100);
+
         Ok(Self {
             chain_configs: config.active_trigger_chain_configs(),
-            channel_bound: 100, // TODO: get from config
             lookup_maps: Arc::new(LookupMaps::new()),
+            action_sender: Arc::new(std::sync::Mutex::new(Some(action_sender))),
+            action_receiver: Arc::new(std::sync::Mutex::new(Some(action_receiver))),
             metrics,
         })
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    async fn start_watcher(
-        &self,
-        action_sender: mpsc::Sender<TriggerAction>,
-    ) -> Result<(), TriggerError> {
+    async fn start_watcher(&self) -> Result<(), TriggerError> {
         // stream of streams, one for each chain
         let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<StreamTriggers>> + Send>>> =
             Vec::new();
@@ -419,6 +421,7 @@ impl CoreTriggerManager {
                 }
             }
 
+            let action_sender = self.action_sender.lock().unwrap().clone().unwrap();
             for action in trigger_actions {
                 action_sender.send(action).await.unwrap();
             }
@@ -430,7 +433,7 @@ impl CoreTriggerManager {
     }
 
     /// Process blocks and return trigger actions for any triggers that should fire
-    fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
+    pub fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
         let mut trigger_actions = vec![];
 
         // Get the triggers that should fire at this block height
@@ -467,10 +470,7 @@ impl CoreTriggerManager {
 impl TriggerManager for CoreTriggerManager {
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
-        // The trigger manager should be free to quickly fire off triggers
-        // so that it can continue to monitor the chain
-        // it's up to the dispatcher to alleviate the backpressure
-        let (action_sender, action_receiver) = mpsc::channel(self.channel_bound);
+        let action_receiver = self.action_receiver.lock().unwrap().take().unwrap();
 
         ctx.rt.clone().spawn({
             let _self = self.clone();
@@ -479,8 +479,10 @@ impl TriggerManager for CoreTriggerManager {
                 tokio::select! {
                     _ = kill_receiver.recv() => {
                         tracing::debug!("Trigger Manager shutting down");
+                        // see the note in dispatcher about the channel automatically closing
+                        _self.action_sender.lock().unwrap().take();
                     },
-                    res = _self.start_watcher(action_sender) => {
+                    res = _self.start_watcher() => {
                         if let Err(err) = res {
                             tracing::error!("Trigger Manager watcher error: {:?}", err);
                             ctx.kill();
