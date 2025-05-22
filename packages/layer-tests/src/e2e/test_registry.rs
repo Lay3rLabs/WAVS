@@ -24,7 +24,9 @@ use super::test_definition::{
 };
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
-pub type CosmosCodeMap = Arc<DashMap<CosmosTriggerDefinition, Arc<Mutex<Option<u64>>>>>;
+/// This map is used to ensure cosmos contracts only have their wasm uploaded once
+/// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
+pub type CosmosTriggerCodeMap = Arc<DashMap<CosmosTriggerDefinition, Arc<Mutex<Option<u64>>>>>;
 
 /// Registry for managing test definitions and their deployed services
 #[derive(Default)]
@@ -56,21 +58,21 @@ impl TestRegistry {
         clients: &Clients,
         component_sources: &ComponentSources,
     ) -> Result<()> {
-        let cosmos_code_map = CosmosCodeMap::new(DashMap::new());
+        let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
 
         let mut futures = FuturesUnordered::new();
 
         for test in self.tests.iter_mut() {
             let clients = clients.clone();
             let component_sources = component_sources.clone();
-            let cosmos_triggers = cosmos_code_map.clone();
+            let cosmos_trigger_code_map = cosmos_trigger_code_map.clone();
 
             futures.push(async move {
                 let service = helpers::deploy_service_for_test(
                     test,
                     &clients,
                     &component_sources,
-                    cosmos_triggers,
+                    cosmos_trigger_code_map,
                 )
                 .await?;
 
@@ -172,7 +174,7 @@ impl TestRegistry {
                             chain_name: chain.clone(),
                         }),
                         clients,
-                        CosmosCodeMap::new(DashMap::new()),
+                        CosmosTriggerCodeMap::new(DashMap::new()),
                     )
                     .await?;
 

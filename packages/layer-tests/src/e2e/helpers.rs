@@ -29,7 +29,7 @@ use crate::{
 
 use super::{
     test_definition::{CosmosTriggerDefinition, EvmTriggerDefinition},
-    test_registry::CosmosCodeMap,
+    test_registry::CosmosTriggerCodeMap,
 };
 
 /// Helper function to deploy a service for a test
@@ -37,7 +37,7 @@ pub async fn deploy_service_for_test(
     test: &TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_triggers: CosmosCodeMap,
+    cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> Result<Service> {
     tracing::info!("Deploying service for test: {}", test.name);
 
@@ -75,7 +75,7 @@ pub async fn deploy_service_for_test(
         tracing::info!("[{}] Creating trigger from config", test.name);
         // Create the trigger based on test configuration
         let trigger =
-            create_trigger_from_config(&workflow.trigger, clients, cosmos_triggers.clone())
+            create_trigger_from_config(&workflow.trigger, clients, cosmos_trigger_code_map.clone())
                 .await
                 .context("Failed to create trigger")?;
 
@@ -157,7 +157,7 @@ pub async fn deploy_service_for_test(
 pub async fn create_trigger_from_config(
     trigger_config: &TriggerDefinition,
     clients: &Clients,
-    cosmos_code_map: CosmosCodeMap,
+    cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> Result<Trigger> {
     match trigger_config {
         TriggerDefinition::Evm(evm_trigger_definition) => match evm_trigger_definition {
@@ -189,7 +189,7 @@ pub async fn create_trigger_from_config(
                 // Get the code ID with better error handling
                 tracing::info!("Getting cosmos code ID for chain {}", chain_name);
                 let code_id =
-                    get_cosmos_code_id(clients, cosmos_trigger_definition, cosmos_code_map)
+                    get_cosmos_code_id(clients, cosmos_trigger_definition, cosmos_trigger_code_map)
                         .await
                         .context(format!(
                             "Failed to get cosmos code ID for chain {}",
@@ -303,10 +303,10 @@ pub async fn deploy_submit(
 pub async fn get_cosmos_code_id(
     clients: &Clients,
     cosmos_trigger_definition: &CosmosTriggerDefinition,
-    cosmos_triggers: CosmosCodeMap,
+    cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> Result<u64> {
     // Get or insert the entry
-    let entry = cosmos_triggers
+    let entry = cosmos_trigger_code_map
         .entry(cosmos_trigger_definition.clone())
         .or_insert_with(|| Arc::new(Mutex::new(None)))
         .clone();
