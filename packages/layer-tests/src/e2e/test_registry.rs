@@ -1,7 +1,7 @@
 use alloy_provider::Provider;
 use anyhow::Result;
 use dashmap::DashMap;
-use futures::stream::{self};
+use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use reqwest::Client;
 use std::collections::BTreeSet;
@@ -56,14 +56,16 @@ impl TestRegistry {
         clients: &Clients,
         component_sources: &ComponentSources,
     ) -> Result<()> {
-        let max_parallel = num_cpus::get();
         let cosmos_code_map = CosmosCodeMap::new(DashMap::new());
 
-        let tests_iter = self.tests.iter_mut().map(|test| {
+        let mut futures = FuturesUnordered::new();
+
+        for test in self.tests.iter_mut() {
             let clients = clients.clone();
             let component_sources = component_sources.clone();
             let cosmos_triggers = cosmos_code_map.clone();
-            async move {
+
+            futures.push(async move {
                 let service = helpers::deploy_service_for_test(
                     test,
                     &clients,
@@ -81,14 +83,10 @@ impl TestRegistry {
                 test.service = Some(service);
 
                 Ok::<(), anyhow::Error>(())
-            }
-        });
+            });
+        }
 
-        let stream = stream::iter(tests_iter).buffer_unordered(max_parallel);
-
-        tokio::pin!(stream);
-
-        while let Some(result) = stream.next().await {
+        while let Some(result) = futures.next().await {
             if let Err(err) = result {
                 tracing::error!("Test failed: {:?}", err);
             }

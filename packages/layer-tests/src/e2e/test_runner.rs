@@ -2,10 +2,7 @@
 
 use alloy_provider::Provider;
 use anyhow::Result;
-use futures::{
-    stream::{self},
-    StreamExt,
-};
+use futures::{stream::FuturesUnordered, StreamExt};
 use std::time::Instant;
 use std::{collections::HashMap, sync::Arc};
 use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
@@ -42,18 +39,16 @@ impl TestRunner {
         tracing::info!("Running {} tests", tests.len());
 
         self.ctx.rt.block_on(async {
-            let max_parallel = num_cpus::get();
+            let mut futures = FuturesUnordered::new();
 
-            let stream = stream::iter(tests.into_iter().map(|test| {
+            for test in tests {
                 let clients = self.clients.clone();
-                async move { self.execute_test(test, clients).await }
-            }))
-            .buffer_unordered(max_parallel);
+                futures.push(async move { self.execute_test(test, clients).await });
+            }
 
             let mut failures = Vec::new();
-            tokio::pin!(stream);
 
-            while let Some(result) = stream.next().await {
+            while let Some(result) = futures.next().await {
                 if let Err(err) = result {
                     failures.push(err);
                 }

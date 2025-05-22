@@ -4503,7 +4503,6 @@ dependencies = [
  "futures",
  "layer-climb",
  "layer-climb-cli",
- "num_cpus",
  "opentelemetry",
  "reqwest",
  "serde",

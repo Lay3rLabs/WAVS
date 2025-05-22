@@ -84,7 +84,6 @@ async-trait = "0.1.88"
 
 # collections
 dashmap = "6.1.0"
-num_cpus = "1.16.0"
 
 # fs
 tempfile = "3.19.1"
