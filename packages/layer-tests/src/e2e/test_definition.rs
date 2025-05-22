@@ -94,7 +94,7 @@ pub enum TriggerDefinition {
 
     Cosmos(CosmosTriggerDefinition),
 
-    /// Use an existing trigger
+    /// Use a valid trigger
     Trigger(Trigger),
 }
 
