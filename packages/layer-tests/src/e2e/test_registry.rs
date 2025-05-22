@@ -146,8 +146,7 @@ impl TestRegistry {
                     registry.register_evm_echo_data_secondary_chain_test(secondary);
                 }
                 EvmService::EchoDataAggregator => {
-                    let (chain, url) = chain_names.first_aggregator().unwrap();
-                    registry.register_evm_echo_data_aggregator_test(chain, url);
+                    registry.register_evm_echo_data_aggregator_test(chain, "http://127.0.0.1:8001");
                 }
                 EvmService::Square => {
                     registry.register_evm_square_test(chain);

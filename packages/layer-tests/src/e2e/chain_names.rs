@@ -6,7 +6,6 @@ use wavs_types::ChainName;
 #[derive(Debug, Default, Clone)]
 pub struct ChainNames {
     pub evm: Vec<ChainName>,
-    pub evm_aggregator: Vec<(ChainName, String)>,
     pub cosmos: Vec<ChainName>,
 }
 
@@ -16,18 +15,8 @@ impl ChainNames {
         let mut chain_names = Self::default();
 
         // Categorize EVM chains
-        for (chain_name, chain) in chain_configs.evm.iter() {
-            if chain.aggregator_endpoint.is_some() {
-                chain_names.evm_aggregator.push((
-                    chain_name.clone(),
-                    chain
-                        .aggregator_endpoint
-                        .clone()
-                        .expect("Aggregator URL is expected"),
-                ));
-            } else {
-                chain_names.evm.push(chain_name.clone());
-            }
+        for chain_name in chain_configs.evm.keys() {
+            chain_names.evm.push(chain_name.clone());
         }
 
         // Collect Cosmos chains
@@ -55,13 +44,5 @@ impl ChainNames {
         self.cosmos
             .first()
             .context("Cosmos chain required but not found")
-    }
-
-    // Get the first aggregator chain and URL with error if not found
-    pub fn first_aggregator(&self) -> Result<(&ChainName, &String)> {
-        self.evm_aggregator
-            .first()
-            .map(|(chain, url)| (chain, url))
-            .context("Aggregator chain required but not found")
     }
 }
