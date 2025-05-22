@@ -278,8 +278,9 @@ impl WorkflowBuilder {
         self
     }
 
-    /// Use the previous workflow's trigger
-    pub fn trigger(mut self, trigger: Trigger) -> Self {
+    /// Directly set a valid trigger
+    /// This is useful for multi-trigger tests where we instantiate a trigger in the registry
+    pub fn direct_trigger(mut self, trigger: Trigger) -> Self {
         self.trigger = Some(TriggerDefinition::Trigger(trigger));
         self
     }

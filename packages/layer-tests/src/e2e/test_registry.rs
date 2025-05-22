@@ -462,7 +462,7 @@ impl TestRegistry {
                     WorkflowID::new("evm_multi_trigger").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
-                        .trigger(trigger.clone())
+                        .direct_trigger(trigger.clone())
                         .evm_submit(chain)
                         .input_text("tttrrrrriiiigggeerrr")
                         .expect_same_output()
@@ -472,7 +472,7 @@ impl TestRegistry {
                     WorkflowID::new("evm_multi_trigger_2").unwrap(),
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
-                        .trigger(trigger)
+                        .direct_trigger(trigger)
                         .evm_submit(chain)
                         .input_text("tttrrrrriiiigggeerrr")
                         .expect_same_output()
