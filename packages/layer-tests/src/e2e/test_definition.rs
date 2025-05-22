@@ -252,7 +252,7 @@ impl TestBuilder {
 // Create a dedicated WorkflowBuilder to construct WorkflowConfig objects
 #[derive(Default)]
 pub struct WorkflowBuilder {
-    components: Option<ComponentName>,
+    component: Option<ComponentName>,
     trigger: Option<TriggerDefinition>,
     submit: Option<SubmitDefinition>,
     aggregators: Vec<AggregatorDefinition>,
@@ -268,7 +268,7 @@ impl WorkflowBuilder {
 
     /// Set the components to use
     pub fn component(mut self, components: ComponentName) -> Self {
-        self.components = Some(components);
+        self.component = Some(components);
         self
     }
 
@@ -358,7 +358,7 @@ impl WorkflowBuilder {
 
     /// Build the workflow configuration
     pub fn build(self) -> anyhow::Result<WorkflowDefinition> {
-        let components = self.components.context("Components not set")?;
+        let component = self.component.context("Component not set")?;
         let trigger = self.trigger.context("Trigger not set")?;
         let submit = self.submit.context("Submit not set")?;
         let expected_output = self.expected_output.context("Expected output not set")?;
@@ -371,7 +371,7 @@ impl WorkflowBuilder {
         }
 
         Ok(WorkflowDefinition {
-            component: components,
+            component,
             trigger,
             submit,
             aggregators: self.aggregators,
