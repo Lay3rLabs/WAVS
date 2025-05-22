@@ -161,7 +161,7 @@ pub async fn create_trigger_from_config(
 ) -> Result<Trigger> {
     match trigger_config {
         TriggerDefinition::Evm(evm_trigger_definition) => match evm_trigger_definition {
-            EvmTriggerDefinition::Simple { chain_name } => {
+            EvmTriggerDefinition::SimpleContractEvent { chain_name } => {
                 let client = clients.get_evm_client(chain_name);
 
                 // Deploy a new EVM trigger contract
@@ -183,7 +183,7 @@ pub async fn create_trigger_from_config(
             }
         },
         TriggerDefinition::Cosmos(cosmos_trigger_definition) => match cosmos_trigger_definition {
-            CosmosTriggerDefinition::Simple { chain_name } => {
+            CosmosTriggerDefinition::SimpleContractEvent { chain_name } => {
                 let client = clients.get_cosmos_client(chain_name).await;
 
                 // Get the code ID with better error handling
@@ -321,7 +321,7 @@ pub async fn get_cosmos_code_id(
 
     // Upload since not cached
     let (chain_name, cosmos_bytecode) = match cosmos_trigger_definition {
-        CosmosTriggerDefinition::Simple { chain_name } => {
+        CosmosTriggerDefinition::SimpleContractEvent { chain_name } => {
             let wasm_path = workspace_path()
                 .join("examples")
                 .join("build")

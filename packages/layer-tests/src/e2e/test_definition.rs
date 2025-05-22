@@ -101,12 +101,12 @@ pub enum TriggerDefinition {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum CosmosTriggerDefinition {
-    Simple { chain_name: ChainName },
+    SimpleContractEvent { chain_name: ChainName },
 }
 
 #[derive(Clone, Debug)]
 pub enum EvmTriggerDefinition {
-    Simple { chain_name: ChainName },
+    SimpleContractEvent { chain_name: ChainName },
 }
 
 /// Configuration for a submit
