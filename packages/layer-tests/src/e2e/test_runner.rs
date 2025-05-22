@@ -54,6 +54,7 @@ impl TestRunner {
             .context(test.name.clone())
             .unwrap();
         let duration = start_time.elapsed();
+        // This is a rough metric for debugging, since it can be interrupted by other async tasks
         tracing::info!(
             "Test {} passed (ran for {}ms)",
             test_name,
