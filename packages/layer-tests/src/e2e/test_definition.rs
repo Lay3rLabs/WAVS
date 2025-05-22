@@ -4,7 +4,6 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::num::{NonZeroU32, NonZeroU64};
 
-use anyhow::{bail, ensure, Context};
 use wavs_types::{Aggregator, ChainName, Service, Submit, Timestamp, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
@@ -187,10 +186,12 @@ pub enum OutputStructure {
 
 impl TestDefinition {
     /// Gets the service for this test
-    pub fn get_service(&self) -> anyhow::Result<&Service> {
-        self.service
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Service not set for test: {}", self.name))
+    pub fn get_service(&self) -> &Service {
+        if let Some(service) = self.service.as_ref() {
+            service
+        } else {
+            panic!("Service not set for {}", self.name)
+        }
     }
 }
 
@@ -226,16 +227,12 @@ impl TestBuilder {
     }
 
     /// Add a workflow
-    pub fn add_workflow(
-        mut self,
-        workflow_id: WorkflowID,
-        workflow: WorkflowDefinition,
-    ) -> anyhow::Result<Self> {
+    pub fn add_workflow(mut self, workflow_id: WorkflowID, workflow: WorkflowDefinition) -> Self {
         if self.definition.workflows.contains_key(&workflow_id) {
-            bail!("Workflow id {} is already in use", workflow_id)
+            panic!("Workflow id {} is already in use", workflow_id)
         }
         self.definition.workflows.insert(workflow_id, workflow);
-        Ok(self)
+        self
     }
 
     pub fn service_manager_chain(mut self, chain_name: &ChainName) -> Self {
@@ -357,27 +354,26 @@ impl WorkflowBuilder {
     }
 
     /// Build the workflow configuration
-    pub fn build(self) -> anyhow::Result<WorkflowDefinition> {
-        let component = self.component.context("Component not set")?;
-        let trigger = self.trigger.context("Trigger not set")?;
-        let submit = self.submit.context("Submit not set")?;
-        let expected_output = self.expected_output.context("Expected output not set")?;
+    pub fn build(self) -> WorkflowDefinition {
+        let component = self.component.expect("Component not set");
+        let trigger = self.trigger.expect("Trigger not set");
+        let submit = self.submit.expect("Submit not set");
+        let expected_output = self.expected_output.expect("Expected output not set");
 
         if let SubmitDefinition::Submit(Submit::Aggregator { .. }) = submit {
-            ensure!(
-                !self.aggregators.is_empty(),
-                "No aggregators set when submit is aggregator"
-            )
+            if self.aggregators.is_empty() {
+                panic!("No aggregators set when submit is aggregator")
+            }
         }
 
-        Ok(WorkflowDefinition {
+        WorkflowDefinition {
             component,
             trigger,
             submit,
             aggregators: self.aggregators,
             input_data: self.input_data,
             expected_output,
-        })
+        }
     }
 
     /// Set raw input data

@@ -69,33 +69,22 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let handles = AppHandles::start(&ctx, &configs, metrics);
 
-    let clients = clients::Clients::new(ctx.clone(), &configs);
+    ctx.rt.block_on(async {
+        let clients = clients::Clients::new(&configs).await;
 
-    let component_sources = ComponentSources::new(ctx.clone(), &configs, &clients.http_client);
+        let component_sources = ComponentSources::new(&configs, &clients.http_client).await;
 
-    // Deploy services for tests
-    let deploy_result = ctx.rt.block_on(async {
         // Create test registry from test mode
         let mut registry =
-            test_registry::TestRegistry::from_test_mode(mode, &configs.chains, &clients).await?;
-        tracing::info!("Deploying services for tests...");
-        registry
-            .deploy_services(&clients, &component_sources)
-            .await?;
+            test_registry::TestRegistry::from_test_mode(mode, &configs.chains, &clients).await;
 
-        Ok::<_, anyhow::Error>(registry)
+        // Deploy services from registry
+        tracing::info!("Deploying services for tests...");
+        registry.deploy_services(&clients, &component_sources).await;
+
+        // Create and run the test runner
+        TestRunner::new(clients, registry).run_tests().await;
     });
-    match deploy_result {
-        Ok(registry) => {
-            // Create and run the test runner
-            TestRunner::new(ctx.clone(), clients, registry)
-                .run_tests()
-                .unwrap();
-        }
-        Err(e) => {
-            tracing::error!("Failed to deploy services for tests: {:?}", e);
-        }
-    }
 
     ctx.kill();
     handles.join();

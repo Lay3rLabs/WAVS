@@ -4,7 +4,7 @@ use std::{
 };
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use utils::{context::AppContext, filesystem::workspace_path};
+use utils::filesystem::workspace_path;
 use wasm_pkg_common::package::PackageRef;
 use wavs_cli::clients::HttpClient;
 use wavs_types::{ComponentSource, Digest, Registry};
@@ -28,48 +28,46 @@ pub enum ComponentName {
 }
 
 impl ComponentSources {
-    pub fn new(ctx: AppContext, configs: &Configs, http_client: &HttpClient) -> Self {
-        ctx.rt.block_on(async {
-            let component_names: HashSet<ComponentName> = configs
-                .matrix
-                .evm
-                .iter()
-                .map(|s| Vec::<ComponentName>::from(*s))
-                .chain(
-                    configs
-                        .matrix
-                        .cosmos
-                        .iter()
-                        .map(|s| Vec::<ComponentName>::from(*s)),
-                )
-                .chain(
-                    configs
-                        .matrix
-                        .cross_chain
-                        .iter()
-                        .map(|s| Vec::<ComponentName>::from(*s)),
-                )
-                .flatten()
-                .collect();
+    pub async fn new(configs: &Configs, http_client: &HttpClient) -> Self {
+        let component_names: HashSet<ComponentName> = configs
+            .matrix
+            .evm
+            .iter()
+            .map(|s| Vec::<ComponentName>::from(*s))
+            .chain(
+                configs
+                    .matrix
+                    .cosmos
+                    .iter()
+                    .map(|s| Vec::<ComponentName>::from(*s)),
+            )
+            .chain(
+                configs
+                    .matrix
+                    .cross_chain
+                    .iter()
+                    .map(|s| Vec::<ComponentName>::from(*s)),
+            )
+            .flatten()
+            .collect();
 
-            let mut futures = FuturesUnordered::new();
+        let mut futures = FuturesUnordered::new();
 
-            for component_name in component_names {
-                futures.push(get_component_source(
-                    http_client,
-                    component_name,
-                    configs.registry,
-                ));
-            }
+        for component_name in component_names {
+            futures.push(get_component_source(
+                http_client,
+                component_name,
+                configs.registry,
+            ));
+        }
 
-            let mut lookup = BTreeMap::default();
+        let mut lookup = BTreeMap::default();
 
-            while let Some((name, digest)) = futures.next().await {
-                lookup.insert(name, digest);
-            }
+        while let Some((name, digest)) = futures.next().await {
+            lookup.insert(name, digest);
+        }
 
-            Self { lookup }
-        })
+        Self { lookup }
     }
 }
 
