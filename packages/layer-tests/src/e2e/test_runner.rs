@@ -139,22 +139,34 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()
         };
 
         // Validate all workflows associated with this trigger
-        for (_, workflow) in workflows_group {
-            match &workflow.submit {
+        for (workflow_id, workflow) in workflows_group {
+            let expected_output = &test
+                .workflows
+                .get(workflow_id)
+                .ok_or(anyhow!(
+                    "Could not get workflow definition from id: {}",
+                    workflow_id
+                ))?
+                .expected_output;
+
+            let signed_data = match &workflow.submit {
                 Submit::EvmContract(EvmContractSubmission {
                     chain_name,
                     address,
                     max_gas: _,
                 }) => {
-                    wait_for_task_to_land(
-                        clients.get_evm_client(chain_name),
-                        *address,
-                        trigger_id,
-                        submit_start_block,
-                    )
-                    .await?;
+                    vec![
+                        wait_for_task_to_land(
+                            clients.get_evm_client(chain_name),
+                            *address,
+                            trigger_id,
+                            submit_start_block,
+                        )
+                        .await?,
+                    ]
                 }
                 Submit::Aggregator { .. } => {
+                    let mut signed_data = vec![];
                     for aggregator in workflow.aggregators.iter() {
                         match aggregator {
                             wavs_types::Aggregator::Evm(EvmContractSubmission {
@@ -162,18 +174,26 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()
                                 address,
                                 ..
                             }) => {
-                                wait_for_task_to_land(
-                                    clients.get_evm_client(chain_name),
-                                    *address,
-                                    trigger_id,
-                                    submit_start_block,
-                                )
-                                .await?;
+                                signed_data.push(
+                                    wait_for_task_to_land(
+                                        clients.get_evm_client(chain_name),
+                                        *address,
+                                        trigger_id,
+                                        submit_start_block,
+                                    )
+                                    .await?,
+                                );
                             }
                         }
                     }
+
+                    signed_data
                 }
                 Submit::None => unimplemented!("Submit::None is not implemented"),
+            };
+
+            for data in signed_data {
+                expected_output.validate(&data.data)?;
             }
         }
     }

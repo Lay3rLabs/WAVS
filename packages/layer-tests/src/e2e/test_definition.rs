@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::num::{NonZeroU32, NonZeroU64};
 
+use anyhow::{anyhow, ensure};
 use wavs_types::{Aggregator, ChainName, Service, Submit, Timestamp, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
@@ -164,11 +165,11 @@ pub enum ExpectedOutput {
     /// String data
     Text(String),
 
+    /// Prefixed string data
+    PrefixedText(String),
+
     /// Square response
     Square { y: u64 },
-
-    /// Same as the input data
-    SameAsInput,
 
     /// Expect specific structure, but don't check values
     StructureOnly(OutputStructure),
@@ -413,7 +414,7 @@ impl WorkflowBuilder {
     }
 
     /// Set expected text output
-    pub fn expect_text(mut self, text: &str) -> Self {
+    pub fn expect_text<T: ToString>(mut self, text: T) -> Self {
         self.expected_output = Some(ExpectedOutput::Text(text.to_string()));
         self
     }
@@ -424,9 +425,8 @@ impl WorkflowBuilder {
         self
     }
 
-    /// Expect output to be the same as the input
-    pub fn expect_same_output(mut self) -> Self {
-        self.expected_output = Some(ExpectedOutput::SameAsInput);
+    pub fn expect_prefix(mut self, arg: &str) -> Self {
+        self.expected_output = Some(ExpectedOutput::PrefixedText(arg.to_string()));
         self
     }
 }
@@ -434,26 +434,22 @@ impl WorkflowBuilder {
 /// Helper methods for testing the output
 impl ExpectedOutput {
     /// Check if the actual output matches the expected output
-    pub fn matches(&self, actual: &[u8], input: &InputData) -> bool {
-        match self {
+    pub fn validate(&self, actual: &[u8]) -> anyhow::Result<()> {
+        let is_valid = match self {
             ExpectedOutput::Raw(expected) => expected == actual,
             ExpectedOutput::Text(expected) => {
-                if let Ok(actual_str) = std::str::from_utf8(actual) {
-                    expected == actual_str
-                } else {
-                    false
-                }
+                let actual_str = std::str::from_utf8(actual)?;
+
+                expected == actual_str
+            }
+            ExpectedOutput::PrefixedText(expected_prefix) => {
+                let actual_str = std::str::from_utf8(actual)?;
+
+                actual_str.starts_with(expected_prefix)
             }
             ExpectedOutput::Square { y } => {
                 if let Ok(response) = serde_json::from_slice::<SquareResponse>(actual) {
                     &response.y == y
-                } else {
-                    false
-                }
-            }
-            ExpectedOutput::SameAsInput => {
-                if let Some(input_bytes) = input.to_bytes() {
-                    input_bytes == actual
                 } else {
                     false
                 }
@@ -467,6 +463,17 @@ impl ExpectedOutput {
                 }
             },
             ExpectedOutput::Any => true,
-        }
+        };
+
+        ensure!(
+            is_valid,
+            anyhow!(
+                "Expected {:?}, Received {}",
+                self,
+                std::str::from_utf8(actual)?
+            )
+        );
+
+        Ok(())
     }
 }
