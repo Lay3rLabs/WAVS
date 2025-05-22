@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::num::{NonZeroU32, NonZeroU64};
+use std::time::Duration;
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use wavs_types::{Aggregator, ChainName, Service, Submit, Timestamp, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
@@ -30,35 +30,8 @@ pub struct TestDefinition {
     /// Reference to the deployed service (populated during test execution)
     pub service: Option<Service>,
 
-    /// Run priority
-    pub priority: u64,
-}
-
-impl PartialEq for TestDefinition {
-    fn eq(&self, other: &Self) -> bool {
-        self.priority.eq(&other.priority) && self.name.eq(&other.name)
-    }
-}
-
-impl Eq for TestDefinition {}
-
-impl PartialOrd for TestDefinition {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for TestDefinition {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // First compare by priority level
-        let by_priority = self.priority.cmp(&other.priority);
-        if by_priority != Ordering::Equal {
-            return by_priority;
-        }
-
-        // Then use name as a stable tiebreaker
-        self.name.cmp(&other.name)
-    }
+    /// Execution group (ascending priority)
+    pub group: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -80,6 +53,9 @@ pub struct WorkflowDefinition {
 
     /// Expected output to verify
     pub expected_output: ExpectedOutput,
+
+    /// The timeout for workflwo to receive signed data
+    pub timeout: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -94,6 +70,12 @@ pub enum TriggerDefinition {
     Evm(EvmTriggerDefinition),
 
     Cosmos(CosmosTriggerDefinition),
+
+    /// Testing for a specific block interval target requires knowing the block height when running the test
+    /// This allows us to test n_blocks(1), start_block=end_block=(height + delay)
+    DeferredBlockIntervalTarget {
+        chain_name: ChainName,
+    },
 
     /// Use a valid trigger
     Trigger(Trigger),
@@ -174,6 +156,10 @@ pub enum ExpectedOutput {
     /// Expect specific structure, but don't check values
     StructureOnly(OutputStructure),
 
+    /// Deferred value
+    /// Block interval start stop uses this to dynamically expect a value
+    Deferred,
+
     /// Accept any output
     Any,
 }
@@ -211,7 +197,7 @@ impl TestBuilder {
                 workflows: BTreeMap::new(),
                 service: None,
                 service_manager_chain: ChainName::new("31337").unwrap(),
-                priority: u64::MAX,
+                group: u64::MAX,
             },
         }
     }
@@ -222,8 +208,8 @@ impl TestBuilder {
         self
     }
 
-    pub fn priority(mut self, priority: u64) -> Self {
-        self.definition.priority = priority;
+    pub fn group(mut self, group: u64) -> Self {
+        self.definition.group = group;
         self
     }
 
@@ -256,6 +242,7 @@ pub struct WorkflowBuilder {
     aggregators: Vec<AggregatorDefinition>,
     input_data: InputData,
     expected_output: Option<ExpectedOutput>,
+    timeout: Option<Duration>,
 }
 
 impl WorkflowBuilder {
@@ -303,6 +290,14 @@ impl WorkflowBuilder {
             start_block,
             end_block,
         }));
+        self
+    }
+
+    /// Configure a deferred block interval trigger
+    pub fn deferred_block_interval_target(mut self, chain_name: &ChainName) -> Self {
+        self.trigger = Some(TriggerDefinition::DeferredBlockIntervalTarget {
+            chain_name: chain_name.clone(),
+        });
         self
     }
 
@@ -354,6 +349,11 @@ impl WorkflowBuilder {
         self
     }
 
+    pub fn expect_deferred(mut self) -> Self {
+        self.expected_output = Some(ExpectedOutput::Deferred);
+        self
+    }
+
     /// Build the workflow configuration
     pub fn build(self) -> WorkflowDefinition {
         let component = self.component.expect("Component not set");
@@ -374,6 +374,7 @@ impl WorkflowBuilder {
             aggregators: self.aggregators,
             input_data: self.input_data,
             expected_output,
+            timeout: self.timeout.unwrap_or(Duration::from_secs(5)),
         }
     }
 
@@ -429,6 +430,11 @@ impl WorkflowBuilder {
         self.expected_output = Some(ExpectedOutput::PrefixedText(arg.to_string()));
         self
     }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
 }
 
 /// Helper methods for testing the output
@@ -463,6 +469,9 @@ impl ExpectedOutput {
                 }
             },
             ExpectedOutput::Any => true,
+            ExpectedOutput::Deferred => {
+                bail!("Invalid configuration: Deferred values must be set dynamically")
+            }
         };
 
         ensure!(

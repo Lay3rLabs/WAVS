@@ -1,7 +1,7 @@
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
@@ -28,13 +28,15 @@ use crate::{
 };
 
 use super::{
-    test_definition::{CosmosTriggerDefinition, EvmTriggerDefinition},
+    test_definition::{
+        CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, WorkflowDefinition,
+    },
     test_registry::CosmosTriggerCodeMap,
 };
 
 /// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
-    test: &TestDefinition,
+    test: &mut TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
@@ -55,7 +57,7 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    for (workflow_id, workflow) in &test.workflows {
+    for (workflow_id, workflow) in test.workflows.iter_mut() {
         // Create components from test definition
         let component_source = component_sources
             .lookup
@@ -71,9 +73,13 @@ pub async fn deploy_service_for_test(
 
         tracing::info!("[{}] Creating trigger from config", test.name);
         // Create the trigger based on test configuration
-        let trigger =
-            create_trigger_from_config(&workflow.trigger, clients, cosmos_trigger_code_map.clone())
-                .await;
+        let trigger = create_trigger_from_config(
+            workflow.trigger.clone(),
+            clients,
+            cosmos_trigger_code_map.clone(),
+            Some(workflow),
+        )
+        .await;
 
         tracing::info!("[{}] Creating submit from config", test.name);
 
@@ -152,14 +158,15 @@ pub async fn deploy_service_for_test(
 
 /// Create a trigger based on test configuration
 pub async fn create_trigger_from_config(
-    trigger_config: &TriggerDefinition,
+    trigger_definition: TriggerDefinition,
     clients: &Clients,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    workflow_definition: Option<&mut WorkflowDefinition>,
 ) -> Trigger {
-    match trigger_config {
+    match trigger_definition {
         TriggerDefinition::Evm(evm_trigger_definition) => match evm_trigger_definition {
             EvmTriggerDefinition::SimpleContractEvent { chain_name } => {
-                let client = clients.get_evm_client(chain_name);
+                let client = clients.get_evm_client(&chain_name);
 
                 // Deploy a new EVM trigger contract
                 tracing::info!("Deploying EVM trigger contract on chain {}", chain_name);
@@ -180,14 +187,17 @@ pub async fn create_trigger_from_config(
             }
         },
         TriggerDefinition::Cosmos(cosmos_trigger_definition) => match cosmos_trigger_definition {
-            CosmosTriggerDefinition::SimpleContractEvent { chain_name } => {
+            CosmosTriggerDefinition::SimpleContractEvent { ref chain_name } => {
                 let client = clients.get_cosmos_client(chain_name).await;
 
                 // Get the code ID with better error handling
                 tracing::info!("Getting cosmos code ID for chain {}", chain_name);
-                let code_id =
-                    get_cosmos_code_id(clients, cosmos_trigger_definition, cosmos_trigger_code_map)
-                        .await;
+                let code_id = get_cosmos_code_id(
+                    clients,
+                    &cosmos_trigger_definition,
+                    cosmos_trigger_code_map,
+                )
+                .await;
 
                 tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
 
@@ -217,6 +227,34 @@ pub async fn create_trigger_from_config(
                 }
             }
         },
+        TriggerDefinition::DeferredBlockIntervalTarget { chain_name } => {
+            let workflow = workflow_definition
+                .expect("Workflow not provided when using deferred block interval targets");
+
+            let block_delay = 5;
+            let current_block = if clients.evm_clients.contains_key(&chain_name) {
+                let client = clients.get_evm_client(&chain_name);
+
+                client.provider.get_block_number().await.unwrap()
+            } else if clients.cosmos_client_pools.contains_key(&chain_name) {
+                let client = clients.get_cosmos_client(&chain_name).await;
+
+                client.querier.block_height().await.unwrap()
+            } else {
+                panic!("Chain is not configured: {}", chain_name)
+            };
+            let target_block = NonZero::new(current_block + block_delay).unwrap();
+
+            workflow.expected_output =
+                ExpectedOutput::Text(format!("block-interval-data-{}", target_block.get()));
+
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks: NonZero::new(1u32).unwrap(),
+                start_block: Some(target_block),
+                end_block: Some(target_block),
+            }
+        }
         TriggerDefinition::Trigger(trigger) => trigger.clone(),
     }
 }
@@ -358,10 +396,11 @@ pub async fn wait_for_task_to_land(
     address: alloy_primitives::Address,
     trigger_id: TriggerId,
     submit_start_block: u64,
+    timeout: Duration,
 ) -> Result<SignedData> {
     let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
 
-    tokio::time::timeout(Duration::from_secs(5), async move {
+    tokio::time::timeout(timeout, async move {
         loop {
             let current_block = submit_client
                 .evm_client

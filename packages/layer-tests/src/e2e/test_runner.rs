@@ -14,6 +14,7 @@ use crate::{
 };
 
 use super::helpers::wait_for_task_to_land;
+use super::test_definition::WorkflowDefinition;
 
 /// Simplified test runner that leverages services directly attached to test definitions
 pub struct TestRunner {
@@ -31,17 +32,19 @@ impl TestRunner {
 
     /// Run all tests in the registry
     pub async fn run_tests(&self) {
-        let tests = self.registry.list_all();
-        tracing::info!("Running {} tests", tests.len());
+        let test_groups = self.registry.list_all_grouped();
 
-        let mut futures = FuturesUnordered::new();
+        for (i, group) in test_groups.values().enumerate() {
+            tracing::info!("Running group {} with {} tests", i + 1, group.len());
+            let mut futures = FuturesUnordered::new();
 
-        for test in tests {
-            let clients = self.clients.clone();
-            futures.push(async move { self.execute_test(test, clients).await });
+            for test in group {
+                let clients = self.clients.clone();
+                futures.push(async move { self.execute_test(test, clients).await });
+            }
+
+            while (futures.next().await).is_some() {}
         }
-
-        while (futures.next().await).is_some() {}
     }
 
     // Execute a single test with timings
@@ -140,14 +143,14 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()
 
         // Validate all workflows associated with this trigger
         for (workflow_id, workflow) in workflows_group {
-            let expected_output = &test
-                .workflows
-                .get(workflow_id)
-                .ok_or(anyhow!(
-                    "Could not get workflow definition from id: {}",
-                    workflow_id
-                ))?
-                .expected_output;
+            let WorkflowDefinition {
+                timeout,
+                expected_output,
+                ..
+            } = &test.workflows.get(workflow_id).ok_or(anyhow!(
+                "Could not get workflow definition from id: {}",
+                workflow_id
+            ))?;
 
             let signed_data = match &workflow.submit {
                 Submit::EvmContract(EvmContractSubmission {
@@ -161,6 +164,7 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()
                             *address,
                             trigger_id,
                             submit_start_block,
+                            *timeout,
                         )
                         .await?,
                     ]
@@ -180,6 +184,7 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()
                                         *address,
                                         trigger_id,
                                         submit_start_block,
+                                        *timeout,
                                     )
                                     .await?,
                                 );
