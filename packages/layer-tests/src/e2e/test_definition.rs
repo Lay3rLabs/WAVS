@@ -10,6 +10,7 @@ use wavs_types::{Aggregator, ChainName, Service, Submit, Timestamp, Trigger, Wor
 use crate::e2e::components::ComponentName;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
 
+use super::config::DEFAULT_CHAIN_ID;
 use super::types::{CosmosQueryResponse, PermissionsResponse};
 
 /// Defines a complete end-to-end test case
@@ -196,7 +197,7 @@ impl TestBuilder {
                 description: None,
                 workflows: BTreeMap::new(),
                 service: None,
-                service_manager_chain: ChainName::new("31337").unwrap(),
+                service_manager_chain: ChainName::new(DEFAULT_CHAIN_ID.to_string()).unwrap(),
                 group: u64::MAX,
             },
         }
