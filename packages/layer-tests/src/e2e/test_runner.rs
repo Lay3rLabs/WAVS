@@ -1,6 +1,7 @@
 // src/e2e/test_runner.rs
 
 use alloy_provider::Provider;
+use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::time::Instant;
 use std::{collections::HashMap, sync::Arc};
@@ -48,7 +49,10 @@ impl TestRunner {
         let test_name = test.name.clone();
         let start_time = Instant::now();
 
-        run_test(test, &clients).await;
+        run_test(test, &clients)
+            .await
+            .context(test.name.clone())
+            .unwrap();
         let duration = start_time.elapsed();
         tracing::info!(
             "Test {} passed (ran for {}ms)",
@@ -59,12 +63,16 @@ impl TestRunner {
 }
 
 /// Run a single test
-async fn run_test(test: &TestDefinition, clients: &Clients) {
+async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()> {
     // Get the service from the test
     let service = test.get_service();
 
     let submit_client = clients.get_evm_client(service.manager.chain_name());
-    let submit_start_block = submit_client.provider.get_block_number().await.unwrap();
+    let submit_start_block = submit_client
+        .provider
+        .get_block_number()
+        .await
+        .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
 
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: HashMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = HashMap::new();
@@ -82,10 +90,13 @@ async fn run_test(test: &TestDefinition, clients: &Clients) {
         let (first_workflow_id, _) = workflows_group[0];
 
         // Get the workflow data safely
-        let first_workflow_data = test.workflows.get(first_workflow_id).unwrap();
+        let first_workflow = test
+            .workflows
+            .get(first_workflow_id)
+            .ok_or(anyhow!("Could not get workflow: {}", first_workflow_id))?;
 
         // Convert input data to bytes safely
-        let input_bytes = first_workflow_data.input_data.to_bytes();
+        let input_bytes = first_workflow.input_data.to_bytes();
 
         // Execute the trigger once
         let trigger_id = match trigger {
@@ -99,8 +110,7 @@ async fn run_test(test: &TestDefinition, clients: &Clients) {
 
                 client
                     .add_trigger(input_bytes.expect("EVM triggers require an input"))
-                    .await
-                    .unwrap()
+                    .await?
             }
             Trigger::CosmosContractEvent {
                 chain_name,
@@ -114,8 +124,7 @@ async fn run_test(test: &TestDefinition, clients: &Clients) {
 
                 let trigger_id = client
                     .add_trigger(input_bytes.expect("Cosmos triggers require an input"))
-                    .await
-                    .unwrap();
+                    .await?;
 
                 TriggerId::new(trigger_id.u64())
             }
@@ -142,7 +151,7 @@ async fn run_test(test: &TestDefinition, clients: &Clients) {
                         trigger_id,
                         submit_start_block,
                     )
-                    .await;
+                    .await?;
                 }
                 Submit::Aggregator { .. } => {
                     for aggregator in workflow.aggregators.iter() {
@@ -158,7 +167,7 @@ async fn run_test(test: &TestDefinition, clients: &Clients) {
                                     trigger_id,
                                     submit_start_block,
                                 )
-                                .await;
+                                .await?;
                             }
                         }
                     }
@@ -167,4 +176,6 @@ async fn run_test(test: &TestDefinition, clients: &Clients) {
             }
         }
     }
+
+    Ok(())
 }

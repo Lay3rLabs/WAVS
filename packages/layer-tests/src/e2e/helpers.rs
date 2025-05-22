@@ -1,6 +1,6 @@
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
@@ -358,39 +358,33 @@ pub async fn wait_for_task_to_land(
     address: alloy_primitives::Address,
     trigger_id: TriggerId,
     submit_start_block: u64,
-) -> SignedData {
+) -> Result<SignedData> {
     let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
 
     tokio::time::timeout(Duration::from_secs(5), async move {
         loop {
-            if submit_client
+            let current_block = submit_client
                 .evm_client
                 .provider
                 .get_block_number()
                 .await
-                .unwrap()
-                == submit_start_block
-            {
-                submit_client
-                    .evm_client
-                    .provider
-                    .evm_mine(None)
-                    .await
-                    .unwrap();
-            }
-            match submit_client.trigger_validated(trigger_id).await {
-                true => {
-                    return submit_client.signed_data(trigger_id).await.unwrap();
-                }
-                false => {
-                    tracing::debug!("Waiting for task response on trigger {}", trigger_id);
-                }
+                .map_err(|e| anyhow!("Failed to get block number: {e}"))?;
+
+            if current_block == submit_start_block {
+                submit_client.evm_client.provider.evm_mine(None).await?;
             }
 
-            // still open, waiting...
+            if submit_client.trigger_validated(trigger_id).await {
+                return submit_client
+                    .signed_data(trigger_id)
+                    .await
+                    .map_err(|e| anyhow!("Failed to get signed data: {e}"));
+            }
+
+            tracing::debug!("Waiting for task response on trigger {}", trigger_id);
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     })
     .await
-    .unwrap()
+    .map_err(|_| anyhow::anyhow!("Timeout when waiting for task to land"))?
 }

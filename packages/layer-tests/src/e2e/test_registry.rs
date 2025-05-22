@@ -140,7 +140,7 @@ impl TestRegistry {
                 }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chain_names.secondary_evm().unwrap();
-                    registry.register_evm_echo_data_secondary_chain_test(chain, secondary);
+                    registry.register_evm_echo_data_secondary_chain_test(secondary);
                 }
                 EvmService::EchoDataAggregator => {
                     let (chain, url) = chain_names.first_aggregator().unwrap();
@@ -268,11 +268,7 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_echo_data_secondary_chain_test(
-        &mut self,
-        trigger_chain: &ChainName,
-        chain: &ChainName,
-    ) -> &mut Self {
+    fn register_evm_echo_data_secondary_chain_test(&mut self, chain: &ChainName) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data_secondary_chain")
                 .description("Tests the EchoData component on the secondary EVM chain")
@@ -281,7 +277,7 @@ impl TestRegistry {
                     WorkflowBuilder::new()
                         .component(ComponentName::EchoData)
                         .evm_trigger(EvmTriggerDefinition::SimpleContractEvent {
-                            chain_name: trigger_chain.clone(),
+                            chain_name: chain.clone(),
                         })
                         .evm_submit(chain)
                         .input_text("collapse")
