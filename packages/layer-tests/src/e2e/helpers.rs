@@ -231,7 +231,7 @@ pub async fn create_trigger_from_config(
             let workflow = workflow_definition
                 .expect("Workflow not provided when using deferred block interval targets");
 
-            let block_delay = 5;
+            let block_delay = 10;
             let current_block = if clients.evm_clients.contains_key(&chain_name) {
                 let client = clients.get_evm_client(&chain_name);
 
