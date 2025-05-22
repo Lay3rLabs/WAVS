@@ -1,10 +1,11 @@
+use alloy_provider::Provider;
 use anyhow::Result;
 use dashmap::DashMap;
 use futures::stream::{self};
 use futures::StreamExt;
 use reqwest::Client;
 use std::collections::BTreeSet;
-use std::num::NonZeroU32;
+use std::num::{NonZero, NonZeroU32};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use wavs_types::aggregator::RegisterServiceRequest;
@@ -137,44 +138,37 @@ impl TestRegistry {
 
         // Process EVM services
         for service in &matrix.evm {
+            let chain = chain_names.primary_evm()?;
+
             match service {
                 EvmService::EchoData => {
-                    let chain = chain_names.primary_evm()?;
                     registry.register_evm_echo_data_test(chain)?;
                 }
                 EvmService::EchoDataSecondaryChain => {
-                    let primary = chain_names.primary_evm()?;
                     let secondary = chain_names.secondary_evm()?;
-                    registry.register_evm_echo_data_secondary_chain_test(primary, secondary)?;
+                    registry.register_evm_echo_data_secondary_chain_test(chain, secondary)?;
                 }
                 EvmService::EchoDataAggregator => {
                     let (chain, url) = chain_names.first_aggregator()?;
                     registry.register_evm_echo_data_aggregator_test(chain, url)?;
                 }
                 EvmService::Square => {
-                    let chain = chain_names.primary_evm()?;
                     registry.register_evm_square_test(chain)?;
                 }
                 EvmService::ChainTriggerLookup => {
-                    let chain = chain_names.primary_evm()?;
                     registry.register_evm_chain_trigger_lookup_test(chain)?;
                 }
                 EvmService::CosmosQuery => {
-                    let evm = chain_names.primary_evm()?;
                     let cosmos = chain_names.primary_cosmos()?;
-                    registry.register_evm_cosmos_query_test(evm, cosmos)?;
+                    registry.register_evm_cosmos_query_test(chain, cosmos)?;
                 }
                 EvmService::Permissions => {
-                    let chain = chain_names.primary_evm()?;
                     registry.register_evm_permissions_test(chain)?;
                 }
                 EvmService::MultiWorkflow => {
-                    let chain = chain_names.primary_evm()?;
                     registry.register_evm_multi_workflow_test(chain)?;
                 }
                 EvmService::MultiTrigger => {
-                    let chain = chain_names.primary_evm()?;
-
                     let trigger = helpers::create_trigger_from_config(
                         &TriggerDefinition::Evm(EvmTriggerDefinition::Simple {
                             chain_name: chain.clone(),
@@ -187,14 +181,17 @@ impl TestRegistry {
                     registry.register_evm_multi_trigger_test(chain, trigger)?;
                 }
                 EvmService::BlockInterval => {
-                    let chain = chain_names.primary_evm()?;
                     registry.register_evm_block_interval_test(chain)?;
                 }
                 EvmService::BlockIntervalStartStop => {
-                    tracing::warn!("BlockIntervalStartStop service is enabled but not implemented");
+                    let client = clients.get_evm_client(chain);
+                    let block_delay = 4;
+                    let target_block =
+                        client.provider.get_block_number().await.unwrap() + block_delay;
+
+                    registry.register_evm_block_interval_start_stop_test(chain, target_block)?;
                 }
                 EvmService::CronInterval => {
-                    let chain = chain_names.primary_evm()?;
                     registry.register_evm_cron_interval_test(chain)?;
                 }
             }
@@ -225,9 +222,15 @@ impl TestRegistry {
                     registry.register_cosmos_block_interval_test(cosmos, evm)?;
                 }
                 CosmosService::BlockIntervalStartStop => {
-                    tracing::warn!(
-                        "Cosmos BlockIntervalStartStop service is enabled but not implemented"
-                    );
+                    let client = clients.get_cosmos_client(cosmos).await;
+                    let block_delay = 3;
+                    let target_block = client.querier.block_height().await.unwrap() + block_delay;
+
+                    registry.register_cosmos_block_interval_start_stop_test(
+                        cosmos,
+                        evm,
+                        target_block,
+                    )?;
                 }
                 CosmosService::CronInterval => {
                     registry.register_cosmos_cron_interval_test(cosmos, evm)?;
@@ -492,6 +495,33 @@ impl TestRegistry {
                         .expect_text("block-interval data")
                         .build()?,
                 )?
+                .priority(1)
+                .build(),
+        ))
+    }
+
+    fn register_evm_block_interval_start_stop_test(
+        &mut self,
+        chain: &ChainName,
+        target_block: u64,
+    ) -> Result<&mut Self> {
+        Ok(self.register(
+            TestBuilder::new("evm_block_interval_start_stop")
+                .description("Tests the block interval trigger with start/stop on an EVM chain")
+                .add_workflow(
+                    WorkflowID::new("evm_block_interval_start_stop").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoBlockInterval)
+                        .block_interval_trigger(
+                            chain,
+                            NonZeroU32::new(1).unwrap(),
+                            Some(NonZero::new(target_block).unwrap()),
+                            Some(NonZero::new(target_block).unwrap()),
+                        )
+                        .evm_submit(chain)
+                        .expect_text("block-interval data")
+                        .build()?,
+                )?
                 .priority(0)
                 .build(),
         ))
@@ -656,6 +686,34 @@ impl TestRegistry {
                             NonZeroU32::new(1).unwrap(),
                             None,
                             None,
+                        )
+                        .evm_submit(evm_chain)
+                        .expect_text("block-interval data")
+                        .build()?,
+                )?
+                .priority(1)
+                .build(),
+        ))
+    }
+
+    fn register_cosmos_block_interval_start_stop_test(
+        &mut self,
+        cosmos_chain: &ChainName,
+        evm_chain: &ChainName,
+        target_block: u64,
+    ) -> Result<&mut Self> {
+        Ok(self.register(
+            TestBuilder::new("cosmos_block_interval_start_stop")
+                .description("Tests the block interval trigger with start/stop on a Cosmos chain")
+                .add_workflow(
+                    WorkflowID::new("cosmos_block_interval_start_stop").unwrap(),
+                    WorkflowBuilder::new()
+                        .component(ComponentName::EchoBlockInterval)
+                        .block_interval_trigger(
+                            cosmos_chain,
+                            NonZeroU32::new(1).unwrap(),
+                            Some(NonZero::new(target_block).unwrap()),
+                            Some(NonZero::new(target_block).unwrap()),
                         )
                         .evm_submit(evm_chain)
                         .expect_text("block-interval data")
