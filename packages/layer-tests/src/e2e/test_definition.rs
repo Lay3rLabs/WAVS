@@ -49,7 +49,7 @@ impl PartialOrd for TestDefinition {
 
 impl Ord for TestDefinition {
     fn cmp(&self, other: &Self) -> Ordering {
-        // First compare block interval
+        // First compare by priority level
         let by_priority = self.priority.cmp(&other.priority);
         if by_priority != Ordering::Equal {
             return by_priority;
