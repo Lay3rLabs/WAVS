@@ -139,11 +139,12 @@ enum StreamTriggers {
 }
 
 impl CoreTriggerManager {
+
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
         // TODO - discuss unbounded, crossbeam, etc.
-        let (action_sender, action_receiver) = mpsc::channel(100);
+        let (action_sender, action_receiver) = mpsc::channel(Self::CHANNEL_SIZE);
 
         Ok(Self {
             chain_configs: config.chains.clone(),
