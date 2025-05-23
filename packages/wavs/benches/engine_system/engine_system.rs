@@ -1,13 +1,13 @@
 use criterion::Criterion;
+use std::sync::Arc;
 use tokio::sync::oneshot;
 use wavs_benchmark_common::app_context::APP_CONTEXT;
-use std::sync::Arc;
 
-use crate::handle::{SystemHandle, SystemConfig};
+use crate::handle::{SystemConfig, SystemHandle};
 use wavs::apis::submission::ChainMessage;
 
 /// Main benchmark function for testing MultiEngineRunner throughput
-/// 
+///
 /// This benchmark measures the performance of processing multiple concurrent
 /// WASM component executions using the MultiEngineRunner. It tests the system's
 /// ability to handle concurrent workloads across multiple threads.
@@ -19,7 +19,7 @@ pub fn benchmark(c: &mut Criterion) {
     group.sample_size(10);
 
     // Test different thread counts to see scaling behavior
-    let thread_counts = vec![4,16];
+    let thread_counts = vec![4, 16];
     let base_actions = 1000;
 
     for &thread_count in &thread_counts {
@@ -37,20 +37,19 @@ pub fn benchmark(c: &mut Criterion) {
 }
 
 /// Execute the configured number of concurrent engine actions through MultiEngineRunner
-/// 
+///
 /// This function simulates a realistic system workload by:
 /// 1. Setting up input/output channels for the MultiEngineRunner
-/// 2. Starting the MultiEngineRunner in a background thread 
+/// 2. Starting the MultiEngineRunner in a background thread
 /// 3. Sending multiple TriggerActions concurrently
 /// 4. Collecting and validating all results
-/// 
+///
 /// The benchmark measures end-to-end throughput including channel overhead,
 /// thread coordination, and WASM execution time.
 fn run_simulation(handle: Arc<SystemHandle>) {
     // This channel will signal when the simulation is finished
     let (finished_sender, finished_receiver) = oneshot::channel::<Vec<ChainMessage>>();
-    let total_actions = handle.config.n_actions; 
-    
+    let total_actions = handle.config.n_actions;
 
     // Collect all results
     let mut results_receiver = handle.result_receiver.lock().unwrap().take().unwrap();
@@ -83,8 +82,8 @@ fn run_simulation(handle: Arc<SystemHandle>) {
     // to keep the handle alive until the end of the simulation
     // we print out the thread count from handle.config
     println!(
-        "Completed {} concurrent actions across {} threads", 
-        received_results.len(), 
+        "Completed {} concurrent actions across {} threads",
+        received_results.len(),
         handle.config.thread_count
     );
 }

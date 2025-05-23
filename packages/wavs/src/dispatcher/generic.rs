@@ -68,7 +68,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
-
 #[async_trait]
 impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;

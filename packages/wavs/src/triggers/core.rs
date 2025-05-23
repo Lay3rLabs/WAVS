@@ -139,7 +139,6 @@ enum StreamTriggers {
 }
 
 impl CoreTriggerManager {
-
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {

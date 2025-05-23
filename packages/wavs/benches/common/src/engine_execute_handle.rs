@@ -5,11 +5,9 @@ use utils::{config::ChainConfigs, filesystem::workspace_path};
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, Digest, ServiceID, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID
+    AllowedHostPermission, Digest, ServiceID, TriggerAction, TriggerConfig, TriggerData, Workflow,
+    WorkflowID,
 };
-
-/// Shared application context for benchmarks
-
 
 /// Configuration for the engine benchmark
 #[derive(Clone, Copy)]
@@ -34,7 +32,7 @@ pub struct EngineHandle {
     pub config: EngineHandleConfig,
     pub component: Component,
     pub component_bytes: Vec<u8>,
-    pub data_dir: TempDir
+    pub data_dir: TempDir,
 }
 
 impl EngineHandle {
@@ -48,7 +46,11 @@ impl EngineHandle {
         let engine = WTEngine::new(&config).unwrap();
 
         // Load the echo_raw.wasm component
-        let component_path = workspace_path().join("examples").join("build").join("components").join("echo_raw.wasm");
+        let component_path = workspace_path()
+            .join("examples")
+            .join("build")
+            .join("components")
+            .join("echo_raw.wasm");
         let component_bytes = std::fs::read(&component_path).unwrap();
         let component_source = wavs_types::ComponentSource::Digest(Digest::new(&component_bytes));
         let component = Component::new(&engine, &component_bytes).unwrap();
@@ -58,7 +60,7 @@ impl EngineHandle {
         let workflow_id = WorkflowID::new("benchmark-workflow".to_string()).unwrap();
 
         let data_dir = tempdir().unwrap();
-        
+
         let workflow = Workflow {
             trigger: wavs_types::Trigger::Manual,
             component: wavs_types::Component {
@@ -67,7 +69,7 @@ impl EngineHandle {
                     file_system: false,
                     allowed_http_hosts: AllowedHostPermission::None,
                 },
-                fuel_limit: None, 
+                fuel_limit: None,
                 time_limit_seconds: None,
                 config: std::collections::BTreeMap::new(),
                 env_keys: std::collections::BTreeSet::new(),
@@ -103,7 +105,7 @@ impl EngineHandle {
             service_id: self.service_id.clone(),
             workflow_id: self.workflow_id.clone(),
             engine: &self.engine,
-            data_dir: self.data_dir.path().to_path_buf(), 
+            data_dir: self.data_dir.path().to_path_buf(),
             chain_configs: &self.chain_configs,
             log,
             max_wasm_fuel: None,
@@ -121,7 +123,7 @@ impl EngineHandle {
                 workflow_id: self.workflow_id.clone(),
                 trigger: wavs_types::Trigger::Manual,
             },
-            data: TriggerData::Raw(data)
+            data: TriggerData::Raw(data),
         }
     }
 }

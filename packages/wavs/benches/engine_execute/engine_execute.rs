@@ -1,10 +1,13 @@
 use criterion::Criterion;
 use std::sync::Arc;
 
-use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_execute_handle::{EngineHandle, EngineHandleConfig}};
+use wavs_benchmark_common::{
+    app_context::APP_CONTEXT,
+    engine_execute_handle::{EngineHandle, EngineHandleConfig},
+};
 
 /// Main benchmark function for testing Engine::execute() throughput
-/// 
+///
 /// This benchmark measures the performance of executing a WASM component
 /// using the echo_raw.wasm component, which provides a minimal overhead
 /// baseline for component execution performance.
@@ -27,7 +30,7 @@ pub fn benchmark(c: &mut Criterion) {
 }
 
 /// Execute the configured number of engine executions
-/// 
+///
 /// This function creates a fresh InstanceDeps for each execution to ensure
 /// isolated execution environments. Each execution uses a TriggerAction with
 /// raw data to minimize overhead and focus on the engine execution performance.
@@ -35,8 +38,7 @@ fn run_simulation(handle: Arc<EngineHandle>) {
     APP_CONTEXT.rt.block_on(async move {
         for execution_count in 1..=handle.config.n_executions {
             // Create a new instance for this execution to ensure isolation
-            let mut deps = handle
-                .create_instance_deps();
+            let mut deps = handle.create_instance_deps();
 
             // Create trigger action with raw test data
             let echo_data = format!("Execution number {}", execution_count).into_bytes();
@@ -45,8 +47,10 @@ fn run_simulation(handle: Arc<EngineHandle>) {
             // Execute the component and measure performance
             match wavs_engine::execute(&mut deps, trigger_action).await {
                 Ok(response) => {
-                    let payload = response.expect("Execution failed to generate a response").payload;
-                    assert_eq!(payload, echo_data, "Payload mismatch"); 
+                    let payload = response
+                        .expect("Execution failed to generate a response")
+                        .payload;
+                    assert_eq!(payload, echo_data, "Payload mismatch");
                 }
                 Err(err) => {
                     panic!("Execution failed: {:?}", err);
