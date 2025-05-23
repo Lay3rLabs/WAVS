@@ -321,13 +321,15 @@ impl Submission for CoreSubmission {
             .unwrap()
             .get(&service_id)
             .ok_or(SubmissionError::MissingMnemonic)
-            .map(|SignerInfo { signer, hd_index }| {
-                let key = signer.credential().to_bytes().to_vec();
-
-                SigningKeyResponse::Secp256k1 {
-                    key,
-                    hd_index: *hd_index,
-                }
-            })
+            .map(
+                |SignerInfo {
+                     signer: _,
+                     hd_index,
+                 }| {
+                    SigningKeyResponse::Secp256k1 {
+                        hd_index: *hd_index,
+                    }
+                },
+            )
     }
 }
