@@ -164,7 +164,7 @@ pub async fn create_trigger_from_config(
     workflow_definition: Option<&mut WorkflowDefinition>,
 ) -> Trigger {
     match trigger_definition {
-        TriggerDefinition::Evm(evm_trigger_definition) => match evm_trigger_definition {
+        TriggerDefinition::NewEvmContract(evm_trigger_definition) => match evm_trigger_definition {
             EvmTriggerDefinition::SimpleContractEvent { chain_name } => {
                 let client = clients.get_evm_client(&chain_name);
 
@@ -186,47 +186,49 @@ pub async fn create_trigger_from_config(
                 }
             }
         },
-        TriggerDefinition::Cosmos(cosmos_trigger_definition) => match cosmos_trigger_definition {
-            CosmosTriggerDefinition::SimpleContractEvent { ref chain_name } => {
-                let client = clients.get_cosmos_client(chain_name).await;
+        TriggerDefinition::NewCosmosContract(cosmos_trigger_definition) => {
+            match cosmos_trigger_definition {
+                CosmosTriggerDefinition::SimpleContractEvent { ref chain_name } => {
+                    let client = clients.get_cosmos_client(chain_name).await;
 
-                // Get the code ID with better error handling
-                tracing::info!("Getting cosmos code ID for chain {}", chain_name);
-                let code_id = get_cosmos_code_id(
-                    clients,
-                    &cosmos_trigger_definition,
-                    cosmos_trigger_code_map,
-                )
-                .await;
+                    // Get the code ID with better error handling
+                    tracing::info!("Getting cosmos code ID for chain {}", chain_name);
+                    let code_id = get_cosmos_code_id(
+                        clients,
+                        &cosmos_trigger_definition,
+                        cosmos_trigger_code_map,
+                    )
+                    .await;
 
-                tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
+                    tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
 
-                // Deploy a new Cosmos trigger contract with better error handling
-                let contract_name = format!("simple_trigger_{}", Uuid::now_v7());
-                tracing::info!(
-                    "Instantiating new contract '{}' with code ID {} on chain {}",
-                    contract_name,
-                    code_id,
-                    chain_name
-                );
+                    // Deploy a new Cosmos trigger contract with better error handling
+                    let contract_name = format!("simple_trigger_{}", Uuid::now_v7());
+                    tracing::info!(
+                        "Instantiating new contract '{}' with code ID {} on chain {}",
+                        contract_name,
+                        code_id,
+                        chain_name
+                    );
 
-                let contract =
-                    SimpleCosmosTriggerClient::new_code_id(client, code_id, &contract_name)
-                        .await
-                        .unwrap();
+                    let contract =
+                        SimpleCosmosTriggerClient::new_code_id(client, code_id, &contract_name)
+                            .await
+                            .unwrap();
 
-                tracing::info!(
-                    "Successfully deployed cosmos contract at address: {}",
-                    contract.contract_address
-                );
+                    tracing::info!(
+                        "Successfully deployed cosmos contract at address: {}",
+                        contract.contract_address
+                    );
 
-                Trigger::CosmosContractEvent {
-                    chain_name: chain_name.clone(),
-                    address: contract.contract_address,
-                    event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
+                    Trigger::CosmosContractEvent {
+                        chain_name: chain_name.clone(),
+                        address: contract.contract_address,
+                        event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
+                    }
                 }
             }
-        },
+        }
         TriggerDefinition::DeferredBlockIntervalTarget { chain_name } => {
             let workflow = workflow_definition
                 .expect("Workflow not provided when using deferred block interval targets");
@@ -258,7 +260,7 @@ pub async fn create_trigger_from_config(
                 end_block: Some(target_block),
             }
         }
-        TriggerDefinition::Trigger(trigger) => trigger.clone(),
+        TriggerDefinition::Existing(trigger) => trigger.clone(),
     }
 }
 
@@ -272,7 +274,7 @@ pub async fn create_submit_from_config(
         SubmitDefinition::NewEvmContract { chain_name } => {
             deploy_submit(clients, chain_name, service_manager_address).await
         }
-        SubmitDefinition::Submit(submit) => Ok(submit.clone()),
+        SubmitDefinition::Existing(submit) => Ok(submit.clone()),
     }
 }
 

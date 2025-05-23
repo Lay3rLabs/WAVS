@@ -66,15 +66,20 @@ pub enum AggregatorDefinition {
 /// Configuration for a trigger
 #[derive(Clone, Debug)]
 pub enum TriggerDefinition {
-    Evm(EvmTriggerDefinition),
-    Cosmos(CosmosTriggerDefinition),
-    /// Testing for a specific block interval target requires knowing the block height when running the test
-    /// This allows us to test n_blocks(1), start_block=end_block=(height + delay)
+    // Deploy a new EVM contract trigger for this test
+    NewEvmContract(EvmTriggerDefinition),
+    /// Deploy a new Cosmos contract trigger for this test
+    NewCosmosContract(CosmosTriggerDefinition),
+    /// Special case for block interval tests that need runtime block height calculation.
+    /// Creates a block interval trigger with start_block=end_block=(current_height + delay)
+    /// to test precise start/stop timing with n_blocks=1
     DeferredBlockIntervalTarget {
         chain_name: ChainName,
     },
-    /// Use a valid trigger
-    Trigger(Trigger),
+    /// Use a pre-existing trigger without additional setup.
+    /// Useful for multi-trigger tests where multiple workflows share the same trigger,
+    /// or for standard triggers like cron/block intervals that don't need test-specific deployment
+    Existing(Trigger),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -90,10 +95,10 @@ pub enum EvmTriggerDefinition {
 /// Configuration for a submit
 #[derive(Clone, Debug)]
 pub enum SubmitDefinition {
-    /// EVM contract submission
+    /// Deploy a new EVM contract submit for this test
     NewEvmContract { chain_name: ChainName },
-    /// Use an existing submit
-    Submit(Submit),
+    /// Use an existing submit instance
+    Existing(Submit),
 }
 
 /// Different types of input data
@@ -302,7 +307,7 @@ impl WorkflowBuilder {
         let submit = self.submit.expect("Submit not set");
         let expected_output = self.expected_output.expect("Expected output not set");
 
-        if let SubmitDefinition::Submit(Submit::Aggregator { .. }) = submit {
+        if let SubmitDefinition::Existing(Submit::Aggregator { .. }) = submit {
             if self.aggregators.is_empty() {
                 panic!("No aggregators set when submit is aggregator")
             }
