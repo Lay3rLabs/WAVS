@@ -15,6 +15,7 @@ use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
 use super::chain_names::ChainNames;
 use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
+use super::config::{BLOCK_INTERVAL_DATA_PREFIX, CRON_INTERVAL_DATA};
 use super::helpers;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
@@ -472,7 +473,7 @@ impl TestRegistry {
                         .component(ComponentName::EchoBlockInterval)
                         .block_interval_trigger(chain, NonZeroU32::new(1).unwrap(), None, None)
                         .evm_submit(chain)
-                        .expect_prefix("block-interval-data")
+                        .expect_prefix(BLOCK_INTERVAL_DATA_PREFIX)
                         .build(),
                 )
                 .build(),
@@ -507,7 +508,7 @@ impl TestRegistry {
                         .component(ComponentName::EchoCronInterval)
                         .cron_trigger("* * * * * *", None, None)
                         .evm_submit(chain)
-                        .expect_text("cron-interval data")
+                        .expect_text(CRON_INTERVAL_DATA)
                         .build(),
                 )
                 .build(),
@@ -657,7 +658,7 @@ impl TestRegistry {
                             None,
                         )
                         .evm_submit(evm_chain)
-                        .expect_prefix("block-interval-data")
+                        .expect_prefix(BLOCK_INTERVAL_DATA_PREFIX)
                         .build(),
                 )
                 .build(),
@@ -700,7 +701,7 @@ impl TestRegistry {
                         .component(ComponentName::EchoCronInterval)
                         .cron_trigger("* * * * * *", None, None)
                         .evm_submit(evm_chain)
-                        .expect_text("cron-interval data")
+                        .expect_text(CRON_INTERVAL_DATA)
                         .build(),
                 )
                 .build(),

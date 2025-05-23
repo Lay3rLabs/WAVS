@@ -15,6 +15,8 @@ use crate::config::TestConfig;
 use super::matrix::TestMatrix;
 
 pub const DEFAULT_CHAIN_ID: u64 = 31337;
+pub const BLOCK_INTERVAL_DATA_PREFIX: &str = "block-interval-data-";
+pub const CRON_INTERVAL_DATA: &str = "cron-interval data";
 
 #[derive(Clone, Debug)]
 pub struct Configs {

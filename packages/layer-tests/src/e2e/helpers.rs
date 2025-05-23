@@ -28,6 +28,7 @@ use crate::{
 };
 
 use super::{
+    config::BLOCK_INTERVAL_DATA_PREFIX,
     test_definition::{
         CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, WorkflowDefinition,
     },
@@ -245,8 +246,11 @@ pub async fn create_trigger_from_config(
             };
             let target_block = NonZero::new(current_block + block_delay).unwrap();
 
-            workflow.expected_output =
-                ExpectedOutput::Text(format!("block-interval-data-{}", target_block.get()));
+            workflow.expected_output = ExpectedOutput::Text(format!(
+                "{}{}",
+                BLOCK_INTERVAL_DATA_PREFIX,
+                target_block.get()
+            ));
 
             Trigger::BlockInterval {
                 chain_name,
