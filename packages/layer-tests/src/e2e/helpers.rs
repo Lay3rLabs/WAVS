@@ -131,7 +131,6 @@ pub async fn deploy_service_for_test(
         },
     };
 
-    // Deploy the service using the CLI
     let submit_client = clients.get_evm_client(&test.service_manager_chain);
 
     tracing::info!("[{}] Deploying service: {}", test.name, service.id);
@@ -233,15 +232,14 @@ pub async fn create_trigger_from_config(
             let workflow = workflow_definition
                 .expect("Workflow not provided when using deferred block interval targets");
 
-            let block_delay = 10;
-            let current_block = if clients.evm_clients.contains_key(&chain_name) {
+            let (current_block, block_delay) = if clients.evm_clients.contains_key(&chain_name) {
                 let client = clients.get_evm_client(&chain_name);
 
-                client.provider.get_block_number().await.unwrap()
+                (client.provider.get_block_number().await.unwrap(), 10)
             } else if clients.cosmos_client_pools.contains_key(&chain_name) {
                 let client = clients.get_cosmos_client(&chain_name).await;
 
-                client.querier.block_height().await.unwrap()
+                (client.querier.block_height().await.unwrap(), 5)
             } else {
                 panic!("Chain is not configured: {}", chain_name)
             };
@@ -278,12 +276,11 @@ pub async fn create_submit_from_config(
     }
 }
 
-/// Deploy service manager contract (re-exported from services.rs)
+/// Deploy service manager contract
 pub async fn deploy_service_manager(
     clients: &Clients,
     chain_name: &ChainName,
 ) -> Result<alloy_primitives::Address> {
-    // Re-export from services.rs or implement here
     let evm_client = clients.get_evm_client(chain_name);
 
     tracing::info!("Deploying service manager on chain {}", chain_name);
