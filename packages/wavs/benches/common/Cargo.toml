@@ -1,0 +1,17 @@
+[package]
+name = "wavs-benchmark-common"
+description = "WAVS Benchmarking common code"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+tempfile = { workspace = true }
+utils = { workspace = true }
+wasmtime = { workspace = true }
+wavs-engine = { workspace = true }
+wavs-types = { workspace = true }

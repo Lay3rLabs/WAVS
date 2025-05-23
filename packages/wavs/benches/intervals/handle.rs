@@ -1,15 +1,14 @@
 use std::{
     num::NonZero,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use opentelemetry::global::meter;
 use tokio::sync::mpsc;
-use utils::{context::AppContext, telemetry::Metrics};
+use utils::telemetry::Metrics;
 use wavs::{apis::trigger::TriggerManager, triggers::core::CoreTriggerManager};
+use wavs_benchmark_common::app_context::APP_CONTEXT;
 use wavs_types::{ChainName, Trigger, TriggerAction, TriggerConfig};
-
-pub static APP_CONTEXT: LazyLock<AppContext> = LazyLock::new(AppContext::new);
 
 // This is a convenience struct to initialize stuff and make it easier to pass around
 pub struct Handle {

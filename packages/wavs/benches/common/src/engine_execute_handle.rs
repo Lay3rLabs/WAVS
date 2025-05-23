@@ -1,7 +1,7 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use tempfile::{tempdir, TempDir};
-use utils::{config::ChainConfigs, context::AppContext, filesystem::workspace_path};
+use utils::{config::ChainConfigs, filesystem::workspace_path};
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
@@ -10,35 +10,34 @@ use wavs_types::{
 
 /// Shared application context for benchmarks
 
-pub static APP_CONTEXT: LazyLock<AppContext> = LazyLock::new(AppContext::new);
 
 /// Configuration for the engine benchmark
 #[derive(Clone, Copy)]
-pub struct HandleConfig {
+pub struct EngineHandleConfig {
     /// Number of executions to perform
     pub n_executions: u64,
 }
 
-impl HandleConfig {
+impl EngineHandleConfig {
     pub fn description(&self) -> String {
         format!("engine executions: {}", self.n_executions)
     }
 }
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
-pub struct Handle {
+pub struct EngineHandle {
     pub engine: WTEngine,
     pub workflow: Workflow,
     pub service_id: ServiceID,
     pub workflow_id: WorkflowID,
     pub chain_configs: ChainConfigs,
-    pub config: HandleConfig,
+    pub config: EngineHandleConfig,
     pub component: Component,
     pub data_dir: TempDir
 }
 
-impl Handle {
-    pub fn new(handle_config: HandleConfig) -> Arc<Self> {
+impl EngineHandle {
+    pub fn new(handle_config: EngineHandleConfig) -> Arc<Self> {
         // Create wasmtime engine
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
@@ -78,7 +77,7 @@ impl Handle {
 
         let chain_configs = ChainConfigs::default();
 
-        Arc::new(Handle {
+        Arc::new(EngineHandle {
             engine,
             workflow,
             component,
@@ -91,7 +90,7 @@ impl Handle {
     }
 
     /// Create a new InstanceDeps for execution
-    pub fn create_instance_deps(&self) -> anyhow::Result<InstanceDeps> {
+    pub fn create_instance_deps(&self) -> InstanceDeps {
         let log: HostComponentLogger = |_service_id, _workflow_id, _digest, _level, _message| {
             // No-op logger for benchmarks
         };
@@ -109,7 +108,7 @@ impl Handle {
             max_execution_seconds: None,
         };
 
-        Ok(builder.build()?)
+        builder.build().unwrap()
     }
 
     /// Create a sample TriggerAction for benchmarking

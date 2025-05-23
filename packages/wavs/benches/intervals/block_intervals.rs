@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use criterion::Criterion;
 use tokio::sync::oneshot;
+use wavs_benchmark_common::app_context::APP_CONTEXT;
 
-use crate::handle::{Handle, HandleConfig, APP_CONTEXT};
+use crate::handle::{Handle, HandleConfig};
 
 pub fn benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("block intervals");

@@ -64,6 +64,7 @@ dashmap = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+wavs-benchmark-common = { workspace = true }
 
 [[bench]]
 name = "mock_bench"
@@ -74,5 +75,9 @@ name = "intervals"
 harness = false
 
 [[bench]]
-name = "engine"
+name = "engine_execute"
+harness = false
+
+[[bench]]
+name = "engine_system"
 harness = false

@@ -1,7 +1,7 @@
 use criterion::Criterion;
 use std::sync::Arc;
 
-use crate::handle::{Handle, HandleConfig, APP_CONTEXT};
+use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_execute_handle::{EngineHandle, EngineHandleConfig}};
 
 /// Main benchmark function for testing Engine::execute() throughput
 /// 
@@ -15,12 +15,12 @@ pub fn benchmark(c: &mut Criterion) {
     // Use moderate sample size for consistent results
     group.sample_size(10);
 
-    let config = HandleConfig {
+    let config = EngineHandleConfig {
         n_executions: 10_000,
     };
 
     group.bench_function(config.description(), move |b| {
-        b.iter_with_setup(|| Handle::new(config), run_simulation);
+        b.iter_with_setup(|| EngineHandle::new(config), run_simulation);
     });
 
     group.finish();
@@ -31,13 +31,12 @@ pub fn benchmark(c: &mut Criterion) {
 /// This function creates a fresh InstanceDeps for each execution to ensure
 /// isolated execution environments. Each execution uses a TriggerAction with
 /// raw data to minimize overhead and focus on the engine execution performance.
-fn run_simulation(handle: Arc<Handle>) {
+fn run_simulation(handle: Arc<EngineHandle>) {
     APP_CONTEXT.rt.block_on(async move {
         for execution_count in 1..=handle.config.n_executions {
             // Create a new instance for this execution to ensure isolation
             let mut deps = handle
-                .create_instance_deps()
-                .expect("Failed to create instance deps");
+                .create_instance_deps();
 
             // Create trigger action with raw test data
             let echo_data = format!("Execution number {}", execution_count).into_bytes();

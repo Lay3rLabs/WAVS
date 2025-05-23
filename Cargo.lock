@@ -9287,6 +9287,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "wasm-pkg-common",
  "wasmtime",
+ "wavs-benchmark-common",
  "wavs-engine",
  "wavs-types",
  "wildmatch",
@@ -9321,6 +9322,17 @@ dependencies = [
  "utoipa-swagger-ui",
  "wavs-types",
  "wildmatch",
+]
+
+[[package]]
+name = "wavs-benchmark-common"
+version = "0.4.0-beta.5"
+dependencies = [
+ "tempfile",
+ "utils",
+ "wasmtime",
+ "wavs-engine",
+ "wavs-types",
 ]
 
 [[package]]
