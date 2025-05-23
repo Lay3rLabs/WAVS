@@ -5,16 +5,16 @@ mod config;
 mod handles;
 mod helpers;
 mod matrix;
+mod runner;
 mod test_definition;
 mod test_registry;
-mod test_runner;
 mod types;
 
 use components::ComponentSources;
 use config::Configs;
 use handles::AppHandles;
 pub use matrix::*;
-use test_runner::TestRunner;
+use runner::Runner;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
@@ -83,7 +83,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
         registry.deploy_services(&clients, &component_sources).await;
 
         // Create and run the test runner
-        TestRunner::new(clients, registry).run_tests().await;
+        Runner::new(clients, registry).run_tests().await;
     });
 
     ctx.kill();
