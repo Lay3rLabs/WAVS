@@ -72,16 +72,6 @@ pub async fn deploy_service_for_test(
             file_system: true,
         };
 
-        tracing::info!("[{}] Creating trigger from config", test.name);
-        // Create the trigger based on test configuration
-        let trigger = create_trigger_from_config(
-            workflow.trigger.clone(),
-            clients,
-            cosmos_trigger_code_map.clone(),
-            Some(workflow),
-        )
-        .await;
-
         tracing::info!("[{}] Creating submit from config", test.name);
 
         // Create the submit based on test configuration
@@ -107,6 +97,16 @@ pub async fn deploy_service_for_test(
 
             aggregators.push(aggregator);
         }
+
+        tracing::info!("[{}] Creating trigger from config", test.name);
+        // Create the trigger based on test configuration
+        let trigger = create_trigger_from_config(
+            workflow.trigger.clone(),
+            clients,
+            cosmos_trigger_code_map.clone(),
+            Some(workflow),
+        )
+        .await;
 
         // Create service workflows
         let workflow = Workflow {
@@ -232,14 +232,15 @@ pub async fn create_trigger_from_config(
             let workflow = workflow_definition
                 .expect("Workflow not provided when using deferred block interval targets");
 
-            let (current_block, block_delay) = if clients.evm_clients.contains_key(&chain_name) {
+            let block_delay = 12;
+            let current_block = if clients.evm_clients.contains_key(&chain_name) {
                 let client = clients.get_evm_client(&chain_name);
 
-                (client.provider.get_block_number().await.unwrap(), 10)
+                client.provider.get_block_number().await.unwrap()
             } else if clients.cosmos_client_pools.contains_key(&chain_name) {
                 let client = clients.get_cosmos_client(&chain_name).await;
 
-                (client.querier.block_height().await.unwrap(), 5)
+                client.querier.block_height().await.unwrap()
             } else {
                 panic!("Chain is not configured: {}", chain_name)
             };
