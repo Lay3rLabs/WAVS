@@ -13,8 +13,6 @@ use utoipa::ToSchema;
 #[serde(rename_all = "snake_case")]
 pub enum SigningKeyResponse {
     Secp256k1 {
-        /// from alloy's SigningKey.to_bytes()
-        key: Vec<u8>,
         /// The derivation index used to create this key from the mnemonic
         hd_index: u32,
     },
