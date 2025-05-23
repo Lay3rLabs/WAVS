@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use opentelemetry::global::meter;
 use utils::telemetry::Metrics;
-use wavs::{engine::{runner::MultiEngineRunner, WasmEngine}, test_utils::address::rand_address_evm};
-use wavs_benchmark_common::engine_execute_handle::{EngineHandle, EngineHandleConfig};
+use wavs::{apis::submission::{ChainMessage, Submission}, engine::{runner::{EngineRunner, MultiEngineRunner}, Engine, WasmEngine}, submission::core::CoreSubmission, test_utils::address::rand_address_evm};
+use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_execute_handle::{EngineHandle, EngineHandleConfig}};
 use wavs_types::{
     TriggerAction, Service
 };
@@ -28,9 +28,11 @@ impl SystemConfig {
 /// This struct combines an EngineHandle with a MultiEngineRunner to test system-level throughput
 pub struct SystemHandle {
     pub engine_handle: Arc<EngineHandle>,
-    pub multi_runner: MultiEngineRunner<Arc<WasmEngine<FileStorage>>>,
+    pub _multi_runner: MultiEngineRunner<Arc<WasmEngine<FileStorage>>>,
     pub config: SystemConfig,
     pub service: Service,
+    pub action_sender: tokio::sync::mpsc::Sender<(TriggerAction, Service)>,
+    pub result_receiver: std::sync::Mutex<Option<tokio::sync::mpsc::Receiver<ChainMessage>>>,
 }
 
 impl SystemHandle {
@@ -60,6 +62,11 @@ impl SystemHandle {
             metrics.wavs.engine, // Engine metrics
         ));
 
+        let digest = wasm_engine.store_component_bytes(&engine_handle.component_bytes).unwrap();
+        if digest != *engine_handle.workflow.component.source.digest() {
+            panic!("Component digest mismatch");
+        }
+
         // Create the MultiEngineRunner
         let multi_runner = MultiEngineRunner::new(wasm_engine, system_config.thread_count);
 
@@ -79,22 +86,31 @@ impl SystemHandle {
             },
         };
 
+        // Create channels for the MultiEngineRunner pipeline - mirror production pipeline sizes
+        let (action_sender, input_receiver) = tokio::sync::mpsc::channel(WasmEngine::<FileStorage>::CHANNEL_SIZE);
+        let (result_sender, result_receiver) = tokio::sync::mpsc::channel(CoreSubmission::CHANNEL_SIZE);
+        
+        // Start the MultiEngineRunner
+        multi_runner.start(
+            APP_CONTEXT.clone(), 
+            input_receiver, 
+            result_sender
+        );
+
         Arc::new(SystemHandle {
             engine_handle,
-            multi_runner,
+            _multi_runner: multi_runner,
             config: system_config,
             service,
+            action_sender,
+            result_receiver: std::sync::Mutex::new(Some(result_receiver)),
         })
     }
 
-    /// Create multiple TriggerActions for concurrent benchmarking
-    pub fn create_trigger_actions(&self) -> Vec<(TriggerAction, Service)> {
-        (0..self.config.n_actions)
-            .map(|i| {
-                let data = format!("System benchmark action {}", i).into_bytes();
-                let action = self.engine_handle.create_trigger_action(data);
-                (action, self.service.clone())
-            })
-            .collect()
+    pub async fn send_action(&self, i: u64) {
+        let data = format!("System benchmark action {}", i).into_bytes();
+        let action = self.engine_handle.create_trigger_action(data);
+
+        self.action_sender.send((action, self.service.clone())).await.unwrap();
     }
 }

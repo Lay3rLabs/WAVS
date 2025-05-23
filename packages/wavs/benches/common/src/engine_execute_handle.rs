@@ -33,6 +33,7 @@ pub struct EngineHandle {
     pub chain_configs: ChainConfigs,
     pub config: EngineHandleConfig,
     pub component: Component,
+    pub component_bytes: Vec<u8>,
     pub data_dir: TempDir
 }
 
@@ -81,6 +82,7 @@ impl EngineHandle {
             engine,
             workflow,
             component,
+            component_bytes,
             service_id,
             workflow_id,
             chain_configs,
