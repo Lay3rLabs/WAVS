@@ -2,6 +2,7 @@ use anyhow::Result;
 use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use regex::Regex;
 use reqwest::Client;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
@@ -533,8 +534,9 @@ impl TestRegistry {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::None)
-                        .with_expected_output(ExpectedOutput::PrefixedText(
-                            BLOCK_INTERVAL_DATA_PREFIX.to_owned(),
+                        .with_expected_output(ExpectedOutput::Regex(
+                            Regex::new(&format!("^{}", regex::escape(BLOCK_INTERVAL_DATA_PREFIX)))
+                                .unwrap(),
                         ))
                         .build(),
                 )
@@ -763,8 +765,9 @@ impl TestRegistry {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::None)
-                        .with_expected_output(ExpectedOutput::PrefixedText(
-                            BLOCK_INTERVAL_DATA_PREFIX.to_owned(),
+                        .with_expected_output(ExpectedOutput::Regex(
+                            Regex::new(&format!("^{}", regex::escape(BLOCK_INTERVAL_DATA_PREFIX)))
+                                .unwrap(),
                         ))
                         .build(),
                 )

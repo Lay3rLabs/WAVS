@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
+use regex::Regex;
 use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
@@ -142,8 +143,8 @@ pub enum ExpectedOutput {
     Raw(Vec<u8>),
     /// String data
     Text(String),
-    /// Prefixed string data
-    PrefixedText(String),
+    /// A regex match
+    Regex(Regex),
     /// Square response
     Square { y: u64 },
     /// Expect specific structure, but don't check values
@@ -335,9 +336,9 @@ impl ExpectedOutput {
                 let actual_str = std::str::from_utf8(actual)?;
                 expected == actual_str
             }
-            ExpectedOutput::PrefixedText(expected_prefix) => {
+            ExpectedOutput::Regex(regex) => {
                 let actual_str = std::str::from_utf8(actual)?;
-                actual_str.starts_with(expected_prefix)
+                regex.is_match(actual_str)
             }
             ExpectedOutput::Square { y } => {
                 if let Ok(response) = serde_json::from_slice::<SquareResponse>(actual) {

@@ -4504,6 +4504,7 @@ dependencies = [
  "layer-climb",
  "layer-climb-cli",
  "opentelemetry",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
