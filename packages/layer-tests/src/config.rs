@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 use utils::config::ConfigExt;
 
-use crate::e2e::matrix::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
+use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -66,31 +66,70 @@ pub enum TestMode {
 
 impl From<TestMode> for TestMatrix {
     fn from(mode: TestMode) -> Self {
-        let mut matrix = TestMatrix::default();
-
         match mode {
             TestMode::All => {
-                matrix.evm = EvmService::all_values().iter().cloned().collect();
-                matrix.cosmos = CosmosService::all_values().iter().cloned().collect();
-                matrix.cross_chain = CrossChainService::all_values().iter().cloned().collect();
+                // All tests across all chains
+                let mut matrix = TestMatrix::default();
+
+                // Add all EVM services
+                for service in EvmService::all_values() {
+                    matrix.evm.insert(*service);
+                }
+
+                // Add all Cosmos services
+                for service in CosmosService::all_values() {
+                    matrix.cosmos.insert(*service);
+                }
+
+                // Add all cross-chain services
+                for service in CrossChainService::all_values() {
+                    matrix.cross_chain.insert(*service);
+                }
+
+                matrix
             }
             TestMode::AllEth => {
-                matrix.evm = EvmService::all_values().iter().cloned().collect();
+                // All EVM tests only
+                let mut matrix = TestMatrix::default();
+
+                // Add all EVM services
+                for service in EvmService::all_values() {
+                    matrix.evm.insert(*service);
+                }
+
+                matrix
             }
             TestMode::AllCosmos => {
-                matrix.cosmos = CosmosService::all_values().iter().cloned().collect();
+                // All Cosmos tests only
+                let mut matrix = TestMatrix::default();
+
+                // Add all Cosmos services
+                for service in CosmosService::all_values() {
+                    matrix.cosmos.insert(*service);
+                }
+
+                matrix
             }
             TestMode::Isolated(services) => {
+                // Only specific services
+                let mut matrix = TestMatrix::default();
+
                 for service in services {
                     match service {
-                        AnyService::Evm(s) => matrix.evm.insert(s),
-                        AnyService::Cosmos(s) => matrix.cosmos.insert(s),
-                        AnyService::CrossChain(s) => matrix.cross_chain.insert(s),
-                    };
+                        AnyService::Evm(evm_service) => {
+                            matrix.evm.insert(evm_service);
+                        }
+                        AnyService::Cosmos(cosmos_service) => {
+                            matrix.cosmos.insert(cosmos_service);
+                        }
+                        AnyService::CrossChain(cross_chain_service) => {
+                            matrix.cross_chain.insert(cross_chain_service);
+                        }
+                    }
                 }
+
+                matrix
             }
         }
-
-        matrix
     }
 }

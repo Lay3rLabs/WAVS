@@ -1,16 +1,20 @@
-mod add_task;
+mod chain_names;
 mod clients;
 mod components;
 mod config;
 mod handles;
-pub mod matrix;
+mod helpers;
+mod matrix;
 mod runner;
-mod services;
+mod test_definition;
+mod test_registry;
+mod types;
 
 use components::ComponentSources;
 use config::Configs;
 use handles::AppHandles;
-use services::Services;
+pub use matrix::*;
+use runner::Runner;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
@@ -22,6 +26,7 @@ use crate::{args::TestArgs, config::TestConfig};
 
 pub fn run(args: TestArgs, ctx: AppContext) {
     let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
+    let mode = config.mode.clone();
 
     // setup tracing
     let tracer_provider = if let Some(collector) = config.jaeger.clone() {
@@ -64,13 +69,22 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let handles = AppHandles::start(&ctx, &configs, metrics);
 
-    let clients = clients::Clients::new(ctx.clone(), &configs);
+    ctx.rt.block_on(async {
+        let clients = clients::Clients::new(&configs).await;
 
-    let component_sources = ComponentSources::new(ctx.clone(), &configs, &clients.http_client);
+        let component_sources = ComponentSources::new(&configs, &clients.http_client).await;
 
-    let services = Services::new(ctx.clone(), &configs, &clients, &component_sources);
+        // Create test registry from test mode
+        let mut registry =
+            test_registry::TestRegistry::from_test_mode(mode, &configs.chains, &clients).await;
 
-    runner::run_tests(ctx.clone(), configs, clients, services);
+        // Deploy services from registry
+        tracing::info!("Deploying services for tests...");
+        registry.deploy_services(&clients, &component_sources).await;
+
+        // Create and run the test runner
+        Runner::new(clients, registry).run_tests().await;
+    });
 
     ctx.kill();
     handles.join();

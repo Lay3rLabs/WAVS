@@ -1,471 +1,207 @@
-use std::{path::PathBuf, sync::Arc};
+// src/e2e/test_runner.rs
 
 use alloy_provider::Provider;
-use alloy_signer::{k256::ecdsa::SigningKey, Signature};
-use alloy_signer_local::PrivateKeySigner;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
-use layer_climb::prelude::Address;
-use serde::{Deserialize, Serialize};
-use tokio::time::Instant;
-use utils::context::AppContext;
-use wavs_types::{
-    ChainName, Envelope, EnvelopeExt, EnvelopeSignature, EvmContractSubmission, Service,
-    SigningKeyResponse, Submit, Trigger,
-};
+use std::time::Instant;
+use std::{collections::HashMap, sync::Arc};
+use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
 
 use crate::{
-    e2e::add_task::{add_task, wait_for_task_to_land},
-    example_evm_client::example_submit::ISimpleSubmit::SignedData,
+    e2e::{clients::Clients, test_definition::TestDefinition, test_registry::TestRegistry},
+    example_cosmos_client::SimpleCosmosTriggerClient,
+    example_evm_client::{SimpleEvmTriggerClient, TriggerId},
 };
 
-use super::{
-    clients::Clients,
-    config::Configs,
-    matrix::{AnyService, CosmosService, CrossChainService, EvmService},
-    services::Services,
-};
+use super::helpers::wait_for_task_to_land;
+use super::test_definition::WorkflowDefinition;
 
-pub fn run_tests(ctx: AppContext, configs: Configs, clients: Clients, services: Services) {
-    let all: Vec<(AnyService, (Service, Option<Service>))> = services.lookup.into_iter().collect();
-
-    let configs = Arc::new(configs);
-    let clients = Arc::new(clients);
-
-    let mut concurrent_futures = FuturesUnordered::new();
-
-    for (name, (service, multi_trigger_service)) in all {
-        let configs = configs.clone();
-        let clients = clients.clone();
-        let fut = async move {
-            tracing::info!("Testing service: {:?}", name);
-            let start_time = Instant::now();
-            test_service(name, service, multi_trigger_service, &configs, &clients).await;
-            tracing::info!(
-                "Service {:?} passed (ran for {}ms)",
-                name,
-                start_time.elapsed().as_millis()
-            );
-        };
-
-        concurrent_futures.push(fut);
-    }
-
-    ctx.rt.block_on(async move {
-        tracing::info!("\n\n Running concurrent tests...");
-        while (concurrent_futures.next().await).is_some() {}
-    });
+/// Simplified test runner that leverages services directly attached to test definitions
+pub struct Runner {
+    clients: Arc<Clients>,
+    registry: Arc<TestRegistry>,
 }
 
-async fn test_service(
-    name: AnyService,
-    service: Service,
-    multi_trigger_service: Option<Service>,
-    configs: &Configs,
-    clients: &Clients,
-) {
-    let service_id = service.id.to_string();
-
-    if let Some(multi_trigger_service) = &multi_trigger_service {
-        // sanity checks for multi-trigger, to surface errors earlier
-        // since mistakes here lead to hard-to-catch race conditions
-        assert_eq!(name, AnyService::Evm(EvmService::MultiTrigger));
-        assert!(multi_trigger_service.workflows.len() == 1);
-        assert!(service.workflows.len() == 1);
-
-        let workflow = service.workflows.values().next().unwrap();
-        let multi_trigger_workflow = multi_trigger_service.workflows.values().next().unwrap();
-
-        // the trigger should be the same
-        assert_eq!(multi_trigger_workflow.trigger, workflow.trigger);
-        // but the submission should be different
-        assert_ne!(multi_trigger_workflow.submit, workflow.submit);
-        // if/when https://github.com/Lay3rLabs/WAVS/pull/502 lands (or any PR that has a distinct service manager per service)
-        // then the service manager should be different too
-        // assert_ne!(multi_trigger_service.manager, service.manager);
+impl Runner {
+    pub fn new(clients: Clients, registry: TestRegistry) -> Self {
+        Self {
+            clients: Arc::new(clients),
+            registry: Arc::new(registry),
+        }
     }
 
-    let n_workflows = service.workflows.len();
+    /// Run all tests in the registry
+    pub async fn run_tests(&self) {
+        let test_groups = self.registry.list_all_grouped();
 
-    for workflow_index in 0..n_workflows {
-        let (workflow_id, workflow) = service.workflows.iter().nth(workflow_index).unwrap();
+        for (i, group) in test_groups.values().enumerate() {
+            tracing::info!("Running group {} with {} tests", i + 1, group.len());
+            let mut futures = FuturesUnordered::new();
 
-        let n_tasks = match &workflow.submit {
-            Submit::EvmContract(EvmContractSubmission { .. }) => 1,
-            Submit::Aggregator { .. } => 3, // TODO: make sure this value will work as aggregator is updated to calculate quorum, power, etc.
-            Submit::None => 1,
-        };
+            for test in group {
+                let clients = self.clients.clone();
+                futures.push(async move { self.execute_test(test, clients).await });
+            }
 
-        let submit_client = clients.get_evm_client(service.manager.chain_name());
-        let submit_start_block = submit_client.provider.get_block_number().await.unwrap();
+            while (futures.next().await).is_some() {}
+        }
+    }
 
-        for task_number in 1..=n_tasks {
-            let is_final = task_number == n_tasks;
+    // Execute a single test with timings
+    async fn execute_test(&self, test: &TestDefinition, clients: Arc<Clients>) {
+        let test_name = test.name.clone();
+        let start_time = Instant::now();
 
-            let (trigger_id, signed_data) = add_task(
-                clients,
-                service_id.clone(),
-                Some(workflow_id.to_string()),
-                get_input_for_service(name, &service, configs, workflow_index),
-                submit_client.clone(),
-                submit_start_block,
-                is_final,
-            )
+        run_test(test, &clients)
             .await
+            .context(test.name.clone())
             .unwrap();
-
-            if is_final {
-                let signed_data = signed_data.context("no signed data returned").unwrap();
-                verify_signed_data(
-                    clients,
-                    name,
-                    signed_data,
-                    &service,
-                    configs,
-                    workflow_index,
-                )
-                .await;
-
-                if let Some(multi_trigger_service) = &multi_trigger_service {
-                    let multi_trigger_workflow =
-                        multi_trigger_service.workflows.values().next().unwrap();
-
-                    // we already triggered - now we just wait for it to land at the expected address
-                    let address = match &multi_trigger_workflow.submit {
-                        Submit::None => {
-                            panic!("no submission in multi-trigger service");
-                        }
-                        Submit::EvmContract(EvmContractSubmission { address, .. }) => *address,
-                        Submit::Aggregator { .. } => {
-                            multi_trigger_service.manager.evm_address_unchecked()
-                        }
-                    };
-
-                    // we control the tests and *only* use on-chain triggers
-                    // for multi-service tests
-                    let signed_data = wait_for_task_to_land(
-                        submit_client.clone(),
-                        address, // this is a different address than the original service submission
-                        trigger_id,
-                        submit_start_block,
-                    )
-                    .await;
-
-                    verify_signed_data(
-                        clients,
-                        name,
-                        signed_data,
-                        multi_trigger_service,
-                        configs,
-                        0,
-                    )
-                    .await;
-                }
-            }
-        }
+        let duration = start_time.elapsed();
+        // This is a rough metric for debugging, since it can be interrupted by other async tasks
+        tracing::info!(
+            "Test {} passed (ran for {}ms)",
+            test_name,
+            duration.as_millis()
+        );
     }
 }
 
-fn get_input_for_service(
-    name: AnyService,
-    _service: &Service,
-    configs: &Configs,
-    workflow_index: usize,
-) -> Option<Vec<u8>> {
-    let permissions_req = || {
-        PermissionsRequest {
-            get_url: "https://postman-echo.com/get".to_string(),
-            post_url: "https://postman-echo.com/post".to_string(),
-            post_data: ("hello".to_string(), "world".to_string()),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        }
-        .to_vec()
-    };
-    let input_data = match name {
-        AnyService::Evm(name) => match name {
-            EvmService::ChainTriggerLookup => b"satoshi".to_vec(),
-            EvmService::CosmosQuery => CosmosQueryRequest::BlockHeight {
-                chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
-            }
-            .to_vec(),
-            EvmService::EchoData => b"The times".to_vec(),
-            EvmService::EchoDataAggregator => b"Chancellor".to_vec(),
-            EvmService::EchoDataSecondaryChain => b"collapse".to_vec(),
-            EvmService::Permissions => permissions_req(),
-            EvmService::Square => SquareRequest { x: 3 }.to_vec(),
-            EvmService::MultiWorkflow => match workflow_index {
-                0 => SquareRequest { x: 3 }.to_vec(),
-                1 => b"the first one was nine".to_vec(),
-                _ => unimplemented!(),
-            },
-            EvmService::MultiTrigger => b"tttrrrrriiiigggeerrr".to_vec(),
-            EvmService::CronInterval
-            | EvmService::BlockInterval
-            | EvmService::BlockIntervalStartStop => Vec::new(),
-        },
-        AnyService::Cosmos(name) => match name {
-            CosmosService::ChainTriggerLookup => b"nakamoto".to_vec(),
-            CosmosService::CosmosQuery => CosmosQueryRequest::BlockHeight {
-                chain_name: configs.chains.cosmos.keys().next().unwrap().clone(),
-            }
-            .to_vec(),
-            CosmosService::EchoData => b"on brink".to_vec(),
-            CosmosService::Permissions => permissions_req(),
-            CosmosService::Square => SquareRequest { x: 3 }.to_vec(),
-            CosmosService::CronInterval
-            | CosmosService::BlockInterval
-            | CosmosService::BlockIntervalStartStop => Vec::new(),
-        },
-        AnyService::CrossChain(name) => match name {
-            CrossChainService::CosmosToEvmEchoData => b"hello EVM world from cosmos".to_vec(),
-        },
-    };
+/// Run a single test
+async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()> {
+    // Get the service from the test
+    let service = test.get_service();
 
-    if input_data.is_empty() {
-        None
-    } else {
-        Some(input_data)
-    }
-}
-
-async fn verify_signed_data(
-    clients: &Clients,
-    name: AnyService,
-    signed_data: SignedData,
-    service: &Service,
-    configs: &Configs,
-    workflow_index: usize,
-) {
-    let data = &signed_data.data;
-
-    let input_req = || {
-        get_input_for_service(name, service, configs, workflow_index)
-            .expect("expected input data to be present for this test")
-    };
-
-    const BLOCK_INTERVAL_PREFIX: &str = "block-interval-data-";
-
-    let expected_data = match name {
-        AnyService::Evm(evm_name) => match evm_name {
-            // Just echo
-            EvmService::EchoData
-            | EvmService::EchoDataSecondaryChain
-            | EvmService::EchoDataAggregator
-            | EvmService::MultiTrigger
-            | EvmService::ChainTriggerLookup => Some(input_req()),
-
-            EvmService::Square => Some(SquareResponse { y: 9 }.to_vec()),
-
-            EvmService::MultiWorkflow => match workflow_index {
-                0 => Some(SquareResponse { y: 9 }.to_vec()),
-                1 => Some(input_req()),
-                _ => unimplemented!(),
-            },
-
-            EvmService::CosmosQuery => {
-                let resp: CosmosQueryResponse = serde_json::from_slice(data).unwrap();
-                tracing::info!("Response: {:?}", resp);
-                None
-            }
-
-            EvmService::Permissions => {
-                let resp: PermissionsResponse = serde_json::from_slice(data).unwrap();
-                tracing::info!("Response: {:?}", resp);
-                None
-            }
-            EvmService::BlockInterval => {
-                let resp = String::from_utf8(data.to_vec()).unwrap();
-                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
-                None
-            }
-            EvmService::BlockIntervalStartStop => {
-                let resp = String::from_utf8(data.to_vec()).unwrap();
-                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
-
-                let block = resp
-                    .strip_prefix(BLOCK_INTERVAL_PREFIX)
-                    .unwrap()
-                    .parse::<u64>()
-                    .unwrap();
-
-                if let Trigger::BlockInterval { start_block, .. } =
-                    service.workflows.values().next().unwrap().trigger
-                {
-                    assert_eq!(block, u64::from(start_block.unwrap()));
-                } else {
-                    panic!("Expected block interval trigger");
-                }
-
-                None
-            }
-            EvmService::CronInterval => Some(b"cron-interval data".to_vec()),
-        },
-        AnyService::Cosmos(cosmos_name) => match cosmos_name {
-            CosmosService::EchoData | CosmosService::ChainTriggerLookup => Some(input_req()),
-
-            CosmosService::Square => Some(SquareResponse { y: 9 }.to_vec()),
-
-            CosmosService::Permissions => {
-                let resp: PermissionsResponse = serde_json::from_slice(data).unwrap();
-                tracing::info!("Response: {:?}", resp);
-                None
-            }
-
-            CosmosService::CosmosQuery => {
-                let resp: CosmosQueryResponse = serde_json::from_slice(data).unwrap();
-                tracing::info!("Response: {:?}", resp);
-                None
-            }
-            CosmosService::BlockInterval => {
-                let resp = String::from_utf8(data.to_vec()).unwrap();
-                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
-                None
-            }
-            CosmosService::BlockIntervalStartStop => {
-                let resp = String::from_utf8(data.to_vec()).unwrap();
-                assert!(resp.starts_with(BLOCK_INTERVAL_PREFIX));
-
-                let block = resp
-                    .strip_prefix(BLOCK_INTERVAL_PREFIX)
-                    .unwrap()
-                    .parse::<u64>()
-                    .unwrap();
-
-                if let Trigger::BlockInterval { start_block, .. } =
-                    service.workflows.values().next().unwrap().trigger
-                {
-                    assert_eq!(block, u64::from(start_block.unwrap()));
-                } else {
-                    panic!("Expected block interval trigger");
-                }
-
-                None
-            }
-            CosmosService::CronInterval => Some(b"cron-interval data".to_vec()),
-        },
-        AnyService::CrossChain(crosschain_name) => match crosschain_name {
-            CrossChainService::CosmosToEvmEchoData => Some(input_req()),
-        },
-    };
-
-    // in some cases we just verify that we could deserialize the data
-    // in others, we know what we expect exactly, make sure we got it
-    if let Some(expected_data) = expected_data {
-        assert_eq!(*data, expected_data);
-
-        if let Ok(msg) = String::from_utf8(data.clone().to_vec()) {
-            tracing::info!("Response: {}", msg);
-        }
-    }
-
-    let service_signing_key = clients
-        .http_client
-        .get_service_key(service.id.clone())
+    let submit_client = clients.get_evm_client(service.manager.chain_name());
+    let submit_start_block = submit_client
+        .provider
+        .get_block_number()
         .await
-        .unwrap();
+        .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
 
-    match service_signing_key {
-        SigningKeyResponse::Secp256k1 {
-            key: service_signing_key_bytes,
-            hd_index: _,
-        } => {
-            let service_private_key = SigningKey::from_slice(&service_signing_key_bytes).unwrap();
-            let service_signer = PrivateKeySigner::from_signing_key(service_private_key);
-            let service_address = service_signer.address();
+    // Group workflows by trigger to handle multi-triggers
+    let mut trigger_groups: HashMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = HashMap::new();
 
-            let envelope_signature = EnvelopeSignature::Secp256k1(
-                Signature::from_raw(&signed_data.signatureData.signatures[0]).unwrap(),
-            );
-            // "same" type
-            let envelope = Envelope {
-                eventId: signed_data.envelope.eventId,
-                ordering: signed_data.envelope.ordering,
-                payload: signed_data.envelope.payload,
-            };
-            let envelope_address = envelope_signature.evm_signer_address(&envelope).unwrap();
+    for (workflow_id, workflow) in service.workflows.iter() {
+        trigger_groups
+            .entry(&workflow.trigger)
+            .or_default()
+            .push((workflow_id, workflow));
+    }
 
-            if service_address != envelope_address {
-                panic!(
-                    "Signature does not match service {} service address: {} signature address: {} signature bytes: {} envelope hash: {}",
-                    service.id,
-                    service_address,
-                    envelope_address,
-                    const_hex::encode(envelope_signature.as_bytes()),
-                    const_hex::encode(envelope.eip191_hash())
+    // Process each unique trigger once, then validate all associated workflows
+    for (trigger, workflows_group) in trigger_groups.iter() {
+        // Use the first workflow to execute the trigger
+        let (first_workflow_id, _) = workflows_group[0];
+
+        // Get the workflow data safely
+        let first_workflow = test
+            .workflows
+            .get(first_workflow_id)
+            .ok_or(anyhow!("Could not get workflow: {}", first_workflow_id))?;
+
+        // Convert input data to bytes safely
+        let input_bytes = first_workflow.input_data.to_bytes();
+
+        // Execute the trigger once
+        let trigger_id = match trigger {
+            Trigger::EvmContractEvent {
+                chain_name,
+                address,
+                event_hash: _,
+            } => {
+                let evm_client = clients.get_evm_client(chain_name);
+                let client = SimpleEvmTriggerClient::new(evm_client, *address);
+
+                client
+                    .add_trigger(input_bytes.expect("EVM triggers require an input"))
+                    .await?
+            }
+            Trigger::CosmosContractEvent {
+                chain_name,
+                address,
+                event_type: _,
+            } => {
+                let client = SimpleCosmosTriggerClient::new(
+                    clients.get_cosmos_client(chain_name).await,
+                    address.clone(),
                 );
+
+                let trigger_id = client
+                    .add_trigger(input_bytes.expect("Cosmos triggers require an input"))
+                    .await?;
+
+                TriggerId::new(trigger_id.u64())
+            }
+            Trigger::BlockInterval {
+                chain_name: _,
+                n_blocks: _,
+                ..
+            } => TriggerId::new(1337),
+            Trigger::Cron { .. } => TriggerId::new(1338),
+            Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
+        };
+
+        // Validate all workflows associated with this trigger
+        for (workflow_id, workflow) in workflows_group {
+            let WorkflowDefinition {
+                timeout,
+                expected_output,
+                ..
+            } = &test.workflows.get(workflow_id).ok_or(anyhow!(
+                "Could not get workflow definition from id: {}",
+                workflow_id
+            ))?;
+
+            let signed_data = match &workflow.submit {
+                Submit::EvmContract(EvmContractSubmission {
+                    chain_name,
+                    address,
+                    max_gas: _,
+                }) => {
+                    vec![
+                        wait_for_task_to_land(
+                            clients.get_evm_client(chain_name),
+                            *address,
+                            trigger_id,
+                            submit_start_block,
+                            *timeout,
+                        )
+                        .await?,
+                    ]
+                }
+                Submit::Aggregator { .. } => {
+                    let mut signed_data = vec![];
+                    for aggregator in workflow.aggregators.iter() {
+                        match aggregator {
+                            wavs_types::Aggregator::Evm(EvmContractSubmission {
+                                chain_name,
+                                address,
+                                ..
+                            }) => {
+                                signed_data.push(
+                                    wait_for_task_to_land(
+                                        clients.get_evm_client(chain_name),
+                                        *address,
+                                        trigger_id,
+                                        submit_start_block,
+                                        *timeout,
+                                    )
+                                    .await?,
+                                );
+                            }
+                        }
+                    }
+
+                    signed_data
+                }
+                Submit::None => unimplemented!("Submit::None is not implemented"),
+            };
+
+            for data in signed_data {
+                expected_output.validate(&data.data)?;
             }
         }
     }
-}
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SquareRequest {
-    pub x: u64,
-}
-
-impl SquareRequest {
-    pub fn to_vec(&self) -> Vec<u8> {
-        serde_json::to_vec(self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[allow(dead_code)]
-pub struct SquareResponse {
-    pub y: u64,
-}
-
-impl SquareResponse {
-    pub fn to_vec(&self) -> Vec<u8> {
-        serde_json::to_vec(self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum CosmosQueryRequest {
-    BlockHeight {
-        chain_name: ChainName,
-    },
-    Balance {
-        chain_name: String,
-        address: Address,
-    },
-}
-
-impl CosmosQueryRequest {
-    pub fn to_vec(&self) -> Vec<u8> {
-        serde_json::to_vec(self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum CosmosQueryResponse {
-    BlockHeight(u64),
-    Balance(String),
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct PermissionsRequest {
-    pub get_url: String,
-    pub post_url: String,
-    pub post_data: (String, String),
-    pub timestamp: u64,
-}
-
-impl PermissionsRequest {
-    pub fn to_vec(&self) -> Vec<u8> {
-        serde_json::to_vec(self).unwrap()
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct PermissionsResponse {
-    pub filename: PathBuf,
-    pub contents: String,
-    pub filecount: usize,
+    Ok(())
 }

@@ -1,7 +1,7 @@
 mod cosmos;
 mod evm;
 
-use std::sync::Arc;
+use std::{sync::Arc, thread::sleep, time::Duration};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -67,5 +67,8 @@ impl AppHandles {
         if let Some(handle) = self.aggregator_handle {
             handle.join().unwrap();
         }
+
+        // Add a small delay to let the aggregator finish processing with the chains
+        sleep(Duration::from_secs(1));
     }
 }

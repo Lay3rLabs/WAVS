@@ -14,6 +14,10 @@ use crate::config::TestConfig;
 
 use super::matrix::TestMatrix;
 
+pub const DEFAULT_CHAIN_ID: u64 = 31337;
+pub const BLOCK_INTERVAL_DATA_PREFIX: &str = "block-interval-data-";
+pub const CRON_INTERVAL_DATA: &str = "cron-interval data";
+
 #[derive(Clone, Debug)]
 pub struct Configs {
     pub matrix: TestMatrix,
@@ -92,7 +96,7 @@ impl From<TestConfig> for Configs {
         let mut chain_configs = ChainConfigs::default();
 
         let mut evm_port = 8545;
-        let mut evm_chain_id = 31337;
+        let mut evm_chain_id = DEFAULT_CHAIN_ID;
 
         let mut push_evm_chain = |aggregator: bool| {
             let http_endpoint = format!("http://127.0.0.1:{}", evm_port);

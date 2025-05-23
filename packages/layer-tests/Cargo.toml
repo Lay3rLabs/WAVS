@@ -42,3 +42,6 @@ alloy-contract = { workspace = true }
 uuid = { workspace = true }
 derive-enum-all-values = "=0.1.0"
 deadpool = "0.12.2"
+regex = "1.11.1"
+reqwest = { workspace = true }
+dashmap = { workspace = true }

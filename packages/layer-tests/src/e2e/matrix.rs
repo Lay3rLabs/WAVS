@@ -81,6 +81,28 @@ impl From<CrossChainService> for AnyService {
 }
 
 impl TestMatrix {
+    // Returns a list of all enabled services across all chain types
+    pub fn enabled_services(self) -> Vec<AnyService> {
+        let mut services = Vec::new();
+
+        // Add enabled EVM services
+        for service in self.evm {
+            services.push(service.into());
+        }
+
+        // Add enabled Cosmos services
+        for service in self.cosmos {
+            services.push(service.into());
+        }
+
+        // Add enabled cross-chain services
+        for service in self.cross_chain {
+            services.push(service.into());
+        }
+
+        services
+    }
+
     pub fn evm_regular_chain_enabled(&self) -> bool {
         // since we currently only submit to EVM, it's always enabled
         // TODO - if we have `Submit::None` then this should be false if no other test is enabled

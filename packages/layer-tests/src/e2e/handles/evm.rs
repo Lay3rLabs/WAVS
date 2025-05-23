@@ -58,6 +58,8 @@ impl LameAnvilInstanceBuilder {
             self.port.to_string(),
             "--chain-id".to_string(),
             self.chain_id,
+            "--block-time".to_string(),
+            "1".to_string(),
         ];
 
         let child = Command::new("anvil")
