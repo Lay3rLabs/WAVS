@@ -72,3 +72,7 @@ harness = false
 [[bench]]
 name = "intervals"
 harness = false
+
+[[bench]]
+name = "engine"
+harness = false
