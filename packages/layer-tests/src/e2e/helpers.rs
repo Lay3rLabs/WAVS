@@ -103,7 +103,6 @@ pub async fn deploy_service_for_test(
                         panic!("EVM contract submission is expected from deploy a new evm aggregator submit")
                     }
                 }
-                AggregatorDefinition::Aggregator(aggregator) => aggregator.clone(),
             };
 
             aggregators.push(aggregator);

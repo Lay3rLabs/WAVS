@@ -1,17 +1,16 @@
-#![allow(dead_code)]
-
 use std::collections::BTreeMap;
-use std::num::{NonZeroU32, NonZeroU64};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
-use wavs_types::{Aggregator, ChainName, Service, Submit, Timestamp, Trigger, WorkflowID};
+use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
-use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, SquareRequest, SquareResponse};
+use crate::e2e::types::{
+    CosmosQueryRequest, CosmosQueryResponse, PermissionsRequest, PermissionsResponse,
+    SquareRequest, SquareResponse,
+};
 
 use super::config::DEFAULT_CHAIN_ID;
-use super::types::{CosmosQueryResponse, PermissionsResponse};
 
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
@@ -55,29 +54,25 @@ pub struct WorkflowDefinition {
     /// Expected output to verify
     pub expected_output: ExpectedOutput,
 
-    /// The timeout for workflwo to receive signed data
+    /// The timeout for workflow to receive signed data
     pub timeout: Duration,
 }
 
 #[derive(Clone, Debug)]
 pub enum AggregatorDefinition {
     NewEvmAggregatorSubmit { chain_name: ChainName },
-    Aggregator(Aggregator),
 }
 
 /// Configuration for a trigger
 #[derive(Clone, Debug)]
 pub enum TriggerDefinition {
     Evm(EvmTriggerDefinition),
-
     Cosmos(CosmosTriggerDefinition),
-
     /// Testing for a specific block interval target requires knowing the block height when running the test
     /// This allows us to test n_blocks(1), start_block=end_block=(height + delay)
     DeferredBlockIntervalTarget {
         chain_name: ChainName,
     },
-
     /// Use a valid trigger
     Trigger(Trigger),
 }
@@ -97,7 +92,6 @@ pub enum EvmTriggerDefinition {
 pub enum SubmitDefinition {
     /// EVM contract submission
     NewEvmContract { chain_name: ChainName },
-
     /// Use an existing submit
     Submit(Submit),
 }
@@ -106,20 +100,16 @@ pub enum SubmitDefinition {
 #[derive(Clone, Debug, Default)]
 pub enum InputData {
     /// Raw bytes
+    #[allow(dead_code)]
     Raw(Vec<u8>),
-
     /// String data
     Text(String),
-
     /// Square request
     Square { x: u64 },
-
     /// Cosmos query
     CosmosQuery(CosmosQueryRequest),
-
     /// Permissions request
     Permissions(PermissionsRequest),
-
     /// No input data
     #[default]
     None,
@@ -143,26 +133,19 @@ impl InputData {
 #[derive(Clone, Debug)]
 pub enum ExpectedOutput {
     /// Raw bytes
+    #[allow(dead_code)]
     Raw(Vec<u8>),
-
     /// String data
     Text(String),
-
     /// Prefixed string data
     PrefixedText(String),
-
     /// Square response
     Square { y: u64 },
-
     /// Expect specific structure, but don't check values
     StructureOnly(OutputStructure),
-
     /// Deferred value
     /// Block interval start stop uses this to dynamically expect a value
     Deferred,
-
-    /// Accept any output
-    Any,
 }
 
 /// For validating structure without checking values
@@ -204,12 +187,13 @@ impl TestBuilder {
     }
 
     /// Add a description
-    pub fn description(mut self, description: &str) -> Self {
+    pub fn with_description(mut self, description: &str) -> Self {
         self.definition.description = Some(description.to_string());
         self
     }
 
-    pub fn group(mut self, group: u64) -> Self {
+    /// Set the execution group
+    pub fn with_group(mut self, group: u64) -> Self {
         self.definition.group = group;
         self
     }
@@ -223,7 +207,8 @@ impl TestBuilder {
         self
     }
 
-    pub fn service_manager_chain(mut self, chain_name: &ChainName) -> Self {
+    /// Set the service manager chain
+    pub fn with_service_manager_chain(mut self, chain_name: &ChainName) -> Self {
         self.definition.service_manager_chain = chain_name.clone();
         self
     }
@@ -234,7 +219,7 @@ impl TestBuilder {
     }
 }
 
-// Create a dedicated WorkflowBuilder to construct WorkflowConfig objects
+/// Simplified workflow builder with overwrite protection
 #[derive(Default)]
 pub struct WorkflowBuilder {
     component: Option<ComponentName>,
@@ -252,110 +237,65 @@ impl WorkflowBuilder {
         Self::default()
     }
 
-    /// Set the components to use
-    pub fn component(mut self, components: ComponentName) -> Self {
-        self.component = Some(components);
+    /// Set the component to use
+    pub fn with_component(mut self, component: ComponentName) -> Self {
+        if self.component.is_some() {
+            panic!("Component already set");
+        }
+        self.component = Some(component);
         self
     }
 
-    /// Configure an EVM contract trigger
-    pub fn evm_trigger(mut self, evm_trigger: EvmTriggerDefinition) -> Self {
-        self.trigger = Some(TriggerDefinition::Evm(evm_trigger));
+    /// Set the trigger definition
+    pub fn with_trigger(mut self, trigger: TriggerDefinition) -> Self {
+        if self.trigger.is_some() {
+            panic!("Trigger already set");
+        }
+        self.trigger = Some(trigger);
         self
     }
 
-    /// Directly set a valid trigger
-    /// This is useful for multi-trigger tests where we instantiate a trigger in the registry
-    pub fn direct_trigger(mut self, trigger: Trigger) -> Self {
-        self.trigger = Some(TriggerDefinition::Trigger(trigger));
-        self
-    }
-
-    /// Configure a Cosmos contract trigger
-    pub fn cosmos_trigger(mut self, cosmos_trigger: CosmosTriggerDefinition) -> Self {
-        self.trigger = Some(TriggerDefinition::Cosmos(cosmos_trigger));
-        self
-    }
-
-    /// Configure a block interval trigger
-    pub fn block_interval_trigger(
-        mut self,
-        chain_name: &ChainName,
-        n_blocks: NonZeroU32,
-        start_block: Option<NonZeroU64>,
-        end_block: Option<NonZeroU64>,
-    ) -> Self {
-        self.trigger = Some(TriggerDefinition::Trigger(Trigger::BlockInterval {
-            chain_name: chain_name.clone(),
-            n_blocks,
-            start_block,
-            end_block,
-        }));
-        self
-    }
-
-    /// Configure a deferred block interval trigger
-    pub fn deferred_block_interval_target(mut self, chain_name: &ChainName) -> Self {
-        self.trigger = Some(TriggerDefinition::DeferredBlockIntervalTarget {
-            chain_name: chain_name.clone(),
-        });
-        self
-    }
-
-    /// Configure a cron trigger
-    pub fn cron_trigger(
-        mut self,
-        schedule: &str,
-        start_time: Option<Timestamp>,
-        end_time: Option<Timestamp>,
-    ) -> Self {
-        self.trigger = Some(TriggerDefinition::Trigger(Trigger::Cron {
-            schedule: schedule.to_string(),
-            start_time,
-            end_time,
-        }));
-        self
-    }
-
-    /// Configure an EVM contract submit
-    pub fn evm_submit(mut self, chain_name: &ChainName) -> Self {
-        self.submit = Some(SubmitDefinition::NewEvmContract {
-            chain_name: chain_name.clone(),
-        });
-        self
-    }
-
-    /// Configure an aggregator submit
-    pub fn aggregator_submit(mut self, url: &str) -> Self {
-        self.submit = Some(SubmitDefinition::Submit(Submit::Aggregator {
-            url: url.to_string(),
-        }));
-        self
-    }
-
-    /// Configure with no submit
-    pub fn no_submit(mut self) -> Self {
-        self.submit = Some(SubmitDefinition::Submit(Submit::None));
+    /// Set the submit definition
+    pub fn with_submit(mut self, submit: SubmitDefinition) -> Self {
+        if self.submit.is_some() {
+            panic!("Submit already set");
+        }
+        self.submit = Some(submit);
         self
     }
 
     /// Add an aggregator
-    pub fn add_aggregator(mut self, aggregator: AggregatorDefinition) -> Self {
+    pub fn with_aggregator(mut self, aggregator: AggregatorDefinition) -> Self {
         self.aggregators.push(aggregator);
         self
     }
 
-    pub fn expect_output_structure(mut self, structure: OutputStructure) -> Self {
-        self.expected_output = Some(ExpectedOutput::StructureOnly(structure));
+    /// Set the input data
+    pub fn with_input_data(mut self, input_data: InputData) -> Self {
+        self.input_data = input_data;
         self
     }
 
-    pub fn expect_deferred(mut self) -> Self {
-        self.expected_output = Some(ExpectedOutput::Deferred);
+    /// Set the expected output
+    pub fn with_expected_output(mut self, expected_output: ExpectedOutput) -> Self {
+        if self.expected_output.is_some() {
+            panic!("Expected output already set");
+        }
+        self.expected_output = Some(expected_output);
         self
     }
 
-    /// Build the workflow configuration
+    /// Set the timeout
+    #[allow(dead_code)]
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        if self.timeout.is_some() {
+            panic!("Timeout already set");
+        }
+        self.timeout = Some(timeout);
+        self
+    }
+
+    /// Build the workflow definition
     pub fn build(self) -> WorkflowDefinition {
         let component = self.component.expect("Component not set");
         let trigger = self.trigger.expect("Trigger not set");
@@ -378,64 +318,6 @@ impl WorkflowBuilder {
             timeout: self.timeout.unwrap_or(Duration::from_secs(5)),
         }
     }
-
-    /// Set raw input data
-    pub fn input_data(mut self, data: Vec<u8>) -> Self {
-        self.input_data = InputData::Raw(data);
-        self
-    }
-
-    /// Set text input data
-    pub fn input_text(mut self, text: &str) -> Self {
-        self.input_data = InputData::Text(text.to_string());
-        self
-    }
-
-    /// Set square input data
-    pub fn input_square(mut self, x: u64) -> Self {
-        self.input_data = InputData::Square { x };
-        self
-    }
-
-    /// Set cosmos query input data
-    pub fn input_cosmos_query(mut self, request: CosmosQueryRequest) -> Self {
-        self.input_data = InputData::CosmosQuery(request);
-        self
-    }
-
-    /// Set permissions input data
-    pub fn input_permissions(mut self, request: PermissionsRequest) -> Self {
-        self.input_data = InputData::Permissions(request);
-        self
-    }
-
-    /// Set expected raw output
-    pub fn expect_output(mut self, data: Vec<u8>) -> Self {
-        self.expected_output = Some(ExpectedOutput::Raw(data));
-        self
-    }
-
-    /// Set expected text output
-    pub fn expect_text<T: ToString>(mut self, text: T) -> Self {
-        self.expected_output = Some(ExpectedOutput::Text(text.to_string()));
-        self
-    }
-
-    /// Set expected square output
-    pub fn expect_square(mut self, y: u64) -> Self {
-        self.expected_output = Some(ExpectedOutput::Square { y });
-        self
-    }
-
-    pub fn expect_prefix(mut self, arg: &str) -> Self {
-        self.expected_output = Some(ExpectedOutput::PrefixedText(arg.to_string()));
-        self
-    }
-
-    pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
-        self
-    }
 }
 
 /// Helper methods for testing the output
@@ -446,12 +328,10 @@ impl ExpectedOutput {
             ExpectedOutput::Raw(expected) => expected == actual,
             ExpectedOutput::Text(expected) => {
                 let actual_str = std::str::from_utf8(actual)?;
-
                 expected == actual_str
             }
             ExpectedOutput::PrefixedText(expected_prefix) => {
                 let actual_str = std::str::from_utf8(actual)?;
-
                 actual_str.starts_with(expected_prefix)
             }
             ExpectedOutput::Square { y } => {
@@ -469,7 +349,6 @@ impl ExpectedOutput {
                     serde_json::from_slice::<PermissionsResponse>(actual).is_ok()
                 }
             },
-            ExpectedOutput::Any => true,
             ExpectedOutput::Deferred => {
                 bail!("Invalid configuration: Deferred values must be set dynamically")
             }
