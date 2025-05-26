@@ -12,10 +12,7 @@ use wavs::{
     submission::core::CoreSubmission,
     test_utils::address::rand_address_evm,
 };
-use wavs_benchmark_common::{
-    app_context::APP_CONTEXT,
-    engine_setup::{EngineSetup, EngineSetupConfig},
-};
+use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};
 use wavs_types::{Service, TriggerAction};
 
 /// Configuration for the system benchmark (MultiEngineRunner)
@@ -39,21 +36,17 @@ impl SystemConfig {
 /// SystemHandle provides the setup and infrastructure needed for MultiEngineRunner benchmarks
 /// This struct combines an EngineHandle with a MultiEngineRunner to test system-level throughput
 pub struct SystemSetup {
-    pub engine_setup: Arc<EngineSetup>,
+    pub _engine_setup: Arc<EngineSetup>,
     pub _multi_runner: MultiEngineRunner<Arc<WasmEngine<FileStorage>>>,
     pub config: SystemConfig,
-    pub service: Service,
     pub action_sender: tokio::sync::mpsc::Sender<(TriggerAction, Service)>,
     pub result_receiver: std::sync::Mutex<Option<tokio::sync::mpsc::Receiver<ChainMessage>>>,
+    pub trigger_actions: std::sync::Mutex<Option<Vec<(TriggerAction, Service)>>>,
 }
 
 impl SystemSetup {
     pub fn new(system_config: SystemConfig) -> Arc<Self> {
-        // Create the base engine setup with a reduced execution count since we'll be doing concurrent work
-        let engine_config = EngineSetupConfig {
-            n_executions: 1, // Each action gets one execution in the system test
-        };
-        let engine_setup = EngineSetup::new(engine_config);
+        let engine_setup = EngineSetup::new();
 
         // Create file storage for the WasmEngine
         let file_storage = FileStorage::new(engine_setup.data_dir.path().join("ca")).unwrap();
@@ -102,6 +95,15 @@ impl SystemSetup {
             },
         };
 
+        let trigger_actions = (1..=system_config.n_actions)
+            .enumerate()
+            .map(|(i, _)| {
+                let data = format!("Action number {}", i).into_bytes();
+                let action = engine_setup.create_trigger_action(data);
+                (action, service.clone())
+            })
+            .collect::<Vec<_>>();
+
         // Create channels for the MultiEngineRunner pipeline - mirror production pipeline sizes
         let (action_sender, input_receiver) =
             tokio::sync::mpsc::channel(WasmEngine::<FileStorage>::CHANNEL_SIZE);
@@ -112,22 +114,12 @@ impl SystemSetup {
         multi_runner.start(APP_CONTEXT.clone(), input_receiver, result_sender);
 
         Arc::new(SystemSetup {
-            engine_setup,
+            _engine_setup: engine_setup,
             _multi_runner: multi_runner,
             config: system_config,
-            service,
             action_sender,
             result_receiver: std::sync::Mutex::new(Some(result_receiver)),
+            trigger_actions: std::sync::Mutex::new(Some(trigger_actions)),
         })
-    }
-
-    pub async fn send_action(&self, i: u64) {
-        let data = format!("System benchmark action {}", i).into_bytes();
-        let action = self.engine_setup.create_trigger_action(data);
-
-        self.action_sender
-            .send((action, self.service.clone()))
-            .await
-            .unwrap();
     }
 }

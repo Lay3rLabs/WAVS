@@ -1,10 +1,9 @@
 use criterion::Criterion;
 use std::sync::Arc;
 
-use wavs_benchmark_common::{
-    app_context::APP_CONTEXT,
-    engine_setup::{EngineSetup, EngineSetupConfig},
-};
+use wavs_benchmark_common::app_context::APP_CONTEXT;
+
+use crate::setup::{ExecuteConfig, ExecuteSetup};
 
 /// Main benchmark function for testing Engine::execute() throughput
 ///
@@ -18,12 +17,12 @@ pub fn benchmark(c: &mut Criterion) {
     // Use moderate sample size for consistent results
     group.sample_size(10);
 
-    let config = EngineSetupConfig {
+    let config = ExecuteConfig {
         n_executions: 10_000,
     };
 
     group.bench_function(config.description(), move |b| {
-        b.iter_with_setup(|| EngineSetup::new(config), run_simulation);
+        b.iter_with_setup(|| ExecuteSetup::new(config), run_simulation);
     });
 
     group.finish();
@@ -34,15 +33,14 @@ pub fn benchmark(c: &mut Criterion) {
 /// This function creates a fresh InstanceDeps for each execution to ensure
 /// isolated execution environments. Each execution uses a TriggerAction with
 /// raw data to minimize overhead and focus on the engine execution performance.
-fn run_simulation(setup: Arc<EngineSetup>) {
+fn run_simulation(setup: Arc<ExecuteSetup>) {
     APP_CONTEXT.rt.block_on(async move {
-        for execution_count in 1..=setup.config.n_executions {
-            // Create a new instance for this execution to ensure isolation
-            let mut deps = setup.create_instance_deps();
+        let mut count = 0;
+        let mut trigger_actions = setup.trigger_actions.lock().unwrap().take().unwrap();
 
-            // Create trigger action with raw test data
-            let echo_data = format!("Execution number {}", execution_count).into_bytes();
-            let trigger_action = setup.create_trigger_action(echo_data.clone());
+        for (trigger_action, echo_data) in trigger_actions.drain(..) {
+            // Create a new instance for this execution to ensure isolation
+            let mut deps = setup.engine_setup.create_instance_deps();
 
             // Execute the component and measure performance
             match wavs_engine::execute(&mut deps, trigger_action).await {
@@ -56,8 +54,10 @@ fn run_simulation(setup: Arc<EngineSetup>) {
                     panic!("Execution failed: {:?}", err);
                 }
             }
+
+            count += 1;
         }
 
-        println!("Completed {} engine executions", setup.config.n_executions);
+        println!("Completed {} engine executions", count);
     });
 }

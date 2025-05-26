@@ -68,8 +68,9 @@ fn run_simulation(setup: Arc<SystemSetup>) {
     });
 
     let setup = APP_CONTEXT.rt.block_on(async move {
-        for i in 0..total_actions {
-            setup.send_action(i).await;
+        let mut actions = setup.trigger_actions.lock().unwrap().take().unwrap();
+        for (action, service) in actions.drain(..) {
+            setup.action_sender.send((action, service)).await.unwrap();
         }
         setup
     });

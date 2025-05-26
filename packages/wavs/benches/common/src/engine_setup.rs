@@ -9,19 +9,6 @@ use wavs_types::{
     WorkflowID,
 };
 
-/// Configuration for the engine benchmark
-#[derive(Clone, Copy)]
-pub struct EngineSetupConfig {
-    /// Number of executions to perform
-    pub n_executions: u64,
-}
-
-impl EngineSetupConfig {
-    pub fn description(&self) -> String {
-        format!("engine executions: {}", self.n_executions)
-    }
-}
-
 /// Handle provides the setup and infrastructure needed for engine benchmarks
 pub struct EngineSetup {
     pub engine: WTEngine,
@@ -29,14 +16,13 @@ pub struct EngineSetup {
     pub service_id: ServiceID,
     pub workflow_id: WorkflowID,
     pub chain_configs: ChainConfigs,
-    pub config: EngineSetupConfig,
     pub component: Component,
     pub component_bytes: Vec<u8>,
     pub data_dir: TempDir,
 }
 
 impl EngineSetup {
-    pub fn new(setup_config: EngineSetupConfig) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         // Create wasmtime engine
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
@@ -88,7 +74,6 @@ impl EngineSetup {
             service_id,
             workflow_id,
             chain_configs,
-            config: setup_config,
             data_dir,
         })
     }
