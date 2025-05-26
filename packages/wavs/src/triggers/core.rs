@@ -539,13 +539,17 @@ impl TriggerManager for CoreTriggerManager {
         if !matches!(config.trigger, Trigger::Manual) {
             let command = LocalStreamCommand::new(&config);
             // If it's not a manual trigger, we need to start listening for it
-            self.local_command_sender
-                .lock()
-                .unwrap()
-                .as_ref()
-                .expect("Local command sender not initialized")
-                .send(command)
-                .unwrap();
+            match self.local_command_sender.lock().unwrap().as_ref() {
+                Some(sender) => {
+                    sender.send(command).unwrap();
+                }
+                None => {
+                    tracing::warn!(
+                        "Local command sender not initialized, cannot send command: {:?}",
+                        command
+                    );
+                }
+            }
 
             // Theoretically, we should wait until we know the stream is started before continuing,
             // however, we can be pretty sure that this `LocalStreamCommand` will come before
