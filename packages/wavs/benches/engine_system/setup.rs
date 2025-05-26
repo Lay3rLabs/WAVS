@@ -14,7 +14,7 @@ use wavs::{
 };
 use wavs_benchmark_common::{
     app_context::APP_CONTEXT,
-    engine_execute_setup::{EngineSetup, EngineSetupConfig},
+    engine_setup::{EngineSetup, EngineSetupConfig},
 };
 use wavs_types::{Service, TriggerAction};
 
@@ -39,7 +39,7 @@ impl SystemConfig {
 /// SystemHandle provides the setup and infrastructure needed for MultiEngineRunner benchmarks
 /// This struct combines an EngineHandle with a MultiEngineRunner to test system-level throughput
 pub struct SystemSetup {
-    pub engine_handle: Arc<EngineSetup>,
+    pub engine_setup: Arc<EngineSetup>,
     pub _multi_runner: MultiEngineRunner<Arc<WasmEngine<FileStorage>>>,
     pub config: SystemConfig,
     pub service: Service,
@@ -112,7 +112,7 @@ impl SystemSetup {
         multi_runner.start(APP_CONTEXT.clone(), input_receiver, result_sender);
 
         Arc::new(SystemSetup {
-            engine_handle,
+            engine_setup: engine_handle,
             _multi_runner: multi_runner,
             config: system_config,
             service,
@@ -123,7 +123,7 @@ impl SystemSetup {
 
     pub async fn send_action(&self, i: u64) {
         let data = format!("System benchmark action {}", i).into_bytes();
-        let action = self.engine_handle.create_trigger_action(data);
+        let action = self.engine_setup.create_trigger_action(data);
 
         self.action_sender
             .send((action, self.service.clone()))

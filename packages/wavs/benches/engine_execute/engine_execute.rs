@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use wavs_benchmark_common::{
     app_context::APP_CONTEXT,
-    engine_execute_setup::{EngineSetup, EngineSetupConfig},
+    engine_setup::{EngineSetup, EngineSetupConfig},
 };
 
 /// Main benchmark function for testing Engine::execute() throughput
