@@ -109,15 +109,11 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             ComponentSource::Download { .. } => todo!(),
             ComponentSource::Registry { registry } => {
                 if !(self.wasm_storage.data_exists(&registry.digest)?) {
-                    if let Some(domain) = &registry.domain {
-                        // Fetches package from registry and validates it has the expected digest
-                        let client = WkgClient::new(domain.to_owned()).unwrap();
-                        let bytes = client.fetch(registry).await?;
-                        self.store_component_bytes(&bytes)
-                    } else {
-                        self.metrics.increment_total_errors("no registry");
-                        return Err(EngineError::NoRegistry);
-                    }
+                    // Fetches package from registry and validates it has the expected digest
+                    let client =
+                        WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
+                    let bytes = client.fetch(registry).await?;
+                    self.store_component_bytes(&bytes)
                 } else {
                     Ok(registry.digest.clone())
                 }
