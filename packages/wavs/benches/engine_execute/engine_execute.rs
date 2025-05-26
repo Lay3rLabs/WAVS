@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use wavs_benchmark_common::{
     app_context::APP_CONTEXT,
-    engine_execute_handle::{EngineHandle, EngineHandleConfig},
+    engine_execute_setup::{EngineSetup, EngineSetupConfig},
 };
 
 /// Main benchmark function for testing Engine::execute() throughput
@@ -18,12 +18,12 @@ pub fn benchmark(c: &mut Criterion) {
     // Use moderate sample size for consistent results
     group.sample_size(10);
 
-    let config = EngineHandleConfig {
+    let config = EngineSetupConfig {
         n_executions: 10_000,
     };
 
     group.bench_function(config.description(), move |b| {
-        b.iter_with_setup(|| EngineHandle::new(config), run_simulation);
+        b.iter_with_setup(|| EngineSetup::new(config), run_simulation);
     });
 
     group.finish();
@@ -34,15 +34,15 @@ pub fn benchmark(c: &mut Criterion) {
 /// This function creates a fresh InstanceDeps for each execution to ensure
 /// isolated execution environments. Each execution uses a TriggerAction with
 /// raw data to minimize overhead and focus on the engine execution performance.
-fn run_simulation(handle: Arc<EngineHandle>) {
+fn run_simulation(setup: Arc<EngineSetup>) {
     APP_CONTEXT.rt.block_on(async move {
-        for execution_count in 1..=handle.config.n_executions {
+        for execution_count in 1..=setup.config.n_executions {
             // Create a new instance for this execution to ensure isolation
-            let mut deps = handle.create_instance_deps();
+            let mut deps = setup.create_instance_deps();
 
             // Create trigger action with raw test data
             let echo_data = format!("Execution number {}", execution_count).into_bytes();
-            let trigger_action = handle.create_trigger_action(echo_data.clone());
+            let trigger_action = setup.create_trigger_action(echo_data.clone());
 
             // Execute the component and measure performance
             match wavs_engine::execute(&mut deps, trigger_action).await {
@@ -58,6 +58,6 @@ fn run_simulation(handle: Arc<EngineHandle>) {
             }
         }
 
-        println!("Completed {} engine executions", handle.config.n_executions);
+        println!("Completed {} engine executions", setup.config.n_executions);
     });
 }

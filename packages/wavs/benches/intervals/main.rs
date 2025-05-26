@@ -1,5 +1,5 @@
 mod block_intervals;
-mod handle;
+mod setup;
 
 use criterion::{criterion_group, criterion_main};
 

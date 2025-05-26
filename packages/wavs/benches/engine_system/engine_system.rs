@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 
-use crate::handle::{SystemConfig, SystemHandle};
+use crate::setup::{SystemConfig, SystemSetup};
 use wavs::apis::submission::ChainMessage;
 
 /// Main benchmark function for testing MultiEngineRunner throughput
@@ -29,7 +29,7 @@ pub fn benchmark(c: &mut Criterion) {
         };
 
         group.bench_function(config.description(), move |b| {
-            b.iter_with_setup(|| SystemHandle::new(config), run_simulation);
+            b.iter_with_setup(|| SystemSetup::new(config), run_simulation);
         });
     }
 
@@ -46,13 +46,13 @@ pub fn benchmark(c: &mut Criterion) {
 ///
 /// The benchmark measures end-to-end throughput including channel overhead,
 /// thread coordination, and WASM execution time.
-fn run_simulation(handle: Arc<SystemHandle>) {
+fn run_simulation(setup: Arc<SystemSetup>) {
     // This channel will signal when the simulation is finished
     let (finished_sender, finished_receiver) = oneshot::channel::<Vec<ChainMessage>>();
-    let total_actions = handle.config.n_actions;
+    let total_actions = setup.config.n_actions;
 
     // Collect all results
-    let mut results_receiver = handle.result_receiver.lock().unwrap().take().unwrap();
+    let mut results_receiver = setup.result_receiver.lock().unwrap().take().unwrap();
     std::thread::spawn(move || {
         APP_CONTEXT.rt.block_on(async move {
             let mut received_results = Vec::new();
@@ -67,11 +67,11 @@ fn run_simulation(handle: Arc<SystemHandle>) {
         });
     });
 
-    let handle = APP_CONTEXT.rt.block_on(async move {
+    let setup = APP_CONTEXT.rt.block_on(async move {
         for i in 0..total_actions {
-            handle.send_action(i).await;
+            setup.send_action(i).await;
         }
-        handle
+        setup
     });
 
     let received_results = APP_CONTEXT.rt.block_on(async {
@@ -79,11 +79,11 @@ fn run_simulation(handle: Arc<SystemHandle>) {
         finished_receiver.await.unwrap()
     });
 
-    // to keep the handle alive until the end of the simulation
-    // we print out the thread count from handle.config
+    // to keep the setup alive until the end of the simulation
+    // we print out the thread count from setup.config
     println!(
         "Completed {} concurrent actions across {} threads",
         received_results.len(),
-        handle.config.thread_count
+        setup.config.thread_count
     );
 }

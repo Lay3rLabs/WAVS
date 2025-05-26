@@ -14,7 +14,7 @@ use wavs::{
 };
 use wavs_benchmark_common::{
     app_context::APP_CONTEXT,
-    engine_execute_handle::{EngineHandle, EngineHandleConfig},
+    engine_execute_setup::{EngineSetup, EngineSetupConfig},
 };
 use wavs_types::{Service, TriggerAction};
 
@@ -38,8 +38,8 @@ impl SystemConfig {
 
 /// SystemHandle provides the setup and infrastructure needed for MultiEngineRunner benchmarks
 /// This struct combines an EngineHandle with a MultiEngineRunner to test system-level throughput
-pub struct SystemHandle {
-    pub engine_handle: Arc<EngineHandle>,
+pub struct SystemSetup {
+    pub engine_handle: Arc<EngineSetup>,
     pub _multi_runner: MultiEngineRunner<Arc<WasmEngine<FileStorage>>>,
     pub config: SystemConfig,
     pub service: Service,
@@ -47,13 +47,13 @@ pub struct SystemHandle {
     pub result_receiver: std::sync::Mutex<Option<tokio::sync::mpsc::Receiver<ChainMessage>>>,
 }
 
-impl SystemHandle {
+impl SystemSetup {
     pub fn new(system_config: SystemConfig) -> Arc<Self> {
         // Create the base engine handle with a reduced execution count since we'll be doing concurrent work
-        let engine_config = EngineHandleConfig {
+        let engine_config = EngineSetupConfig {
             n_executions: 1, // Each action gets one execution in the system test
         };
-        let engine_handle = EngineHandle::new(engine_config);
+        let engine_handle = EngineSetup::new(engine_config);
 
         // Create file storage for the WasmEngine
         let file_storage = FileStorage::new(engine_handle.data_dir.path().join("ca")).unwrap();
@@ -111,7 +111,7 @@ impl SystemHandle {
         // Start the MultiEngineRunner
         multi_runner.start(APP_CONTEXT.clone(), input_receiver, result_sender);
 
-        Arc::new(SystemHandle {
+        Arc::new(SystemSetup {
             engine_handle,
             _multi_runner: multi_runner,
             config: system_config,
