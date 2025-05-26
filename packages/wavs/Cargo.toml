@@ -67,10 +67,6 @@ criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
 
 [[bench]]
-name = "mock_bench"
-harness = false
-
-[[bench]]
 name = "intervals"
 harness = false
 
