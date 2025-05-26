@@ -175,8 +175,6 @@ impl From<TestConfig> for Configs {
         .build()
         .unwrap();
 
-        wavs_config.active_trigger_chains = chain_configs.all_chain_names();
-
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
 

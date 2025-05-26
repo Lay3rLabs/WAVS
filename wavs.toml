@@ -115,9 +115,6 @@ port = 8000
 # The directory to store the data. Default is "/var/wavs"
 # data = "/var/wavs"
 
-# Active chain names to watch for triggers
-active_trigger_chains = ["local"]
-
 # Jaeger collector to send trace data
 # jaeger = "http://localhost:4317"
 # Prometheus endpoint to send metrics to

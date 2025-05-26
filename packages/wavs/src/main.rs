@@ -38,23 +38,10 @@ fn main() {
     };
 
     ctx.rt.block_on(async {
-        // require query chain health for all trigger chains before starting
-        if let Err(err) =
-            health_check_chains_query(&config.chains, &config.active_trigger_chains).await
-        {
-            panic!("Trigger chain health-check failed: {}", err);
-        }
-
-        // warn bad health for non-trigger chains (services may or may not submit to these)
-        let non_trigger_chains = config.chains.all_chain_names();
-        let non_trigger_chains = non_trigger_chains
-            .iter()
-            .filter(|chain_name| !config.active_trigger_chains.contains(chain_name))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        if !non_trigger_chains.is_empty() {
-            if let Err(err) = health_check_chains_query(&config.chains, &non_trigger_chains).await {
+        // warn bad health for chains (services may or may not submit to these)
+        let chain_names = config.chains.all_chain_names();
+        if !chain_names.is_empty() {
+            if let Err(err) = health_check_chains_query(&config.chains, &chain_names).await {
                 tracing::warn!("Non-trigger-chain health-check failed: {}", err);
             }
         }
