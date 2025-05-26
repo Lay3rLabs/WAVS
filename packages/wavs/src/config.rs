@@ -1,14 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 use utils::{
-    config::{AnyChainConfig, ChainConfigs, ConfigExt},
+    config::{ChainConfigs, ConfigExt},
     service::DEFAULT_IPFS_GATEWAY,
 };
 use utoipa::ToSchema;
-use wavs_types::{ChainName, Workflow};
+use wavs_types::Workflow;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -38,9 +35,6 @@ pub struct Config {
     // wasm engine config
     pub wasm_lru_size: usize,
     pub wasm_threads: usize,
-
-    /// The active chain names to watch for triggers
-    pub active_trigger_chains: Vec<ChainName>,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -90,7 +84,6 @@ impl Default for Config {
             host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
-            active_trigger_chains: Vec::new(),
             chains: ChainConfigs {
                 cosmos: BTreeMap::new(),
                 evm: BTreeMap::new(),
@@ -106,28 +99,5 @@ impl Default for Config {
             prometheus: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
         }
-    }
-}
-
-impl Config {
-    pub fn active_trigger_chain_configs(&self) -> HashMap<ChainName, AnyChainConfig> {
-        self.chains
-            .cosmos
-            .iter()
-            .filter_map(|(chain_name, chain)| {
-                if self.active_trigger_chains.contains(chain_name) {
-                    Some((chain_name.clone(), chain.clone().into()))
-                } else {
-                    None
-                }
-            })
-            .chain(self.chains.evm.iter().filter_map(|(chain_name, chain)| {
-                if self.active_trigger_chains.contains(chain_name) {
-                    Some((chain_name.clone(), chain.clone().into()))
-                } else {
-                    None
-                }
-            }))
-            .collect()
     }
 }

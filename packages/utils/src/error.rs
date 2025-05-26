@@ -43,6 +43,9 @@ pub enum EvmClientError {
 
     #[error("Unable to create http provider: {0:#?}")]
     HttpProvider(anyhow::Error),
+
+    #[error("Unable to get block height")]
+    BlockHeight,
 }
 
 #[derive(Debug, Error)]

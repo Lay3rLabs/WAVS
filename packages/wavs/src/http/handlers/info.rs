@@ -3,7 +3,6 @@ use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
-use utils::config::AnyChainConfig;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -32,17 +31,15 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     // TODO - get the operators from the dispatcher, and/or Eigenlayer?
 
-    let cosmos_chain_config = state
+    let cosmos_chain_config: layer_climb::prelude::ChainConfig = state
         .config
-        .active_trigger_chain_configs()
+        .chains
+        .cosmos
         .values()
-        .filter_map(|c| match c {
-            AnyChainConfig::Cosmos(c) => Some(ChainConfig::from(c.clone())),
-            _ => None,
-        })
         .next()
         .context("no active cosmos chain")?
-        .clone();
+        .clone()
+        .into();
 
     let mnemonic = state
         .config

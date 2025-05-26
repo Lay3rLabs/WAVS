@@ -40,6 +40,8 @@ pub enum TriggerError {
     ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]
     NoSuchService(ServiceID),
+    #[error("Cannot find chain: {0}")]
+    NoSuchChain(ChainName),
     #[error("Cannot find workflow: {0} / {1}")]
     NoSuchWorkflow(ServiceID, WorkflowID),
     #[error("Cannot find trigger data: {0}")]
