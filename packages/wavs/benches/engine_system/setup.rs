@@ -49,25 +49,25 @@ pub struct SystemSetup {
 
 impl SystemSetup {
     pub fn new(system_config: SystemConfig) -> Arc<Self> {
-        // Create the base engine handle with a reduced execution count since we'll be doing concurrent work
+        // Create the base engine setup with a reduced execution count since we'll be doing concurrent work
         let engine_config = EngineSetupConfig {
             n_executions: 1, // Each action gets one execution in the system test
         };
-        let engine_handle = EngineSetup::new(engine_config);
+        let engine_setup = EngineSetup::new(engine_config);
 
         // Create file storage for the WasmEngine
-        let file_storage = FileStorage::new(engine_handle.data_dir.path().join("ca")).unwrap();
+        let file_storage = FileStorage::new(engine_setup.data_dir.path().join("ca")).unwrap();
 
         // Create metrics for the engine
         let metrics = Metrics::new(&meter("wavs-benchmark"));
 
         // Create a WasmEngine similar to how it's done in CoreDispatcher
-        let app_storage = engine_handle.data_dir.path().join("app");
+        let app_storage = engine_setup.data_dir.path().join("app");
         let wasm_engine = Arc::new(WasmEngine::new(
             file_storage,
             app_storage,
             50, // LRU cache size for components
-            engine_handle.chain_configs.clone(),
+            engine_setup.chain_configs.clone(),
             None,                // No registry domain for benchmarks
             None,                // No fuel limit for benchmarks
             None,                // No time limit for benchmarks
@@ -75,11 +75,11 @@ impl SystemSetup {
         ));
 
         let digest = wasm_engine
-            .store_component_bytes(&engine_handle.component_bytes)
+            .store_component_bytes(&engine_setup.component_bytes)
             .unwrap();
 
         // just a sanity check to ensure the digest matches
-        if digest != *engine_handle.workflow.component.source.digest() {
+        if digest != *engine_setup.workflow.component.source.digest() {
             panic!("Component digest mismatch");
         }
 
@@ -88,11 +88,11 @@ impl SystemSetup {
 
         // Create a Service that matches our workflow
         let service = Service {
-            id: engine_handle.service_id.clone(),
+            id: engine_setup.service_id.clone(),
             name: "Benchmark System Service".to_string(),
             workflows: [(
-                engine_handle.workflow_id.clone(),
-                engine_handle.workflow.clone(),
+                engine_setup.workflow_id.clone(),
+                engine_setup.workflow.clone(),
             )]
             .into(),
             status: wavs_types::ServiceStatus::Active,
@@ -112,7 +112,7 @@ impl SystemSetup {
         multi_runner.start(APP_CONTEXT.clone(), input_receiver, result_sender);
 
         Arc::new(SystemSetup {
-            engine_setup: engine_handle,
+            engine_setup,
             _multi_runner: multi_runner,
             config: system_config,
             service,
