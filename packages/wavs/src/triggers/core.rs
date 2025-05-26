@@ -1,12 +1,16 @@
+mod cosmos_stream;
+mod cron_stream;
+mod evm_stream;
+mod local_command_stream;
+
 use crate::{
     apis::trigger::{TriggerError, TriggerManager},
     config::Config,
     AppContext,
 };
-use alloy_provider::Provider;
-use alloy_rpc_types_eth::{Filter, Log};
-use anyhow::{Context, Result};
-use futures::{Stream, StreamExt};
+use alloy_rpc_types_eth::Log;
+use anyhow::Result;
+use futures::{stream::SelectAll, Stream, StreamExt};
 use layer_climb::prelude::*;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -15,9 +19,12 @@ use std::{
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::IntervalStream;
 use tracing::instrument;
-use utils::{config::AnyChainConfig, evm_client::EvmQueryClient, telemetry::TriggerMetrics};
+use utils::{
+    config::{AnyChainConfig, ChainConfigs},
+    evm_client::EvmQueryClient,
+    telemetry::TriggerMetrics,
+};
 use wavs_types::{
     ByteArray, ChainName, ServiceID, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
     WorkflowID,
@@ -28,11 +35,16 @@ use super::{
     cron_scheduler::{CronIntervalState, CronScheduler},
 };
 
+type MultiplexedStream = SelectAll<
+    Pin<Box<dyn Stream<Item = std::result::Result<StreamTriggers, TriggerError>> + Send>>,
+>;
+
 #[derive(Clone)]
 pub struct CoreTriggerManager {
-    pub chain_configs: HashMap<ChainName, AnyChainConfig>,
+    pub chain_configs: ChainConfigs,
     pub action_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TriggerAction>>>>,
     action_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<TriggerAction>>>>,
+    local_command_sender: Arc<std::sync::Mutex<Option<mpsc::UnboundedSender<LocalStreamCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
     metrics: TriggerMetrics,
 }
@@ -75,9 +87,30 @@ impl LookupMaps {
 
 pub type LookupId = usize;
 
+#[derive(Debug)]
+enum LocalStreamCommand {
+    StartListeningChain { chain_name: ChainName },
+    StartListeningCron,
+}
+
+impl LocalStreamCommand {
+    pub fn new(trigger_config: &TriggerConfig) -> Self {
+        match &trigger_config.trigger {
+            Trigger::Cron { .. } => Self::StartListeningCron,
+            Trigger::EvmContractEvent { chain_name, .. }
+            | Trigger::CosmosContractEvent { chain_name, .. }
+            | Trigger::BlockInterval { chain_name, .. } => Self::StartListeningChain {
+                chain_name: chain_name.clone(),
+            },
+            Trigger::Manual => unreachable!("Manual triggers don't really get added"),
+        }
+    }
+}
+
 // *potential* triggers that we can react to
 // this is just a local encapsulation, not a full trigger
 // and is used to ultimately filter+map to a TriggerAction
+#[derive(Debug)]
 enum StreamTriggers {
     Cosmos {
         chain_name: ChainName,
@@ -102,6 +135,7 @@ enum StreamTriggers {
         /// Multiple triggers can fire simultaneously in a single tick.
         lookup_ids: Vec<LookupId>,
     },
+    LocalCommand(LocalStreamCommand),
 }
 
 impl CoreTriggerManager {
@@ -112,170 +146,38 @@ impl CoreTriggerManager {
         let (action_sender, action_receiver) = mpsc::channel(100);
 
         Ok(Self {
-            chain_configs: config.active_trigger_chain_configs(),
+            chain_configs: config.chains.clone(),
             lookup_maps: Arc::new(LookupMaps::new()),
             action_sender: Arc::new(std::sync::Mutex::new(Some(action_sender))),
             action_receiver: Arc::new(std::sync::Mutex::new(Some(action_receiver))),
+            local_command_sender: Arc::new(std::sync::Mutex::new(None)),
             metrics,
         })
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     async fn start_watcher(&self) -> Result<(), TriggerError> {
-        // stream of streams, one for each chain
-        let mut streams: Vec<Pin<Box<dyn Stream<Item = Result<StreamTriggers>> + Send>>> =
-            Vec::new();
+        let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
+
+        // Start the local command stream
+        let (local_stream_command_sender, local_stream_command_receiver) =
+            mpsc::unbounded_channel();
+        *self.local_command_sender.lock().unwrap() = Some(local_stream_command_sender);
+        let local_command_stream = local_command_stream::start_local_command_stream(
+            local_stream_command_receiver,
+            self.metrics.clone(),
+        )
+        .await?;
+        multiplexed_stream.push(local_command_stream);
 
         let mut cosmos_clients = HashMap::new();
-        for (chain_name, chain_config) in self.chain_configs.clone() {
-            if let AnyChainConfig::Cosmos(chain_config) = chain_config {
-                let client = QueryClient::new(chain_config.into(), None)
-                    .await
-                    .map_err(TriggerError::Climb)?;
-
-                cosmos_clients.insert(chain_name, client);
-            }
-        }
-
         let mut evm_clients = HashMap::new();
-        for (chain_name, chain_config) in self.chain_configs.clone() {
-            if let AnyChainConfig::Evm(chain_config) = chain_config {
-                let endpoint = chain_config
-                    .query_client_endpoint()
-                    .map_err(|e| TriggerError::EvmClient(chain_name.clone(), e))?;
-                let client = EvmQueryClient::new(endpoint)
-                    .await
-                    .map_err(|e| TriggerError::EvmClient(chain_name.clone(), e))?;
 
-                evm_clients.insert(chain_name, client);
-            }
-        }
-
-        for (chain_name, query_client) in cosmos_clients.into_iter() {
-            tracing::debug!("Trigger Manager for Cosmos chain {} started", chain_name);
-
-            let chain_config = query_client.chain_config.clone();
-
-            let event_stream = Box::pin(
-                query_client
-                    .stream_block_events(None)
-                    .await
-                    .map_err(TriggerError::Climb)?
-                    .map(move |block_events| match block_events {
-                        Ok(block_events) => {
-                            let mut contract_events = Vec::new();
-                            let events = CosmosTxEvents::from(block_events.events);
-
-                            for event in events.events_iter() {
-                                if event.ty().starts_with("wasm-") {
-                                    let contract_address = event.attributes().find_map(|attr| {
-                                        if attr.key() == "_contract_address" {
-                                            chain_config.parse_address(attr.value()).ok()
-                                        } else {
-                                            None
-                                        }
-                                    });
-                                    match contract_address {
-                                        Some(contract_address) => {
-                                            let mut event = cosmwasm_std::Event::from(event);
-                                            event.ty =
-                                                event.ty.strip_prefix("wasm-").unwrap().to_string();
-                                            contract_events.push((contract_address, event));
-                                        }
-                                        None => {
-                                            tracing::warn!(
-                                                "Missing contract address in event: {:?}",
-                                                event
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-
-                            Ok(StreamTriggers::Cosmos {
-                                chain_name: chain_name.clone(),
-                                contract_events,
-                                block_height: block_events.height,
-                            })
-                        }
-                        Err(err) => {
-                            self.metrics.increment_total_errors("block_events");
-                            Err(err)
-                        }
-                    }),
-            );
-
-            streams.push(event_stream);
-        }
-
-        for (chain_name, query_client) in evm_clients.iter() {
-            tracing::debug!("Trigger Manager for EVM chain {} started", chain_name);
-
-            // Start the event stream
-            let filter = Filter::new();
-
-            let stream = query_client
-                .provider
-                .subscribe_logs(&filter)
-                .await
-                .map_err(|e| TriggerError::EvmSubscription(e.into()))?
-                .into_stream();
-
-            let chain_name = chain_name.clone();
-
-            let event_stream = Box::pin(stream.map(move |log| {
-                Ok(StreamTriggers::Evm {
-                    chain_name: chain_name.clone(),
-                    block_height: log.block_number.context("couldn't get EVM block height")?,
-                    log,
-                })
-            }));
-
-            streams.push(event_stream);
-        }
-
-        for (chain_name, query_client) in evm_clients.iter() {
-            let chain_name = chain_name.clone();
-
-            // Start the block stream (for block-based triggers)
-            let stream = query_client
-                .provider
-                .subscribe_blocks()
-                .await
-                .map_err(|e| TriggerError::EvmSubscription(e.into()))?
-                .into_stream();
-
-            let block_stream = Box::pin(stream.map(move |block| {
-                Ok(StreamTriggers::EvmBlock {
-                    chain_name: chain_name.clone(),
-                    block_height: block.number,
-                })
-            }));
-            streams.push(block_stream);
-        }
+        let mut listening_chains = HashSet::new();
 
         // Create a stream for cron triggers that produces a trigger for each due task
-        let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
-        let interval_stream =
-            IntervalStream::new(tokio::time::interval(std::time::Duration::from_secs(1)));
 
-        // Process cron triggers on each interval tick
-        let cron_stream = Box::pin(interval_stream.map(move |_| {
-            let trigger_time = Timestamp::now();
-            let lookup_ids = cron_scheduler.lock().unwrap().tick(trigger_time);
-
-            Ok(StreamTriggers::Cron {
-                lookup_ids,
-                trigger_time,
-            })
-        }));
-
-        streams.push(cron_stream);
-
-        // Multiplex all the stream of streams
-        let mut streams = futures::stream::select_all(streams);
-
-        while let Some(res) = streams.next().await {
+        while let Some(res) = multiplexed_stream.next().await {
             let res = match res {
                 Err(err) => {
                     tracing::error!("{:?}", err);
@@ -287,6 +189,134 @@ impl CoreTriggerManager {
             let mut trigger_actions = Vec::new();
 
             match res {
+                StreamTriggers::LocalCommand(command) => {
+                    match command {
+                        LocalStreamCommand::StartListeningCron => {
+                            let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
+                            match cron_stream::start_cron_stream(
+                                cron_scheduler,
+                                self.metrics.clone(),
+                            )
+                            .await
+                            {
+                                Ok(cron_stream) => {
+                                    multiplexed_stream.push(cron_stream);
+                                }
+                                Err(err) => {
+                                    tracing::error!("Failed to start cron stream: {:?}", err);
+                                    continue;
+                                }
+                            }
+                        }
+                        LocalStreamCommand::StartListeningChain { chain_name } => {
+                            if listening_chains.contains(&chain_name) {
+                                tracing::debug!("Already listening to chain {}", chain_name);
+                                continue;
+                            }
+
+                            // insert right away, before we get to an await point
+                            listening_chains.insert(chain_name.clone());
+
+                            let chain_config = match self.chain_configs.get_chain(&chain_name) {
+                                Ok(config) => match config {
+                                    Some(config) => config,
+                                    None => {
+                                        tracing::error!("No chain config found for {}", chain_name);
+                                        continue;
+                                    }
+                                },
+                                Err(e) => {
+                                    tracing::error!("{:?}", e);
+                                    continue;
+                                }
+                            };
+
+                            match chain_config {
+                                AnyChainConfig::Cosmos(chain_config) => {
+                                    let cosmos_client =
+                                        QueryClient::new(chain_config.clone().into(), None)
+                                            .await
+                                            .map_err(TriggerError::Climb)?;
+
+                                    cosmos_clients
+                                        .insert(chain_name.clone(), cosmos_client.clone());
+
+                                    // Start the Cosmos event stream
+                                    match cosmos_stream::start_cosmos_stream(
+                                        cosmos_client.clone(),
+                                        chain_name.clone(),
+                                        self.metrics.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(cosmos_event_stream) => {
+                                            multiplexed_stream.push(cosmos_event_stream);
+                                        }
+                                        Err(err) => {
+                                            tracing::error!(
+                                                "Failed to start Cosmos event stream: {:?}",
+                                                err
+                                            );
+                                            continue;
+                                        }
+                                    }
+                                }
+                                AnyChainConfig::Evm(chain_config) => {
+                                    let endpoint =
+                                        chain_config.query_client_endpoint().map_err(|e| {
+                                            TriggerError::EvmClient(chain_name.clone(), e)
+                                        })?;
+                                    let evm_client =
+                                        EvmQueryClient::new(endpoint).await.map_err(|e| {
+                                            TriggerError::EvmClient(chain_name.clone(), e)
+                                        })?;
+
+                                    evm_clients.insert(chain_name.clone(), evm_client.clone());
+
+                                    // Start the EVM event stream
+                                    match evm_stream::start_evm_event_stream(
+                                        evm_client.clone(),
+                                        chain_name.clone(),
+                                        self.metrics.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(evm_event_stream) => {
+                                            multiplexed_stream.push(evm_event_stream);
+                                        }
+                                        Err(err) => {
+                                            tracing::error!(
+                                                "Failed to start EVM event stream: {:?}",
+                                                err
+                                            );
+                                            continue;
+                                        }
+                                    }
+
+                                    // Start the EVM block stream
+                                    match evm_stream::start_evm_block_stream(
+                                        evm_client.clone(),
+                                        chain_name.clone(),
+                                        self.metrics.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(evm_block_stream) => {
+                                            multiplexed_stream.push(evm_block_stream);
+                                        }
+                                        Err(err) => {
+                                            tracing::error!(
+                                                "Failed to start EVM block stream: {:?}",
+                                                err
+                                            );
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 StreamTriggers::Evm {
                     log,
                     chain_name,
@@ -506,6 +536,25 @@ impl TriggerManager for CoreTriggerManager {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
+        if !matches!(config.trigger, Trigger::Manual) {
+            let command = LocalStreamCommand::new(&config);
+            // If it's not a manual trigger, we need to start listening for it
+            self.local_command_sender
+                .lock()
+                .unwrap()
+                .as_ref()
+                .expect("Local command sender not initialized")
+                .send(command)
+                .unwrap();
+
+            // Theoretically, we should wait until we know the stream is started before continuing,
+            // however, we can be pretty sure that this `LocalStreamCommand` will come before
+            // any actual trigger events, since they are all multiplexed into the same stream
+            // and so by definition this comes "first".
+            //
+            // There's a bit of a question whether "first" is a guarantee, but, so far so good :P
+        }
+
         // get the next lookup id
         let lookup_id = self
             .lookup_maps
@@ -589,6 +638,7 @@ impl TriggerManager for CoreTriggerManager {
             .write()
             .unwrap()
             .insert(lookup_id, config);
+
         Ok(())
     }
 
@@ -839,7 +889,6 @@ mod tests {
     #[test]
     fn core_trigger_lookups() {
         let config = Config {
-            active_trigger_chains: vec![ChainName::new("test").unwrap()],
             chains: ChainConfigs {
                 evm: [(
                     ChainName::new("test-evm").unwrap(),
@@ -984,7 +1033,6 @@ mod tests {
     #[tokio::test]
     async fn block_interval_trigger_is_removed_when_config_is_gone() {
         let config = Config {
-            active_trigger_chains: vec![ChainName::new("test").unwrap()],
             chains: ChainConfigs {
                 evm: [(
                     ChainName::new("test-evm").unwrap(),
@@ -1088,10 +1136,7 @@ mod tests {
     #[tokio::test]
     async fn cron_trigger_is_removed_when_config_is_gone() {
         // Setup configuration and manager
-        let config = Config {
-            active_trigger_chains: vec![ChainName::new("test").unwrap()],
-            ..Default::default()
-        };
+        let config = Config::default();
 
         let manager = CoreTriggerManager::new(
             &config,
