@@ -77,6 +77,8 @@ impl SystemHandle {
         let digest = wasm_engine
             .store_component_bytes(&engine_handle.component_bytes)
             .unwrap();
+
+        // just a sanity check to ensure the digest matches
         if digest != *engine_handle.workflow.component.source.digest() {
             panic!("Component digest mismatch");
         }
