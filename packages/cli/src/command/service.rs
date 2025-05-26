@@ -76,15 +76,8 @@ pub async fn handle_service_command(
                     package,
                     version,
                 } => {
-                    let result = set_component_source_registry(
-                        ctx.config.registry_domain.clone(),
-                        &file,
-                        id,
-                        domain,
-                        package,
-                        version,
-                    )
-                    .await?;
+                    let result =
+                        set_component_source_registry(&file, id, domain, package, version).await?;
                     display_result(ctx, result, json)?;
                 }
                 ComponentCommand::Permissions {
@@ -718,14 +711,13 @@ pub fn set_component_source_digest(
 
 /// Set the component source to a registry package
 pub async fn set_component_source_registry(
-    default_domain: Option<String>,
     file_path: &Path,
     workflow_id: WorkflowID,
     domain: Option<String>,
     package: PackageRef,
     version: Option<Version>,
 ) -> Result<ComponentSourceRegistryResult> {
-    let resolved_domain = domain.clone().unwrap_or(default_domain.unwrap());
+    let resolved_domain = domain.clone().unwrap_or("wa.dev".to_string());
 
     // Create a WkgClient using the registry domain
     let wkg_client = WkgClient::new(resolved_domain.clone())?;
@@ -3403,7 +3395,6 @@ mod tests {
 
         // Call the function to set the component source
         let result = set_component_source_registry(
-            Some(registry_domain.clone()),
             &file_path,
             workflow_id.clone(),
             None, // Use default domain

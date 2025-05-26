@@ -14,7 +14,6 @@ use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestM
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TestConfig {
     pub registry: Option<bool>,
-    pub registry_domain: Option<String>,
     pub mode: TestMode,
     pub jaeger: Option<String>,
     pub prometheus: Option<String>,
@@ -40,7 +39,6 @@ impl Default for TestConfig {
     fn default() -> Self {
         Self {
             registry: None,
-            registry_domain: None,
             _log_levels: EnvFilter::from_default_env()
                 .to_string()
                 .split(',')

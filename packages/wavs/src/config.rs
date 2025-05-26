@@ -45,9 +45,6 @@ pub struct Config {
     /// The mnemonic to use for submitting transactions on Cosmos chains
     pub cosmos_submission_mnemonic: Option<String>,
 
-    /// Domain to use for registries
-    pub registry_domain: Option<String>,
-
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     pub max_wasm_fuel: u64,
 
@@ -92,7 +89,6 @@ impl Default for Config {
             wasm_threads: 4,
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
-            registry_domain: None,
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3,
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
             jaeger: None,

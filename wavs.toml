@@ -97,8 +97,6 @@ poll_interval_ms = 7000
 # WAVS specific settings
 # ----------------------------
 [wavs]
-# Registry domain
-registry_domain = "wa.dev"
 
 cors_allowed_origins = [
     "https://lay3rlabs.github.io/*",

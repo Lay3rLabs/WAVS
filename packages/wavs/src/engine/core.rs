@@ -23,7 +23,6 @@ pub struct WasmEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
     app_data_dir: PathBuf,
-    wkg_client: Option<WkgClient>,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
     metrics: EngineMetrics,
@@ -37,7 +36,6 @@ impl<S: CAStorage> WasmEngine<S> {
         app_data_dir: impl AsRef<Path>,
         lru_size: usize,
         chain_configs: ChainConfigs,
-        registry_domain: Option<String>,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         metrics: EngineMetrics,
@@ -63,7 +61,6 @@ impl<S: CAStorage> WasmEngine<S> {
             memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
             chain_configs,
-            wkg_client: registry_domain.map(|d| WkgClient::new(d).unwrap()),
             max_execution_seconds,
             max_wasm_fuel,
             metrics,
@@ -112,8 +109,9 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             ComponentSource::Download { .. } => todo!(),
             ComponentSource::Registry { registry } => {
                 if !(self.wasm_storage.data_exists(&registry.digest)?) {
-                    if let Some(client) = &self.wkg_client {
+                    if let Some(domain) = &registry.domain {
                         // Fetches package from registry and validates it has the expected digest
+                        let client = WkgClient::new(domain.to_owned()).unwrap();
                         let bytes = client.fetch(registry).await?;
                         self.store_component_bytes(&bytes)
                     } else {
@@ -280,7 +278,6 @@ mod tests {
             ChainConfigs::default(),
             None,
             None,
-            None,
             metrics(),
         );
 
@@ -307,7 +304,6 @@ mod tests {
             ChainConfigs::default(),
             None,
             None,
-            None,
             metrics(),
         );
 
@@ -330,7 +326,6 @@ mod tests {
             &app_data,
             3,
             mock_chain_configs(),
-            None,
             None,
             None,
             metrics(),
@@ -376,7 +371,6 @@ mod tests {
             &app_data,
             3,
             mock_chain_configs(),
-            None,
             None,
             None,
             metrics(),
@@ -463,7 +457,6 @@ mod tests {
             mock_chain_configs(),
             None,
             None,
-            None,
             metrics(),
         );
 
@@ -512,7 +505,6 @@ mod tests {
             ChainConfigs::default(),
             None,
             None,
-            None,
             metrics(),
         );
 
@@ -559,7 +551,6 @@ mod tests {
             &app_data,
             3,
             mock_chain_configs(),
-            None,
             None,
             None,
             metrics(),
