@@ -15,6 +15,8 @@ pub enum SigningKeyResponse {
     Secp256k1 {
         /// The derivation index used to create this key from the mnemonic
         hd_index: u32,
+        /// The evm-style address ("0x" prefixed hex string) derived from the key
+        evm_address: String,
     },
 }
 
