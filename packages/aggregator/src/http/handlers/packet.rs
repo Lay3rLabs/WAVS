@@ -781,7 +781,6 @@ mod test {
                     chain_id: "31337".to_string(),
                     http_endpoint: Some(anvil.endpoint()),
                     ws_endpoint: Some(anvil.ws_endpoint()),
-                    aggregator_endpoint: None,
                     faucet_endpoint: None,
                     poll_interval_ms: None,
                 },
