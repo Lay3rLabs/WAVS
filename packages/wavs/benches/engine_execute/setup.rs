@@ -13,14 +13,14 @@ pub struct ExecuteConfig {
 
 #[derive(Clone)]
 pub struct AsyncConfig {
-    pub sleep_seconds: u8,
+    pub sleep_ms: u64,
     pub sleep_kind: String,
 }
 
 impl Default for AsyncConfig {
     fn default() -> Self {
         Self {
-            sleep_seconds: 1,
+            sleep_ms: 100,
             sleep_kind: "async".to_string(),
         }
     }
@@ -51,10 +51,7 @@ impl ExecuteSetup {
     pub fn new(execute_config: ExecuteConfig) -> Arc<Self> {
         let config = if let Some(async_config) = execute_config.async_config {
             BTreeMap::from_iter([
-                (
-                    "sleep-seconds".to_string(),
-                    async_config.sleep_seconds.to_string(),
-                ),
+                ("sleep-ms".to_string(), async_config.sleep_ms.to_string()),
                 ("sleep-kind".to_string(), async_config.sleep_kind),
             ])
         } else {

@@ -16,19 +16,19 @@ struct Component;
 impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> std::result::Result<Option<WasmResponse>, String> {
         // For internal testing purposes
-        if let Some(n) = host::config_var("sleep-seconds") {
+        if let Some(n) = host::config_var("sleep-ms") {
             let n = n
                 .parse::<u64>()
-                .map_err(|e| format!("invalid sleep-seconds {e:?}"))?;
+                .map_err(|e| format!("invalid sleep-ms {e:?}"))?;
 
             match host::config_var("sleep-kind").as_deref() {
                 Some("async") => {
                     block_on(async move {
-                        wstd::task::sleep(wstd::time::Duration::from_secs(n)).await;
+                        wstd::task::sleep(wstd::time::Duration::from_millis(n)).await;
                     });
                 }
                 Some("sync") => {
-                    std::thread::sleep(std::time::Duration::from_secs(n));
+                    std::thread::sleep(std::time::Duration::from_millis(n));
                 }
                 _ => {
                     return Err(

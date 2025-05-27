@@ -567,7 +567,7 @@ mod tests {
         workflow
             .component
             .config
-            .insert("sleep-seconds".to_string(), "1".to_string());
+            .insert("sleep-ms".to_string(), "1000".to_string());
         workflow
             .component
             .config
@@ -592,7 +592,7 @@ mod tests {
         workflow
             .component
             .config
-            .insert("sleep-seconds".to_string(), "1".to_string());
+            .insert("sleep-ms".to_string(), "1000".to_string());
         workflow
             .component
             .config
@@ -617,7 +617,7 @@ mod tests {
         workflow
             .component
             .config
-            .insert("sleep-seconds".to_string(), "10".to_string());
+            .insert("sleep-ms".to_string(), "10000".to_string());
         workflow
             .component
             .config
@@ -647,7 +647,7 @@ mod tests {
         workflow
             .component
             .config
-            .insert("sleep-seconds".to_string(), "10".to_string());
+            .insert("sleep-ms".to_string(), "10000".to_string());
         workflow
             .component
             .config

@@ -2,22 +2,21 @@ use criterion::Criterion;
 
 use crate::{
     run_simulation,
-    setup::{ExecuteConfig, ExecuteSetup},
+    setup::{AsyncConfig, ExecuteConfig, ExecuteSetup},
 };
 
 /// Main benchmark function for testing Engine::execute() throughput
 ///
 /// This benchmark measures the performance of executing a WASM component
-/// using the echo_raw.wasm component, which provides a minimal overhead
-/// baseline for component execution performance.
+/// using the echo_raw.wasm component with async configuration
 pub fn benchmark(c: &mut Criterion) {
-    let mut group = c.benchmark_group("engine execute");
+    let mut group = c.benchmark_group("engine execute async");
     // Use moderate sample size for consistent results
     group.sample_size(10);
 
     let config = ExecuteConfig {
-        n_executions: 10_000,
-        async_config: None,
+        n_executions: 1_000,
+        async_config: Some(AsyncConfig::default()),
     };
 
     group.bench_function(config.description(), move |b| {

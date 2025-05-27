@@ -292,7 +292,7 @@ impl TestRegistry {
                             ComponentName::EchoRaw
                                 .into_builder()
                                 .with_config_vars(BTreeMap::from_iter([
-                                    ("sleep-seconds".to_string(), "1".to_string()),
+                                    ("sleep-ms".to_string(), "1000".to_string()),
                                     ("sleep-kind".to_string(), "async".to_string()),
                                 ]))
                                 .with_env_vars(BTreeMap::from_iter([(
