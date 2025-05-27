@@ -61,7 +61,6 @@ impl SystemSetup {
             app_storage,
             50, // LRU cache size for components
             engine_setup.chain_configs.clone(),
-            None,                // No registry domain for benchmarks
             None,                // No fuel limit for benchmarks
             None,                // No time limit for benchmarks
             metrics.wavs.engine, // Engine metrics
