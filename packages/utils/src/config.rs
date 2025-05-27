@@ -361,7 +361,6 @@ pub struct EvmChainConfig {
     pub chain_id: String,
     pub ws_endpoint: Option<String>,
     pub http_endpoint: Option<String>,
-    pub aggregator_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
     pub poll_interval_ms: Option<u64>,
 }
@@ -1003,7 +1002,6 @@ mod test {
                         chain_id: "evm".to_string(),
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
-                        aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         poll_interval_ms: None,
                     },
@@ -1014,7 +1012,6 @@ mod test {
                         chain_id: "polygon".to_string(),
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
-                        aggregator_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         poll_interval_ms: None,
                     },

@@ -30,6 +30,9 @@ use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
 pub type CosmosTriggerCodeMap = Arc<DashMap<CosmosTriggerDefinition, Arc<Mutex<Option<u64>>>>>;
 
+// Eventually we will have multiple aggregators to test against, but for now we use a single local aggregator
+const AGGREGATOR_ENDPOINT: &str = "http://127.0.0.1:8001";
+
 /// Registry for managing test definitions and their deployed services
 #[derive(Default)]
 pub struct TestRegistry {
@@ -150,7 +153,7 @@ impl TestRegistry {
                     registry.register_evm_echo_data_secondary_chain_test(secondary);
                 }
                 EvmService::EchoDataAggregator => {
-                    registry.register_evm_echo_data_aggregator_test(chain, "http://127.0.0.1:8001");
+                    registry.register_evm_echo_data_aggregator_test(chain, AGGREGATOR_ENDPOINT);
                 }
                 EvmService::Square => {
                     registry.register_evm_square_test(chain);

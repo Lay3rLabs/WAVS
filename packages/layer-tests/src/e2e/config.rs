@@ -98,7 +98,7 @@ impl From<TestConfig> for Configs {
         let mut evm_port = 8545;
         let mut evm_chain_id = DEFAULT_CHAIN_ID;
 
-        let mut push_evm_chain = |aggregator: bool| {
+        let mut push_evm_chain = || {
             let http_endpoint = format!("http://127.0.0.1:{}", evm_port);
             let ws_endpoint = format!("ws://127.0.0.1:{}", evm_port);
             let chain_id = evm_chain_id.to_string();
@@ -107,11 +107,6 @@ impl From<TestConfig> for Configs {
                 chain_id: chain_id.to_string(),
                 http_endpoint: Some(http_endpoint),
                 ws_endpoint: Some(ws_endpoint),
-                aggregator_endpoint: if aggregator {
-                    Some("http://127.0.0.1:8001".to_string())
-                } else {
-                    None
-                },
                 faucet_endpoint: None,
                 poll_interval_ms: None,
             };
@@ -127,7 +122,7 @@ impl From<TestConfig> for Configs {
         let mut cosmos_port = 9545;
         let mut cosmos_chain_id = 1;
 
-        let mut push_cosmos_chain = |_aggregator: bool| {
+        let mut push_cosmos_chain = || {
             let rpc_endpoint = format!("http://127.0.0.1:{}", cosmos_port);
             let chain_id = format!("wasmd-{}", cosmos_chain_id);
 
@@ -150,19 +145,15 @@ impl From<TestConfig> for Configs {
         };
 
         if matrix.evm_regular_chain_enabled() {
-            push_evm_chain(false);
+            push_evm_chain();
         }
 
         if matrix.evm_secondary_chain_enabled() {
-            push_evm_chain(false);
-        }
-
-        if matrix.evm_aggregator_chain_enabled() {
-            push_evm_chain(true);
+            push_evm_chain();
         }
 
         if matrix.cosmos_regular_chain_enabled() {
-            push_cosmos_chain(false);
+            push_cosmos_chain();
         }
 
         let mut wavs_config: wavs::config::Config = ConfigBuilder::new(wavs::args::CliArgs {
@@ -212,20 +203,6 @@ impl From<TestConfig> for Configs {
         cli_config.chains = chain_configs.clone();
         // some random mnemonic
         cli_config.evm_credential = Some(mnemonics.cli.clone());
-
-        // Sanity check
-
-        if let Some(aggregator_config) = aggregator_config.as_ref() {
-            let aggregator_endpoint = format!(
-                "http://{}:{}",
-                aggregator_config.host, aggregator_config.port
-            );
-            for evm_chain in chain_configs.evm.values() {
-                if let Some(endpoint) = evm_chain.aggregator_endpoint.as_ref() {
-                    assert_eq!(*endpoint, aggregator_endpoint);
-                }
-            }
-        }
 
         Self {
             matrix,

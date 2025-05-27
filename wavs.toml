@@ -135,19 +135,6 @@ port = 8000
 # WAVS endpoint
 # wavs_endpoint = "http://localhost:8000"
 
-# CLI-specific chain overrides
-[cli.chains.evm.local]
-aggregator_endpoint = "http://localhost:8001"
-
-[cli.chains.evm.local2]
-aggregator_endpoint = "http://localhost:8001"
-
-[cli.chains.evm.sepolia]
-aggregator_endpoint = "http://localhost:8001"
-
-[cli.chains.evm.holesky]
-aggregator_endpoint = "http://localhost:8001"
-
 # ----------------------------
 # Aggregator specific settings
 # ----------------------------
