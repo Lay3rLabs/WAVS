@@ -32,8 +32,6 @@ pub struct Config {
     /// The credential to use for submitting transactions on evm chains (mnemonic or private key)
     pub evm_credential: Option<String>,
 
-    pub registry_domain: Option<String>,
-
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
 }
@@ -59,7 +57,6 @@ impl Default for Config {
             chains: ChainConfigs::default(),
             cosmos_mnemonic: None,
             evm_credential: None,
-            registry_domain: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
         }
     }

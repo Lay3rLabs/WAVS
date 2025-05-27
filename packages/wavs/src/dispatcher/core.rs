@@ -27,7 +27,6 @@ impl CoreDispatcher {
             app_storage,
             config.wasm_lru_size,
             config.chains.clone(),
-            config.registry_domain.clone(),
             Some(config.max_wasm_fuel),
             Some(config.max_execution_seconds),
             metrics.engine,
