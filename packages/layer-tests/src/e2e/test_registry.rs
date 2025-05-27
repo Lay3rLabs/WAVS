@@ -17,7 +17,7 @@ use super::chain_names::ChainNames;
 use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
 use super::config::{BLOCK_INTERVAL_DATA_PREFIX, CRON_INTERVAL_DATA};
-use super::helpers;
+use super::helpers::{self, ServiceAndUri};
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
     AggregatorDefinition, CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, InputData,
@@ -77,7 +77,10 @@ impl TestRegistry {
             let cosmos_trigger_code_map = cosmos_trigger_code_map.clone();
 
             futures.push(async move {
-                let (service, service_uri) = helpers::deploy_service_for_test(
+                let ServiceAndUri {
+                    service,
+                    uri: service_uri,
+                } = helpers::deploy_service_for_test(
                     test,
                     &clients,
                     &component_sources,

@@ -35,13 +35,21 @@ use super::{
     test_registry::CosmosTriggerCodeMap,
 };
 
+pub struct ServiceAndUri {
+    pub service: Service,
+    // The URI where the service is deployed
+    // currently, in tests, this is the URL hosted on WAVS itself
+    // but in production, it's typically IPFS
+    pub uri: String,
+}
+
 /// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
     test: &mut TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> (Service, String) {
+) -> ServiceAndUri {
     tracing::info!("Deploying service for test: {}", test.name);
 
     // Create unique service ID
@@ -152,7 +160,10 @@ pub async fn deploy_service_for_test(
     .await
     .unwrap();
 
-    (service, service_url)
+    ServiceAndUri {
+        service,
+        uri: service_url,
+    }
 }
 
 /// Create a trigger based on test configuration
