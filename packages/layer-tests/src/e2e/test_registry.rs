@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
+use wavs_types::{ChainName, ServiceID, Submit, Trigger, WorkflowID};
 
 use super::chain_names::ChainNames;
 use super::clients::Clients;
@@ -88,7 +88,7 @@ impl TestRegistry {
                 for workflow in test.workflows.values() {
                     if let SubmitDefinition::Existing(Submit::Aggregator { url }) = &workflow.submit
                     {
-                        TestRegistry::register_to_aggregator(url, &service, &service_uri)
+                        TestRegistry::register_to_aggregator(url, &service.id, &service_uri)
                             .await
                             .unwrap();
                     }
@@ -104,7 +104,7 @@ impl TestRegistry {
     /// Registers a service on the aggregator
     pub async fn register_to_aggregator(
         aggregator_url: &str,
-        service: &Service,
+        service_id: &ServiceID,
         service_uri: &str,
     ) -> Result<()> {
         let http_client = Client::new();
@@ -116,7 +116,7 @@ impl TestRegistry {
 
         tracing::info!(
             "Registering service {} with aggregator at {}",
-            service.id,
+            service_id,
             endpoint
         );
 
