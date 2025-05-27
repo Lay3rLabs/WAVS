@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 
-use crate::setup::{ExecuteConfig, ExecuteSetup};
+use crate::setup::{AsyncConfig, ExecuteConfig, ExecuteSetup};
 
 /// Main benchmark function for testing Engine::execute() throughput
 ///
@@ -19,10 +19,20 @@ pub fn benchmark(c: &mut Criterion) {
 
     let config = ExecuteConfig {
         n_executions: 10_000,
+        async_config: None,
     };
 
     group.bench_function(config.description(), move |b| {
-        b.iter_with_setup(|| ExecuteSetup::new(config), run_simulation);
+        b.iter_with_setup(|| ExecuteSetup::new(config.clone()), run_simulation);
+    });
+
+    let config = ExecuteConfig {
+        n_executions: 10,
+        async_config: Some(AsyncConfig::default()),
+    };
+
+    group.bench_function(config.description(), move |b| {
+        b.iter_with_setup(|| ExecuteSetup::new(config.clone()), run_simulation);
     });
 
     group.finish();
