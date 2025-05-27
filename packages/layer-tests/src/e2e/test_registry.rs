@@ -77,7 +77,7 @@ impl TestRegistry {
             let cosmos_trigger_code_map = cosmos_trigger_code_map.clone();
 
             futures.push(async move {
-                let service = helpers::deploy_service_for_test(
+                let (service, service_uri) = helpers::deploy_service_for_test(
                     test,
                     &clients,
                     &component_sources,
@@ -88,7 +88,7 @@ impl TestRegistry {
                 for workflow in test.workflows.values() {
                     if let SubmitDefinition::Existing(Submit::Aggregator { url }) = &workflow.submit
                     {
-                        TestRegistry::register_to_aggregator(url, &service)
+                        TestRegistry::register_to_aggregator(url, &service, &service_uri)
                             .await
                             .unwrap();
                     }
@@ -102,12 +102,16 @@ impl TestRegistry {
     }
 
     /// Registers a service on the aggregator
-    pub async fn register_to_aggregator(url: &str, service: &Service) -> Result<()> {
+    pub async fn register_to_aggregator(
+        aggregator_url: &str,
+        service: &Service,
+        service_uri: &str,
+    ) -> Result<()> {
         let http_client = Client::new();
 
-        let endpoint = format!("{}/register-service", url);
+        let endpoint = format!("{}/register-service", aggregator_url);
         let payload = RegisterServiceRequest {
-            service: service.clone(),
+            uri: service_uri.to_string(),
         };
 
         tracing::info!(

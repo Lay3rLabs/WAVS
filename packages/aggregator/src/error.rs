@@ -62,6 +62,9 @@ pub enum AggregatorError {
 
     #[error("Failed to decode with bincode: {0:?}")]
     BincodeDecode(#[from] bincode::error::DecodeError),
+
+    #[error("Unable to fetch service: {0:?}")]
+    FetchService(anyhow::Error),
 }
 
 #[derive(Error, Debug)]

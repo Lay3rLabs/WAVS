@@ -41,7 +41,7 @@ pub async fn deploy_service_for_test(
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> Service {
+) -> (Service, String) {
     tracing::info!("Deploying service for test: {}", test.name);
 
     // Create unique service ID
@@ -145,14 +145,14 @@ pub async fn deploy_service_for_test(
             service: service.clone(),
             set_service_url_args: Some(SetServiceUrlArgs {
                 provider: submit_client.provider.clone(),
-                service_url,
+                service_url: service_url.clone(),
             }),
         },
     )
     .await
     .unwrap();
 
-    service
+    (service, service_url)
 }
 
 /// Create a trigger based on test configuration
