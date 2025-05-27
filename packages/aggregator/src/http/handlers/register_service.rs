@@ -1,7 +1,11 @@
 use axum::{extract::State, http::Response, response::IntoResponse, Json};
+use utils::service::fetch_service;
 use wavs_types::aggregator::RegisterServiceRequest;
 
-use crate::http::{error::*, state::HttpState};
+use crate::{
+    error::AggregatorError,
+    http::{error::*, state::HttpState},
+};
 
 #[utoipa::path(
     post,
@@ -19,8 +23,15 @@ pub async fn handle_register_service(
     State(state): State<HttpState>,
     Json(req): Json<RegisterServiceRequest>,
 ) -> impl IntoResponse {
-    match state.register_service(&req.service) {
+    match inner(state, req).await {
         Ok(_) => Response::new(().into()),
         Err(e) => AnyError::from(e).into_response(),
     }
+}
+
+async fn inner(state: HttpState, req: RegisterServiceRequest) -> Result<(), AggregatorError> {
+    let service = fetch_service(&req.uri, &state.config.ipfs_gateway)
+        .await
+        .map_err(AggregatorError::FetchService)?;
+    state.register_service(&service)
 }

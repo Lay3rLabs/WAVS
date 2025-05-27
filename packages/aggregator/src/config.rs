@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::config::{ChainConfigs, ConfigExt};
+use utils::{
+    config::{ChainConfigs, ConfigExt},
+    service::DEFAULT_IPFS_GATEWAY,
+};
 use utoipa::ToSchema;
 
 /// The fully parsed and validated config struct we use in the application
@@ -42,6 +45,9 @@ pub struct Config {
 
     /// Jaeger collector to send trace data
     pub jaeger: Option<String>,
+
+    /// The IPFS gateway URL used to access IPFS content over HTTP.
+    pub ipfs_gateway: String,
 }
 
 /// Default values for the config struct
@@ -61,6 +67,7 @@ impl Default for Config {
                 cosmos: Default::default(),
                 evm: Default::default(),
             },
+            ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
         }
     }
 }
