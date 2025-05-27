@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
 use regex::Regex;
+use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
@@ -36,9 +37,81 @@ pub struct TestDefinition {
 }
 
 #[derive(Clone, Debug)]
+pub struct ComponentDefinition {
+    /// The name of the component
+    pub name: ComponentName,
+
+    /// Key-value pairs that are accessible in the components via host bindings.
+    pub config_vars: BTreeMap<String, String>,
+
+    /// External env variable keys to be read from the system host on execute (i.e. API keys).
+    /// Must be prefixed with `WAVS_ENV_`.
+    pub env_vars: BTreeMap<String, String>,
+}
+
+impl From<ComponentName> for ComponentDefinition {
+    fn from(name: ComponentName) -> Self {
+        ComponentDefinition {
+            name,
+            config_vars: BTreeMap::new(),
+            env_vars: BTreeMap::new(),
+        }
+    }
+}
+
+impl ComponentName {
+    pub fn into_builder(self) -> ComponentBuilder {
+        ComponentBuilder::new(self)
+    }
+}
+
+pub struct ComponentBuilder {
+    name: ComponentName,
+    config_vars: BTreeMap<String, String>,
+    env_vars: BTreeMap<String, String>,
+}
+
+impl ComponentBuilder {
+    pub fn new(name: ComponentName) -> Self {
+        Self {
+            name,
+            config_vars: BTreeMap::new(),
+            env_vars: BTreeMap::new(),
+        }
+    }
+
+    pub fn with_config_vars(mut self, config_vars: BTreeMap<String, String>) -> Self {
+        self.config_vars = config_vars;
+        self
+    }
+
+    pub fn with_env_vars(mut self, env_vars: BTreeMap<String, String>) -> Self {
+        self.env_vars = env_vars;
+        self
+    }
+
+    pub fn build(self) -> ComponentDefinition {
+        for key in self.env_vars.keys() {
+            if !key.starts_with(WAVS_ENV_PREFIX) {
+                panic!(
+                    "Env var key '{}' must be prefixed with '{WAVS_ENV_PREFIX}'",
+                    key
+                );
+            }
+        }
+
+        ComponentDefinition {
+            name: self.name,
+            config_vars: self.config_vars,
+            env_vars: self.env_vars,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct WorkflowDefinition {
-    /// Components used in this test
-    pub component: ComponentName,
+    /// Component configuration
+    pub component: ComponentDefinition,
 
     /// Trigger configuration
     pub trigger: TriggerDefinition,
@@ -106,7 +179,6 @@ pub enum SubmitDefinition {
 #[derive(Clone, Debug, Default)]
 pub enum InputData {
     /// Raw bytes
-    #[allow(dead_code)]
     Raw(Vec<u8>),
     /// String data
     Text(String),
@@ -139,7 +211,6 @@ impl InputData {
 #[derive(Clone, Debug)]
 pub enum ExpectedOutput {
     /// Raw bytes
-    #[allow(dead_code)]
     Raw(Vec<u8>),
     /// String data
     Text(String),
@@ -228,7 +299,7 @@ impl TestBuilder {
 /// Simplified workflow builder with overwrite protection
 #[derive(Default)]
 pub struct WorkflowBuilder {
-    component: Option<ComponentName>,
+    component: Option<ComponentDefinition>,
     trigger: Option<TriggerDefinition>,
     submit: Option<SubmitDefinition>,
     aggregators: Vec<AggregatorDefinition>,
@@ -244,7 +315,7 @@ impl WorkflowBuilder {
     }
 
     /// Set the component to use
-    pub fn with_component(mut self, component: ComponentName) -> Self {
+    pub fn with_component(mut self, component: ComponentDefinition) -> Self {
         if self.component.is_some() {
             panic!("Component already set");
         }

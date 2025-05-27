@@ -25,6 +25,22 @@ pub enum ComponentName {
     Square,
     EchoBlockInterval,
     EchoCronInterval,
+    EchoRaw,
+}
+
+impl ComponentName {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ComponentName::ChainTriggerLookup => "chain_trigger_lookup",
+            ComponentName::CosmosQuery => "cosmos_query",
+            ComponentName::EchoData => "echo_data",
+            ComponentName::Permissions => "permissions",
+            ComponentName::Square => "square",
+            ComponentName::EchoBlockInterval => "echo_block_interval",
+            ComponentName::EchoCronInterval => "echo_cron_interval",
+            ComponentName::EchoRaw => "echo_raw",
+        }
+    }
 }
 
 impl ComponentSources {
@@ -77,15 +93,7 @@ async fn get_component_source(
     registry: bool,
 ) -> (ComponentName, ComponentSource) {
     if !registry {
-        let wasm_filename = match name {
-            ComponentName::ChainTriggerLookup => "chain_trigger_lookup",
-            ComponentName::CosmosQuery => "cosmos_query",
-            ComponentName::EchoData => "echo_data",
-            ComponentName::Permissions => "permissions",
-            ComponentName::Square => "square",
-            ComponentName::EchoBlockInterval => "echo_block_interval",
-            ComponentName::EchoCronInterval => "echo_cron_interval",
-        };
+        let wasm_filename = name.as_str();
 
         let wasm_path = workspace_path()
             .join("examples")
@@ -107,15 +115,7 @@ async fn get_component_source(
         // While we could do that by either loading the files from disk or downloading from the registry
         // and calculating the hash from that - using the checksums is faster and gives us an extra
         // sanity check that we've deployed the latest builds to the test registry
-        let pkg_name = match name {
-            ComponentName::ChainTriggerLookup => "chain_trigger_lookup",
-            ComponentName::CosmosQuery => "cosmos_query",
-            ComponentName::EchoData => "echo_data",
-            ComponentName::Permissions => "permissions",
-            ComponentName::Square => "square",
-            ComponentName::EchoBlockInterval => "echo_block_interval",
-            ComponentName::EchoCronInterval => "echo_cron_interval",
-        };
+        let pkg_name = name.as_str();
         let checksum_bytes = std::fs::read("../../checksums.txt").unwrap();
         let checksums_raw = std::str::from_utf8(&checksum_bytes).unwrap();
         let checksums: Vec<&str> = checksums_raw.split("\n").collect();

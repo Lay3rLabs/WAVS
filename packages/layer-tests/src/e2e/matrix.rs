@@ -22,6 +22,7 @@ pub enum EvmService {
     EchoData,
     EchoDataSecondaryChain,
     EchoDataAggregator,
+    EchoDataRaw,
     Permissions,
     Square,
     MultiWorkflow,
@@ -141,6 +142,7 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::BlockInterval => vec![ComponentName::EchoBlockInterval],
             EvmService::BlockIntervalStartStop => vec![ComponentName::EchoBlockInterval],
             EvmService::CronInterval => vec![ComponentName::EchoCronInterval],
+            EvmService::EchoDataRaw => vec![ComponentName::EchoRaw],
         }
     }
 }

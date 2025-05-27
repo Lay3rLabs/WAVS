@@ -77,7 +77,6 @@ impl TestHttpApp {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn http_router(&mut self) -> &mut axum::Router {
         // wait till it's ready
         <axum::Router as tower::ServiceExt<axum::extract::Request<axum::body::Body>>>::ready(

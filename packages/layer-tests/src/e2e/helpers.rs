@@ -70,7 +70,7 @@ pub async fn deploy_service_for_test(
         // Create components from test definition
         let component_source = component_sources
             .lookup
-            .get(&workflow.component)
+            .get(&workflow.component.name)
             .unwrap()
             .clone();
 
@@ -79,6 +79,13 @@ pub async fn deploy_service_for_test(
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
         };
+        component.config = workflow.component.config_vars.clone();
+        component.env_keys = workflow.component.env_vars.keys().cloned().collect();
+
+        for (k, v) in workflow.component.env_vars.iter() {
+            // NOTE: we should avoid collisions here
+            std::env::set_var(k, v);
+        }
 
         tracing::info!("[{}] Creating submit from config", test.name);
 
