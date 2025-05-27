@@ -68,9 +68,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
-const TRIGGER_PIPELINE_SIZE: usize = 20;
-const SUBMISSION_PIPELINE_SIZE: usize = 20;
-
 #[async_trait]
 impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
     type Error = DispatcherError;
@@ -82,9 +79,9 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         let mut actions_in = self.triggers.start(ctx.clone())?;
         // Next is the local (blocking) processing
         let (work_sender, work_receiver) =
-            mpsc::channel::<(TriggerAction, Service)>(TRIGGER_PIPELINE_SIZE);
+            mpsc::channel::<(TriggerAction, Service)>(E::Engine::CHANNEL_SIZE);
         let (wasi_result_sender, wasi_result_receiver) =
-            mpsc::channel::<ChainMessage>(SUBMISSION_PIPELINE_SIZE);
+            mpsc::channel::<ChainMessage>(S::CHANNEL_SIZE);
         // Then the engine processing
         self.engine
             .start(ctx.clone(), work_receiver, wasi_result_sender);

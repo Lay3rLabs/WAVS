@@ -7,6 +7,8 @@ use wavs_types::{
 };
 
 pub trait Engine: Send + Sync {
+    const CHANNEL_SIZE: usize = 20;
+
     fn start(&self) -> Result<(), EngineError>;
 
     fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError>;

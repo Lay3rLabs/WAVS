@@ -8,6 +8,7 @@ use crate::AppContext;
 use wavs_types::{ByteArray, ChainName, ServiceID, TriggerAction, TriggerConfig, WorkflowID};
 
 pub trait TriggerManager: Send + Sync {
+    const CHANNEL_SIZE: usize = 100;
     /// Start running the trigger manager.
     /// This should only be called once in the lifetime of the object
     fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError>;
