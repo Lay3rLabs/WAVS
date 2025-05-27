@@ -322,13 +322,9 @@ impl Submission for CoreSubmission {
             .get(&service_id)
             .ok_or(SubmissionError::MissingMnemonic)
             .map(
-                |SignerInfo {
-                     signer: _,
-                     hd_index,
-                 }| {
-                    SigningKeyResponse::Secp256k1 {
-                        hd_index: *hd_index,
-                    }
+                |SignerInfo { signer, hd_index }| SigningKeyResponse::Secp256k1 {
+                    hd_index: *hd_index,
+                    evm_address: signer.address().to_string(),
                 },
             )
     }
