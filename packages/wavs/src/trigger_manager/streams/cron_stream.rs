@@ -1,7 +1,3 @@
-use crate::{
-    apis::trigger::TriggerError,
-    triggers::{cron_scheduler::CronIntervalState, interval_scheduler::IntervalScheduler},
-};
 use futures::{Stream, StreamExt};
 use std::{
     pin::Pin,
@@ -10,6 +6,11 @@ use std::{
 use tokio_stream::wrappers::IntervalStream;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::Timestamp;
+
+use crate::trigger_manager::{
+    error::TriggerError,
+    schedulers::{cron_scheduler::CronIntervalState, interval_scheduler::IntervalScheduler},
+};
 
 use super::StreamTriggers;
 

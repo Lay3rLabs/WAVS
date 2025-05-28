@@ -1,16 +1,15 @@
 use std::sync::Arc;
 
-use crate::config::Config;
 use crate::engine::runner::MultiEngineRunner;
 use crate::engine::WasmEngine;
 use crate::submission::core::CoreSubmission;
-use crate::triggers::core::CoreTriggerManager;
+use crate::{config::Config, trigger_manager::TriggerManager};
 use utils::{storage::fs::FileStorage, telemetry::WavsMetrics};
 
 use super::generic::{Dispatcher, DispatcherError};
 
 pub type CoreDispatcher =
-    Dispatcher<CoreTriggerManager, MultiEngineRunner<Arc<WasmEngine<FileStorage>>>, CoreSubmission>;
+    Dispatcher<MultiEngineRunner<Arc<WasmEngine<FileStorage>>>, CoreSubmission>;
 
 impl CoreDispatcher {
     pub fn new_core(
@@ -19,7 +18,7 @@ impl CoreDispatcher {
     ) -> Result<CoreDispatcher, DispatcherError> {
         let file_storage = FileStorage::new(config.data.join("ca"))?;
 
-        let triggers = CoreTriggerManager::new(config, metrics.trigger)?;
+        let triggers = TriggerManager::new(config, metrics.trigger)?;
 
         let app_storage = config.data.join("app");
         let engine = Arc::new(WasmEngine::new(

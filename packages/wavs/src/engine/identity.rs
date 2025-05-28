@@ -1,8 +1,10 @@
 use tracing::instrument;
 use wavs_types::{Digest, TriggerAction, WasmResponse, Workflow};
 
-use crate::apis::engine::{Engine, EngineError};
-use crate::triggers::mock::get_mock_trigger_data;
+use crate::{
+    apis::engine::{Engine, EngineError},
+    test_utils::mock_trigger_manager::get_mock_trigger_data,
+};
 
 /// Simply returns the request as the result.
 /// MVP for just testing inputs and outputs and wiring
@@ -64,7 +66,7 @@ impl Engine for IdentityEngine {
 mod test {
     use wavs_types::{ComponentSource, Submit, TriggerData};
 
-    use crate::triggers::mock::mock_evm_event_trigger_config;
+    use crate::test_utils::mock_trigger_manager::mock_evm_event_trigger_config;
 
     use super::*;
 

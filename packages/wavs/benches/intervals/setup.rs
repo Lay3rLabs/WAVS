@@ -6,14 +6,14 @@ use std::{
 use opentelemetry::global::meter;
 use tokio::sync::mpsc;
 use utils::telemetry::Metrics;
-use wavs::{apis::trigger::TriggerManager, triggers::core::CoreTriggerManager};
+use wavs::trigger_manager::TriggerManager;
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 use wavs_types::{ChainName, Trigger, TriggerAction, TriggerConfig};
 
 // This is a convenience struct to initialize stuff and make it easier to pass around
 pub struct Setup {
     pub chain_names: Vec<ChainName>,
-    pub trigger_manager: CoreTriggerManager,
+    pub trigger_manager: TriggerManager,
     pub action_receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
     pub config: SetupConfig,
 }
@@ -55,7 +55,7 @@ impl Setup {
         let config = wavs::config::Config::default();
         let metrics = Metrics::new(&meter("wavs-benchmark"));
 
-        let trigger_manager = CoreTriggerManager::new(&config, metrics.wavs.trigger).unwrap();
+        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger).unwrap();
         let receiver = trigger_manager.start(APP_CONTEXT.clone()).unwrap();
 
         let mut chain_names = Vec::with_capacity(setup_config.n_chains as usize);

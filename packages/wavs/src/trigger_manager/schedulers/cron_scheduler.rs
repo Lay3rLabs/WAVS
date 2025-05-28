@@ -3,12 +3,9 @@ use std::{str::FromStr, sync::Arc};
 use chrono::Utc;
 use wavs_types::Timestamp;
 
-use crate::apis::trigger::TriggerError;
+use crate::trigger_manager::{error::TriggerError, lookup::LookupId};
 
-use super::{
-    core::LookupId,
-    interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime},
-};
+use super::interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime};
 
 impl IntervalTime for Timestamp {}
 

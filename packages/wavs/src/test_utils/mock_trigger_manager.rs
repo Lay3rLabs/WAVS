@@ -1,15 +1,12 @@
-use std::sync::{Mutex, RwLock};
+use std::sync::RwLock;
 use std::time::Duration;
 
-use crate::apis::trigger::{TriggerError, TriggerManager};
 use crate::test_utils::address::{
     rand_address_evm, rand_address_layer, rand_event_cosmos, rand_event_evm,
 };
+use crate::trigger_manager::error::TriggerError;
 
-use layer_climb::prelude::Address;
-use serde::Serialize;
 use tokio::sync::mpsc;
-use tracing::instrument;
 use utils::context::AppContext;
 use wavs_types::{
     ChainName, IDError, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
@@ -138,8 +135,8 @@ impl MockTriggerManagerVec {
     }
 }
 
-impl TriggerManager for MockTriggerManagerVec {
-    fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+impl MockTriggerManagerVec {
+    pub fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
         self.start_error()?;
 
         let triggers: Vec<TriggerAction> = self.triggers.write().unwrap().drain(..).collect();
@@ -158,14 +155,14 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(receiver)
     }
 
-    fn add_trigger(&self, _trigger: TriggerConfig) -> Result<(), TriggerError> {
+    pub fn add_trigger(&self, _trigger: TriggerConfig) -> Result<(), TriggerError> {
         self.store_error()?;
 
         // MockTriggerManagerVec doesn't allow adding new triggers, since they need their data too
         Ok(())
     }
 
-    fn remove_trigger(
+    pub fn remove_trigger(
         &self,
         service_id: ServiceID,
         workflow_id: WorkflowID,
@@ -179,7 +176,7 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(())
     }
 
-    fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
+    pub fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -190,7 +187,7 @@ impl TriggerManager for MockTriggerManagerVec {
         Ok(())
     }
 
-    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
+    pub fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -200,110 +197,6 @@ impl TriggerManager for MockTriggerManagerVec {
             .filter(|t| t.config.service_id == service_id)
             .map(|t| Ok(t.config.clone()))
             .collect()
-    }
-}
-
-// This mock is currently only used in mock_e2e.rs
-// it doesn't have the same coverage in unit tests here as MockTriggerManager
-pub struct MockTriggerManagerChannel {
-    sender: mpsc::Sender<TriggerAction>,
-    receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
-    trigger_datas: Mutex<Vec<TriggerConfig>>,
-}
-
-impl MockTriggerManagerChannel {
-    #[allow(clippy::new_without_default)]
-    #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
-    pub fn new(channel_bound: usize) -> Self {
-        let (sender, receiver) = mpsc::channel(channel_bound);
-
-        Self {
-            receiver: Mutex::new(Some(receiver)),
-            sender,
-            trigger_datas: Mutex::new(Vec::new()),
-        }
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub async fn send_trigger(
-        &self,
-        service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
-        workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
-        contract_address: &Address,
-        data: &(impl Serialize + std::fmt::Debug),
-        chain_id: impl ToString + std::fmt::Debug,
-    ) {
-        self.sender
-            .send(TriggerAction {
-                config: match contract_address {
-                    Address::Evm(_) => TriggerConfig::evm_contract_event(
-                        service_id,
-                        workflow_id,
-                        contract_address.clone().try_into().unwrap(),
-                        ChainName::new(chain_id.to_string()).unwrap(),
-                        rand_event_evm(),
-                    )
-                    .unwrap(),
-                    Address::Cosmos { .. } => TriggerConfig::cosmos_contract_event(
-                        service_id,
-                        workflow_id,
-                        contract_address.clone(),
-                        ChainName::new(chain_id.to_string()).unwrap(),
-                        rand_event_evm(),
-                    )
-                    .unwrap(),
-                },
-                data: TriggerData::new_raw(serde_json::to_string(data).unwrap().as_bytes()),
-            })
-            .await
-            .unwrap();
-    }
-}
-
-impl TriggerManager for MockTriggerManagerChannel {
-    #[instrument(level = "debug", skip(self, _ctx), fields(subsys = "TriggerManager"))]
-    fn start(&self, _ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
-        let receiver = self.receiver.lock().unwrap().take().unwrap();
-        Ok(receiver)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn add_trigger(&self, trigger: TriggerConfig) -> Result<(), TriggerError> {
-        self.trigger_datas.lock().unwrap().push(trigger);
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_trigger(
-        &self,
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
-    ) -> Result<(), TriggerError> {
-        self.trigger_datas
-            .lock()
-            .unwrap()
-            .retain(|t| t.service_id != service_id && t.workflow_id != workflow_id);
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
-        self.trigger_datas
-            .lock()
-            .unwrap()
-            .retain(|t| t.service_id != service_id);
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
-        let triggers = self.trigger_datas.lock().unwrap();
-        let triggers = triggers
-            .iter()
-            .filter(|t| t.service_id == service_id)
-            .cloned()
-            .collect();
-        Ok(triggers)
     }
 }
 

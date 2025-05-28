@@ -28,7 +28,6 @@ pub trait DispatchManager: Send + Sync {
     async fn add_service(&self, chain_name: ChainName, address: Address)
         -> Result<(), Self::Error>;
 
-    #[cfg(feature = "mock")]
     async fn add_service_direct(&self, service: Service) -> Result<(), Self::Error>;
 
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error>;

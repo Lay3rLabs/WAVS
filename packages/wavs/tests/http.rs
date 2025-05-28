@@ -9,8 +9,8 @@ use wavs::{
     test_utils::{
         address::rand_address_evm,
         http::{map_response, TestHttpApp},
+        mock_trigger_manager::mock_evm_event_trigger,
     },
-    triggers::mock::mock_evm_event_trigger,
 };
 use wavs_types::{ComponentSource, Digest, ServiceID, UploadComponentResponse};
 

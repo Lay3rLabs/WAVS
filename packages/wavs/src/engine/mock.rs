@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
-use crate::triggers::mock::get_mock_trigger_data;
 use tracing::instrument;
 use utils::config::{ChainConfigs, CosmosChainConfig, EvmChainConfig};
 use wavs_types::{Digest, TriggerAction, WasmResponse, Workflow};
+
+use crate::test_utils::mock_trigger_manager::get_mock_trigger_data;
 
 use super::{Engine, EngineError};
 

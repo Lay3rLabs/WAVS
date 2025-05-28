@@ -1,6 +1,6 @@
-use wavs::triggers::{
-    core::LookupId,
-    interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime},
+use wavs::trigger_manager::{
+    lookup::LookupId,
+    schedulers::interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime},
 };
 
 #[derive(Clone)]

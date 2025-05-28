@@ -1,4 +1,3 @@
-#![cfg(feature = "mock")]
 // these are like the real e2e but with only mocks
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
@@ -8,7 +7,7 @@ use wavs::{
     engine::runner::EngineRunner,
     test_utils::{
         address::rand_address_evm,
-        mock::{BigSquare, ComponentNone, MockE2ETestRunner, SquareIn, SquareOut},
+        mock_app::{BigSquare, ComponentNone, MockE2ETestRunner, SquareIn, SquareOut},
     },
 };
 use wavs_types::{ComponentSource, Digest, ServiceID, WorkflowID};
@@ -39,14 +38,11 @@ fn mock_e2e_trigger_flow() {
     });
 
     // now pretend like we're reading some triggers off the chain
-    // this spawned into the async runtime, so it's sortof like the real TriggerManager
-    runner.ctx.rt.spawn({
+    runner.ctx.rt.block_on({
         let runner = runner.clone();
 
         async move {
             runner
-                .dispatcher
-                .triggers
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),
@@ -56,8 +52,6 @@ fn mock_e2e_trigger_flow() {
                 )
                 .await;
             runner
-                .dispatcher
-                .triggers
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),
@@ -191,14 +185,11 @@ fn mock_e2e_component_none() {
     });
 
     // now pretend like we're reading some triggers off the chain
-    // this spawned into the async runtime, so it's sortof like the real TriggerManager
-    runner.ctx.rt.spawn({
+    runner.ctx.rt.block_on({
         let runner = runner.clone();
 
         async move {
             runner
-                .dispatcher
-                .triggers
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),

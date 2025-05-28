@@ -24,16 +24,17 @@ use crate::apis::dispatcher::DispatchManager;
 use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 
-use crate::apis::trigger::{TriggerError, TriggerManager};
 use crate::engine::runner::EngineRunner;
+use crate::trigger_manager::error::TriggerError;
+use crate::trigger_manager::TriggerManager;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::CAStorageError;
 use wasm_pkg_common::Error as RegistryError;
 
 /// This should auto-derive clone if T, E, S: Clone
-pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
-    pub triggers: T,
+pub struct Dispatcher<E: EngineRunner, S: Submission> {
+    pub trigger_manager: TriggerManager,
     pub engine: E,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
@@ -42,9 +43,9 @@ pub struct Dispatcher<T: TriggerManager, E: EngineRunner, S: Submission> {
     pub ipfs_gateway: String,
 }
 
-impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
+impl<E: EngineRunner, S: Submission> Dispatcher<E, S> {
     pub fn new(
-        triggers: T,
+        trigger_manager: TriggerManager,
         engine: E,
         submission: S,
         chain_configs: ChainConfigs,
@@ -55,7 +56,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
         let storage = Arc::new(RedbStorage::new(db_storage_path)?);
 
         Ok(Dispatcher {
-            triggers,
+            trigger_manager,
             engine,
             submission,
             storage,
@@ -69,14 +70,14 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> Dispatcher<T, E, S> {
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
 #[async_trait]
-impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Dispatcher<T, E, S> {
+impl<E: EngineRunner, S: Submission> DispatchManager for Dispatcher<E, S> {
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Dispatcher"))]
     fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
         // Trigger is pipeline start
-        let mut actions_in = self.triggers.start(ctx.clone())?;
+        let mut actions_in = self.trigger_manager.start(ctx.clone())?;
         // Next is the local (blocking) processing
         let (work_sender, work_receiver) =
             mpsc::channel::<(TriggerAction, Service)>(E::Engine::CHANNEL_SIZE);
@@ -99,7 +100,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         );
         for service in initial_services {
             ctx.rt.block_on(async {
-                add_service_to_managers(service, &self.triggers, &self.submission).await
+                add_service_to_managers(service, &self.trigger_manager, &self.submission).await
             })?;
         }
 
@@ -194,7 +195,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
-        add_service_to_managers(service.clone(), &self.triggers, &self.submission).await?;
+        add_service_to_managers(service.clone(), &self.trigger_manager, &self.submission).await?;
 
         // Get current service count for logging
         let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
@@ -207,7 +208,6 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         Ok(())
     }
 
-    #[cfg(feature = "mock")]
     async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         // Check if service is already registered
         if self
@@ -231,7 +231,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
         // Set up triggers and submissions
-        add_service_to_managers(service, &self.triggers, &self.submission).await?;
+        add_service_to_managers(service, &self.trigger_manager, &self.submission).await?;
 
         Ok(())
     }
@@ -240,7 +240,7 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error> {
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.engine.engine().remove_storage(&id);
-        self.triggers.remove_service(id.clone())?;
+        self.trigger_manager.remove_service(id.clone())?;
         self.submission.remove_service(id.clone())?;
 
         // Get current service count for logging
@@ -405,7 +405,7 @@ async fn query_service_from_address(
 // called at init and when a new service is added
 async fn add_service_to_managers(
     service: Service,
-    triggers: &impl TriggerManager,
+    triggers: &TriggerManager,
     submissions: &impl Submission,
 ) -> Result<(), DispatcherError> {
     if let Err(err) = submissions.add_service(&service).await {

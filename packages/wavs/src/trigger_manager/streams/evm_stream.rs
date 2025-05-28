@@ -1,10 +1,11 @@
-use crate::apis::trigger::TriggerError;
 use alloy_provider::Provider;
 use alloy_rpc_types_eth::Filter;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
 use utils::{error::EvmClientError, evm_client::EvmQueryClient, telemetry::TriggerMetrics};
 use wavs_types::ChainName;
+
+use crate::trigger_manager::error::TriggerError;
 
 use super::StreamTriggers;
 

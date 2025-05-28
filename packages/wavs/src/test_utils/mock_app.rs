@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use super::http::{map_response, TestHttpApp};
 use crate::{
     apis::{dispatcher::DispatchManager, engine::EngineError},
     dispatcher::Dispatcher,
@@ -9,8 +8,11 @@ use crate::{
         runner::{EngineRunner, SingleEngineRunner},
     },
     submission::mock::MockSubmission,
-    test_utils::address::rand_address_evm,
-    triggers::mock::{mock_evm_event_trigger, MockTriggerManagerChannel},
+    test_utils::{
+        address::{rand_address_evm, rand_event_evm},
+        http::{map_response, TestHttpApp},
+    },
+    trigger_manager::TriggerManager,
     AppContext,
 };
 use axum::{
@@ -19,23 +21,30 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tower::Service as _;
-use utils::{config::ChainConfigs, telemetry::DispatcherMetrics};
-use wavs_types::{
-    ComponentSource, DeleteServicesRequest, ListServicesResponse, Service, ServiceID,
-    ServiceManager, Submit,
+use utils::{
+    config::ChainConfigs,
+    telemetry::{DispatcherMetrics, Metrics},
 };
+use wavs_types::{
+    ChainName, ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service,
+    ServiceID, ServiceManager, Submit, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+};
+
+use super::mock_trigger_manager::mock_evm_event_trigger;
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,
-    pub dispatcher:
-        Arc<Dispatcher<MockTriggerManagerChannel, SingleEngineRunner<MockEngine>, MockSubmission>>,
+    pub dispatcher: Arc<Dispatcher<SingleEngineRunner<MockEngine>, MockSubmission>>,
     pub http_app: TestHttpApp,
 }
 
 impl MockE2ETestRunner {
     pub fn new(ctx: AppContext) -> Arc<Self> {
         // create our dispatcher
-        let trigger_manager = MockTriggerManagerChannel::new(10);
+        let config = crate::config::Config::default();
+        let meter = opentelemetry::global::meter("wavs_metrics");
+        let metrics = Metrics::new(&meter);
+        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger).unwrap();
         let engine = SingleEngineRunner::new(MockEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
@@ -72,6 +81,51 @@ impl MockE2ETestRunner {
             dispatcher,
             http_app,
         })
+    }
+
+    pub async fn send_trigger(
+        &self,
+        service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
+        workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
+        contract_address: &layer_climb::prelude::Address,
+        data: &(impl Serialize + std::fmt::Debug),
+        chain_id: impl ToString + std::fmt::Debug,
+    ) {
+        let sender = self
+            .dispatcher
+            .trigger_manager
+            .action_sender
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap();
+
+        sender
+            .send(TriggerAction {
+                config: match contract_address {
+                    layer_climb::prelude::Address::Evm(_) => TriggerConfig::evm_contract_event(
+                        service_id,
+                        workflow_id,
+                        contract_address.clone().try_into().unwrap(),
+                        ChainName::new(chain_id.to_string()).unwrap(),
+                        rand_event_evm(),
+                    )
+                    .unwrap(),
+                    layer_climb::prelude::Address::Cosmos { .. } => {
+                        TriggerConfig::cosmos_contract_event(
+                            service_id,
+                            workflow_id,
+                            contract_address.clone(),
+                            ChainName::new(chain_id.to_string()).unwrap(),
+                            rand_event_evm(),
+                        )
+                        .unwrap()
+                    }
+                },
+                data: TriggerData::new_raw(serde_json::to_string(data).unwrap().as_bytes()),
+            })
+            .await
+            .unwrap();
     }
 
     pub async fn list_services(&self) -> ListServicesResponse {

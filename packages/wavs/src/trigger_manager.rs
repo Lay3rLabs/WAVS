@@ -1,22 +1,23 @@
-mod cosmos_stream;
-mod cron_stream;
-mod evm_stream;
-mod local_command_stream;
+pub mod error;
+pub mod lookup;
+pub mod schedulers;
+pub mod streams;
 
-use crate::{
-    apis::trigger::{TriggerError, TriggerManager},
-    config::Config,
-    AppContext,
-};
-use alloy_rpc_types_eth::Log;
+use crate::{config::Config, AppContext};
 use anyhow::Result;
-use futures::{stream::SelectAll, Stream, StreamExt};
+use error::TriggerError;
+use futures::{stream::SelectAll, StreamExt};
 use layer_climb::prelude::*;
+use lookup::{LookupId, LookupMaps};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     num::NonZeroU64,
-    pin::Pin,
-    sync::{atomic::AtomicUsize, Arc, RwLock},
+    sync::Arc,
+};
+use streams::{
+    cosmos_stream, cron_stream, evm_stream,
+    local_command_stream::{self, LocalStreamCommand},
+    MultiplexedStream, StreamTriggers,
 };
 use tokio::sync::mpsc;
 use tracing::instrument;
@@ -26,21 +27,13 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainName, ServiceID, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
-    WorkflowID,
+    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
 
-use super::{
-    block_scheduler::{BlockIntervalState, BlockSchedulers},
-    cron_scheduler::{CronIntervalState, CronScheduler},
-};
-
-type MultiplexedStream = SelectAll<
-    Pin<Box<dyn Stream<Item = std::result::Result<StreamTriggers, TriggerError>> + Send>>,
->;
+use schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronIntervalState};
 
 #[derive(Clone)]
-pub struct CoreTriggerManager {
+pub struct TriggerManager {
     pub chain_configs: ChainConfigs,
     pub action_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TriggerAction>>>>,
     action_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<TriggerAction>>>>,
@@ -49,96 +42,9 @@ pub struct CoreTriggerManager {
     metrics: TriggerMetrics,
 }
 
-#[allow(clippy::type_complexity)]
-struct LookupMaps {
-    /// single lookup for all triggers (in theory, can be more than just task queue addr)
-    pub trigger_configs: Arc<RwLock<BTreeMap<LookupId, TriggerConfig>>>,
-    /// lookup id by (chain name, contract event address, event type)
-    pub triggers_by_cosmos_contract_event:
-        Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
-    /// lookup id by (chain id, contract event address, event hash)
-    pub triggers_by_evm_contract_event: Arc<
-        RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
-    >,
-    /// Efficient block schedulers (one per chain) for block interval triggers
-    pub block_schedulers: BlockSchedulers,
-    /// lookup id by service id -> workflow id
-    pub triggers_by_service_workflow:
-        Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
-    /// latest lookup_id
-    pub lookup_id: Arc<AtomicUsize>,
-    /// cron scheduler
-    pub cron_scheduler: CronScheduler,
-}
+impl TriggerManager {
+    pub const CHANNEL_SIZE: usize = 100;
 
-impl LookupMaps {
-    pub fn new() -> Self {
-        Self {
-            trigger_configs: Arc::new(RwLock::new(BTreeMap::new())),
-            lookup_id: Arc::new(AtomicUsize::new(0)),
-            triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
-            triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
-            block_schedulers: BlockSchedulers::default(),
-            triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
-            cron_scheduler: CronScheduler::default(),
-        }
-    }
-}
-
-pub type LookupId = usize;
-
-#[derive(Debug)]
-enum LocalStreamCommand {
-    StartListeningChain { chain_name: ChainName },
-    StartListeningCron,
-}
-
-impl LocalStreamCommand {
-    pub fn new(trigger_config: &TriggerConfig) -> Self {
-        match &trigger_config.trigger {
-            Trigger::Cron { .. } => Self::StartListeningCron,
-            Trigger::EvmContractEvent { chain_name, .. }
-            | Trigger::CosmosContractEvent { chain_name, .. }
-            | Trigger::BlockInterval { chain_name, .. } => Self::StartListeningChain {
-                chain_name: chain_name.clone(),
-            },
-            Trigger::Manual => unreachable!("Manual triggers don't really get added"),
-        }
-    }
-}
-
-// *potential* triggers that we can react to
-// this is just a local encapsulation, not a full trigger
-// and is used to ultimately filter+map to a TriggerAction
-#[derive(Debug)]
-enum StreamTriggers {
-    Cosmos {
-        chain_name: ChainName,
-        // these are not filtered yet, just all the contract-based events
-        contract_events: Vec<(Address, cosmwasm_std::Event)>,
-        block_height: u64,
-    },
-    Evm {
-        chain_name: ChainName,
-        log: Log,
-        block_height: u64,
-    },
-    // We need a separate stream for EVM block interval triggers
-    EvmBlock {
-        chain_name: ChainName,
-        block_height: u64,
-    },
-    Cron {
-        /// Unix timestamp (in nanos) when these triggers were processed
-        trigger_time: Timestamp,
-        /// Vector of lookup IDs for all triggers that are due at this time.
-        /// Multiple triggers can fire simultaneously in a single tick.
-        lookup_ids: Vec<LookupId>,
-    },
-    LocalCommand(LocalStreamCommand),
-}
-
-impl CoreTriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
@@ -153,6 +59,145 @@ impl CoreTriggerManager {
             local_command_sender: Arc::new(std::sync::Mutex::new(None)),
             metrics,
         })
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    pub fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
+        if !matches!(config.trigger, Trigger::Manual) {
+            let command = LocalStreamCommand::new(&config);
+            // If it's not a manual trigger, we need to start listening for it
+            match self.local_command_sender.lock().unwrap().as_ref() {
+                Some(sender) => {
+                    sender.send(command).unwrap();
+                }
+                None => {
+                    tracing::warn!(
+                        "Local command sender not initialized, cannot send command: {:?}",
+                        command
+                    );
+                }
+            }
+
+            // Theoretically, we should wait until we know the stream is started before continuing,
+            // however, we can be pretty sure that this `LocalStreamCommand` will come before
+            // any actual trigger events, since they are all multiplexed into the same stream
+            // and so by definition this comes "first".
+            //
+            // There's a bit of a question whether "first" is a guarantee, but, so far so good :P
+        }
+
+        // get the next lookup id
+        let lookup_id = self
+            .lookup_maps
+            .lookup_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        match config.trigger.clone() {
+            Trigger::EvmContractEvent {
+                address,
+                chain_name,
+                event_hash,
+            } => {
+                let mut lock = self
+                    .lookup_maps
+                    .triggers_by_evm_contract_event
+                    .write()
+                    .unwrap();
+                let key = (chain_name.clone(), address, event_hash);
+
+                lock.entry(key).or_default().insert(lookup_id);
+            }
+            Trigger::CosmosContractEvent {
+                address,
+                chain_name,
+                event_type,
+            } => {
+                let mut lock = self
+                    .lookup_maps
+                    .triggers_by_cosmos_contract_event
+                    .write()
+                    .unwrap();
+                let key = (chain_name.clone(), address.clone(), event_type.clone());
+
+                lock.entry(key).or_default().insert(lookup_id);
+            }
+            Trigger::BlockInterval {
+                chain_name,
+                n_blocks,
+                start_block,
+                end_block,
+            } => {
+                self.lookup_maps
+                    .block_schedulers
+                    .entry(chain_name.clone())
+                    .or_default()
+                    .add_trigger(BlockIntervalState::new(
+                        lookup_id,
+                        n_blocks,
+                        start_block.map(Into::into),
+                        end_block.map(Into::into),
+                    ))?;
+            }
+            Trigger::Cron {
+                schedule,
+                start_time,
+                end_time,
+            } => {
+                // Add directly to the cron scheduler
+                self.lookup_maps
+                    .cron_scheduler
+                    .lock()
+                    .unwrap()
+                    .add_trigger(CronIntervalState::new(
+                        lookup_id, &schedule, start_time, end_time,
+                    )?)?;
+            }
+            Trigger::Manual => {}
+        }
+
+        // adding it to our lookups is the same, regardless of type
+        self.lookup_maps
+            .triggers_by_service_workflow
+            .write()
+            .unwrap()
+            .entry(config.service_id.clone())
+            .or_default()
+            .insert(config.workflow_id.clone(), lookup_id);
+
+        self.lookup_maps
+            .trigger_configs
+            .write()
+            .unwrap()
+            .insert(lookup_id, config);
+
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
+    pub fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
+        let action_receiver = self.action_receiver.lock().unwrap().take().unwrap();
+
+        ctx.rt.clone().spawn({
+            let _self = self.clone();
+            let mut kill_receiver = ctx.get_kill_receiver();
+            async move {
+                tokio::select! {
+                    _ = kill_receiver.recv() => {
+                        tracing::debug!("Trigger Manager shutting down");
+                        // see the note in dispatcher about the channel automatically closing
+                        _self.action_sender.lock().unwrap().take();
+                    },
+                    res = _self.start_watcher() => {
+                        if let Err(err) = res {
+                            tracing::error!("Trigger Manager watcher error: {:?}", err);
+                            ctx.kill();
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(action_receiver)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
@@ -520,150 +565,9 @@ impl CoreTriggerManager {
             Vec::new()
         }
     }
-}
-
-impl TriggerManager for CoreTriggerManager {
-    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
-    fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
-        let action_receiver = self.action_receiver.lock().unwrap().take().unwrap();
-
-        ctx.rt.clone().spawn({
-            let _self = self.clone();
-            let mut kill_receiver = ctx.get_kill_receiver();
-            async move {
-                tokio::select! {
-                    _ = kill_receiver.recv() => {
-                        tracing::debug!("Trigger Manager shutting down");
-                        // see the note in dispatcher about the channel automatically closing
-                        _self.action_sender.lock().unwrap().take();
-                    },
-                    res = _self.start_watcher() => {
-                        if let Err(err) = res {
-                            tracing::error!("Trigger Manager watcher error: {:?}", err);
-                            ctx.kill();
-                        }
-                    }
-                }
-            }
-        });
-
-        Ok(action_receiver)
-    }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
-        if !matches!(config.trigger, Trigger::Manual) {
-            let command = LocalStreamCommand::new(&config);
-            // If it's not a manual trigger, we need to start listening for it
-            match self.local_command_sender.lock().unwrap().as_ref() {
-                Some(sender) => {
-                    sender.send(command).unwrap();
-                }
-                None => {
-                    tracing::warn!(
-                        "Local command sender not initialized, cannot send command: {:?}",
-                        command
-                    );
-                }
-            }
-
-            // Theoretically, we should wait until we know the stream is started before continuing,
-            // however, we can be pretty sure that this `LocalStreamCommand` will come before
-            // any actual trigger events, since they are all multiplexed into the same stream
-            // and so by definition this comes "first".
-            //
-            // There's a bit of a question whether "first" is a guarantee, but, so far so good :P
-        }
-
-        // get the next lookup id
-        let lookup_id = self
-            .lookup_maps
-            .lookup_id
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        match config.trigger.clone() {
-            Trigger::EvmContractEvent {
-                address,
-                chain_name,
-                event_hash,
-            } => {
-                let mut lock = self
-                    .lookup_maps
-                    .triggers_by_evm_contract_event
-                    .write()
-                    .unwrap();
-                let key = (chain_name.clone(), address, event_hash);
-
-                lock.entry(key).or_default().insert(lookup_id);
-            }
-            Trigger::CosmosContractEvent {
-                address,
-                chain_name,
-                event_type,
-            } => {
-                let mut lock = self
-                    .lookup_maps
-                    .triggers_by_cosmos_contract_event
-                    .write()
-                    .unwrap();
-                let key = (chain_name.clone(), address.clone(), event_type.clone());
-
-                lock.entry(key).or_default().insert(lookup_id);
-            }
-            Trigger::BlockInterval {
-                chain_name,
-                n_blocks,
-                start_block,
-                end_block,
-            } => {
-                self.lookup_maps
-                    .block_schedulers
-                    .entry(chain_name.clone())
-                    .or_default()
-                    .add_trigger(BlockIntervalState::new(
-                        lookup_id,
-                        n_blocks,
-                        start_block.map(Into::into),
-                        end_block.map(Into::into),
-                    ))?;
-            }
-            Trigger::Cron {
-                schedule,
-                start_time,
-                end_time,
-            } => {
-                // Add directly to the cron scheduler
-                self.lookup_maps
-                    .cron_scheduler
-                    .lock()
-                    .unwrap()
-                    .add_trigger(CronIntervalState::new(
-                        lookup_id, &schedule, start_time, end_time,
-                    )?)?;
-            }
-            Trigger::Manual => {}
-        }
-
-        // adding it to our lookups is the same, regardless of type
-        self.lookup_maps
-            .triggers_by_service_workflow
-            .write()
-            .unwrap()
-            .entry(config.service_id.clone())
-            .or_default()
-            .insert(config.workflow_id.clone(), lookup_id);
-
-        self.lookup_maps
-            .trigger_configs
-            .write()
-            .unwrap()
-            .insert(lookup_id, config);
-
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_trigger(
+    pub fn remove_trigger(
         &self,
         service_id: ServiceID,
         workflow_id: WorkflowID,
@@ -761,7 +665,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn remove_service(&self, service_id: wavs_types::ServiceID) -> Result<(), TriggerError> {
+    pub fn remove_service(&self, service_id: wavs_types::ServiceID) -> Result<(), TriggerError> {
         let mut trigger_configs = self.lookup_maps.trigger_configs.write().unwrap();
         let mut triggers_by_evm_contract_event = self
             .lookup_maps
@@ -862,7 +766,7 @@ impl TriggerManager for CoreTriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
+    pub fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
         let mut triggers = Vec::new();
 
         let triggers_by_service_workflow_lock = self
@@ -892,9 +796,9 @@ mod tests {
     use std::num::NonZero;
 
     use crate::{
-        apis::trigger::TriggerManager,
         config::Config,
         test_utils::address::{rand_address_evm, rand_event_evm},
+        trigger_manager::TriggerManager,
     };
     use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
 
@@ -903,8 +807,6 @@ mod tests {
         config::{ChainConfigs, CosmosChainConfig, EvmChainConfig},
         telemetry::TriggerMetrics,
     };
-
-    use super::CoreTriggerManager;
 
     #[test]
     fn core_trigger_lookups() {
@@ -940,7 +842,7 @@ mod tests {
             ..Default::default()
         };
 
-        let manager = CoreTriggerManager::new(
+        let manager = TriggerManager::new(
             &config,
             TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
         )
@@ -1070,7 +972,7 @@ mod tests {
             ..Default::default()
         };
 
-        let manager = CoreTriggerManager::new(
+        let manager = TriggerManager::new(
             &config,
             TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
         )
@@ -1156,7 +1058,7 @@ mod tests {
         // Setup configuration and manager
         let config = Config::default();
 
-        let manager = CoreTriggerManager::new(
+        let manager = TriggerManager::new(
             &config,
             TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
         )

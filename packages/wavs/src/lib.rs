@@ -6,7 +6,7 @@ pub mod engine; // where we manage and execute wasm
 pub mod http;
 pub mod submission; // where we submit the results to the chain
 pub mod test_utils;
-pub mod triggers; // where we handle the trigger runtime
+pub mod trigger_manager; // where we handle the trigger runtime
 
 use apis::dispatcher::DispatchManager;
 use config::Config;

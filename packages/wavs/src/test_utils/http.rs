@@ -5,18 +5,18 @@ use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use utils::{
     config::ChainConfigs,
-    telemetry::{DispatcherMetrics, HttpMetrics},
+    telemetry::{DispatcherMetrics, HttpMetrics, Metrics},
 };
 
 use crate::{
-    apis::{submission::Submission, trigger::TriggerManager},
+    apis::submission::Submission,
     dispatcher::Dispatcher,
     engine::{
         identity::IdentityEngine,
         runner::{EngineRunner, SingleEngineRunner},
     },
     submission::mock::MockSubmission,
-    triggers::mock::MockTriggerManagerVec,
+    trigger_manager::TriggerManager,
 };
 
 use super::app::TestApp;
@@ -29,7 +29,10 @@ pub struct TestHttpApp {
 
 impl TestHttpApp {
     pub async fn new() -> Self {
-        let trigger_manager = MockTriggerManagerVec::new();
+        let config = crate::config::Config::default();
+        let meter = opentelemetry::global::meter("wavs_metrics");
+        let metrics = Metrics::new(&meter);
+        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger).unwrap();
         let engine = SingleEngineRunner::new(IdentityEngine::new());
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
@@ -51,9 +54,8 @@ impl TestHttpApp {
         Self::new_with_dispatcher(dispatcher).await
     }
 
-    pub async fn new_with_dispatcher<T, E, S>(dispatcher: Arc<Dispatcher<T, E, S>>) -> Self
+    pub async fn new_with_dispatcher<E, S>(dispatcher: Arc<Dispatcher<E, S>>) -> Self
     where
-        T: TriggerManager + 'static,
         E: EngineRunner + 'static,
         S: Submission + 'static,
     {

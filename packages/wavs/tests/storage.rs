@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use utils::storage::db::{RedbStorage, Table, JSON};
-use wavs::{test_utils::address::rand_address_evm, triggers::mock::mock_evm_event_trigger};
+use wavs::test_utils::{address::rand_address_evm, mock_trigger_manager::mock_evm_event_trigger};
 use wavs_types::{
     Component, ComponentSource, Digest, Service, ServiceID, ServiceManager, ServiceStatus, Submit,
     Workflow, WorkflowID,

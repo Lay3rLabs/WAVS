@@ -1,9 +1,10 @@
-use crate::apis::trigger::TriggerError;
 use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
 use std::pin::Pin;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::ChainName;
+
+use crate::trigger_manager::error::TriggerError;
 
 use super::StreamTriggers;
 

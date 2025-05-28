@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 
-use crate::apis::trigger::TriggerError;
-
-use super::core::LookupId;
+use crate::trigger_manager::{error::TriggerError, lookup::LookupId};
 
 // This is for some sort of scheduler that runs on an interval.
 // It's used in WAVS for the cron and block interval triggers
@@ -55,10 +53,12 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.triggers.len() + self.unadded_triggers.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.triggers.is_empty() && self.unadded_triggers.is_empty()
     }
