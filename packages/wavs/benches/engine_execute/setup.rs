@@ -40,10 +40,10 @@ pub struct ExecuteSetup {
 
 impl ExecuteSetup {
     pub fn new(execute_config: ExecuteConfig) -> Arc<Self> {
-        let config = if let Some(async_config) = execute_config.sleep_config {
+        let config = if let Some(sleep_config) = execute_config.sleep_config {
             BTreeMap::from_iter([
-                ("sleep-ms".to_string(), async_config.sleep_ms.to_string()),
-                ("sleep-kind".to_string(), async_config.sleep_kind),
+                ("sleep-ms".to_string(), sleep_config.sleep_ms.to_string()),
+                ("sleep-kind".to_string(), sleep_config.sleep_kind),
             ])
         } else {
             BTreeMap::new()
