@@ -1,4 +1,5 @@
 use axum::{extract::State, response::IntoResponse, Json};
+use tracing::instrument;
 
 use crate::{config::Config, http::state::HttpState};
 
@@ -12,6 +13,7 @@ use crate::{config::Config, http::state::HttpState};
     description = "Returns the current configuration settings for the aggregator service"
 )]
 #[axum::debug_handler]
+#[instrument(level = "debug", skip(state))]
 pub async fn handle_config(State(state): State<HttpState>) -> impl IntoResponse {
     Json(state.config).into_response()
 }

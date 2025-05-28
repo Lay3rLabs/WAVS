@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 use utils::{
     async_transaction::AsyncTransaction,
     config::EvmChainConfig,
@@ -67,6 +68,7 @@ pub struct HttpState {
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
+    #[instrument(level = "debug", skip(config))]
     pub fn new(config: Config) -> AggregatorResult<Self> {
         let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
@@ -79,6 +81,7 @@ impl HttpState {
         })
     }
 
+    #[instrument(level = "debug", skip(self), fields(chain_name = %chain_name))]
     pub async fn get_evm_client(
         &self,
         chain_name: &ChainName,
@@ -87,6 +90,7 @@ impl HttpState {
             let lock = self.evm_clients.read().unwrap();
 
             if let Some(client) = lock.get(chain_name) {
+                tracing::debug!("Using cached EVM client for chain: {}", chain_name);
                 return Ok(client.clone());
             }
         }
@@ -106,6 +110,7 @@ impl HttpState {
                 .ok_or(AggregatorError::MissingEvmCredential)?,
         )?;
 
+        tracing::info!("Creating new EVM client for chain: {}", chain_name);
         let evm_client = EvmSigningClient::new(client_config)
             .await
             .map_err(AggregatorError::CreateEvmClient)?;
@@ -140,12 +145,14 @@ impl HttpState {
         }
     }
 
+    #[instrument(level = "debug", skip(self, service), fields(service_id = %service.id))]
     pub fn register_service(&self, service: &Service) -> AggregatorResult<()> {
         if self.storage.get(SERVICES, &service.id)?.is_none() {
             tracing::info!("Registering aggregator for service {}", service.id);
 
             self.storage.set(SERVICES, &service.id, service)?;
         } else {
+            tracing::warn!("Attempted to register duplicate service: {}", service.id);
             return Err(AggregatorError::RepeatService(service.id.clone()));
         }
 

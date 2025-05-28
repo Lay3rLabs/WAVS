@@ -2,6 +2,7 @@ use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use alloy_sol_types::SolError;
 use axum::{extract::State, response::IntoResponse, Json};
+use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -30,6 +31,7 @@ use crate::{
     description = "Validates and processes a packet, adding it to the aggregation queue. When enough packets from different signers accumulate to meet the threshold, the aggregated packet is sent to the target contract."
 )]
 #[axum::debug_handler]
+#[instrument(level = "info", skip(state, req), fields(service_id = %req.packet.route.service_id, workflow_id = %req.packet.route.workflow_id))]
 pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
@@ -43,12 +45,19 @@ pub async fn handle_packet(
     }
 }
 
+#[instrument(level = "debug", skip(state, packet), fields(service_id = %packet.route.service_id, workflow_id = %packet.route.workflow_id))]
 async fn process_packet(
     state: HttpState,
     packet: &Packet,
 ) -> AggregatorResult<Vec<AddPacketResponse>> {
     let event_id = packet.event_id();
     let route = packet.route.clone();
+
+    tracing::info!(
+        "Processing packet for service: {}, workflow: {}",
+        route.service_id,
+        route.workflow_id
+    );
 
     let service = state.get_service(&packet.route)?;
     let aggregators = &service.workflows[&packet.route.workflow_id].aggregators;
@@ -62,6 +71,7 @@ async fn process_packet(
 
     // this implicitly validates that the signature is valid
     let signer = packet.signature.evm_signer_address(&packet.envelope)?;
+    tracing::debug!("Packet signer address: {:?}", signer);
 
     let service_manager_client = state.get_evm_client(service.manager.chain_name()).await?;
     let service_manager = IWavsServiceManager::new(
@@ -121,6 +131,7 @@ struct AggregatorProcess<'a> {
 }
 
 impl AggregatorProcess<'_> {
+    #[instrument(level = "debug", skip(self), fields(queue_id = ?self.queue_id, signer = ?self.signer))]
     async fn run(self) -> AggregatorResult<AddPacketResponse> {
         let Self {
             state,
@@ -182,6 +193,12 @@ impl AggregatorProcess<'_> {
                         {
                             Ok(_) => {
                                 let client = state.get_evm_client(chain_name).await?;
+                                tracing::info!(
+                                    "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
+                                    chain_name,
+                                    address,
+                                    block_height
+                                );
                                 let tx_receipt = client
                                     .send_envelope_signatures(
                                         packet.envelope.clone(),
@@ -190,8 +207,13 @@ impl AggregatorProcess<'_> {
                                         *max_gas,
                                     )
                                     .await?;
+                                tracing::info!(
+                                    "Transaction sent successfully: {:?}",
+                                    tx_receipt.transaction_hash
+                                );
 
                                 state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+                                tracing::info!("Packet queue burned after successful submission");
 
                                 Ok(AddPacketResponse::Sent {
                                     tx_receipt: Box::new(tx_receipt),

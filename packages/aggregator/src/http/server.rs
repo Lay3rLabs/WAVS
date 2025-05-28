@@ -1,6 +1,7 @@
 use crate::{config::Config, AppContext};
 use axum::routing::{get, post};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tracing::instrument;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
@@ -14,6 +15,7 @@ use super::{
 };
 
 // this is called from main
+#[instrument(level = "info", skip(ctx, config))]
 pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
     let mut shutdown_signal = ctx.get_kill_receiver();
     ctx.rt.block_on(async move {
@@ -23,12 +25,12 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
-        tracing::info!("Http server starting on: {}", listener.local_addr()?);
+        tracing::info!("HTTP server starting on: {}", listener.local_addr()?);
 
         axum::serve(listener, router)
             .with_graceful_shutdown(async move {
                 shutdown_signal.recv().await.ok();
-                tracing::debug!("Http server shutting down");
+                tracing::info!("HTTP server shutting down");
             })
             .await?;
 
