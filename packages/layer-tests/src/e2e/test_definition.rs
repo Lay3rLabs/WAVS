@@ -80,26 +80,31 @@ impl ComponentBuilder {
         }
     }
 
-    pub fn with_config_vars(mut self, config_vars: BTreeMap<String, String>) -> Self {
-        self.config_vars = config_vars;
+    pub fn with_config_var(mut self, key: String, value: String) -> Self {
+        if self.env_vars.contains_key(&key) {
+            panic!("Config var key '{}' is already defined", key);
+        }
+
+        self.config_vars.insert(key, value);
         self
     }
 
-    pub fn with_env_vars(mut self, env_vars: BTreeMap<String, String>) -> Self {
-        self.env_vars = env_vars;
+    pub fn with_env_var(mut self, key: String, value: String) -> Self {
+        if !key.starts_with(WAVS_ENV_PREFIX) {
+            panic!(
+                "Env var key '{}' must be prefixed with '{WAVS_ENV_PREFIX}'",
+                key
+            );
+        }
+        if self.env_vars.contains_key(&key) {
+            panic!("Env var key '{}' is already defined", key);
+        }
+
+        self.env_vars.insert(key, value);
         self
     }
 
     pub fn build(self) -> ComponentDefinition {
-        for key in self.env_vars.keys() {
-            if !key.starts_with(WAVS_ENV_PREFIX) {
-                panic!(
-                    "Env var key '{}' must be prefixed with '{WAVS_ENV_PREFIX}'",
-                    key
-                );
-            }
-        }
-
         ComponentDefinition {
             name: self.name,
             config_vars: self.config_vars,
