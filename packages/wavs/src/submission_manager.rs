@@ -34,7 +34,7 @@ pub struct SubmissionManager {
     // created on-demand from chain_name and hd_index
     evm_signers: Arc<RwLock<HashMap<ServiceID, SignerInfo>>>,
     evm_sending_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
-    evm_mnemonic: String,
+    evm_mnemonic: Option<String>,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
     message_count: Arc<AtomicU64>,
@@ -56,10 +56,7 @@ impl SubmissionManager {
             http_client: reqwest::Client::new(),
             evm_signers: Arc::new(RwLock::new(HashMap::new())),
             evm_sending_clients: Arc::new(RwLock::new(HashMap::new())),
-            evm_mnemonic: config
-                .submission_mnemonic
-                .clone()
-                .ok_or(SubmissionError::MissingMnemonic)?,
+            evm_mnemonic: config.submission_mnemonic.clone(),
             evm_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
             metrics,
             message_count: Arc::new(AtomicU64::new(0)),
@@ -94,10 +91,6 @@ impl SubmissionManager {
                                 submit
                             } = msg;
 
-                            if matches!(&submit, Submit::None) {
-                                tracing::debug!("Skipping submission");
-                                continue;
-                            }
 
                             let packet = match _self.make_packet(packet_route, envelope).await {
                                 Ok(packet) => packet,
@@ -106,6 +99,15 @@ impl SubmissionManager {
                                     continue;
                                 }
                             };
+
+                            if cfg!(debug_assertions) {
+                                _self.debug_packets.write().unwrap().push(packet.clone());
+                            }
+
+                            if matches!(&submit, Submit::None) {
+                                tracing::debug!("Skipping submission");
+                                continue;
+                            }
 
                             match submit {
                                 Submit::EvmContract(submission) => {
@@ -145,8 +147,13 @@ impl SubmissionManager {
             .evm_mnemonic_hd_index_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let signer = make_signer(&self.evm_mnemonic, Some(hd_index))
-            .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service.id.clone(), e))?;
+        let signer = make_signer(
+            self.evm_mnemonic
+                .as_ref()
+                .ok_or(SubmissionError::MissingMnemonic)?,
+            Some(hd_index),
+        )
+        .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service.id.clone(), e))?;
 
         tracing::info!(
             "Created new signing client for service {} -> {}",
@@ -176,8 +183,11 @@ impl SubmissionManager {
                         .try_into()
                         .map_err(|_| SubmissionError::NotEvmChain)?;
 
-                    let sending_client_config =
-                        chain_config.signing_client_config(self.evm_mnemonic.clone())?;
+                    let sending_client_config = chain_config.signing_client_config(
+                        self.evm_mnemonic
+                            .clone()
+                            .ok_or(SubmissionError::MissingMnemonic)?,
+                    )?;
 
                     let sending_client = EvmSigningClient::new(sending_client_config)
                         .await
@@ -368,7 +378,7 @@ impl SubmissionManager {
 mod test {
     use std::{thread::sleep, time::Duration};
 
-    use wavs_types::{ChainName, Envelope, PacketRoute};
+    use wavs_types::{ChainName, Envelope, PacketRoute, ServiceManager};
 
     use crate::test_utils::{
         address::rand_address_evm,
@@ -394,7 +404,12 @@ mod test {
 
     #[test]
     fn collect_messages_with_sleep() {
-        let config = crate::config::Config::default();
+        let config = crate::config::Config {
+            submission_mnemonic: Some(
+                "test test test test test test test test test test test junk".to_string(),
+            ),
+            ..crate::config::Config::default()
+        };
         let meter = opentelemetry::global::meter("wavs_metrics");
         let metrics = SubmissionMetrics::new(&meter);
         let submission_manager = SubmissionManager::new(&config, metrics).unwrap();
@@ -404,6 +419,22 @@ mod test {
 
         let (send, rx) = mpsc::channel::<ChainMessage>(2);
         submission_manager.start(ctx.clone(), rx).unwrap();
+
+        ctx.rt.block_on(async {
+            submission_manager
+                .add_service(&wavs_types::Service {
+                    name: "serv1".to_string(),
+                    status: wavs_types::ServiceStatus::Active,
+                    id: "serv1".parse().unwrap(),
+                    manager: ServiceManager::Evm {
+                        chain_name: ChainName::new("evm").unwrap(),
+                        address: rand_address_evm(),
+                    },
+                    workflows: Default::default(),
+                })
+                .await
+                .unwrap();
+        });
 
         let msg1 = dummy_message("serv1", "foo");
         let msg2 = dummy_message("serv1", "bar");
@@ -437,7 +468,12 @@ mod test {
 
     #[test]
     fn collect_messages_with_wait() {
-        let config = crate::config::Config::default();
+        let config = crate::config::Config {
+            submission_mnemonic: Some(
+                "test test test test test test test test test test test junk".to_string(),
+            ),
+            ..crate::config::Config::default()
+        };
         let meter = opentelemetry::global::meter("wavs_metrics");
         let metrics = SubmissionMetrics::new(&meter);
         let submission_manager = SubmissionManager::new(&config, metrics).unwrap();
@@ -458,6 +494,22 @@ mod test {
         let ctx = AppContext::new();
         let (send, rx) = mpsc::channel::<ChainMessage>(2);
         submission_manager.start(ctx.clone(), rx).unwrap();
+
+        ctx.rt.block_on(async {
+            submission_manager
+                .add_service(&wavs_types::Service {
+                    name: "serv1".to_string(),
+                    status: wavs_types::ServiceStatus::Active,
+                    id: "serv1".parse().unwrap(),
+                    manager: ServiceManager::Evm {
+                        chain_name: ChainName::new("evm").unwrap(),
+                        address: rand_address_evm(),
+                    },
+                    workflows: Default::default(),
+                })
+                .await
+                .unwrap();
+        });
 
         let msg1 = dummy_message("serv1", "foo");
         let msg2 = dummy_message("serv1", "bar");

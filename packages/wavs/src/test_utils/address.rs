@@ -26,7 +26,7 @@ pub fn rand_event_cosmos() -> String {
     const_hex::encode(rand_event_evm().as_slice())
 }
 
-pub fn rand_address_layer() -> Address {
+pub fn rand_address_cosmos() -> Address {
     let mut rng = rand::rng();
 
     let entropy: [u8; 32] = rng.random();

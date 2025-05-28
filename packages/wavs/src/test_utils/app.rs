@@ -15,7 +15,7 @@ pub struct TestApp {
 }
 
 impl TestApp {
-    pub async fn new() -> Self {
+    pub fn new() -> Self {
         let temp_home_dir_handle = Arc::new(tempfile::tempdir().unwrap());
         let temp_data_dir_handle = Arc::new(tempfile::tempdir().unwrap());
 

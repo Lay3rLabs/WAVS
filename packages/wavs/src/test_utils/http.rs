@@ -12,46 +12,53 @@ use super::{app::TestApp, mock_app::MockE2ETestRunner};
 #[derive(Clone)]
 pub struct TestHttpApp {
     pub inner: TestApp,
+    pub ctx: AppContext,
     _temp_data_dir: Option<Arc<tempfile::TempDir>>,
     _http_router: axum::Router,
 }
 
 impl TestHttpApp {
-    pub async fn new() -> Self {
+    pub fn new() -> Self {
+        let ctx = AppContext::new();
+
         let temp_data_dir = tempfile::tempdir().unwrap();
         Self::new_with_dispatcher(
+            ctx.clone(),
             Arc::new(MockE2ETestRunner::create_dispatcher(
-                AppContext::new(),
+                ctx.clone(),
                 &temp_data_dir,
             )),
             Some(temp_data_dir),
         )
-        .await
     }
 
-    pub async fn new_with_dispatcher(
+    pub fn new_with_dispatcher(
+        ctx: AppContext,
         dispatcher: Arc<Dispatcher<FileStorage>>,
         temp_data_dir: Option<tempfile::TempDir>,
     ) -> Self {
-        let inner = TestApp::new().await;
+        let inner = TestApp::new();
 
         let meter = opentelemetry::global::meter("wavs_test_metrics");
         let metrics = HttpMetrics::new(&meter);
 
-        let http_router = crate::http::server::make_router(
-            inner.config.as_ref().clone(),
-            dispatcher,
-            true,
-            metrics,
-        )
-        .await
-        .unwrap();
+        ctx.clone().rt.block_on(async move {
+            let http_router = crate::http::server::make_router(
+                inner.config.as_ref().clone(),
+                dispatcher,
+                true,
+                metrics,
+            )
+            .await
+            .unwrap();
 
-        Self {
-            inner,
-            _http_router: http_router,
-            _temp_data_dir: temp_data_dir.map(Arc::new),
-        }
+            Self {
+                ctx,
+                inner,
+                _http_router: http_router,
+                _temp_data_dir: temp_data_dir.map(Arc::new),
+            }
+        })
     }
 
     pub async fn http_router(&mut self) -> &mut axum::Router {

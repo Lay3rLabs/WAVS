@@ -2,7 +2,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use crate::test_utils::address::{
-    rand_address_evm, rand_address_layer, rand_event_cosmos, rand_event_evm,
+    rand_address_cosmos, rand_address_evm, rand_event_cosmos, rand_event_evm,
 };
 use crate::trigger_manager::error::TriggerError;
 
@@ -33,7 +33,7 @@ pub fn mock_cosmos_event_trigger_config(
     TriggerConfig::cosmos_contract_event(
         service_id,
         workflow_id,
-        rand_address_layer(),
+        rand_address_cosmos(),
         ChainName::new("cosmos").unwrap(),
         rand_event_cosmos(),
     )
@@ -50,7 +50,7 @@ pub fn mock_evm_event_trigger() -> Trigger {
 
 pub fn mock_cosmos_event_trigger() -> Trigger {
     Trigger::cosmos_contract_event(
-        rand_address_layer(),
+        rand_address_cosmos(),
         ChainName::new("cosmos").unwrap(),
         rand_event_cosmos(),
     )
@@ -58,7 +58,7 @@ pub fn mock_cosmos_event_trigger() -> Trigger {
 
 pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -> TriggerData {
     TriggerData::CosmosContractEvent {
-        contract_address: rand_address_layer(),
+        contract_address: rand_address_cosmos(),
         chain_name: ChainName::new("layer").unwrap(),
         // matches example_cosmos_client::NewMessageEvent
         event: cosmwasm_std::Event::new("new-message")

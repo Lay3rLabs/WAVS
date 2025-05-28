@@ -14,9 +14,9 @@ use wavs::{
 };
 use wavs_types::{ComponentSource, Digest, ServiceID, UploadComponentResponse};
 
-#[tokio::test]
-async fn http_not_found() {
-    let mut app = TestHttpApp::new().await;
+#[test]
+fn http_not_found() {
+    let app = TestHttpApp::new();
 
     let req = Request::builder()
         .method(Method::GET)
@@ -24,14 +24,17 @@ async fn http_not_found() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.http_router().await.call(req).await.unwrap();
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
 
     assert_eq!(response.status(), 404);
 }
 
-#[tokio::test]
-async fn http_config() {
-    let mut app = TestHttpApp::new().await;
+#[test]
+fn http_config() {
+    let app = TestHttpApp::new();
 
     let req = Request::builder()
         .method(Method::GET)
@@ -39,21 +42,24 @@ async fn http_config() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.http_router().await.call(req).await.unwrap();
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
 
     assert!(response.status().is_success());
 
-    let config: Config = map_response(response).await;
+    let config: Config = app.ctx.rt.block_on(map_response(response));
 
     assert_eq!(config.port, app.inner.config.port);
 }
 
-#[tokio::test]
-async fn http_upload_component() {
-    let bytes = vec![1, 2, 3];
+#[test]
+fn http_upload_component() {
+    let bytes = include_bytes!("../../../examples/build/components/square.wasm").to_vec();
     let digest = Digest::new(&bytes);
 
-    let mut app = TestHttpApp::new().await;
+    let app = TestHttpApp::new();
 
     let body = Body::from(bytes);
 
@@ -64,18 +70,21 @@ async fn http_upload_component() {
         .body(body)
         .unwrap();
 
-    let response = app.http_router().await.call(req).await.unwrap();
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
 
     assert!(response.status().is_success());
 
-    let response: UploadComponentResponse = map_response(response).await;
+    let response: UploadComponentResponse = app.ctx.rt.block_on(map_response(response));
 
     assert_eq!(response.digest, digest.into());
 }
 
-#[tokio::test]
-async fn http_save_service() {
-    let mut app = TestHttpApp::new().await;
+#[test]
+fn http_save_service() {
+    let app = TestHttpApp::new();
 
     let service = wavs_types::Service::new_simple(
         ServiceID::new("service-1").unwrap(),
@@ -98,7 +107,10 @@ async fn http_save_service() {
         .body(body)
         .unwrap();
 
-    let response = app.http_router().await.call(req).await.unwrap();
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
 
     assert!(response.status().is_success());
 
@@ -109,7 +121,10 @@ async fn http_save_service() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.http_router().await.call(req).await.unwrap();
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
 
     assert!(!response.status().is_success());
 
@@ -120,11 +135,14 @@ async fn http_save_service() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.http_router().await.call(req).await.unwrap();
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
 
     assert!(response.status().is_success());
 
-    let response: wavs_types::Service = map_response(response).await;
+    let response: wavs_types::Service = app.ctx.rt.block_on(map_response(response));
 
     assert_eq!(response, service);
 
