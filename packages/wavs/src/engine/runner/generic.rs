@@ -42,11 +42,20 @@ pub trait EngineRunner: Send + Sync {
 
         let trigger_config = action.config.clone();
 
+        tracing::info!(
+            "Executing component: service_id={}, workflow_id={}, component_digest={:?}",
+            trigger_config.service_id,
+            trigger_config.workflow_id,
+            workflow.component.source.digest()
+        );
+
         let wasm_response = self.engine().execute(workflow.clone(), action.clone())?;
 
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
         if let Some(wasm_response) = wasm_response {
+            tracing::info!("Component execution produced result: service_id={}, workflow_id={}, payload_size={}", 
+                trigger_config.service_id, trigger_config.workflow_id, wasm_response.payload.len());
             let service_id = trigger_config.service_id.clone();
             let workflow_id = trigger_config.workflow_id.clone();
 
@@ -69,6 +78,11 @@ pub trait EngineRunner: Send + Sync {
                 .blocking_send(msg)
                 .map_err(|_| EngineError::WasiResultSend(service_id, workflow_id))
         } else {
+            tracing::info!(
+                "Component execution produced no result: service_id={}, workflow_id={}",
+                trigger_config.service_id,
+                trigger_config.workflow_id
+            );
             Ok(())
         }
     }

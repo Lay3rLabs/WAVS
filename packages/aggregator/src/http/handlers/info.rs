@@ -1,6 +1,7 @@
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 use utils::config::ChainConfigs;
 use utoipa::ToSchema;
 
@@ -20,6 +21,7 @@ pub struct InfoResponse {
     description = "Provides information about the aggregator service including all supported blockchain networks and their configurations"
 )]
 #[axum::debug_handler]
+#[instrument(level = "debug", skip(state))]
 pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
     match inner_handle_info(state).await {
         Ok(response) => Json(response).into_response(),
@@ -27,6 +29,7 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
     }
 }
 
+#[instrument(level = "debug", skip(state))]
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     Ok(InfoResponse {
         chains: state.config.chains,

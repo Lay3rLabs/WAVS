@@ -90,7 +90,13 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
 
         // populate the initial triggers
         let initial_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
-        tracing::info!("Initializing {} services", initial_services.len());
+        let total_workflows: usize = initial_services.iter().map(|s| s.workflows.len()).sum();
+        tracing::info!(
+            "Initializing dispatcher: services={}, workflows={}, components={}",
+            initial_services.len(),
+            total_workflows,
+            self.list_component_digests()?.len()
+        );
         for service in initial_services {
             ctx.rt.block_on(async {
                 add_service_to_managers(service, &self.triggers, &self.submission).await
@@ -104,6 +110,12 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         // This reads the actions, extends them with the local service data, and passes
         // the combined info down to the EngineRunner to work.
         while let Some(action) = actions_in.blocking_recv() {
+            tracing::info!(
+                "Dispatcher received trigger action: service_id={}, workflow_id={}",
+                action.config.service_id,
+                action.config.workflow_id
+            );
+
             let service = match self
                 .storage
                 .get(SERVICE_TABLE, action.config.service_id.as_ref())?
@@ -182,7 +194,15 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
-        add_service_to_managers(service, &self.triggers, &self.submission).await?;
+        add_service_to_managers(service.clone(), &self.triggers, &self.submission).await?;
+
+        // Get current service count for logging
+        let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
+        let total_services = current_services.len();
+        let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
+
+        tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}", 
+            service.id, service.workflows.len(), total_services, total_workflows);
 
         Ok(())
     }
@@ -221,7 +241,18 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.engine.engine().remove_storage(&id);
         self.triggers.remove_service(id.clone())?;
-        self.submission.remove_service(id)?;
+        self.submission.remove_service(id.clone())?;
+
+        // Get current service count for logging
+        let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
+        let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
+
+        tracing::info!(
+            "Service removed: service_id={}, remaining_services={}, remaining_workflows={}",
+            id,
+            current_services.len(),
+            total_workflows
+        );
 
         Ok(())
     }
