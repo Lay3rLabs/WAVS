@@ -31,12 +31,12 @@ impl EngineSetup {
         wt_config.epoch_interruption(true);
         let engine = WTEngine::new(&wt_config).unwrap();
 
-        // Load the echo_raw.wasm component
+        // Load the echo_data.wasm component
         let component_path = workspace_path()
             .join("examples")
             .join("build")
             .join("components")
-            .join("echo_raw.wasm");
+            .join("echo_data.wasm");
         let component_bytes = std::fs::read(&component_path).unwrap();
         let component_source = wavs_types::ComponentSource::Digest(Digest::new(&component_bytes));
         let component = Component::new(&engine, &component_bytes).unwrap();

@@ -179,6 +179,7 @@ pub enum SubmitDefinition {
 #[derive(Clone, Debug, Default)]
 pub enum InputData {
     /// Raw bytes
+    #[allow(dead_code)]
     Raw(Vec<u8>),
     /// String data
     Text(String),
@@ -211,6 +212,7 @@ impl InputData {
 #[derive(Clone, Debug)]
 pub enum ExpectedOutput {
     /// Raw bytes
+    #[allow(dead_code)]
     Raw(Vec<u8>),
     /// String data
     Text(String),

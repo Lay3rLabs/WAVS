@@ -144,7 +144,7 @@ start-aggregator:
 start-anvil:
     anvil
 
-# e.g. `just cli-exec ./examples/build/components/echo_raw.wasm "hello world"`
+# e.g. `just cli-exec ./examples/build/components/echo_data.wasm "hello world"`
 cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'
 

@@ -162,9 +162,6 @@ impl TestRegistry {
                 EvmService::EchoDataAggregator => {
                     registry.register_evm_echo_data_aggregator_test(chain, AGGREGATOR_ENDPOINT);
                 }
-                EvmService::EchoDataRaw => {
-                    registry.register_evm_echo_sleep_test(chain);
-                }
                 EvmService::Square => {
                     registry.register_evm_square_test(chain);
                 }
@@ -275,42 +272,6 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::Text("The times".to_string()))
                         .with_expected_output(ExpectedOutput::Text("The times".to_string()))
-                        .build(),
-                )
-                .build(),
-        )
-    }
-
-    fn register_evm_echo_sleep_test(&mut self, chain: &ChainName) -> &mut Self {
-        self.register(
-            TestBuilder::new("evm_echo_sleep")
-                .with_description("Tests the EchoRaw component on the primary EVM chain")
-                .add_workflow(
-                    WorkflowID::new("echo_sleep").unwrap(),
-                    WorkflowBuilder::new()
-                        .with_component(
-                            ComponentName::EchoRaw
-                                .into_builder()
-                                .with_config_vars(BTreeMap::from_iter([
-                                    ("sleep-ms".to_string(), "1000".to_string()),
-                                    ("sleep-kind".to_string(), "async".to_string()),
-                                ]))
-                                .with_env_vars(BTreeMap::from_iter([(
-                                    "WAVS_ENV_KEY".to_string(),
-                                    "value".to_string(),
-                                )]))
-                                .build(),
-                        )
-                        .with_trigger(TriggerDefinition::NewEvmContract(
-                            EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
-                            },
-                        ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
-                            chain_name: chain.clone(),
-                        })
-                        .with_input_data(InputData::Raw(b"envvar:WAVS_ENV_KEY".to_vec()))
-                        .with_expected_output(ExpectedOutput::Raw(b"value".to_vec()))
                         .build(),
                 )
                 .build(),

@@ -4,7 +4,6 @@ members = [
   "examples/components/cosmos-query",
   "examples/components/chain-trigger-lookup",
   "examples/components/echo-data",
-  "examples/components/echo-raw",
   "examples/components/square",
   "examples/components/permissions",
   "examples/components/echo-block-interval",

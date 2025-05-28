@@ -255,7 +255,7 @@ mod tests {
 
     use super::*;
 
-    const ECHO_RAW: &[u8] = include_bytes!("../../../../examples/build/components/echo_raw.wasm");
+    const ECHO_DATA: &[u8] = include_bytes!("../../../../examples/build/components/echo_data.wasm");
     const PERMISSIONS: &[u8] =
         include_bytes!("../../../../examples/build/components/permissions.wasm");
 
@@ -278,7 +278,7 @@ mod tests {
         );
 
         // store two blobs
-        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
         let digest2 = engine.store_component_bytes(PERMISSIONS).unwrap();
         assert_ne!(digest, digest2);
 
@@ -304,7 +304,7 @@ mod tests {
         );
 
         // store valid wasm
-        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
         // fail on invalid wasm
         engine.store_component_bytes(b"foobarbaz").unwrap_err();
 
@@ -328,7 +328,7 @@ mod tests {
         );
 
         // store square digest
-        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
         let workflow = Workflow {
             trigger: Trigger::evm_contract_event(
                 crate::test_utils::address::rand_address_evm(),
@@ -375,7 +375,7 @@ mod tests {
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
         let mut workflow = Workflow {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
@@ -457,7 +457,7 @@ mod tests {
         );
 
         // store square digest
-        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
         let mut workflow = Workflow {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
@@ -554,7 +554,7 @@ mod tests {
 
         engine.start().unwrap();
 
-        let digest = engine.store_component_bytes(ECHO_RAW).unwrap();
+        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
         let mut workflow = Workflow {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
