@@ -459,7 +459,7 @@ impl CoreTriggerManager {
                     trigger_actions.len()
                 );
                 for (idx, action) in trigger_actions.iter().enumerate() {
-                    tracing::info!(
+                    tracing::debug!(
                         "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}",
                         idx + 1,
                         action.config.service_id,
