@@ -9,7 +9,7 @@ use utils::{
     health::health_check_chains_query,
     telemetry::{setup_metrics, setup_tracing, Metrics},
 };
-use wavs::{args::CliArgs, config::Config, dispatcher::CoreDispatcher};
+use wavs::{args::CliArgs, config::Config, dispatcher::Dispatcher};
 
 fn main() {
     let args = CliArgs::parse();
@@ -55,7 +55,7 @@ fn main() {
     let metrics = Metrics::new(&meter);
 
     let config_clone = config.clone();
-    let dispatcher = Arc::new(CoreDispatcher::new_core(&config_clone, metrics.wavs).unwrap());
+    let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
 
     wavs::run_server(ctx, config, dispatcher, metrics.http);
     if let Some(tracer) = tracer_provider {

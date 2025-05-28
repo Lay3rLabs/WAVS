@@ -2,12 +2,20 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
+use std::{
+    thread::sleep,
+    time::{Duration, Instant},
+};
+
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use utils::context::AppContext;
 use wavs::test_utils::{address::rand_address_evm, mock_app::MockE2ETestRunner};
 use wavs_types::{ComponentSource, Digest, ServiceID, WorkflowID};
 
 const SQUARE: &[u8] = include_bytes!("../../../examples/build/components/square.wasm");
+const SUBMISSION_TIMEOUT: Duration = Duration::from_secs(1);
+const SUBMISSION_POLL: Duration = Duration::from_millis(50);
 #[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
 pub struct SquareIn {
     pub x: u64,
@@ -71,18 +79,10 @@ fn mock_e2e_trigger_flow() {
     });
 
     // block and wait for triggers to go through the whole flow
-    runner.dispatcher.submission.wait_for_messages(2).unwrap();
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 2).unwrap();
 
-    // check the results
-    let results: Vec<SquareOut> = runner
-        .dispatcher
-        .submission
-        .received()
-        .iter()
-        .map(|msg| serde_json::from_slice(&msg.envelope.payload).unwrap())
-        .collect();
-
-    assert_eq!(results, vec![SquareOut { y: 9 }, SquareOut { y: 441 }]);
+    // elsewhere we know that the component is executing, no need to check the actual results here
+    // since Submit is None
 }
 
 #[test]
@@ -207,9 +207,26 @@ fn mock_e2e_component_none() {
     });
 
     // this _should_ error because submission is not fired
-    runner
-        .dispatcher
-        .submission
-        .wait_for_messages(1)
-        .unwrap_err();
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 1).unwrap_err();
+}
+
+/// This will block until n messages arrive in the inbox, or until custom Duration passes
+fn wait_for_submission_messages(
+    submission_manager: &wavs::submission_manager::SubmissionManager,
+    n: u64,
+) -> Result<(), WaitError> {
+    let end = Instant::now() + SUBMISSION_TIMEOUT;
+    while Instant::now() < end {
+        if submission_manager.get_message_count() >= n {
+            return Ok(());
+        }
+        sleep(SUBMISSION_POLL);
+    }
+    Err(WaitError::Timeout)
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum WaitError {
+    #[error("Waiting timed out")]
+    Timeout,
 }

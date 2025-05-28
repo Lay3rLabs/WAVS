@@ -3,31 +3,36 @@ use std::sync::Arc;
 use axum::body::Body;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use utils::{context::AppContext, storage::CAStorage, telemetry::HttpMetrics};
+use utils::{context::AppContext, storage::fs::FileStorage, telemetry::HttpMetrics};
 
-use crate::{apis::submission::Submission, dispatcher::Dispatcher};
+use crate::dispatcher::Dispatcher;
 
 use super::{app::TestApp, mock_app::MockE2ETestRunner};
 
 #[derive(Clone)]
 pub struct TestHttpApp {
     pub inner: TestApp,
+    _temp_data_dir: Option<Arc<tempfile::TempDir>>,
     _http_router: axum::Router,
 }
 
 impl TestHttpApp {
     pub async fn new() -> Self {
-        Self::new_with_dispatcher(Arc::new(MockE2ETestRunner::create_dispatcher(
-            AppContext::new(),
-        )))
+        let temp_data_dir = tempfile::tempdir().unwrap();
+        Self::new_with_dispatcher(
+            Arc::new(MockE2ETestRunner::create_dispatcher(
+                AppContext::new(),
+                &temp_data_dir,
+            )),
+            Some(temp_data_dir),
+        )
         .await
     }
 
-    pub async fn new_with_dispatcher<Storage, S>(dispatcher: Arc<Dispatcher<Storage, S>>) -> Self
-    where
-        Storage: CAStorage + 'static,
-        S: Submission + 'static,
-    {
+    pub async fn new_with_dispatcher(
+        dispatcher: Arc<Dispatcher<FileStorage>>,
+        temp_data_dir: Option<tempfile::TempDir>,
+    ) -> Self {
         let inner = TestApp::new().await;
 
         let meter = opentelemetry::global::meter("wavs_test_metrics");
@@ -45,6 +50,7 @@ impl TestHttpApp {
         Self {
             inner,
             _http_router: http_router,
+            _temp_data_dir: temp_data_dir.map(Arc::new),
         }
     }
 

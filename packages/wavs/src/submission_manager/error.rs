@@ -1,38 +1,6 @@
-use async_trait::async_trait;
 use thiserror::Error;
-use tokio::sync::mpsc;
 use utils::error::EvmClientError;
-use wavs_types::{ChainName, Envelope, EnvelopeError, PacketRoute, Service, ServiceID, Submit};
-
-use crate::AppContext;
-
-#[async_trait]
-pub trait Submission: Send + Sync {
-    /// Start running the submission manager
-    /// This should only be called once in the lifetime of the object.
-    fn start(
-        &self,
-        ctx: AppContext,
-        receiver: mpsc::Receiver<ChainMessage>,
-    ) -> Result<(), SubmissionError>;
-
-    async fn add_service(&self, service: &Service) -> Result<(), SubmissionError>;
-
-    fn remove_service(&self, service_id: ServiceID) -> Result<(), SubmissionError>;
-
-    fn get_service_key(
-        &self,
-        service_id: ServiceID,
-    ) -> Result<wavs_types::SigningKeyResponse, SubmissionError>;
-}
-
-/// The data returned from a trigger action
-#[derive(Clone, Debug)]
-pub struct ChainMessage {
-    pub packet_route: PacketRoute,
-    pub envelope: Envelope,
-    pub submit: Submit,
-}
+use wavs_types::{ChainName, EnvelopeError, ServiceID};
 
 #[derive(Error, Debug)]
 pub enum SubmissionError {

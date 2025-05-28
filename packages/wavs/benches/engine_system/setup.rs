@@ -4,9 +4,9 @@ use opentelemetry::global::meter;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::Metrics;
 use wavs::{
-    apis::submission::ChainMessage,
     dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE},
     engine_manager::{wasm_engine::WasmEngine, EngineManager},
+    submission_manager::chain_message::ChainMessage,
     test_utils::address::rand_address_evm,
 };
 use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};

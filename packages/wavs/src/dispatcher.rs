@@ -1,10 +1,148 @@
+/***
+ *
+ * High-level system design
+ *
+ * The main component is the Dispatcher, which can receive "management" calls via the http server
+ * to determine its configuration. It works at the level of "Services" which are independent
+ * collections of code and triggers that serve one AVS.
+ *
+ * Principally the Dispatcher manages workflows by the following system:
+ *
+ * * When the workflow is created, it adds all relevant triggers to the TriggerManager
+ * * It continually listens to new results from the TriggerManager, and executes them on the WasmEngine.
+ * * When the WasmEngine has produced the result, it submits it to the verifier contract.
+ *
+ * The TriggerManager has it's own internal runtime and is meant to be able to handle a large number of
+ * async network requests. These may be polling or event-driven (websockets), but there are expected to be quite
+ * a few network calls and relatively little computation.
+ *
+ * The WasmEngine stores a large number of wasm components, indexed by their digest.
+ * It should be able to quickly execute any of them, via a number of predefined wit component interfaces.
+ * We do want to limit the number of wasmtime instances at once. For testing, a simple Mutex around the WasmEngine
+ * should demo this. For real usage, we should use some internal threadpool like rayon at set a max number of
+ * engines running at once. We may want to make this an async interface?
+ *
+ * Once the results are calculated, they need to be signed and submitted to the chain (or later to the aggregator).
+ * We can do this in the operatator itself, or design a new subsystem for that. (Open to suggestions).
+ *
+ * I think the biggest question in my head is how to handle all these different runtimes and sync/async assumptions.
+ * * Tokio channels is one way (which triggers use as it really matches this fan-in element well) - which allow each side to be either sync or async.
+ * * Async code can call sync via `tokio::spawn_blocking`, but we may need some limit on how many such threads can be active at once
+ *
+ * Currently, I have a strong inclination to use sync code for:
+ * * WasmEngine (it seems more stable)
+ * * ReDB / KVStore (official recommendation is to wrap it with `tokio::block_in_place` or such if you need it async)
+ *
+ * And use async code for:
+ * * TriggerManager
+ * * HTTP Server
+ *
+ * I think the internal operation of the Dispatcher is my biggest question.
+ * Along with how to organize the submission of results.
+ * And then how to somehow throttle concurrent access to the WasmEngine.
+ *
+ ***/
+
+/*
+
+General execution workflow:
+
+<Triggers> --Action--> <WasmEngine> --Result--> <Submission>
+
+           mpsc channel               mpsc channel
+
+Implementation: Actual pipeline is orchestrated by Dispatcher.
+"Dispatcher" is like "event dispatcher" but also stores state and can reconstruct the other ones
+Dispatcher should be quick, it has high-level system overview, just needs to delegate work to subsystems.
+
+
+Idea 1
+
+<Triggers> --TriggerAction-->     Dispatcher        --ChainMessage-->  <Submission>
+                        - call WasmEngine
+                        (call/response interface)
+
+
+Idea 2
+
+<Triggers> --TriggerAction-->  Dispatcher  --WasmRequest--> WasmEngine --WasmResult--> Dispatcher --ChainMessage-->  <Submission>
+  async       (buffer?)      sync (select)                                         sync (select)
+
+Trigger Action:
+- (service, workflow) id
+- task id (from queue)
+- payload data
+
+WasmRequest:
+- (service, workflow id)
+- task id
+- payload data
+- wasm digest
+
+WasmResult:
+- (service, workflow id)
+- task id
+- wasm result data
+
+ChainMessage:
+- (service, workflow id) ?? Do we need this anymore?
+- task id
+- wasm result data
+- submit (hd_index, verifier_addr)
+
+Dispatcher Thread 1 and 2 maintain some mapping by querying the workflow for the next step to execute.
+
+HD Index must not be shared between different services.
+For now assume all Submit in one service use the same HD Index.
+
+Notes:
+
+Dispatcher should allow multiple trigger actions to be run at the same time (some limit).
+
+- WasmEngine can manage internal threadpool / concurrency limits
+- Dispatcher has channel to WasmEngine, sends onshot channel with request to get result
+
+* Look at backpressure
+* Tracing, logging, metrics are important to monitor this pipeline
+
+*/
+
+/*
+
+General management workflow
+Sync calls on Dispatcher.
+
+On load:
+- Dispatcher loads all current state (list of registered services - workflows + triggers)
+- Triggers wasm to refresh state if needed??
+- Initializes all channels and subsystems (trigger, wasm engine, submission)
+- Adds all triggers to trigger manager
+
+On HTTP Request (local, from authorized agent):
+- Update Dispatcher state
+  - May store new wasm -> wasm engine (internal persistence)
+  - May add/update triggers in trigger subsystem
+  - Stores new services locally to manage workflows when triggers send actions
+
+Management interface of Dispatcher may be somewhat slow, unlike the execution pipeline.
+We also don't expect high-throughput here and could even limit to one management
+operation at a time to simplify code for now.
+
+HTTP server should call in `spawn_blocking` to avoid blocking the async runtime.
+We can even use a mutex internally to ensure only one management call processed at a time.
+
+Idea: HTTP server is outside of the Dispatcher and contains it as state once the Dispatcher
+is properly initialized. It can then call into the Dispatcher to adjust running services.
+
+- Management - set up workflows, add components
+- Execution - run workflows, triggers -> wasm -> submit
+
+*/
 use alloy_provider::ProviderBuilder;
 use anyhow::Result;
-use async_trait::async_trait;
 use layer_climb::prelude::Address;
 use redb::ReadableTable;
 use std::ops::Bound;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -13,19 +151,21 @@ use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
 use utils::error::ChainConfigError;
 use utils::service::fetch_service;
-use utils::telemetry::DispatcherMetrics;
+use utils::storage::fs::FileStorage;
+use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
     TriggerConfig,
 };
 
-use crate::apis::dispatcher::DispatchManager;
-use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
-
-use crate::dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE};
+use crate::config::Config;
 use crate::engine_manager::error::EngineError;
+use crate::engine_manager::wasm_engine::WasmEngine;
 use crate::engine_manager::EngineManager;
+use crate::submission_manager::chain_message::ChainMessage;
+use crate::submission_manager::error::SubmissionError;
+use crate::submission_manager::SubmissionManager;
 use crate::trigger_manager::error::TriggerError;
 use crate::trigger_manager::TriggerManager;
 use crate::AppContext;
@@ -33,50 +173,59 @@ use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::{CAStorage, CAStorageError};
 use wasm_pkg_common::Error as RegistryError;
 
-/// This should auto-derive clone if T, E, S: Clone
-pub struct Dispatcher<Storage: CAStorage, S: Submission> {
+pub const TRIGGER_CHANNEL_SIZE: usize = 100;
+pub const ENGINE_CHANNEL_SIZE: usize = 20;
+pub const SUBMISSION_CHANNEL_SIZE: usize = 20;
+
+const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
+
+pub struct Dispatcher<S: CAStorage> {
     pub trigger_manager: TriggerManager,
-    pub engine_manager: EngineManager<Storage>,
-    pub submission: S,
-    pub storage: Arc<RedbStorage>,
+    pub engine_manager: EngineManager<S>,
+    pub submission_manager: SubmissionManager,
+    pub db_storage: Arc<RedbStorage>,
     pub chain_configs: ChainConfigs,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
 }
 
-impl<Storage: CAStorage, S: Submission> Dispatcher<Storage, S> {
-    pub fn new(
-        trigger_manager: TriggerManager,
-        engine_manager: EngineManager<Storage>,
-        submission: S,
-        chain_configs: ChainConfigs,
-        db_storage_path: impl AsRef<Path>,
-        metrics: DispatcherMetrics,
-        ipfs_gateway: String,
-    ) -> Result<Self, DispatcherError> {
-        let storage = Arc::new(RedbStorage::new(db_storage_path)?);
+impl Dispatcher<FileStorage> {
+    pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
+        let file_storage = FileStorage::new(config.data.join("ca"))?;
+        let db_storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
 
-        Ok(Dispatcher {
+        let trigger_manager = TriggerManager::new(config, metrics.trigger)?;
+
+        let app_storage = config.data.join("app");
+        let engine = WasmEngine::new(
+            file_storage,
+            app_storage,
+            config.wasm_lru_size,
+            config.chains.clone(),
+            Some(config.max_wasm_fuel),
+            Some(config.max_execution_seconds),
+            metrics.engine,
+        );
+        let engine_manager = EngineManager::new(engine, config.wasm_threads);
+
+        let submission_manager = SubmissionManager::new(config, metrics.submission)?;
+
+        Ok(Self {
             trigger_manager,
             engine_manager,
-            submission,
-            storage,
-            chain_configs,
-            metrics,
-            ipfs_gateway,
+            submission_manager,
+            db_storage,
+            chain_configs: config.chains.clone(),
+            metrics: metrics.dispatcher.clone(),
+            ipfs_gateway: config.ipfs_gateway.clone(),
         })
     }
 }
 
-const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
-
-#[async_trait]
-impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher<Storage, S> {
-    type Error = DispatcherError;
-
+impl<S: CAStorage + 'static> Dispatcher<S> {
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Dispatcher"))]
-    fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
+    pub fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
         // Trigger is pipeline start
         let mut actions_in = self.trigger_manager.start(ctx.clone())?;
         // Next is the local (blocking) processing
@@ -88,7 +237,8 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
         self.engine_manager
             .start(ctx.clone(), work_receiver, wasi_result_sender);
         // And pipeline finishes with submission
-        self.submission.start(ctx.clone(), wasi_result_receiver)?;
+        self.submission_manager
+            .start(ctx.clone(), wasi_result_receiver)?;
 
         // populate the initial triggers
         let initial_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
@@ -101,7 +251,8 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
         );
         for service in initial_services {
             ctx.rt.block_on(async {
-                add_service_to_managers(service, &self.trigger_manager, &self.submission).await
+                add_service_to_managers(service, &self.trigger_manager, &self.submission_manager)
+                    .await
             })?;
         }
 
@@ -119,7 +270,7 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
             );
 
             let service = match self
-                .storage
+                .db_storage
                 .get(SERVICE_TABLE, action.config.service_id.as_ref())?
             {
                 Some(service) => service.value(),
@@ -153,22 +304,23 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, Self::Error> {
+    pub fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, DispatcherError> {
         let digest = self.engine_manager.engine.store_component_bytes(&source)?;
         Ok(digest)
     }
+
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn list_component_digests(&self) -> Result<Vec<Digest>, Self::Error> {
+    pub fn list_component_digests(&self) -> Result<Vec<Digest>, DispatcherError> {
         let digests = self.engine_manager.engine.list_digests()?;
 
         Ok(digests)
     }
 
-    async fn add_service(
+    pub async fn add_service(
         &self,
         chain_name: ChainName,
         address: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), DispatcherError> {
         let service = query_service_from_address(
             chain_name,
             address,
@@ -179,7 +331,7 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
 
         // persist it in storage if not there yet
         if self
-            .storage
+            .db_storage
             .get(SERVICE_TABLE, service.id.as_ref())?
             .is_some()
         {
@@ -193,10 +345,15 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
                 .await?;
         }
 
-        self.storage
+        self.db_storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
-        add_service_to_managers(service.clone(), &self.trigger_manager, &self.submission).await?;
+        add_service_to_managers(
+            service.clone(),
+            &self.trigger_manager,
+            &self.submission_manager,
+        )
+        .await?;
 
         // Get current service count for logging
         let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
@@ -209,10 +366,10 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
         Ok(())
     }
 
-    async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
+    pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         // Check if service is already registered
         if self
-            .storage
+            .db_storage
             .get(SERVICE_TABLE, service.id.as_ref())?
             .is_some()
         {
@@ -228,21 +385,21 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
         }
 
         // Store the service
-        self.storage
+        self.db_storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
         // Set up triggers and submissions
-        add_service_to_managers(service, &self.trigger_manager, &self.submission).await?;
+        add_service_to_managers(service, &self.trigger_manager, &self.submission_manager).await?;
 
         Ok(())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error> {
-        self.storage.remove(SERVICE_TABLE, id.as_ref())?;
+    pub fn remove_service(&self, id: ServiceID) -> Result<(), DispatcherError> {
+        self.db_storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
-        self.submission.remove_service(id.clone())?;
+        self.submission_manager.remove_service(id.clone())?;
 
         // Get current service count for logging
         let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
@@ -259,13 +416,13 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn list_services(
+    pub fn list_services(
         &self,
         bounds_start: Bound<&str>,
         bounds_end: Bound<&str>,
-    ) -> Result<Vec<Service>, Self::Error> {
+    ) -> Result<Vec<Service>, DispatcherError> {
         let res = self
-            .storage
+            .db_storage
             .map_table_read(SERVICE_TABLE, |table| match table {
                 // TODO: try to refactor. There's a couple areas of improvement:
                 //
@@ -352,8 +509,11 @@ impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse, Self::Error> {
-        Ok(self.submission.get_service_key(service_id)?)
+    pub fn get_service_key(
+        &self,
+        service_id: ServiceID,
+    ) -> Result<SigningKeyResponse, DispatcherError> {
+        Ok(self.submission_manager.get_service_key(service_id)?)
     }
 }
 
@@ -407,7 +567,7 @@ async fn query_service_from_address(
 async fn add_service_to_managers(
     service: Service,
     triggers: &TriggerManager,
-    submissions: &impl Submission,
+    submissions: &SubmissionManager,
 ) -> Result<(), DispatcherError> {
     if let Err(err) = submissions.add_service(&service).await {
         tracing::error!("Error adding service to submission manager: {:?}", err);

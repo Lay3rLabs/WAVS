@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
 use crate::{
-    apis::dispatcher::DispatchManager,
     dispatcher::Dispatcher,
-    engine_manager::{wasm_engine::WasmEngine, EngineManager},
-    submission::mock::MockSubmission,
+    engine_manager::wasm_engine::WasmEngine,
     test_utils::{
         address::{rand_address_evm, rand_event_evm},
         http::{map_response, TestHttpApp},
     },
-    trigger_manager::TriggerManager,
     AppContext,
 };
 use axum::{
@@ -19,9 +16,8 @@ use axum::{
 use serde::Serialize;
 use tower::Service as _;
 use utils::{
-    config::ChainConfigs,
-    storage::memory::MemoryStorage,
-    telemetry::{DispatcherMetrics, EngineMetrics, Metrics},
+    storage::{fs::FileStorage, memory::MemoryStorage},
+    telemetry::{EngineMetrics, Metrics},
 };
 use wavs_types::{
     ChainName, ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service,
@@ -32,7 +28,8 @@ use super::mock_trigger_manager::mock_evm_event_trigger;
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,
-    pub dispatcher: Arc<Dispatcher<MemoryStorage, MockSubmission>>,
+    pub dispatcher: Arc<Dispatcher<FileStorage>>,
+    pub temp_data_dir: tempfile::TempDir,
     pub http_app: TestHttpApp,
 }
 
@@ -56,33 +53,23 @@ impl MockE2ETestRunner {
             metrics,
         )
     }
-    pub fn create_dispatcher(_ctx: AppContext) -> Dispatcher<MemoryStorage, MockSubmission> {
+    pub fn create_dispatcher(
+        _ctx: AppContext,
+        data_dir: impl AsRef<std::path::Path>,
+    ) -> Dispatcher<FileStorage> {
         // create our dispatcher
-        let config = crate::config::Config::default();
+        let config = crate::config::Config {
+            data: data_dir.as_ref().to_path_buf(),
+            ..crate::config::Config::default()
+        };
         let meter = opentelemetry::global::meter("wavs_metrics");
         let metrics = Metrics::new(&meter);
-        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger.clone()).unwrap();
-
-        let engine_manager = EngineManager::new(
-            Self::create_engine(Some(config.clone()), Some(metrics.wavs.engine.clone())),
-            1,
-        );
-        let submission = MockSubmission::new();
-        let storage_path = tempfile::NamedTempFile::new().unwrap();
-        Dispatcher::new(
-            trigger_manager,
-            engine_manager,
-            submission,
-            ChainConfigs::default(),
-            storage_path,
-            DispatcherMetrics::default(),
-            "https://ipfs.io/ipfs/".to_string(),
-        )
-        .unwrap()
+        Dispatcher::new(&config, metrics.wavs).unwrap()
     }
 
     pub fn new(ctx: AppContext) -> Arc<Self> {
-        let dispatcher = Arc::new(Self::create_dispatcher(ctx.clone()));
+        let temp_data_dir = tempfile::tempdir().unwrap();
+        let dispatcher = Arc::new(Self::create_dispatcher(ctx.clone(), &temp_data_dir));
 
         // start up the dispatcher in its own thread, before creating any data (similar to how we do it in main)
         std::thread::spawn({
@@ -96,13 +83,14 @@ impl MockE2ETestRunner {
         // start up our "http server" in its own thread, before creating any data (similar to how we do it in main)
         let http_app = ctx.rt.block_on({
             let dispatcher = dispatcher.clone();
-            async move { TestHttpApp::new_with_dispatcher(dispatcher).await }
+            async move { TestHttpApp::new_with_dispatcher(dispatcher, None).await }
         });
 
         Arc::new(Self {
             ctx,
             dispatcher,
             http_app,
+            temp_data_dir,
         })
     }
 
@@ -175,7 +163,7 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let trigger = mock_evm_event_trigger();
 
-        let submit = Submit::evm_contract("evm".try_into().unwrap(), rand_address_evm(), None);
+        let submit = Submit::None;
 
         let service = Service::new_simple(
             service_id,

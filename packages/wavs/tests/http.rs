@@ -5,10 +5,10 @@ use axum::{
 use tower::Service;
 use wavs::{
     config::Config,
-    submission::mock::mock_eigen_submit,
     test_utils::{
         address::rand_address_evm,
         http::{map_response, TestHttpApp},
+        mock_submissions::mock_eigen_submit,
         mock_trigger_manager::mock_evm_event_trigger,
     },
 };

@@ -6,7 +6,7 @@ use std::{sync::Arc, thread::sleep, time::Duration};
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
 use utils::{context::AppContext, telemetry::Metrics};
-use wavs::dispatcher::CoreDispatcher;
+use wavs::dispatcher::Dispatcher;
 
 use super::config::Configs;
 
@@ -33,7 +33,7 @@ impl AppHandles {
             cosmos_chains.push(handle);
         }
 
-        let dispatcher = Arc::new(CoreDispatcher::new_core(&configs.wavs, metrics.wavs).unwrap());
+        let dispatcher = Arc::new(Dispatcher::new(&configs.wavs, metrics.wavs).unwrap());
 
         let wavs_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();
