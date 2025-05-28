@@ -198,10 +198,11 @@ impl<T: TriggerManager, E: EngineRunner, S: Submission> DispatchManager for Disp
 
         // Get current service count for logging
         let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
+        let total_services = current_services.len();
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
         tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}", 
-            service.id, service.workflows.len(), current_services.len(), total_workflows);
+            service.id, service.workflows.len(), total_services, total_workflows);
 
         Ok(())
     }
