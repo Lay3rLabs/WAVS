@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
-    apis::{dispatcher::DispatchManager, engine::EngineError},
+    apis::dispatcher::DispatchManager,
     dispatcher::Dispatcher,
-    engine::{
-        mock::{Function, MockEngine},
-        runner::{EngineRunner, SingleEngineRunner},
-    },
+    engine_manager::{wasm_engine::WasmEngine, EngineManager},
     submission::mock::MockSubmission,
     test_utils::{
         address::{rand_address_evm, rand_event_evm},
@@ -19,11 +16,12 @@ use axum::{
     body::Body,
     http::{Method, Request},
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tower::Service as _;
 use utils::{
     config::ChainConfigs,
-    telemetry::{DispatcherMetrics, Metrics},
+    storage::memory::MemoryStorage,
+    telemetry::{DispatcherMetrics, EngineMetrics, Metrics},
 };
 use wavs_types::{
     ChainName, ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service,
@@ -34,32 +32,57 @@ use super::mock_trigger_manager::mock_evm_event_trigger;
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,
-    pub dispatcher: Arc<Dispatcher<SingleEngineRunner<MockEngine>, MockSubmission>>,
+    pub dispatcher: Arc<Dispatcher<MemoryStorage, MockSubmission>>,
     pub http_app: TestHttpApp,
 }
 
 impl MockE2ETestRunner {
-    pub fn new(ctx: AppContext) -> Arc<Self> {
+    pub fn create_engine(
+        config: Option<crate::config::Config>,
+        metrics: Option<EngineMetrics>,
+    ) -> WasmEngine<MemoryStorage> {
+        let config = config.unwrap_or_default();
+        let memory_storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+        let metrics = metrics
+            .unwrap_or_else(|| EngineMetrics::new(&opentelemetry::global::meter("wavs_metrics")));
+        WasmEngine::new(
+            memory_storage,
+            app_data,
+            3,
+            config.chains.clone(),
+            None,
+            None,
+            metrics,
+        )
+    }
+    pub fn create_dispatcher(_ctx: AppContext) -> Dispatcher<MemoryStorage, MockSubmission> {
         // create our dispatcher
         let config = crate::config::Config::default();
         let meter = opentelemetry::global::meter("wavs_metrics");
         let metrics = Metrics::new(&meter);
-        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger).unwrap();
-        let engine = SingleEngineRunner::new(MockEngine::new());
+        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger.clone()).unwrap();
+
+        let engine_manager = EngineManager::new(
+            Self::create_engine(Some(config.clone()), Some(metrics.wavs.engine.clone())),
+            1,
+        );
         let submission = MockSubmission::new();
         let storage_path = tempfile::NamedTempFile::new().unwrap();
-        let dispatcher = Arc::new(
-            Dispatcher::new(
-                trigger_manager,
-                engine,
-                submission,
-                ChainConfigs::default(),
-                storage_path,
-                DispatcherMetrics::default(),
-                "https://ipfs.io/ipfs/".to_string(),
-            )
-            .unwrap(),
-        );
+        Dispatcher::new(
+            trigger_manager,
+            engine_manager,
+            submission,
+            ChainConfigs::default(),
+            storage_path,
+            DispatcherMetrics::default(),
+            "https://ipfs.io/ipfs/".to_string(),
+        )
+        .unwrap()
+    }
+
+    pub fn new(ctx: AppContext) -> Arc<Self> {
+        let dispatcher = Arc::new(Self::create_dispatcher(ctx.clone()));
 
         // start up the dispatcher in its own thread, before creating any data (similar to how we do it in main)
         std::thread::spawn({
@@ -147,31 +170,8 @@ impl MockE2ETestRunner {
         map_response::<ListServicesResponse>(response).await
     }
 
-    pub async fn create_service_simple(
-        &self,
-        service_id: ServiceID,
-        source: ComponentSource,
-        function: impl Function,
-    ) {
-        self.create_service(service_id, source, function).await
-    }
-
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_service(
-        &self,
-        service_id: ServiceID,
-        source: ComponentSource,
-        function: impl Function,
-    ) {
-        // "upload" the component
-        // not going through http for this because we don't have raw bytes, digest is fake
-        let digest = match &source {
-            ComponentSource::Download { digest, .. } => digest,
-            ComponentSource::Registry { registry } => &registry.digest,
-            ComponentSource::Digest(digest) => digest,
-        };
-        self.dispatcher.engine.engine().register(digest, function);
-
+    pub async fn create_service(&self, service_id: ServiceID, component_source: ComponentSource) {
         // but we can create a service via http router
         let trigger = mock_evm_event_trigger();
 
@@ -181,7 +181,7 @@ impl MockE2ETestRunner {
             service_id,
             Some("mock-service".to_string()),
             trigger,
-            source,
+            component_source,
             submit,
             ServiceManager::Evm {
                 chain_name: "evm".try_into().unwrap(),
@@ -216,35 +216,5 @@ impl MockE2ETestRunner {
 
     pub fn teardown(&self) {
         // Your teardown code here
-    }
-}
-
-// taken from dispatcher unit test
-pub struct BigSquare;
-
-#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
-pub struct SquareIn {
-    pub x: u64,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
-
-pub struct SquareOut {
-    pub y: u64,
-}
-
-impl Function for BigSquare {
-    fn execute(&self, request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError> {
-        let SquareIn { x } = serde_json::from_slice(&request).unwrap();
-        let output = SquareOut { y: x * x };
-        Ok(Some(serde_json::to_vec(&output).unwrap()))
-    }
-}
-
-pub struct ComponentNone;
-
-impl Function for ComponentNone {
-    fn execute(&self, _request: Vec<u8>) -> Result<Option<Vec<u8>>, EngineError> {
-        Ok(None)
     }
 }

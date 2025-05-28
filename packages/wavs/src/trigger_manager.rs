@@ -3,7 +3,7 @@ pub mod lookup;
 pub mod schedulers;
 pub mod streams;
 
-use crate::{config::Config, AppContext};
+use crate::{config::Config, dispatcher::TRIGGER_CHANNEL_SIZE, AppContext};
 use anyhow::Result;
 use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
@@ -43,13 +43,11 @@ pub struct TriggerManager {
 }
 
 impl TriggerManager {
-    pub const CHANNEL_SIZE: usize = 100;
-
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
         // TODO - discuss unbounded, crossbeam, etc.
-        let (action_sender, action_receiver) = mpsc::channel(Self::CHANNEL_SIZE);
+        let (action_sender, action_receiver) = mpsc::channel(TRIGGER_CHANNEL_SIZE);
 
         Ok(Self {
             chain_configs: config.chains.clone(),

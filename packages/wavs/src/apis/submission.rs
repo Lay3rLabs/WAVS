@@ -8,8 +8,6 @@ use crate::AppContext;
 
 #[async_trait]
 pub trait Submission: Send + Sync {
-    const CHANNEL_SIZE: usize = 20;
-
     /// Start running the submission manager
     /// This should only be called once in the lifetime of the object.
     fn start(

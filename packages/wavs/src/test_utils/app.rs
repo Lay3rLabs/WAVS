@@ -2,7 +2,9 @@ use std::{path::PathBuf, sync::Arc};
 
 use utils::config::ConfigBuilder;
 
-use crate::{args::CliArgs, config::Config, engine::mock::mock_chain_configs};
+use crate::{args::CliArgs, config::Config};
+
+use super::mock_chain_configs::mock_chain_configs;
 
 #[derive(Clone)]
 pub struct TestApp {

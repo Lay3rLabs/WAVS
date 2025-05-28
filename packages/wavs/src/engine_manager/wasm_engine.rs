@@ -15,7 +15,7 @@ use wavs_types::{
 
 use utils::storage::{CAStorage, CAStorageError};
 
-use super::{Engine, EngineError};
+use super::error::EngineError;
 
 pub struct WasmEngine<S: CAStorage> {
     chain_configs: ChainConfigs,
@@ -66,11 +66,9 @@ impl<S: CAStorage> WasmEngine<S> {
             metrics,
         }
     }
-}
 
-impl<S: CAStorage> Engine for WasmEngine<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn start(&self) -> Result<(), EngineError> {
+    pub fn start(&self) -> Result<(), EngineError> {
         let engine = self.wasm_engine.clone();
 
         // just run forever, ticking forward till the end of time (or however long this node is up)
@@ -83,7 +81,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+    pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
         // compile component (validate it is proper wasm)
         let cm = Component::new(&self.wasm_engine, bytecode).map_err(EngineError::Compile)?;
 
@@ -99,7 +97,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    async fn store_component_from_source(
+    pub async fn store_component_from_source(
         &self,
         source: &ComponentSource,
     ) -> Result<Digest, EngineError> {
@@ -131,14 +129,14 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
 
     // TODO: paginate this
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
+    pub fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
         let digests: Result<Vec<_>, CAStorageError> = self.wasm_storage.digests()?.collect();
         Ok(digests?)
     }
 
     /// This will execute a contract that implements the wavs:worker wit interface
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    fn execute(
+    pub fn execute(
         &self,
         workflow: Workflow,
         trigger_action: TriggerAction,
@@ -209,7 +207,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
-    fn remove_storage(&self, service_id: &ServiceID) {
+    pub fn remove_storage(&self, service_id: &ServiceID) {
         let dir_path = self.app_data_dir.join(service_id.as_ref());
 
         if dir_path.exists() {
@@ -225,9 +223,7 @@ impl<S: CAStorage> Engine for WasmEngine<S> {
             tracing::warn!("Storage directory {:?} does not exist", dir_path);
         }
     }
-}
 
-impl<S: CAStorage> WasmEngine<S> {
     fn block_on_run<F, T>(&self, fut: F) -> T
     where
         F: std::future::Future<Output = T>,
@@ -245,18 +241,19 @@ impl<S: CAStorage> WasmEngine<S> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use utils::storage::memory::MemoryStorage;
     use wavs_types::{
         ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, WorkflowID,
     };
 
-    use crate::{engine::mock::mock_chain_configs, test_utils::address::rand_event_evm};
+    use crate::test_utils::{address::rand_event_evm, mock_chain_configs::mock_chain_configs};
 
     use super::*;
 
-    const ECHO_DATA: &[u8] = include_bytes!("../../../../examples/build/components/echo_data.wasm");
-    const PERMISSIONS: &[u8] =
+    pub static ECHO_DATA: &[u8] =
+        include_bytes!("../../../../examples/build/components/echo_data.wasm");
+    pub static PERMISSIONS: &[u8] =
         include_bytes!("../../../../examples/build/components/permissions.wasm");
 
     fn metrics() -> EngineMetrics {
@@ -327,8 +324,12 @@ mod tests {
             metrics(),
         );
 
-        // store square digest
+        // store echo digest
         let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
+
+        // also store permissions digest, to test that we execute the right one
+        let _ = engine.store_component_bytes(PERMISSIONS).unwrap();
+
         let workflow = Workflow {
             trigger: Trigger::evm_contract_event(
                 crate::test_utils::address::rand_address_evm(),

@@ -2,7 +2,7 @@ pub mod apis;
 pub mod args;
 pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
-pub mod engine; // where we manage and execute wasm
+pub mod engine_manager; // where we manage and execute wasm
 pub mod http;
 pub mod submission; // where we submit the results to the chain
 pub mod test_utils;

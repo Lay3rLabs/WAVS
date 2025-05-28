@@ -3,23 +3,11 @@ use std::sync::Arc;
 use axum::body::Body;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use utils::{
-    config::ChainConfigs,
-    telemetry::{DispatcherMetrics, HttpMetrics, Metrics},
-};
+use utils::{context::AppContext, storage::CAStorage, telemetry::HttpMetrics};
 
-use crate::{
-    apis::submission::Submission,
-    dispatcher::Dispatcher,
-    engine::{
-        identity::IdentityEngine,
-        runner::{EngineRunner, SingleEngineRunner},
-    },
-    submission::mock::MockSubmission,
-    trigger_manager::TriggerManager,
-};
+use crate::{apis::submission::Submission, dispatcher::Dispatcher};
 
-use super::app::TestApp;
+use super::{app::TestApp, mock_app::MockE2ETestRunner};
 
 #[derive(Clone)]
 pub struct TestHttpApp {
@@ -29,34 +17,15 @@ pub struct TestHttpApp {
 
 impl TestHttpApp {
     pub async fn new() -> Self {
-        let config = crate::config::Config::default();
-        let meter = opentelemetry::global::meter("wavs_metrics");
-        let metrics = Metrics::new(&meter);
-        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger).unwrap();
-        let engine = SingleEngineRunner::new(IdentityEngine::new());
-        let submission = MockSubmission::new();
-        let storage_path = tempfile::NamedTempFile::new().unwrap();
-        let metrics = DispatcherMetrics::new(&opentelemetry::global::meter("trigger-test-metrics"));
-
-        let dispatcher = Arc::new(
-            Dispatcher::new(
-                trigger_manager,
-                engine,
-                submission,
-                ChainConfigs::default(),
-                storage_path,
-                metrics,
-                "https://ipfs.io/ipfs/".to_string(),
-            )
-            .unwrap(),
-        );
-
-        Self::new_with_dispatcher(dispatcher).await
+        Self::new_with_dispatcher(Arc::new(MockE2ETestRunner::create_dispatcher(
+            AppContext::new(),
+        )))
+        .await
     }
 
-    pub async fn new_with_dispatcher<E, S>(dispatcher: Arc<Dispatcher<E, S>>) -> Self
+    pub async fn new_with_dispatcher<Storage, S>(dispatcher: Arc<Dispatcher<Storage, S>>) -> Self
     where
-        E: EngineRunner + 'static,
+        Storage: CAStorage + 'static,
         S: Submission + 'static,
     {
         let inner = TestApp::new().await;

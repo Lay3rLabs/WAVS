@@ -1,28 +1,70 @@
+pub mod error;
+pub mod wasm_engine;
+
+use std::sync::Arc;
+
 use alloy_primitives::FixedBytes;
+use error::EngineError;
+use rayon::ThreadPoolBuilder;
 use tokio::sync::mpsc;
+use tracing::instrument;
+use utils::storage::CAStorage;
 use wavs_types::{Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction};
 
 use crate::apis::submission::ChainMessage;
-use crate::engine::{Engine, EngineError};
+use crate::engine_manager::wasm_engine::WasmEngine;
 use crate::AppContext;
 
-pub trait EngineRunner: Send + Sync {
-    type Engine: Engine;
+pub struct EngineManager<S: CAStorage> {
+    pub engine: Arc<WasmEngine<S>>,
+    pub thread_count: usize,
+}
 
-    // This starts a loop to process all incoming triggers ans prepare outgoing results
-    // It should immediately return and run the processing task in the background
-    fn start(
+impl<S: CAStorage> Clone for EngineManager<S> {
+    fn clone(&self) -> Self {
+        Self {
+            engine: Arc::clone(&self.engine),
+            thread_count: self.thread_count,
+        }
+    }
+}
+
+impl<S: CAStorage> EngineManager<S> {
+    pub fn new(engine: WasmEngine<S>, thread_count: usize) -> Self {
+        Self {
+            engine: Arc::new(engine),
+            thread_count,
+        }
+    }
+
+    #[instrument(level = "debug", skip(self, _ctx), fields(subsys = "EngineRunner"))]
+    pub fn start(
         &self,
-        ctx: AppContext,
-        input: mpsc::Receiver<(TriggerAction, Service)>,
+        _ctx: AppContext,
+        mut input: mpsc::Receiver<(TriggerAction, Service)>,
         result_sender: mpsc::Sender<ChainMessage>,
-    );
+    ) where
+        S: 'static,
+    {
+        let _self = self.clone();
 
-    // Return the engine if they want to use that directly.
-    fn engine(&self) -> &Self::Engine;
+        std::thread::spawn(move || {
+            let pool = ThreadPoolBuilder::new()
+                .num_threads(_self.thread_count)
+                .build()
+                .unwrap();
+            while let Some((action, service)) = input.blocking_recv() {
+                let _self = _self.clone();
+                let result_sender = result_sender.clone();
+                pool.install(move || {
+                    if let Err(e) = _self.run_trigger(action, service, result_sender) {
+                        tracing::error!("{:?}", e);
+                    }
+                })
+            }
+        });
+    }
 
-    /// This is where the heavy lifting is done (at least for now, where self.engine.execute_queue happens in the same thread)
-    /// effectively, it slows down the consumption of triggers and can inadvertendly cause the whole system to slow down
     fn run_trigger(
         &self,
         action: TriggerAction,
@@ -49,7 +91,7 @@ pub trait EngineRunner: Send + Sync {
             workflow.component.source.digest()
         );
 
-        let wasm_response = self.engine().execute(workflow.clone(), action.clone())?;
+        let wasm_response = self.engine.execute(workflow.clone(), action.clone())?;
 
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)

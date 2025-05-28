@@ -2,15 +2,22 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
+use serde::{Deserialize, Serialize};
 use utils::context::AppContext;
-use wavs::{
-    engine::runner::EngineRunner,
-    test_utils::{
-        address::rand_address_evm,
-        mock_app::{BigSquare, ComponentNone, MockE2ETestRunner, SquareIn, SquareOut},
-    },
-};
+use wavs::test_utils::{address::rand_address_evm, mock_app::MockE2ETestRunner};
 use wavs_types::{ComponentSource, Digest, ServiceID, WorkflowID};
+
+const SQUARE: &[u8] = include_bytes!("../../../examples/build/components/square.wasm");
+#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
+pub struct SquareIn {
+    pub x: u64,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
+
+pub struct SquareOut {
+    pub y: u64,
+}
 
 #[test]
 fn mock_e2e_trigger_flow() {
@@ -25,14 +32,14 @@ fn mock_e2e_trigger_flow() {
         let service_id = service_id.clone();
 
         async move {
-            let digest = Digest::new(b"wasm");
-
+            let digest = runner
+                .dispatcher
+                .engine_manager
+                .engine
+                .store_component_bytes(SQUARE)
+                .unwrap();
             runner
-                .create_service(
-                    service_id.clone(),
-                    ComponentSource::Digest(digest),
-                    BigSquare,
-                )
+                .create_service(service_id.clone(), ComponentSource::Digest(digest))
                 .await;
         }
     });
@@ -94,25 +101,20 @@ fn mock_e2e_service_lifecycle() {
 
             // add services in order
             let service_id1 = ServiceID::new("service1").unwrap();
-            let digest1 = Digest::new(b"wasm1");
+            let digest = runner
+                .dispatcher
+                .engine_manager
+                .engine
+                .store_component_bytes(SQUARE)
+                .unwrap();
 
             let service_id2 = ServiceID::new("service2").unwrap();
-            let digest2 = Digest::new(b"wasm2");
 
             let service_id3 = ServiceID::new("service3").unwrap();
-            let digest3 = Digest::new(b"wasm3");
 
-            for (service_id, digest) in [
-                (&service_id1, digest1),
-                (&service_id2, digest2),
-                (&service_id3, digest3),
-            ] {
+            for service_id in [&service_id1, &service_id2, &service_id3] {
                 runner
-                    .create_service_simple(
-                        service_id.clone(),
-                        ComponentSource::Digest(digest.clone()),
-                        BigSquare,
-                    )
+                    .create_service(service_id.clone(), ComponentSource::Digest(digest.clone()))
                     .await;
             }
 
@@ -128,9 +130,11 @@ fn mock_e2e_service_lifecycle() {
             let orphaned_digest = Digest::new(b"orphaned");
             runner
                 .dispatcher
+                .engine_manager
                 .engine
-                .engine()
-                .register(&orphaned_digest, BigSquare);
+                .store_component_from_source(&ComponentSource::Digest(orphaned_digest))
+                .await
+                .unwrap();
 
             let services = runner.list_services().await;
             assert_eq!(services.services.len(), 3);
@@ -172,14 +176,15 @@ fn mock_e2e_component_none() {
         let service_id = service_id.clone();
 
         async move {
-            let digest = Digest::new(b"wasm");
+            let digest = runner
+                .dispatcher
+                .engine_manager
+                .engine
+                .store_component_bytes(SQUARE)
+                .unwrap();
 
             runner
-                .create_service(
-                    service_id.clone(),
-                    ComponentSource::Digest(digest),
-                    ComponentNone,
-                )
+                .create_service(service_id.clone(), ComponentSource::Digest(digest))
                 .await;
         }
     });

@@ -21,21 +21,22 @@ use wavs_types::{
 };
 
 use crate::apis::dispatcher::DispatchManager;
-use crate::apis::engine::{Engine, EngineError};
 use crate::apis::submission::{ChainMessage, Submission, SubmissionError};
 
-use crate::engine::runner::EngineRunner;
+use crate::dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE};
+use crate::engine_manager::error::EngineError;
+use crate::engine_manager::EngineManager;
 use crate::trigger_manager::error::TriggerError;
 use crate::trigger_manager::TriggerManager;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
-use utils::storage::CAStorageError;
+use utils::storage::{CAStorage, CAStorageError};
 use wasm_pkg_common::Error as RegistryError;
 
 /// This should auto-derive clone if T, E, S: Clone
-pub struct Dispatcher<E: EngineRunner, S: Submission> {
+pub struct Dispatcher<Storage: CAStorage, S: Submission> {
     pub trigger_manager: TriggerManager,
-    pub engine: E,
+    pub engine_manager: EngineManager<Storage>,
     pub submission: S,
     pub storage: Arc<RedbStorage>,
     pub chain_configs: ChainConfigs,
@@ -43,10 +44,10 @@ pub struct Dispatcher<E: EngineRunner, S: Submission> {
     pub ipfs_gateway: String,
 }
 
-impl<E: EngineRunner, S: Submission> Dispatcher<E, S> {
+impl<Storage: CAStorage, S: Submission> Dispatcher<Storage, S> {
     pub fn new(
         trigger_manager: TriggerManager,
-        engine: E,
+        engine_manager: EngineManager<Storage>,
         submission: S,
         chain_configs: ChainConfigs,
         db_storage_path: impl AsRef<Path>,
@@ -57,7 +58,7 @@ impl<E: EngineRunner, S: Submission> Dispatcher<E, S> {
 
         Ok(Dispatcher {
             trigger_manager,
-            engine,
+            engine_manager,
             submission,
             storage,
             chain_configs,
@@ -70,7 +71,7 @@ impl<E: EngineRunner, S: Submission> Dispatcher<E, S> {
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
 #[async_trait]
-impl<E: EngineRunner, S: Submission> DispatchManager for Dispatcher<E, S> {
+impl<Storage: CAStorage + 'static, S: Submission> DispatchManager for Dispatcher<Storage, S> {
     type Error = DispatcherError;
 
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
@@ -80,11 +81,11 @@ impl<E: EngineRunner, S: Submission> DispatchManager for Dispatcher<E, S> {
         let mut actions_in = self.trigger_manager.start(ctx.clone())?;
         // Next is the local (blocking) processing
         let (work_sender, work_receiver) =
-            mpsc::channel::<(TriggerAction, Service)>(E::Engine::CHANNEL_SIZE);
+            mpsc::channel::<(TriggerAction, Service)>(ENGINE_CHANNEL_SIZE);
         let (wasi_result_sender, wasi_result_receiver) =
-            mpsc::channel::<ChainMessage>(S::CHANNEL_SIZE);
+            mpsc::channel::<ChainMessage>(SUBMISSION_CHANNEL_SIZE);
         // Then the engine processing
-        self.engine
+        self.engine_manager
             .start(ctx.clone(), work_receiver, wasi_result_sender);
         // And pipeline finishes with submission
         self.submission.start(ctx.clone(), wasi_result_receiver)?;
@@ -153,12 +154,12 @@ impl<E: EngineRunner, S: Submission> DispatchManager for Dispatcher<E, S> {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, Self::Error> {
-        let digest = self.engine.engine().store_component_bytes(&source)?;
+        let digest = self.engine_manager.engine.store_component_bytes(&source)?;
         Ok(digest)
     }
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn list_component_digests(&self) -> Result<Vec<Digest>, Self::Error> {
-        let digests = self.engine.engine().list_digests()?;
+        let digests = self.engine_manager.engine.list_digests()?;
 
         Ok(digests)
     }
@@ -186,8 +187,8 @@ impl<E: EngineRunner, S: Submission> DispatchManager for Dispatcher<E, S> {
         }
 
         for workflow in service.workflows.values() {
-            self.engine
-                .engine()
+            self.engine_manager
+                .engine
                 .store_component_from_source(&workflow.component.source)
                 .await?;
         }
@@ -220,8 +221,8 @@ impl<E: EngineRunner, S: Submission> DispatchManager for Dispatcher<E, S> {
 
         // Store components
         for workflow in service.workflows.values() {
-            self.engine
-                .engine()
+            self.engine_manager
+                .engine
                 .store_component_from_source(&workflow.component.source)
                 .await?;
         }
@@ -239,7 +240,7 @@ impl<E: EngineRunner, S: Submission> DispatchManager for Dispatcher<E, S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     fn remove_service(&self, id: ServiceID) -> Result<(), Self::Error> {
         self.storage.remove(SERVICE_TABLE, id.as_ref())?;
-        self.engine.engine().remove_storage(&id);
+        self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
         self.submission.remove_service(id.clone())?;
 
