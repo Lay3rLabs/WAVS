@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
 use regex::Regex;
+use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
@@ -36,9 +37,86 @@ pub struct TestDefinition {
 }
 
 #[derive(Clone, Debug)]
+pub struct ComponentDefinition {
+    /// The name of the component
+    pub name: ComponentName,
+
+    /// Key-value pairs that are accessible in the components via host bindings.
+    pub config_vars: BTreeMap<String, String>,
+
+    /// External env variable keys to be read from the system host on execute (i.e. API keys).
+    /// Must be prefixed with `WAVS_ENV_`.
+    pub env_vars: BTreeMap<String, String>,
+}
+
+impl From<ComponentName> for ComponentDefinition {
+    fn from(name: ComponentName) -> Self {
+        ComponentDefinition {
+            name,
+            config_vars: BTreeMap::new(),
+            env_vars: BTreeMap::new(),
+        }
+    }
+}
+
+impl ComponentName {
+    pub fn into_builder(self) -> ComponentBuilder {
+        ComponentBuilder::new(self)
+    }
+}
+
+pub struct ComponentBuilder {
+    name: ComponentName,
+    config_vars: BTreeMap<String, String>,
+    env_vars: BTreeMap<String, String>,
+}
+
+impl ComponentBuilder {
+    pub fn new(name: ComponentName) -> Self {
+        Self {
+            name,
+            config_vars: BTreeMap::new(),
+            env_vars: BTreeMap::new(),
+        }
+    }
+
+    pub fn with_config_var(mut self, key: String, value: String) -> Self {
+        if self.env_vars.contains_key(&key) {
+            panic!("Config var key '{}' is already defined", key);
+        }
+
+        self.config_vars.insert(key, value);
+        self
+    }
+
+    pub fn with_env_var(mut self, key: String, value: String) -> Self {
+        if !key.starts_with(WAVS_ENV_PREFIX) {
+            panic!(
+                "Env var key '{}' must be prefixed with '{WAVS_ENV_PREFIX}'",
+                key
+            );
+        }
+        if self.env_vars.contains_key(&key) {
+            panic!("Env var key '{}' is already defined", key);
+        }
+
+        self.env_vars.insert(key, value);
+        self
+    }
+
+    pub fn build(self) -> ComponentDefinition {
+        ComponentDefinition {
+            name: self.name,
+            config_vars: self.config_vars,
+            env_vars: self.env_vars,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct WorkflowDefinition {
-    /// Components used in this test
-    pub component: ComponentName,
+    /// Component configuration
+    pub component: ComponentDefinition,
 
     /// Trigger configuration
     pub trigger: TriggerDefinition,
@@ -228,7 +306,7 @@ impl TestBuilder {
 /// Simplified workflow builder with overwrite protection
 #[derive(Default)]
 pub struct WorkflowBuilder {
-    component: Option<ComponentName>,
+    component: Option<ComponentDefinition>,
     trigger: Option<TriggerDefinition>,
     submit: Option<SubmitDefinition>,
     aggregators: Vec<AggregatorDefinition>,
@@ -244,7 +322,7 @@ impl WorkflowBuilder {
     }
 
     /// Set the component to use
-    pub fn with_component(mut self, component: ComponentName) -> Self {
+    pub fn with_component(mut self, component: ComponentDefinition) -> Self {
         if self.component.is_some() {
             panic!("Component already set");
         }

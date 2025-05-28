@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use tempfile::{tempdir, TempDir};
 use utils::{config::ChainConfigs, filesystem::workspace_path};
@@ -22,21 +22,21 @@ pub struct EngineSetup {
 }
 
 impl EngineSetup {
-    pub fn new() -> Arc<Self> {
+    pub fn new(config: BTreeMap<String, String>) -> Arc<Self> {
         // Create wasmtime engine
-        let mut config = wasmtime::Config::new();
-        config.wasm_component_model(true);
-        config.async_support(true);
-        config.consume_fuel(true);
-        config.epoch_interruption(true);
-        let engine = WTEngine::new(&config).unwrap();
+        let mut wt_config = wasmtime::Config::new();
+        wt_config.wasm_component_model(true);
+        wt_config.async_support(true);
+        wt_config.consume_fuel(true);
+        wt_config.epoch_interruption(true);
+        let engine = WTEngine::new(&wt_config).unwrap();
 
-        // Load the echo_raw.wasm component
+        // Load the echo_data.wasm component
         let component_path = workspace_path()
             .join("examples")
             .join("build")
             .join("components")
-            .join("echo_raw.wasm");
+            .join("echo_data.wasm");
         let component_bytes = std::fs::read(&component_path).unwrap();
         let component_source = wavs_types::ComponentSource::Digest(Digest::new(&component_bytes));
         let component = Component::new(&engine, &component_bytes).unwrap();
@@ -57,7 +57,7 @@ impl EngineSetup {
                 },
                 fuel_limit: None,
                 time_limit_seconds: None,
-                config: std::collections::BTreeMap::new(),
+                config,
                 env_keys: std::collections::BTreeSet::new(),
             },
             submit: wavs_types::Submit::None,

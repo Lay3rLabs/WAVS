@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use opentelemetry::global::meter;
 use utils::storage::fs::FileStorage;
@@ -46,7 +46,7 @@ pub struct SystemSetup {
 
 impl SystemSetup {
     pub fn new(system_config: SystemConfig) -> Arc<Self> {
-        let engine_setup = EngineSetup::new();
+        let engine_setup = EngineSetup::new(BTreeMap::new());
 
         // Create file storage for the WasmEngine
         let file_storage = FileStorage::new(engine_setup.data_dir.path().join("ca")).unwrap();

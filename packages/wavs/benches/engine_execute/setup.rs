@@ -1,17 +1,32 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use wavs_benchmark_common::engine_setup::EngineSetup;
 use wavs_types::TriggerAction;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ExecuteConfig {
     /// Number of executions
     pub n_executions: u64,
+    /// Configuration for async component calls
+    pub sleep_config: Option<SleepConfig>,
+}
+
+#[derive(Clone)]
+pub struct SleepConfig {
+    pub sleep_ms: u64,
+    pub sleep_kind: String,
 }
 
 impl ExecuteConfig {
     pub fn description(&self) -> String {
-        format!("{} executions", self.n_executions)
+        format!(
+            "{}{} executions",
+            self.n_executions,
+            self.sleep_config
+                .as_ref()
+                .map(|x| format!(" {} sleep", x.sleep_kind))
+                .unwrap_or_default()
+        )
     }
 }
 
@@ -25,7 +40,15 @@ pub struct ExecuteSetup {
 
 impl ExecuteSetup {
     pub fn new(execute_config: ExecuteConfig) -> Arc<Self> {
-        let engine_setup = EngineSetup::new();
+        let config = if let Some(sleep_config) = execute_config.sleep_config {
+            BTreeMap::from_iter([
+                ("sleep-ms".to_string(), sleep_config.sleep_ms.to_string()),
+                ("sleep-kind".to_string(), sleep_config.sleep_kind),
+            ])
+        } else {
+            BTreeMap::new()
+        };
+        let engine_setup = EngineSetup::new(config);
 
         let trigger_actions = (1..=execute_config.n_executions)
             .map(|execution_count| {

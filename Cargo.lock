@@ -3002,13 +3002,6 @@ name = "echo-data"
 version = "0.4.0-beta.5"
 dependencies = [
  "example-helpers",
-]
-
-[[package]]
-name = "echo-raw"
-version = "0.4.0-beta.5"
-dependencies = [
- "example-helpers",
  "wstd",
 ]
 

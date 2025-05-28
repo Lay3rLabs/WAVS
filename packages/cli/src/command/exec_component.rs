@@ -184,7 +184,7 @@ mod test {
             .join("examples")
             .join("build")
             .join("components")
-            .join("echo_raw.wasm")
+            .join("echo_data.wasm")
             .to_string_lossy()
             .to_string();
 

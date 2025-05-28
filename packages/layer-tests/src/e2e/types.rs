@@ -10,7 +10,6 @@ pub struct SquareRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[allow(dead_code)]
 pub struct SquareResponse {
     pub y: u64,
 }
