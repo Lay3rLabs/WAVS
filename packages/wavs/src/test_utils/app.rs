@@ -14,6 +14,12 @@ pub struct TestApp {
     _temp_data_dir_handle: Arc<tempfile::TempDir>,
 }
 
+impl Default for TestApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestApp {
     pub fn new() -> Self {
         let temp_home_dir_handle = Arc::new(tempfile::tempdir().unwrap());

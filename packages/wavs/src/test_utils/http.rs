@@ -17,6 +17,12 @@ pub struct TestHttpApp {
     _http_router: axum::Router,
 }
 
+impl Default for TestHttpApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestHttpApp {
     pub fn new() -> Self {
         let ctx = AppContext::new();

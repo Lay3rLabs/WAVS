@@ -124,7 +124,7 @@ impl MockE2ETestRunner {
                             workflow_id,
                             contract_address.clone().try_into().unwrap(),
                             ChainName::new(chain_id.to_string()).unwrap(),
-                            event.clone(),
+                            event,
                         )
                         .unwrap(),
                         data: TriggerData::EvmContractEvent {

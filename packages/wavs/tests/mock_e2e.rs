@@ -66,7 +66,7 @@ fn mock_e2e_trigger_flow() {
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),
-                    &task_queue_address.clone().into(),
+                    &task_queue_address.clone(),
                     &SquareIn { x: 3 },
                     "evm",
                 )
@@ -75,7 +75,7 @@ fn mock_e2e_trigger_flow() {
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),
-                    &task_queue_address.into(),
+                    &task_queue_address,
                     &SquareIn { x: 21 },
                     "evm",
                 )
