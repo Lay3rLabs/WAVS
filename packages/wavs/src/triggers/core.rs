@@ -186,6 +186,7 @@ impl CoreTriggerManager {
                 Ok(res) => res,
             };
 
+            tracing::info!("Processing trigger stream event: {:?}", res);
             let mut trigger_actions = Vec::new();
 
             match res {
@@ -452,6 +453,21 @@ impl CoreTriggerManager {
             }
 
             let action_sender = self.action_sender.lock().unwrap().clone().unwrap();
+            if !trigger_actions.is_empty() {
+                tracing::info!(
+                    "Sending {} trigger actions to dispatcher",
+                    trigger_actions.len()
+                );
+                for (idx, action) in trigger_actions.iter().enumerate() {
+                    tracing::info!(
+                        "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}",
+                        idx + 1,
+                        action.config.service_id,
+                        action.config.workflow_id,
+                        action.data
+                    );
+                }
+            }
             for action in trigger_actions {
                 action_sender.send(action).await.unwrap();
             }

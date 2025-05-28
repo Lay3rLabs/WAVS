@@ -116,10 +116,17 @@ impl CoreSubmission {
             .envelope
             .signature_data(vec![packet.signature], block_height)?;
 
-        let _tx_receipt = client
+        let tx_receipt = client
             .send_envelope_signatures(packet.envelope, signature_data, address, max_gas)
             .await
             .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
+
+        tracing::info!(
+            "Successfully submitted to EVM chain {}: tx_hash={}, service_id={}",
+            chain_name,
+            tx_receipt.transaction_hash,
+            packet.route.service_id
+        );
 
         self.metrics.increment_total_processed_messages("to_evm");
 
@@ -132,6 +139,7 @@ impl CoreSubmission {
         url: String,
         packet: Packet,
     ) -> Result<(), SubmissionError> {
+        let service_id = packet.route.service_id.clone();
         let response = self
             .http_client
             .post(format!("{url}/packet"))
@@ -154,22 +162,29 @@ impl CoreSubmission {
         for response in responses {
             match response {
                 AddPacketResponse::Sent { tx_receipt, count } => {
-                    tracing::debug!(
-                        "Aggregator submitted with tx hash {} and payload count {}",
-                        tx_receipt.transaction_hash,
-                        count
+                    tracing::info!(
+                        "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}",
+                        url, tx_receipt.transaction_hash, count, service_id
                     );
                 }
                 AddPacketResponse::Aggregated { count } => {
-                    tracing::debug!("Aggregated with current payload count {}", count);
+                    tracing::info!(
+                        "Successfully aggregated for service_id={}: current_payload_count={}",
+                        service_id,
+                        count
+                    );
                 }
 
                 AddPacketResponse::Error { reason } => {
-                    tracing::error!("Aggregator errored: {}", reason);
+                    tracing::error!(
+                        "Aggregator errored for service_id={}: {}",
+                        service_id,
+                        reason
+                    );
                 }
 
                 AddPacketResponse::Burned => {
-                    tracing::debug!("Aggregator queue is burned");
+                    tracing::info!("Aggregator queue burned for service_id={}", service_id);
                 }
             }
 
