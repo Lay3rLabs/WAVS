@@ -8,33 +8,24 @@ pub struct ExecuteConfig {
     /// Number of executions
     pub n_executions: u64,
     /// Configuration for async component calls
-    pub async_config: Option<AsyncConfig>,
+    pub sleep_config: Option<SleepConfig>,
 }
 
 #[derive(Clone)]
-pub struct AsyncConfig {
+pub struct SleepConfig {
     pub sleep_ms: u64,
     pub sleep_kind: String,
-}
-
-impl Default for AsyncConfig {
-    fn default() -> Self {
-        Self {
-            sleep_ms: 100,
-            sleep_kind: "async".to_string(),
-        }
-    }
 }
 
 impl ExecuteConfig {
     pub fn description(&self) -> String {
         format!(
-            "{} {} executions",
+            "{}{} executions",
             self.n_executions,
-            self.async_config
+            self.sleep_config
                 .as_ref()
-                .map(|_| "async")
-                .unwrap_or("sync")
+                .map(|x| format!(" {} sleep", x.sleep_kind))
+                .unwrap_or_default()
         )
     }
 }
@@ -49,7 +40,7 @@ pub struct ExecuteSetup {
 
 impl ExecuteSetup {
     pub fn new(execute_config: ExecuteConfig) -> Arc<Self> {
-        let config = if let Some(async_config) = execute_config.async_config {
+        let config = if let Some(async_config) = execute_config.sleep_config {
             BTreeMap::from_iter([
                 ("sleep-ms".to_string(), async_config.sleep_ms.to_string()),
                 ("sleep-kind".to_string(), async_config.sleep_kind),

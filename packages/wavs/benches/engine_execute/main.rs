@@ -1,5 +1,4 @@
 mod engine_execute;
-mod engine_execute_async;
 mod setup;
 
 use criterion::{criterion_group, criterion_main};
@@ -42,5 +41,4 @@ pub fn run_simulation(setup: Arc<ExecuteSetup>) {
 }
 
 criterion_group!(benches, engine_execute::benchmark);
-criterion_group!(async_benches, engine_execute_async::benchmark);
-criterion_main!(benches, async_benches);
+criterion_main!(benches);
