@@ -1,8 +1,10 @@
 mod service_manager {
+
     alloy_sol_macro::sol!(
         #[allow(missing_docs)]
         #[cfg(feature = "solidity-rpc")]
         #[sol(rpc)]
+        #[derive(Debug)]
         IWavsServiceManager,
         "./src/contracts/solidity/abi/IWavsServiceManager.sol/IWavsServiceManager.json"
     );

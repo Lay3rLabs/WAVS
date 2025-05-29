@@ -1,6 +1,6 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
-use alloy_sol_types::SolError;
+use alloy_sol_types::SolInterface;
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
@@ -231,15 +231,15 @@ impl AggregatorProcess<'_> {
                             Err(e) => {
                                 if let Some(revert) = e
                                     .as_revert_data()
-                                    .and_then(|raw| alloy_sol_types::Revert::abi_decode(&raw).ok())
+                                    .and_then(|raw| IWavsServiceManager::IWavsServiceManagerErrors::abi_decode(&raw).ok())
                                 {
                                     // TODO - we want to get the specific error of "valid but not enough signers"
                                     // but for now, we've validated the signature and other things locally
                                     // so we can be optimistic and aggregate
                                     tracing::debug!(
-                                        "Aggregator {} validation failed: {}",
+                                        "Aggregator {} validation failed: {:?}",
                                         chain_name,
-                                        revert.reason
+                                        revert
                                     );
 
                                     state.save_packet_queue(
