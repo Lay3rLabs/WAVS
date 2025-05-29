@@ -100,7 +100,8 @@ impl SubmissionManager {
                                 }
                             };
 
-                            if cfg!(debug_assertions) {
+                            #[cfg(debug_assertions)]
+                            {
                                 _self.debug_packets.write().unwrap().push(packet.clone());
                             }
 
