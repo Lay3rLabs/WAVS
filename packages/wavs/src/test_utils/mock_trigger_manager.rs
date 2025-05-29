@@ -6,11 +6,69 @@ use crate::test_utils::address::{
     rand_address_cosmos, rand_address_evm, rand_event_cosmos, rand_event_evm,
 };
 
+use alloy_primitives::LogData;
+use serde::Serialize;
 use tokio::sync::mpsc;
 use utils::context::AppContext;
 use wavs_types::{
     ChainName, IDError, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
+
+// erm, not really a mock... but a test utility
+pub fn mock_real_trigger_action(
+    service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
+    workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
+    contract_address: &layer_climb::prelude::Address,
+    data: &(impl Serialize + std::fmt::Debug),
+    chain_name: impl ToString + std::fmt::Debug,
+) -> TriggerAction {
+    let data = serde_json::to_vec(data).unwrap();
+    match contract_address {
+        layer_climb::prelude::Address::Evm(_) => {
+            let event = rand_event_evm();
+            TriggerAction {
+                config: TriggerConfig::evm_contract_event(
+                    service_id,
+                    workflow_id,
+                    contract_address.clone().try_into().unwrap(),
+                    ChainName::new(chain_name.to_string()).unwrap(),
+                    event,
+                )
+                .unwrap(),
+                data: TriggerData::EvmContractEvent {
+                    contract_address: contract_address.clone().try_into().unwrap(),
+                    chain_name: ChainName::new(chain_name.to_string()).unwrap(),
+                    // FIXME: this should be a proper EVM event, this is just a placeholder
+                    log: LogData::new(vec![event.into_inner().into()], data.into()).unwrap(),
+                    block_height: 1,
+                },
+            }
+        }
+        layer_climb::prelude::Address::Cosmos { .. } => {
+            let event = rand_event_cosmos();
+
+            TriggerAction {
+                config: TriggerConfig::cosmos_contract_event(
+                    service_id,
+                    workflow_id,
+                    contract_address.clone(),
+                    ChainName::new(chain_name.to_string()).unwrap(),
+                    event.clone(),
+                )
+                .unwrap(),
+                data: TriggerData::CosmosContractEvent {
+                    contract_address: contract_address.clone(),
+                    chain_name: ChainName::new(chain_name.to_string()).unwrap(),
+                    event: cosmwasm_std::Event::new("new-message").add_attributes(vec![
+                        ("id", "1".to_string()),
+                        ("data", const_hex::encode(data)),
+                    ]),
+                    block_height: 1,
+                },
+            }
+        }
+    }
+}
 
 pub fn mock_evm_event_trigger_config(
     service_id: impl TryInto<ServiceID, Error = IDError>,

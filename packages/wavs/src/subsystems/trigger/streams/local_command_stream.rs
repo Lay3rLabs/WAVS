@@ -30,15 +30,15 @@ pub enum LocalStreamCommand {
 }
 
 impl LocalStreamCommand {
-    pub fn new(trigger_config: &TriggerConfig) -> Self {
+    pub fn new(trigger_config: &TriggerConfig) -> Option<Self> {
         match &trigger_config.trigger {
-            Trigger::Cron { .. } => Self::StartListeningCron,
+            Trigger::Cron { .. } => Some(Self::StartListeningCron),
             Trigger::EvmContractEvent { chain_name, .. }
             | Trigger::CosmosContractEvent { chain_name, .. }
-            | Trigger::BlockInterval { chain_name, .. } => Self::StartListeningChain {
+            | Trigger::BlockInterval { chain_name, .. } => Some(Self::StartListeningChain {
                 chain_name: chain_name.clone(),
-            },
-            Trigger::Manual => unreachable!("Manual triggers don't really get added"),
+            }),
+            Trigger::Manual => None,
         }
     }
 }

@@ -2,35 +2,14 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use std::{
-    thread::sleep,
-    time::{Duration, Instant},
-};
-
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use utils::context::AppContext;
 use wavs::test_utils::{
     address::{rand_address_cosmos, rand_address_evm},
     mock_app::MockE2ETestRunner,
+    mock_engine::{SquareIn, COMPONENT_ECHO_DATA, COMPONENT_SQUARE},
+    mock_submissions::wait_for_submission_messages,
 };
 use wavs_types::{ComponentSource, ServiceID, WorkflowID};
-
-const SQUARE: &[u8] = include_bytes!("../../../examples/build/components/square.wasm");
-const ECHO_DATA: &[u8] = include_bytes!("../../../examples/build/components/echo_data.wasm");
-const SUBMISSION_TIMEOUT: Duration = Duration::from_secs(1);
-const SUBMISSION_POLL: Duration = Duration::from_millis(50);
-
-#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
-pub struct SquareIn {
-    pub x: u64,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Eq, Debug)]
-
-pub struct SquareOut {
-    pub y: u64,
-}
 
 #[test]
 fn mock_e2e_trigger_flow() {
@@ -49,7 +28,7 @@ fn mock_e2e_trigger_flow() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(SQUARE)
+                .store_component_bytes(COMPONENT_SQUARE)
                 .unwrap();
             runner
                 .create_service(service_id.clone(), ComponentSource::Digest(digest))
@@ -84,7 +63,7 @@ fn mock_e2e_trigger_flow() {
     });
 
     // block and wait for triggers to go through the whole flow
-    wait_for_submission_messages(&runner.dispatcher.submission_manager, 2).unwrap();
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 2, None).unwrap();
 
     // elsewhere we know that the component is executing, no need to check the actual results here
     // since Submit is None
@@ -110,7 +89,7 @@ fn mock_e2e_service_lifecycle() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(SQUARE)
+                .store_component_bytes(COMPONENT_SQUARE)
                 .unwrap();
 
             let service_id2 = ServiceID::new("service2").unwrap();
@@ -136,7 +115,7 @@ fn mock_e2e_service_lifecycle() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(ECHO_DATA)
+                .store_component_bytes(COMPONENT_ECHO_DATA)
                 .unwrap();
 
             let services = runner.list_services().await;
@@ -183,7 +162,7 @@ fn mock_e2e_component_none() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(SQUARE)
+                .store_component_bytes(COMPONENT_SQUARE)
                 .unwrap();
 
             runner
@@ -210,26 +189,5 @@ fn mock_e2e_component_none() {
     });
 
     // this _should_ error because submission is not fired
-    wait_for_submission_messages(&runner.dispatcher.submission_manager, 1).unwrap_err();
-}
-
-/// This will block until n messages arrive in the inbox, or until custom Duration passes
-fn wait_for_submission_messages(
-    submission_manager: &wavs::subsystems::submission::SubmissionManager,
-    n: u64,
-) -> Result<(), WaitError> {
-    let end = Instant::now() + SUBMISSION_TIMEOUT;
-    while Instant::now() < end {
-        if submission_manager.get_message_count() >= n {
-            return Ok(());
-        }
-        sleep(SUBMISSION_POLL);
-    }
-    Err(WaitError::Timeout)
-}
-
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum WaitError {
-    #[error("Waiting timed out")]
-    Timeout,
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 1, None).unwrap_err();
 }

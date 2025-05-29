@@ -472,6 +472,7 @@ mod test_ext {
             })
         }
 
+        #[cfg(test)]
         pub fn manual(
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,

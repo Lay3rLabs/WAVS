@@ -22,8 +22,8 @@ pub enum SubmissionError {
     MissingCosmosChain,
     #[error("evm: {0}")]
     EVM(anyhow::Error),
-    #[error("missing EVM chain")]
-    MissingEvmChain,
+    #[error("missing EVM chain for {0}")]
+    MissingEvmChain(ChainName),
     #[error("chain is not an EVM chain")]
     NotEvmChain,
     #[error("cross-chain submissions are not supported yet")]

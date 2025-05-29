@@ -4,12 +4,11 @@ use crate::{
     dispatcher::Dispatcher,
     subsystems::engine::wasm_engine::WasmEngine,
     test_utils::{
-        address::{rand_address_evm, rand_event_evm},
+        address::rand_address_evm,
         http::{map_response, TestHttpApp},
     },
     AppContext,
 };
-use alloy_primitives::LogData;
 use axum::{
     body::Body,
     http::{Method, Request},
@@ -21,11 +20,11 @@ use utils::{
     telemetry::{EngineMetrics, Metrics},
 };
 use wavs_types::{
-    ChainName, ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service,
-    ServiceID, ServiceManager, Submit, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service, ServiceID,
+    ServiceManager, Submit, WorkflowID,
 };
 
-use super::{address::rand_event_cosmos, mock_trigger_manager::mock_evm_event_trigger};
+use super::mock_trigger_manager::{mock_evm_event_trigger, mock_real_trigger_action};
 
 pub struct MockE2ETestRunner {
     pub ctx: AppContext,
@@ -58,7 +57,6 @@ impl MockE2ETestRunner {
         _ctx: AppContext,
         data_dir: impl AsRef<std::path::Path>,
     ) -> Dispatcher<FileStorage> {
-        // create our dispatcher
         let config = crate::config::Config {
             submission_mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
@@ -68,7 +66,11 @@ impl MockE2ETestRunner {
         };
         let meter = opentelemetry::global::meter("wavs_metrics");
         let metrics = Metrics::new(&meter);
-        Dispatcher::new(&config, metrics.wavs).unwrap()
+
+        let mut dispatcher = Dispatcher::new(&config, metrics.wavs).unwrap();
+        dispatcher.trigger_manager.disable_networking = true;
+        dispatcher.submission_manager.disable_networking = true;
+        dispatcher
     }
 
     pub fn new(ctx: AppContext) -> Arc<Self> {
@@ -103,69 +105,17 @@ impl MockE2ETestRunner {
         data: &(impl Serialize + std::fmt::Debug),
         chain_id: impl ToString + std::fmt::Debug,
     ) {
-        let sender = self
-            .dispatcher
+        self.dispatcher
             .trigger_manager
-            .action_sender
-            .lock()
-            .unwrap()
-            .clone()
+            .send_actions([mock_real_trigger_action(
+                service_id,
+                workflow_id,
+                contract_address,
+                data,
+                chain_id,
+            )])
+            .await
             .unwrap();
-
-        let data = serde_json::to_vec(data).unwrap();
-        match contract_address {
-            layer_climb::prelude::Address::Evm(_) => {
-                let event = rand_event_evm();
-
-                sender
-                    .send(TriggerAction {
-                        config: TriggerConfig::evm_contract_event(
-                            service_id,
-                            workflow_id,
-                            contract_address.clone().try_into().unwrap(),
-                            ChainName::new(chain_id.to_string()).unwrap(),
-                            event,
-                        )
-                        .unwrap(),
-                        data: TriggerData::EvmContractEvent {
-                            contract_address: contract_address.clone().try_into().unwrap(),
-                            chain_name: ChainName::new(chain_id.to_string()).unwrap(),
-                            // FIXME: this should be a proper EVM event, this is just a placeholder
-                            log: LogData::new(vec![event.into_inner().into()], data.into())
-                                .unwrap(),
-                            block_height: 1,
-                        },
-                    })
-                    .await
-                    .unwrap();
-            }
-            layer_climb::prelude::Address::Cosmos { .. } => {
-                let event = rand_event_cosmos();
-
-                sender
-                    .send(TriggerAction {
-                        config: TriggerConfig::cosmos_contract_event(
-                            service_id,
-                            workflow_id,
-                            contract_address.clone(),
-                            ChainName::new(chain_id.to_string()).unwrap(),
-                            event.clone(),
-                        )
-                        .unwrap(),
-                        data: TriggerData::CosmosContractEvent {
-                            contract_address: contract_address.clone(),
-                            chain_name: ChainName::new(chain_id.to_string()).unwrap(),
-                            event: cosmwasm_std::Event::new("new-message").add_attributes(vec![
-                                ("id", "1".to_string()),
-                                ("data", const_hex::encode(data)),
-                            ]),
-                            block_height: 1,
-                        },
-                    })
-                    .await
-                    .unwrap();
-            }
-        }
     }
 
     pub async fn list_services(&self) -> ListServicesResponse {

@@ -247,14 +247,13 @@ pub mod tests {
         ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, WorkflowID,
     };
 
-    use crate::test_utils::{address::rand_event_evm, mock_chain_configs::mock_chain_configs};
+    use crate::test_utils::{
+        address::rand_event_evm,
+        mock_chain_configs::mock_chain_configs,
+        mock_engine::{COMPONENT_ECHO_DATA, COMPONENT_PERMISSIONS},
+    };
 
     use super::*;
-
-    pub static ECHO_DATA: &[u8] =
-        include_bytes!("../../../../../examples/build/components/echo_data.wasm");
-    pub static PERMISSIONS: &[u8] =
-        include_bytes!("../../../../../examples/build/components/permissions.wasm");
 
     fn metrics() -> EngineMetrics {
         EngineMetrics::new(&opentelemetry::global::meter("engine-test-metrics"))
@@ -275,8 +274,8 @@ pub mod tests {
         );
 
         // store two blobs
-        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
-        let digest2 = engine.store_component_bytes(PERMISSIONS).unwrap();
+        let digest = engine.store_component_bytes(COMPONENT_ECHO_DATA).unwrap();
+        let digest2 = engine.store_component_bytes(COMPONENT_PERMISSIONS).unwrap();
         assert_ne!(digest, digest2);
 
         // list them
@@ -301,7 +300,7 @@ pub mod tests {
         );
 
         // store valid wasm
-        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
+        let digest = engine.store_component_bytes(COMPONENT_ECHO_DATA).unwrap();
         // fail on invalid wasm
         engine.store_component_bytes(b"foobarbaz").unwrap_err();
 
@@ -325,10 +324,10 @@ pub mod tests {
         );
 
         // store echo digest
-        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
+        let digest = engine.store_component_bytes(COMPONENT_ECHO_DATA).unwrap();
 
         // also store permissions digest, to test that we execute the right one
-        let _ = engine.store_component_bytes(PERMISSIONS).unwrap();
+        let _ = engine.store_component_bytes(COMPONENT_PERMISSIONS).unwrap();
 
         let workflow = Workflow {
             trigger: Trigger::evm_contract_event(
@@ -376,7 +375,7 @@ pub mod tests {
         std::env::set_var("WAVS_ENV_TEST", "testing");
         std::env::set_var("WAVS_ENV_TEST_NOT_ALLOWED", "secret");
 
-        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
+        let digest = engine.store_component_bytes(COMPONENT_ECHO_DATA).unwrap();
         let mut workflow = Workflow {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
@@ -458,7 +457,7 @@ pub mod tests {
         );
 
         // store square digest
-        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
+        let digest = engine.store_component_bytes(COMPONENT_ECHO_DATA).unwrap();
         let mut workflow = Workflow {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
@@ -555,7 +554,7 @@ pub mod tests {
 
         engine.start().unwrap();
 
-        let digest = engine.store_component_bytes(ECHO_DATA).unwrap();
+        let digest = engine.store_component_bytes(COMPONENT_ECHO_DATA).unwrap();
         let mut workflow = Workflow {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),

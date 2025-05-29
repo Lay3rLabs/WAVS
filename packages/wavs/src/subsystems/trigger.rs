@@ -35,11 +35,13 @@ use schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronInterv
 #[derive(Clone)]
 pub struct TriggerManager {
     pub chain_configs: ChainConfigs,
-    pub action_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TriggerAction>>>>,
+    action_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TriggerAction>>>>,
     action_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<TriggerAction>>>>,
     local_command_sender: Arc<std::sync::Mutex<Option<mpsc::UnboundedSender<LocalStreamCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
     metrics: TriggerMetrics,
+    #[cfg(debug_assertions)]
+    pub disable_networking: bool,
 }
 
 impl TriggerManager {
@@ -56,14 +58,14 @@ impl TriggerManager {
             action_receiver: Arc::new(std::sync::Mutex::new(Some(action_receiver))),
             local_command_sender: Arc::new(std::sync::Mutex::new(None)),
             metrics,
+            #[cfg(debug_assertions)]
+            disable_networking: false,
         })
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     pub fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
-        if !matches!(config.trigger, Trigger::Manual) {
-            let command = LocalStreamCommand::new(&config);
-            // If it's not a manual trigger, we need to start listening for it
+        if let Some(command) = LocalStreamCommand::new(&config) {
             match self.local_command_sender.lock().unwrap().as_ref() {
                 Some(sender) => {
                     sender.send(command).unwrap();
@@ -75,14 +77,14 @@ impl TriggerManager {
                     );
                 }
             }
-
-            // Theoretically, we should wait until we know the stream is started before continuing,
-            // however, we can be pretty sure that this `LocalStreamCommand` will come before
-            // any actual trigger events, since they are all multiplexed into the same stream
-            // and so by definition this comes "first".
-            //
-            // There's a bit of a question whether "first" is a guarantee, but, so far so good :P
         }
+
+        // Theoretically, we should wait until we know the stream is started before continuing,
+        // however, we can be pretty sure that this `LocalStreamCommand` will come before
+        // any actual trigger events, since they are all multiplexed into the same stream
+        // and so by definition this comes "first".
+        //
+        // There's a bit of a question whether "first" is a guarantee, but, so far so good :P
 
         // get the next lookup id
         let lookup_id = self
@@ -198,6 +200,18 @@ impl TriggerManager {
         Ok(action_receiver)
     }
 
+    pub async fn send_actions(
+        &self,
+        trigger_actions: impl IntoIterator<Item = TriggerAction>,
+    ) -> Result<(), TriggerError> {
+        let action_sender = self.action_sender.lock().unwrap().clone().unwrap();
+        for action in trigger_actions {
+            action_sender.send(action).await?;
+        }
+
+        Ok(())
+    }
+
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     async fn start_watcher(&self) -> Result<(), TriggerError> {
         let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
@@ -236,6 +250,13 @@ impl TriggerManager {
                 StreamTriggers::LocalCommand(command) => {
                     match command {
                         LocalStreamCommand::StartListeningCron => {
+                            #[cfg(debug_assertions)]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping cron stream start"
+                                );
+                                continue;
+                            }
                             let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
                             match cron_stream::start_cron_stream(
                                 cron_scheduler,
@@ -253,6 +274,13 @@ impl TriggerManager {
                             }
                         }
                         LocalStreamCommand::StartListeningChain { chain_name } => {
+                            #[cfg(debug_assertions)]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping chain stream start"
+                                );
+                                continue;
+                            }
                             if listening_chains.contains(&chain_name) {
                                 tracing::debug!("Already listening to chain {}", chain_name);
                                 continue;
@@ -495,7 +523,6 @@ impl TriggerManager {
                 }
             }
 
-            let action_sender = self.action_sender.lock().unwrap().clone().unwrap();
             if !trigger_actions.is_empty() {
                 tracing::info!(
                     "Sending {} trigger actions to dispatcher",
@@ -510,9 +537,8 @@ impl TriggerManager {
                         action.data
                     );
                 }
-            }
-            for action in trigger_actions {
-                action_sender.send(action).await.unwrap();
+
+                self.send_actions(trigger_actions).await?;
             }
         }
 

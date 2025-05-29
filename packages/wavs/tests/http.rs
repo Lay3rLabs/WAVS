@@ -8,6 +8,7 @@ use wavs::{
     test_utils::{
         address::rand_address_evm,
         http::{map_response, TestHttpApp},
+        mock_engine::COMPONENT_SQUARE,
         mock_submissions::mock_eigen_submit,
         mock_trigger_manager::mock_evm_event_trigger,
     },
@@ -56,12 +57,11 @@ fn http_config() {
 
 #[test]
 fn http_upload_component() {
-    let bytes = include_bytes!("../../../examples/build/components/square.wasm").to_vec();
-    let digest = Digest::new(&bytes);
+    let digest = Digest::new(COMPONENT_SQUARE);
 
     let app = TestHttpApp::new();
 
-    let body = Body::from(bytes);
+    let body = Body::from(COMPONENT_SQUARE);
 
     let req = Request::builder()
         .method(Method::POST)

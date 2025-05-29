@@ -40,6 +40,8 @@ pub struct SubmissionManager {
     message_count: Arc<AtomicU64>,
     #[cfg(debug_assertions)]
     pub debug_packets: Arc<RwLock<Vec<Packet>>>,
+    #[cfg(debug_assertions)]
+    pub disable_networking: bool,
 }
 
 struct SignerInfo {
@@ -62,6 +64,8 @@ impl SubmissionManager {
             message_count: Arc::new(AtomicU64::new(0)),
             #[cfg(debug_assertions)]
             debug_packets: Arc::new(RwLock::new(Vec::new())),
+            #[cfg(debug_assertions)]
+            disable_networking: false,
         })
     }
 
@@ -107,6 +111,12 @@ impl SubmissionManager {
 
                             if matches!(&submit, Submit::None) {
                                 tracing::debug!("Skipping submission");
+                                continue;
+                            }
+
+                            #[cfg(debug_assertions)]
+                            if _self.disable_networking {
+                                tracing::warn!("Networking is disabled, skipping submission");
                                 continue;
                             }
 
@@ -179,7 +189,9 @@ impl SubmissionManager {
                     let chain_config: EvmChainConfig = self
                         .chain_configs
                         .get(service.manager.chain_name())
-                        .ok_or(SubmissionError::MissingEvmChain)?
+                        .ok_or_else(|| {
+                            SubmissionError::MissingEvmChain(service.manager.chain_name().clone())
+                        })?
                         .clone()
                         .try_into()
                         .map_err(|_| SubmissionError::NotEvmChain)?;
@@ -383,7 +395,7 @@ mod test {
 
     use crate::test_utils::{
         address::rand_address_evm,
-        mock_submissions::{mock_event_id, mock_event_order},
+        mock_submissions::{mock_event_id, mock_event_order, wait_for_submission_messages},
     };
 
     use super::*;
@@ -479,17 +491,6 @@ mod test {
         let metrics = SubmissionMetrics::new(&meter);
         let submission_manager = SubmissionManager::new(&config, metrics).unwrap();
 
-        let wait_for_messages = |n: u64, duration: Option<Duration>| {
-            let duration = duration.unwrap_or(Duration::from_secs(5));
-            let end = std::time::Instant::now() + duration;
-            while std::time::Instant::now() < end {
-                if submission_manager.get_message_count() >= n {
-                    return Ok(());
-                }
-                sleep(Duration::from_millis(100));
-            }
-            Err("Timeout waiting for messages")
-        };
         assert_eq!(submission_manager.get_message_count(), 0);
 
         let ctx = AppContext::new();
@@ -517,7 +518,7 @@ mod test {
         let msg3 = dummy_message("serv1", "baz");
 
         send.blocking_send(msg1.clone()).unwrap();
-        wait_for_messages(1, None).unwrap();
+        wait_for_submission_messages(&submission_manager, 1, None).unwrap();
 
         assert_eq!(
             submission_manager
@@ -530,7 +531,7 @@ mod test {
 
         send.blocking_send(msg2.clone()).unwrap();
         send.blocking_send(msg3.clone()).unwrap();
-        wait_for_messages(3, None).unwrap();
+        wait_for_submission_messages(&submission_manager, 3, None).unwrap();
         assert_eq!(
             submission_manager
                 .get_debug_packets()
@@ -541,6 +542,7 @@ mod test {
         );
 
         // show this doesn't loop forever if the 4th never appears
-        wait_for_messages(4, Some(Duration::from_millis(300))).unwrap_err();
+        wait_for_submission_messages(&submission_manager, 4, Some(Duration::from_millis(300)))
+            .unwrap_err();
     }
 }

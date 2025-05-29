@@ -642,172 +642,64 @@ pub enum DispatcherError {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use crate::{
-        apis::submission::ChainMessage,
-        engine::{
-            identity::IdentityEngine,
-            mock::MockEngine,
-            runner::{MultiEngineRunner, SingleEngineRunner},
-        },
         init_tracing_tests,
-        submission::mock::{mock_event_id, mock_event_order, MockSubmission},
         test_utils::{
-            address::{rand_address_evm, rand_event_evm},
-            mock::BigSquare,
-        },
-        triggers::mock::{
-            mock_evm_event_trigger, mock_evm_event_trigger_config, MockTriggerManagerVec,
+            address::{rand_address_cosmos, rand_address_evm},
+            mock_app::MockE2ETestRunner,
+            mock_engine::{SquareIn, SquareOut, COMPONENT_SQUARE},
+            mock_submissions::wait_for_submission_messages,
+            mock_trigger_manager::{mock_cosmos_event_trigger, mock_real_trigger_action},
         },
     };
     use wavs_types::{
-        ChainName, Component, ComponentSource, Envelope, PacketRoute, ServiceID, ServiceManager,
-        ServiceStatus, Submit, TriggerData, Workflow, WorkflowID,
+        Aggregator, ChainName, Component, ComponentSource, EvmContractSubmission, ServiceID,
+        ServiceManager, ServiceStatus, Submit, Workflow, WorkflowID,
     };
 
     use super::*;
 
-    const IPFS_GATEWAY: &str = "https://ipfs.io/ipfs/";
-
-    /// Ensure that some items pass end-to-end in simplest possible setup
+    /// Simple test to check that the dispatcher can handle the full pipeline
     #[test]
-    fn dispatcher_pipeline_happy_path() {
+    fn dispatcher_pipeline() {
         init_tracing_tests();
 
-        let db_file = tempfile::NamedTempFile::new().unwrap();
-        let payload = b"foobar";
+        let data_dir = tempfile::tempdir().unwrap();
 
-        let action = TriggerAction {
-            config: mock_evm_event_trigger_config("service1", "workflow1"),
-            data: TriggerData::new_raw(payload),
-        };
-        let ctx = AppContext::new();
+        // Prepare two actions to be squared
+        let service_id = ServiceID::new("service1").unwrap();
+        let workflow_id = WorkflowID::new("workflow1").unwrap();
+        let chain_name = "cosmos".to_string();
 
-        let action_clone = action.clone();
-        let dispatcher = Dispatcher::new(
-            MockTriggerManagerVec::new().with_actions(vec![action_clone]),
-            SingleEngineRunner::new(IdentityEngine),
-            MockSubmission::new(),
-            ChainConfigs::default(),
-            db_file.as_ref(),
-            DispatcherMetrics::default(),
-            IPFS_GATEWAY.to_string(),
-        )
-        .unwrap();
-
-        // Register a service to handle this action
-        let digest = Digest::new(b"wasm1");
-        let service_manager_addr = rand_address_evm();
-        let service = Service {
-            id: action.config.service_id.clone(),
-            name: "My awesome service".to_string(),
-            workflows: [(
-                action.config.workflow_id.clone(),
-                Workflow {
-                    component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_evm_event_trigger(),
-                    submit: Submit::evm_contract(
-                        ChainName::new("evm").unwrap(),
-                        service_manager_addr,
-                        None,
-                    ),
-                    aggregators: Vec::new(),
-                },
-            )]
-            .into(),
-            status: ServiceStatus::Active,
-            manager: ServiceManager::Evm {
-                chain_name: ChainName::new("evm").unwrap(),
-                address: service_manager_addr,
-            },
-        };
-        ctx.rt.block_on(async {
-            dispatcher.add_service_direct(service).await.unwrap();
-        });
-
-        // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-        dispatcher.start(ctx).unwrap();
-
-        // check that this event was properly handled and arrived at submission
-        dispatcher.submission.wait_for_messages(1).unwrap();
-        let processed = dispatcher.submission.received();
-        assert_eq!(processed.len(), 1);
-        let expected = ChainMessage {
-            packet_route: PacketRoute::new_trigger_config(&action.config),
-            envelope: Envelope {
-                eventId: mock_event_id().into(),
-                ordering: mock_event_order().into(),
-                payload: payload.into(),
-            },
-            submit: Submit::evm_contract(
-                ChainName::new("evm").unwrap(),
-                service_manager_addr,
-                None,
+        let contract_address = rand_address_cosmos();
+        let actions = vec![
+            mock_real_trigger_action(
+                &service_id,
+                &workflow_id,
+                &contract_address,
+                &SquareIn::new(3),
+                &chain_name,
             ),
-        };
-        assert_eq!(processed[0].envelope.payload, expected.envelope.payload);
-    }
-
-    /// Simulate running the square workflow but Function not WASI component
-    #[test]
-    fn dispatcher_big_square_mocked() {
-        init_tracing_tests();
-
-        let db_file = tempfile::NamedTempFile::new().unwrap();
-
-        // Prepare two actions to be squared
-        let service_id = ServiceID::new("service1").unwrap();
-        let workflow_id = WorkflowID::new("workflow1").unwrap();
-
-        let contract_address = rand_address_evm();
-        let actions = vec![
-            TriggerAction {
-                config: TriggerConfig::evm_contract_event(
-                    &service_id,
-                    &workflow_id,
-                    contract_address,
-                    ChainName::new("evm").unwrap(),
-                    rand_event_evm(),
-                )
-                .unwrap(),
-                data: TriggerData::new_raw(br#"{"x":3}"#),
-            },
-            TriggerAction {
-                config: TriggerConfig::evm_contract_event(
-                    &service_id,
-                    &workflow_id,
-                    contract_address,
-                    ChainName::new("evm").unwrap(),
-                    rand_event_evm(),
-                )
-                .unwrap(),
-                data: TriggerData::new_raw(br#"{"x":21}"#),
-            },
+            mock_real_trigger_action(
+                &service_id,
+                &workflow_id,
+                &contract_address,
+                &SquareIn::new(21),
+                &chain_name,
+            ),
         ];
 
         let ctx = AppContext::new();
-        // Set up the dispatcher
-        let dispatcher = Dispatcher::new(
-            MockTriggerManagerVec::new().with_actions(actions),
-            SingleEngineRunner::new(MockEngine::new()),
-            MockSubmission::new(),
-            ChainConfigs::default(),
-            db_file.as_ref(),
-            DispatcherMetrics::default(),
-            IPFS_GATEWAY.to_string(),
-        )
-        .unwrap();
+        let dispatcher = Arc::new(MockE2ETestRunner::create_dispatcher(ctx.clone(), &data_dir));
 
-        // Register the BigSquare function on our known digest
-        let digest = Digest::new(b"wasm1");
-        dispatcher
+        // Register the square component
+        let digest = dispatcher
+            .engine_manager
             .engine
-            .engine()
-            .register(&digest.clone(), BigSquare);
+            .store_component_bytes(COMPONENT_SQUARE)
+            .unwrap();
 
         // Register a service to handle this action
-        let service_manager_addr = rand_address_evm();
         let service = Service {
             id: service_id.clone(),
             name: "Big Square AVS".to_string(),
@@ -815,139 +707,56 @@ mod tests {
                 workflow_id.clone(),
                 Workflow {
                     component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_evm_event_trigger(),
-                    submit: Submit::evm_contract(
-                        ChainName::new("evm").unwrap(),
-                        rand_address_evm(),
-                        None,
-                    ),
-                    aggregators: Vec::new(),
+                    trigger: mock_cosmos_event_trigger(),
+                    submit: Submit::Aggregator {
+                        url: "http://example.com/aggregator".to_string(),
+                    },
+                    aggregators: vec![Aggregator::Evm(EvmContractSubmission {
+                        chain_name: chain_name.parse().unwrap(),
+                        address: rand_address_evm(),
+                        max_gas: None,
+                    })],
                 },
             )]
             .into(),
             status: ServiceStatus::Active,
             manager: ServiceManager::Evm {
                 chain_name: ChainName::new("evm").unwrap(),
-                address: service_manager_addr,
-            },
-        };
-
-        ctx.rt.block_on(async {
-            dispatcher.add_service_direct(service).await.unwrap();
-        });
-
-        // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-        dispatcher.start(ctx).unwrap();
-
-        // check that the events were properly handled and arrived at submission
-        dispatcher.submission.wait_for_messages(2).unwrap();
-        let processed = dispatcher.submission.received();
-        assert_eq!(processed.len(), 2);
-
-        // Check the payloads
-        assert_eq!(&processed[0].envelope.payload.to_vec(), br#"{"y":9}"#);
-        assert_eq!(&processed[1].envelope.payload.to_vec(), br#"{"y":441}"#);
-    }
-
-    /// Simulate big-square on a multi-threaded dispatcher
-    /// TODO: don't copy this test, but refactor the above for reuse
-    #[test]
-    fn multi_dispatcher_big_square_mocked() {
-        init_tracing_tests();
-
-        let db_file = tempfile::NamedTempFile::new().unwrap();
-
-        // Prepare two actions to be squared
-        let service_id = ServiceID::new("service1").unwrap();
-        let workflow_id = WorkflowID::new("workflow1").unwrap();
-        let contract_address = rand_address_evm();
-        let actions = vec![
-            TriggerAction {
-                config: TriggerConfig::evm_contract_event(
-                    &service_id,
-                    &workflow_id,
-                    contract_address,
-                    ChainName::new("evm").unwrap(),
-                    rand_event_evm(),
-                )
-                .unwrap(),
-                data: TriggerData::new_raw(br#"{"x":3}"#),
-            },
-            TriggerAction {
-                config: TriggerConfig::evm_contract_event(
-                    &service_id,
-                    &workflow_id,
-                    contract_address,
-                    ChainName::new("evm").unwrap(),
-                    rand_event_evm(),
-                )
-                .unwrap(),
-                data: TriggerData::new_raw(br#"{"x":21}"#),
-            },
-        ];
-
-        // Set up the dispatcher
-        let dispatcher = Dispatcher::new(
-            MockTriggerManagerVec::new().with_actions(actions),
-            MultiEngineRunner::new(MockEngine::new(), 4),
-            MockSubmission::new(),
-            ChainConfigs {
-                cosmos: BTreeMap::new(),
-                evm: BTreeMap::new(),
-            },
-            db_file.as_ref(),
-            DispatcherMetrics::default(),
-            IPFS_GATEWAY.to_string(),
-        )
-        .unwrap();
-
-        // Register the BigSquare function on our known digest
-        let digest = Digest::new(b"wasm1");
-        dispatcher
-            .engine
-            .engine()
-            .register(&digest.clone(), BigSquare);
-
-        // Register a service to handle this action
-        let service_manager_addr = rand_address_evm();
-        let service = Service {
-            id: service_id.clone(),
-            name: "Big Square AVS".to_string(),
-            workflows: [(
-                workflow_id.clone(),
-                Workflow {
-                    component: Component::new(ComponentSource::Digest(digest)),
-                    trigger: mock_evm_event_trigger(),
-                    submit: Submit::evm_contract(
-                        ChainName::new("evm").unwrap(),
-                        rand_address_evm(),
-                        None,
-                    ),
-                    aggregators: Vec::new(),
-                },
-            )]
-            .into(),
-            status: ServiceStatus::Active,
-            manager: ServiceManager::Evm {
-                chain_name: ChainName::new("evm").unwrap(),
-                address: service_manager_addr,
+                address: rand_address_evm(),
             },
         };
 
         // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
-        let ctx = AppContext::new();
+        std::thread::spawn({
+            let dispatcher = dispatcher.clone();
+            let ctx = ctx.clone();
+            move || {
+                dispatcher.start(ctx).unwrap();
+            }
+        });
+
         ctx.rt.block_on(async {
             dispatcher.add_service_direct(service).await.unwrap();
+            dispatcher
+                .trigger_manager
+                .send_actions(actions)
+                .await
+                .unwrap();
         });
-        dispatcher.start(ctx).unwrap();
 
         // check that the events were properly handled and arrived at submission
-        dispatcher.submission.wait_for_messages(2).unwrap();
-        let processed = dispatcher.submission.received();
+        wait_for_submission_messages(&dispatcher.submission_manager, 2, None).unwrap();
+        let processed = dispatcher.submission_manager.get_debug_packets();
         assert_eq!(processed.len(), 2);
 
         // Check the payloads
-        assert_eq!(&processed[0].envelope.payload.to_vec(), br#"{"y":9}"#);
-        assert_eq!(&processed[1].envelope.payload.to_vec(), br#"{"y":441}"#);
+        assert_eq!(
+            processed[0].envelope.payload.to_vec(),
+            serde_json::to_vec(&SquareOut::new(9)).unwrap()
+        );
+        assert_eq!(
+            processed[1].envelope.payload.to_vec(),
+            serde_json::to_vec(&SquareOut::new(441)).unwrap()
+        );
     }
 }
