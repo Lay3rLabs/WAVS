@@ -69,15 +69,23 @@ async fn process_packet(
         });
     }
 
-    // this implicitly validates that the signature is valid
-    let signer = packet.signature.evm_signer_address(&packet.envelope)?;
-    tracing::debug!("Packet signer address: {:?}", signer);
-
     let service_manager_client = state.get_evm_client(service.manager.chain_name()).await?;
     let service_manager = IWavsServiceManager::new(
         service.manager.evm_address_unchecked(),
         service_manager_client.provider.clone(),
     );
+
+    // this implicitly validates that the signature is valid
+    let signing_key = packet.signature.evm_signer_address(&packet.envelope)?;
+
+    // Query for the operator key associated with this signing key
+    let signer = service_manager
+        .getLatestOperatorForSigningKey(signing_key)
+        .call()
+        .await
+        .map_err(AggregatorError::OperatorKeyLookup)?;
+
+    tracing::debug!("Packet signer address: {:?}", signer);
 
     let mut responses: Vec<AddPacketResponse> = Vec::new();
 

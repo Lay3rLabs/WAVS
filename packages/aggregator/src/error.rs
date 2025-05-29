@@ -65,6 +65,9 @@ pub enum AggregatorError {
 
     #[error("Unable to fetch service: {0:?}")]
     FetchService(anyhow::Error),
+
+    #[error("Unable to look up operator key from signing key: {0:?}")]
+    OperatorKeyLookup(alloy_contract::Error),
 }
 
 #[derive(Error, Debug)]

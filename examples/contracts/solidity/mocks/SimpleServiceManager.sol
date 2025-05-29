@@ -95,4 +95,10 @@ contract SimpleServiceManager is IWavsServiceManager {
     function getLastCheckpointTotalWeight() external view returns (uint256) {
         return lastCheckpointTotalWeight;
     }
+
+    function getLatestOperatorForSigningKey(
+        address signingKey
+    ) external pure override returns (address) {
+        return signingKey;
+    }
 }
