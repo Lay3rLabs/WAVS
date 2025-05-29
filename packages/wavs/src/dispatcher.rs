@@ -641,7 +641,6 @@ pub enum DispatcherError {
 }
 
 #[cfg(test)]
-#[cfg(feature = "mock")]
 mod tests {
     use std::collections::BTreeMap;
 

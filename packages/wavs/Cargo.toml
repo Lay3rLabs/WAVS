@@ -9,9 +9,6 @@ repository.workspace = true
 license.workspace = true
 publish = false
 
-[features]
-mock = []
-
 [dependencies]
 wavs-types = { workspace = true }
 wavs-engine = { workspace = true }

@@ -66,7 +66,7 @@ jobs:
         with:
           toolchain: 1.85.0
           command: test
-          args: -p wavs --features mock --locked -- --nocapture
+          args: -p wavs --locked -- --nocapture
         env:
           RUST_BACKTRACE: 1
           RUST_LOG: info

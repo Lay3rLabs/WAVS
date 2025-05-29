@@ -15,7 +15,7 @@ just wasi-build
 in repo `packages/wavs`:
 
 ```bash
-RUST_LOG="info,wavs=debug" cargo test --features e2e_tests_ethereum_cosmos_query e2e_tests -- --nocapture
+RUST_LOG="info,wavs=debug" cargo test --workspace -- --nocapture
 ```
 
 ## Stop local chain
