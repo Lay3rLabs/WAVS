@@ -1,6 +1,6 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
-use alloy_sol_types::SolInterface;
+use alloy_sol_types::{SolError, SolInterface};
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
@@ -229,28 +229,32 @@ impl AggregatorProcess<'_> {
                                 })
                             }
                             Err(e) => {
-                                if let Some(revert) = e
+                                let error = if let Some(raw) = e
                                     .as_revert_data()
-                                    .and_then(|raw| IWavsServiceManager::IWavsServiceManagerErrors::abi_decode(&raw).ok())
                                 {
-                                    // TODO - we want to get the specific error of "valid but not enough signers"
-                                    // but for now, we've validated the signature and other things locally
-                                    // so we can be optimistic and aggregate
-                                    tracing::debug!(
-                                        "Aggregator {} validation failed: {:?}",
-                                        chain_name,
-                                        revert
-                                    );
-
-                                    state.save_packet_queue(
-                                        &queue_id,
-                                        PacketQueue::Alive(queue.clone()),
-                                    )?;
-
-                                    Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                    if let Ok(service_manager_errors) = IWavsServiceManager::IWavsServiceManagerErrors::abi_decode(&raw) {
+                                        format!("{:?}", service_manager_errors)
+                                    } else if let Ok(revert) = alloy_sol_types::Revert::abi_decode(&raw) {
+                                        revert.reason
+                                    } else {
+                                        raw.to_string()
+                                    }
                                 } else {
-                                    Err(AggregatorError::ServiceManagerValidate(e))
-                                }
+                                    return Err(AggregatorError::ServiceManagerValidate(e))
+                                };
+
+                                tracing::info!(
+                                    "Aggregator {} validation failed: {:?}",
+                                    chain_name,
+                                    error
+                                );
+
+                                state.save_packet_queue(
+                                    &queue_id,
+                                    PacketQueue::Alive(queue.clone()),
+                                )?;
+
+                                Ok(AddPacketResponse::Aggregated { count: queue.len() })
                             }
                         }
                     })
