@@ -588,6 +588,71 @@ mod test {
         }
     }
 
+    #[tokio::test]
+    async fn first_packet_sent() {
+        let deps = TestDeps::new().await;
+
+        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_handler = deps
+            .deploy_simple_service_handler(*service_manager.address())
+            .await;
+
+        // Configure the service with a threshold of 1 (first packet sends immediately)
+        service_manager
+            .setLastCheckpointTotalWeight(U256::ONE)
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        service_manager
+            .setLastCheckpointThresholdWeight(U256::ONE)
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        let signer = mock_signer();
+        service_manager
+            .setOperatorWeight(signer.address(), U256::ONE)
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        let envelope = mock_envelope(1, [1, 2, 3]);
+        let service = deps
+            .create_service(
+                "service-burn-test".parse().unwrap(),
+                *service_manager.address(),
+                vec![*service_handler.address()],
+            )
+            .await;
+
+        let packet = mock_packet(&signer, &envelope, service.id.clone());
+
+        // First packet: should be validated and sent
+        let responses = process_packet(deps.state.clone(), &packet).await.unwrap();
+        assert_eq!(responses.len(), 1);
+        match &responses[0] {
+            AddPacketResponse::Sent { count, .. } => {
+                assert_eq!(*count, 1);
+            }
+            other => panic!("Expected Sent, got {:?}", other),
+        }
+
+        // Resend the same packet: should be Burned
+        let responses = process_packet(deps.state.clone(), &packet).await.unwrap();
+        assert_eq!(responses.len(), 1);
+        assert!(matches!(responses[0], AddPacketResponse::Burned));
+    }
+
     async fn process_many_packets(concurrent: bool) {
         let deps = TestDeps::new().await;
 
