@@ -4,7 +4,7 @@ use std::pin::Pin;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::ChainName;
 
-use crate::trigger_manager::error::TriggerError;
+use crate::subsystems::trigger::error::TriggerError;
 
 use super::StreamTriggers;
 

@@ -5,7 +5,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{ChainName, Trigger, TriggerConfig};
 
-use crate::trigger_manager::error::TriggerError;
+use crate::subsystems::trigger::error::TriggerError;
 
 use super::StreamTriggers;
 

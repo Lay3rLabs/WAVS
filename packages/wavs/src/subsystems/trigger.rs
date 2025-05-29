@@ -795,8 +795,8 @@ mod tests {
 
     use crate::{
         config::Config,
+        subsystems::trigger::TriggerManager,
         test_utils::address::{rand_address_evm, rand_event_evm},
-        trigger_manager::TriggerManager,
     };
     use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
 

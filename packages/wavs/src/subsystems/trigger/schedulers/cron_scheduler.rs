@@ -3,7 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use chrono::Utc;
 use wavs_types::Timestamp;
 
-use crate::trigger_manager::{error::TriggerError, lookup::LookupId};
+use crate::subsystems::trigger::{error::TriggerError, lookup::LookupId};
 
 use super::interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime};
 

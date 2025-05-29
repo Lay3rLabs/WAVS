@@ -1,7 +1,7 @@
 use criterion::Criterion;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use wavs::submission_manager::chain_message::ChainMessage;
+use wavs::subsystems::submission::chain_message::ChainMessage;
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 
 use crate::setup::{SystemConfig, SystemSetup};

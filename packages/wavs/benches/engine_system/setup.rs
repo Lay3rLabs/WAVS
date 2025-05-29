@@ -5,8 +5,8 @@ use utils::storage::fs::FileStorage;
 use utils::telemetry::Metrics;
 use wavs::{
     dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE},
-    engine_manager::{wasm_engine::WasmEngine, EngineManager},
-    submission_manager::chain_message::ChainMessage,
+    subsystems::engine::{wasm_engine::WasmEngine, EngineManager},
+    subsystems::submission::chain_message::ChainMessage,
     test_utils::address::rand_address_evm,
 };
 use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};

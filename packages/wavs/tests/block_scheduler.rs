@@ -1,6 +1,6 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
-use wavs::trigger_manager::{
+use wavs::subsystems::trigger::{
     lookup::LookupId,
     schedulers::{
         block_scheduler::{BlockHeight, BlockIntervalState},

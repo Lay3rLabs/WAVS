@@ -11,8 +11,8 @@ use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction};
 
-use crate::engine_manager::wasm_engine::WasmEngine;
-use crate::submission_manager::chain_message::ChainMessage;
+use crate::subsystems::engine::wasm_engine::WasmEngine;
+use crate::subsystems::submission::chain_message::ChainMessage;
 use crate::AppContext;
 
 pub struct EngineManager<S: CAStorage> {

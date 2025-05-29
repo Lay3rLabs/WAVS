@@ -252,9 +252,9 @@ pub mod tests {
     use super::*;
 
     pub static ECHO_DATA: &[u8] =
-        include_bytes!("../../../../examples/build/components/echo_data.wasm");
+        include_bytes!("../../../../../examples/build/components/echo_data.wasm");
     pub static PERMISSIONS: &[u8] =
-        include_bytes!("../../../../examples/build/components/permissions.wasm");
+        include_bytes!("../../../../../examples/build/components/permissions.wasm");
 
     fn metrics() -> EngineMetrics {
         EngineMetrics::new(&opentelemetry::global::meter("engine-test-metrics"))

@@ -7,7 +7,7 @@ use tokio_stream::wrappers::IntervalStream;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::Timestamp;
 
-use crate::trigger_manager::{
+use crate::subsystems::trigger::{
     error::TriggerError,
     schedulers::{cron_scheduler::CronIntervalState, interval_scheduler::IntervalScheduler},
 };

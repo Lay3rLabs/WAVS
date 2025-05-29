@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 
-use crate::trigger_manager::{error::TriggerError, lookup::LookupId};
+use crate::subsystems::trigger::{error::TriggerError, lookup::LookupId};
 
 // This is for some sort of scheduler that runs on an interval.
 // It's used in WAVS for the cron and block interval triggers

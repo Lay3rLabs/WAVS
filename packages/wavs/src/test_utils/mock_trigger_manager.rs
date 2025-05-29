@@ -1,10 +1,10 @@
 use std::sync::RwLock;
 use std::time::Duration;
 
+use crate::subsystems::trigger::error::TriggerError;
 use crate::test_utils::address::{
     rand_address_cosmos, rand_address_evm, rand_event_cosmos, rand_event_evm,
 };
-use crate::trigger_manager::error::TriggerError;
 
 use tokio::sync::mpsc;
 use utils::context::AppContext;

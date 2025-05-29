@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Timelike, Utc};
-use wavs::trigger_manager::{
+use wavs::subsystems::trigger::{
     error::TriggerError,
     lookup::LookupId,
     schedulers::{cron_scheduler::CronIntervalState, interval_scheduler::IntervalState},

@@ -3,7 +3,7 @@ use std::num::{NonZeroU32, NonZeroU64};
 use dashmap::DashMap;
 use wavs_types::ChainName;
 
-use crate::trigger_manager::lookup::LookupId;
+use crate::subsystems::trigger::lookup::LookupId;
 
 use super::interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime};
 

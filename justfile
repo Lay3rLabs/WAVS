@@ -126,6 +126,9 @@ lint:
     cargo fix --allow-dirty --allow-staged
     cargo clippy --all-targets -- -D warnings
 
+clippy:
+    cargo clippy --all-targets -- -D warnings
+
 # waiting on: https://github.com/casey/just/issues/626
 start-all:
   #!/bin/bash -eux

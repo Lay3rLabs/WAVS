@@ -1,11 +1,9 @@
 pub mod args;
 pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
-pub mod engine_manager; // where we manage and execute wasm
 pub mod http;
-pub mod submission_manager; // where we submit the results to the chain
+pub mod subsystems; // subsystems: engine, submission, and trigger
 pub mod test_utils; // TODO - move this into tests?
-pub mod trigger_manager; // where we handle the trigger runtime
 
 use config::Config;
 use dispatcher::Dispatcher;

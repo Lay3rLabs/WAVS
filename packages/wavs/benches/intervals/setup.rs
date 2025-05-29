@@ -6,7 +6,7 @@ use std::{
 use opentelemetry::global::meter;
 use tokio::sync::mpsc;
 use utils::telemetry::Metrics;
-use wavs::trigger_manager::TriggerManager;
+use wavs::subsystems::trigger::TriggerManager;
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 use wavs_types::{ChainName, Trigger, TriggerAction, TriggerConfig};
 

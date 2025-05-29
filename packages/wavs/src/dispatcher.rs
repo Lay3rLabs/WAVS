@@ -160,14 +160,14 @@ use wavs_types::{
 };
 
 use crate::config::Config;
-use crate::engine_manager::error::EngineError;
-use crate::engine_manager::wasm_engine::WasmEngine;
-use crate::engine_manager::EngineManager;
-use crate::submission_manager::chain_message::ChainMessage;
-use crate::submission_manager::error::SubmissionError;
-use crate::submission_manager::SubmissionManager;
-use crate::trigger_manager::error::TriggerError;
-use crate::trigger_manager::TriggerManager;
+use crate::subsystems::engine::error::EngineError;
+use crate::subsystems::engine::wasm_engine::WasmEngine;
+use crate::subsystems::engine::EngineManager;
+use crate::subsystems::submission::chain_message::ChainMessage;
+use crate::subsystems::submission::error::SubmissionError;
+use crate::subsystems::submission::SubmissionManager;
+use crate::subsystems::trigger::error::TriggerError;
+use crate::subsystems::trigger::TriggerManager;
 use crate::AppContext;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use utils::storage::{CAStorage, CAStorageError};

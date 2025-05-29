@@ -1,4 +1,4 @@
-use wavs::trigger_manager::{
+use wavs::subsystems::trigger::{
     lookup::LookupId,
     schedulers::interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime},
 };

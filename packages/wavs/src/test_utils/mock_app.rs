@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     dispatcher::Dispatcher,
-    engine_manager::wasm_engine::WasmEngine,
+    subsystems::engine::wasm_engine::WasmEngine,
     test_utils::{
         address::{rand_address_evm, rand_event_evm},
         http::{map_response, TestHttpApp},

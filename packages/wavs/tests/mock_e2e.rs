@@ -215,7 +215,7 @@ fn mock_e2e_component_none() {
 
 /// This will block until n messages arrive in the inbox, or until custom Duration passes
 fn wait_for_submission_messages(
-    submission_manager: &wavs::submission_manager::SubmissionManager,
+    submission_manager: &wavs::subsystems::submission::SubmissionManager,
     n: u64,
 ) -> Result<(), WaitError> {
     let end = Instant::now() + SUBMISSION_TIMEOUT;
