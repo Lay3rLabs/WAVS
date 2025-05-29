@@ -9,7 +9,14 @@ interface IWavsServiceManager {
     // Custom Errors
     // ------------------------------------------------------------------------
     error InvalidSignature();
+    error InsufficientQuorum();
+    error InvalidQuorumParameters();
+    
+    // ------------------------------------------------------------------------
+    // Events
+    // ------------------------------------------------------------------------
     event ServiceURIUpdated(string serviceURI);
+    event QuorumThresholdUpdated(uint256 numerator, uint256 denominator);
 
     // ------------------------------------------------------------------------
     // Stake Registry View Functions
