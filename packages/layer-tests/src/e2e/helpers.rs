@@ -9,7 +9,9 @@ use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger, Workflow
+    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
+    Permissions, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
+    Trigger, Workflow,
 };
 
 use crate::{
@@ -22,7 +24,8 @@ use crate::{
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
-        example_service_manager::SimpleServiceManager, example_submit::ISimpleSubmit::SignedData, example_trigger::SimpleTrigger, SimpleEvmSubmitClient, TriggerId
+        example_service_manager::SimpleServiceManager, example_submit::ISimpleSubmit::SignedData,
+        example_trigger::SimpleTrigger, SimpleEvmSubmitClient, TriggerId,
     },
 };
 
@@ -169,19 +172,23 @@ pub async fn deploy_service_for_test(
 
     // give signer address some weight in the service manager
     #[allow(irrefutable_let_patterns)]
-    if let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients.http_client.get_service_key(service.id.clone()).await.unwrap() {
-        let service_manager = SimpleServiceManager::new(
-            service_manager_address,
-            submit_client.provider.clone(),
-        );
+    if let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients
+        .http_client
+        .get_service_key(service.id.clone())
+        .await
+        .unwrap()
+    {
+        let service_manager =
+            SimpleServiceManager::new(service_manager_address, submit_client.provider.clone());
         service_manager
             .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .watch()
-            .await.unwrap();
+            .await
+            .unwrap();
     }
-
 
     ServiceAndUri {
         service,
@@ -320,18 +327,19 @@ pub async fn deploy_service_manager(
 
     tracing::info!("Deploying service manager on chain {}", chain_name);
 
-    let service_manager = crate::example_evm_client::example_service_manager::SimpleServiceManager::deploy(
-        evm_client.provider.clone(),
-    )
-    .await
-    .context("Failed to deploy service manager contract")?;
+    let service_manager =
+        crate::example_evm_client::example_service_manager::SimpleServiceManager::deploy(
+            evm_client.provider.clone(),
+        )
+        .await
+        .context("Failed to deploy service manager contract")?;
 
     service_manager
-            .setLastCheckpointTotalWeight(U256::ONE)
-            .send()
-            .await?
-            .watch()
-            .await?;
+        .setLastCheckpointTotalWeight(U256::ONE)
+        .send()
+        .await?
+        .watch()
+        .await?;
 
     service_manager
         .setLastCheckpointThresholdWeight(U256::ONE)
