@@ -5,7 +5,7 @@ use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
 use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::sol;
 
-use crate::{Envelope, EnvelopeExt, EnvelopeSignature, IWavsServiceManager};
+use crate::{Envelope, EnvelopeExt, EnvelopeSignature, IWavsServiceManager, ServiceManagerError};
 
 // Define the simple service manager contract for testing
 sol!(
@@ -39,9 +39,10 @@ async fn test_validate_function() {
     // Set up test signers
     let signer_1 = mock_signer();
     let signer_2 = mock_signer();
+    let signer_3 = mock_signer();
 
     // Configure operator weights and thresholds
-    const NUM_SIGNERS: usize = 2;
+    const NUM_SIGNERS: usize = 3;
     const NUM_THRESHOLD: usize = 2;
 
     service_manager
@@ -74,6 +75,15 @@ async fn test_validate_function() {
 
     service_manager
         .setOperatorWeight(signer_2.address(), U256::ONE)
+        .send()
+        .await
+        .unwrap()
+        .watch()
+        .await
+        .unwrap();
+
+    service_manager
+        .setOperatorWeight(signer_3.address(), U256::ONE)
         .send()
         .await
         .unwrap()
@@ -127,10 +137,19 @@ async fn test_validate_function() {
         .call()
         .await;
 
-    assert!(
-        insufficient_result.is_err(),
-        "Validation should fail with insufficient quorum"
-    );
+    match insufficient_result {
+        Ok(_) => panic!("Validation should fail with at least _some_ error!"),
+        Err(err) => {
+            eprintln!("{:#?}", err);
+            match err.as_decoded_interface_error::<ServiceManagerError>() {
+                Some(ServiceManagerError::InsufficientQuorum(_)) => {
+                    // Expected error for insufficient quorum
+                },
+                Some(_) => panic!("Unexpected error type received: {:?}", err),
+                None => panic!("Failed to decode service manager errors"),
+            }
+        }
+    }
 }
 
 #[tokio::test]
