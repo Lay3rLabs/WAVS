@@ -305,20 +305,12 @@ fn add_packet_to_queue(
 mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
-    use alloy_node_bindings::{Anvil, AnvilInstance};
     use alloy_primitives::{Bytes, FixedBytes, U256};
     use alloy_provider::DynProvider;
     use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
     use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
     use alloy_sol_types::SolValue;
     use futures::{stream::FuturesUnordered, StreamExt};
-    use service_handler::{
-        ISimpleSubmit::DataWithId,
-        SimpleSubmit::{
-            self as SimpleServiceHandler, SimpleSubmitInstance as SimpleServiceHandlerInstance,
-        },
-    };
-    use service_manager::SimpleServiceManager::{self, SimpleServiceManagerInstance};
     use std::{
         collections::{BTreeMap, HashSet},
         sync::{Arc, Mutex},
@@ -326,34 +318,18 @@ mod test {
     use tempfile::TempDir;
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
-        evm_client::EvmSigningClient,
         filesystem::workspace_path,
+        test_contracts::{
+            TestContractDeps, SimpleServiceHandlerInstance,
+            SimpleServiceManagerInstance,
+        },
     };
     use wavs_types::{
         ChainName, Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute, Service, ServiceID,
     };
 
-    mod service_manager {
-        use alloy_sol_types::sol;
-
-        sol!(
-            #[allow(missing_docs)]
-            #[sol(rpc)]
-            SimpleServiceManager,
-            "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
-        );
-    }
-
-    mod service_handler {
-        use alloy_sol_types::sol;
-
-        sol!(
-            #[allow(missing_docs)]
-            #[sol(rpc)]
-            SimpleSubmit,
-            "../../examples/contracts/solidity/abi/SimpleSubmit.sol/SimpleSubmit.json"
-        );
-    }
+    // Contract definitions are now imported from utils::test_contracts
+    use utils::test_contracts::ISimpleSubmit::DataWithId;
 
     #[test]
     fn packet_validation() {
@@ -544,7 +520,7 @@ mod test {
             .aggregators
             .get_mut(1)
             .unwrap() = wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
-            chain_name: deps.chain_name.clone(),
+            chain_name: deps.contract_deps.chain_name.clone(),
             address: *fixed_second_service_handler.address(),
             max_gas: None,
         });
@@ -851,16 +827,14 @@ mod test {
     }
 
     struct TestDeps {
-        _anvil: AnvilInstance,
-        _data_dir: TempDir,
-        client: EvmSigningClient,
+        contract_deps: TestContractDeps,
         state: HttpState,
-        chain_name: ChainName,
     }
 
     impl TestDeps {
         async fn new() -> Self {
-            let anvil = Anvil::new().spawn();
+            let contract_deps = TestContractDeps::new().await;
+
             let data_dir = tempfile::tempdir().unwrap();
             let mut config: Config = ConfigBuilder::new(CliArgs {
                 data: Some(data_dir.path().to_path_buf()),
@@ -872,14 +846,13 @@ mod test {
             .build()
             .unwrap();
 
-            let chain_name = ChainName::new("local").unwrap();
-
+            // Use the same chain configuration from contract_deps
             config.chains.evm.insert(
-                chain_name.clone(),
+                contract_deps.chain_name.clone(),
                 EvmChainConfig {
                     chain_id: "31337".to_string(),
-                    http_endpoint: Some(anvil.endpoint()),
-                    ws_endpoint: Some(anvil.ws_endpoint()),
+                    http_endpoint: Some(contract_deps._anvil.endpoint()),
+                    ws_endpoint: Some(contract_deps._anvil.ws_endpoint()),
                     faucet_endpoint: None,
                     poll_interval_ms: None,
                 },
@@ -888,24 +861,11 @@ mod test {
             config.credential =
                 Some("test test test test test test test test test test test junk".to_string());
 
-            let client_config = config
-                .chains
-                .evm
-                .get(&chain_name)
-                .unwrap()
-                .signing_client_config(config.credential.clone().unwrap())
-                .unwrap();
-
-            let client = EvmSigningClient::new(client_config).await.unwrap();
-
             let state = HttpState::new(config).unwrap();
 
             Self {
-                _anvil: anvil,
-                _data_dir: data_dir,
-                client,
+                contract_deps,
                 state,
-                chain_name,
             }
         }
 
@@ -916,7 +876,7 @@ mod test {
             service_handler_addresses: Vec<Address>,
         ) -> Service {
             let service = mock_service(
-                self.chain_name.clone(),
+                self.contract_deps.chain_name.clone(),
                 service_id,
                 service_manager_address,
                 service_handler_addresses,
@@ -927,18 +887,14 @@ mod test {
         }
 
         async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
-            SimpleServiceManager::deploy(self.client.provider.clone())
-                .await
-                .unwrap()
+            self.contract_deps.deploy_simple_service_manager().await
         }
 
         async fn deploy_simple_service_handler(
             &self,
             service_manager_address: Address,
         ) -> SimpleServiceHandlerInstance<DynProvider> {
-            SimpleServiceHandler::deploy(self.client.provider.clone(), service_manager_address)
-                .await
-                .unwrap()
+            self.contract_deps.deploy_simple_service_handler(service_manager_address).await
         }
     }
 }
