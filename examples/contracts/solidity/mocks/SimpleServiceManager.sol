@@ -15,23 +15,32 @@ contract SimpleServiceManager is IWavsServiceManager {
         IWavsServiceHandler.Envelope calldata /* envelope */,
         IWavsServiceHandler.SignatureData calldata signatureData
     ) external view override {
-        // Validate that operators are sorted in ascending byte order
-        require(
-            _validateOperatorSorting(signatureData.operators),
-            "Operators are not properly sorted"
-        );
-
-        // Get the total operator weight of these signatures
-        uint256 totalWeight = 0;
-        for (uint256 i = 0; i < signatureData.operators.length; i++) {
-            totalWeight += operatorWeights[signatureData.operators[i]];
+        // Input validation
+        if (signatureData.signers.length == 0 || signatureData.signers.length != signatureData.signatures.length) {
+            revert IWavsServiceManager.InvalidSignatureLength();
+        }
+        if (signatureData.referenceBlock >= block.number) {
+            revert IWavsServiceManager.InvalidSignatureBlock();
+        }
+        if (!_validateOperatorSorting(signatureData.signers)) {
+            revert IWavsServiceManager.InvalidSignatureOrder();
         }
 
-        // Check if total weight is above threshold
-        require(
-            totalWeight >= lastCheckpointThresholdWeight,
-            "Not enough operator weight"
-        );
+        // Get the total operator weight of these signatures
+        uint256 signedWeight = 0;
+        for (uint256 i = 0; i < signatureData.signers.length; i++) {
+            signedWeight += operatorWeights[signatureData.signers[i]];
+        }
+
+        // Avoid 0 weight ever passing this check
+        if (signedWeight == 0) {
+            revert IWavsServiceManager.InsufficientQuorumZero();
+        }
+
+        // Check if the total weight meets the last checkpoint threshold 
+        if (signedWeight < lastCheckpointThresholdWeight) {
+            revert IWavsServiceManager.InsufficientQuorum(signedWeight, lastCheckpointThresholdWeight, lastCheckpointTotalWeight);
+        }
     }
 
     /**

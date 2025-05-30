@@ -37,4 +37,5 @@ bincode = { workspace = true }
 tempfile = {workspace = true}
 alloy-node-bindings = { workspace = true }
 futures = { workspace = true }
+utils = { workspace = true, features = ["test-utils"] }
 

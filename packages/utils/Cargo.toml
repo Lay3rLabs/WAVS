@@ -9,6 +9,9 @@ repository.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+test-utils = []
+
 [dependencies]
 wasm-pkg-client = { workspace = true }
 wavs-types = { workspace = true }
@@ -53,6 +56,8 @@ tracing-opentelemetry = { workspace = true }
 url = { workspace = true }
 cid = { workspace = true }
 reqwest = { workspace = true }
+tempfile = { workspace = true }
+alloy-contract = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

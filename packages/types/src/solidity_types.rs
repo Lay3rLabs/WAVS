@@ -32,6 +32,12 @@ pub use service_manager::{
     IWavsServiceHandler::SignatureData as ServiceManagerSignatureData,
 };
 
+pub type ServiceManagerError = IWavsServiceManager::IWavsServiceManagerErrors;
+
+pub fn decode_service_manager_error(err: alloy_contract::Error) -> Option<ServiceManagerError> {
+    err.as_decoded_interface_error::<ServiceManagerError>()
+}
+
 #[cfg(feature = "solidity-rpc")]
 mod rpc {
     use alloy_provider::DynProvider;

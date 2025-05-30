@@ -1816,6 +1816,7 @@ mod tests {
     use layer_climb::prelude::{ChainConfig, ChainId};
     use layer_climb::querier::QueryClient as CosmosQueryClient;
     use tempfile::tempdir;
+    use utils::init_tracing_tests;
 
     #[test]
     fn test_service_init() {
@@ -3370,6 +3371,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_component_source_registry() {
+        init_tracing_tests();
         // Create a temporary directory for the test
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("component_registry_test.json");

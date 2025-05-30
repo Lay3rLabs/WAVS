@@ -3,7 +3,7 @@ use utils::{
     error::{ChainConfigError, EvmClientError},
     storage::db::DBError,
 };
-use wavs_types::{ChainName, EnvelopeError, ServiceID, WorkflowID};
+use wavs_types::{ChainName, EnvelopeError, ServiceID, ServiceManagerError, WorkflowID};
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
 
@@ -40,7 +40,13 @@ pub enum AggregatorError {
     CreateEvmClient(anyhow::Error),
 
     #[error("Service manager validate(): {0:?}")]
-    ServiceManagerValidate(alloy_contract::Error),
+    ServiceManagerValidateKnown(ServiceManagerError),
+
+    #[error("Service manager validate(): {0}")]
+    ServiceManagerValidateAnyRevert(String),
+
+    #[error("Service manager validate(): {0:?}")]
+    ServiceManagerValidateUnknown(alloy_contract::Error),
 
     #[error("Chain not found: {0}")]
     ChainNotFound(ChainName),

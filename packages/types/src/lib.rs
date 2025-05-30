@@ -14,3 +14,6 @@ pub use packet::*;
 pub use service::*;
 pub use solidity_types::*;
 pub use timestamp::*;
+
+#[cfg(test)]
+mod tests;

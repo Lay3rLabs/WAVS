@@ -1,6 +1,5 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
-use alloy_sol_types::{SolError, SolInterface};
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
@@ -8,7 +7,7 @@ use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
     Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
     IWavsServiceManager::{self, IWavsServiceManagerInstance},
-    Packet,
+    Packet, ServiceManagerError,
 };
 
 use crate::{
@@ -172,40 +171,39 @@ impl AggregatorProcess<'_> {
                             }
                         };
 
-                        let block_height = service_manager
+                        // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
+                        let block_height_minus_one = service_manager
                             .provider()
                             .get_block_number()
                             .await
-                            .map_err(|e| AggregatorError::BlockNumber(e.into()))?;
+                            .map_err(|e| AggregatorError::BlockNumber(e.into()))? - 1;
 
                         let signatures: Vec<EnvelopeSignature> = queue
                             .iter()
                             .map(|queued| queued.packet.signature.clone())
                             .collect();
 
-                        // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
                         let signature_data = packet
                             .envelope
-                            .signature_data(signatures, block_height - 1)?;
+                            .signature_data(signatures, block_height_minus_one)?;
 
-                        // validate the potential quorum on-chain
-                        // we'll get an error if quorum is not met, but may get other errors as well
-                        // success means we've reached quorum and can send the signatures + data
-                        match service_manager
+                        let result = service_manager
                             .validate(
                                 packet.envelope.clone().into(),
                                 signature_data.clone().into(),
                             )
                             .call()
-                            .await
-                        {
+                            .await;
+
+
+                        match result {
                             Ok(_) => {
                                 let client = state.get_evm_client(chain_name).await?;
                                 tracing::info!(
                                     "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
                                     chain_name,
                                     address,
-                                    block_height
+                                    block_height_minus_one
                                 );
                                 let tx_receipt = client
                                     .send_envelope_signatures(
@@ -227,34 +225,28 @@ impl AggregatorProcess<'_> {
                                     tx_receipt: Box::new(tx_receipt),
                                     count: queue.len(),
                                 })
-                            }
-                            Err(e) => {
-                                let error = if let Some(raw) = e
-                                    .as_revert_data()
-                                {
-                                    if let Ok(service_manager_errors) = IWavsServiceManager::IWavsServiceManagerErrors::abi_decode(&raw) {
-                                        format!("{:?}", service_manager_errors)
-                                    } else if let Ok(revert) = alloy_sol_types::Revert::abi_decode(&raw) {
-                                        revert.reason
-                                    } else {
-                                        raw.to_string()
+                            },
+                            Err(err) => {
+                                match err.as_decoded_interface_error::<ServiceManagerError>() {
+                                    Some(ServiceManagerError::InsufficientQuorum(_)) => {
+                                        // insufficient quorum means we just keep aggregating
+                                        state.save_packet_queue(
+                                            &queue_id,
+                                            PacketQueue::Alive(queue.clone()),
+                                        )?;
+
+                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                    },
+                                    Some(err) => {
+                                        Err(AggregatorError::ServiceManagerValidateKnown(err))
                                     }
-                                } else {
-                                    return Err(AggregatorError::ServiceManagerValidate(e))
-                                };
-
-                                tracing::info!(
-                                    "Aggregator {} validation failed: {:?}",
-                                    chain_name,
-                                    error
-                                );
-
-                                state.save_packet_queue(
-                                    &queue_id,
-                                    PacketQueue::Alive(queue.clone()),
-                                )?;
-
-                                Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                    None => {
+                                        match err.as_revert_data() {
+                                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
+                                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err))
+                                        }
+                                    }
+                                }
                             }
                         }
                     })
@@ -305,55 +297,22 @@ fn add_packet_to_queue(
 mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
-    use alloy_node_bindings::{Anvil, AnvilInstance};
-    use alloy_primitives::{Bytes, FixedBytes, U256};
-    use alloy_provider::DynProvider;
-    use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
-    use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
-    use alloy_sol_types::SolValue;
+    use alloy_primitives::U256;
     use futures::{stream::FuturesUnordered, StreamExt};
-    use service_handler::{
-        ISimpleSubmit::DataWithId,
-        SimpleSubmit::{
-            self as SimpleServiceHandler, SimpleSubmitInstance as SimpleServiceHandlerInstance,
-        },
-    };
-    use service_manager::SimpleServiceManager::{self, SimpleServiceManagerInstance};
     use std::{
         collections::{BTreeMap, HashSet},
         sync::{Arc, Mutex},
     };
-    use tempfile::TempDir;
+
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
-        evm_client::EvmSigningClient,
         filesystem::workspace_path,
+        test_utils::{
+            test_contracts::TestContractDeps,
+            test_packet::{mock_envelope, mock_packet, mock_signer},
+        },
     };
-    use wavs_types::{
-        ChainName, Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute, Service, ServiceID,
-    };
-
-    mod service_manager {
-        use alloy_sol_types::sol;
-
-        sol!(
-            #[allow(missing_docs)]
-            #[sol(rpc)]
-            SimpleServiceManager,
-            "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
-        );
-    }
-
-    mod service_handler {
-        use alloy_sol_types::sol;
-
-        sol!(
-            #[allow(missing_docs)]
-            #[sol(rpc)]
-            SimpleSubmit,
-            "../../examples/contracts/solidity/abi/SimpleSubmit.sol/SimpleSubmit.json"
-        );
-    }
+    use wavs_types::{ChainName, Service, ServiceID};
 
     #[test]
     fn packet_validation() {
@@ -405,7 +364,7 @@ mod test {
     async fn process_mixed_responses() {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_manager = deps.contracts.deploy_simple_service_manager().await;
 
         let mut signers = Vec::new();
         const NUM_SIGNERS: usize = 3;
@@ -445,10 +404,12 @@ mod test {
         let envelope = mock_envelope(1, [1, 2, 3]);
 
         let service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
 
         let fixed_second_service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
 
@@ -544,7 +505,7 @@ mod test {
             .aggregators
             .get_mut(1)
             .unwrap() = wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
-            chain_name: deps.chain_name.clone(),
+            chain_name: deps.contracts.chain_name.clone(),
             address: *fixed_second_service_handler.address(),
             max_gas: None,
         });
@@ -592,8 +553,9 @@ mod test {
     async fn first_packet_sent() {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_manager = deps.contracts.deploy_simple_service_manager().await;
         let service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
 
@@ -656,8 +618,9 @@ mod test {
     async fn process_many_packets(concurrent: bool) {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_manager = deps.contracts.deploy_simple_service_manager().await;
         let service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
         let service = deps
@@ -813,54 +776,16 @@ mod test {
             },
         }
     }
-    fn mock_packet(
-        signer: &LocalSigner<SigningKey>,
-        envelope: &Envelope,
-        service_id: ServiceID,
-    ) -> Packet {
-        let signature = signer.sign_hash_sync(&envelope.eip191_hash()).unwrap();
-
-        Packet {
-            envelope: envelope.clone(),
-            route: PacketRoute {
-                service_id,
-                workflow_id: "workflow".parse().unwrap(),
-            },
-            signature: EnvelopeSignature::Secp256k1(signature),
-        }
-    }
-
-    fn mock_signer() -> LocalSigner<SigningKey> {
-        MnemonicBuilder::<English>::default()
-            .word_count(24)
-            .build_random()
-            .unwrap()
-    }
-
-    fn mock_envelope(trigger_id: u64, data: impl Into<Bytes>) -> Envelope {
-        // SimpleSubmit has its own data format, so we need to encode it
-        let payload = DataWithId {
-            triggerId: trigger_id,
-            data: data.into(),
-        };
-        Envelope {
-            payload: payload.abi_encode().into(),
-            eventId: FixedBytes([0; 20]),
-            ordering: FixedBytes([0; 12]),
-        }
-    }
 
     struct TestDeps {
-        _anvil: AnvilInstance,
-        _data_dir: TempDir,
-        client: EvmSigningClient,
+        contracts: TestContractDeps,
         state: HttpState,
-        chain_name: ChainName,
     }
 
     impl TestDeps {
         async fn new() -> Self {
-            let anvil = Anvil::new().spawn();
+            let contract_deps = TestContractDeps::new().await;
+
             let data_dir = tempfile::tempdir().unwrap();
             let mut config: Config = ConfigBuilder::new(CliArgs {
                 data: Some(data_dir.path().to_path_buf()),
@@ -872,14 +797,13 @@ mod test {
             .build()
             .unwrap();
 
-            let chain_name = ChainName::new("local").unwrap();
-
+            // Use the same chain configuration from contract_deps
             config.chains.evm.insert(
-                chain_name.clone(),
+                contract_deps.chain_name.clone(),
                 EvmChainConfig {
                     chain_id: "31337".to_string(),
-                    http_endpoint: Some(anvil.endpoint()),
-                    ws_endpoint: Some(anvil.ws_endpoint()),
+                    http_endpoint: Some(contract_deps._anvil.endpoint()),
+                    ws_endpoint: Some(contract_deps._anvil.ws_endpoint()),
                     faucet_endpoint: None,
                     poll_interval_ms: None,
                 },
@@ -888,24 +812,11 @@ mod test {
             config.credential =
                 Some("test test test test test test test test test test test junk".to_string());
 
-            let client_config = config
-                .chains
-                .evm
-                .get(&chain_name)
-                .unwrap()
-                .signing_client_config(config.credential.clone().unwrap())
-                .unwrap();
-
-            let client = EvmSigningClient::new(client_config).await.unwrap();
-
             let state = HttpState::new(config).unwrap();
 
             Self {
-                _anvil: anvil,
-                _data_dir: data_dir,
-                client,
+                contracts: contract_deps,
                 state,
-                chain_name,
             }
         }
 
@@ -916,7 +827,7 @@ mod test {
             service_handler_addresses: Vec<Address>,
         ) -> Service {
             let service = mock_service(
-                self.chain_name.clone(),
+                self.contracts.chain_name.clone(),
                 service_id,
                 service_manager_address,
                 service_handler_addresses,
@@ -924,21 +835,6 @@ mod test {
             .await;
             self.state.register_service(&service).unwrap();
             service
-        }
-
-        async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
-            SimpleServiceManager::deploy(self.client.provider.clone())
-                .await
-                .unwrap()
-        }
-
-        async fn deploy_simple_service_handler(
-            &self,
-            service_manager_address: Address,
-        ) -> SimpleServiceHandlerInstance<DynProvider> {
-            SimpleServiceHandler::deploy(self.client.provider.clone(), service_manager_address)
-                .await
-                .unwrap()
         }
     }
 }

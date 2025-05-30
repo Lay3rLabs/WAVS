@@ -55,7 +55,7 @@ impl From<Envelope> for ServiceManagerEnvelope {
 impl From<SignatureData> for ServiceManagerSignatureData {
     fn from(signature_data: SignatureData) -> Self {
         ServiceManagerSignatureData {
-            operators: signature_data.operators,
+            signers: signature_data.signers,
             signatures: signature_data.signatures,
             referenceBlock: signature_data.referenceBlock,
         }
@@ -73,28 +73,24 @@ impl EnvelopeExt for Envelope {
         signatures: Vec<EnvelopeSignature>,
         block_height: u64,
     ) -> std::result::Result<SignatureData, EnvelopeError> {
-        let mut operators_and_signatures: Vec<(
-            alloy_primitives::Address,
-            alloy_primitives::Bytes,
-        )> = signatures
-            .iter()
-            .map(|sig| {
-                sig.evm_signer_address(self)
-                    .map(|addr| (addr, sig.as_bytes().into()))
-            })
-            .collect::<Result<_, _>>()?;
+        let mut signers_and_signatures: Vec<(alloy_primitives::Address, alloy_primitives::Bytes)> =
+            signatures
+                .iter()
+                .map(|sig| {
+                    sig.evm_signer_address(self)
+                        .map(|addr| (addr, sig.as_bytes().into()))
+                })
+                .collect::<Result<_, _>>()?;
 
         // Solidity‑compatible ascending order (lexicographic / numeric)
-        operators_and_signatures.sort_by_key(|(addr, _)| *addr);
+        signers_and_signatures.sort_by_key(|(addr, _)| *addr);
 
         // unzip back into two parallel, sorted vectors
-        let (operators, signatures): (
-            Vec<alloy_primitives::Address>,
-            Vec<alloy_primitives::Bytes>,
-        ) = operators_and_signatures.into_iter().unzip();
+        let (signers, signatures): (Vec<alloy_primitives::Address>, Vec<alloy_primitives::Bytes>) =
+            signers_and_signatures.into_iter().unzip();
 
         Ok(SignatureData {
-            operators,
+            signers,
             signatures,
             referenceBlock: block_height as u32,
         })
