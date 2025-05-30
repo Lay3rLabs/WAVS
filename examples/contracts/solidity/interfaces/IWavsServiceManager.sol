@@ -8,8 +8,12 @@ interface IWavsServiceManager {
     // ------------------------------------------------------------------------
     // Custom Errors
     // ------------------------------------------------------------------------
+    error InvalidSignatureLength();
+    error InvalidSignatureBlock();
+    error InvalidSignatureOrder();
     error InvalidSignature();
-    error InsufficientQuorum();
+    error InsufficientQuorumZero();
+    error InsufficientQuorum(uint256 signerWeight, uint256 thresholdWeight, uint256 totalWeight);
     error InvalidQuorumParameters();
     
     // ------------------------------------------------------------------------

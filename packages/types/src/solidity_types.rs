@@ -34,9 +34,7 @@ pub use service_manager::{
 
 pub type ServiceManagerError = IWavsServiceManager::IWavsServiceManagerErrors;
 
-pub fn decode_service_manager_error(
-    err: alloy_contract::Error,
-) -> Option<ServiceManagerError> {
+pub fn decode_service_manager_error(err: alloy_contract::Error) -> Option<ServiceManagerError> {
     err.as_decoded_interface_error::<ServiceManagerError>()
 }
 

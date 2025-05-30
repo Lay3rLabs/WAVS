@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 interface IWavsServiceHandler {
     struct SignatureData {
-        address[] operators;
+        address[] signers;
         bytes[] signatures;
         uint32 referenceBlock;
     }

@@ -106,15 +106,16 @@ impl CoreSubmission {
                 .clone()
         };
 
-        let block_height = client
+        let block_height_minus_one = client
             .provider
             .get_block_number()
             .await
-            .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
+            .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?
+            - 1;
 
         let signature_data = packet
             .envelope
-            .signature_data(vec![packet.signature], block_height)?;
+            .signature_data(vec![packet.signature], block_height_minus_one)?;
 
         let tx_receipt = client
             .send_envelope_signatures(packet.envelope, signature_data, address, max_gas)

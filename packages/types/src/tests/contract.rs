@@ -104,8 +104,8 @@ async fn test_validate_function() {
     let signature_2 =
         EnvelopeSignature::Secp256k1(signer_2.sign_hash_sync(&envelope.eip191_hash()).unwrap());
 
-    // Get current block height
-    let block_height = provider.get_block_number().await.unwrap();
+    // Get current block height - 1
+    let block_height = provider.get_block_number().await.unwrap() - 1;
 
     // Create signature data with both signers (meeting threshold)
     let signatures = vec![signature_1.clone(), signature_2.clone()];
@@ -123,7 +123,7 @@ async fn test_validate_function() {
 
     assert!(
         result.is_ok(),
-        "Validation should succeed with sufficient quorum"
+        "Validation should succeed with sufficient quorum, got error: {result:#?}"
     );
 
     // Test: validate function should fail with insufficient quorum (only one signer)
@@ -139,16 +139,15 @@ async fn test_validate_function() {
 
     match insufficient_result {
         Ok(_) => panic!("Validation should fail with at least _some_ error!"),
-        Err(err) => {
-            eprintln!("{:#?}", err);
-            match err.as_decoded_interface_error::<ServiceManagerError>() {
-                Some(ServiceManagerError::InsufficientQuorum(_)) => {
-                    // Expected error for insufficient quorum
-                },
-                Some(_) => panic!("Unexpected error type received: {:?}", err),
-                None => panic!("Failed to decode service manager errors"),
+        Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
+            Some(ServiceManagerError::InsufficientQuorum(quorum_err)) => {
+                assert_eq!(quorum_err.signerWeight, U256::from(1u64));
+                assert_eq!(quorum_err.thresholdWeight, U256::from(NUM_THRESHOLD as u64));
+                assert_eq!(quorum_err.totalWeight, U256::from(NUM_SIGNERS as u64));
             }
-        }
+            Some(_) => panic!("Unexpected error type received: {:?}", err),
+            None => panic!("Failed to decode service manager errors"),
+        },
     }
 }
 
@@ -212,8 +211,8 @@ async fn test_validate_function_invalid_signature() {
             .unwrap(),
     );
 
-    // Get current block height
-    let block_height = provider.get_block_number().await.unwrap();
+    // Get current block height - 1
+    let block_height = provider.get_block_number().await.unwrap() - 1;
 
     // Create signature data with unauthorized signer
     let signatures = vec![unauthorized_signature];
