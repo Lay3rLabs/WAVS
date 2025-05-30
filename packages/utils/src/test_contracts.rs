@@ -35,11 +35,10 @@ pub mod service_handler {
 }
 
 pub use service_handler::{
-    ISimpleSubmit, SimpleSubmitInstance as SimpleServiceHandlerInstance, SimpleSubmit as SimpleServiceHandler,
+    ISimpleSubmit, SimpleSubmit as SimpleServiceHandler,
+    SimpleSubmitInstance as SimpleServiceHandlerInstance,
 };
-pub use service_manager::{
-    SimpleServiceManagerInstance, SimpleServiceManager,
-};
+pub use service_manager::{SimpleServiceManager, SimpleServiceManagerInstance};
 
 /// Test dependencies for EVM contract testing
 /// Provides a reusable setup for testing with simple service manager and handler contracts
@@ -78,9 +77,7 @@ impl TestContractDeps {
     }
 
     /// Deploy a simple service manager contract for testing
-    pub async fn deploy_simple_service_manager(
-        &self,
-    ) -> SimpleServiceManagerInstance<DynProvider> {
+    pub async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
         SimpleServiceManager::deploy(self.client.provider.clone())
             .await
             .unwrap()

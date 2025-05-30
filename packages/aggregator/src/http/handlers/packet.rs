@@ -315,13 +315,12 @@ mod test {
         collections::{BTreeMap, HashSet},
         sync::{Arc, Mutex},
     };
-    use tempfile::TempDir;
+
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
         test_contracts::{
-            TestContractDeps, SimpleServiceHandlerInstance,
-            SimpleServiceManagerInstance,
+            SimpleServiceHandlerInstance, SimpleServiceManagerInstance, TestContractDeps,
         },
     };
     use wavs_types::{
@@ -894,7 +893,9 @@ mod test {
             &self,
             service_manager_address: Address,
         ) -> SimpleServiceHandlerInstance<DynProvider> {
-            self.contract_deps.deploy_simple_service_handler(service_manager_address).await
+            self.contract_deps
+                .deploy_simple_service_handler(service_manager_address)
+                .await
         }
     }
 }
