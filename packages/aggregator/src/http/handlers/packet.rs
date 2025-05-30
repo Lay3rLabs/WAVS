@@ -238,12 +238,12 @@ impl AggregatorProcess<'_> {
                                         Ok(AddPacketResponse::Aggregated { count: queue.len() })
                                     },
                                     Some(err) => {
-                                        return Err(AggregatorError::ServiceManagerValidateKnown(err))
+                                        Err(AggregatorError::ServiceManagerValidateKnown(err))
                                     }
                                     None => {
                                         match err.as_revert_data() {
-                                            Some(raw) => return Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
-                                            None => return Err(AggregatorError::ServiceManagerValidateUnknown(err))
+                                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
+                                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err))
                                         }
                                     }
                                 }
