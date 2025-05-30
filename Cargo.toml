@@ -22,8 +22,8 @@ split-debuginfo = "unpacked"
 [workspace.package]
 edition = "2021"
 version = "0.4.0-beta.5"
-license = "MIT"
-authors = ["Lay3r Labs Team"]
+license = "GPL-3.0-or-later"
+authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
 rust-version = "1.85.0"
 
