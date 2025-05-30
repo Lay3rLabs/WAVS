@@ -305,11 +305,7 @@ fn add_packet_to_queue(
 mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
-    use alloy_primitives::{Bytes, FixedBytes, U256};
-    use alloy_provider::DynProvider;
-    use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
-    use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
-    use alloy_sol_types::SolValue;
+    use alloy_primitives::U256;
     use futures::{stream::FuturesUnordered, StreamExt};
     use std::{
         collections::{BTreeMap, HashSet},
@@ -319,16 +315,12 @@ mod test {
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
-        test_contracts::{
-            SimpleServiceHandlerInstance, SimpleServiceManagerInstance, TestContractDeps,
+        test_utils::{
+            test_contracts::TestContractDeps,
+            test_packet::{mock_envelope, mock_packet, mock_signer},
         },
     };
-    use wavs_types::{
-        ChainName, Envelope, EnvelopeExt, EnvelopeSignature, PacketRoute, Service, ServiceID,
-    };
-
-    // Contract definitions are now imported from utils::test_contracts
-    use utils::test_contracts::ISimpleSubmit::DataWithId;
+    use wavs_types::{ChainName, Service, ServiceID};
 
     #[test]
     fn packet_validation() {
@@ -380,7 +372,7 @@ mod test {
     async fn process_mixed_responses() {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_manager = deps.contracts.deploy_simple_service_manager().await;
 
         let mut signers = Vec::new();
         const NUM_SIGNERS: usize = 3;
@@ -420,10 +412,12 @@ mod test {
         let envelope = mock_envelope(1, [1, 2, 3]);
 
         let service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
 
         let fixed_second_service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
 
@@ -519,7 +513,7 @@ mod test {
             .aggregators
             .get_mut(1)
             .unwrap() = wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
-            chain_name: deps.contract_deps.chain_name.clone(),
+            chain_name: deps.contracts.chain_name.clone(),
             address: *fixed_second_service_handler.address(),
             max_gas: None,
         });
@@ -567,8 +561,9 @@ mod test {
     async fn first_packet_sent() {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_manager = deps.contracts.deploy_simple_service_manager().await;
         let service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
 
@@ -631,8 +626,9 @@ mod test {
     async fn process_many_packets(concurrent: bool) {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.deploy_simple_service_manager().await;
+        let service_manager = deps.contracts.deploy_simple_service_manager().await;
         let service_handler = deps
+            .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
         let service = deps
@@ -788,45 +784,9 @@ mod test {
             },
         }
     }
-    fn mock_packet(
-        signer: &LocalSigner<SigningKey>,
-        envelope: &Envelope,
-        service_id: ServiceID,
-    ) -> Packet {
-        let signature = signer.sign_hash_sync(&envelope.eip191_hash()).unwrap();
-
-        Packet {
-            envelope: envelope.clone(),
-            route: PacketRoute {
-                service_id,
-                workflow_id: "workflow".parse().unwrap(),
-            },
-            signature: EnvelopeSignature::Secp256k1(signature),
-        }
-    }
-
-    fn mock_signer() -> LocalSigner<SigningKey> {
-        MnemonicBuilder::<English>::default()
-            .word_count(24)
-            .build_random()
-            .unwrap()
-    }
-
-    fn mock_envelope(trigger_id: u64, data: impl Into<Bytes>) -> Envelope {
-        // SimpleSubmit has its own data format, so we need to encode it
-        let payload = DataWithId {
-            triggerId: trigger_id,
-            data: data.into(),
-        };
-        Envelope {
-            payload: payload.abi_encode().into(),
-            eventId: FixedBytes([0; 20]),
-            ordering: FixedBytes([0; 12]),
-        }
-    }
 
     struct TestDeps {
-        contract_deps: TestContractDeps,
+        contracts: TestContractDeps,
         state: HttpState,
     }
 
@@ -863,7 +823,7 @@ mod test {
             let state = HttpState::new(config).unwrap();
 
             Self {
-                contract_deps,
+                contracts: contract_deps,
                 state,
             }
         }
@@ -875,7 +835,7 @@ mod test {
             service_handler_addresses: Vec<Address>,
         ) -> Service {
             let service = mock_service(
-                self.contract_deps.chain_name.clone(),
+                self.contracts.chain_name.clone(),
                 service_id,
                 service_manager_address,
                 service_handler_addresses,
@@ -883,19 +843,6 @@ mod test {
             .await;
             self.state.register_service(&service).unwrap();
             service
-        }
-
-        async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
-            self.contract_deps.deploy_simple_service_manager().await
-        }
-
-        async fn deploy_simple_service_handler(
-            &self,
-            service_manager_address: Address,
-        ) -> SimpleServiceHandlerInstance<DynProvider> {
-            self.contract_deps
-                .deploy_simple_service_handler(service_manager_address)
-                .await
         }
     }
 }

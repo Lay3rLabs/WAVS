@@ -10,7 +10,7 @@ pub mod serde;
 pub mod service;
 pub mod storage;
 pub mod telemetry;
-pub mod test_contracts;
+pub mod test_utils;
 pub mod wkg;
 
 // the test version of init_tracing does not take a config

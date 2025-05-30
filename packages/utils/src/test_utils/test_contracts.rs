@@ -1,5 +1,3 @@
-#![cfg(any(test, feature = "test-utils"))]
-
 use alloy_node_bindings::{Anvil, AnvilInstance};
 use alloy_primitives::Address;
 use alloy_provider::DynProvider;
