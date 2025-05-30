@@ -43,4 +43,11 @@ interface IWavsServiceManager {
      * @param _serviceURI The service URI to update.
      */
     function setServiceURI(string calldata _serviceURI) external;
+
+     /**
+     * @notice Retrieves the latest operator address associated with a signing key.
+     * @param signingKey The address of the signing key.
+     * @return The latest operator address associated with the signing key, or address(0) if none.
+     */
+    function getLatestOperatorForSigningKey(address signingKey) external view returns(address);
 }
