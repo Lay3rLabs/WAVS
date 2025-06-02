@@ -1,6 +1,6 @@
 use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResult};
 use alloy_provider::DynProvider;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use wavs_types::Service;
 
 pub struct DeployService {
@@ -40,17 +40,12 @@ pub struct SetServiceUrlArgs {
 impl DeployService {
     pub async fn run(ctx: &CliContext, args: DeployServiceArgs) -> Result<Self> {
         let service = args.service.clone();
-        let service_id = service.id.clone();
 
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
         http_client
             .create_service(service, args.set_service_url_args.clone())
-            .await
-            .context(format!(
-                "Failed to deploy service with ID '{}' to endpoint '{}'",
-                service_id, ctx.config.wavs_endpoint
-            ))?;
+            .await?;
 
         let _self = Self { args };
 
