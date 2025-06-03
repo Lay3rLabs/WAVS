@@ -5,7 +5,7 @@ use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use utils::{context::AppContext, storage::fs::FileStorage, telemetry::HttpMetrics};
 
-use crate::dispatcher::Dispatcher;
+use wavs::dispatcher::Dispatcher;
 
 use super::{app::TestApp, mock_app::MockE2ETestRunner};
 
@@ -49,7 +49,7 @@ impl TestHttpApp {
         let metrics = HttpMetrics::new(&meter);
 
         ctx.clone().rt.block_on(async move {
-            let http_router = crate::http::server::make_router(
+            let http_router = wavs::http::server::make_router(
                 inner.config.as_ref().clone(),
                 dispatcher,
                 true,

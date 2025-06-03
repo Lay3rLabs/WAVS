@@ -242,12 +242,12 @@ impl<S: CAStorage> WasmEngine<S> {
 
 #[cfg(test)]
 pub mod tests {
-    use utils::storage::memory::MemoryStorage;
+    use utils::{storage::memory::MemoryStorage, test_utils::address::rand_address_evm};
     use wavs_types::{
         ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, WorkflowID,
     };
 
-    use crate::test_utils::{
+    use utils::test_utils::{
         address::rand_event_evm,
         mock_chain_configs::mock_chain_configs,
         mock_engine::{COMPONENT_ECHO_DATA, COMPONENT_PERMISSIONS},
@@ -331,7 +331,7 @@ pub mod tests {
 
         let workflow = Workflow {
             trigger: Trigger::evm_contract_event(
-                crate::test_utils::address::rand_address_evm(),
+                rand_address_evm(),
                 ChainName::new("evm").unwrap(),
                 rand_event_evm(),
             ),

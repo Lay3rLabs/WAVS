@@ -3,15 +3,13 @@ use axum::{
     http::{Method, Request},
 };
 use tower::Service;
-use wavs::{
-    config::Config,
-    test_utils::{
-        address::rand_address_evm,
-        http::{map_response, TestHttpApp},
-        mock_engine::COMPONENT_SQUARE,
-        mock_submissions::mock_eigen_submit,
-        mock_trigger_manager::mock_evm_event_trigger,
-    },
+use utils::test_utils::{address::rand_address_evm, mock_engine::COMPONENT_SQUARE};
+use wavs::config::Config;
+mod wavs_systems;
+use wavs_systems::{
+    http::{map_response, TestHttpApp},
+    mock_submissions::mock_eigen_submit,
+    mock_trigger_manager::mock_evm_event_trigger,
 };
 use wavs_types::{ComponentSource, Digest, ServiceID, UploadComponentResponse};
 

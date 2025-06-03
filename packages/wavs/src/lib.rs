@@ -3,7 +3,6 @@ pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
 pub mod http;
 pub mod subsystems; // subsystems: engine, submission, and trigger
-pub mod test_utils; // TODO - move this into tests?
 
 use config::Config;
 use dispatcher::Dispatcher;

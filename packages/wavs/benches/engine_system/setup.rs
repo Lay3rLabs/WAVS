@@ -3,11 +3,11 @@ use std::{collections::BTreeMap, sync::Arc};
 use opentelemetry::global::meter;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::Metrics;
+use utils::test_utils::address::rand_address_evm;
 use wavs::{
     dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE},
     subsystems::engine::{wasm_engine::WasmEngine, EngineManager},
     subsystems::submission::chain_message::ChainMessage,
-    test_utils::address::rand_address_evm,
 };
 use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};
 use wavs_types::{Service, TriggerAction};

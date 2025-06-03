@@ -2,9 +2,9 @@ use std::{path::PathBuf, sync::Arc};
 
 use utils::config::ConfigBuilder;
 
-use crate::{args::CliArgs, config::Config};
+use wavs::{args::CliArgs, config::Config};
 
-use super::mock_chain_configs::mock_chain_configs;
+use utils::test_utils::mock_chain_configs::mock_chain_configs;
 
 #[derive(Clone)]
 pub struct TestApp {
@@ -34,7 +34,7 @@ impl TestApp {
 
         config.chains = mock_chain_configs();
 
-        crate::init_tracing_tests();
+        wavs::init_tracing_tests();
 
         Self {
             config: Arc::new(config),

@@ -1,4 +1,4 @@
-use utils::config::{ChainConfigs, CosmosChainConfig, EvmChainConfig};
+use crate::config::{ChainConfigs, CosmosChainConfig, EvmChainConfig};
 
 pub fn mock_chain_configs() -> ChainConfigs {
     ChainConfigs {

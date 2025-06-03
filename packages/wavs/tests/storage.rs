@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use utils::storage::db::{RedbStorage, Table, JSON};
-use wavs::test_utils::{address::rand_address_evm, mock_trigger_manager::mock_evm_event_trigger};
+use utils::test_utils::address::rand_address_evm;
 use wavs_types::{
     Component, ComponentSource, Digest, Service, ServiceID, ServiceManager, ServiceStatus, Submit,
     Workflow, WorkflowID,
@@ -9,6 +9,8 @@ use wavs_types::{
 
 use redb::ReadableTable;
 use serde::{Deserialize, Serialize};
+mod wavs_systems;
+use wavs_systems::mock_trigger_manager::mock_evm_event_trigger;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
 pub struct Demo {

@@ -2,13 +2,15 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use utils::context::AppContext;
-use wavs::test_utils::{
-    address::{rand_address_cosmos, rand_address_evm},
-    mock_app::MockE2ETestRunner,
-    mock_engine::{SquareIn, COMPONENT_ECHO_DATA, COMPONENT_SQUARE},
-    mock_submissions::wait_for_submission_messages,
+use utils::{
+    context::AppContext,
+    test_utils::{
+        address::{rand_address_cosmos, rand_address_evm},
+        mock_engine::{SquareIn, COMPONENT_ECHO_DATA, COMPONENT_SQUARE},
+    },
 };
+mod wavs_systems;
+use wavs_systems::{mock_app::MockE2ETestRunner, mock_submissions::wait_for_submission_messages};
 use wavs_types::{ComponentSource, ServiceID, WorkflowID};
 
 #[test]

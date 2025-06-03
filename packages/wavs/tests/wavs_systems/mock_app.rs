@@ -1,24 +1,19 @@
 use std::sync::Arc;
 
-use crate::{
-    dispatcher::Dispatcher,
-    subsystems::engine::wasm_engine::WasmEngine,
-    test_utils::{
-        address::rand_address_evm,
-        http::{map_response, TestHttpApp},
-    },
-    AppContext,
-};
+use super::http::{map_response, TestHttpApp};
 use axum::{
     body::Body,
     http::{Method, Request},
 };
 use serde::Serialize;
 use tower::Service as _;
+use utils::test_utils::address::rand_address_evm;
 use utils::{
+    context::AppContext,
     storage::{fs::FileStorage, memory::MemoryStorage},
     telemetry::{EngineMetrics, Metrics},
 };
+use wavs::{dispatcher::Dispatcher, subsystems::engine::wasm_engine::WasmEngine};
 use wavs_types::{
     ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service, ServiceID,
     ServiceManager, Submit, WorkflowID,
@@ -35,7 +30,7 @@ pub struct MockE2ETestRunner {
 
 impl MockE2ETestRunner {
     pub fn create_engine(
-        config: Option<crate::config::Config>,
+        config: Option<wavs::config::Config>,
         metrics: Option<EngineMetrics>,
     ) -> WasmEngine<MemoryStorage> {
         let config = config.unwrap_or_default();
@@ -57,12 +52,12 @@ impl MockE2ETestRunner {
         _ctx: AppContext,
         data_dir: impl AsRef<std::path::Path>,
     ) -> Dispatcher<FileStorage> {
-        let config = crate::config::Config {
+        let config = wavs::config::Config {
             submission_mnemonic: Some(
                 "test test test test test test test test test test test junk".to_string(),
             ),
             data: data_dir.as_ref().to_path_buf(),
-            ..crate::config::Config::default()
+            ..wavs::config::Config::default()
         };
         let meter = opentelemetry::global::meter("wavs_metrics");
         let metrics = Metrics::new(&meter);

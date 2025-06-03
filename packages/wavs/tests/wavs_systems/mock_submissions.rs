@@ -7,9 +7,9 @@ use alloy_primitives::FixedBytes;
 use thiserror::Error;
 use wavs_types::{EventId, EventOrder, Submit};
 
-use crate::subsystems::submission::SubmissionManager;
+use wavs::subsystems::submission::SubmissionManager;
 
-use super::address::rand_address_evm;
+use utils::test_utils::address::rand_address_evm;
 
 pub fn mock_eigen_submit() -> Submit {
     Submit::evm_contract("evm".try_into().unwrap(), rand_address_evm(), None)

@@ -10,7 +10,7 @@ license.workspace = true
 publish = false
 
 [features]
-test-utils = []
+test-utils = ["dep:rand", "dep:bip39"]
 
 [dependencies]
 wasm-pkg-client = { workspace = true }
@@ -58,6 +58,8 @@ cid = { workspace = true }
 reqwest = { workspace = true }
 tempfile = { workspace = true }
 alloy-contract = { workspace = true }
+rand = { workspace = true, optional = true }
+bip39 = { workspace = true, optional = true}
 
 [dev-dependencies]
 tokio = { workspace = true }
