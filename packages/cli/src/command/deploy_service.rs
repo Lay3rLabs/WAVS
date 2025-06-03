@@ -47,10 +47,7 @@ impl DeployService {
         http_client
             .create_service(service, args.set_service_url_args.clone())
             .await
-            .context(format!(
-                "Failed to deploy service with ID '{}' to endpoint '{}'",
-                service_id, ctx.config.wavs_endpoint
-            ))?;
+            .context(format!("Failed to deploy service with ID '{}'", service_id))?;
 
         let _self = Self { args };
 
