@@ -1,5 +1,5 @@
 use alloy_provider::DynProvider;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use wavs_types::{
     AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
@@ -64,13 +64,25 @@ impl HttpClient {
             address: Address::Evm(service.manager.evm_address_unchecked().into()),
         })?;
 
-        self.inner
-            .post(format!("{}/app", self.endpoint))
+        let url = format!("{}/app", self.endpoint);
+        let response = self
+            .inner
+            .post(&url)
             .header("Content-Type", "application/json")
             .body(body)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .with_context(|| format!("Failed to send request to {}", url))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<Failed to read response body>".to_string());
+
+            anyhow::bail!("{} from {}: {}", status, url, error_text);
+        }
 
         Ok(())
     }
@@ -95,13 +107,25 @@ impl HttpClient {
     pub async fn save_service(&self, service: &Service) -> Result<String> {
         let body = serde_json::to_string(service)?;
 
-        self.inner
-            .post(format!("{}/save-service", self.endpoint))
+        let url = format!("{}/save-service", self.endpoint);
+        let response = self
+            .inner
+            .post(&url)
             .header("Content-Type", "application/json")
             .body(body)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .with_context(|| format!("Failed to send request to {}", url))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<Failed to read response body>".to_string());
+
+            anyhow::bail!("{} from {}: {}", status, url, error_text);
+        }
 
         Ok(format!("{}/service/{}", self.endpoint, service.id))
     }
