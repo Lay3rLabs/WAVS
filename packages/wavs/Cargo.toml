@@ -62,6 +62,8 @@ dashmap = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
+alloy-sol-types = { workspace = true }
+utils = { workspace = true, features = ["test-utils"] }
 
 [[bench]]
 name = "intervals"

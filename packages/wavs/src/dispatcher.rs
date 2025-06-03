@@ -652,6 +652,8 @@ mod tests {
             mock_trigger_manager::{mock_cosmos_event_trigger, mock_real_trigger_action},
         },
     };
+    use alloy_sol_types::SolValue;
+    use utils::test_utils::test_contracts::ISimpleSubmit::DataWithId;
     use wavs_types::{
         Aggregator, ChainName, Component, ComponentSource, EvmContractSubmission, ServiceID,
         ServiceManager, ServiceStatus, Submit, Workflow, WorkflowID,
@@ -749,14 +751,15 @@ mod tests {
         let processed = dispatcher.submission_manager.get_debug_packets();
         assert_eq!(processed.len(), 2);
 
+        let payload_1: DataWithId = DataWithId::abi_decode(&processed[0].envelope.payload).unwrap();
+        let data_1: SquareOut = serde_json::from_slice(&payload_1.data).unwrap();
+
+        let payload_2: DataWithId = DataWithId::abi_decode(&processed[1].envelope.payload).unwrap();
+        let data_2: SquareOut = serde_json::from_slice(&payload_2.data).unwrap();
+
         // Check the payloads
-        assert_eq!(
-            processed[0].envelope.payload.to_vec(),
-            serde_json::to_vec(&SquareOut::new(9)).unwrap()
-        );
-        assert_eq!(
-            processed[1].envelope.payload.to_vec(),
-            serde_json::to_vec(&SquareOut::new(441)).unwrap()
-        );
+        assert_eq!(data_1, SquareOut::new(9));
+
+        assert_eq!(data_2, SquareOut::new(441));
     }
 }
