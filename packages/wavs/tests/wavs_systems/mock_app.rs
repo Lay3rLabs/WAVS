@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::Serialize;
 use tower::Service as _;
+use tracing::instrument;
 use utils::test_utils::address::rand_address_evm;
 use utils::{
     context::AppContext,
@@ -29,6 +30,7 @@ pub struct MockE2ETestRunner {
 }
 
 impl MockE2ETestRunner {
+    #[instrument(level = "debug", skip(config, metrics))]
     pub fn create_engine(
         config: Option<wavs::config::Config>,
         metrics: Option<EngineMetrics>,
@@ -48,6 +50,7 @@ impl MockE2ETestRunner {
             metrics,
         )
     }
+    #[instrument(level = "debug", skip(_ctx, data_dir))]
     pub fn create_dispatcher(
         _ctx: AppContext,
         data_dir: impl AsRef<std::path::Path>,
@@ -68,6 +71,7 @@ impl MockE2ETestRunner {
         dispatcher
     }
 
+    #[instrument(level = "debug", skip(ctx))]
     pub fn new(ctx: AppContext) -> Arc<Self> {
         let temp_data_dir = tempfile::tempdir().unwrap();
         let dispatcher = Arc::new(Self::create_dispatcher(ctx.clone(), &temp_data_dir));
@@ -92,6 +96,7 @@ impl MockE2ETestRunner {
         })
     }
 
+    #[instrument(level = "debug", skip(self))]
     pub async fn send_trigger(
         &self,
         service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
@@ -113,6 +118,7 @@ impl MockE2ETestRunner {
             .unwrap();
     }
 
+    #[instrument(level = "debug", skip(self))]
     pub async fn list_services(&self) -> ListServicesResponse {
         let req = Request::builder()
             .method(Method::GET)
@@ -132,7 +138,7 @@ impl MockE2ETestRunner {
         map_response::<ListServicesResponse>(response).await
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[instrument(level = "debug", skip(self))]
     pub async fn create_service(&self, service_id: ServiceID, component_source: ComponentSource) {
         // but we can create a service via http router
         let trigger = mock_evm_event_trigger();
@@ -154,6 +160,7 @@ impl MockE2ETestRunner {
         self.dispatcher.add_service_direct(service).await.unwrap();
     }
 
+    #[instrument(level = "debug", skip(self))]
     pub async fn delete_services(&self, service_ids: Vec<ServiceID>) {
         let body = serde_json::to_string(&DeleteServicesRequest { service_ids }).unwrap();
 
