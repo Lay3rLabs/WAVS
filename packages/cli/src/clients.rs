@@ -81,7 +81,7 @@ impl HttpClient {
                 .await
                 .unwrap_or_else(|_| "<Failed to read response body>".to_string());
 
-            anyhow::bail!("HTTP {} error from {}: {}", status, url, error_text);
+            anyhow::bail!("{} from {}: {}", status, url, error_text);
         }
 
         Ok(())
@@ -124,7 +124,7 @@ impl HttpClient {
                 .await
                 .unwrap_or_else(|_| "<Failed to read response body>".to_string());
 
-            anyhow::bail!("HTTP {} error from {}: {}", status, url, error_text);
+            anyhow::bail!("{} from {}: {}", status, url, error_text);
         }
 
         Ok(format!("{}/service/{}", self.endpoint, service.id))
