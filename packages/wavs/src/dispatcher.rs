@@ -399,7 +399,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         self.db_storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
-        self.submission_manager.remove_service(id.clone())?;
+        // no need to remove from submission manager, it has nothing to do 
 
         // Get current service count for logging
         let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;

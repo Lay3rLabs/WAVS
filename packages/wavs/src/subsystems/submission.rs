@@ -217,12 +217,6 @@ impl SubmissionManager {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    pub fn remove_service(&self, _service_id: ServiceID) -> Result<(), SubmissionError> {
-        // nothing we really care about here, it's okay to keep the signing clients in memory
-        Ok(())
-    }
-
     pub fn get_message_count(&self) -> u64 {
         self.message_count.load(std::sync::atomic::Ordering::SeqCst)
     }
