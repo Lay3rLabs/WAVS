@@ -124,7 +124,7 @@ update-submodules:
 lint:
     cargo fmt --all -- --check
     cargo fix --allow-dirty --allow-staged
-    cargo clippy --all-targets -- -D warnings
+    just clippy
 
 clippy:
     cargo clippy --all-targets -- -D warnings
