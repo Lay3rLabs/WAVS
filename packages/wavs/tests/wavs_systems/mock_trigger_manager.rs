@@ -14,7 +14,6 @@ use wavs_types::{
     ChainName, IDError, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
 };
 
-// erm, not really a mock... but a test utility
 pub fn mock_real_trigger_action(
     service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
     workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
