@@ -273,15 +273,14 @@ pub async fn create_trigger_from_config(
             let workflow = workflow_definition
                 .expect("Workflow not provided when using deferred block interval targets");
 
-            let block_delay = 12;
-            let current_block = if clients.evm_clients.contains_key(&chain_name) {
+            let (current_block, block_delay) = if clients.evm_clients.contains_key(&chain_name) {
                 let client = clients.get_evm_client(&chain_name);
 
-                client.provider.get_block_number().await.unwrap()
+                (client.provider.get_block_number().await.unwrap(), 5)
             } else if clients.cosmos_client_pools.contains_key(&chain_name) {
                 let client = clients.get_cosmos_client(&chain_name).await;
 
-                client.querier.block_height().await.unwrap()
+                (client.querier.block_height().await.unwrap(), 12)
             } else {
                 panic!("Chain is not configured: {}", chain_name)
             };
