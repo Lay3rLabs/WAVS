@@ -53,12 +53,10 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.triggers.len() + self.unadded_triggers.len()
     }
 
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.triggers.is_empty() && self.unadded_triggers.is_empty()
     }
