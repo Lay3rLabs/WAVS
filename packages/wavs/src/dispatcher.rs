@@ -464,7 +464,7 @@ async fn add_service_to_managers(
         let trigger = TriggerConfig {
             service_id: service.id.clone(),
             workflow_id: id,
-            trigger: workflow.trigger,
+            triggers: workflow.triggers,
         };
         triggers.add_trigger(trigger)?;
     }

@@ -33,10 +33,15 @@ impl TryFrom<wavs_types::TriggerConfig> for component::TriggerConfig {
     type Error = EngineError;
 
     fn try_from(src: wavs_types::TriggerConfig) -> Result<Self, Self::Error> {
+        let trigger_sources: Result<Vec<_>, _> = src.triggers
+            .into_iter()
+            .map(|trigger| trigger.try_into())
+            .collect();
+        
         Ok(Self {
             service_id: src.service_id.to_string(),
             workflow_id: src.workflow_id.to_string(),
-            trigger_source: src.trigger.try_into()?,
+            trigger_source: trigger_sources?,
         })
     }
 }

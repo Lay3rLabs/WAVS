@@ -31,7 +31,7 @@ pub enum LocalStreamCommand {
 
 impl LocalStreamCommand {
     pub fn new(trigger_config: &TriggerConfig) -> Option<Self> {
-        match &trigger_config.trigger {
+        match &trigger_config.triggers {
             Trigger::Cron { .. } => Some(Self::StartListeningCron),
             Trigger::EvmContractEvent { chain_name, .. }
             | Trigger::CosmosContractEvent { chain_name, .. }

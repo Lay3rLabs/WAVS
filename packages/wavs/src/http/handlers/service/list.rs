@@ -38,9 +38,9 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                 status: service.status,
                 id: service.id.clone(),
                 // just first workflow for now
-                trigger: match service.workflows.values().next() {
+                triggers: match service.workflows.values().next() {
                     None => return Err(anyhow::anyhow!("No workflows found").into()),
-                    Some(w) => w.trigger.clone(),
+                    Some(w) => w.triggers.clone(),
                 },
             });
         }

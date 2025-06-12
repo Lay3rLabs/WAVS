@@ -63,7 +63,7 @@ impl Service {
         let workflow_id = WorkflowID::default();
 
         let workflow = Workflow {
-            trigger,
+            triggers: vec![trigger],
             component: Component::new(source),
             submit,
             aggregators: Vec::new(),
@@ -146,8 +146,8 @@ impl ComponentSource {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Workflow {
-    /// The trigger that fires this workflow
-    pub trigger: Trigger,
+    /// Triggers that fires this workflow
+    pub triggers: Vec<Trigger>,
 
     /// The component to run when the trigger fires
     pub component: Component,
@@ -266,7 +266,7 @@ pub struct TriggerAction {
 pub struct TriggerConfig {
     pub service_id: ServiceID,
     pub workflow_id: WorkflowID,
-    pub trigger: Trigger,
+    pub triggers: Vec<Trigger>,
 }
 
 // TODO - rename this? Trigger is a noun, Submit is a verb.. feels a bit weird
@@ -436,7 +436,7 @@ mod test_ext {
             Ok(Self {
                 service_id: service_id.try_into()?,
                 workflow_id: workflow_id.try_into()?,
-                trigger: Trigger::cosmos_contract_event(contract_address, chain_name, event_type),
+                triggers: vec![Trigger::cosmos_contract_event(contract_address, chain_name, event_type)],
             })
         }
 
@@ -450,7 +450,7 @@ mod test_ext {
             Ok(Self {
                 service_id: service_id.try_into()?,
                 workflow_id: workflow_id.try_into()?,
-                trigger: Trigger::evm_contract_event(contract_address, chain_name, event_hash),
+                triggers: vec![Trigger::evm_contract_event(contract_address, chain_name, event_hash)],
             })
         }
 
@@ -463,12 +463,12 @@ mod test_ext {
             Ok(Self {
                 service_id: service_id.try_into()?,
                 workflow_id: workflow_id.try_into()?,
-                trigger: Trigger::BlockInterval {
+                triggers: vec![Trigger::BlockInterval {
                     chain_name: chain_name.into(),
                     n_blocks,
                     start_block: None,
                     end_block: None,
-                },
+                }],
             })
         }
 

@@ -24,7 +24,7 @@ mode = "all"
 # registry = true
 
 # Send tracing to Jaeger
-# jaeger = "http://localhost:4317"
+jaeger = "http://localhost:4317"
 
 # Send metrics to Prometheus
 # prometheus = "http://localhost:9090"

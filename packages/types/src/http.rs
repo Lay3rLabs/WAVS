@@ -43,7 +43,7 @@ pub struct ListServiceResponse {
     pub id: ServiceID,
     pub status: ServiceStatus,
     pub source: ComponentSource,
-    pub trigger: Trigger,
+    pub triggers: Vec<Trigger>,
     pub permissions: Permissions,
 }
 

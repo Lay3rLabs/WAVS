@@ -58,7 +58,7 @@ interface layer-types {
   record trigger-config {
     service-id: string,
     workflow-id: string,
-    trigger-source: trigger-source
+    trigger-source: list<trigger-source>
   }
 
   variant trigger-source {
