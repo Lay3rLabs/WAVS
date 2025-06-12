@@ -68,8 +68,11 @@ impl TriggerManager {
         // The mechanics of adding a trigger are that we:
 
         // 1. Setup all the records needed to track the trigger in various "lookup" maps.
-        // 2a. If the trigger needs some kind of stream to track it, we need to create that stream.
-        // 2b. This happens by way of a "local command" so that everything is handled in `start_watcher` (helps with lifetime issues).
+        // 2a. If the trigger needs some kind of stream to kick it off, we need to create that stream.
+        // 2b. Actual stream-creation happens by way of a "local command" so that everything is handled in `start_watcher` (helps with lifetime issues).
+        //
+        // It doesn't really matter what order the multiplexed streams are polled in, a trigger simply
+        // will not be fired until the stream that kicks it off is polled (i.e. this definitively happens _after_ the stream is created).
         if let Some(command) = LocalStreamCommand::new(&config) {
             match self.local_command_sender.lock().unwrap().as_ref() {
                 Some(sender) => {
