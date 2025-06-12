@@ -1,19 +1,22 @@
 use std::sync::Arc;
 
 use utils::{
-    storage::db::{DBError, RedbStorage, Table, JSON},
+    storage::{
+        db::{DBError, RedbStorage, Table, JSON},
+        fs::FileStorage,
+    },
     telemetry::HttpMetrics,
 };
 use wavs_types::ServiceID;
 
-use crate::{apis::dispatcher::DispatchManager, config::Config, dispatcher::DispatcherError};
+use crate::{config::Config, dispatcher::Dispatcher};
 
 const SERVICES: Table<&str, JSON<wavs_types::Service>> = Table::new("services");
 
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
-    pub dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
+    pub dispatcher: Arc<Dispatcher<FileStorage>>,
     pub is_mock_chain_client: bool,
     pub http_client: reqwest::Client,
     pub storage: Arc<RedbStorage>,
@@ -23,7 +26,7 @@ pub struct HttpState {
 impl HttpState {
     pub async fn new(
         config: Config,
-        dispatcher: Arc<dyn DispatchManager<Error = DispatcherError>>,
+        dispatcher: Arc<Dispatcher<FileStorage>>,
         is_mock_chain_client: bool,
         metrics: HttpMetrics,
     ) -> anyhow::Result<Self> {

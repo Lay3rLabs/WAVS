@@ -333,6 +333,19 @@ pub struct Permissions {
     pub file_system: bool,
 }
 
+#[test]
+fn permission_defaults() {
+    let permissions_json: Permissions = serde_json::from_str("{}").unwrap();
+    let permissions_default: Permissions = Permissions::default();
+
+    assert_eq!(permissions_json, permissions_default);
+    assert_eq!(
+        permissions_default.allowed_http_hosts,
+        AllowedHostPermission::None
+    );
+    assert!(!permissions_default.file_system);
+}
+
 // TODO: remove / change defaults?
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, ToSchema)]
@@ -459,6 +472,7 @@ mod test_ext {
             })
         }
 
+        #[cfg(test)]
         pub fn manual(
             service_id: impl TryInto<ServiceID, Error = IDError>,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,

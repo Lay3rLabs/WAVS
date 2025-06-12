@@ -1,12 +1,10 @@
 use chrono::{DateTime, Duration, Timelike, Utc};
-use wavs_types::Timestamp;
-
-use wavs::{
-    apis::trigger::TriggerError,
-    triggers::{
-        core::LookupId, cron_scheduler::CronIntervalState, interval_scheduler::IntervalState,
-    },
+use wavs::subsystems::trigger::{
+    error::TriggerError,
+    lookup::LookupId,
+    schedulers::{cron_scheduler::CronIntervalState, interval_scheduler::IntervalState},
 };
+use wavs_types::Timestamp;
 
 // Helper function to create a timestamp from a datetime
 fn make_timestamp(dt: DateTime<Utc>) -> Timestamp {

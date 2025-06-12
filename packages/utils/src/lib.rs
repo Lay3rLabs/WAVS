@@ -10,6 +10,7 @@ pub mod serde;
 pub mod service;
 pub mod storage;
 pub mod telemetry;
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 pub mod wkg;
 

@@ -55,13 +55,6 @@ fn run_simulation(setup: Arc<Setup>) {
     // and send the actions to the action receiver
     std::thread::spawn({
         let setup = setup.clone();
-        let action_sender = setup
-            .trigger_manager
-            .action_sender
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap();
         move || {
             APP_CONTEXT.rt.block_on(async move {
                 for block_height in 0..=setup.config.total_blocks() {
@@ -69,9 +62,7 @@ fn run_simulation(setup: Arc<Setup>) {
                         let actions = setup
                             .trigger_manager
                             .process_blocks(chain_name, block_height);
-                        for action in actions {
-                            action_sender.send(action).await.unwrap();
-                        }
+                        setup.trigger_manager.send_actions(actions).await.unwrap();
                     }
                 }
             });

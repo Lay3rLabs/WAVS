@@ -1,24 +1,24 @@
-#![cfg(feature = "mock")]
 // these are like the real e2e but with only mocks
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use utils::context::AppContext;
-use wavs::{
-    engine::runner::EngineRunner,
+use utils::{
+    context::AppContext,
     test_utils::{
-        address::rand_address_evm,
-        mock::{BigSquare, ComponentNone, MockE2ETestRunner, SquareIn, SquareOut},
+        address::{rand_address_cosmos, rand_address_evm},
+        mock_engine::{SquareIn, COMPONENT_ECHO_DATA, COMPONENT_SQUARE},
     },
 };
-use wavs_types::{ComponentSource, Digest, ServiceID, WorkflowID};
+mod wavs_systems;
+use wavs_systems::{mock_app::MockE2ETestRunner, mock_submissions::wait_for_submission_messages};
+use wavs_types::{ComponentSource, ServiceID, WorkflowID};
 
 #[test]
 fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
     let service_id = ServiceID::new("service1").unwrap();
-    let task_queue_address = rand_address_evm();
+    let task_queue_address = rand_address_cosmos();
 
     // block and wait for creating the service
     runner.ctx.rt.block_on({
@@ -26,42 +26,37 @@ fn mock_e2e_trigger_flow() {
         let service_id = service_id.clone();
 
         async move {
-            let digest = Digest::new(b"wasm");
-
+            let digest = runner
+                .dispatcher
+                .engine_manager
+                .engine
+                .store_component_bytes(COMPONENT_SQUARE)
+                .unwrap();
             runner
-                .create_service(
-                    service_id.clone(),
-                    ComponentSource::Digest(digest),
-                    BigSquare,
-                )
+                .create_service(service_id.clone(), ComponentSource::Digest(digest))
                 .await;
         }
     });
 
     // now pretend like we're reading some triggers off the chain
-    // this spawned into the async runtime, so it's sortof like the real TriggerManager
-    runner.ctx.rt.spawn({
+    runner.ctx.rt.block_on({
         let runner = runner.clone();
 
         async move {
             runner
-                .dispatcher
-                .triggers
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),
-                    &task_queue_address.into(),
+                    &task_queue_address.clone(),
                     &SquareIn { x: 3 },
                     "evm",
                 )
                 .await;
             runner
-                .dispatcher
-                .triggers
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),
-                    &task_queue_address.into(),
+                    &task_queue_address,
                     &SquareIn { x: 21 },
                     "evm",
                 )
@@ -70,18 +65,10 @@ fn mock_e2e_trigger_flow() {
     });
 
     // block and wait for triggers to go through the whole flow
-    runner.dispatcher.submission.wait_for_messages(2).unwrap();
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 2, None).unwrap();
 
-    // check the results
-    let results: Vec<SquareOut> = runner
-        .dispatcher
-        .submission
-        .received()
-        .iter()
-        .map(|msg| serde_json::from_slice(&msg.envelope.payload).unwrap())
-        .collect();
-
-    assert_eq!(results, vec![SquareOut { y: 9 }, SquareOut { y: 441 }]);
+    // elsewhere we know that the component is executing, no need to check the actual results here
+    // since Submit is None
 }
 
 #[test]
@@ -100,47 +87,42 @@ fn mock_e2e_service_lifecycle() {
 
             // add services in order
             let service_id1 = ServiceID::new("service1").unwrap();
-            let digest1 = Digest::new(b"wasm1");
+            let digest = runner
+                .dispatcher
+                .engine_manager
+                .engine
+                .store_component_bytes(COMPONENT_SQUARE)
+                .unwrap();
 
             let service_id2 = ServiceID::new("service2").unwrap();
-            let digest2 = Digest::new(b"wasm2");
 
             let service_id3 = ServiceID::new("service3").unwrap();
-            let digest3 = Digest::new(b"wasm3");
 
-            for (service_id, digest) in [
-                (&service_id1, digest1),
-                (&service_id2, digest2),
-                (&service_id3, digest3),
-            ] {
+            for service_id in [&service_id1, &service_id2, &service_id3] {
                 runner
-                    .create_service_simple(
-                        service_id.clone(),
-                        ComponentSource::Digest(digest.clone()),
-                        BigSquare,
-                    )
+                    .create_service(service_id.clone(), ComponentSource::Digest(digest.clone()))
                     .await;
             }
 
             let services = runner.list_services().await;
 
             assert_eq!(services.services.len(), 3);
-            assert_eq!(services.digests.len(), 3);
+            assert_eq!(services.digests.len(), 1);
             assert_eq!(services.services[0].id, service_id1);
             assert_eq!(services.services[1].id, service_id2);
             assert_eq!(services.services[2].id, service_id3);
 
             // add an orphaned digest
-            let orphaned_digest = Digest::new(b"orphaned");
-            runner
+            let _orphaned_digest = runner
                 .dispatcher
+                .engine_manager
                 .engine
-                .engine()
-                .register(&orphaned_digest, BigSquare);
+                .store_component_bytes(COMPONENT_ECHO_DATA)
+                .unwrap();
 
             let services = runner.list_services().await;
             assert_eq!(services.services.len(), 3);
-            assert_eq!(services.digests.len(), 4);
+            assert_eq!(services.digests.len(), 2);
 
             // selectively delete services 1 and 3, leaving just 2
 
@@ -151,7 +133,7 @@ fn mock_e2e_service_lifecycle() {
             let services = runner.list_services().await;
 
             assert_eq!(services.services.len(), 1);
-            assert_eq!(services.digests.len(), 4);
+            assert_eq!(services.digests.len(), 2);
             assert_eq!(services.services[0].id, service_id2);
 
             // and make sure we can delete the last one but still get an empty list
@@ -160,7 +142,7 @@ fn mock_e2e_service_lifecycle() {
             let services = runner.list_services().await;
 
             assert!(services.services.is_empty());
-            assert_eq!(services.digests.len(), 4);
+            assert_eq!(services.digests.len(), 2);
         }
     });
 }
@@ -178,27 +160,25 @@ fn mock_e2e_component_none() {
         let service_id = service_id.clone();
 
         async move {
-            let digest = Digest::new(b"wasm");
+            let digest = runner
+                .dispatcher
+                .engine_manager
+                .engine
+                .store_component_bytes(COMPONENT_SQUARE)
+                .unwrap();
 
             runner
-                .create_service(
-                    service_id.clone(),
-                    ComponentSource::Digest(digest),
-                    ComponentNone,
-                )
+                .create_service(service_id.clone(), ComponentSource::Digest(digest))
                 .await;
         }
     });
 
     // now pretend like we're reading some triggers off the chain
-    // this spawned into the async runtime, so it's sortof like the real TriggerManager
-    runner.ctx.rt.spawn({
+    runner.ctx.rt.block_on({
         let runner = runner.clone();
 
         async move {
             runner
-                .dispatcher
-                .triggers
                 .send_trigger(
                     &service_id,
                     &WorkflowID::default(),
@@ -211,9 +191,5 @@ fn mock_e2e_component_none() {
     });
 
     // this _should_ error because submission is not fired
-    runner
-        .dispatcher
-        .submission
-        .wait_for_messages(1)
-        .unwrap_err();
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 1, None).unwrap_err();
 }

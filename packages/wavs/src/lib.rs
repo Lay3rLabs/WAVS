@@ -1,18 +1,14 @@
-pub mod apis;
 pub mod args;
 pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
-pub mod engine; // where we manage and execute wasm
 pub mod http;
-pub mod submission; // where we submit the results to the chain
-pub mod test_utils;
-pub mod triggers; // where we handle the trigger runtime
+pub mod subsystems; // subsystems: engine, submission, and trigger
 
-use apis::dispatcher::DispatchManager;
 use config::Config;
+use dispatcher::Dispatcher;
+use utils::storage::fs::FileStorage;
 
 // This section is called from both main and end-to-end tests
-use dispatcher::CoreDispatcher;
 use std::sync::Arc;
 use utils::context::AppContext;
 use utils::telemetry::HttpMetrics;
@@ -22,7 +18,7 @@ use utils::telemetry::HttpMetrics;
 pub fn run_server(
     ctx: AppContext,
     config: Config,
-    dispatcher: Arc<CoreDispatcher>,
+    dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
 ) {
     let _ = ctrlc::set_handler({

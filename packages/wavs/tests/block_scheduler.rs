@@ -1,9 +1,11 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
-use wavs::triggers::{
-    block_scheduler::{BlockHeight, BlockIntervalState},
-    core::LookupId,
-    interval_scheduler::IntervalState,
+use wavs::subsystems::trigger::{
+    lookup::LookupId,
+    schedulers::{
+        block_scheduler::{BlockHeight, BlockIntervalState},
+        interval_scheduler::IntervalState,
+    },
 };
 
 fn make_block_height(h: u64) -> BlockHeight {

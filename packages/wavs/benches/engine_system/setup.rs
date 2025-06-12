@@ -3,14 +3,11 @@ use std::{collections::BTreeMap, sync::Arc};
 use opentelemetry::global::meter;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::Metrics;
+use utils::test_utils::address::rand_address_evm;
 use wavs::{
-    apis::submission::{ChainMessage, Submission},
-    engine::{
-        runner::{EngineRunner, MultiEngineRunner},
-        Engine, WasmEngine,
-    },
-    submission::core::CoreSubmission,
-    test_utils::address::rand_address_evm,
+    dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE},
+    subsystems::engine::{wasm_engine::WasmEngine, EngineManager},
+    subsystems::submission::chain_message::ChainMessage,
 };
 use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};
 use wavs_types::{Service, TriggerAction};
@@ -37,7 +34,7 @@ impl SystemConfig {
 /// This struct combines an EngineHandle with a MultiEngineRunner to test system-level throughput
 pub struct SystemSetup {
     pub _engine_setup: Arc<EngineSetup>,
-    pub _multi_runner: MultiEngineRunner<Arc<WasmEngine<FileStorage>>>,
+    pub _engine_manager: EngineManager<FileStorage>,
     pub config: SystemConfig,
     pub action_sender: tokio::sync::mpsc::Sender<(TriggerAction, Service)>,
     pub result_receiver: std::sync::Mutex<Option<tokio::sync::mpsc::Receiver<ChainMessage>>>,
@@ -56,7 +53,7 @@ impl SystemSetup {
 
         // Create a WasmEngine similar to how it's done in CoreDispatcher
         let app_storage = engine_setup.data_dir.path().join("app");
-        let wasm_engine = Arc::new(WasmEngine::new(
+        let wasm_engine = WasmEngine::new(
             file_storage,
             app_storage,
             50, // LRU cache size for components
@@ -64,7 +61,7 @@ impl SystemSetup {
             None,                // No fuel limit for benchmarks
             None,                // No time limit for benchmarks
             metrics.wavs.engine, // Engine metrics
-        ));
+        );
 
         let digest = wasm_engine
             .store_component_bytes(&engine_setup.component_bytes)
@@ -76,7 +73,7 @@ impl SystemSetup {
         }
 
         // Create the MultiEngineRunner
-        let multi_runner = MultiEngineRunner::new(wasm_engine, system_config.thread_count);
+        let engine_manager = EngineManager::new(wasm_engine, system_config.thread_count);
 
         // Create a Service that matches our workflow
         let service = Service {
@@ -103,18 +100,16 @@ impl SystemSetup {
             })
             .collect::<Vec<_>>();
 
-        // Create channels for the MultiEngineRunner pipeline - mirror production pipeline sizes
-        let (action_sender, input_receiver) =
-            tokio::sync::mpsc::channel(WasmEngine::<FileStorage>::CHANNEL_SIZE);
-        let (result_sender, result_receiver) =
-            tokio::sync::mpsc::channel(CoreSubmission::CHANNEL_SIZE);
+        // Create channels for the Engine Manager pipeline - mirror production pipeline sizes
+        let (action_sender, input_receiver) = tokio::sync::mpsc::channel(ENGINE_CHANNEL_SIZE);
+        let (result_sender, result_receiver) = tokio::sync::mpsc::channel(SUBMISSION_CHANNEL_SIZE);
 
-        // Start the MultiEngineRunner
-        multi_runner.start(APP_CONTEXT.clone(), input_receiver, result_sender);
+        // Start the Engine Manager
+        engine_manager.start(APP_CONTEXT.clone(), input_receiver, result_sender);
 
         Arc::new(SystemSetup {
             _engine_setup: engine_setup,
-            _multi_runner: multi_runner,
+            _engine_manager: engine_manager,
             config: system_config,
             action_sender,
             result_receiver: std::sync::Mutex::new(Some(result_receiver)),

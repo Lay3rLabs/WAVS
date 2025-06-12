@@ -1,9 +1,4 @@
-use crate::{
-    apis::dispatcher::DispatchManager,
-    config::Config,
-    dispatcher::{CoreDispatcher, DispatcherError},
-    AppContext,
-};
+use crate::{config::Config, dispatcher::Dispatcher, AppContext};
 use axum::{
     extract::DefaultBodyLimit,
     routing::{delete, get, post},
@@ -11,7 +6,7 @@ use axum::{
 use axum_tracing_opentelemetry::middleware::OtelAxumLayer;
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use utils::telemetry::HttpMetrics;
+use utils::{storage::fs::FileStorage, telemetry::HttpMetrics};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
@@ -28,11 +23,11 @@ use super::{
     state::HttpState,
 };
 
-// this is called from main, takes a real CoreDispatcher
+// this is called from main, takes a file-based Dispatcher
 pub fn start(
     ctx: AppContext,
     config: Config,
-    dispatcher: Arc<CoreDispatcher>,
+    dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
@@ -62,9 +57,9 @@ pub fn start(
 }
 
 // this is called from main and tests
-pub async fn make_router<D: DispatchManager<Error = DispatcherError> + 'static>(
+pub async fn make_router(
     config: Config,
-    dispatcher: Arc<D>,
+    dispatcher: Arc<Dispatcher<FileStorage>>,
     is_mock_chain_client: bool,
     metrics: HttpMetrics,
 ) -> anyhow::Result<axum::Router> {
