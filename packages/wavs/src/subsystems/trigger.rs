@@ -65,6 +65,11 @@ impl TriggerManager {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     pub fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
+        // The mechanics of adding a trigger are that we:
+
+        // 1. Setup all the records needed to track the trigger in various "lookup" maps.
+        // 2a. If the trigger needs some kind of stream to track it, we need to create that stream.
+        // 2b. This happens by way of a "local command" so that everything is handled in `start_watcher` (helps with lifetime issues).
         if let Some(command) = LocalStreamCommand::new(&config) {
             match self.local_command_sender.lock().unwrap().as_ref() {
                 Some(sender) => {
@@ -78,13 +83,6 @@ impl TriggerManager {
                 }
             }
         }
-
-        // Theoretically, we should wait until we know the stream is started before continuing,
-        // however, we can be pretty sure that this `LocalStreamCommand` will come before
-        // any actual trigger events, since they are all multiplexed into the same stream
-        // and so by definition this comes "first".
-        //
-        // There's a bit of a question whether "first" is a guarantee, but, so far so good :P
 
         // get the next lookup id
         let lookup_id = self
@@ -231,6 +229,7 @@ impl TriggerManager {
         let mut evm_clients = HashMap::new();
 
         let mut listening_chains = HashSet::new();
+        let mut has_started_cron_stream = false;
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -257,6 +256,14 @@ impl TriggerManager {
                                 );
                                 continue;
                             }
+
+                            if has_started_cron_stream {
+                                tracing::debug!("Cron stream already started, skipping");
+                                continue;
+                            }
+
+                            has_started_cron_stream = true;
+
                             let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
                             match cron_stream::start_cron_stream(
                                 cron_scheduler,
