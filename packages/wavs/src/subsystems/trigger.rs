@@ -65,97 +65,106 @@ impl TriggerManager {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     pub fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
-        if let Some(command) = LocalStreamCommand::new(&config) {
+        let commands = LocalStreamCommand::new(&config);
+        if !commands.is_empty() {
             match self.local_command_sender.lock().unwrap().as_ref() {
                 Some(sender) => {
-                    sender.send(command).unwrap();
+                    for command in commands {
+                        sender.send(command).unwrap();
+                    }
                 }
                 None => {
                     tracing::warn!(
-                        "Local command sender not initialized, cannot send command: {:?}",
-                        command
+                        "Local command sender not initialized, cannot send commands: {:?}",
+                        commands
                     );
                 }
             }
         }
 
         // Theoretically, we should wait until we know the stream is started before continuing,
-        // however, we can be pretty sure that this `LocalStreamCommand` will come before
+        // however, we can be pretty sure that these `LocalStreamCommand`s will come before
         // any actual trigger events, since they are all multiplexed into the same stream
         // and so by definition this comes "first".
         //
         // There's a bit of a question whether "first" is a guarantee, but, so far so good :P
 
-        // get the next lookup id
+        // Get one lookup ID for the entire workflow
         let lookup_id = self
             .lookup_maps
             .lookup_id
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        match config.trigger.clone() {
-            Trigger::EvmContractEvent {
-                address,
-                chain_name,
-                event_hash,
-            } => {
-                let mut lock = self
-                    .lookup_maps
-                    .triggers_by_evm_contract_event
-                    .write()
-                    .unwrap();
-                let key = (chain_name.clone(), address, event_hash);
+        // Register each trigger in the appropriate lookup map using the same workflow lookup ID
+        for trigger in &config.triggers {
+            match trigger {
+                Trigger::EvmContractEvent {
+                    address,
+                    chain_name,
+                    event_hash,
+                } => {
+                    let mut lock = self
+                        .lookup_maps
+                        .triggers_by_evm_contract_event
+                        .write()
+                        .unwrap();
+                    let key = (chain_name.clone(), *address, *event_hash);
 
-                lock.entry(key).or_default().insert(lookup_id);
-            }
-            Trigger::CosmosContractEvent {
-                address,
-                chain_name,
-                event_type,
-            } => {
-                let mut lock = self
-                    .lookup_maps
-                    .triggers_by_cosmos_contract_event
-                    .write()
-                    .unwrap();
-                let key = (chain_name.clone(), address.clone(), event_type.clone());
+                    lock.entry(key).or_default().insert(lookup_id);
+                }
+                Trigger::CosmosContractEvent {
+                    address,
+                    chain_name,
+                    event_type,
+                } => {
+                    let mut lock = self
+                        .lookup_maps
+                        .triggers_by_cosmos_contract_event
+                        .write()
+                        .unwrap();
+                    let key = (chain_name.clone(), address.clone(), event_type.clone());
 
-                lock.entry(key).or_default().insert(lookup_id);
+                    lock.entry(key).or_default().insert(lookup_id);
+                }
+                Trigger::BlockInterval {
+                    chain_name,
+                    n_blocks,
+                    start_block,
+                    end_block,
+                } => {
+                    self.lookup_maps
+                        .block_schedulers
+                        .entry(chain_name.clone())
+                        .or_default()
+                        .add_trigger(BlockIntervalState::new(
+                            lookup_id,
+                            *n_blocks,
+                            start_block.map(Into::into),
+                            end_block.map(Into::into),
+                        ))?;
+                }
+                Trigger::Cron {
+                    schedule,
+                    start_time,
+                    end_time,
+                } => {
+                    // Add directly to the cron scheduler
+                    self.lookup_maps
+                        .cron_scheduler
+                        .lock()
+                        .unwrap()
+                        .add_trigger(CronIntervalState::new(
+                            lookup_id,
+                            schedule,
+                            *start_time,
+                            *end_time,
+                        )?)?;
+                }
+                Trigger::Manual => {}
             }
-            Trigger::BlockInterval {
-                chain_name,
-                n_blocks,
-                start_block,
-                end_block,
-            } => {
-                self.lookup_maps
-                    .block_schedulers
-                    .entry(chain_name.clone())
-                    .or_default()
-                    .add_trigger(BlockIntervalState::new(
-                        lookup_id,
-                        n_blocks,
-                        start_block.map(Into::into),
-                        end_block.map(Into::into),
-                    ))?;
-            }
-            Trigger::Cron {
-                schedule,
-                start_time,
-                end_time,
-            } => {
-                // Add directly to the cron scheduler
-                self.lookup_maps
-                    .cron_scheduler
-                    .lock()
-                    .unwrap()
-                    .add_trigger(CronIntervalState::new(
-                        lookup_id, &schedule, start_time, end_time,
-                    )?)?;
-            }
-            Trigger::Manual => {}
         }
 
-        // adding it to our lookups is the same, regardless of type
+        // Map this workflow to the single lookup ID
         self.lookup_maps
             .triggers_by_service_workflow
             .write()
@@ -164,6 +173,7 @@ impl TriggerManager {
             .or_default()
             .insert(config.workflow_id.clone(), lookup_id);
 
+        // Store the complete trigger config (with all triggers) under the single lookup ID
         self.lookup_maps
             .trigger_configs
             .write()
@@ -591,7 +601,7 @@ impl TriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn remove_trigger(
+    pub fn remove_triggers(
         &self,
         service_id: ServiceID,
         workflow_id: WorkflowID,
@@ -606,21 +616,22 @@ impl TriggerManager {
             .get_mut(&service_id)
             .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
 
-        // first remove it from services
+        // Get the single lookup ID for this workflow
         let lookup_id = workflow_map
             .remove(&workflow_id)
             .ok_or(TriggerError::NoSuchWorkflow(service_id, workflow_id))?;
 
-        // Get the trigger type to know which scheduler to remove from
-        let trigger_type = {
+        // Get all triggers for this workflow
+        let triggers = {
             let trigger_configs = self.lookup_maps.trigger_configs.read().unwrap();
             trigger_configs
                 .get(&lookup_id)
-                .map(|config| config.trigger.clone())
+                .map(|config| config.triggers.clone())
+                .unwrap_or_default()
         };
 
-        // Remove from the appropriate collection based on trigger type
-        if let Some(trigger) = trigger_type {
+        // Remove from the appropriate collections based on each trigger type
+        for trigger in triggers {
             match trigger {
                 Trigger::EvmContractEvent {
                     address,
@@ -684,6 +695,11 @@ impl TriggerManager {
             .write()
             .unwrap()
             .remove(&lookup_id);
+
+        // Clean up empty service entry if no workflows remain
+        if workflow_map.is_empty() {
+            service_lock.remove(&service_id);
+        }
 
         Ok(())
     }
