@@ -30,15 +30,19 @@ pub enum LocalStreamCommand {
 }
 
 impl LocalStreamCommand {
-    pub fn new(trigger_config: &TriggerConfig) -> Option<Self> {
-        match &trigger_config.triggers {
-            Trigger::Cron { .. } => Some(Self::StartListeningCron),
-            Trigger::EvmContractEvent { chain_name, .. }
-            | Trigger::CosmosContractEvent { chain_name, .. }
-            | Trigger::BlockInterval { chain_name, .. } => Some(Self::StartListeningChain {
-                chain_name: chain_name.clone(),
-            }),
-            Trigger::Manual => None,
-        }
+    pub fn new(trigger_config: &TriggerConfig) -> Vec<Self> {
+        trigger_config
+            .triggers
+            .iter()
+            .filter_map(|trigger| match trigger {
+                Trigger::Cron { .. } => Some(Self::StartListeningCron),
+                Trigger::EvmContractEvent { chain_name, .. }
+                | Trigger::CosmosContractEvent { chain_name, .. }
+                | Trigger::BlockInterval { chain_name, .. } => Some(Self::StartListeningChain {
+                    chain_name: chain_name.clone(),
+                }),
+                Trigger::Manual => None,
+            })
+            .collect()
     }
 }
