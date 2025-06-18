@@ -138,9 +138,13 @@ impl ExecComponent {
             .get_fuel()
             .context("Failed to get initial fuel value from the instance store")?;
         let start_time = Instant::now();
-        let wasm_response = wavs_engine::execute(&mut instance_deps, trigger_action)
-            .await
-            .context("Failed to execute component with the provided input")?;
+        let wasm_response = match wavs_engine::execute(&mut instance_deps, trigger_action).await {
+            Ok(response) => response,
+            Err(e) => {
+                eprintln!("Error executing component: {}", e);
+                return Err(anyhow::anyhow!("Component execution failed: {}", e));
+            }
+        };
 
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 
