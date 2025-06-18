@@ -132,7 +132,7 @@ async fn main() {
                 })
                 .collect();
 
-            let res = ExecComponent::run(
+            let res = match ExecComponent::run(
                 &ctx.config,
                 ExecComponentArgs {
                     component_path: component,
@@ -143,7 +143,13 @@ async fn main() {
                 },
             )
             .await
-            .unwrap();
+            {
+                Ok(result) => result,
+                Err(e) => {
+                    eprintln!("Failed to execute component: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
             ctx.handle_display_result(res);
         }
