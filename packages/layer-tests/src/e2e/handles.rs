@@ -12,7 +12,7 @@ use super::config::Configs;
 
 pub struct AppHandles {
     pub wavs_handle: std::thread::JoinHandle<()>,
-    pub aggregator_handle: Option<std::thread::JoinHandle<()>>,
+    pub aggregator_handles: Vec<std::thread::JoinHandle<()>>,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
 }
@@ -45,18 +45,21 @@ impl AppHandles {
             }
         });
 
-        let aggregator_handle = configs.aggregator.clone().map(|config| {
-            std::thread::spawn({
+        let mut aggregator_handles = Vec::new();
+
+        for config in &configs.aggregators {
+            aggregator_handles.push(std::thread::spawn({
                 let ctx = ctx.clone();
+                let config = config.clone();
                 move || {
                     wavs_aggregator::run_server(ctx, config);
                 }
-            })
-        });
+            }));
+        }
 
         Self {
             wavs_handle,
-            aggregator_handle,
+            aggregator_handles,
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
         }
@@ -64,7 +67,7 @@ impl AppHandles {
 
     pub fn join(self) {
         self.wavs_handle.join().unwrap();
-        if let Some(handle) = self.aggregator_handle {
+        for handle in self.aggregator_handles {
             handle.join().unwrap();
         }
 

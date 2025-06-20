@@ -25,7 +25,7 @@ pub struct Configs {
     pub wavs: wavs::config::Config,
     pub cli: wavs_cli::config::Config,
     pub cli_args: wavs_cli::args::CliArgs,
-    pub aggregator: Option<wavs_aggregator::config::Config>,
+    pub aggregators: Vec<wavs_aggregator::config::Config>,
     pub chains: ChainConfigs,
     pub mnemonics: TestMnemonics,
 }
@@ -169,25 +169,19 @@ impl From<TestConfig> for Configs {
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
 
-        let aggregator_config = if matrix.evm_aggregator_chain_enabled() {
-            let mut aggregator_config: wavs_aggregator::config::Config =
-                ConfigBuilder::new(wavs_aggregator::args::CliArgs {
-                    data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
-                    home: Some(workspace_path()),
-                    // deliberately point to a non-existing file
-                    dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
-                    ..Default::default()
-                })
-                .build()
-                .unwrap();
+        let mut aggregator_config: wavs_aggregator::config::Config =
+            ConfigBuilder::new(wavs_aggregator::args::CliArgs {
+                data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
+                home: Some(workspace_path()),
+                // deliberately point to a non-existing file
+                dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
+                ..Default::default()
+            })
+            .build()
+            .unwrap();
 
-            aggregator_config.chains = chain_configs.clone();
-            aggregator_config.credential = Some(mnemonics.aggregator.clone());
-
-            Some(aggregator_config)
-        } else {
-            None
-        };
+        aggregator_config.chains = chain_configs.clone();
+        aggregator_config.credential = Some(mnemonics.aggregator.clone());
 
         let cli_args = wavs_cli::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
@@ -209,7 +203,7 @@ impl From<TestConfig> for Configs {
             registry: test_config.registry.map_or_else(|| false, |t| t),
             cli: cli_config,
             cli_args,
-            aggregator: aggregator_config,
+            aggregators: vec![aggregator_config],
             wavs: wavs_config,
             chains: chain_configs,
             mnemonics,

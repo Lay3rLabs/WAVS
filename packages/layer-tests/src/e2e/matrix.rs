@@ -113,10 +113,6 @@ impl TestMatrix {
         self.evm.contains(&EvmService::EchoDataSecondaryChain)
     }
 
-    pub fn evm_aggregator_chain_enabled(&self) -> bool {
-        self.evm.contains(&EvmService::EchoDataAggregator)
-    }
-
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
         self.evm.contains(&EvmService::CosmosQuery)
             || !self.cosmos.is_empty()
