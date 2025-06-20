@@ -8,7 +8,6 @@ use wavs::config::Config;
 mod wavs_systems;
 use wavs_systems::{
     http::{map_response, TestHttpApp},
-    mock_submissions::mock_eigen_submit,
     mock_trigger_manager::mock_evm_event_trigger,
 };
 use wavs_types::{ComponentSource, Digest, ServiceID, UploadComponentResponse};
@@ -89,7 +88,9 @@ fn http_save_service() {
         Some("My amazing service".to_string()),
         mock_evm_event_trigger(),
         ComponentSource::Digest(Digest::new(&[1, 2, 3])),
-        mock_eigen_submit(),
+        wavs_types::Submit::Aggregator {
+            url: "http://example.com/aggregator".to_string(),
+        },
         wavs_types::ServiceManager::Evm {
             chain_name: "evm".try_into().unwrap(),
             address: rand_address_evm(),

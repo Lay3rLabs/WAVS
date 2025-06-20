@@ -153,22 +153,6 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()
             ))?;
 
             let signed_data = match &workflow.submit {
-                Submit::EvmContract(EvmContractSubmission {
-                    chain_name,
-                    address,
-                    max_gas: _,
-                }) => {
-                    vec![
-                        wait_for_task_to_land(
-                            clients.get_evm_client(chain_name),
-                            *address,
-                            trigger_id,
-                            submit_start_block,
-                            *timeout,
-                        )
-                        .await?,
-                    ]
-                }
                 Submit::Aggregator { .. } => {
                     let mut signed_data = vec![];
                     for aggregator in workflow.aggregators.iter() {

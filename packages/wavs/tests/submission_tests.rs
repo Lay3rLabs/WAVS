@@ -24,7 +24,9 @@ fn dummy_message(service: &str, payload: &str) -> ChainMessage {
             eventId: mock_event_id().into(),
             ordering: mock_event_order().into(),
         },
-        submit: Submit::evm_contract(ChainName::new("evm").unwrap(), rand_address_evm(), None),
+        submit: Submit::Aggregator {
+            url: "http://example.com/aggregator".to_string(),
+        },
     }
 }
 

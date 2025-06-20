@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::{ChainName, ServiceID, Submit, Trigger, WorkflowID};
+use wavs_types::{ChainName, ServiceID, Trigger, WorkflowID};
 
 use super::chain_names::ChainNames;
 use super::clients::Clients;
@@ -89,12 +89,10 @@ impl TestRegistry {
                 .await;
 
                 for workflow in test.workflows.values() {
-                    if let SubmitDefinition::Existing(Submit::Aggregator { url }) = &workflow.submit
-                    {
-                        TestRegistry::register_to_aggregator(url, &service.id, &service_uri)
-                            .await
-                            .unwrap();
-                    }
+                    let SubmitDefinition::Aggregator { url } = &workflow.submit;
+                    TestRegistry::register_to_aggregator(url, &service.id, &service_uri)
+                        .await
+                        .unwrap();
                 }
 
                 test.service = Some(service);
@@ -150,33 +148,37 @@ impl TestRegistry {
         // Process EVM services
         for service in &matrix.evm {
             let chain = chain_names.primary_evm().unwrap();
+            let aggregator_endpoint = AGGREGATOR_ENDPOINT;
 
             match service {
                 EvmService::EchoData => {
-                    registry.register_evm_echo_data_test(chain);
+                    registry.register_evm_echo_data_test(chain, aggregator_endpoint);
                 }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chain_names.secondary_evm().unwrap();
-                    registry.register_evm_echo_data_secondary_chain_test(secondary);
+                    registry.register_evm_echo_data_secondary_chain_test(
+                        secondary,
+                        aggregator_endpoint,
+                    );
                 }
                 EvmService::EchoDataAggregator => {
-                    registry.register_evm_echo_data_aggregator_test(chain, AGGREGATOR_ENDPOINT);
+                    registry.register_evm_echo_data_aggregator_test(chain, aggregator_endpoint);
                 }
                 EvmService::Square => {
-                    registry.register_evm_square_test(chain);
+                    registry.register_evm_square_test(chain, aggregator_endpoint);
                 }
                 EvmService::ChainTriggerLookup => {
-                    registry.register_evm_chain_trigger_lookup_test(chain);
+                    registry.register_evm_chain_trigger_lookup_test(chain, aggregator_endpoint);
                 }
                 EvmService::CosmosQuery => {
                     let cosmos = chain_names.primary_cosmos().unwrap();
-                    registry.register_evm_cosmos_query_test(chain, cosmos);
+                    registry.register_evm_cosmos_query_test(chain, cosmos, aggregator_endpoint);
                 }
                 EvmService::Permissions => {
-                    registry.register_evm_permissions_test(chain);
+                    registry.register_evm_permissions_test(chain, aggregator_endpoint);
                 }
                 EvmService::MultiWorkflow => {
-                    registry.register_evm_multi_workflow_test(chain);
+                    registry.register_evm_multi_workflow_test(chain, aggregator_endpoint);
                 }
                 EvmService::MultiTrigger => {
                     let trigger = helpers::create_trigger_from_config(
@@ -191,16 +193,17 @@ impl TestRegistry {
                     )
                     .await;
 
-                    registry.register_evm_multi_trigger_test(chain, trigger);
+                    registry.register_evm_multi_trigger_test(chain, trigger, aggregator_endpoint);
                 }
                 EvmService::BlockInterval => {
-                    registry.register_evm_block_interval_test(chain);
+                    registry.register_evm_block_interval_test(chain, aggregator_endpoint);
                 }
                 EvmService::BlockIntervalStartStop => {
-                    registry.register_evm_block_interval_start_stop_test(chain);
+                    registry
+                        .register_evm_block_interval_start_stop_test(chain, aggregator_endpoint);
                 }
                 EvmService::CronInterval => {
-                    registry.register_evm_cron_interval_test(chain);
+                    registry.register_evm_cron_interval_test(chain, aggregator_endpoint);
                 }
             }
         }
@@ -209,31 +212,40 @@ impl TestRegistry {
         for service in &matrix.cosmos {
             let cosmos = chain_names.primary_cosmos().unwrap();
             let evm = chain_names.primary_evm().unwrap();
+            let aggregator_endpoint = AGGREGATOR_ENDPOINT;
 
             match service {
                 CosmosService::EchoData => {
-                    registry.register_cosmos_echo_data_test(cosmos, evm);
+                    registry.register_cosmos_echo_data_test(cosmos, evm, aggregator_endpoint);
                 }
                 CosmosService::Square => {
-                    registry.register_cosmos_square_test(cosmos, evm);
+                    registry.register_cosmos_square_test(cosmos, evm, aggregator_endpoint);
                 }
                 CosmosService::ChainTriggerLookup => {
-                    registry.register_cosmos_chain_trigger_lookup_test(cosmos, evm);
+                    registry.register_cosmos_chain_trigger_lookup_test(
+                        cosmos,
+                        evm,
+                        aggregator_endpoint,
+                    );
                 }
                 CosmosService::CosmosQuery => {
-                    registry.register_cosmos_cosmos_query_test(cosmos, evm);
+                    registry.register_cosmos_cosmos_query_test(cosmos, evm, aggregator_endpoint);
                 }
                 CosmosService::Permissions => {
-                    registry.register_cosmos_permissions_test(cosmos, evm);
+                    registry.register_cosmos_permissions_test(cosmos, evm, aggregator_endpoint);
                 }
                 CosmosService::BlockInterval => {
-                    registry.register_cosmos_block_interval_test(cosmos, evm);
+                    registry.register_cosmos_block_interval_test(cosmos, evm, aggregator_endpoint);
                 }
                 CosmosService::BlockIntervalStartStop => {
-                    registry.register_cosmos_block_interval_start_stop_test(cosmos, evm);
+                    registry.register_cosmos_block_interval_start_stop_test(
+                        cosmos,
+                        evm,
+                        aggregator_endpoint,
+                    );
                 }
                 CosmosService::CronInterval => {
-                    registry.register_cosmos_cron_interval_test(cosmos, evm);
+                    registry.register_cosmos_cron_interval_test(cosmos, evm, aggregator_endpoint);
                 }
             }
         }
@@ -242,10 +254,15 @@ impl TestRegistry {
         for service in &matrix.cross_chain {
             let cosmos = chain_names.primary_cosmos().unwrap();
             let evm = chain_names.primary_evm().unwrap();
+            let aggregator_endpoint = AGGREGATOR_ENDPOINT;
 
             match service {
                 CrossChainService::CosmosToEvmEchoData => {
-                    registry.register_cosmos_to_evm_echo_data_test(cosmos, evm);
+                    registry.register_cosmos_to_evm_echo_data_test(
+                        cosmos,
+                        evm,
+                        aggregator_endpoint,
+                    );
                 }
             }
         }
@@ -254,7 +271,11 @@ impl TestRegistry {
     }
 
     // Individual test registration methods
-    fn register_evm_echo_data_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_echo_data_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data")
                 .with_description("Tests the EchoData component on the primary EVM chain")
@@ -267,7 +288,10 @@ impl TestRegistry {
                                 chain_name: chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Text("The times".to_string()))
@@ -281,6 +305,7 @@ impl TestRegistry {
     fn register_evm_echo_data_secondary_chain_test(
         &mut self,
         secondary_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data_secondary_chain")
@@ -294,7 +319,10 @@ impl TestRegistry {
                                 chain_name: secondary_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: secondary_chain.clone(),
                         })
                         .with_input_data(InputData::Text("collapse".to_string()))
@@ -309,7 +337,7 @@ impl TestRegistry {
     fn register_evm_echo_data_aggregator_test(
         &mut self,
         aggregator_chain: &ChainName,
-        url: &str,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data_aggregator")
@@ -323,9 +351,9 @@ impl TestRegistry {
                                 chain_name: aggregator_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::Existing(Submit::Aggregator {
-                            url: url.to_string(),
-                        }))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: aggregator_chain.clone(),
                         })
@@ -338,7 +366,11 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_square_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_square_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_square")
                 .with_description("Tests the Square component on EVM chain")
@@ -351,7 +383,10 @@ impl TestRegistry {
                                 chain_name: chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Square { x: 3 })
@@ -362,7 +397,11 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_chain_trigger_lookup_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_chain_trigger_lookup_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_chain_trigger_lookup")
                 .with_description("Tests the ChainTriggerLookup component on EVM chain")
@@ -375,7 +414,10 @@ impl TestRegistry {
                                 chain_name: chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Text("satoshi".to_string()))
@@ -390,6 +432,7 @@ impl TestRegistry {
         &mut self,
         evm_chain: &ChainName,
         cosmos_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_cosmos_query")
@@ -403,7 +446,10 @@ impl TestRegistry {
                                 chain_name: evm_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
@@ -418,7 +464,11 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_permissions_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_permissions_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_permissions")
                 .with_description("Tests permissions for HTTP and file system access on EVM chain")
@@ -431,7 +481,10 @@ impl TestRegistry {
                                 chain_name: chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Permissions(create_permissions_request()))
@@ -444,7 +497,11 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_multi_workflow_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_multi_workflow_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multi_workflow")
                 .with_description("Tests multiple workflows in a single service on EVM chain")
@@ -457,7 +514,10 @@ impl TestRegistry {
                                 chain_name: chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Square { x: 10 })
@@ -473,7 +533,10 @@ impl TestRegistry {
                                 chain_name: chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Text("Multi-workflow".to_string()))
@@ -488,6 +551,7 @@ impl TestRegistry {
         &mut self,
         chain: &ChainName,
         trigger: Trigger,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multi_trigger")
@@ -499,7 +563,10 @@ impl TestRegistry {
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::Existing(trigger.clone()))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Text("tttrrrrriiiigggeerrr".to_string()))
@@ -513,7 +580,10 @@ impl TestRegistry {
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::Existing(trigger))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Text("tttrrrrriiiigggeerrr".to_string()))
@@ -526,7 +596,11 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_block_interval_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_block_interval_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_block_interval")
                 .with_description("Tests the block interval trigger on EVM chain")
@@ -540,7 +614,10 @@ impl TestRegistry {
                             start_block: None,
                             end_block: None,
                         }))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::None)
@@ -554,7 +631,11 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_block_interval_start_stop_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_block_interval_start_stop_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_block_interval_start_stop")
                 .with_description(
@@ -567,7 +648,10 @@ impl TestRegistry {
                         .with_trigger(TriggerDefinition::DeferredBlockIntervalTarget {
                             chain_name: chain.clone(),
                         })
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::None)
@@ -579,7 +663,11 @@ impl TestRegistry {
         )
     }
 
-    fn register_evm_cron_interval_test(&mut self, chain: &ChainName) -> &mut Self {
+    fn register_evm_cron_interval_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_cron_interval")
                 .with_description("Tests the cron interval trigger")
@@ -592,7 +680,10 @@ impl TestRegistry {
                             start_time: None,
                             end_time: None,
                         }))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::None)
@@ -609,6 +700,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_echo_data")
@@ -622,7 +714,10 @@ impl TestRegistry {
                                 chain_name: cosmos_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::Text("on brink".to_string()))
@@ -637,6 +732,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_square")
@@ -650,7 +746,10 @@ impl TestRegistry {
                                 chain_name: cosmos_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::Square { x: 3 })
@@ -665,6 +764,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_chain_trigger_lookup")
@@ -678,7 +778,10 @@ impl TestRegistry {
                                 chain_name: cosmos_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::Text("nakamoto".to_string()))
@@ -693,6 +796,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_cosmos_query")
@@ -706,7 +810,10 @@ impl TestRegistry {
                                 chain_name: cosmos_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
@@ -725,6 +832,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_permissions")
@@ -740,7 +848,10 @@ impl TestRegistry {
                                 chain_name: cosmos_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::Permissions(create_permissions_request()))
@@ -757,6 +868,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_block_interval")
@@ -771,7 +883,10 @@ impl TestRegistry {
                             start_block: None,
                             end_block: None,
                         }))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::None)
@@ -789,6 +904,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_block_interval_start_stop")
@@ -802,7 +918,10 @@ impl TestRegistry {
                         .with_trigger(TriggerDefinition::DeferredBlockIntervalTarget {
                             chain_name: cosmos_chain.clone(),
                         })
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::None)
@@ -818,6 +937,7 @@ impl TestRegistry {
         &mut self,
         _cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_cron_interval")
@@ -831,7 +951,10 @@ impl TestRegistry {
                             start_time: None,
                             end_time: None,
                         }))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::None)
@@ -848,6 +971,7 @@ impl TestRegistry {
         &mut self,
         cosmos_chain: &ChainName,
         evm_chain: &ChainName,
+        aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cross_chain_cosmos_to_evm_echo_data")
@@ -861,7 +985,10 @@ impl TestRegistry {
                                 chain_name: cosmos_chain.clone(),
                             },
                         ))
-                        .with_submit(SubmitDefinition::NewEvmContract {
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::Text("hello EVM world from cosmos".to_string()))

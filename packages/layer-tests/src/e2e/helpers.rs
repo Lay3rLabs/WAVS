@@ -100,15 +100,9 @@ pub async fn deploy_service_for_test(
         for aggregator in &workflow.aggregators {
             let aggregator = match aggregator {
                 AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
-                    let submit = deploy_submit(clients, chain_name, service_manager_address)
+                    deploy_submit(clients, chain_name, service_manager_address)
                         .await
-                        .unwrap();
-
-                    if let Submit::EvmContract(evm_contract_submission) = submit {
-                        Aggregator::Evm(evm_contract_submission)
-                    } else {
-                        panic!("EVM contract submission is expected from deploy a new evm aggregator submit")
-                    }
+                        .unwrap()
                 }
             };
 
@@ -306,14 +300,11 @@ pub async fn create_trigger_from_config(
 /// Create a submit based on test configuration
 pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
-    clients: &Clients,
-    service_manager_address: alloy_primitives::Address,
+    _clients: &Clients,
+    _service_manager_address: alloy_primitives::Address,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::NewEvmContract { chain_name } => {
-            deploy_submit(clients, chain_name, service_manager_address).await
-        }
-        SubmitDefinition::Existing(submit) => Ok(submit.clone()),
+        SubmitDefinition::Aggregator { url } => Ok(Submit::Aggregator { url: url.clone() }),
     }
 }
 
@@ -353,12 +344,12 @@ pub async fn deploy_service_manager(
     Ok(address)
 }
 
-/// Deploy submit contract and create a Submit from it
+/// Deploy submit contract and create an Aggregator from it
 pub async fn deploy_submit(
     clients: &Clients,
     chain_name: &ChainName,
     service_manager_address: alloy_primitives::Address,
-) -> Result<Submit> {
+) -> Result<Aggregator> {
     // Deploy the contract
     let evm_client = clients.get_evm_client(chain_name);
 
@@ -378,7 +369,7 @@ pub async fn deploy_submit(
     let address = *result.address();
     tracing::info!("Submit contract deployed at address: {}", address);
 
-    Ok(Submit::EvmContract(EvmContractSubmission {
+    Ok(Aggregator::Evm(EvmContractSubmission {
         chain_name: chain_name.clone(),
         address,
         max_gas: None,

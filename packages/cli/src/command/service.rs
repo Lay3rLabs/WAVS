@@ -105,14 +105,6 @@ pub async fn handle_service_command(
                 }
             },
             WorkflowCommand::Submit { id, command } => match command {
-                SubmitCommand::SetEvm {
-                    address,
-                    chain_name,
-                    max_gas,
-                } => {
-                    let result = set_evm_submit(&file, id, address, chain_name, max_gas)?;
-                    display_result(ctx, result, json)?;
-                }
                 SubmitCommand::SetAggregator {
                     url,
                     chain_name,
@@ -435,18 +427,6 @@ impl std::fmt::Display for WorkflowSubmitResult {
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
 
         match &self.submit {
-            Submit::EvmContract(EvmContractSubmission {
-                address,
-                chain_name,
-                max_gas,
-            }) => {
-                writeln!(f, "  Submit Type: EVM Service Handler")?;
-                writeln!(f, "    Address:    {}", address)?;
-                writeln!(f, "    Chain:      {}", chain_name)?;
-                if let Some(gas) = max_gas {
-                    writeln!(f, "    Max Gas:    {}", gas)?;
-                }
-            }
             Submit::None => {
                 writeln!(f, "  Submit Type: None")?;
             }
@@ -1222,41 +1202,6 @@ pub fn update_component_env_keys(
     })
 }
 
-pub fn set_evm_submit(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    address: alloy_primitives::Address,
-    chain_name: ChainName,
-    max_gas: Option<u64>,
-) -> Result<WorkflowSubmitResult> {
-    modify_service_file(file_path, |mut service| {
-        // Check if the workflow exists
-        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
-            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
-        })?;
-
-        // Update the submit
-        let submit = Submit::EvmContract(EvmContractSubmission {
-            address,
-            chain_name,
-            max_gas,
-        });
-        workflow.submit = SubmitJson::Submit(submit.clone());
-
-        // Reset the workflow aggregator
-        workflow.aggregators = Vec::new();
-
-        Ok((
-            service,
-            WorkflowSubmitResult {
-                workflow_id,
-                submit,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
 /// Set an Aggregator submit for a workflow
 pub fn set_aggregator_submit(
     file_path: &Path,
@@ -1343,6 +1288,7 @@ pub async fn validate_service(
         let mut chains_to_validate = HashSet::new();
         let mut triggers = Vec::new();
         let mut submits = Vec::new();
+        let mut aggregators = Vec::new();
 
         // Collect information for network-dependent validation
         for (workflow_id, workflow) in &service.workflows {
@@ -1419,10 +1365,6 @@ pub async fn validate_service(
             }
 
             if let SubmitJson::Submit(submit) = &workflow.submit {
-                if let Submit::EvmContract(EvmContractSubmission { chain_name, .. }) = submit {
-                    chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
-                }
-
                 // Collect submit for contract existence check
                 submits.push((workflow_id, submit));
             }
@@ -1434,6 +1376,7 @@ pub async fn validate_service(
                             .insert((evm_contract_submission.chain_name.clone(), ChainType::EVM));
                     }
                 };
+                aggregators.push((workflow_id, aggregator));
             }
         }
 
@@ -1475,7 +1418,7 @@ pub async fn validate_service(
             if let Err(err) = validate_contracts_exist(
                 service.id.as_ref(),
                 triggers,
-                submits,
+                aggregators,
                 service_manager,
                 &evm_providers,
                 &cosmos_clients,
@@ -1584,7 +1527,7 @@ async fn validate_registry_availability(registry_url: &str, errors: &mut Vec<Str
 pub async fn validate_contracts_exist(
     service_id: &str,
     triggers: Vec<(&WorkflowID, &Trigger)>,
-    submits: Vec<(&WorkflowID, &Submit)>,
+    aggregators: Vec<(&WorkflowID, &Aggregator)>,
     service_manager: Option<&ServiceManager>,
     evm_providers: &HashMap<ChainName, RootProvider>,
     cosmos_clients: &HashMap<ChainName, CosmosQueryClient>,
@@ -1669,12 +1612,12 @@ pub async fn validate_contracts_exist(
         }
     }
 
-    // Check all submit contracts
-    for (workflow_id, submit) in submits {
-        match submit {
-            Submit::EvmContract(EvmContractSubmission {
-                address,
+    // Check all aggregators
+    for (workflow_id, aggregator) in aggregators {
+        match aggregator {
+            Aggregator::Evm(EvmContractSubmission {
                 chain_name,
+                address,
                 ..
             }) => {
                 // Check if we have a provider for this chain
@@ -1704,10 +1647,6 @@ pub async fn validate_contracts_exist(
                         workflow_id, chain_name
                     ));
                 }
-            }
-            Submit::None => {}
-            Submit::Aggregator { url: _ } => {
-                // TODO - anything to validate here?
             }
         }
     }
@@ -2678,97 +2617,11 @@ mod tests {
             panic!("Expected Json::Unset");
         }
 
-        // Test setting EVM submit
+        // Test setting Aggregator submit
+        let aggregator_url = "https://api.example.com/aggregator".to_string();
         let evm_address = address!("0x00000000219ab540356cBB839Cbe05303d7705Fa");
         let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
         let max_gas = Some(1000000u64);
-
-        let evm_result = set_evm_submit(
-            &file_path,
-            workflow_id.clone(),
-            evm_address,
-            evm_chain.clone(),
-            max_gas,
-        )
-        .unwrap();
-
-        // Verify EVM submit result
-        assert_eq!(evm_result.workflow_id, workflow_id);
-        if let Submit::EvmContract(EvmContractSubmission {
-            address,
-            chain_name,
-            max_gas: result_max_gas,
-        }) = &evm_result.submit
-        {
-            assert_eq!(*address, evm_address);
-            assert_eq!(chain_name, &evm_chain);
-            assert_eq!(result_max_gas, &max_gas);
-        } else {
-            panic!("Expected EvmServiceHandler submit");
-        }
-
-        // Verify the service was updated with EVM submit
-        let service_after: ServiceJson =
-            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-        let evm_workflow = service_after.workflows.get(&workflow_id).unwrap();
-
-        // Handle SubmitJson wrapper
-        if let SubmitJson::Submit(submit) = &evm_workflow.submit {
-            if let Submit::EvmContract(EvmContractSubmission {
-                address,
-                chain_name,
-                max_gas: result_max_gas,
-            }) = submit
-            {
-                assert_eq!(*address, evm_address);
-                assert_eq!(chain_name, &evm_chain);
-                assert_eq!(result_max_gas, &max_gas);
-            } else {
-                panic!("Expected EvmServiceHandler submit in service");
-            }
-        } else {
-            panic!("Expected SubmitJson::Submit");
-        }
-
-        // Test updating with null max_gas
-        let evm_result_no_gas = set_evm_submit(
-            &file_path,
-            workflow_id.clone(),
-            evm_address,
-            evm_chain.clone(),
-            None,
-        )
-        .unwrap();
-
-        // Verify EVM submit result without gas
-        if let Submit::EvmContract(EvmContractSubmission {
-            max_gas: result_max_gas,
-            ..
-        }) = &evm_result_no_gas.submit
-        {
-            assert_eq!(result_max_gas, &None);
-        } else {
-            panic!("Expected EvmServiceHandler submit");
-        }
-
-        // Test error handling for non-existent workflow
-        let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
-        let submit_error = set_evm_submit(
-            &file_path,
-            non_existent_workflow.clone(),
-            evm_address,
-            evm_chain.clone(),
-            max_gas,
-        );
-
-        // Verify it returns an error with appropriate message
-        assert!(submit_error.is_err());
-        let submit_error_msg = submit_error.unwrap_err().to_string();
-        assert!(submit_error_msg.contains(&non_existent_workflow.to_string()));
-        assert!(submit_error_msg.contains("not found"));
-
-        // Test setting Aggregator submit
-        let aggregator_url = "https://api.example.com/aggregator".to_string();
 
         let aggregator_result = set_aggregator_submit(
             &file_path,
@@ -2776,7 +2629,7 @@ mod tests {
             aggregator_url.clone(),
             evm_chain.clone(),
             evm_address,
-            None,
+            max_gas,
         )
         .unwrap();
 
@@ -2806,6 +2659,34 @@ mod tests {
         } else {
             panic!("Expected SubmitJson::Submit");
         }
+
+        let Aggregator::Evm(evm) = &aggregator_workflow.aggregators[0];
+        assert_eq!(evm.chain_name, evm_chain);
+        assert_eq!(evm.address, evm_address);
+        assert_eq!(evm.max_gas, max_gas);
+
+        // Test updating with null max_gas
+        let _ = set_aggregator_submit(
+            &file_path,
+            workflow_id.clone(),
+            aggregator_url.clone(),
+            evm_chain.clone(),
+            evm_address,
+            None,
+        )
+        .unwrap();
+
+        let service_after_aggregator: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let aggregator_workflow = service_after_aggregator
+            .workflows
+            .get(&workflow_id)
+            .unwrap();
+
+        let Aggregator::Evm(evm) = &aggregator_workflow.aggregators[0];
+        assert_eq!(evm.chain_name, evm_chain);
+        assert_eq!(evm.address, evm_address);
+        assert_eq!(evm.max_gas, max_gas);
 
         // Test error handling for invalid URL
         let invalid_url = "not-a-valid-url".to_string();
@@ -2850,11 +2731,15 @@ mod tests {
             event_hash: wavs_types::ByteArray::new([1u8; 32]),
         };
 
-        let submit = Submit::EvmContract(EvmContractSubmission {
+        let aggregator = Aggregator::Evm(EvmContractSubmission {
             address: evm_address,
             chain_name: evm_chain.clone(),
             max_gas: Some(1000000u64),
         });
+
+        let submit = Submit::Aggregator {
+            url: "https://api.example.com/aggregator".to_string(),
+        };
 
         // Create service manager
         let manager = ServiceManagerJson::Manager(ServiceManager::Evm {
@@ -2871,7 +2756,7 @@ mod tests {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
                     submit: SubmitJson::Submit(submit.clone()),
-                    aggregators: Vec::new(),
+                    aggregators: vec![aggregator.clone()],
                 },
             );
 
@@ -3111,10 +2996,10 @@ mod tests {
             );
         }
 
-        // Test zero max_gas in submit
+        // Test zero max_gas in aggregator
         {
             let mut workflows = BTreeMap::new();
-            let zero_gas_submit = Submit::EvmContract(EvmContractSubmission {
+            let zero_gas_aggregator = Aggregator::Evm(EvmContractSubmission {
                 address: evm_address,
                 chain_name: evm_chain.clone(),
                 max_gas: Some(0u64), // Zero gas
@@ -3125,8 +3010,10 @@ mod tests {
                 WorkflowJson {
                     trigger: TriggerJson::Trigger(trigger.clone()),
                     component: ComponentJson::Component(component.clone()),
-                    submit: SubmitJson::Submit(zero_gas_submit),
-                    aggregators: Vec::new(),
+                    submit: SubmitJson::Submit(Submit::Aggregator {
+                        url: "https://api.example.com/aggregator".to_string(),
+                    }),
+                    aggregators: vec![zero_gas_aggregator],
                 },
             );
 

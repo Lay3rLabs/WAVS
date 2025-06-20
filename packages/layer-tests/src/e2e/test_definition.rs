@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure};
 use regex::Regex;
 use utils::config::WAVS_ENV_PREFIX;
-use wavs_types::{ChainName, Service, Submit, Trigger, WorkflowID};
+use wavs_types::{ChainName, Service, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
 use crate::e2e::types::{
@@ -174,10 +174,7 @@ pub enum EvmTriggerDefinition {
 /// Configuration for a submit
 #[derive(Clone, Debug)]
 pub enum SubmitDefinition {
-    /// Deploy a new EVM contract submit for this test
-    NewEvmContract { chain_name: ChainName },
-    /// Use an existing submit instance
-    Existing(Submit),
+    Aggregator { url: String },
 }
 
 /// Different types of input data
@@ -386,10 +383,9 @@ impl WorkflowBuilder {
         let submit = self.submit.expect("Submit not set");
         let expected_output = self.expected_output.expect("Expected output not set");
 
-        if let SubmitDefinition::Existing(Submit::Aggregator { .. }) = submit {
-            if self.aggregators.is_empty() {
-                panic!("No aggregators set when submit is aggregator")
-            }
+        let SubmitDefinition::Aggregator { .. } = submit;
+        if self.aggregators.is_empty() {
+            panic!("No aggregators set when submit is aggregator")
         }
 
         WorkflowDefinition {

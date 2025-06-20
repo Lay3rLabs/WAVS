@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Aggregator, Component, EvmContractSubmission, ServiceID, ServiceManager, ServiceStatus, Submit,
-    Timestamp, Trigger, WorkflowID,
+    Aggregator, Component, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger,
+    WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -149,36 +149,6 @@ impl ServiceJson {
                 SubmitJson::Submit(submit) => {
                     // Basic submit validation
                     match submit {
-                        Submit::EvmContract(EvmContractSubmission {
-                            address,
-                            max_gas,
-                            chain_name: _,
-                        }) => {
-                            // Validate EVM address format
-                            if let Err(err) = alloy_primitives::Address::parse_checksummed(
-                                address.to_string(),
-                                None,
-                            ) {
-                                errors.push(format!(
-                                    "Workflow '{}' has an invalid EVM address format in submit action: {}",
-                                    workflow_id, err
-                                ));
-                            }
-
-                            // Check if max_gas is reasonable if specified
-                            if let Some(gas) = max_gas {
-                                if *gas == 0 {
-                                    errors.push(format!(
-                                        "Workflow '{}' has max_gas of zero, which will prevent transactions",
-                                        workflow_id
-                                    ));
-                                }
-                            }
-
-                            if !workflow.aggregators.is_empty() {
-                                errors.push(format!("Workflow '{}' submits with evm contract, but it has an aggregator defined", workflow_id));
-                            }
-                        }
                         Submit::None => {
                             // None submit type is always valid
                             if !workflow.aggregators.is_empty() {
