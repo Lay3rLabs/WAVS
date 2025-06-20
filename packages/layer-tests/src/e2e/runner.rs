@@ -152,6 +152,35 @@ async fn run_test(test: &TestDefinition, clients: &Clients) -> anyhow::Result<()
                 workflow_id
             ))?;
 
+            if let Trigger::BlockInterval {
+                chain_name,
+                start_block,
+                ..
+            } = &workflow.trigger
+            {
+                match (start_block, clients.cosmos_client_pools.get(chain_name)) {
+                    (Some(start_block), Some(client)) => {
+                        let current_block = client
+                            .get()
+                            .await
+                            .unwrap()
+                            .querier
+                            .block_height()
+                            .await
+                            .unwrap();
+                        tracing::warn!(" ******** DEBUGGGING: COSMOS Current block when checking the result: {}, must start before {}", current_block, start_block.get());
+                    }
+                    _ => {}
+                }
+                match (start_block, clients.evm_clients.get(chain_name)) {
+                    (Some(start_block), Some(client)) => {
+                        let current_block = client.provider.get_block_number().await.unwrap();
+                        tracing::warn!(" ******* DEBUGGGING: EVM Current block when checking the result: {}, must start before {}", current_block, start_block.get());
+                    }
+                    _ => {}
+                }
+            }
+
             let signed_data = match &workflow.submit {
                 Submit::Aggregator { .. } => {
                     let mut signed_data = vec![];
