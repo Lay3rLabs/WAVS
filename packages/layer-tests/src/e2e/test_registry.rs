@@ -4,10 +4,9 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use regex::Regex;
 use reqwest::Client;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
@@ -28,7 +27,8 @@ use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
-pub type CosmosTriggerCodeMap = Arc<DashMap<CosmosTriggerDefinition, Arc<Mutex<Option<u64>>>>>;
+pub type CosmosTriggerCodeMap =
+    Arc<DashMap<CosmosTriggerDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
 
 // Eventually we will have multiple aggregators to test against, but for now we use a single local aggregator
 const AGGREGATOR_ENDPOINT: &str = "http://127.0.0.1:8001";
@@ -71,10 +71,13 @@ impl TestRegistry {
 
         let mut futures = FuturesUnordered::new();
 
+        let to_register_aggregator = Arc::new(std::sync::Mutex::new(HashSet::new()));
+
         for test in self.tests.iter_mut() {
             let clients = clients.clone();
             let component_sources = component_sources.clone();
             let cosmos_trigger_code_map = cosmos_trigger_code_map.clone();
+            let to_register_aggregator = to_register_aggregator.clone();
 
             futures.push(async move {
                 let ServiceAndUri {
@@ -90,9 +93,15 @@ impl TestRegistry {
 
                 for workflow in test.workflows.values() {
                     let SubmitDefinition::Aggregator { url } = &workflow.submit;
-                    TestRegistry::register_to_aggregator(url, &service.id, &service_uri)
-                        .await
-                        .unwrap();
+                    if to_register_aggregator
+                        .lock()
+                        .unwrap()
+                        .insert(service.id.clone())
+                    {
+                        TestRegistry::register_to_aggregator(url, &service.id, &service_uri)
+                            .await
+                            .unwrap();
+                    }
                 }
 
                 test.service = Some(service);
