@@ -150,12 +150,12 @@ pub async fn deploy_service_for_test(
         .unwrap();
 
     // First, register the service to the aggregator if needed
-    if aggregator_registered_service_ids
-        .lock()
-        .unwrap()
-        .insert(service.id.clone())
-    {
-        for workflow in test.workflows.values() {
+    for workflow in test.workflows.values() {
+        if aggregator_registered_service_ids
+            .lock()
+            .unwrap()
+            .insert(service.id.clone())
+        {
             let SubmitDefinition::Aggregator { url } = &workflow.submit;
             TestRegistry::register_to_aggregator(url, &service.id, &service_url)
                 .await
