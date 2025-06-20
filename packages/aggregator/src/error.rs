@@ -74,6 +74,9 @@ pub enum AggregatorError {
 
     #[error("Unable to look up operator key from signing key: {0:?}")]
     OperatorKeyLookup(alloy_contract::Error),
+
+    #[error("Unable to look up service manager from service handler: {0:?}")]
+    ServiceManagerLookup(alloy_contract::Error),
 }
 
 #[derive(Error, Debug)]

@@ -6,7 +6,8 @@ use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
     Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
-    IWavsServiceManager::{self, IWavsServiceManagerInstance},
+    IWavsServiceHandler::IWavsServiceHandlerInstance,
+    IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,
 };
 
@@ -59,7 +60,8 @@ async fn process_packet(
     );
 
     let service = state.get_service(&packet.route)?;
-    let aggregators = &service.workflows[&packet.route.workflow_id].aggregators;
+    let workflow = &service.workflows[&packet.route.workflow_id];
+    let aggregators = &workflow.aggregators;
 
     if aggregators.is_empty() {
         return Err(AggregatorError::MissingWorkflow {
@@ -68,21 +70,25 @@ async fn process_packet(
         });
     }
 
-    let service_manager_client = state.get_evm_client(service.manager.chain_name()).await?;
-    let service_manager = IWavsServiceManager::new(
-        service.manager.evm_address_unchecked(),
-        service_manager_client.provider.clone(),
-    );
-
     // this implicitly validates that the signature is valid
     let signing_key = packet.signature.evm_signer_address(&packet.envelope)?;
 
-    // Query for the operator key associated with this signing key
-    let signer = service_manager
-        .getLatestOperatorForSigningKey(signing_key)
-        .call()
-        .await
-        .map_err(AggregatorError::OperatorKeyLookup)?;
+    // Query for the operator address associated with this signing key
+    // we can use the service manager from the staked chain for this
+    // but drop it after this scope so we don't confuse it with the service manager
+    // that is used for the actual submission
+    let signer = {
+        let service_manager_client = state.get_evm_client(service.manager.chain_name()).await?;
+        let service_manager = IWavsServiceManagerInstance::new(
+            service.manager.evm_address_unchecked(),
+            service_manager_client.provider,
+        );
+        service_manager
+            .getLatestOperatorForSigningKey(signing_key)
+            .call()
+            .await
+            .map_err(AggregatorError::OperatorKeyLookup)?
+    };
 
     tracing::debug!("Packet signer address: {:?}", signer);
 
@@ -91,7 +97,6 @@ async fn process_packet(
     for (aggregator_index, aggregator) in aggregators.iter().enumerate() {
         let resp = AggregatorProcess {
             state: &state,
-            service_manager: &service_manager,
             async_tx: state.queue_transaction.clone(),
             aggregator,
             queue_id: PacketQueueId {
@@ -130,7 +135,6 @@ async fn process_packet(
 struct AggregatorProcess<'a> {
     state: &'a HttpState,
     async_tx: AsyncTransaction<PacketQueueId>,
-    service_manager: &'a IWavsServiceManagerInstance<DynProvider>,
     aggregator: &'a Aggregator,
     queue_id: PacketQueueId,
     packet: &'a Packet,
@@ -143,7 +147,6 @@ impl AggregatorProcess<'_> {
         let Self {
             state,
             async_tx,
-            service_manager,
             aggregator,
             queue_id,
             packet,
@@ -170,6 +173,8 @@ impl AggregatorProcess<'_> {
                                 return Ok(AddPacketResponse::Burned);
                             }
                         };
+
+                        let service_manager = get_submission_service_manager(state, aggregator).await?;
 
                         // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
                         let block_height_minus_one = service_manager
@@ -252,6 +257,37 @@ impl AggregatorProcess<'_> {
                     })
                     .await
             }
+        }
+    }
+}
+
+async fn get_submission_service_manager(
+    state: &HttpState,
+    aggregator: &Aggregator,
+) -> AggregatorResult<IWavsServiceManagerInstance<DynProvider>> {
+    // we need to get the service manager from the perspective of the service handler
+    // which may be different than the service manager where the operator is staked
+    // e.g. in the case of operator sets that are mirrored across multiple chains
+    match aggregator {
+        Aggregator::Evm(EvmContractSubmission {
+            chain_name,
+            address,
+            ..
+        }) => {
+            let service_handler_client = state.get_evm_client(chain_name).await?;
+            let service_handler =
+                IWavsServiceHandlerInstance::new(*address, service_handler_client.provider.clone());
+
+            let service_manager_address = service_handler
+                .getServiceManager()
+                .call()
+                .await
+                .map_err(AggregatorError::ServiceManagerLookup)?;
+
+            Ok(IWavsServiceManagerInstance::new(
+                service_manager_address,
+                service_handler_client.provider,
+            ))
         }
     }
 }
@@ -433,8 +469,12 @@ mod test {
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
             for (agg_index, result) in final_results.into_iter().enumerate() {
                 match (signer_index, agg_index) {
-                    // first signer on any chain is just aggregating
-                    (0, _) => {
+                    // invalid chain errors
+                    (_, 1) => {
+                        assert!(matches!(result, AddPacketResponse::Error { .. }));
+                    }
+                    // first signer on valid chain is just aggregating
+                    (0, 0) => {
                         assert!(matches!(
                             result,
                             AddPacketResponse::Aggregated { count: 1, .. }
@@ -443,10 +483,6 @@ mod test {
                     // second signer on valid chain sends
                     (1, 0) => {
                         assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
-                    }
-                    // second signer on invalid chain errors
-                    (1, 1) => {
-                        assert!(matches!(result, AddPacketResponse::Error { .. }));
                     }
                     _ => {
                         panic!(
@@ -474,15 +510,8 @@ mod test {
                     (_, 0) => {
                         assert!(matches!(result, AddPacketResponse::Burned));
                     }
-                    // first signer on invalid chain still aggregates properly
-                    (0, 1) => {
-                        assert!(matches!(
-                            result,
-                            AddPacketResponse::Aggregated { count: 1, .. }
-                        ));
-                    }
-                    // second signer on invalid chain errors
-                    (1, 1) => {
+                    // invalid chain errors
+                    (_, 1) => {
                         assert!(matches!(result, AddPacketResponse::Error { .. }));
                     }
                     _ => {
