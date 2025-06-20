@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure};
 use regex::Regex;
 use utils::config::WAVS_ENV_PREFIX;
-use wavs_types::{ChainName, Service, Trigger, WorkflowID};
+use wavs_types::{ChainName, Trigger, WorkflowID};
 
 use crate::e2e::components::ComponentName;
 use crate::e2e::types::{
@@ -28,9 +28,6 @@ pub struct TestDefinition {
 
     /// Service manager chain
     pub service_manager_chain: ChainName,
-
-    /// Reference to the deployed service (populated during test execution)
-    pub service: Option<Service>,
 
     /// Execution group (ascending priority)
     pub group: u64,
@@ -236,17 +233,6 @@ pub enum OutputStructure {
     PermissionsResponse,
 }
 
-impl TestDefinition {
-    /// Gets the service for this test
-    pub fn get_service(&self) -> &Service {
-        if let Some(service) = self.service.as_ref() {
-            service
-        } else {
-            panic!("Service not set for {}", self.name)
-        }
-    }
-}
-
 /// Builder pattern for creating test definitions
 pub struct TestBuilder {
     pub definition: TestDefinition,
@@ -260,7 +246,6 @@ impl TestBuilder {
                 name: name.to_string(),
                 description: None,
                 workflows: BTreeMap::new(),
-                service: None,
                 service_manager_chain: ChainName::new(DEFAULT_CHAIN_ID.to_string()).unwrap(),
                 group: u64::MAX,
             },

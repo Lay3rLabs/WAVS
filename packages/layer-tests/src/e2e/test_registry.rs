@@ -1,10 +1,8 @@
 use anyhow::Result;
 use dashmap::DashMap;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use regex::Regex;
 use reqwest::Client;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use wavs_types::aggregator::RegisterServiceRequest;
@@ -14,7 +12,7 @@ use wavs_types::{ChainName, ServiceID, Trigger, WorkflowID};
 
 use super::chain_names::ChainNames;
 use super::clients::Clients;
-use super::components::{ComponentName, ComponentSources};
+use super::components::ComponentName;
 use super::config::{BLOCK_INTERVAL_DATA_PREFIX, CRON_INTERVAL_DATA};
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
@@ -22,7 +20,7 @@ use super::test_definition::{
     OutputStructure, SubmitDefinition, TestBuilder, TestDefinition, TriggerDefinition,
     WorkflowBuilder,
 };
-use crate::e2e::helpers::{create_trigger_from_config, deploy_service_for_test};
+use crate::e2e::helpers::create_trigger_from_config;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
@@ -55,45 +53,10 @@ impl TestRegistry {
     /// Group all test definitions by group (ascending priority)
     pub fn list_all_grouped(&self) -> BTreeMap<u64, Vec<&TestDefinition>> {
         let mut map: BTreeMap<u64, Vec<&TestDefinition>> = BTreeMap::new();
-        for test in &self.tests {
+        for test in self.tests.iter() {
             map.entry(test.group).or_default().push(test);
         }
         map
-    }
-
-    /// Deploy services for all tests concurrently
-    pub async fn deploy_services(
-        &mut self,
-        clients: &Clients,
-        component_sources: &ComponentSources,
-    ) {
-        let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
-
-        let mut futures = FuturesUnordered::new();
-
-        let aggregator_registered_service_ids = Arc::new(std::sync::Mutex::new(HashSet::new()));
-
-        for test in self.tests.iter_mut() {
-            let clients = clients.clone();
-            let component_sources = component_sources.clone();
-            let cosmos_trigger_code_map = cosmos_trigger_code_map.clone();
-            let aggregator_registered_service_ids = aggregator_registered_service_ids.clone();
-
-            futures.push(async move {
-                test.service = Some(
-                    deploy_service_for_test(
-                        test,
-                        &clients,
-                        &component_sources,
-                        cosmos_trigger_code_map,
-                        aggregator_registered_service_ids.clone(),
-                    )
-                    .await,
-                );
-            });
-        }
-
-        while (futures.next().await).is_some() {}
     }
 
     /// Registers a service on the aggregator
@@ -130,6 +93,7 @@ impl TestRegistry {
         test_mode: crate::config::TestMode,
         chain_configs: &ChainConfigs,
         clients: &Clients,
+        cosmos_trigger_code_map: &CosmosTriggerCodeMap,
     ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -182,7 +146,7 @@ impl TestRegistry {
                             },
                         ),
                         clients,
-                        CosmosTriggerCodeMap::new(DashMap::new()),
+                        cosmos_trigger_code_map.clone(),
                         None,
                     )
                     .await;
@@ -621,6 +585,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
@@ -652,7 +617,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Deferred)
                         .build(),
                 )
-                .with_group(0)
+                .with_group(1)
                 .build(),
         )
     }
@@ -684,6 +649,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
@@ -890,6 +856,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
@@ -922,7 +889,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Deferred)
                         .build(),
                 )
-                .with_group(0)
+                .with_group(1)
                 .build(),
         )
     }
@@ -955,6 +922,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
