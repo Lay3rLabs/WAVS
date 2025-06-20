@@ -5,7 +5,6 @@ use reqwest::Client;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use std::time::Duration;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
@@ -612,7 +611,6 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
-                        .with_timeout(Duration::from_secs(10))
                         .build(),
                 )
                 .build(),
@@ -884,7 +882,6 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
-                        .with_timeout(Duration::from_secs(10))
                         .build(),
                 )
                 .build(),

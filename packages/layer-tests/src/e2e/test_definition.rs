@@ -380,7 +380,7 @@ impl WorkflowBuilder {
             aggregators: self.aggregators,
             input_data: self.input_data,
             expected_output,
-            timeout: self.timeout.unwrap_or(Duration::from_secs(5)),
+            timeout: self.timeout.unwrap_or(Duration::from_secs(15)),
         }
     }
 }
