@@ -16,13 +16,13 @@ use super::chain_names::ChainNames;
 use super::clients::Clients;
 use super::components::{ComponentName, ComponentSources};
 use super::config::{BLOCK_INTERVAL_DATA_PREFIX, CRON_INTERVAL_DATA};
-use super::helpers::{self, ServiceAndUri};
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
     AggregatorDefinition, CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, InputData,
     OutputStructure, SubmitDefinition, TestBuilder, TestDefinition, TriggerDefinition,
     WorkflowBuilder,
 };
+use crate::e2e::helpers::{create_trigger_from_config, deploy_service_for_test};
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
@@ -71,40 +71,25 @@ impl TestRegistry {
 
         let mut futures = FuturesUnordered::new();
 
-        let to_register_aggregator = Arc::new(std::sync::Mutex::new(HashSet::new()));
+        let aggregator_registered_service_ids = Arc::new(std::sync::Mutex::new(HashSet::new()));
 
         for test in self.tests.iter_mut() {
             let clients = clients.clone();
             let component_sources = component_sources.clone();
             let cosmos_trigger_code_map = cosmos_trigger_code_map.clone();
-            let to_register_aggregator = to_register_aggregator.clone();
+            let aggregator_registered_service_ids = aggregator_registered_service_ids.clone();
 
             futures.push(async move {
-                let ServiceAndUri {
-                    service,
-                    uri: service_uri,
-                } = helpers::deploy_service_for_test(
-                    test,
-                    &clients,
-                    &component_sources,
-                    cosmos_trigger_code_map,
-                )
-                .await;
-
-                for workflow in test.workflows.values() {
-                    let SubmitDefinition::Aggregator { url } = &workflow.submit;
-                    if to_register_aggregator
-                        .lock()
-                        .unwrap()
-                        .insert(service.id.clone())
-                    {
-                        TestRegistry::register_to_aggregator(url, &service.id, &service_uri)
-                            .await
-                            .unwrap();
-                    }
-                }
-
-                test.service = Some(service);
+                test.service = Some(
+                    deploy_service_for_test(
+                        test,
+                        &clients,
+                        &component_sources,
+                        cosmos_trigger_code_map,
+                        aggregator_registered_service_ids.clone(),
+                    )
+                    .await,
+                );
             });
         }
 
@@ -190,7 +175,7 @@ impl TestRegistry {
                     registry.register_evm_multi_workflow_test(chain, aggregator_endpoint);
                 }
                 EvmService::MultiTrigger => {
-                    let trigger = helpers::create_trigger_from_config(
+                    let trigger = create_trigger_from_config(
                         TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
