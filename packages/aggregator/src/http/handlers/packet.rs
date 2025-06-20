@@ -95,11 +95,8 @@ async fn process_packet(
     let mut responses: Vec<AddPacketResponse> = Vec::new();
 
     for (aggregator_index, aggregator) in aggregators.iter().enumerate() {
-        let service_manager = get_submission_service_manager(&state, aggregator).await?;
-
         let resp = AggregatorProcess {
             state: &state,
-            service_manager,
             async_tx: state.queue_transaction.clone(),
             aggregator,
             queue_id: PacketQueueId {
@@ -138,7 +135,6 @@ async fn process_packet(
 struct AggregatorProcess<'a> {
     state: &'a HttpState,
     async_tx: AsyncTransaction<PacketQueueId>,
-    service_manager: IWavsServiceManagerInstance<DynProvider>,
     aggregator: &'a Aggregator,
     queue_id: PacketQueueId,
     packet: &'a Packet,
@@ -151,7 +147,6 @@ impl AggregatorProcess<'_> {
         let Self {
             state,
             async_tx,
-            service_manager,
             aggregator,
             queue_id,
             packet,
@@ -178,6 +173,8 @@ impl AggregatorProcess<'_> {
                                 return Ok(AddPacketResponse::Burned);
                             }
                         };
+
+                        let service_manager = get_submission_service_manager(state, aggregator).await?;
 
                         // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
                         let block_height_minus_one = service_manager
@@ -472,8 +469,12 @@ mod test {
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
             for (agg_index, result) in final_results.into_iter().enumerate() {
                 match (signer_index, agg_index) {
-                    // first signer on any chain is just aggregating
-                    (0, _) => {
+                    // invalid chain errors
+                    (_, 1) => {
+                        assert!(matches!(result, AddPacketResponse::Error { .. }));
+                    }
+                    // first signer on valid chain is just aggregating
+                    (0, 0) => {
                         assert!(matches!(
                             result,
                             AddPacketResponse::Aggregated { count: 1, .. }
@@ -482,10 +483,6 @@ mod test {
                     // second signer on valid chain sends
                     (1, 0) => {
                         assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
-                    }
-                    // second signer on invalid chain errors
-                    (1, 1) => {
-                        assert!(matches!(result, AddPacketResponse::Error { .. }));
                     }
                     _ => {
                         panic!(
@@ -513,15 +510,8 @@ mod test {
                     (_, 0) => {
                         assert!(matches!(result, AddPacketResponse::Burned));
                     }
-                    // first signer on invalid chain still aggregates properly
-                    (0, 1) => {
-                        assert!(matches!(
-                            result,
-                            AddPacketResponse::Aggregated { count: 1, .. }
-                        ));
-                    }
-                    // second signer on invalid chain errors
-                    (1, 1) => {
+                    // invalid chain errors
+                    (_, 1) => {
                         assert!(matches!(result, AddPacketResponse::Error { .. }));
                     }
                     _ => {

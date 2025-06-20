@@ -86,8 +86,17 @@ impl TestContractDeps {
         &self,
         service_manager_address: Address,
     ) -> SimpleServiceHandlerInstance<DynProvider> {
-        SimpleServiceHandler::deploy(self.client.provider.clone(), service_manager_address)
-            .await
-            .unwrap()
+        let instance =
+            SimpleServiceHandler::deploy(self.client.provider.clone(), service_manager_address)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            instance.getServiceManager().call().await.unwrap(),
+            service_manager_address,
+            "Service manager address mismatch"
+        );
+
+        instance
     }
 }
