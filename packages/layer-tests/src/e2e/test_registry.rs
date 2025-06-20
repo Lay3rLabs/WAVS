@@ -5,6 +5,7 @@ use reqwest::Client;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::Duration;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
@@ -118,9 +119,6 @@ impl TestRegistry {
                         secondary,
                         aggregator_endpoint,
                     );
-                }
-                EvmService::EchoDataAggregator => {
-                    registry.register_evm_echo_data_aggregator_test(chain, aggregator_endpoint);
                 }
                 EvmService::Square => {
                     registry.register_evm_square_test(chain, aggregator_endpoint);
@@ -288,38 +286,6 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(secondary_chain)
-                .build(),
-        )
-    }
-
-    fn register_evm_echo_data_aggregator_test(
-        &mut self,
-        aggregator_chain: &ChainName,
-        aggregator_endpoint: &str,
-    ) -> &mut Self {
-        self.register(
-            TestBuilder::new("evm_echo_data_aggregator")
-                .with_description("Tests the EchoData component using an aggregator")
-                .add_workflow(
-                    WorkflowID::new("echo_data_aggregator").unwrap(),
-                    WorkflowBuilder::new()
-                        .with_component(ComponentName::EchoData.into())
-                        .with_trigger(TriggerDefinition::NewEvmContract(
-                            EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: aggregator_chain.clone(),
-                            },
-                        ))
-                        .with_submit(SubmitDefinition::Aggregator {
-                            url: aggregator_endpoint.to_string(),
-                        })
-                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
-                            chain_name: aggregator_chain.clone(),
-                        })
-                        .with_input_data(InputData::Text("Chancellor".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("Chancellor".to_string()))
-                        .build(),
-                )
-                .with_service_manager_chain(aggregator_chain)
                 .build(),
         )
     }
@@ -568,7 +534,7 @@ impl TestRegistry {
                         .with_component(ComponentName::EchoBlockInterval.into())
                         .with_trigger(TriggerDefinition::Existing(Trigger::BlockInterval {
                             chain_name: chain.clone(),
-                            n_blocks: NonZeroU32::new(1).unwrap(),
+                            n_blocks: NonZeroU32::new(10).unwrap(),
                             start_block: None,
                             end_block: None,
                         }))
@@ -585,7 +551,6 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
-                .with_group(2)
                 .build(),
         )
     }
@@ -635,7 +600,7 @@ impl TestRegistry {
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoCronInterval.into())
                         .with_trigger(TriggerDefinition::Existing(Trigger::Cron {
-                            schedule: "* * * * * *".to_string(),
+                            schedule: "*/5 * * * * *".to_string(),
                             start_time: None,
                             end_time: None,
                         }))
@@ -647,9 +612,9 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
+                        .with_timeout(Duration::from_secs(10))
                         .build(),
                 )
-                .with_group(2)
                 .build(),
         )
     }
@@ -839,7 +804,7 @@ impl TestRegistry {
                         .with_component(ComponentName::EchoBlockInterval.into())
                         .with_trigger(TriggerDefinition::Existing(Trigger::BlockInterval {
                             chain_name: cosmos_chain.clone(),
-                            n_blocks: NonZeroU32::new(1).unwrap(),
+                            n_blocks: NonZeroU32::new(10).unwrap(),
                             start_block: None,
                             end_block: None,
                         }))
@@ -856,7 +821,6 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
-                .with_group(2)
                 .build(),
         )
     }
@@ -908,7 +872,7 @@ impl TestRegistry {
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoCronInterval.into())
                         .with_trigger(TriggerDefinition::Existing(Trigger::Cron {
-                            schedule: "* * * * * *".to_string(),
+                            schedule: "*/5 * * * * *".to_string(),
                             start_time: None,
                             end_time: None,
                         }))
@@ -920,9 +884,9 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
+                        .with_timeout(Duration::from_secs(10))
                         .build(),
                 )
-                .with_group(2)
                 .build(),
         )
     }

@@ -174,14 +174,6 @@ async fn run_test(
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
 
-        // Get submit start block
-        let submit_client = clients.get_evm_client(service.manager.chain_name());
-        let submit_start_block = submit_client
-            .provider
-            .get_block_number()
-            .await
-            .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
-
         // Validate all workflows associated with this trigger
         for (workflow_id, workflow) in workflows_group {
             let WorkflowDefinition {
@@ -203,9 +195,15 @@ async fn run_test(
                                 address,
                                 ..
                             }) => {
+                                let client = clients.get_evm_client(chain_name);
+                                let submit_start_block =
+                                    client.provider.get_block_number().await.map_err(|e| {
+                                        anyhow!("Failed to get block number: {}", e)
+                                    })?;
+
                                 signed_data.push(
                                     wait_for_task_to_land(
-                                        clients.get_evm_client(chain_name),
+                                        client,
                                         *address,
                                         trigger_id,
                                         submit_start_block,
