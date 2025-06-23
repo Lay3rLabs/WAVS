@@ -84,6 +84,7 @@ fn collect_messages_with_sleep() {
     send.blocking_send(msg3.clone()).unwrap();
     // try waiting a bit. is there a way to block somehow?
     sleep(Duration::from_millis(100));
+    assert_eq!(submission_manager.get_message_count(), 3);
     assert_eq!(
         submission_manager
             .get_debug_packets()
