@@ -550,6 +550,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
@@ -613,6 +614,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
@@ -819,6 +821,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
@@ -884,6 +887,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
                         .build(),
                 )
+                .with_group(2)
                 .build(),
         )
     }
