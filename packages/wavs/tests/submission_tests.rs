@@ -83,6 +83,7 @@ fn collect_messages_with_wait() {
     send.blocking_send(msg2.clone()).unwrap();
     send.blocking_send(msg3.clone()).unwrap();
     wait_for_submission_messages(&submission_manager, 3, None).unwrap();
+    assert_eq!(submission_manager.get_message_count(), 3);
     assert_eq!(
         submission_manager
             .get_debug_packets()
