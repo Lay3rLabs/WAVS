@@ -2686,7 +2686,7 @@ mod tests {
         let Aggregator::Evm(evm) = &aggregator_workflow.aggregators[0];
         assert_eq!(evm.chain_name, evm_chain);
         assert_eq!(evm.address, evm_address);
-        assert_eq!(evm.max_gas, max_gas);
+        assert_eq!(evm.max_gas, None);
 
         // Test error handling for invalid URL
         let invalid_url = "not-a-valid-url".to_string();

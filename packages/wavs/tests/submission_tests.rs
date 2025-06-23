@@ -1,4 +1,4 @@
-use std::{thread::sleep, time::Duration};
+use std::time::Duration;
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
