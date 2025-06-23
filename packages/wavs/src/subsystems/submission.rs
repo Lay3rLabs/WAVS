@@ -2,7 +2,7 @@ pub mod chain_message;
 pub mod error;
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     sync::{
         atomic::{AtomicU32, AtomicU64},
         Arc, RwLock,
@@ -10,30 +10,22 @@ use std::{
 };
 
 use crate::{config::Config, AppContext};
-use alloy_provider::Provider;
 use alloy_signer_local::PrivateKeySigner;
 use chain_message::ChainMessage;
 use error::SubmissionError;
 use tokio::sync::mpsc;
 use tracing::instrument;
-use utils::{
-    config::{AnyChainConfig, EvmChainConfig},
-    evm_client::{signing::make_signer, EvmSigningClient},
-    telemetry::SubmissionMetrics,
-};
+use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainName, Envelope, EnvelopeExt, EvmContractSubmission, Packet, PacketRoute, ServiceID,
-    SigningKeyResponse, Submit,
+    Envelope, EnvelopeExt, Packet, PacketRoute, ServiceID, SigningKeyResponse, Submit,
 };
 
 #[derive(Clone)]
 pub struct SubmissionManager {
-    chain_configs: BTreeMap<ChainName, AnyChainConfig>,
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     evm_signers: Arc<RwLock<HashMap<ServiceID, SignerInfo>>>,
-    evm_sending_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
     evm_mnemonic: Option<String>,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
@@ -54,10 +46,8 @@ impl SubmissionManager {
     #[instrument(level = "debug", fields(subsys = "Submission"))]
     pub fn new(config: &Config, metrics: SubmissionMetrics) -> Result<Self, SubmissionError> {
         Ok(Self {
-            chain_configs: config.chains.clone().into(),
             http_client: reqwest::Client::new(),
             evm_signers: Arc::new(RwLock::new(HashMap::new())),
-            evm_sending_clients: Arc::new(RwLock::new(HashMap::new())),
             evm_mnemonic: config.submission_mnemonic.clone(),
             evm_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
             metrics,
@@ -121,16 +111,6 @@ impl SubmissionManager {
                             }
 
                             match submit {
-                                Submit::EvmContract(submission) => {
-                                    let _self = _self.clone();
-                                    tokio::spawn(
-                                        async move {
-                                            if let Err(e) = _self.submit_to_evm(submission, packet).await {
-                                                tracing::error!("{:?}", e);
-                                            }
-                                        }
-                                    );
-                                },
                                 Submit::Aggregator{url} => {
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
                                         tracing::error!("{:?}", e);
@@ -176,43 +156,6 @@ impl SubmissionManager {
             .write()
             .unwrap()
             .insert(service.id.clone(), SignerInfo { signer, hd_index });
-
-        for workflow in service.workflows.values() {
-            if let Submit::EvmContract(EvmContractSubmission { chain_name, .. }) = &workflow.submit
-            {
-                if !self
-                    .evm_sending_clients
-                    .read()
-                    .unwrap()
-                    .contains_key(chain_name)
-                {
-                    let chain_config: EvmChainConfig = self
-                        .chain_configs
-                        .get(service.manager.chain_name())
-                        .ok_or_else(|| {
-                            SubmissionError::MissingEvmChain(service.manager.chain_name().clone())
-                        })?
-                        .clone()
-                        .try_into()
-                        .map_err(|_| SubmissionError::NotEvmChain)?;
-
-                    let sending_client_config = chain_config.signing_client_config(
-                        self.evm_mnemonic
-                            .clone()
-                            .ok_or(SubmissionError::MissingMnemonic)?,
-                    )?;
-
-                    let sending_client = EvmSigningClient::new(sending_client_config)
-                        .await
-                        .map_err(SubmissionError::EVM)?;
-
-                    self.evm_sending_clients
-                        .write()
-                        .unwrap()
-                        .insert(chain_name.clone(), sending_client);
-                }
-            }
-        }
 
         Ok(())
     }
@@ -266,56 +209,6 @@ impl SubmissionManager {
             envelope,
             signature,
         })
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    async fn submit_to_evm(
-        &self,
-        submission: EvmContractSubmission,
-        packet: Packet,
-    ) -> Result<(), SubmissionError> {
-        let EvmContractSubmission {
-            chain_name,
-            max_gas,
-            address,
-        } = submission;
-
-        // free up the mutex to add more clients
-        let client = {
-            self.evm_sending_clients
-                .read()
-                .unwrap()
-                .get(&chain_name)
-                .ok_or(SubmissionError::MissingEvmSendingClient(chain_name.clone()))?
-                .clone()
-        };
-
-        let block_height_minus_one = client
-            .provider
-            .get_block_number()
-            .await
-            .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?
-            - 1;
-
-        let signature_data = packet
-            .envelope
-            .signature_data(vec![packet.signature], block_height_minus_one)?;
-
-        let tx_receipt = client
-            .send_envelope_signatures(packet.envelope, signature_data, address, max_gas)
-            .await
-            .map_err(|e| SubmissionError::FailedToSubmitEvmDirect(e.into()))?;
-
-        tracing::info!(
-            "Successfully submitted to EVM chain {}: tx_hash={}, service_id={}",
-            chain_name,
-            tx_receipt.transaction_hash,
-            packet.route.service_id
-        );
-
-        self.metrics.increment_total_processed_messages("to_evm");
-
-        Ok(())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]

@@ -2,8 +2,12 @@ use alloy_primitives::U256;
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
-use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
+use std::{
+    collections::{BTreeMap, HashSet},
+    num::NonZero,
+    sync::Arc,
+    time::Duration,
+};
 use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 
@@ -21,6 +25,7 @@ use crate::{
         test_definition::{
             AggregatorDefinition, SubmitDefinition, TestDefinition, TriggerDefinition,
         },
+        test_registry::TestRegistry,
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
@@ -37,21 +42,14 @@ use super::{
     test_registry::CosmosTriggerCodeMap,
 };
 
-pub struct ServiceAndUri {
-    pub service: Service,
-    // The URI where the service is deployed
-    // currently, in tests, this is the URL hosted on WAVS itself
-    // but in production, it's typically IPFS
-    pub uri: String,
-}
-
 /// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
     test: &mut TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> ServiceAndUri {
+    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<ServiceID>>>,
+) -> Service {
     tracing::info!("Deploying service for test: {}", test.name);
 
     // Create unique service ID
@@ -100,15 +98,9 @@ pub async fn deploy_service_for_test(
         for aggregator in &workflow.aggregators {
             let aggregator = match aggregator {
                 AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
-                    let submit = deploy_submit(clients, chain_name, service_manager_address)
+                    deploy_submit(clients, chain_name, service_manager_address)
                         .await
-                        .unwrap();
-
-                    if let Submit::EvmContract(evm_contract_submission) = submit {
-                        Aggregator::Evm(evm_contract_submission)
-                    } else {
-                        panic!("EVM contract submission is expected from deploy a new evm aggregator submit")
-                    }
+                        .unwrap()
                 }
             };
 
@@ -152,11 +144,26 @@ pub async fn deploy_service_for_test(
 
     tracing::info!("[{}] Deploying service: {}", test.name, service.id);
 
-    // Deploy the service
+    // Save the service on WAVS endpoint (just a local test thing, real-world would be IPFS or similar)
     let service_url = DeployService::save_service(&clients.cli_ctx, &service)
         .await
         .unwrap();
 
+    // First, register the service to the aggregator if needed
+    for workflow in test.workflows.values() {
+        if aggregator_registered_service_ids
+            .lock()
+            .unwrap()
+            .insert(service.id.clone())
+        {
+            let SubmitDefinition::Aggregator { url } = &workflow.submit;
+            TestRegistry::register_to_aggregator(url, &service.id, &service_url)
+                .await
+                .unwrap();
+        }
+    }
+
+    // Deploy the service on WAVS
     DeployService::run(
         &clients.cli_ctx,
         DeployServiceArgs {
@@ -190,10 +197,7 @@ pub async fn deploy_service_for_test(
             .unwrap();
     }
 
-    ServiceAndUri {
-        service,
-        uri: service_url,
-    }
+    service
 }
 
 /// Create a trigger based on test configuration
@@ -275,12 +279,14 @@ pub async fn create_trigger_from_config(
 
             let (current_block, block_delay) = if clients.evm_clients.contains_key(&chain_name) {
                 let client = clients.get_evm_client(&chain_name);
-
-                (client.provider.get_block_number().await.unwrap(), 5)
+                let current_block = client.provider.get_block_number().await.unwrap();
+                let block_delay = 5;
+                (current_block, block_delay)
             } else if clients.cosmos_client_pools.contains_key(&chain_name) {
                 let client = clients.get_cosmos_client(&chain_name).await;
-
-                (client.querier.block_height().await.unwrap(), 12)
+                let current_block = client.querier.block_height().await.unwrap();
+                let block_delay = 12;
+                (current_block, block_delay)
             } else {
                 panic!("Chain is not configured: {}", chain_name)
             };
@@ -306,14 +312,11 @@ pub async fn create_trigger_from_config(
 /// Create a submit based on test configuration
 pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
-    clients: &Clients,
-    service_manager_address: alloy_primitives::Address,
+    _clients: &Clients,
+    _service_manager_address: alloy_primitives::Address,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::NewEvmContract { chain_name } => {
-            deploy_submit(clients, chain_name, service_manager_address).await
-        }
-        SubmitDefinition::Existing(submit) => Ok(submit.clone()),
+        SubmitDefinition::Aggregator { url } => Ok(Submit::Aggregator { url: url.clone() }),
     }
 }
 
@@ -353,12 +356,12 @@ pub async fn deploy_service_manager(
     Ok(address)
 }
 
-/// Deploy submit contract and create a Submit from it
+/// Deploy submit contract and create an Aggregator from it
 pub async fn deploy_submit(
     clients: &Clients,
     chain_name: &ChainName,
     service_manager_address: alloy_primitives::Address,
-) -> Result<Submit> {
+) -> Result<Aggregator> {
     // Deploy the contract
     let evm_client = clients.get_evm_client(chain_name);
 
@@ -378,7 +381,7 @@ pub async fn deploy_submit(
     let address = *result.address();
     tracing::info!("Submit contract deployed at address: {}", address);
 
-    Ok(Submit::EvmContract(EvmContractSubmission {
+    Ok(Aggregator::Evm(EvmContractSubmission {
         chain_name: chain_name.clone(),
         address,
         max_gas: None,
@@ -394,7 +397,7 @@ pub async fn get_cosmos_code_id(
     // Get or insert the entry
     let entry = cosmos_trigger_code_map
         .entry(cosmos_trigger_definition.clone())
-        .or_insert_with(|| Arc::new(Mutex::new(None)))
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(None)))
         .clone();
 
     // Lock the entry

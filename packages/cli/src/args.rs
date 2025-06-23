@@ -302,20 +302,6 @@ pub enum TriggerCommand {
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum SubmitCommand {
-    /// Set an EVM submit for a workflow
-    SetEvm {
-        /// The hexadecimal EVM address (e.g., "0x1234...")
-        #[clap(long)]
-        address: alloy_primitives::Address,
-
-        /// The chain name (e.g., "ethereum-mainnet")
-        #[clap(long)]
-        chain_name: ChainName,
-
-        /// The maximum gas to use for the submission (optional)
-        #[clap(long)]
-        max_gas: Option<u64>,
-    },
     /// Set an aggregator submit for a workflow
     SetAggregator {
         /// The URL of the aggregator

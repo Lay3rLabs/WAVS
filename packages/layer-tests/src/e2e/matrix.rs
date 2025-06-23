@@ -21,7 +21,6 @@ pub enum EvmService {
     CosmosQuery,
     EchoData,
     EchoDataSecondaryChain,
-    EchoDataAggregator,
     Permissions,
     Square,
     MultiWorkflow,
@@ -113,10 +112,6 @@ impl TestMatrix {
         self.evm.contains(&EvmService::EchoDataSecondaryChain)
     }
 
-    pub fn evm_aggregator_chain_enabled(&self) -> bool {
-        self.evm.contains(&EvmService::EchoDataAggregator)
-    }
-
     pub fn cosmos_regular_chain_enabled(&self) -> bool {
         self.evm.contains(&EvmService::CosmosQuery)
             || !self.cosmos.is_empty()
@@ -135,7 +130,6 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::Permissions => vec![ComponentName::Permissions],
             EvmService::Square => vec![ComponentName::Square],
             EvmService::EchoDataSecondaryChain => vec![ComponentName::EchoData],
-            EvmService::EchoDataAggregator => vec![ComponentName::EchoData],
             EvmService::MultiWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
             EvmService::MultiTrigger => vec![ComponentName::EchoData],
             EvmService::BlockInterval => vec![ComponentName::EchoBlockInterval],

@@ -279,8 +279,6 @@ pub enum Submit {
         /// The aggregator endpoint
         url: String,
     },
-    /// Service handler directly
-    EvmContract(EvmContractSubmission),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
@@ -375,17 +373,7 @@ mod test_ext {
 
     use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
 
-    use super::{Component, EvmContractSubmission, Submit, Trigger, TriggerConfig};
-
-    impl Submit {
-        pub fn evm_contract(
-            chain_name: ChainName,
-            address: alloy_primitives::Address,
-            max_gas: Option<u64>,
-        ) -> Submit {
-            Submit::EvmContract(EvmContractSubmission::new(chain_name, address, max_gas))
-        }
-    }
+    use super::{Component, Trigger, TriggerConfig};
 
     impl Component {
         pub fn new(source: ComponentSource) -> Component {

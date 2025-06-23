@@ -5,15 +5,9 @@ use std::{
 
 use alloy_primitives::FixedBytes;
 use thiserror::Error;
-use wavs_types::{EventId, EventOrder, Submit};
+use wavs_types::{EventId, EventOrder};
 
 use wavs::subsystems::submission::SubmissionManager;
-
-use utils::test_utils::address::rand_address_evm;
-
-pub fn mock_eigen_submit() -> Submit {
-    Submit::evm_contract("evm".try_into().unwrap(), rand_address_evm(), None)
-}
 
 pub fn mock_event_id() -> EventId {
     FixedBytes::new([0; 20]).into()
