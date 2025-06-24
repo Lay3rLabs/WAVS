@@ -19,4 +19,6 @@ interface IWavsServiceHandler {
      * @param signatureData The signature data.
      */
     function handleSignedEnvelope(Envelope calldata envelope, SignatureData calldata signatureData) external;
+
+    function getServiceManager() external view returns (address);
 }
