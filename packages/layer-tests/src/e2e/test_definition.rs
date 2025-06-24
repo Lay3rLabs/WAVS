@@ -26,6 +26,11 @@ pub struct TestDefinition {
     /// The workflows of this test
     pub workflows: BTreeMap<WorkflowID, WorkflowDefinition>,
 
+    /// If a service changes, set it here
+    /// the change will be applied after service deployment
+    /// but before explicit trigger and test evaluation
+    pub change_service: Option<ChangeServiceDefinition>,
+
     /// Service manager chain
     pub service_manager_chain: ChainName,
 
@@ -139,6 +144,17 @@ pub enum AggregatorDefinition {
     NewEvmAggregatorSubmit { chain_name: ChainName },
 }
 
+#[derive(Clone, Debug)]
+pub enum ChangeServiceDefinition {
+    ChangeName(String),
+    ReplaceWorkflow {
+        workflow_id: WorkflowID,
+        new_workflow: WorkflowDefinition,
+    },
+
+    // TODO: status etc.
+}
+
 /// Configuration for a trigger
 #[derive(Clone, Debug)]
 pub enum TriggerDefinition {
@@ -247,6 +263,7 @@ impl TestBuilder {
                 description: None,
                 workflows: BTreeMap::new(),
                 service_manager_chain: ChainName::new(DEFAULT_CHAIN_ID.to_string()).unwrap(),
+                change_service: None,
                 group: u64::MAX,
             },
         }
@@ -270,6 +287,17 @@ impl TestBuilder {
             panic!("Workflow id {} is already in use", workflow_id)
         }
         self.definition.workflows.insert(workflow_id, workflow);
+        self
+    }
+
+    pub fn with_change_service(
+        mut self,
+        change: ChangeServiceDefinition,
+    ) -> Self {
+        if self.definition.change_service.is_some() {
+            panic!("Change service already set");
+        }
+        self.definition.change_service = Some(change);
         self
     }
 
