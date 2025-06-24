@@ -115,6 +115,16 @@ pub async fn handle_service_command(
                         set_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
                     display_result(ctx, result, json)?;
                 }
+                SubmitCommand::AddAggregator {
+                    url,
+                    address,
+                    chain_name,
+                    max_gas,
+                } => {
+                    let result =
+                        add_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
+                    display_result(ctx, result, json)?;
+                }
             },
             WorkflowCommand::Trigger { id, command } => match command {
                 TriggerCommand::SetCosmos {
@@ -412,16 +422,18 @@ impl std::fmt::Display for WorkflowTriggerResult {
 
 /// Result of updating a workflow's submit
 #[derive(Debug, Clone, Serialize)]
-pub struct WorkflowSubmitResult {
+pub struct WorkflowSetSubmitAggregatorResult {
     /// The workflow id that was updated
     pub workflow_id: WorkflowID,
     /// The updated submit type
     pub submit: Submit,
+    /// The aggregator submit
+    pub aggregator_submit: Aggregator,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
 
-impl std::fmt::Display for WorkflowSubmitResult {
+impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Workflow submit updated successfully!")?;
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
@@ -433,6 +445,60 @@ impl std::fmt::Display for WorkflowSubmitResult {
             Submit::Aggregator { url } => {
                 writeln!(f, "  Submit Type: Aggregator")?;
                 writeln!(f, "    Url:    {}", url)?;
+                match &self.aggregator_submit {
+                    Aggregator::Evm(EvmContractSubmission {
+                        chain_name,
+                        address,
+                        max_gas,
+                    }) => writeln!(
+                        f,
+                        "    chain: {}, address: {}, max_gas: {}",
+                        chain_name,
+                        address,
+                        max_gas
+                            .map(|x| x.to_string())
+                            .unwrap_or("default".to_string())
+                    )?,
+                }
+            }
+        }
+
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+/// Result of adding an aggregator handler
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkflowAddAggregatorResult {
+    /// The workflow id that was updated
+    pub workflow_id: WorkflowID,
+    /// The updated submit type
+    pub aggregator_submits: Vec<Aggregator>,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for WorkflowAddAggregatorResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow aggregator submit updated successfully!")?;
+        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
+
+        writeln!(f, "  Aggregators: ")?;
+        for submit in &self.aggregator_submits {
+            match submit {
+                Aggregator::Evm(EvmContractSubmission {
+                    chain_name,
+                    address,
+                    max_gas,
+                }) => writeln!(
+                    f,
+                    "    chain: {}, address: {}, max_gas: {}",
+                    chain_name,
+                    address,
+                    max_gas
+                        .map(|x| x.to_string())
+                        .unwrap_or("default".to_string())
+                )?,
             }
         }
 
@@ -1210,7 +1276,7 @@ pub fn set_aggregator_submit(
     chain_name: ChainName,
     address: alloy_primitives::Address,
     max_gas: Option<u64>,
-) -> Result<WorkflowSubmitResult> {
+) -> Result<WorkflowSetSubmitAggregatorResult> {
     // Validate the URL format
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
 
@@ -1224,18 +1290,70 @@ pub fn set_aggregator_submit(
         let submit = Submit::Aggregator { url };
         workflow.submit = SubmitJson::Submit(submit.clone());
 
-        // Set the workflow aggregator
-        workflow.aggregators = vec![Aggregator::Evm(EvmContractSubmission {
+        let aggregator_submit = Aggregator::Evm(EvmContractSubmission {
             chain_name,
             address,
             max_gas,
-        })];
+        });
+
+        // Set the workflow aggregator
+        workflow.aggregators = vec![aggregator_submit.clone()];
 
         Ok((
             service,
-            WorkflowSubmitResult {
+            WorkflowSetSubmitAggregatorResult {
                 workflow_id,
                 submit,
+                aggregator_submit,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Add an Aggregator submit for a workflow
+pub fn add_aggregator_submit(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    url: String,
+    chain_name: ChainName,
+    address: alloy_primitives::Address,
+    max_gas: Option<u64>,
+) -> Result<WorkflowAddAggregatorResult> {
+    // Validate the URL format
+    let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
+
+    modify_service_file(file_path, |mut service| {
+        // Check if the workflow exists
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        if !matches!(
+            workflow.submit,
+            SubmitJson::Submit(Submit::Aggregator { .. })
+        ) {
+            anyhow::bail!(
+                "Cannot add an aggregator submit when the workflow's submit is not set to aggregator"
+            );
+        }
+
+        // Set the workflow aggregator
+        workflow
+            .aggregators
+            .push(Aggregator::Evm(EvmContractSubmission {
+                chain_name,
+                address,
+                max_gas,
+            }));
+
+        let aggregator_submits = workflow.aggregators.clone();
+
+        Ok((
+            service,
+            WorkflowAddAggregatorResult {
+                workflow_id,
+                aggregator_submits,
                 file_path: file_path.to_path_buf(),
             },
         ))
@@ -2694,13 +2812,62 @@ mod tests {
             &file_path,
             workflow_id.clone(),
             invalid_url,
-            evm_chain,
+            evm_chain.clone(),
             evm_address,
             None,
         );
         assert!(invalid_url_result.is_err());
         let invalid_url_error = invalid_url_result.unwrap_err().to_string();
         assert!(invalid_url_error.contains("Invalid URL format"));
+
+        // Test add_aggregator_submit function
+        let second_address = address!("0x1111111111111111111111111111111111111111");
+        let second_chain = ChainName::from_str("base").unwrap();
+        let second_max_gas = Some(2000000u64);
+
+        let add_result = add_aggregator_submit(
+            &file_path,
+            workflow_id.clone(),
+            aggregator_url.clone(),
+            second_chain.clone(),
+            second_address,
+            second_max_gas,
+        )
+        .unwrap();
+
+        // Verify add_aggregator_submit result
+        assert_eq!(add_result.workflow_id, workflow_id);
+        assert_eq!(add_result.aggregator_submits.len(), 2);
+
+        // Verify the service now has two aggregators
+        let service_with_two_aggregators: ServiceJson =
+            serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+        let workflow_with_two = service_with_two_aggregators
+            .workflows
+            .get(&workflow_id)
+            .unwrap();
+
+        assert_eq!(workflow_with_two.aggregators.len(), 2);
+
+        // Check second aggregator was added
+        let Aggregator::Evm(second_evm) = &workflow_with_two.aggregators[1];
+        assert_eq!(second_evm.chain_name, second_chain);
+        assert_eq!(second_evm.address, second_address);
+        assert_eq!(second_evm.max_gas, second_max_gas);
+
+        // Test error handling for add_aggregator_submit with non-existent workflow
+        let non_existent_workflow = WorkflowID::new("non-existent").unwrap();
+        let non_existent_result = add_aggregator_submit(
+            &file_path,
+            non_existent_workflow,
+            aggregator_url.clone(),
+            evm_chain,
+            evm_address,
+            None,
+        );
+        assert!(non_existent_result.is_err());
+        let non_existent_error = non_existent_result.unwrap_err().to_string();
+        assert!(non_existent_error.contains("Workflow with ID 'non-existent' not found"));
     }
 
     #[tokio::test]
