@@ -1,4 +1,4 @@
-package wavs:worker@0.4.0-beta.4;
+package wavs:worker@0.4.0;
 
 use wasi:io/poll@0.2.0;
 use wasi:clocks/monotonic-clock@0.2.0;
