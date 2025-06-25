@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [v0.5.0-alpha.1]
+
+### Added
+
+- CLI: Add multiple aggregator submit
+
 ## [v0.4.0]
 
 ### Added

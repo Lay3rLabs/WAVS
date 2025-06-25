@@ -320,6 +320,24 @@ pub enum SubmitCommand {
         #[clap(long)]
         max_gas: Option<u64>,
     },
+    /// Add an aggregator submit for a workflow
+    AddAggregator {
+        /// The URL of the aggregator
+        #[clap(long)]
+        url: String,
+
+        /// The hexadecimal EVM address (e.g., "0x1234...")
+        #[clap(long)]
+        address: alloy_primitives::Address,
+
+        /// The chain name (e.g., "ethereum-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The maximum gas to use for the submission (optional)
+        #[clap(long)]
+        max_gas: Option<u64>,
+    },
 }
 
 impl Command {
