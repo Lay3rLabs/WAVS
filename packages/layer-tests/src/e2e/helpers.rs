@@ -23,7 +23,7 @@ use crate::{
         clients::Clients,
         components::ComponentSources,
         test_definition::{
-            AggregatorDefinition, SubmitDefinition, TestDefinition, TriggerDefinition,
+            AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition, TestDefinition, TriggerDefinition
         },
         test_registry::TestRegistry,
     },
@@ -487,4 +487,31 @@ pub async fn wait_for_task_to_land(
     })
     .await
     .map_err(|_| anyhow::anyhow!("Timeout when waiting for task to land"))?
+}
+
+/// Helper function to deploy a service for a test
+pub async fn change_service_for_test(
+    old_service: &Service,
+    change_service: &ChangeServiceDefinition,
+    clients: &Clients,
+    component_sources: &ComponentSources,
+    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+) {
+
+
+    let mut new_service = old_service.clone();
+
+    new_service.name = format!("{}-2", old_service.name);
+
+    // TODO - actually update the service!
+
+    let service_manager = match &old_service.manager {
+        ServiceManager::Evm { chain_name, address } => {
+            SimpleServiceManager::new(*address, clients.get_evm_client(chain_name).provider.clone())
+        }
+    };
+
+    let url = DeployService::save_service(&clients.cli_ctx, &new_service).await.unwrap();
+
+    service_manager.setServiceURI(url).send().await.unwrap().watch().await.unwrap();
 }
