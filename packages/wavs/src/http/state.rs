@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use utils::{
     storage::{
-        db::{DBError, RedbStorage, Table, JSON},
+        db::{RedbStorage, Table, JSON},
         fs::FileStorage,
     },
     telemetry::HttpMetrics,
 };
-use wavs_types::{Digest, ServiceID};
+use wavs_types::Digest;
 
 use crate::{config::Config, dispatcher::Dispatcher};
 

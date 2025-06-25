@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{Digest, ServiceID};
+use wavs_types::Digest;
 
 #[utoipa::path(
     get,

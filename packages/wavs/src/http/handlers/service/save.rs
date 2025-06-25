@@ -1,5 +1,4 @@
 use axum::{extract::State, response::IntoResponse, Json};
-use reqwest::StatusCode;
 use wavs_types::{Digest, SaveServiceResponse};
 
 use crate::http::{error::HttpResult, state::HttpState};

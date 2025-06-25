@@ -506,7 +506,7 @@ impl TestRegistry {
                 )
                 .with_change_service(ChangeServiceDefinition::ReplaceWorkflow { 
                     workflow_id, 
-                    new_workflow: WorkflowBuilder::new()
+                    workflow: WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
