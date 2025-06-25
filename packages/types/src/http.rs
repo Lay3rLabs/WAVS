@@ -52,6 +52,11 @@ pub struct UploadComponentResponse {
     pub digest: ShaDigest,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+pub struct SaveServiceResponse {
+    pub hash: Digest,
+}
+
 #[derive(Clone, PartialEq, Eq, ToSchema)]
 pub struct ShaDigest(Digest);
 
