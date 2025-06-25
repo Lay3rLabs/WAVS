@@ -117,7 +117,14 @@ async fn run_test(
     .await;
 
     if let Some(change_service) = &mut test.change_service {
-        change_service_for_test(change_service, &service, clients, component_sources, cosmos_trigger_code_map).await;
+        change_service_for_test(
+            change_service,
+            &service,
+            clients,
+            component_sources,
+            cosmos_trigger_code_map,
+        )
+        .await;
     }
 
     // Group workflows by trigger to handle multi-triggers

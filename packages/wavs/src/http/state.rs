@@ -55,17 +55,18 @@ impl HttpState {
     pub fn load_service(&self, service_hash: &Digest) -> anyhow::Result<wavs_types::Service> {
         match self.storage.get(SERVICES, service_hash.as_ref()) {
             Ok(Some(service)) => Ok(service.value()),
-            _ => {
-                Err(anyhow::anyhow!(
-                    "Service Hash {service_hash} has not been set on the http server",
-                ))
-            },
+            _ => Err(anyhow::anyhow!(
+                "Service Hash {service_hash} has not been set on the http server",
+            )),
         }
     }
 
-    pub fn save_service(&self, service_hash: &Digest, service: &wavs_types::Service) -> anyhow::Result<()> {
+    pub fn save_service(
+        &self,
+        service_hash: &Digest,
+        service: &wavs_types::Service,
+    ) -> anyhow::Result<()> {
         self.storage.set(SERVICES, service_hash.as_ref(), service)?;
-
 
         Ok(())
     }

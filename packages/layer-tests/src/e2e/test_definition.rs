@@ -152,7 +152,6 @@ pub enum ChangeServiceDefinition {
         workflow_id: WorkflowID,
         workflow: WorkflowDefinition,
     },
-
     // TODO: status etc.
 }
 
@@ -291,10 +290,7 @@ impl TestBuilder {
         self
     }
 
-    pub fn with_change_service(
-        mut self,
-        change: ChangeServiceDefinition,
-    ) -> Self {
+    pub fn with_change_service(mut self, change: ChangeServiceDefinition) -> Self {
         if self.definition.change_service.is_some() {
             panic!("Change service already set");
         }

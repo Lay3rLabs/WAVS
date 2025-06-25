@@ -160,6 +160,15 @@ impl SubmissionManager {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    pub async fn change_service(
+        &self,
+        _service: &wavs_types::Service,
+    ) -> Result<(), SubmissionError> {
+        // Nothing to do here for now, it's just a placeholder
+        Ok(())
+    }
+
     pub fn get_message_count(&self) -> u64 {
         self.message_count.load(std::sync::atomic::Ordering::SeqCst)
     }

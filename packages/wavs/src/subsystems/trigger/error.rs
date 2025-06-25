@@ -1,7 +1,9 @@
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 use utils::error::EvmClientError;
-use wavs_types::{ByteArray, ChainName, ServiceID, TriggerAction, WorkflowID};
+use wavs_types::{ByteArray, ChainName, ServiceID, WorkflowID};
+
+use crate::dispatcher::DispatcherCommand;
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
@@ -38,5 +40,5 @@ pub enum TriggerError {
     #[error("Interval start time cannot be after end time")]
     IntervalStartAfterEnd,
     #[error("Send error: {0}")]
-    ActionSendError(#[from] SendError<TriggerAction>),
+    ActionSendError(#[from] SendError<DispatcherCommand>),
 }

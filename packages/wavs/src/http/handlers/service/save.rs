@@ -26,7 +26,10 @@ pub async fn handle_save_service(
     }
 }
 
-async fn save_service_inner(state: HttpState, service: wavs_types::Service) -> HttpResult<SaveServiceResponse> {
+async fn save_service_inner(
+    state: HttpState,
+    service: wavs_types::Service,
+) -> HttpResult<SaveServiceResponse> {
     let service_bytes = serde_json::to_vec(&service)?;
     let service_hash = Digest::new(&service_bytes);
     if state.load_service(&service_hash).is_ok() {
@@ -39,7 +42,5 @@ async fn save_service_inner(state: HttpState, service: wavs_types::Service) -> H
 
     state.save_service(&service_hash, &service)?;
 
-    Ok(SaveServiceResponse {
-        hash: service_hash,
-    })
+    Ok(SaveServiceResponse { hash: service_hash })
 }

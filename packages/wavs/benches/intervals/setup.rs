@@ -6,15 +6,15 @@ use std::{
 use opentelemetry::global::meter;
 use tokio::sync::mpsc;
 use utils::telemetry::Metrics;
-use wavs::subsystems::trigger::TriggerManager;
+use wavs::{dispatcher::DispatcherCommand, subsystems::trigger::TriggerManager};
 use wavs_benchmark_common::app_context::APP_CONTEXT;
-use wavs_types::{ChainName, Trigger, TriggerAction, TriggerConfig};
+use wavs_types::{ChainName, Trigger, TriggerConfig};
 
 // This is a convenience struct to initialize stuff and make it easier to pass around
 pub struct Setup {
     pub chain_names: Vec<ChainName>,
     pub trigger_manager: TriggerManager,
-    pub action_receiver: Mutex<Option<mpsc::Receiver<TriggerAction>>>,
+    pub dispatcher_command_receiver: Mutex<Option<mpsc::Receiver<DispatcherCommand>>>,
     pub config: SetupConfig,
 }
 
@@ -93,7 +93,7 @@ impl Setup {
 
         Arc::new(Setup {
             trigger_manager,
-            action_receiver: Mutex::new(Some(receiver)),
+            dispatcher_command_receiver: Mutex::new(Some(receiver)),
             chain_names,
             config: setup_config,
         })

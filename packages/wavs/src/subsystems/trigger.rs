@@ -3,7 +3,11 @@ pub mod lookup;
 pub mod schedulers;
 pub mod streams;
 
-use crate::{config::Config, dispatcher::TRIGGER_CHANNEL_SIZE, AppContext};
+use crate::{
+    config::Config,
+    dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
+    AppContext,
+};
 use anyhow::Result;
 use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
@@ -35,8 +39,8 @@ use schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronInterv
 #[derive(Clone)]
 pub struct TriggerManager {
     pub chain_configs: ChainConfigs,
-    action_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TriggerAction>>>>,
-    action_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<TriggerAction>>>>,
+    dispatcher_command_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<DispatcherCommand>>>>,
+    dispatcher_command_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<DispatcherCommand>>>>,
     local_command_sender: Arc<std::sync::Mutex<Option<mpsc::UnboundedSender<LocalStreamCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
     metrics: TriggerMetrics,
@@ -49,18 +53,58 @@ impl TriggerManager {
     #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
     pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
         // TODO - discuss unbounded, crossbeam, etc.
-        let (action_sender, action_receiver) = mpsc::channel(TRIGGER_CHANNEL_SIZE);
+        let (dispatcher_command_sender, dispatcher_command_receiver) =
+            mpsc::channel(TRIGGER_CHANNEL_SIZE);
 
         Ok(Self {
             chain_configs: config.chains.clone(),
             lookup_maps: Arc::new(LookupMaps::new()),
-            action_sender: Arc::new(std::sync::Mutex::new(Some(action_sender))),
-            action_receiver: Arc::new(std::sync::Mutex::new(Some(action_receiver))),
+            dispatcher_command_sender: Arc::new(std::sync::Mutex::new(Some(
+                dispatcher_command_sender,
+            ))),
+            dispatcher_command_receiver: Arc::new(std::sync::Mutex::new(Some(
+                dispatcher_command_receiver,
+            ))),
             local_command_sender: Arc::new(std::sync::Mutex::new(None)),
             metrics,
             #[cfg(debug_assertions)]
             disable_networking: false,
         })
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    pub async fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
+        // Add the service manager address to the lookup maps
+        let manager_address: layer_climb::prelude::Address =
+            service.manager.evm_address_unchecked().into();
+
+        self.lookup_maps
+            .service_by_manager_address
+            .write()
+            .unwrap()
+            .insert(manager_address.clone(), service.id.clone());
+
+        self.lookup_maps
+            .service_manager_address_by_service
+            .write()
+            .unwrap()
+            .insert(service.id.clone(), manager_address);
+
+        for (id, workflow) in &service.workflows {
+            let trigger = TriggerConfig {
+                service_id: service.id.clone(),
+                workflow_id: id.clone(),
+                trigger: workflow.trigger.clone(),
+            };
+            self.add_trigger(trigger)?;
+        }
+
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    pub async fn change_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
+        todo!("Change service not implemented yet");
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
@@ -175,8 +219,16 @@ impl TriggerManager {
     }
 
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
-    pub fn start(&self, ctx: AppContext) -> Result<mpsc::Receiver<TriggerAction>, TriggerError> {
-        let action_receiver = self.action_receiver.lock().unwrap().take().unwrap();
+    pub fn start(
+        &self,
+        ctx: AppContext,
+    ) -> Result<mpsc::Receiver<DispatcherCommand>, TriggerError> {
+        let dispatcher_command_receiver = self
+            .dispatcher_command_receiver
+            .lock()
+            .unwrap()
+            .take()
+            .unwrap();
 
         ctx.rt.clone().spawn({
             let _self = self.clone();
@@ -186,7 +238,7 @@ impl TriggerManager {
                     _ = kill_receiver.recv() => {
                         tracing::debug!("Trigger Manager shutting down");
                         // see the note in dispatcher about the channel automatically closing
-                        _self.action_sender.lock().unwrap().take();
+                        _self.dispatcher_command_sender.lock().unwrap().take();
                     },
                     res = _self.start_watcher() => {
                         if let Err(err) = res {
@@ -198,16 +250,21 @@ impl TriggerManager {
             }
         });
 
-        Ok(action_receiver)
+        Ok(dispatcher_command_receiver)
     }
 
-    pub async fn send_actions(
+    pub async fn send_dispatcher_commands(
         &self,
-        trigger_actions: impl IntoIterator<Item = TriggerAction>,
+        commands: impl IntoIterator<Item = DispatcherCommand>,
     ) -> Result<(), TriggerError> {
-        let action_sender = self.action_sender.lock().unwrap().clone().unwrap();
-        for action in trigger_actions {
-            action_sender.send(action).await?;
+        let dispatcher_command_sender = self
+            .dispatcher_command_sender
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap();
+        for command in commands {
+            dispatcher_command_sender.send(command).await?;
         }
 
         Ok(())
@@ -246,7 +303,7 @@ impl TriggerManager {
             };
 
             tracing::info!("Processing trigger stream event: {:?}", res);
-            let mut trigger_actions = Vec::new();
+            let mut dispatcher_commands = Vec::new();
 
             match res {
                 StreamTriggers::LocalCommand(command) => {
@@ -424,15 +481,17 @@ impl TriggerManager {
                             for id in lookup_ids {
                                 match trigger_configs_lock.get(id) {
                                     Some(trigger_config) => {
-                                        trigger_actions.push(TriggerAction {
-                                            data: TriggerData::EvmContractEvent {
-                                                contract_address,
-                                                chain_name: chain_name.clone(),
-                                                log: log.inner.data.clone(),
-                                                block_height,
+                                        dispatcher_commands.push(DispatcherCommand::Trigger(
+                                            TriggerAction {
+                                                data: TriggerData::EvmContractEvent {
+                                                    contract_address,
+                                                    chain_name: chain_name.clone(),
+                                                    log: log.inner.data.clone(),
+                                                    block_height,
+                                                },
+                                                config: trigger_config.clone(),
                                             },
-                                            config: trigger_config.clone(),
-                                        });
+                                        ));
                                     }
                                     None => {
                                         self.metrics.increment_total_errors(
@@ -472,15 +531,17 @@ impl TriggerManager {
                                 for id in lookup_ids {
                                     match trigger_configs_lock.get(id) {
                                         Some(trigger_config) => {
-                                            trigger_actions.push(TriggerAction {
-                                                data: TriggerData::CosmosContractEvent {
-                                                    contract_address: contract_address.clone(),
-                                                    chain_name: chain_name.clone(),
-                                                    event: event.clone(),
-                                                    block_height,
+                                            dispatcher_commands.push(DispatcherCommand::Trigger(
+                                                TriggerAction {
+                                                    data: TriggerData::CosmosContractEvent {
+                                                        contract_address: contract_address.clone(),
+                                                        chain_name: chain_name.clone(),
+                                                        event: event.clone(),
+                                                        block_height,
+                                                    },
+                                                    config: trigger_config.clone(),
                                                 },
-                                                config: trigger_config.clone(),
-                                            });
+                                            ));
                                         }
                                         None => {
                                             self.metrics.increment_total_errors(
@@ -498,13 +559,13 @@ impl TriggerManager {
                     }
 
                     // process block-based triggers
-                    trigger_actions.extend(self.process_blocks(chain_name, block_height));
+                    dispatcher_commands.extend(self.process_blocks(chain_name, block_height));
                 }
                 StreamTriggers::EvmBlock {
                     chain_name,
                     block_height,
                 } => {
-                    trigger_actions.extend(self.process_blocks(chain_name, block_height));
+                    dispatcher_commands.extend(self.process_blocks(chain_name, block_height));
                 }
                 StreamTriggers::Cron {
                     trigger_time,
@@ -515,10 +576,12 @@ impl TriggerManager {
                     for lookup_id in lookup_ids {
                         match trigger_configs_lock.get(&lookup_id) {
                             Some(trigger_config) => {
-                                trigger_actions.push(TriggerAction {
-                                    data: TriggerData::Cron { trigger_time },
-                                    config: trigger_config.clone(),
-                                });
+                                dispatcher_commands.push(DispatcherCommand::Trigger(
+                                    TriggerAction {
+                                        data: TriggerData::Cron { trigger_time },
+                                        config: trigger_config.clone(),
+                                    },
+                                ));
                             }
                             None => {
                                 self.metrics
@@ -533,22 +596,25 @@ impl TriggerManager {
                 }
             }
 
-            if !trigger_actions.is_empty() {
+            if !dispatcher_commands.is_empty() {
                 tracing::info!(
-                    "Sending {} trigger actions to dispatcher",
-                    trigger_actions.len()
+                    "Sending {} commands to dispatcher",
+                    dispatcher_commands.len()
                 );
-                for (idx, action) in trigger_actions.iter().enumerate() {
-                    tracing::debug!(
-                        "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}",
-                        idx + 1,
-                        action.config.service_id,
-                        action.config.workflow_id,
-                        action.data
-                    );
+                for (idx, command) in dispatcher_commands.iter().enumerate() {
+                    if let DispatcherCommand::Trigger(action) = command {
+                        // Log the trigger action details
+                        tracing::debug!(
+                            "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}",
+                            idx + 1,
+                            action.config.service_id,
+                            action.config.workflow_id,
+                            action.data
+                        );
+                    }
                 }
 
-                self.send_actions(trigger_actions).await?;
+                self.send_dispatcher_commands(dispatcher_commands).await?;
             }
         }
 
@@ -558,7 +624,11 @@ impl TriggerManager {
     }
 
     /// Process blocks and return trigger actions for any triggers that should fire
-    pub fn process_blocks(&self, chain_name: ChainName, block_height: u64) -> Vec<TriggerAction> {
+    pub fn process_blocks(
+        &self,
+        chain_name: ChainName,
+        block_height: u64,
+    ) -> Vec<DispatcherCommand> {
         let block_height = match NonZeroU64::new(block_height) {
             Some(height) => height,
             None => {
@@ -576,17 +646,17 @@ impl TriggerManager {
         if !firing_lookup_ids.is_empty() {
             let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
 
-            let mut trigger_actions = Vec::with_capacity(firing_lookup_ids.len());
+            let mut dispatcher_commands = Vec::with_capacity(firing_lookup_ids.len());
 
             for lookup_id in firing_lookup_ids {
                 if let Some(trigger_config) = trigger_configs_lock.get(&lookup_id) {
-                    trigger_actions.push(TriggerAction {
+                    dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
                         data: TriggerData::BlockInterval {
                             chain_name: chain_name.clone(),
                             block_height: block_height.get(),
                         },
                         config: trigger_config.clone(),
-                    });
+                    }));
                 } else {
                     self.metrics
                         .increment_total_errors("block interval trigger config not found");
@@ -594,7 +664,7 @@ impl TriggerManager {
                 }
             }
 
-            trigger_actions
+            dispatcher_commands
         } else {
             Vec::new()
         }
@@ -720,6 +790,20 @@ impl TriggerManager {
         let workflow_map = triggers_by_service_workflow_lock
             .get(&service_id)
             .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
+
+        let mut service_by_manager_address =
+            self.lookup_maps.service_by_manager_address.write().unwrap();
+
+        let mut service_manager_address_by_service = self
+            .lookup_maps
+            .service_manager_address_by_service
+            .write()
+            .unwrap();
+
+        // Remove the service manager
+        if let Some(manager_address) = service_manager_address_by_service.remove(&service_id) {
+            service_by_manager_address.remove(&manager_address);
+        }
 
         // Collect all lookup IDs to be removed
         let lookup_ids: Vec<LookupId> = workflow_map.values().copied().collect();

@@ -23,7 +23,8 @@ use crate::{
         clients::Clients,
         components::ComponentSources,
         test_definition::{
-            AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition, TestDefinition, TriggerDefinition
+            AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition, TestDefinition,
+            TriggerDefinition,
         },
         test_registry::TestRegistry,
     },
@@ -67,7 +68,6 @@ pub async fn deploy_service_for_test(
         .unwrap();
 
     for (workflow_id, workflow_definition) in test.workflows.iter_mut() {
-
         let workflow = deploy_workflow(
             &test.name,
             workflow_definition,
@@ -75,7 +75,8 @@ pub async fn deploy_service_for_test(
             clients,
             component_sources,
             cosmos_trigger_code_map.clone(),
-        ).await;
+        )
+        .await;
 
         workflows.insert(workflow_id.clone(), workflow);
     }
@@ -160,7 +161,6 @@ async fn deploy_workflow(
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> Workflow {
-
     // Create components from test definition
     let component_source = component_sources
         .lookup
@@ -174,7 +174,12 @@ async fn deploy_workflow(
         file_system: true,
     };
     component.config = workflow_definition.component.config_vars.clone();
-    component.env_keys = workflow_definition.component.env_vars.keys().cloned().collect();
+    component.env_keys = workflow_definition
+        .component
+        .env_vars
+        .keys()
+        .cloned()
+        .collect();
 
     for (k, v) in workflow_definition.component.env_vars.iter() {
         // NOTE: we should avoid collisions here
@@ -184,9 +189,13 @@ async fn deploy_workflow(
     tracing::info!("[{}] Creating submit from config", test_name);
 
     // Create the submit based on test configuration
-    let submit = create_submit_from_config(&workflow_definition.submit, clients, service_manager_address)
-        .await
-        .unwrap();
+    let submit = create_submit_from_config(
+        &workflow_definition.submit,
+        clients,
+        service_manager_address,
+    )
+    .await
+    .unwrap();
 
     let mut aggregators = vec![];
     for aggregator in &workflow_definition.aggregators {
@@ -517,16 +526,16 @@ pub async fn change_service_for_test(
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) {
-
-
     let mut new_service = old_service.clone();
 
     match change_service {
         ChangeServiceDefinition::ChangeName(new_name) => {
             new_service.name = new_name.clone();
         }
-        ChangeServiceDefinition::ReplaceWorkflow { workflow_id, workflow: workflow_definition} => {
-
+        ChangeServiceDefinition::ReplaceWorkflow {
+            workflow_id,
+            workflow: workflow_definition,
+        } => {
             let workflow = deploy_workflow(
                 &new_service.name,
                 workflow_definition,
@@ -534,20 +543,33 @@ pub async fn change_service_for_test(
                 clients,
                 component_sources,
                 cosmos_trigger_code_map.clone(),
-            ).await;
+            )
+            .await;
 
             new_service.workflows.insert(workflow_id.clone(), workflow);
         }
     }
 
-
     let service_manager = match &old_service.manager {
-        ServiceManager::Evm { chain_name, address } => {
-            SimpleServiceManager::new(*address, clients.get_evm_client(chain_name).provider.clone())
-        }
+        ServiceManager::Evm {
+            chain_name,
+            address,
+        } => SimpleServiceManager::new(
+            *address,
+            clients.get_evm_client(chain_name).provider.clone(),
+        ),
     };
 
-    let url = DeployService::save_service(&clients.cli_ctx, &new_service).await.unwrap();
+    let url = DeployService::save_service(&clients.cli_ctx, &new_service)
+        .await
+        .unwrap();
 
-    service_manager.setServiceURI(url).send().await.unwrap().watch().await.unwrap();
+    service_manager
+        .setServiceURI(url)
+        .send()
+        .await
+        .unwrap()
+        .watch()
+        .await
+        .unwrap();
 }

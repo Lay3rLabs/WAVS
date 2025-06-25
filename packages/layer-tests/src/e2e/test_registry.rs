@@ -504,8 +504,8 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("ruhroh!".to_string()))
                         .build(),
                 )
-                .with_change_service(ChangeServiceDefinition::ReplaceWorkflow { 
-                    workflow_id, 
+                .with_change_service(ChangeServiceDefinition::ReplaceWorkflow {
+                    workflow_id,
                     workflow: WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::NewEvmContract(
@@ -522,8 +522,7 @@ impl TestRegistry {
                         .with_input_data(InputData::Text("replaced workflow".to_string()))
                         .with_expected_output(ExpectedOutput::Text("replaced workflow".to_string()))
                         .build(),
-                }
-                )
+                })
                 .build(),
         )
     }

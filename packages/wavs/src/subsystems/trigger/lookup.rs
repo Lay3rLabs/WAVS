@@ -18,6 +18,11 @@ pub struct LookupMaps {
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
+    // lookup by ServiceManager address, get ServiceID
+    pub service_by_manager_address: Arc<RwLock<HashMap<layer_climb::prelude::Address, ServiceID>>>,
+    // lookup by ServiceID, get ServiceManager address
+    pub service_manager_address_by_service:
+        Arc<RwLock<HashMap<ServiceID, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
     pub block_schedulers: BlockSchedulers,
     /// lookup id by service id -> workflow id
@@ -44,6 +49,8 @@ impl LookupMaps {
             triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
             block_schedulers: BlockSchedulers::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
+            service_by_manager_address: Arc::new(RwLock::new(HashMap::new())),
+            service_manager_address_by_service: Arc::new(RwLock::new(HashMap::new())),
             cron_scheduler: CronScheduler::default(),
         }
     }

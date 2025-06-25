@@ -37,7 +37,12 @@ fn run_simulation(setup: Arc<Setup>) {
             APP_CONTEXT.rt.block_on(async move {
                 let mut count = 0;
                 // take out the action receiver so we can listen to it
-                let mut receiver = setup.action_receiver.lock().unwrap().take().unwrap();
+                let mut receiver = setup
+                    .dispatcher_command_receiver
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap();
 
                 while receiver.recv().await.is_some() {
                     count += 1;
@@ -59,10 +64,14 @@ fn run_simulation(setup: Arc<Setup>) {
             APP_CONTEXT.rt.block_on(async move {
                 for block_height in 0..=setup.config.total_blocks() {
                     for chain_name in setup.chain_names.clone() {
-                        let actions = setup
+                        let commands = setup
                             .trigger_manager
                             .process_blocks(chain_name, block_height);
-                        setup.trigger_manager.send_actions(actions).await.unwrap();
+                        setup
+                            .trigger_manager
+                            .send_dispatcher_commands(commands)
+                            .await
+                            .unwrap();
                     }
                 }
             });

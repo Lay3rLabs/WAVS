@@ -2,7 +2,8 @@ use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use wavs_types::{
-    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceID, SigningKeyResponse, UploadComponentResponse
+    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance,
+    SaveServiceResponse, Service, ServiceID, SigningKeyResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -107,7 +108,7 @@ impl HttpClient {
         let body = serde_json::to_string(service)?;
 
         let url = format!("{}/save-service", self.endpoint);
-        let response:SaveServiceResponse = self
+        let response: SaveServiceResponse = self
             .inner
             .post(&url)
             .header("Content-Type", "application/json")
