@@ -436,8 +436,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
         self.db_storage.set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
-        self.trigger_manager.change_service(&service).await?;
-        self.submission_manager.change_service(&service).await?;
+        self.trigger_manager.change_service(&service)?;
+        self.submission_manager.change_service(&service)?;
 
         Ok(())
     }
@@ -495,12 +495,12 @@ async fn add_service_to_managers(
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service(&service).await {
+    if let Err(err) = submissions.add_service(&service) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }
 
-    if let Err(err) = triggers.add_service(&service).await {
+    if let Err(err) = triggers.add_service(&service) {
         tracing::error!("Error adding service to trigger manager: {:?}", err);
         return Err(err.into());
     }

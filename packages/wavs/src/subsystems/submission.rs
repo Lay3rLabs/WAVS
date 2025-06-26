@@ -133,7 +133,7 @@ impl SubmissionManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    pub async fn add_service(&self, service: &wavs_types::Service) -> Result<(), SubmissionError> {
+    pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), SubmissionError> {
         let hd_index = self
             .evm_mnemonic_hd_index_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -161,7 +161,7 @@ impl SubmissionManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub async fn change_service(
+    pub fn change_service(
         &self,
         _service: &wavs_types::Service,
     ) -> Result<(), SubmissionError> {

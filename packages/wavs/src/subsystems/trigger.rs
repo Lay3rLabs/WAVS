@@ -13,7 +13,7 @@ use anyhow::Result;
 use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
 use layer_climb::prelude::*;
-use lookup::{LookupId, LookupMaps};
+use lookup::LookupMaps;
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
@@ -32,10 +32,8 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainName, IWavsServiceManager, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID
+    ByteArray, ChainName, IWavsServiceManager, ServiceID, TriggerAction, TriggerConfig, TriggerData
 };
-
-use schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronIntervalState};
 
 #[derive(Clone)]
 pub struct TriggerManager {
@@ -74,42 +72,7 @@ impl TriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub async fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
-        // Add the service manager address to the lookup maps
-        let manager_address: layer_climb::prelude::Address =
-            service.manager.evm_address_unchecked().into();
-
-        self.lookup_maps
-            .service_by_manager_address
-            .write()
-            .unwrap()
-            .insert(manager_address.clone(), service.id.clone());
-
-        self.lookup_maps
-            .service_manager_address_by_service
-            .write()
-            .unwrap()
-            .insert(service.id.clone(), manager_address);
-
-        for (id, workflow) in &service.workflows {
-            let trigger = TriggerConfig {
-                service_id: service.id.clone(),
-                workflow_id: id.clone(),
-                trigger: workflow.trigger.clone(),
-            };
-            self.add_trigger(trigger)?;
-        }
-
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub async fn change_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
-        todo!("Change service not implemented yet");
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn add_trigger(&self, config: TriggerConfig) -> Result<(), TriggerError> {
+    pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
         // The mechanics of adding a trigger are that we:
 
         // 1. Setup all the records needed to track the trigger in various "lookup" maps.
@@ -118,105 +81,42 @@ impl TriggerManager {
         //
         // It doesn't really matter what order the multiplexed streams are polled in, a trigger simply
         // will not be fired until the stream that kicks it off is polled (i.e. this definitively happens _after_ the stream is created).
-        if let Some(command) = LocalStreamCommand::new(&config) {
-            match self.local_command_sender.lock().unwrap().as_ref() {
-                Some(sender) => {
-                    sender.send(command).unwrap();
-                }
-                None => {
-                    tracing::warn!(
-                        "Local command sender not initialized, cannot send command: {:?}",
-                        command
-                    );
+
+        self.lookup_maps.add_service(service)?;
+
+        for (id, workflow) in &service.workflows {
+            let config = TriggerConfig {
+                service_id: service.id.clone(),
+                workflow_id: id.clone(),
+                trigger: workflow.trigger.clone(),
+            };
+
+            if let Some(command) = LocalStreamCommand::new(&config) {
+                match self.local_command_sender.lock().unwrap().as_ref() {
+                    Some(sender) => {
+                        sender.send(command).unwrap();
+                    }
+                    None => {
+                        tracing::warn!(
+                            "Local command sender not initialized, cannot send command: {:?}",
+                            command
+                        );
+                    }
                 }
             }
         }
-
-        // get the next lookup id
-        let lookup_id = self
-            .lookup_maps
-            .lookup_id
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        match config.trigger.clone() {
-            Trigger::EvmContractEvent {
-                address,
-                chain_name,
-                event_hash,
-            } => {
-                let mut lock = self
-                    .lookup_maps
-                    .triggers_by_evm_contract_event
-                    .write()
-                    .unwrap();
-                let key = (chain_name.clone(), address, event_hash);
-
-                lock.entry(key).or_default().insert(lookup_id);
-            }
-            Trigger::CosmosContractEvent {
-                address,
-                chain_name,
-                event_type,
-            } => {
-                let mut lock = self
-                    .lookup_maps
-                    .triggers_by_cosmos_contract_event
-                    .write()
-                    .unwrap();
-                let key = (chain_name.clone(), address.clone(), event_type.clone());
-
-                lock.entry(key).or_default().insert(lookup_id);
-            }
-            Trigger::BlockInterval {
-                chain_name,
-                n_blocks,
-                start_block,
-                end_block,
-            } => {
-                self.lookup_maps
-                    .block_schedulers
-                    .entry(chain_name.clone())
-                    .or_default()
-                    .add_trigger(BlockIntervalState::new(
-                        lookup_id,
-                        n_blocks,
-                        start_block.map(Into::into),
-                        end_block.map(Into::into),
-                    ))?;
-            }
-            Trigger::Cron {
-                schedule,
-                start_time,
-                end_time,
-            } => {
-                // Add directly to the cron scheduler
-                self.lookup_maps
-                    .cron_scheduler
-                    .lock()
-                    .unwrap()
-                    .add_trigger(CronIntervalState::new(
-                        lookup_id, &schedule, start_time, end_time,
-                    )?)?;
-            }
-            Trigger::Manual => {}
-        }
-
-        // adding it to our lookups is the same, regardless of type
-        self.lookup_maps
-            .triggers_by_service_workflow
-            .write()
-            .unwrap()
-            .entry(config.service_id.clone())
-            .or_default()
-            .insert(config.workflow_id.clone(), lookup_id);
-
-        self.lookup_maps
-            .trigger_configs
-            .write()
-            .unwrap()
-            .insert(lookup_id, config);
 
         Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    pub fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
+        self.lookup_maps.remove_service(service_id.clone())
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    pub fn change_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
+        todo!("Change service not implemented yet");
     }
 
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
@@ -697,243 +597,6 @@ impl TriggerManager {
         }
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn remove_trigger(
-        &self,
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
-    ) -> Result<(), TriggerError> {
-        let mut service_lock = self
-            .lookup_maps
-            .triggers_by_service_workflow
-            .write()
-            .unwrap();
-
-        let workflow_map = service_lock
-            .get_mut(&service_id)
-            .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
-
-        // first remove it from services
-        let lookup_id = workflow_map
-            .remove(&workflow_id)
-            .ok_or(TriggerError::NoSuchWorkflow(service_id, workflow_id))?;
-
-        // Get the trigger type to know which scheduler to remove from
-        let trigger_type = {
-            let trigger_configs = self.lookup_maps.trigger_configs.read().unwrap();
-            trigger_configs
-                .get(&lookup_id)
-                .map(|config| config.trigger.clone())
-        };
-
-        // Remove from the appropriate collection based on trigger type
-        if let Some(trigger) = trigger_type {
-            match trigger {
-                Trigger::EvmContractEvent {
-                    address,
-                    chain_name,
-                    event_hash,
-                } => {
-                    let mut lock = self
-                        .lookup_maps
-                        .triggers_by_evm_contract_event
-                        .write()
-                        .unwrap();
-                    if let Some(set) = lock.get_mut(&(chain_name.clone(), address, event_hash)) {
-                        set.remove(&lookup_id);
-                        if set.is_empty() {
-                            lock.remove(&(chain_name, address, event_hash));
-                        }
-                    }
-                }
-                Trigger::CosmosContractEvent {
-                    address,
-                    chain_name,
-                    event_type,
-                } => {
-                    let mut lock = self
-                        .lookup_maps
-                        .triggers_by_cosmos_contract_event
-                        .write()
-                        .unwrap();
-                    if let Some(set) =
-                        lock.get_mut(&(chain_name.clone(), address.clone(), event_type.clone()))
-                    {
-                        set.remove(&lookup_id);
-                        if set.is_empty() {
-                            lock.remove(&(chain_name, address, event_type));
-                        }
-                    }
-                }
-                Trigger::BlockInterval { chain_name, .. } => {
-                    // Remove from block scheduler
-                    if let Some(mut scheduler) =
-                        self.lookup_maps.block_schedulers.get_mut(&chain_name)
-                    {
-                        scheduler.remove_trigger(lookup_id);
-                    }
-                }
-                Trigger::Cron { .. } => {
-                    // Remove from cron scheduler
-                    self.lookup_maps
-                        .cron_scheduler
-                        .lock()
-                        .unwrap()
-                        .remove_trigger(lookup_id);
-                }
-                Trigger::Manual => {}
-            }
-        }
-
-        // Remove from trigger_configs
-        self.lookup_maps
-            .trigger_configs
-            .write()
-            .unwrap()
-            .remove(&lookup_id);
-
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn remove_service(&self, service_id: wavs_types::ServiceID) -> Result<(), TriggerError> {
-        let mut trigger_configs = self.lookup_maps.trigger_configs.write().unwrap();
-        let mut triggers_by_evm_contract_event = self
-            .lookup_maps
-            .triggers_by_evm_contract_event
-            .write()
-            .unwrap();
-        let mut triggers_by_cosmos_contract_event = self
-            .lookup_maps
-            .triggers_by_cosmos_contract_event
-            .write()
-            .unwrap();
-        let mut triggers_by_service_workflow_lock = self
-            .lookup_maps
-            .triggers_by_service_workflow
-            .write()
-            .unwrap();
-
-        let workflow_map = triggers_by_service_workflow_lock
-            .get(&service_id)
-            .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
-
-        let mut service_by_manager_address =
-            self.lookup_maps.service_by_manager_address.write().unwrap();
-
-        let mut service_manager_address_by_service = self
-            .lookup_maps
-            .service_manager_address_by_service
-            .write()
-            .unwrap();
-
-        // Remove the service manager
-        if let Some(manager_address) = service_manager_address_by_service.remove(&service_id) {
-            service_by_manager_address.remove(&manager_address);
-        }
-
-        // Collect all lookup IDs to be removed
-        let lookup_ids: Vec<LookupId> = workflow_map.values().copied().collect();
-
-        // Remove triggers from all collections
-        for lookup_id in &lookup_ids {
-            if let Some(config) = trigger_configs.get(lookup_id) {
-                match &config.trigger {
-                    Trigger::EvmContractEvent {
-                        address,
-                        chain_name,
-                        event_hash,
-                    } => {
-                        if let Some(set) = triggers_by_evm_contract_event.get_mut(&(
-                            chain_name.clone(),
-                            *address,
-                            *event_hash,
-                        )) {
-                            set.remove(lookup_id);
-                            if set.is_empty() {
-                                triggers_by_evm_contract_event.remove(&(
-                                    chain_name.clone(),
-                                    *address,
-                                    *event_hash,
-                                ));
-                            }
-                        }
-                    }
-                    Trigger::CosmosContractEvent {
-                        address,
-                        chain_name,
-                        event_type,
-                    } => {
-                        if let Some(set) = triggers_by_cosmos_contract_event.get_mut(&(
-                            chain_name.clone(),
-                            address.clone(),
-                            event_type.clone(),
-                        )) {
-                            set.remove(lookup_id);
-                            if set.is_empty() {
-                                triggers_by_cosmos_contract_event.remove(&(
-                                    chain_name.clone(),
-                                    address.clone(),
-                                    event_type.clone(),
-                                ));
-                            }
-                        }
-                    }
-                    Trigger::BlockInterval { chain_name, .. } => {
-                        // Remove from block scheduler
-                        if let Some(mut scheduler) =
-                            self.lookup_maps.block_schedulers.get_mut(chain_name)
-                        {
-                            scheduler.remove_trigger(*lookup_id);
-                        }
-                    }
-                    Trigger::Cron { .. } => {
-                        self.lookup_maps
-                            .cron_scheduler
-                            .lock()
-                            .unwrap()
-                            .remove_trigger(*lookup_id);
-                    }
-                    Trigger::Manual => {}
-                }
-            }
-        }
-
-        // Remove all trigger configs
-        for lookup_id in &lookup_ids {
-            trigger_configs.remove(lookup_id);
-        }
-
-        // Remove from service_workflow_lookup_map
-        triggers_by_service_workflow_lock.remove(&service_id);
-
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
-        let mut triggers = Vec::new();
-
-        let triggers_by_service_workflow_lock = self
-            .lookup_maps
-            .triggers_by_service_workflow
-            .read()
-            .unwrap();
-        let trigger_configs = self.lookup_maps.trigger_configs.read().unwrap();
-
-        let workflow_map = triggers_by_service_workflow_lock
-            .get(&service_id)
-            .ok_or(TriggerError::NoSuchService(service_id))?;
-
-        for lookup_id in workflow_map.values() {
-            let trigger_config = trigger_configs
-                .get(lookup_id)
-                .ok_or(TriggerError::NoSuchTriggerData(*lookup_id))?;
-            triggers.push(trigger_config.clone());
-        }
-
-        Ok(triggers)
-    }
 
     #[cfg(debug_assertions)]
     pub fn get_lookup_maps(&self) -> &Arc<LookupMaps> {

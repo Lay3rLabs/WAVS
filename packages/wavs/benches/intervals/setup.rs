@@ -66,6 +66,7 @@ impl Setup {
             for block in 1..=setup_config.n_blocks {
                 for _ in 0..setup_config.triggers_per_block {
                     trigger_manager
+                        .get_lookup_maps()
                         .add_trigger(TriggerConfig {
                             service_id: wavs_types::ServiceID::new(format!(
                                 "wavs-benchmark-{trigger_id}"

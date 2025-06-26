@@ -58,7 +58,6 @@ fn collect_messages_with_wait() {
                 },
                 workflows: Default::default(),
             })
-            .await
             .unwrap();
     });
 
