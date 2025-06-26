@@ -147,10 +147,10 @@ pub enum AggregatorDefinition {
 #[derive(Clone, Debug)]
 pub enum ChangeServiceDefinition {
     #[allow(dead_code)]
-    ChangeName(String),
-    ReplaceWorkflow {
+    Name(String),
+    Component{
         workflow_id: WorkflowID,
-        workflow: WorkflowDefinition,
+        component: ComponentDefinition,
     },
     // TODO: status etc.
 }

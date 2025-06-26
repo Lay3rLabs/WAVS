@@ -504,24 +504,9 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("ruhroh!".to_string()))
                         .build(),
                 )
-                .with_change_service(ChangeServiceDefinition::ReplaceWorkflow {
+                .with_change_service(ChangeServiceDefinition::Component {
                     workflow_id,
-                    workflow: WorkflowBuilder::new()
-                        .with_component(ComponentName::EchoData.into())
-                        .with_trigger(TriggerDefinition::NewEvmContract(
-                            EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
-                            },
-                        ))
-                        .with_submit(SubmitDefinition::Aggregator {
-                            url: aggregator_endpoint.to_string(),
-                        })
-                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
-                            chain_name: chain.clone(),
-                        })
-                        .with_input_data(InputData::Text("replaced workflow".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("replaced workflow".to_string()))
-                        .build(),
+                    component: ComponentName::EchoData.into()
                 })
                 .build(),
         )

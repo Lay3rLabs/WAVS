@@ -23,8 +23,7 @@ use crate::{
         clients::Clients,
         components::ComponentSources,
         test_definition::{
-            AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition, TestDefinition,
-            TriggerDefinition,
+            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition, TestDefinition, TriggerDefinition
         },
         test_registry::TestRegistry,
     },
@@ -153,18 +152,14 @@ pub async fn deploy_service_for_test(
     service
 }
 
-async fn deploy_workflow(
-    test_name: &str,
-    workflow_definition: &mut WorkflowDefinition,
-    service_manager_address: alloy_primitives::Address,
-    clients: &Clients,
+fn deploy_component(
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> Workflow {
+    component_definition: &ComponentDefinition,
+) -> Component {
     // Create components from test definition
     let component_source = component_sources
         .lookup
-        .get(&workflow_definition.component.name)
+        .get(&component_definition.name)
         .unwrap()
         .clone();
 
@@ -173,18 +168,33 @@ async fn deploy_workflow(
         allowed_http_hosts: AllowedHostPermission::All,
         file_system: true,
     };
-    component.config = workflow_definition.component.config_vars.clone();
-    component.env_keys = workflow_definition
-        .component
+    component.config = component_definition.config_vars.clone();
+    component.env_keys = component_definition 
         .env_vars
         .keys()
         .cloned()
         .collect();
 
-    for (k, v) in workflow_definition.component.env_vars.iter() {
+    for (k, v) in component_definition.env_vars.iter() {
         // NOTE: we should avoid collisions here
         std::env::set_var(k, v);
     }
+
+    component
+}
+
+async fn deploy_workflow(
+    test_name: &str,
+    workflow_definition: &mut WorkflowDefinition,
+    service_manager_address: alloy_primitives::Address,
+    clients: &Clients,
+    component_sources: &ComponentSources,
+    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+) -> Workflow {
+    let component = deploy_component(
+        component_sources,
+        &workflow_definition.component,
+    );
 
     tracing::info!("[{}] Creating submit from config", test_name);
 
@@ -524,29 +534,27 @@ pub async fn change_service_for_test(
     old_service: &Service,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    _cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) {
     let mut new_service = old_service.clone();
 
     match change_service {
-        ChangeServiceDefinition::ChangeName(new_name) => {
+        ChangeServiceDefinition::Name (new_name) => {
             new_service.name = new_name.clone();
         }
-        ChangeServiceDefinition::ReplaceWorkflow {
+        ChangeServiceDefinition::Component {
             workflow_id,
-            workflow: workflow_definition,
+            component: component_definition,
         } => {
-            let workflow = deploy_workflow(
-                &new_service.name,
-                workflow_definition,
-                new_service.manager.evm_address_unchecked(),
-                clients,
+            let component = deploy_component(
                 component_sources,
-                cosmos_trigger_code_map.clone(),
-            )
-            .await;
+                component_definition,
+            );
+            let workflow = new_service.workflows
+                .get_mut(workflow_id)
+                .expect("Workflow not found in service");
 
-            new_service.workflows.insert(workflow_id.clone(), workflow);
+            workflow.component = component;
         }
     }
 
