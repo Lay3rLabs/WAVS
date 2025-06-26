@@ -8,6 +8,7 @@ use crate::{
     dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
     AppContext,
 };
+use alloy_sol_types::SolEvent;
 use anyhow::Result;
 use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
@@ -31,7 +32,7 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainName, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ByteArray, ChainName, IWavsServiceManager, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID
 };
 
 use schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronIntervalState};
@@ -463,6 +464,32 @@ impl TriggerManager {
                 } => {
                     if let Some(event_hash) = log.topic0() {
                         let contract_address = log.address();
+
+                        if *event_hash == IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH {
+                            // 3. Decode the event data
+                            match IWavsServiceManager::ServiceURIUpdated::decode_log_data(log.data()) {
+                                Ok(decoded_event) => {
+                                    let service_uri: String = decoded_event.serviceURI;
+                                    let service_by_manager_address = self
+                                        .lookup_maps
+                                        .service_by_manager_address
+                                        .read()
+                                        .unwrap();
+                                    // check if this is a service we're interested in
+                                    if let Some(service_id) =
+                                        service_by_manager_address.get(&contract_address.into())
+                                    {
+                                        dispatcher_commands.push(DispatcherCommand::ChangeServiceUri {
+                                            service_id: service_id.clone(),
+                                            uri: service_uri,
+                                        });
+                                    } 
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to decode ServiceURIUpdated data: {}", e);
+                                }
+                            }
+                        }
 
                         let triggers_by_contract_event_lock = self
                             .lookup_maps

@@ -76,7 +76,10 @@ pub struct Dispatcher<S: CAStorage> {
 
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
-    ChangeService(Service),
+    ChangeServiceUri {
+        service_id: ServiceID,
+        uri: String,
+    },
 }
 
 impl Dispatcher<FileStorage> {
@@ -178,15 +181,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         tracing::error!("Error sending work to engine: {:?}", err);
                     }
                 }
-                DispatcherCommand::ChangeService(service) => {
+                DispatcherCommand::ChangeServiceUri { service_id, uri } => {
                     ctx.rt.block_on(async {
-                        if let Err(err) = change_service_in_managers(
-                            service,
-                            &self.trigger_manager,
-                            &self.submission_manager,
-                        )
-                        .await
-                        {
+                        if let Err(err) = self.change_service(service_id, uri).await {
                             tracing::error!("Error changing service in managers: {:?}", err);
                         }
                     });
@@ -424,6 +421,26 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     ) -> Result<SigningKeyResponse, DispatcherError> {
         Ok(self.submission_manager.get_service_key(service_id)?)
     }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    async fn change_service(
+        &self, 
+        service_id: ServiceID,
+        url_str: String,
+    ) -> Result<(), DispatcherError> {
+        let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
+
+        if service.id != service_id {
+            return Err(DispatcherError::ChangeIdMismatch { old_id: service_id, new_id: service.id });
+        }
+
+        self.db_storage.set(SERVICE_TABLE, service.id.as_ref(), &service)?;
+
+        self.trigger_manager.change_service(&service).await?;
+        self.submission_manager.change_service(&service).await?;
+
+        Ok(())
+    }
 }
 
 async fn query_service_from_address(
@@ -491,23 +508,6 @@ async fn add_service_to_managers(
     Ok(())
 }
 
-async fn change_service_in_managers(
-    service: Service,
-    triggers: &TriggerManager,
-    submissions: &SubmissionManager,
-) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.change_service(&service).await {
-        tracing::error!("Error updating service in submission manager: {:?}", err);
-        return Err(err.into());
-    }
-
-    if let Err(err) = triggers.change_service(&service).await {
-        tracing::error!("Error updating service in trigger manager: {:?}", err);
-        return Err(err.into());
-    }
-
-    Ok(())
-}
 
 #[derive(Error, Debug)]
 pub enum DispatcherError {
@@ -561,4 +561,10 @@ pub enum DispatcherError {
 
     #[error("Config error: {0}")]
     Config(String),
+
+    #[error("Service change: id mismatch, from {old_id} to {new_id}")]
+    ChangeIdMismatch {
+        old_id: ServiceID,
+        new_id: ServiceID,  
+    }
 }
