@@ -114,11 +114,6 @@ impl TriggerManager {
         self.lookup_maps.remove_service(service_id.clone())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn change_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
-        todo!("Change service not implemented yet");
-    }
-
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
     pub fn start(
         &self,

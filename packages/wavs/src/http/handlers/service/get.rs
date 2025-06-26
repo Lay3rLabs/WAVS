@@ -32,7 +32,6 @@ async fn get_service_inner(
     state: &HttpState,
     service_hash: String,
 ) -> HttpResult<wavs_types::Service> {
-    tracing::warn!("Fetching service with hash: {}", service_hash);
     let service_hash = Digest::from_str(&service_hash)
         .map_err(|_| anyhow::anyhow!("Invalid service hash format: {}", service_hash))?;
     Ok(state.load_service(&service_hash)?)

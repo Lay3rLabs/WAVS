@@ -145,7 +145,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         );
         for service in initial_services {
             ctx.rt.block_on(async {
-                add_service_to_managers(service, &self.trigger_manager, &self.submission_manager)
+                add_service_to_managers(service, &self.trigger_manager, &self.submission_manager, None)
                     .await
             })?;
         }
@@ -222,6 +222,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(digests)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub async fn add_service(
         &self,
         chain_name: ChainName,
@@ -235,31 +236,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         )
         .await?;
 
-        // persist it in storage if not there yet
-        if self
-            .db_storage
-            .get(SERVICE_TABLE, service.id.as_ref())?
-            .is_some()
-        {
-            return Err(DispatcherError::ServiceRegistered(service.id));
-        }
-
-        for workflow in service.workflows.values() {
-            self.engine_manager
-                .engine
-                .store_component_from_source(&workflow.component.source)
-                .await?;
-        }
-
-        self.db_storage
-            .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
-
-        add_service_to_managers(
-            service.clone(),
-            &self.trigger_manager,
-            &self.submission_manager,
-        )
-        .await?;
+        self.add_service_direct(service.clone(), None).await?;
 
         // Get current service count for logging
         let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
@@ -272,7 +249,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-    pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
+    pub async fn add_service_direct(&self, service: Service, hd_index: Option<u32>) -> Result<(), DispatcherError> {
         // Check if service is already registered
         if self
             .db_storage
@@ -295,7 +272,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
         // Set up triggers and submissions
-        add_service_to_managers(service, &self.trigger_manager, &self.submission_manager).await?;
+        add_service_to_managers(service, &self.trigger_manager, &self.submission_manager, hd_index).await?;
 
         Ok(())
     }
@@ -434,10 +411,26 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             return Err(DispatcherError::ChangeIdMismatch { old_id: service_id, new_id: service.id });
         }
 
-        self.db_storage.set(SERVICE_TABLE, service.id.as_ref(), &service)?;
+        let SigningKeyResponse::Secp256k1 { hd_index, .. } = self
+            .submission_manager
+            .get_service_key(service_id.clone())?;
 
-        self.trigger_manager.change_service(&service)?;
-        self.submission_manager.change_service(&service)?;
+        #[cfg(debug_assertions)]
+        {
+            let old_service = self
+                .db_storage
+                .get(SERVICE_TABLE, service_id.as_ref())?
+                .map(|s| s.value())
+                .ok_or_else(|| DispatcherError::UnknownService(service_id.clone()))?;
+
+            tracing::info!("Changing service from {:?} to {:?}", old_service, service);
+        }
+
+        // Remove the old service
+        self.remove_service(service_id.clone())?;
+
+        // Add the new service
+        self.add_service_direct(service, Some(hd_index)).await?;
 
         Ok(())
     }
@@ -494,8 +487,9 @@ async fn add_service_to_managers(
     service: Service,
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
+    hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service(&service) {
+    if let Err(err) = submissions.add_service(&service, hd_index) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }

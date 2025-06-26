@@ -133,10 +133,12 @@ impl SubmissionManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
-    pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), SubmissionError> {
-        let hd_index = self
+    // Adds a service to the submission manager, creating a new signer for it.
+    // if no hd_index is provided, it will be automatically assigned.
+    pub fn add_service(&self, service: &wavs_types::Service, hd_index: Option<u32>) -> Result<(), SubmissionError> {
+        let hd_index = hd_index.unwrap_or(self
             .evm_mnemonic_hd_index_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst));
 
         let signer = make_signer(
             self.evm_mnemonic
@@ -157,15 +159,6 @@ impl SubmissionManager {
             .unwrap()
             .insert(service.id.clone(), SignerInfo { signer, hd_index });
 
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn change_service(
-        &self,
-        _service: &wavs_types::Service,
-    ) -> Result<(), SubmissionError> {
-        // Nothing to do here for now, it's just a placeholder
         Ok(())
     }
 

@@ -57,7 +57,7 @@ fn collect_messages_with_wait() {
                     address: rand_address_evm(),
                 },
                 workflows: Default::default(),
-            })
+            }, None)
             .unwrap();
     });
 

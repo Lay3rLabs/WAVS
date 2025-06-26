@@ -390,9 +390,6 @@ impl LookupMaps {
 
         Ok(triggers)
     }
-
-    pub fn change_service(&self, service: &wavs_types::Service) {
-    }
 }
 
 pub type LookupId = usize;

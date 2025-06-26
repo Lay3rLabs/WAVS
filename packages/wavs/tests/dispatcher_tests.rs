@@ -99,7 +99,7 @@ fn dispatcher_pipeline() {
     });
 
     ctx.rt.block_on(async {
-        dispatcher.add_service_direct(service).await.unwrap();
+        dispatcher.add_service_direct(service, None).await.unwrap();
         dispatcher
             .trigger_manager
             .send_dispatcher_commands(actions.into_iter().map(DispatcherCommand::Trigger))
