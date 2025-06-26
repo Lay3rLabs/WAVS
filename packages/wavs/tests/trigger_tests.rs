@@ -99,7 +99,10 @@ fn core_trigger_lookups() {
     manager.get_lookup_maps().add_trigger(trigger_2_1).unwrap();
     manager.get_lookup_maps().add_trigger(trigger_2_2).unwrap();
 
-    let triggers_service_1 = manager.get_lookup_maps().configs_for_service(service_id_1.clone()).unwrap();
+    let triggers_service_1 = manager
+        .get_lookup_maps()
+        .configs_for_service(service_id_1.clone())
+        .unwrap();
 
     assert_eq!(triggers_service_1.len(), 2);
     assert_eq!(triggers_service_1[0].service_id, service_id_1);
@@ -115,7 +118,10 @@ fn core_trigger_lookups() {
         task_queue_addr_1_2.into()
     );
 
-    let triggers_service_2 = manager.get_lookup_maps().configs_for_service(service_id_2.clone()).unwrap();
+    let triggers_service_2 = manager
+        .get_lookup_maps()
+        .configs_for_service(service_id_2.clone())
+        .unwrap();
 
     assert_eq!(triggers_service_2.len(), 2);
     assert_eq!(triggers_service_2[0].service_id, service_id_2);
@@ -135,14 +141,26 @@ fn core_trigger_lookups() {
         .get_lookup_maps()
         .remove_workflow(service_id_1.clone(), workflow_id_1)
         .unwrap();
-    let triggers_service_1 = manager.get_lookup_maps().configs_for_service(service_id_1.clone()).unwrap();
-    let triggers_service_2 = manager.get_lookup_maps().configs_for_service(service_id_2.clone()).unwrap();
+    let triggers_service_1 = manager
+        .get_lookup_maps()
+        .configs_for_service(service_id_1.clone())
+        .unwrap();
+    let triggers_service_2 = manager
+        .get_lookup_maps()
+        .configs_for_service(service_id_2.clone())
+        .unwrap();
     assert_eq!(triggers_service_1.len(), 1);
     assert_eq!(triggers_service_2.len(), 2);
 
     manager.remove_service(service_id_2.clone()).unwrap();
-    let triggers_service_1 = manager.get_lookup_maps().configs_for_service(service_id_1.clone()).unwrap();
-    let _triggers_service_2_err = manager.get_lookup_maps().configs_for_service(service_id_2.clone()).unwrap_err();
+    let triggers_service_1 = manager
+        .get_lookup_maps()
+        .configs_for_service(service_id_1.clone())
+        .unwrap();
+    let _triggers_service_2_err = manager
+        .get_lookup_maps()
+        .configs_for_service(service_id_2.clone())
+        .unwrap_err();
     assert_eq!(triggers_service_1.len(), 1);
 
     fn get_trigger_addr(trigger: &Trigger) -> Address {
@@ -194,7 +212,10 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         n_blocks,
     )
     .unwrap();
-    manager.get_lookup_maps().add_trigger(trigger.clone()).unwrap();
+    manager
+        .get_lookup_maps()
+        .add_trigger(trigger.clone())
+        .unwrap();
 
     let service_id2 = ServiceID::new("service-2").unwrap();
     let trigger = TriggerConfig::block_interval_event(
@@ -204,7 +225,10 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         n_blocks,
     )
     .unwrap();
-    manager.get_lookup_maps().add_trigger(trigger.clone()).unwrap();
+    manager
+        .get_lookup_maps()
+        .add_trigger(trigger.clone())
+        .unwrap();
 
     // Verify we have two scheduled triggers
     assert_eq!(

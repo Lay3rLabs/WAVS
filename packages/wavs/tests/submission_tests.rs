@@ -48,16 +48,19 @@ fn collect_messages_with_wait() {
 
     ctx.rt.block_on(async {
         submission_manager
-            .add_service(&wavs_types::Service {
-                name: "serv1".to_string(),
-                status: wavs_types::ServiceStatus::Active,
-                id: "serv1".parse().unwrap(),
-                manager: ServiceManager::Evm {
-                    chain_name: ChainName::new("evm").unwrap(),
-                    address: rand_address_evm(),
+            .add_service(
+                &wavs_types::Service {
+                    name: "serv1".to_string(),
+                    status: wavs_types::ServiceStatus::Active,
+                    id: "serv1".parse().unwrap(),
+                    manager: ServiceManager::Evm {
+                        chain_name: ChainName::new("evm").unwrap(),
+                        address: rand_address_evm(),
+                    },
+                    workflows: Default::default(),
                 },
-                workflows: Default::default(),
-            }, None)
+                None,
+            )
             .unwrap();
     });
 

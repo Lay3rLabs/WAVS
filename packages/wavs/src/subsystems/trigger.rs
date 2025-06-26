@@ -32,7 +32,7 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainName, IWavsServiceManager, ServiceID, TriggerAction, TriggerConfig, TriggerData
+    ByteArray, ChainName, IWavsServiceManager, ServiceID, TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Clone)]
@@ -362,26 +362,30 @@ impl TriggerManager {
 
                         if *event_hash == IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH {
                             // 3. Decode the event data
-                            match IWavsServiceManager::ServiceURIUpdated::decode_log_data(log.data()) {
+                            match IWavsServiceManager::ServiceURIUpdated::decode_log_data(
+                                log.data(),
+                            ) {
                                 Ok(decoded_event) => {
                                     let service_uri: String = decoded_event.serviceURI;
-                                    let service_by_manager_address = self
-                                        .lookup_maps
-                                        .service_by_manager_address
-                                        .read()
-                                        .unwrap();
+                                    let service_by_manager_address =
+                                        self.lookup_maps.service_by_manager_address.read().unwrap();
                                     // check if this is a service we're interested in
                                     if let Some(service_id) =
                                         service_by_manager_address.get(&contract_address.into())
                                     {
-                                        dispatcher_commands.push(DispatcherCommand::ChangeServiceUri {
-                                            service_id: service_id.clone(),
-                                            uri: service_uri,
-                                        });
-                                    } 
+                                        dispatcher_commands.push(
+                                            DispatcherCommand::ChangeServiceUri {
+                                                service_id: service_id.clone(),
+                                                uri: service_uri,
+                                            },
+                                        );
+                                    }
                                 }
                                 Err(e) => {
-                                    tracing::error!("Failed to decode ServiceURIUpdated data: {}", e);
+                                    tracing::error!(
+                                        "Failed to decode ServiceURIUpdated data: {}",
+                                        e
+                                    );
                                 }
                             }
                         }
@@ -591,7 +595,6 @@ impl TriggerManager {
             Vec::new()
         }
     }
-
 
     #[cfg(debug_assertions)]
     pub fn get_lookup_maps(&self) -> &Arc<LookupMaps> {

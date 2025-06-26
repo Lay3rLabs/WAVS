@@ -76,10 +76,7 @@ pub struct Dispatcher<S: CAStorage> {
 
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
-    ChangeServiceUri {
-        service_id: ServiceID,
-        uri: String,
-    },
+    ChangeServiceUri { service_id: ServiceID, uri: String },
 }
 
 impl Dispatcher<FileStorage> {
@@ -145,8 +142,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         );
         for service in initial_services {
             ctx.rt.block_on(async {
-                add_service_to_managers(service, &self.trigger_manager, &self.submission_manager, None)
-                    .await
+                add_service_to_managers(
+                    service,
+                    &self.trigger_manager,
+                    &self.submission_manager,
+                    None,
+                )
+                .await
             })?;
         }
 
@@ -249,7 +251,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-    pub async fn add_service_direct(&self, service: Service, hd_index: Option<u32>) -> Result<(), DispatcherError> {
+    pub async fn add_service_direct(
+        &self,
+        service: Service,
+        hd_index: Option<u32>,
+    ) -> Result<(), DispatcherError> {
         // Check if service is already registered
         if self
             .db_storage
@@ -272,7 +278,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
         // Set up triggers and submissions
-        add_service_to_managers(service, &self.trigger_manager, &self.submission_manager, hd_index).await?;
+        add_service_to_managers(
+            service,
+            &self.trigger_manager,
+            &self.submission_manager,
+            hd_index,
+        )
+        .await?;
 
         Ok(())
     }
@@ -401,14 +413,17 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     async fn change_service(
-        &self, 
+        &self,
         service_id: ServiceID,
         url_str: String,
     ) -> Result<(), DispatcherError> {
         let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
 
         if service.id != service_id {
-            return Err(DispatcherError::ChangeIdMismatch { old_id: service_id, new_id: service.id });
+            return Err(DispatcherError::ChangeIdMismatch {
+                old_id: service_id,
+                new_id: service.id,
+            });
         }
 
         let SigningKeyResponse::Secp256k1 { hd_index, .. } = self
@@ -503,7 +518,6 @@ async fn add_service_to_managers(
     Ok(())
 }
 
-
 #[derive(Error, Debug)]
 pub enum DispatcherError {
     #[error("Service {0} already registered")]
@@ -560,6 +574,6 @@ pub enum DispatcherError {
     #[error("Service change: id mismatch, from {old_id} to {new_id}")]
     ChangeIdMismatch {
         old_id: ServiceID,
-        new_id: ServiceID,  
-    }
+        new_id: ServiceID,
+    },
 }

@@ -507,7 +507,7 @@ impl TestRegistry {
                 )
                 .with_change_service(ChangeServiceDefinition::Component {
                     workflow_id,
-                    component: ComponentName::EchoData.into()
+                    component: ComponentName::EchoData.into(),
                 })
                 .build(),
         )

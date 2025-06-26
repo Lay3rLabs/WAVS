@@ -23,7 +23,8 @@ use crate::{
         clients::Clients,
         components::ComponentSources,
         test_definition::{
-            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition, TestDefinition, TriggerDefinition
+            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
+            TestDefinition, TriggerDefinition,
         },
         test_registry::TestRegistry,
     },
@@ -169,11 +170,7 @@ fn deploy_component(
         file_system: true,
     };
     component.config = component_definition.config_vars.clone();
-    component.env_keys = component_definition 
-        .env_vars
-        .keys()
-        .cloned()
-        .collect();
+    component.env_keys = component_definition.env_vars.keys().cloned().collect();
 
     for (k, v) in component_definition.env_vars.iter() {
         // NOTE: we should avoid collisions here
@@ -191,10 +188,7 @@ async fn deploy_workflow(
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> Workflow {
-    let component = deploy_component(
-        component_sources,
-        &workflow_definition.component,
-    );
+    let component = deploy_component(component_sources, &workflow_definition.component);
 
     tracing::info!("[{}] Creating submit from config", test_name);
 
@@ -539,26 +533,22 @@ pub async fn change_service_for_test(
     let mut new_service = old_service.clone();
 
     match change_service {
-        ChangeServiceDefinition::Name (new_name) => {
+        ChangeServiceDefinition::Name(new_name) => {
             new_service.name = new_name.clone();
         }
         ChangeServiceDefinition::Component {
             workflow_id,
             component: component_definition,
         } => {
-            let component = deploy_component(
-                component_sources,
-                component_definition,
-            );
-            let workflow = new_service.workflows
+            let component = deploy_component(component_sources, component_definition);
+            let workflow = new_service
+                .workflows
                 .get_mut(workflow_id)
                 .expect("Workflow not found in service");
 
             workflow.component = component;
         }
     }
-
-
 
     let service_manager = match &old_service.manager {
         ServiceManager::Evm {
@@ -599,10 +589,9 @@ pub async fn change_service_for_test(
         timeout -= Duration::from_millis(100);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        if timeout.as_secs() <= 0 {
+        if timeout.as_secs() == 0 {
             tracing::error!("Timeout while waiting for service update");
             break;
         }
-
     }
 }

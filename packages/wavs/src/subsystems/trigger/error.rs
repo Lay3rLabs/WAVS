@@ -44,5 +44,4 @@ pub enum TriggerError {
 
     #[error("Todo: {0}")]
     Todo(String),
-
 }

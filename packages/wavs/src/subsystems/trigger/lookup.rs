@@ -5,7 +5,10 @@ use std::{
 
 use wavs_types::{ByteArray, ChainName, ServiceID, Trigger, TriggerConfig, WorkflowID};
 
-use crate::subsystems::trigger::{error::TriggerError, schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronIntervalState}};
+use crate::subsystems::trigger::{
+    error::TriggerError,
+    schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronIntervalState},
+};
 
 use super::schedulers::{block_scheduler::BlockSchedulers, cron_scheduler::CronScheduler};
 
@@ -96,11 +99,12 @@ impl LookupMaps {
                 event_hash,
             } => {
                 let key = (chain_name.clone(), address, event_hash);
-                self
-                    .triggers_by_evm_contract_event
+                self.triggers_by_evm_contract_event
                     .write()
                     .unwrap()
-                    .entry(key).or_default().insert(lookup_id);
+                    .entry(key)
+                    .or_default()
+                    .insert(lookup_id);
             }
             Trigger::CosmosContractEvent {
                 address,
@@ -108,11 +112,12 @@ impl LookupMaps {
                 event_type,
             } => {
                 let key = (chain_name.clone(), address.clone(), event_type.clone());
-                self
-                    .triggers_by_cosmos_contract_event
+                self.triggers_by_cosmos_contract_event
                     .write()
                     .unwrap()
-                    .entry(key).or_default().insert(lookup_id);
+                    .entry(key)
+                    .or_default()
+                    .insert(lookup_id);
             }
             Trigger::BlockInterval {
                 chain_name,
@@ -147,16 +152,14 @@ impl LookupMaps {
         }
 
         // adding it to our lookups is the same, regardless of type
-        self
-            .triggers_by_service_workflow
+        self.triggers_by_service_workflow
             .write()
             .unwrap()
             .entry(config.service_id.clone())
             .or_default()
             .insert(config.workflow_id.clone(), lookup_id);
 
-        self
-            .trigger_configs
+        self.trigger_configs
             .write()
             .unwrap()
             .insert(lookup_id, config);
@@ -169,10 +172,7 @@ impl LookupMaps {
         service_id: ServiceID,
         workflow_id: WorkflowID,
     ) -> Result<(), TriggerError> {
-        let mut service_lock = self
-            .triggers_by_service_workflow
-            .write()
-            .unwrap();
+        let mut service_lock = self.triggers_by_service_workflow.write().unwrap();
 
         let workflow_map = service_lock
             .get_mut(&service_id)
@@ -199,10 +199,7 @@ impl LookupMaps {
                     chain_name,
                     event_hash,
                 } => {
-                    let mut lock = self
-                        .triggers_by_evm_contract_event
-                        .write()
-                        .unwrap();
+                    let mut lock = self.triggers_by_evm_contract_event.write().unwrap();
                     if let Some(set) = lock.get_mut(&(chain_name.clone(), address, event_hash)) {
                         set.remove(&lookup_id);
                         if set.is_empty() {
@@ -215,10 +212,7 @@ impl LookupMaps {
                     chain_name,
                     event_type,
                 } => {
-                    let mut lock = self
-                        .triggers_by_cosmos_contract_event
-                        .write()
-                        .unwrap();
+                    let mut lock = self.triggers_by_cosmos_contract_event.write().unwrap();
                     if let Some(set) =
                         lock.get_mut(&(chain_name.clone(), address.clone(), event_type.clone()))
                     {
@@ -230,16 +224,13 @@ impl LookupMaps {
                 }
                 Trigger::BlockInterval { chain_name, .. } => {
                     // Remove from block scheduler
-                    if let Some(mut scheduler) =
-                        self.block_schedulers.get_mut(&chain_name)
-                    {
+                    if let Some(mut scheduler) = self.block_schedulers.get_mut(&chain_name) {
                         scheduler.remove_trigger(lookup_id);
                     }
                 }
                 Trigger::Cron { .. } => {
                     // Remove from cron scheduler
-                    self
-                        .cron_scheduler
+                    self.cron_scheduler
                         .lock()
                         .unwrap()
                         .remove_trigger(lookup_id);
@@ -249,41 +240,28 @@ impl LookupMaps {
         }
 
         // Remove from trigger_configs
-        self
-            .trigger_configs
-            .write()
-            .unwrap()
-            .remove(&lookup_id);
+        self.trigger_configs.write().unwrap().remove(&lookup_id);
 
         Ok(())
     }
 
     pub fn remove_service(&self, service_id: wavs_types::ServiceID) -> Result<(), TriggerError> {
         let mut trigger_configs = self.trigger_configs.write().unwrap();
-        let mut triggers_by_evm_contract_event = self
-            .triggers_by_evm_contract_event
-            .write()
-            .unwrap();
-        let mut triggers_by_cosmos_contract_event = self
-            .triggers_by_cosmos_contract_event
-            .write()
-            .unwrap();
-        let mut triggers_by_service_workflow_lock = self
-            .triggers_by_service_workflow
-            .write()
-            .unwrap();
+        let mut triggers_by_evm_contract_event =
+            self.triggers_by_evm_contract_event.write().unwrap();
+        let mut triggers_by_cosmos_contract_event =
+            self.triggers_by_cosmos_contract_event.write().unwrap();
+        let mut triggers_by_service_workflow_lock =
+            self.triggers_by_service_workflow.write().unwrap();
 
         let workflow_map = triggers_by_service_workflow_lock
             .get(&service_id)
             .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
 
-        let mut service_by_manager_address =
-            self.service_by_manager_address.write().unwrap();
+        let mut service_by_manager_address = self.service_by_manager_address.write().unwrap();
 
-        let mut service_manager_address_by_service = self
-            .service_manager_address_by_service
-            .write()
-            .unwrap();
+        let mut service_manager_address_by_service =
+            self.service_manager_address_by_service.write().unwrap();
 
         // Remove the service manager
         if let Some(manager_address) = service_manager_address_by_service.remove(&service_id) {
@@ -339,15 +317,12 @@ impl LookupMaps {
                     }
                     Trigger::BlockInterval { chain_name, .. } => {
                         // Remove from block scheduler
-                        if let Some(mut scheduler) =
-                            self.block_schedulers.get_mut(chain_name)
-                        {
+                        if let Some(mut scheduler) = self.block_schedulers.get_mut(chain_name) {
                             scheduler.remove_trigger(*lookup_id);
                         }
                     }
                     Trigger::Cron { .. } => {
-                        self
-                            .cron_scheduler
+                        self.cron_scheduler
                             .lock()
                             .unwrap()
                             .remove_trigger(*lookup_id);
@@ -368,13 +343,13 @@ impl LookupMaps {
         Ok(())
     }
 
-    pub fn configs_for_service(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
+    pub fn configs_for_service(
+        &self,
+        service_id: ServiceID,
+    ) -> Result<Vec<TriggerConfig>, TriggerError> {
         let mut triggers = Vec::new();
 
-        let triggers_by_service_workflow_lock = self
-            .triggers_by_service_workflow
-            .read()
-            .unwrap();
+        let triggers_by_service_workflow_lock = self.triggers_by_service_workflow.read().unwrap();
         let trigger_configs = self.trigger_configs.read().unwrap();
 
         let workflow_map = triggers_by_service_workflow_lock
