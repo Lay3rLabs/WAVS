@@ -132,4 +132,14 @@ impl HttpClient {
             .await
             .map_err(|e| e.into())
     }
+
+    pub async fn get_service_from_node(&self, service_hash: &Digest) -> Result<Service> {
+        self.inner
+            .get(format!("{}/service/{}", self.endpoint, service_hash))
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.into())
+    }
 }

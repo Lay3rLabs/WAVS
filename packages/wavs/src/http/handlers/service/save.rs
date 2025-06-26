@@ -1,5 +1,5 @@
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{Digest, SaveServiceResponse};
+use wavs_types::SaveServiceResponse;
 
 use crate::http::{error::HttpResult, state::HttpState};
 
@@ -30,8 +30,7 @@ async fn save_service_inner(
     state: HttpState,
     service: wavs_types::Service,
 ) -> HttpResult<SaveServiceResponse> {
-    let service_bytes = serde_json::to_vec(&service)?;
-    let service_hash = Digest::new(&service_bytes);
+    let service_hash = service.hash()?;
     if state.load_service(&service_hash).is_ok() {
         return Err(anyhow::anyhow!(
             "Service Hash {} has already been set on the http server",

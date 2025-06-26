@@ -500,8 +500,9 @@ impl TestRegistry {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Square { x: 10 })
-                        // Intentionally put the wrong thing here to test the change
-                        .with_expected_output(ExpectedOutput::Text("ruhroh!".to_string()))
+                        // the original component is square, and so we expect '{"y": 100}'
+                        // but when we swap the component, we just get the original trigger echoed back
+                        .with_expected_output(ExpectedOutput::EchoSquare { x: 10 })
                         .build(),
                 )
                 .with_change_service(ChangeServiceDefinition::Component {

@@ -424,6 +424,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 .ok_or_else(|| DispatcherError::UnknownService(service_id.clone()))?;
 
             tracing::info!("Changing service from {:?} to {:?}", old_service, service);
+            tracing::info!("hash {} to {}", old_service.hash()?, service.hash()?);
         }
 
         // Remove the old service

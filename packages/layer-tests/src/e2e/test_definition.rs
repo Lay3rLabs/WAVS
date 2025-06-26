@@ -235,6 +235,8 @@ pub enum ExpectedOutput {
     Regex(Regex),
     /// Square response
     Square { y: u64 },
+    /// Square input, echoed back (used in "change service" tests)
+    EchoSquare { x: u64 },
     /// Expect specific structure, but don't check values
     StructureOnly(OutputStructure),
     /// Deferred value
@@ -427,6 +429,13 @@ impl ExpectedOutput {
             ExpectedOutput::Square { y } => {
                 if let Ok(response) = serde_json::from_slice::<SquareResponse>(actual) {
                     &response.y == y
+                } else {
+                    false
+                }
+            }
+            ExpectedOutput::EchoSquare { x } => {
+                if let Ok(response) = serde_json::from_slice::<SquareRequest>(actual) {
+                    &response.x == x
                 } else {
                     false
                 }
