@@ -14,7 +14,10 @@ use utils::{
     storage::{fs::FileStorage, memory::MemoryStorage},
     telemetry::{EngineMetrics, Metrics},
 };
-use wavs::{dispatcher::Dispatcher, subsystems::engine::wasm_engine::WasmEngine};
+use wavs::{
+    dispatcher::{Dispatcher, DispatcherCommand},
+    subsystems::engine::wasm_engine::WasmEngine,
+};
 use wavs_types::{
     ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service, ServiceID,
     ServiceManager, Submit, WorkflowID,
@@ -107,13 +110,13 @@ impl MockE2ETestRunner {
     ) {
         self.dispatcher
             .trigger_manager
-            .send_actions([mock_real_trigger_action(
+            .send_dispatcher_commands([DispatcherCommand::Trigger(mock_real_trigger_action(
                 service_id,
                 workflow_id,
                 contract_address,
                 data,
                 chain_id,
-            )])
+            ))])
             .await
             .unwrap();
     }
@@ -157,7 +160,10 @@ impl MockE2ETestRunner {
             },
         );
 
-        self.dispatcher.add_service_direct(service).await.unwrap();
+        self.dispatcher
+            .add_service_direct(service, None)
+            .await
+            .unwrap();
     }
 
     #[instrument(level = "debug", skip(self))]

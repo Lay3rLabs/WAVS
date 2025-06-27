@@ -27,6 +27,14 @@ pub struct Service {
     pub manager: ServiceManager,
 }
 
+impl Service {
+    // this is only used for local/tests, but we want to keep it consistent
+    pub fn hash(&self) -> anyhow::Result<Digest> {
+        let service_bytes = serde_json::to_vec(self)?;
+        Ok(Digest::new(&service_bytes))
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {

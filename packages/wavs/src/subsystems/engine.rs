@@ -1,6 +1,7 @@
 pub mod error;
 pub mod wasm_engine;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use alloy_primitives::FixedBytes;
@@ -9,7 +10,9 @@ use rayon::ThreadPoolBuilder;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
-use wavs_types::{Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction};
+use wavs_types::{
+    Digest, Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction, WorkflowID,
+};
 
 use crate::subsystems::engine::wasm_engine::WasmEngine;
 use crate::subsystems::submission::chain_message::ChainMessage;
@@ -63,6 +66,24 @@ impl<S: CAStorage> EngineManager<S> {
                 })
             }
         });
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    pub async fn store_components_for_service(
+        &self,
+        service: &Service,
+    ) -> Result<HashMap<WorkflowID, Digest>, EngineError> {
+        let mut digests = HashMap::new();
+
+        for (workflow_id, workflow) in service.workflows.iter() {
+            let digest = self
+                .engine
+                .store_component_from_source(&workflow.component.source)
+                .await?;
+            digests.insert(workflow_id.clone(), digest);
+        }
+
+        Ok(digests)
     }
 
     fn run_trigger(

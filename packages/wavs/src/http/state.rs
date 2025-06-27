@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use utils::{
     storage::{
-        db::{DBError, RedbStorage, Table, JSON},
+        db::{RedbStorage, Table, JSON},
         fs::FileStorage,
     },
     telemetry::HttpMetrics,
 };
-use wavs_types::ServiceID;
+use wavs_types::Digest;
 
 use crate::{config::Config, dispatcher::Dispatcher};
 
-const SERVICES: Table<&str, JSON<wavs_types::Service>> = Table::new("services");
+const SERVICES: Table<&[u8], JSON<wavs_types::Service>> = Table::new("services");
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -52,16 +52,22 @@ impl HttpState {
         })
     }
 
-    pub fn load_service(&self, service_id: &ServiceID) -> anyhow::Result<wavs_types::Service> {
-        match self.storage.get(SERVICES, service_id.as_ref()) {
+    pub fn load_service(&self, service_hash: &Digest) -> anyhow::Result<wavs_types::Service> {
+        match self.storage.get(SERVICES, service_hash.as_ref()) {
             Ok(Some(service)) => Ok(service.value()),
             _ => Err(anyhow::anyhow!(
-                "Service ID {service_id} has not been set on the http server",
+                "Service Hash {service_hash} has not been set on the http server",
             )),
         }
     }
 
-    pub fn save_service(&self, service: &wavs_types::Service) -> Result<(), DBError> {
-        self.storage.set(SERVICES, service.id.as_ref(), service)
+    pub fn save_service(
+        &self,
+        service_hash: &Digest,
+        service: &wavs_types::Service,
+    ) -> anyhow::Result<()> {
+        self.storage.set(SERVICES, service_hash.as_ref(), service)?;
+
+        Ok(())
     }
 }

@@ -23,7 +23,8 @@ use crate::{
         clients::Clients,
         components::ComponentSources,
         test_definition::{
-            AggregatorDefinition, SubmitDefinition, TestDefinition, TriggerDefinition,
+            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
+            TestDefinition, TriggerDefinition,
         },
         test_registry::TestRegistry,
     },
@@ -66,64 +67,16 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    for (workflow_id, workflow) in test.workflows.iter_mut() {
-        // Create components from test definition
-        let component_source = component_sources
-            .lookup
-            .get(&workflow.component.name)
-            .unwrap()
-            .clone();
-
-        let mut component = Component::new(component_source);
-        component.permissions = Permissions {
-            allowed_http_hosts: AllowedHostPermission::All,
-            file_system: true,
-        };
-        component.config = workflow.component.config_vars.clone();
-        component.env_keys = workflow.component.env_vars.keys().cloned().collect();
-
-        for (k, v) in workflow.component.env_vars.iter() {
-            // NOTE: we should avoid collisions here
-            std::env::set_var(k, v);
-        }
-
-        tracing::info!("[{}] Creating submit from config", test.name);
-
-        // Create the submit based on test configuration
-        let submit = create_submit_from_config(&workflow.submit, clients, service_manager_address)
-            .await
-            .unwrap();
-
-        let mut aggregators = vec![];
-        for aggregator in &workflow.aggregators {
-            let aggregator = match aggregator {
-                AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
-                    deploy_submit(clients, chain_name, service_manager_address)
-                        .await
-                        .unwrap()
-                }
-            };
-
-            aggregators.push(aggregator);
-        }
-
-        tracing::info!("[{}] Creating trigger from config", test.name);
-        // Create the trigger based on test configuration
-        let trigger = create_trigger_from_config(
-            workflow.trigger.clone(),
+    for (workflow_id, workflow_definition) in test.workflows.iter_mut() {
+        let workflow = deploy_workflow(
+            &test.name,
+            workflow_definition,
+            service_manager_address,
             clients,
+            component_sources,
             cosmos_trigger_code_map.clone(),
-            Some(workflow),
         )
         .await;
-
-        // Create service workflows
-        let workflow = Workflow {
-            trigger: trigger.clone(), // Clone for possible use in multi-trigger service
-            component,
-            submit: submit.clone(),
-            aggregators,
-        };
 
         workflows.insert(workflow_id.clone(), workflow);
     }
@@ -198,6 +151,86 @@ pub async fn deploy_service_for_test(
     }
 
     service
+}
+
+fn deploy_component(
+    component_sources: &ComponentSources,
+    component_definition: &ComponentDefinition,
+) -> Component {
+    // Create components from test definition
+    let component_source = component_sources
+        .lookup
+        .get(&component_definition.name)
+        .unwrap()
+        .clone();
+
+    let mut component = Component::new(component_source);
+    component.permissions = Permissions {
+        allowed_http_hosts: AllowedHostPermission::All,
+        file_system: true,
+    };
+    component.config = component_definition.config_vars.clone();
+    component.env_keys = component_definition.env_vars.keys().cloned().collect();
+
+    for (k, v) in component_definition.env_vars.iter() {
+        // NOTE: we should avoid collisions here
+        std::env::set_var(k, v);
+    }
+
+    component
+}
+
+async fn deploy_workflow(
+    test_name: &str,
+    workflow_definition: &mut WorkflowDefinition,
+    service_manager_address: alloy_primitives::Address,
+    clients: &Clients,
+    component_sources: &ComponentSources,
+    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+) -> Workflow {
+    let component = deploy_component(component_sources, &workflow_definition.component);
+
+    tracing::info!("[{}] Creating submit from config", test_name);
+
+    // Create the submit based on test configuration
+    let submit = create_submit_from_config(
+        &workflow_definition.submit,
+        clients,
+        service_manager_address,
+    )
+    .await
+    .unwrap();
+
+    let mut aggregators = vec![];
+    for aggregator in &workflow_definition.aggregators {
+        let aggregator = match aggregator {
+            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
+                deploy_submit(clients, chain_name, service_manager_address)
+                    .await
+                    .unwrap()
+            }
+        };
+
+        aggregators.push(aggregator);
+    }
+
+    tracing::info!("[{}] Creating trigger from config", test_name);
+    // Create the trigger based on test configuration
+    let trigger = create_trigger_from_config(
+        workflow_definition.trigger.clone(),
+        clients,
+        cosmos_trigger_code_map.clone(),
+        Some(workflow_definition),
+    )
+    .await;
+
+    // Create service workflows
+    Workflow {
+        trigger: trigger.clone(), // Clone for possible use in multi-trigger service
+        component,
+        submit: submit.clone(),
+        aggregators,
+    }
 }
 
 /// Create a trigger based on test configuration
@@ -487,4 +520,78 @@ pub async fn wait_for_task_to_land(
     })
     .await
     .map_err(|_| anyhow::anyhow!("Timeout when waiting for task to land"))?
+}
+
+/// Helper function to deploy a service for a test
+pub async fn change_service_for_test(
+    change_service: &mut ChangeServiceDefinition,
+    old_service: &Service,
+    clients: &Clients,
+    component_sources: &ComponentSources,
+    _cosmos_trigger_code_map: CosmosTriggerCodeMap,
+) {
+    let mut new_service = old_service.clone();
+
+    match change_service {
+        ChangeServiceDefinition::Name(new_name) => {
+            new_service.name = new_name.clone();
+        }
+        ChangeServiceDefinition::Component {
+            workflow_id,
+            component: component_definition,
+        } => {
+            let component = deploy_component(component_sources, component_definition);
+            let workflow = new_service
+                .workflows
+                .get_mut(workflow_id)
+                .expect("Workflow not found in service");
+
+            workflow.component = component;
+        }
+    }
+
+    let service_manager = match &old_service.manager {
+        ServiceManager::Evm {
+            chain_name,
+            address,
+        } => SimpleServiceManager::new(
+            *address,
+            clients.get_evm_client(chain_name).provider.clone(),
+        ),
+    };
+
+    let url = DeployService::save_service(&clients.cli_ctx, &new_service)
+        .await
+        .unwrap();
+
+    service_manager
+        .setServiceURI(url)
+        .send()
+        .await
+        .unwrap()
+        .watch()
+        .await
+        .unwrap();
+
+    // wait until WAVS sees the new service
+    let service_hash = new_service.hash().unwrap();
+    let timeout_result = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let resp = clients
+                .http_client
+                .get_service_from_node(&service_hash)
+                .await;
+
+            if resp.is_ok() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await;
+
+    if timeout_result.is_err() {
+        tracing::error!("Timeout while waiting for service update");
+    }
 }

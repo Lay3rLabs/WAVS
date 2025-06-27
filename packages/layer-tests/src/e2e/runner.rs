@@ -8,6 +8,7 @@ use std::time::Instant;
 use std::{collections::HashMap, sync::Arc};
 use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
 
+use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::test_registry::CosmosTriggerCodeMap;
 use crate::{
     e2e::{
@@ -110,10 +111,21 @@ async fn run_test(
         test,
         clients,
         component_sources,
-        cosmos_trigger_code_map,
+        cosmos_trigger_code_map.clone(),
         aggregator_registered_service_ids,
     )
     .await;
+
+    if let Some(change_service) = &mut test.change_service {
+        change_service_for_test(
+            change_service,
+            &service,
+            clients,
+            component_sources,
+            cosmos_trigger_code_map,
+        )
+        .await;
+    }
 
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: HashMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = HashMap::new();

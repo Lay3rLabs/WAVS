@@ -21,6 +21,7 @@ use super::test_definition::{
     WorkflowBuilder,
 };
 use crate::e2e::helpers::create_trigger_from_config;
+use crate::e2e::test_definition::ChangeServiceDefinition;
 use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
@@ -134,6 +135,9 @@ impl TestRegistry {
                 }
                 EvmService::MultiWorkflow => {
                     registry.register_evm_multi_workflow_test(chain, aggregator_endpoint);
+                }
+                EvmService::ChangeWorkflow => {
+                    registry.register_evm_change_workflow_test(chain, aggregator_endpoint);
                 }
                 EvmService::MultiTrigger => {
                     let trigger = create_trigger_from_config(
@@ -466,6 +470,45 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("Multi-workflow".to_string()))
                         .build(),
                 )
+                .build(),
+        )
+    }
+
+    fn register_evm_change_workflow_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        let workflow_id = WorkflowID::new("change_workflow").unwrap();
+
+        self.register(
+            TestBuilder::new("evm_change_workflow")
+                .with_description("Tests changing workflows in a single service on EVM chain")
+                .add_workflow(
+                    workflow_id.clone(),
+                    WorkflowBuilder::new()
+                        .with_component(ComponentName::Square.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
+                            chain_name: chain.clone(),
+                        })
+                        .with_input_data(InputData::Square { x: 10 })
+                        // the original component is square, and so we expect '{"y": 100}'
+                        // but when we swap the component, we just get the original trigger echoed back
+                        .with_expected_output(ExpectedOutput::EchoSquare { x: 10 })
+                        .build(),
+                )
+                .with_change_service(ChangeServiceDefinition::Component {
+                    workflow_id,
+                    component: ComponentName::EchoData.into(),
+                })
                 .build(),
         )
     }

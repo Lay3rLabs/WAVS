@@ -51,6 +51,7 @@ alloy-rpc-types-eth = { workspace = true }
 alloy-signer-local = { workspace = true }
 alloy-signer = { workspace = true }
 alloy-provider = { workspace = true }
+alloy-sol-types = { workspace = true }
 wasm-pkg-common = { workspace = true }
 chrono = { workspace = true }
 cron = { workspace = true }
@@ -61,11 +62,11 @@ opentelemetry = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 dashmap = { workspace = true }
+bimap = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
-alloy-sol-types = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
 
 [[bench]]

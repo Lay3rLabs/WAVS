@@ -42,7 +42,6 @@ use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
-    TriggerConfig,
 };
 
 use crate::config::Config;
@@ -73,6 +72,11 @@ pub struct Dispatcher<S: CAStorage> {
     pub chain_configs: ChainConfigs,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
+}
+
+pub enum DispatcherCommand {
+    Trigger(TriggerAction),
+    ChangeServiceUri { service_id: ServiceID, uri: String },
 }
 
 impl Dispatcher<FileStorage> {
@@ -113,7 +117,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Dispatcher"))]
     pub fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
         // Trigger is pipeline start
-        let mut actions_in = self.trigger_manager.start(ctx.clone())?;
+        let mut trigger_commands_in = self.trigger_manager.start(ctx.clone())?;
+
         // Next is the local (blocking) processing
         let (work_sender, work_receiver) =
             mpsc::channel::<(TriggerAction, Service)>(ENGINE_CHANNEL_SIZE);
@@ -136,10 +141,12 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             self.list_component_digests()?.len()
         );
         for service in initial_services {
-            ctx.rt.block_on(async {
-                add_service_to_managers(service, &self.trigger_manager, &self.submission_manager)
-                    .await
-            })?;
+            add_service_to_managers(
+                service,
+                &self.trigger_manager,
+                &self.submission_manager,
+                None,
+            )?;
         }
 
         // since triggers listens to the async kill signal handler and closes the channel when
@@ -148,26 +155,38 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
         // This reads the actions, extends them with the local service data, and passes
         // the combined info down to the EngineRunner to work.
-        while let Some(action) = actions_in.blocking_recv() {
-            tracing::info!(
-                "Dispatcher received trigger action: service_id={}, workflow_id={}",
-                action.config.service_id,
-                action.config.workflow_id
-            );
+        while let Some(command) = trigger_commands_in.blocking_recv() {
+            match command {
+                DispatcherCommand::Trigger(action) => {
+                    tracing::info!(
+                        "Dispatcher received trigger action: service_id={}, workflow_id={}",
+                        action.config.service_id,
+                        action.config.workflow_id
+                    );
 
-            let service = match self
-                .db_storage
-                .get(SERVICE_TABLE, action.config.service_id.as_ref())?
-            {
-                Some(service) => service.value(),
-                None => {
-                    let err = DispatcherError::UnknownService(action.config.service_id.clone());
-                    tracing::error!("{}", err);
-                    continue;
+                    let service = match self
+                        .db_storage
+                        .get(SERVICE_TABLE, action.config.service_id.as_ref())?
+                    {
+                        Some(service) => service.value(),
+                        None => {
+                            let err =
+                                DispatcherError::UnknownService(action.config.service_id.clone());
+                            tracing::error!("{}", err);
+                            continue;
+                        }
+                    };
+                    if let Err(err) = work_sender.blocking_send((action, service)) {
+                        tracing::error!("Error sending work to engine: {:?}", err);
+                    }
                 }
-            };
-            if let Err(err) = work_sender.blocking_send((action, service)) {
-                tracing::error!("Error sending work to engine: {:?}", err);
+                DispatcherCommand::ChangeServiceUri { service_id, uri } => {
+                    ctx.rt.block_on(async {
+                        if let Err(err) = self.change_service(service_id, uri).await {
+                            tracing::error!("Error changing service in managers: {:?}", err);
+                        }
+                    });
+                }
             }
         }
 
@@ -202,6 +221,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(digests)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub async fn add_service(
         &self,
         chain_name: ChainName,
@@ -215,31 +235,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         )
         .await?;
 
-        // persist it in storage if not there yet
-        if self
-            .db_storage
-            .get(SERVICE_TABLE, service.id.as_ref())?
-            .is_some()
-        {
-            return Err(DispatcherError::ServiceRegistered(service.id));
-        }
-
-        for workflow in service.workflows.values() {
-            self.engine_manager
-                .engine
-                .store_component_from_source(&workflow.component.source)
-                .await?;
-        }
-
-        self.db_storage
-            .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
-
-        add_service_to_managers(
-            service.clone(),
-            &self.trigger_manager,
-            &self.submission_manager,
-        )
-        .await?;
+        self.add_service_direct(service.clone(), None).await?;
 
         // Get current service count for logging
         let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
@@ -252,7 +248,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-    pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
+    pub async fn add_service_direct(
+        &self,
+        service: Service,
+        hd_index: Option<u32>,
+    ) -> Result<(), DispatcherError> {
         // Check if service is already registered
         if self
             .db_storage
@@ -263,19 +263,21 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         }
 
         // Store components
-        for workflow in service.workflows.values() {
-            self.engine_manager
-                .engine
-                .store_component_from_source(&workflow.component.source)
-                .await?;
-        }
+        self.engine_manager
+            .store_components_for_service(&service)
+            .await?;
 
         // Store the service
         self.db_storage
             .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
 
         // Set up triggers and submissions
-        add_service_to_managers(service, &self.trigger_manager, &self.submission_manager).await?;
+        add_service_to_managers(
+            service,
+            &self.trigger_manager,
+            &self.submission_manager,
+            hd_index,
+        )?;
 
         Ok(())
     }
@@ -401,6 +403,45 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     ) -> Result<SigningKeyResponse, DispatcherError> {
         Ok(self.submission_manager.get_service_key(service_id)?)
     }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    async fn change_service(
+        &self,
+        service_id: ServiceID,
+        url_str: String,
+    ) -> Result<(), DispatcherError> {
+        let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
+
+        if service.id != service_id {
+            return Err(DispatcherError::ChangeIdMismatch {
+                old_id: service_id,
+                new_id: service.id,
+            });
+        }
+
+        let SigningKeyResponse::Secp256k1 { hd_index, .. } = self
+            .submission_manager
+            .get_service_key(service_id.clone())?;
+
+        if tracing::enabled!(tracing::Level::INFO) {
+            let old_service = self
+                .db_storage
+                .get(SERVICE_TABLE, service_id.as_ref())?
+                .map(|s| s.value())
+                .ok_or_else(|| DispatcherError::UnknownService(service_id.clone()))?;
+
+            tracing::info!("Changing service from {:?} to {:?}", old_service, service);
+            tracing::info!("hash {} to {}", old_service.hash()?, service.hash()?);
+        }
+
+        // Remove the old service
+        self.remove_service(service_id.clone())?;
+
+        // Add the new service
+        self.add_service_direct(service, Some(hd_index)).await?;
+
+        Ok(())
+    }
 }
 
 async fn query_service_from_address(
@@ -450,23 +491,20 @@ async fn query_service_from_address(
 }
 
 // called at init and when a new service is added
-async fn add_service_to_managers(
+fn add_service_to_managers(
     service: Service,
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
+    hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service(&service).await {
+    if let Err(err) = submissions.add_service(&service, hd_index) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }
 
-    for (id, workflow) in service.workflows {
-        let trigger = TriggerConfig {
-            service_id: service.id.clone(),
-            workflow_id: id,
-            trigger: workflow.trigger,
-        };
-        triggers.add_trigger(trigger)?;
+    if let Err(err) = triggers.add_service(&service) {
+        tracing::error!("Error adding service to trigger manager: {:?}", err);
+        return Err(err.into());
     }
 
     Ok(())
@@ -524,4 +562,10 @@ pub enum DispatcherError {
 
     #[error("Config error: {0}")]
     Config(String),
+
+    #[error("Service change: id mismatch, from {old_id} to {new_id}")]
+    ChangeIdMismatch {
+        old_id: ServiceID,
+        new_id: ServiceID,
+    },
 }

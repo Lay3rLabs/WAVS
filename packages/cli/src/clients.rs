@@ -2,8 +2,8 @@ use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use wavs_types::{
-    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance, Service,
-    ServiceID, SigningKeyResponse, UploadComponentResponse,
+    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance,
+    SaveServiceResponse, Service, ServiceID, SigningKeyResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -108,31 +108,34 @@ impl HttpClient {
         let body = serde_json::to_string(service)?;
 
         let url = format!("{}/save-service", self.endpoint);
-        let response = self
+        let response: SaveServiceResponse = self
             .inner
             .post(&url)
             .header("Content-Type", "application/json")
             .body(body)
             .send()
             .await
-            .with_context(|| format!("Failed to send request to {}", url))?;
+            .with_context(|| format!("Failed to send request to {}", url))?
+            .json()
+            .await
+            .with_context(|| format!("Failed to parse response from {}", url))?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "<Failed to read response body>".to_string());
-
-            anyhow::bail!("{} from {}: {}", status, url, error_text);
-        }
-
-        Ok(format!("{}/service/{}", self.endpoint, service.id))
+        Ok(format!("{}/service/{}", self.endpoint, response.hash))
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
         self.inner
             .get(format!("{}/service-key/{service_id}", self.endpoint))
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.into())
+    }
+
+    pub async fn get_service_from_node(&self, service_hash: &Digest) -> Result<Service> {
+        self.inner
+            .get(format!("{}/service/{}", self.endpoint, service_hash))
             .send()
             .await?
             .json()

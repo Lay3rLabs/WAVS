@@ -9,6 +9,7 @@ use utils::{
         mock_engine::{SquareIn, SquareOut, COMPONENT_SQUARE},
     },
 };
+use wavs::dispatcher::DispatcherCommand;
 use wavs::init_tracing_tests;
 use wavs_types::{
     Aggregator, ChainName, Component, ComponentSource, EvmContractSubmission, Service, ServiceID,
@@ -98,10 +99,10 @@ fn dispatcher_pipeline() {
     });
 
     ctx.rt.block_on(async {
-        dispatcher.add_service_direct(service).await.unwrap();
+        dispatcher.add_service_direct(service, None).await.unwrap();
         dispatcher
             .trigger_manager
-            .send_actions(actions)
+            .send_dispatcher_commands(actions.into_iter().map(DispatcherCommand::Trigger))
             .await
             .unwrap();
     });

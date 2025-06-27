@@ -26,6 +26,11 @@ pub struct TestDefinition {
     /// The workflows of this test
     pub workflows: BTreeMap<WorkflowID, WorkflowDefinition>,
 
+    /// If a service changes, set it here
+    /// the change will be applied after service deployment
+    /// but before explicit trigger and test evaluation
+    pub change_service: Option<ChangeServiceDefinition>,
+
     /// Service manager chain
     pub service_manager_chain: ChainName,
 
@@ -139,6 +144,17 @@ pub enum AggregatorDefinition {
     NewEvmAggregatorSubmit { chain_name: ChainName },
 }
 
+#[derive(Clone, Debug)]
+pub enum ChangeServiceDefinition {
+    #[allow(dead_code)]
+    Name(String),
+    Component {
+        workflow_id: WorkflowID,
+        component: ComponentDefinition,
+    },
+    // TODO: status etc.
+}
+
 /// Configuration for a trigger
 #[derive(Clone, Debug)]
 pub enum TriggerDefinition {
@@ -219,6 +235,8 @@ pub enum ExpectedOutput {
     Regex(Regex),
     /// Square response
     Square { y: u64 },
+    /// Square input, echoed back (used in "change service" tests)
+    EchoSquare { x: u64 },
     /// Expect specific structure, but don't check values
     StructureOnly(OutputStructure),
     /// Deferred value
@@ -247,6 +265,7 @@ impl TestBuilder {
                 description: None,
                 workflows: BTreeMap::new(),
                 service_manager_chain: ChainName::new(DEFAULT_CHAIN_ID.to_string()).unwrap(),
+                change_service: None,
                 group: u64::MAX,
             },
         }
@@ -270,6 +289,14 @@ impl TestBuilder {
             panic!("Workflow id {} is already in use", workflow_id)
         }
         self.definition.workflows.insert(workflow_id, workflow);
+        self
+    }
+
+    pub fn with_change_service(mut self, change: ChangeServiceDefinition) -> Self {
+        if self.definition.change_service.is_some() {
+            panic!("Change service already set");
+        }
+        self.definition.change_service = Some(change);
         self
     }
 
@@ -402,6 +429,13 @@ impl ExpectedOutput {
             ExpectedOutput::Square { y } => {
                 if let Ok(response) = serde_json::from_slice::<SquareResponse>(actual) {
                     &response.y == y
+                } else {
+                    false
+                }
+            }
+            ExpectedOutput::EchoSquare { x } => {
+                if let Ok(response) = serde_json::from_slice::<SquareRequest>(actual) {
+                    &response.x == x
                 } else {
                     false
                 }
