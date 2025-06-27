@@ -574,24 +574,24 @@ pub async fn change_service_for_test(
         .unwrap();
 
     // wait until WAVS sees the new service
-    let mut timeout = Duration::from_secs(3);
     let service_hash = new_service.hash().unwrap();
-    loop {
-        let resp = clients
-            .http_client
-            .get_service_from_node(&service_hash)
-            .await;
+    let timeout_result = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let resp = clients
+                .http_client
+                .get_service_from_node(&service_hash)
+                .await;
 
-        if resp.is_ok() {
-            break;
+            if resp.is_ok() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
+    })
+    .await;
 
-        timeout -= Duration::from_millis(100);
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        if timeout.as_secs() == 0 {
-            tracing::error!("Timeout while waiting for service update");
-            break;
-        }
+    if timeout_result.is_err() {
+        tracing::error!("Timeout while waiting for service update");
     }
 }
