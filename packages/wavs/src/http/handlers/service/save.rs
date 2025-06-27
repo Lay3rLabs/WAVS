@@ -30,17 +30,6 @@ async fn save_service_inner(
     state: HttpState,
     service: wavs_types::Service,
 ) -> HttpResult<SaveServiceResponse> {
-    if let Ok(old_service) = state.load_service(&service.id) {
-        if old_service.hash()? == service.hash()? {
-            return Err(anyhow::anyhow!(
-                "Service {} has already been set on the http server with the same hash",
-                service.id
-            )
-            .into());
-        }
-    }
-
     state.save_service(&service)?;
-
     Ok(SaveServiceResponse { id: service.id })
 }

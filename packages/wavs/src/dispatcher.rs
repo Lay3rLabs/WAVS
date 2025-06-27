@@ -226,7 +226,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         &self,
         chain_name: ChainName,
         address: Address,
-    ) -> Result<(), DispatcherError> {
+    ) -> Result<Service, DispatcherError> {
         let service = query_service_from_address(
             chain_name,
             address,
@@ -245,7 +245,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}", 
             service.id, service.workflows.len(), total_services, total_workflows);
 
-        Ok(())
+        Ok(service)
     }
 
     pub async fn add_service_direct(
