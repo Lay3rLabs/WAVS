@@ -7,11 +7,11 @@ use utils::{
     },
     telemetry::HttpMetrics,
 };
-use wavs_types::Digest;
+use wavs_types::ServiceID;
 
 use crate::{config::Config, dispatcher::Dispatcher};
 
-const SERVICES: Table<&[u8], JSON<wavs_types::Service>> = Table::new("services");
+const SERVICES: Table<&str, JSON<wavs_types::Service>> = Table::new("services");
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -52,21 +52,20 @@ impl HttpState {
         })
     }
 
-    pub fn load_service(&self, service_hash: &Digest) -> anyhow::Result<wavs_types::Service> {
-        match self.storage.get(SERVICES, service_hash.as_ref()) {
+    pub fn load_service(&self, service_id: &ServiceID) -> anyhow::Result<wavs_types::Service> {
+        match self.storage.get(SERVICES, service_id.as_ref()) {
             Ok(Some(service)) => Ok(service.value()),
             _ => Err(anyhow::anyhow!(
-                "Service Hash {service_hash} has not been set on the http server",
+                "Service Hash {service_id} has not been set on the http server",
             )),
         }
     }
 
     pub fn save_service(
         &self,
-        service_hash: &Digest,
         service: &wavs_types::Service,
     ) -> anyhow::Result<()> {
-        self.storage.set(SERVICES, service_hash.as_ref(), service)?;
+        self.storage.set(SERVICES, service.id.as_ref(), service)?;
 
         Ok(())
     }
