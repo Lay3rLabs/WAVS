@@ -3,6 +3,7 @@ use std::{
     sync::{atomic::AtomicUsize, Arc, RwLock},
 };
 
+use bimap::BiMap;
 use wavs_types::{ByteArray, ChainName, ServiceID, Trigger, TriggerConfig, WorkflowID};
 
 use crate::subsystems::trigger::{
@@ -23,11 +24,8 @@ pub struct LookupMaps {
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
-    // lookup by ServiceManager address, get ServiceID
-    pub service_by_manager_address: Arc<RwLock<HashMap<layer_climb::prelude::Address, ServiceID>>>,
-    // lookup by ServiceID, get ServiceManager address
-    pub service_manager_address_by_service:
-        Arc<RwLock<HashMap<ServiceID, layer_climb::prelude::Address>>>,
+    // ServiceID <-> ServiceManager address
+    pub service_manager: Arc<RwLock<BiMap<ServiceID, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
     pub block_schedulers: BlockSchedulers,
     /// lookup id by service id -> workflow id
@@ -54,8 +52,7 @@ impl LookupMaps {
             triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
             block_schedulers: BlockSchedulers::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
-            service_by_manager_address: Arc::new(RwLock::new(HashMap::new())),
-            service_manager_address_by_service: Arc::new(RwLock::new(HashMap::new())),
+            service_manager: Arc::new(RwLock::new(BiMap::new())),
             cron_scheduler: CronScheduler::default(),
         }
     }
@@ -64,12 +61,7 @@ impl LookupMaps {
         let manager_address: layer_climb::prelude::Address =
             service.manager.evm_address_unchecked().into();
 
-        self.service_by_manager_address
-            .write()
-            .unwrap()
-            .insert(manager_address.clone(), service.id.clone());
-
-        self.service_manager_address_by_service
+        self.service_manager
             .write()
             .unwrap()
             .insert(service.id.clone(), manager_address);
@@ -258,15 +250,11 @@ impl LookupMaps {
             .get(&service_id)
             .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
 
-        let mut service_by_manager_address = self.service_by_manager_address.write().unwrap();
-
-        let mut service_manager_address_by_service =
-            self.service_manager_address_by_service.write().unwrap();
-
         // Remove the service manager
-        if let Some(manager_address) = service_manager_address_by_service.remove(&service_id) {
-            service_by_manager_address.remove(&manager_address);
-        }
+        self.service_manager
+            .write()
+            .unwrap()
+            .remove_by_left(&service_id);
 
         // Collect all lookup IDs to be removed
         let lookup_ids: Vec<LookupId> = workflow_map.values().copied().collect();

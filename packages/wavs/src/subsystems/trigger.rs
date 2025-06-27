@@ -367,11 +367,13 @@ impl TriggerManager {
                             ) {
                                 Ok(decoded_event) => {
                                     let service_uri: String = decoded_event.serviceURI;
-                                    let service_by_manager_address =
-                                        self.lookup_maps.service_by_manager_address.read().unwrap();
                                     // check if this is a service we're interested in
-                                    if let Some(service_id) =
-                                        service_by_manager_address.get(&contract_address.into())
+                                    if let Some(service_id) = self
+                                        .lookup_maps
+                                        .service_manager
+                                        .read()
+                                        .unwrap()
+                                        .get_by_right(&contract_address.into())
                                     {
                                         dispatcher_commands.push(
                                             DispatcherCommand::ChangeServiceUri {

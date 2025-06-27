@@ -83,6 +83,7 @@ async-trait = "0.1.88"
 
 # collections
 dashmap = "6.1.0"
+bimap = {version = "0.6.3", features = ["serde"]}
 
 # fs
 tempfile = "3.19.1"
