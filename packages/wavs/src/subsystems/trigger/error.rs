@@ -41,7 +41,4 @@ pub enum TriggerError {
     IntervalStartAfterEnd,
     #[error("Send error: {0}")]
     ActionSendError(#[from] SendError<DispatcherCommand>),
-
-    #[error("Todo: {0}")]
-    Todo(String),
 }
