@@ -7,11 +7,11 @@ use utils::{
     },
     telemetry::HttpMetrics,
 };
-use wavs_types::Digest;
+use wavs_types::{Digest, Service, ServiceID};
 
 use crate::{config::Config, dispatcher::Dispatcher};
 
-const SERVICES: Table<&[u8], JSON<wavs_types::Service>> = Table::new("services");
+const LOCAL_SERVICE_BY_HASH_TABLE: Table<&[u8], JSON<Service>> = Table::new("services-by-hash");
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -52,22 +52,35 @@ impl HttpState {
         })
     }
 
-    pub fn load_service(&self, service_hash: &Digest) -> anyhow::Result<wavs_types::Service> {
-        match self.storage.get(SERVICES, service_hash.as_ref()) {
-            Ok(Some(service)) => Ok(service.value()),
+    pub fn load_service(&self, service_id: &ServiceID) -> anyhow::Result<wavs_types::Service> {
+        match self.dispatcher.get_service(service_id) {
+            Ok(Some(service)) => Ok(service),
             _ => Err(anyhow::anyhow!(
-                "Service Hash {service_hash} has not been set on the http server",
+                "Service Hash {service_id} has not been set on the http server",
             )),
         }
     }
 
-    pub fn save_service(
+    pub fn load_service_by_hash(
         &self,
         service_hash: &Digest,
-        service: &wavs_types::Service,
-    ) -> anyhow::Result<()> {
-        self.storage.set(SERVICES, service_hash.as_ref(), service)?;
-
-        Ok(())
+    ) -> anyhow::Result<wavs_types::Service> {
+        match self
+            .storage
+            .get(LOCAL_SERVICE_BY_HASH_TABLE, service_hash.as_ref())
+        {
+            Ok(Some(service)) => Ok(service.value()),
+            Ok(None) => Err(anyhow::anyhow!(
+                "Service Hash {} has not been set on the http server",
+                service_hash
+            )),
+            Err(e) => Err(anyhow::anyhow!("Failed to load service by hash: {}", e)),
+        }
+    }
+    pub fn save_service_by_hash(&self, service: &Service) -> anyhow::Result<Digest> {
+        let service_hash = service.hash()?;
+        self.storage
+            .set(LOCAL_SERVICE_BY_HASH_TABLE, service_hash.as_ref(), service)?;
+        Ok(service_hash)
     }
 }

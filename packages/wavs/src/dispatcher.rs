@@ -226,7 +226,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         &self,
         chain_name: ChainName,
         address: Address,
-    ) -> Result<(), DispatcherError> {
+    ) -> Result<Service, DispatcherError> {
         let service = query_service_from_address(
             chain_name,
             address,
@@ -245,7 +245,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}", 
             service.id, service.workflows.len(), total_services, total_workflows);
 
-        Ok(())
+        Ok(service)
     }
 
     pub async fn add_service_direct(
@@ -253,6 +253,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         service: Service,
         hd_index: Option<u32>,
     ) -> Result<(), DispatcherError> {
+        tracing::info!("Adding service: {}", service.id);
         // Check if service is already registered
         if self
             .db_storage
@@ -282,8 +283,17 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
+    pub fn get_service(&self, id: &ServiceID) -> Result<Option<Service>, DispatcherError> {
+        match self.db_storage.get(SERVICE_TABLE, id.as_ref()) {
+            Ok(Some(service)) => Ok(Some(service.value())),
+            Ok(None) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceID) -> Result<(), DispatcherError> {
+        tracing::info!("Removing service: {}", id);
         self.db_storage.remove(SERVICE_TABLE, id.as_ref())?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;

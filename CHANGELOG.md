@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [v0.5.0-alpha.2]
+
+### Added
+
+- WAVS: get service by service ID endpoint for all added services (not just those saved by http)
+
+### Changed
+
+- WAVS: changed endpoint for local service getting by hash to `/service-by-hash`
+
 ## [v0.5.0-alpha.1]
 
 ### Added
