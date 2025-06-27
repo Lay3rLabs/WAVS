@@ -61,10 +61,7 @@ impl HttpState {
         }
     }
 
-    pub fn save_service(
-        &self,
-        service: &wavs_types::Service,
-    ) -> anyhow::Result<()> {
+    pub fn save_service(&self, service: &wavs_types::Service) -> anyhow::Result<()> {
         self.storage.set(SERVICES, service.id.as_ref(), service)?;
 
         Ok(())

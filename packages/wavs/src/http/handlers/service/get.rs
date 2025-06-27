@@ -28,7 +28,7 @@ pub async fn handle_get_service(
 
 async fn get_service_inner(
     state: &HttpState,
-    service_id: ServiceID 
+    service_id: ServiceID,
 ) -> HttpResult<wavs_types::Service> {
     Ok(state.load_service(&service_id)?)
 }
