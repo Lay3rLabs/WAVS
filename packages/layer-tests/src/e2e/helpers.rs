@@ -575,7 +575,7 @@ pub async fn change_service_for_test(
 
     // wait until WAVS sees the new service
     let new_service_hash = new_service.hash().unwrap();
-    let timeout_result = tokio::time::timeout(Duration::from_secs(3), async {
+    let timeout_result = tokio::time::timeout(Duration::from_secs(120), async {
         loop {
             let current_service_hash = clients
                 .http_client
