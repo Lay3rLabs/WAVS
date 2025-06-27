@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning].
 ### Added
 
 - CLI: Add multiple aggregator submit
+- WAVS: Support for changing services
 
 ## [v0.4.0]
 
