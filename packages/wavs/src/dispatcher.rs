@@ -242,7 +242,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let total_services = current_services.len();
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
-        tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}", 
+        tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}",
             service.id, service.workflows.len(), total_services, total_workflows);
 
         Ok(())
@@ -402,6 +402,12 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         service_id: ServiceID,
     ) -> Result<SigningKeyResponse, DispatcherError> {
         Ok(self.submission_manager.get_service_key(service_id)?)
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    pub async fn add_chain(&self, chain_config: AnyChainConfig) -> Result<(), DispatcherError> {
+        tracing::info!("Chain added dynamically: {:?}", chain_config);
+        todo!("Implement subsystem chain addition")
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]

@@ -342,7 +342,10 @@ impl ChainConfigs {
         self.evm.keys().chain(self.cosmos.keys()).cloned().collect()
     }
 
-    pub fn add_chain(&mut self, chain_config: AnyChainConfig) -> Result<ChainName, ChainConfigError> {
+    pub fn add_chain(
+        &mut self,
+        chain_config: AnyChainConfig,
+    ) -> Result<ChainName, ChainConfigError> {
         let chain_name = match &chain_config {
             AnyChainConfig::Evm(config) => ChainName::from(config.chain_id.clone()),
             AnyChainConfig::Cosmos(config) => ChainName::from(config.chain_id.clone()),
