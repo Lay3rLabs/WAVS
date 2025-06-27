@@ -423,8 +423,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .submission_manager
             .get_service_key(service_id.clone())?;
 
-        #[cfg(debug_assertions)]
-        {
+        if tracing::enabled!(tracing::Level::INFO) {
             let old_service = self
                 .db_storage
                 .get(SERVICE_TABLE, service_id.as_ref())?
