@@ -113,10 +113,14 @@ fn http_save_service() {
 
     assert!(response.status().is_success());
 
+    let service_hash = service.hash().unwrap();
     // retrieving the wrong service id should fail even if it's a partial match
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/service/service-10")
+        .uri(format!(
+            "/service-by-hash/{}",
+            service_hash.to_string().split_off(5)
+        ))
         .body(Body::empty())
         .unwrap();
 
@@ -130,7 +134,7 @@ fn http_save_service() {
     // now get the real one and ensure it's what we originally sent
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/service/service-1")
+        .uri(format!("/service-by-hash/{service_hash}"))
         .body(Body::empty())
         .unwrap();
 
