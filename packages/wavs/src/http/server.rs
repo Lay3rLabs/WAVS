@@ -1,4 +1,7 @@
-use crate::{config::Config, dispatcher::Dispatcher, AppContext};
+use crate::{
+    config::Config, dispatcher::Dispatcher,
+    http::handlers::service::get::handle_get_service_by_hash, AppContext,
+};
 use axum::{
     extract::DefaultBodyLimit,
     routing::{delete, get, post},
@@ -72,6 +75,10 @@ pub async fn make_router(
         .layer(OtelAxumLayer::default())
         .route("/config", get(handle_config))
         .route("/service/{service_id}", get(handle_get_service))
+        .route(
+            "/service-by-hash/{service_hash}",
+            get(handle_get_service_by_hash),
+        )
         .route("/service-key/{service_id}", get(handle_get_service_key))
         .route("/save-service", post(handle_save_service))
         .route("/app", get(handle_list_services))

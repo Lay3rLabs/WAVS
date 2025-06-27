@@ -54,7 +54,7 @@ pub struct UploadComponentResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct SaveServiceResponse {
-    pub id: ServiceID,
+    pub hash: Digest,
 }
 
 #[derive(Clone, PartialEq, Eq, ToSchema)]

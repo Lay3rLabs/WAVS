@@ -33,9 +33,7 @@ async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResu
         address,
     } = req;
 
-    let service = state.dispatcher.add_service(chain_name, address).await?;
-
-    state.save_service(&service)?;
+    state.dispatcher.add_service(chain_name, address).await?;
 
     state.metrics.increment_registered_services();
 

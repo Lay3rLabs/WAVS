@@ -108,7 +108,7 @@ impl HttpClient {
         let body = serde_json::to_string(service)?;
 
         let url = format!("{}/save-service", self.endpoint);
-        let _response: SaveServiceResponse = self
+        let response: SaveServiceResponse = self
             .inner
             .post(&url)
             .header("Content-Type", "application/json")
@@ -120,7 +120,10 @@ impl HttpClient {
             .await
             .with_context(|| format!("Failed to parse response from {}", url))?;
 
-        Ok(format!("{}/service/{}", self.endpoint, service.id))
+        Ok(format!(
+            "{}/service-by-hash/{}",
+            self.endpoint, response.hash
+        ))
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
