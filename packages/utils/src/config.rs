@@ -341,6 +341,30 @@ impl ChainConfigs {
     pub fn all_chain_names(&self) -> Vec<ChainName> {
         self.evm.keys().chain(self.cosmos.keys()).cloned().collect()
     }
+
+    pub fn add_chain(&mut self, chain_config: AnyChainConfig) -> Result<ChainName, ChainConfigError> {
+        let chain_name = match &chain_config {
+            AnyChainConfig::Evm(config) => ChainName::from(config.chain_id.clone()),
+            AnyChainConfig::Cosmos(config) => ChainName::from(config.chain_id.clone()),
+        };
+
+        // Check if chain already exists
+        if self.get_chain(&chain_name)?.is_some() {
+            return Err(ChainConfigError::DuplicateChainName(chain_name.clone()));
+        }
+
+        // Add to appropriate map
+        match chain_config {
+            AnyChainConfig::Evm(config) => {
+                self.evm.insert(chain_name.clone(), config);
+            }
+            AnyChainConfig::Cosmos(config) => {
+                self.cosmos.insert(chain_name.clone(), config);
+            }
+        }
+
+        Ok(chain_name)
+    }
 }
 
 /// Cosmos chain config with extra info like faucet and mnemonic
