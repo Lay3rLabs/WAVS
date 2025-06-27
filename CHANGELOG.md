@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning].
 - CLI: Add multiple aggregator submit
 - WAVS: Support for changing services
 
+### Changed
+
+- WAVS: Local save-service and get service endpoints are by hash instead of service ID
+
 ## [v0.4.0]
 
 ### Added
