@@ -141,15 +141,12 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             self.list_component_digests()?.len()
         );
         for service in initial_services {
-            ctx.rt.block_on(async {
-                add_service_to_managers(
-                    service,
-                    &self.trigger_manager,
-                    &self.submission_manager,
-                    None,
-                )
-                .await
-            })?;
+            add_service_to_managers(
+                service,
+                &self.trigger_manager,
+                &self.submission_manager,
+                None,
+            )?;
         }
 
         // since triggers listens to the async kill signal handler and closes the channel when
@@ -266,12 +263,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         }
 
         // Store components
-        for workflow in service.workflows.values() {
-            self.engine_manager
-                .engine
-                .store_component_from_source(&workflow.component.source)
-                .await?;
-        }
+        self.engine_manager
+            .store_components_for_service(&service)
+            .await?;
 
         // Store the service
         self.db_storage
@@ -283,8 +277,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             &self.trigger_manager,
             &self.submission_manager,
             hd_index,
-        )
-        .await?;
+        )?;
 
         Ok(())
     }
@@ -499,7 +492,7 @@ async fn query_service_from_address(
 }
 
 // called at init and when a new service is added
-async fn add_service_to_managers(
+fn add_service_to_managers(
     service: Service,
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
