@@ -57,6 +57,11 @@ pub struct SaveServiceResponse {
     pub hash: Digest,
 }
 
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct AddChainResponse {
+    pub success: bool,
+}
+
 #[derive(Clone, PartialEq, Eq, ToSchema)]
 pub struct ShaDigest(Digest);
 

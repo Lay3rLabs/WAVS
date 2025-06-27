@@ -13,7 +13,7 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
-        handle_add_service, handle_config, handle_delete_service, handle_info,
+        handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_info,
         handle_list_services, handle_not_found, handle_upload_service,
         openapi::ApiDoc,
         service::{
@@ -77,6 +77,7 @@ pub async fn make_router(
         .route("/app", get(handle_list_services))
         .route("/app", post(handle_add_service))
         .route("/app", delete(handle_delete_service))
+        .route("/add-chain", post(handle_add_chain))
         .route("/info", get(handle_info))
         .route(
             "/upload",
