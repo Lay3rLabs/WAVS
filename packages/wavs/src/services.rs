@@ -4,7 +4,7 @@ use redb::ReadableTable;
 use thiserror::Error;
 use tracing::instrument;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
-use wavs_types::{Service, ServiceID};
+use wavs_types::{Service, ServiceID, ServiceStatus};
 
 const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
 
@@ -45,6 +45,15 @@ impl Services {
             Some(_) => Ok(true),
             None => Ok(false),
         }
+    }
+
+    pub fn is_active(&self, service_id: &ServiceID) -> Result<bool> {
+        self.get(service_id).map(|service| {
+            match service.status {
+                ServiceStatus::Active => true,
+                ServiceStatus::Paused => false,
+            }
+        })
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]

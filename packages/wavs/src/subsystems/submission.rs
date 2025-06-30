@@ -79,13 +79,30 @@ impl SubmissionManager {
                     _ = async move {
                     } => {
                         while let Some(msg) = rx.recv().await {
-                            _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
                             let ChainMessage {
                                 packet_route,
                                 envelope,
                                 submit
                             } = msg;
+
+                            // Check if the service is active
+                            match _self.services.is_active(&packet_route.service_id) {
+                                Ok(true) => {
+                                    // Service is active, proceed with submission
+                                }
+                                Ok(false) => {
+                                    tracing::warn!("Service {} is not active, skipping message", packet_route.service_id);
+                                    continue;
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to check service status: {:?}", e);
+                                    continue;
+                                }
+                            }
+
+
+                            _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
 
 
                             let packet = match _self.make_packet(packet_route, envelope).await {

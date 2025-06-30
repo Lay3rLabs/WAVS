@@ -54,7 +54,7 @@ impl SetupConfig {
 
 impl Setup {
     pub fn new(setup_config: SetupConfig) -> Arc<Self> {
-        let mut config = wavs::config::Config::default();
+        let config = wavs::config::Config::default();
         let data_dir = tempfile::tempdir().unwrap();
         let metrics = Metrics::new(&meter("wavs-benchmark"));
 
