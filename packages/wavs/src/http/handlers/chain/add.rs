@@ -44,7 +44,7 @@ async fn add_chain_inner(
         .dispatcher
         .chain_configs
         .write()
-        .unwrap()
+        .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
         .add_chain(chain_name, chain_config)?;
     Ok(())
 }
