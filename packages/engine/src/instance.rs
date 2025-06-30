@@ -5,6 +5,7 @@ use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_http::WasiHttpCtx;
+use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 use wavs_types::{AllowedHostPermission, ServiceID, Workflow, WorkflowID};
 
 use crate::{EngineError, HostComponent, HostComponentLogger};
@@ -57,6 +58,11 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         if permissions.allowed_http_hosts != AllowedHostPermission::None {
             wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
         }
+        
+        // add keyvalue support
+        wasmtime_wasi_keyvalue::add_to_linker(&mut linker, |h: &mut HostComponent| {
+            WasiKeyValue::new(&h.keyvalue, &mut h.table)
+        }).unwrap();
 
         // create wasi context
         let mut builder = WasiCtxBuilder::new();
@@ -107,6 +113,9 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         let ctx = builder.build();
 
+        // create keyvalue context
+        let keyvalue = WasiKeyValueCtxBuilder::new().build();
+
         // create host (what is this actually? some state needed for the linker?)
         let host = HostComponent {
             workflow,
@@ -116,6 +125,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             table: wasmtime::component::ResourceTable::new(),
             ctx,
             http: WasiHttpCtx::new(),
+            keyvalue,
             inner_log: log,
         };
 

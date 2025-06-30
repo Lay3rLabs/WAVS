@@ -1,6 +1,7 @@
 use utils::config::ChainConfigs;
 use wasmtime_wasi::{IoView, WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_keyvalue::WasiKeyValueCtx;
 use wavs_types::{Digest, ServiceID, Workflow, WorkflowID};
 
 use crate::bindings::world::host::LogLevel;
@@ -15,6 +16,7 @@ pub struct HostComponent {
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,
+    pub(crate) keyvalue: WasiKeyValueCtx,
     pub(crate) inner_log: HostComponentLogger,
 }
 
@@ -37,3 +39,4 @@ impl WasiHttpView for HostComponent {
         &mut self.http
     }
 }
+
