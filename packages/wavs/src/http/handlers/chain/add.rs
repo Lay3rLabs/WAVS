@@ -40,6 +40,11 @@ async fn add_chain_inner(
     chain_name: ChainName,
     chain_config: AnyChainConfig,
 ) -> HttpResult<()> {
-    state.dispatcher.add_chain(chain_name, chain_config)?;
+    state
+        .dispatcher
+        .chain_configs
+        .write()
+        .unwrap()
+        .add_chain(chain_name, chain_config)?;
     Ok(())
 }

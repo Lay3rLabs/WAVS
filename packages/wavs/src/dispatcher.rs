@@ -402,21 +402,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn add_chain(
-        &self,
-        chain_name: ChainName,
-        chain_config: AnyChainConfig,
-    ) -> Result<(), DispatcherError> {
-        self.chain_configs
-            .write()
-            .unwrap()
-            .add_chain(chain_name.clone(), chain_config.clone())?;
-
-        tracing::info!("Chain added dynamically: {:?}", chain_config);
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     async fn change_service(
         &self,
         service_id: ServiceID,
