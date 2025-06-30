@@ -81,12 +81,12 @@ pub async fn deploy_service_for_test(
         workflows.insert(workflow_id.clone(), workflow);
     }
 
-    // Create the service
-    let service = Service {
+    // Create the service in Paused state
+    let mut service = Service {
         id: service_id,
         name: test.name.clone(),
         workflows,
-        status: ServiceStatus::Active,
+        status: ServiceStatus::Paused,
         manager: ServiceManager::Evm {
             chain_name: test.service_manager_chain.clone(),
             address: service_manager_address,
@@ -116,27 +116,6 @@ pub async fn deploy_service_for_test(
         }
     }
 
-
-    // give signer address some weight in the service manager
-    #[allow(irrefutable_let_patterns)]
-    if let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients
-        .http_client
-        .get_service_key(service.id.clone())
-        .await
-        .unwrap()
-    {
-        let service_manager =
-            SimpleServiceManager::new(service_manager_address, submit_client.provider.clone());
-        service_manager
-            .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-    }
-
     // Deploy the service on WAVS
     DeployService::run(
         &clients.cli_ctx,
@@ -150,6 +129,53 @@ pub async fn deploy_service_for_test(
     )
     .await
     .unwrap();
+
+
+    // give signer address some weight in the service manager
+    let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients
+        .http_client
+        .get_service_key(service.id.clone())
+        .await
+        .unwrap();
+
+    let service_manager =
+            SimpleServiceManager::new(service_manager_address, submit_client.provider.clone());
+        service_manager
+            .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
+            .send()
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+    
+    // activate the service
+    // requires:
+    // 1. Changing the service JSON to active
+    // 2. Getting a URL for that updated JSON
+    // 3. Setting that URI on the service manager
+    // 4. waiting for that updated service to be observable on WAVS
+
+    service.status = ServiceStatus::Active;
+
+    let service_url = DeployService::save_service(&clients.cli_ctx, &service)
+        .await
+        .unwrap();
+
+    service_manager
+        .setServiceURI(service_url)
+        .send()
+        .await
+        .unwrap()
+        .watch()
+        .await
+        .unwrap();
+
+    // wait until WAVS sees the new service
+    clients.http_client
+        .wait_for_service_update(&service, None)
+        .await
+        .unwrap();
 
     service
 }
@@ -575,29 +601,8 @@ pub async fn change_service_for_test(
         .unwrap();
 
     // wait until WAVS sees the new service
-    let new_service_hash = new_service.hash().unwrap();
-    let timeout_result = tokio::time::timeout(Duration::from_secs(120), async {
-        loop {
-            let current_service_hash = clients
-                .http_client
-                .get_service_from_node(&new_service.id)
-                .await
-                .unwrap()
-                .hash()
-                .unwrap();
-
-            if current_service_hash == new_service_hash {
-                break;
-            }
-
-            tracing::info!("Waiting for service update: {}", new_service.id);
-
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await;
-
-    if timeout_result.is_err() {
-        tracing::error!("Timeout while waiting for service update");
-    }
+    clients.http_client
+        .wait_for_service_update(&new_service, None)
+        .await
+        .unwrap();
 }

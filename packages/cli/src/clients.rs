@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
@@ -152,4 +154,29 @@ impl HttpClient {
             .await
             .map_err(|e| e.into())
     }
+
+    pub async fn wait_for_service_update(&self, service: &Service, timeout: Option<Duration>) -> Result<()> {
+        // wait until WAVS sees the new service
+        let service_hash = service.hash()?;
+        tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(120)), async {
+            loop {
+                tracing::warn!("Waiting for service update: {}", service.id);
+
+                let current_service_hash = self
+                    .get_service_from_node(&service.id)
+                    .await?
+                    .hash()?;
+
+                if current_service_hash == service_hash {
+                    break Ok(());
+                }
+
+
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await?
+    }
+
+
 }
