@@ -37,7 +37,7 @@ use wavs_types::{
 
 #[derive(Clone)]
 pub struct TriggerManager {
-    pub chain_configs: ChainConfigs,
+    pub chain_configs: Arc<std::sync::RwLock<ChainConfigs>>,
     dispatcher_command_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<DispatcherCommand>>>>,
     dispatcher_command_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<DispatcherCommand>>>>,
     local_command_sender: Arc<std::sync::Mutex<Option<mpsc::UnboundedSender<LocalStreamCommand>>>>,
@@ -56,7 +56,7 @@ impl TriggerManager {
             mpsc::channel(TRIGGER_CHANNEL_SIZE);
 
         Ok(Self {
-            chain_configs: config.chains.clone(),
+            chain_configs: Arc::new(std::sync::RwLock::new(config.chains.clone())),
             lookup_maps: Arc::new(LookupMaps::new()),
             dispatcher_command_sender: Arc::new(std::sync::Mutex::new(Some(
                 dispatcher_command_sender,
@@ -115,8 +115,10 @@ impl TriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn add_chain(&mut self, chain_config: &AnyChainConfig) -> Result<(), TriggerError> {
+    pub fn add_chain(&self, chain_config: &AnyChainConfig) -> Result<(), TriggerError> {
         self.chain_configs
+            .write()
+            .unwrap()
             .add_chain(chain_config.clone())
             .map_err(|e| TriggerError::Config(format!("Failed to add chain: {}", e)))?;
         tracing::info!("TriggerManager: Chain added successfully");
@@ -261,19 +263,23 @@ impl TriggerManager {
                             // insert right away, before we get to an await point
                             listening_chains.insert(chain_name.clone());
 
-                            let chain_config = match self.chain_configs.get_chain(&chain_name) {
-                                Ok(config) => match config {
-                                    Some(config) => config,
-                                    None => {
-                                        tracing::error!("No chain config found for {}", chain_name);
+                            let chain_config =
+                                match self.chain_configs.read().unwrap().get_chain(&chain_name) {
+                                    Ok(config) => match config {
+                                        Some(config) => config,
+                                        None => {
+                                            tracing::error!(
+                                                "No chain config found for {}",
+                                                chain_name
+                                            );
+                                            continue;
+                                        }
+                                    },
+                                    Err(e) => {
+                                        tracing::error!("{:?}", e);
                                         continue;
                                     }
-                                },
-                                Err(e) => {
-                                    tracing::error!("{:?}", e);
-                                    continue;
-                                }
-                            };
+                                };
 
                             match chain_config {
                                 AnyChainConfig::Cosmos(chain_config) => {
