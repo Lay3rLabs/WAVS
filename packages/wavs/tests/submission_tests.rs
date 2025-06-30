@@ -1,11 +1,11 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
 use wavs_types::{ChainName, Envelope, PacketRoute, ServiceManager, Submit};
 
 use utils::{
-    context::AppContext, telemetry::SubmissionMetrics, test_utils::address::rand_address_evm,
+    context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics, test_utils::address::rand_address_evm
 };
 
 mod wavs_systems;
@@ -38,7 +38,12 @@ fn collect_messages_with_wait() {
     };
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = SubmissionMetrics::new(&meter);
-    let submission_manager = SubmissionManager::new(&config, metrics).unwrap();
+    let data_dir = tempfile::tempdir().unwrap();
+    let data_dir = data_dir.path().join("db");
+    let services = wavs::services::Services::new(
+        Arc::new(RedbStorage::new(data_dir).unwrap()),
+    );
+    let submission_manager = SubmissionManager::new(&config, metrics, services).unwrap();
 
     assert_eq!(submission_manager.get_message_count(), 0);
 

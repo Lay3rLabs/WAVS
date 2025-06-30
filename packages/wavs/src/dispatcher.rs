@@ -83,7 +83,9 @@ impl Dispatcher<FileStorage> {
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
 
-        let trigger_manager = TriggerManager::new(config, metrics.trigger)?;
+        let services = Services::new(db_storage);
+
+        let trigger_manager = TriggerManager::new(config, metrics.trigger, services.clone())?;
 
         let app_storage = config.data.join("app");
         let engine = WasmEngine::new(
@@ -95,15 +97,15 @@ impl Dispatcher<FileStorage> {
             Some(config.max_execution_seconds),
             metrics.engine,
         );
-        let engine_manager = EngineManager::new(engine, config.wasm_threads);
+        let engine_manager = EngineManager::new(engine, config.wasm_threads, services.clone());
 
-        let submission_manager = SubmissionManager::new(config, metrics.submission)?;
+        let submission_manager = SubmissionManager::new(config, metrics.submission, services.clone())?;
 
         Ok(Self {
             trigger_manager,
             engine_manager,
             submission_manager,
-            services: Services::new(db_storage),
+            services,
             chain_configs: config.chains.clone(),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),

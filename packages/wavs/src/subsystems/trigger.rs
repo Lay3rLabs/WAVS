@@ -4,9 +4,7 @@ pub mod schedulers;
 pub mod streams;
 
 use crate::{
-    config::Config,
-    dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
-    AppContext,
+    config::Config, dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE}, services::Services, AppContext
 };
 use alloy_sol_types::SolEvent;
 use anyhow::Result;
@@ -45,12 +43,13 @@ pub struct TriggerManager {
     metrics: TriggerMetrics,
     #[cfg(debug_assertions)]
     pub disable_networking: bool,
+    pub services: Services,
 }
 
 impl TriggerManager {
     #[allow(clippy::new_without_default)]
-    #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
-    pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
+    #[instrument(level = "debug", skip(services), fields(subsys = "TriggerManager"))]
+    pub fn new(config: &Config, metrics: TriggerMetrics, services: Services) -> Result<Self, TriggerError> {
         // TODO - discuss unbounded, crossbeam, etc.
         let (dispatcher_command_sender, dispatcher_command_receiver) =
             mpsc::channel(TRIGGER_CHANNEL_SIZE);
@@ -68,6 +67,7 @@ impl TriggerManager {
             metrics,
             #[cfg(debug_assertions)]
             disable_networking: false,
+            services,
         })
     }
 

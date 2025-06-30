@@ -14,6 +14,7 @@ use wavs_types::{
     Digest, Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction, WorkflowID,
 };
 
+use crate::services::Services;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
 use crate::subsystems::submission::chain_message::ChainMessage;
 use crate::AppContext;
@@ -21,6 +22,7 @@ use crate::AppContext;
 pub struct EngineManager<S: CAStorage> {
     pub engine: Arc<WasmEngine<S>>,
     pub thread_count: usize,
+    pub services: Services,
 }
 
 impl<S: CAStorage> Clone for EngineManager<S> {
@@ -28,15 +30,17 @@ impl<S: CAStorage> Clone for EngineManager<S> {
         Self {
             engine: Arc::clone(&self.engine),
             thread_count: self.thread_count,
+            services: self.services.clone(),
         }
     }
 }
 
 impl<S: CAStorage> EngineManager<S> {
-    pub fn new(engine: WasmEngine<S>, thread_count: usize) -> Self {
+    pub fn new(engine: WasmEngine<S>, thread_count: usize, services: Services) -> Self {
         Self {
             engine: Arc::new(engine),
             thread_count,
+            services,
         }
     }
 

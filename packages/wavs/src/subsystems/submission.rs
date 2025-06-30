@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use crate::{config::Config, AppContext};
+use crate::{config::Config, services::Services, AppContext};
 use alloy_signer_local::PrivateKeySigner;
 use chain_message::ChainMessage;
 use error::SubmissionError;
@@ -34,6 +34,7 @@ pub struct SubmissionManager {
     pub debug_packets: Arc<RwLock<Vec<Packet>>>,
     #[cfg(debug_assertions)]
     pub disable_networking: bool,
+    pub services: Services,
 }
 
 struct SignerInfo {
@@ -43,8 +44,8 @@ struct SignerInfo {
 
 impl SubmissionManager {
     #[allow(clippy::new_without_default)]
-    #[instrument(level = "debug", fields(subsys = "Submission"))]
-    pub fn new(config: &Config, metrics: SubmissionMetrics) -> Result<Self, SubmissionError> {
+    #[instrument(level = "debug", skip(services), fields(subsys = "Submission"))]
+    pub fn new(config: &Config, metrics: SubmissionMetrics, services: Services) -> Result<Self, SubmissionError> {
         Ok(Self {
             http_client: reqwest::Client::new(),
             evm_signers: Arc::new(RwLock::new(HashMap::new())),
@@ -56,6 +57,7 @@ impl SubmissionManager {
             debug_packets: Arc::new(RwLock::new(Vec::new())),
             #[cfg(debug_assertions)]
             disable_networking: false,
+            services
         })
     }
 

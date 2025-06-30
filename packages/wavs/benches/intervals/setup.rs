@@ -4,9 +4,10 @@ use std::{
 };
 
 use opentelemetry::global::meter;
+use tempfile::TempDir;
 use tokio::sync::mpsc;
-use utils::telemetry::Metrics;
-use wavs::{dispatcher::DispatcherCommand, subsystems::trigger::TriggerManager};
+use utils::{storage::db::RedbStorage, telemetry::Metrics};
+use wavs::{dispatcher::DispatcherCommand, services::Services, subsystems::trigger::TriggerManager};
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 use wavs_types::{ChainName, Trigger, TriggerConfig};
 
@@ -16,6 +17,7 @@ pub struct Setup {
     pub trigger_manager: TriggerManager,
     pub dispatcher_command_receiver: Mutex<Option<mpsc::Receiver<DispatcherCommand>>>,
     pub config: SetupConfig,
+    _data_dir: TempDir,
 }
 
 #[derive(Clone, Copy)]
@@ -52,10 +54,12 @@ impl SetupConfig {
 
 impl Setup {
     pub fn new(setup_config: SetupConfig) -> Arc<Self> {
-        let config = wavs::config::Config::default();
+        let mut config = wavs::config::Config::default();
+        let data_dir = tempfile::tempdir().unwrap();
         let metrics = Metrics::new(&meter("wavs-benchmark"));
 
-        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger).unwrap();
+        let db_storage = Arc::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
+        let trigger_manager = TriggerManager::new(&config, metrics.wavs.trigger, Services::new(db_storage)).unwrap();
         let receiver = trigger_manager.start(APP_CONTEXT.clone()).unwrap();
 
         let mut chain_names = Vec::with_capacity(setup_config.n_chains as usize);
@@ -97,6 +101,7 @@ impl Setup {
             dispatcher_command_receiver: Mutex::new(Some(receiver)),
             chain_names,
             config: setup_config,
+            _data_dir: data_dir
         })
     }
 }
