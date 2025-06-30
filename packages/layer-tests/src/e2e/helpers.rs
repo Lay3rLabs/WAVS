@@ -574,17 +574,22 @@ pub async fn change_service_for_test(
         .unwrap();
 
     // wait until WAVS sees the new service
-    let service_hash = new_service.hash().unwrap();
-    let timeout_result = tokio::time::timeout(Duration::from_secs(3), async {
+    let new_service_hash = new_service.hash().unwrap();
+    let timeout_result = tokio::time::timeout(Duration::from_secs(120), async {
         loop {
-            let resp = clients
+            let current_service_hash = clients
                 .http_client
-                .get_service_from_node(&service_hash)
-                .await;
+                .get_service_from_node(&new_service.id)
+                .await
+                .unwrap()
+                .hash()
+                .unwrap();
 
-            if resp.is_ok() {
+            if current_service_hash == new_service_hash {
                 break;
             }
+
+            tracing::info!("Waiting for service update: {}", new_service.id);
 
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
