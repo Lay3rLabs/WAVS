@@ -184,7 +184,7 @@ impl SubmissionManager {
             .read()
             .unwrap()
             .get(&service_id)
-            .ok_or(SubmissionError::MissingMnemonic)
+            .ok_or(SubmissionError::MissingServiceKey { service_id })
             .map(
                 |SignerInfo { signer, hd_index }| SigningKeyResponse::Secp256k1 {
                     hd_index: *hd_index,

@@ -127,13 +127,20 @@ impl HttpClient {
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
-        self.inner
+        let text = self.inner
             .get(format!("{}/service-key/{service_id}", self.endpoint))
             .send()
             .await?
-            .json()
-            .await
-            .map_err(|e| e.into())
+            .text()
+            .await?;
+
+        match serde_json::from_str(&text) {
+            Ok(response) => Ok(response),
+            Err(_) => {
+                // If the response is not JSON, return it as an error
+                Err(anyhow::anyhow!("Failed to parse response as SigningKeyResponse: {}", text))
+            }
+        }
     }
 
     pub async fn get_service_from_node(&self, service_id: &ServiceID) -> Result<Service> {

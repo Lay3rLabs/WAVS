@@ -116,19 +116,6 @@ pub async fn deploy_service_for_test(
         }
     }
 
-    // Deploy the service on WAVS
-    DeployService::run(
-        &clients.cli_ctx,
-        DeployServiceArgs {
-            service: service.clone(),
-            set_service_url_args: Some(SetServiceUrlArgs {
-                provider: submit_client.provider.clone(),
-                service_url: service_url.clone(),
-            }),
-        },
-    )
-    .await
-    .unwrap();
 
     // give signer address some weight in the service manager
     #[allow(irrefutable_let_patterns)]
@@ -149,6 +136,20 @@ pub async fn deploy_service_for_test(
             .await
             .unwrap();
     }
+
+    // Deploy the service on WAVS
+    DeployService::run(
+        &clients.cli_ctx,
+        DeployServiceArgs {
+            service: service.clone(),
+            set_service_url_args: Some(SetServiceUrlArgs {
+                provider: submit_client.provider.clone(),
+                service_url: service_url.clone(),
+            }),
+        },
+    )
+    .await
+    .unwrap();
 
     service
 }
