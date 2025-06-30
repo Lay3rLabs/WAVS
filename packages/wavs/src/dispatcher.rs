@@ -77,7 +77,6 @@ pub struct Dispatcher<S: CAStorage> {
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
     ChangeServiceUri { service_id: ServiceID, uri: String },
-    AddChain { chain_config: AnyChainConfig },
 }
 
 impl Dispatcher<FileStorage> {
@@ -187,11 +186,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             tracing::error!("Error changing service in managers: {:?}", err);
                         }
                     });
-                }
-                DispatcherCommand::AddChain { chain_config } => {
-                    if let Err(err) = self.add_chain_direct(chain_config) {
-                        tracing::error!("Error adding chain to managers: {:?}", err);
-                    }
                 }
             }
         }
@@ -408,24 +402,18 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub async fn add_chain(&self, chain_config: AnyChainConfig) -> Result<(), DispatcherError> {
-        self.trigger_manager
-            .send_dispatcher_commands(std::iter::once(DispatcherCommand::AddChain {
-                chain_config,
-            }))
-            .await?;
-        Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    fn add_chain_direct(&self, chain_config: AnyChainConfig) -> Result<(), DispatcherError> {
+    pub fn add_chain(
+        &self,
+        chain_name: ChainName,
+        chain_config: AnyChainConfig,
+    ) -> Result<(), DispatcherError> {
         self.chain_configs
             .write()
             .unwrap()
-            .add_chain(chain_config.clone())?;
+            .add_chain(chain_name.clone(), chain_config.clone())?;
 
-        self.engine_manager.add_chain(&chain_config)?;
-        self.trigger_manager.add_chain(&chain_config)?;
+        self.engine_manager.add_chain(&chain_name, &chain_config)?;
+        self.trigger_manager.add_chain(&chain_name, &chain_config)?;
 
         tracing::info!("Chain added dynamically: {:?}", chain_config);
         Ok(())

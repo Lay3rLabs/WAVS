@@ -115,11 +115,15 @@ impl TriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn add_chain(&self, chain_config: &AnyChainConfig) -> Result<(), TriggerError> {
+    pub fn add_chain(
+        &self,
+        chain_name: &ChainName,
+        chain_config: &AnyChainConfig,
+    ) -> Result<(), TriggerError> {
         self.chain_configs
             .write()
             .unwrap()
-            .add_chain(chain_config.clone())
+            .add_chain(chain_name.clone(), chain_config.clone())
             .map_err(|e| TriggerError::Config(format!("Failed to add chain: {}", e)))?;
         tracing::info!("TriggerManager: Chain added successfully");
         Ok(())

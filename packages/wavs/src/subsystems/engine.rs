@@ -11,7 +11,8 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{
-    Digest, Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction, WorkflowID,
+    ChainName, Digest, Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction,
+    WorkflowID,
 };
 
 use crate::subsystems::engine::wasm_engine::WasmEngine;
@@ -89,9 +90,10 @@ impl<S: CAStorage> EngineManager<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     pub fn add_chain(
         &self,
+        chain_name: &ChainName,
         chain_config: &utils::config::AnyChainConfig,
     ) -> Result<(), EngineError> {
-        self.engine.add_chain(chain_config)
+        self.engine.add_chain(chain_name, chain_config)
     }
 
     fn run_trigger(

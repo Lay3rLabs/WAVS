@@ -344,27 +344,23 @@ impl ChainConfigs {
 
     pub fn add_chain(
         &mut self,
+        chain_name: ChainName,
         chain_config: AnyChainConfig,
-    ) -> Result<ChainName, ChainConfigError> {
-        let chain_name = match &chain_config {
-            AnyChainConfig::Evm(config) => ChainName::new(config.chain_id.clone())?,
-            AnyChainConfig::Cosmos(config) => ChainName::new(config.chain_id.clone())?,
-        };
-
+    ) -> Result<(), ChainConfigError> {
         if self.get_chain(&chain_name)?.is_some() {
             return Err(ChainConfigError::DuplicateChainName(chain_name.clone()));
         }
 
         match chain_config {
             AnyChainConfig::Evm(config) => {
-                self.evm.insert(chain_name.clone(), config);
+                self.evm.insert(chain_name, config);
             }
             AnyChainConfig::Cosmos(config) => {
-                self.cosmos.insert(chain_name.clone(), config);
+                self.cosmos.insert(chain_name, config);
             }
         }
 
-        Ok(chain_name)
+        Ok(())
     }
 }
 
