@@ -1,0 +1,17 @@
+[package]
+name = "kv-store"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+wstd = { workspace = true }
+example-helpers = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "wavs-tests:kv-store"

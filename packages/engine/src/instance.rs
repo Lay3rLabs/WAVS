@@ -58,8 +58,6 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         if permissions.allowed_http_hosts != AllowedHostPermission::None {
             wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
         }
-
-        // add keyvalue support
         wasmtime_wasi_keyvalue::add_to_linker(&mut linker, |h: &mut HostComponent| {
             WasiKeyValue::new(&h.keyvalue, &mut h.table)
         })

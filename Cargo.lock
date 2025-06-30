@@ -4355,6 +4355,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kv-store"
+version = "0.5.0-alpha.2"
+dependencies = [
+ "example-helpers",
+ "wstd",
+]
+
+[[package]]
 name = "layer-climb"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
