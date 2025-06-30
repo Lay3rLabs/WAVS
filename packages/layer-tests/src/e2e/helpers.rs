@@ -130,7 +130,6 @@ pub async fn deploy_service_for_test(
     .await
     .unwrap();
 
-
     // give signer address some weight in the service manager
     let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients
         .http_client
@@ -139,16 +138,16 @@ pub async fn deploy_service_for_test(
         .unwrap();
 
     let service_manager =
-            SimpleServiceManager::new(service_manager_address, submit_client.provider.clone());
-        service_manager
-            .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-    
+        SimpleServiceManager::new(service_manager_address, submit_client.provider.clone());
+    service_manager
+        .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
+        .send()
+        .await
+        .unwrap()
+        .watch()
+        .await
+        .unwrap();
+
     // activate the service
     // requires:
     // 1. Changing the service JSON to active
@@ -172,7 +171,8 @@ pub async fn deploy_service_for_test(
         .unwrap();
 
     // wait until WAVS sees the new service
-    clients.http_client
+    clients
+        .http_client
         .wait_for_service_update(&service, None)
         .await
         .unwrap();
@@ -601,7 +601,8 @@ pub async fn change_service_for_test(
         .unwrap();
 
     // wait until WAVS sees the new service
-    clients.http_client
+    clients
+        .http_client
         .wait_for_service_update(&new_service, None)
         .await
         .unwrap();

@@ -62,7 +62,6 @@ pub const TRIGGER_CHANNEL_SIZE: usize = 100;
 pub const ENGINE_CHANNEL_SIZE: usize = 20;
 pub const SUBMISSION_CHANNEL_SIZE: usize = 20;
 
-
 pub struct Dispatcher<S: CAStorage> {
     pub trigger_manager: TriggerManager,
     pub engine_manager: EngineManager<S>,
@@ -99,7 +98,8 @@ impl Dispatcher<FileStorage> {
         );
         let engine_manager = EngineManager::new(engine, config.wasm_threads, services.clone());
 
-        let submission_manager = SubmissionManager::new(config, metrics.submission, services.clone())?;
+        let submission_manager =
+            SubmissionManager::new(config, metrics.submission, services.clone())?;
 
         Ok(Self {
             trigger_manager,
@@ -274,7 +274,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceID) -> Result<(), DispatcherError> {
         tracing::info!("Removing service: {}", id);
@@ -296,7 +295,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
         Ok(())
     }
-
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn get_service_key(

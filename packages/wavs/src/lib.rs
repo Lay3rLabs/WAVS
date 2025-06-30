@@ -2,8 +2,8 @@ pub mod args;
 pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
 pub mod http;
-pub mod subsystems; // subsystems: engine, submission, and trigger
-pub mod services; // services lookup
+pub mod services;
+pub mod subsystems; // subsystems: engine, submission, and trigger // services lookup
 
 use config::Config;
 use dispatcher::Dispatcher;

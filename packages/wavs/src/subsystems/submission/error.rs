@@ -11,9 +11,7 @@ pub enum SubmissionError {
     #[error("missing mnemonic")]
     MissingMnemonic,
     #[error("missing key for service {service_id}")]
-    MissingServiceKey {
-        service_id: ServiceID,
-    },
+    MissingServiceKey { service_id: ServiceID },
     #[error("faucet url: {0}")]
     FaucetUrl(url::ParseError),
     #[error("reqwest: {0}")]

@@ -4,7 +4,10 @@ pub mod schedulers;
 pub mod streams;
 
 use crate::{
-    config::Config, dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE}, services::Services, AppContext
+    config::Config,
+    dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
+    services::Services,
+    AppContext,
 };
 use alloy_sol_types::SolEvent;
 use anyhow::Result;
@@ -49,7 +52,11 @@ pub struct TriggerManager {
 impl TriggerManager {
     #[allow(clippy::new_without_default)]
     #[instrument(level = "debug", skip(services), fields(subsys = "TriggerManager"))]
-    pub fn new(config: &Config, metrics: TriggerMetrics, services: Services) -> Result<Self, TriggerError> {
+    pub fn new(
+        config: &Config,
+        metrics: TriggerMetrics,
+        services: Services,
+    ) -> Result<Self, TriggerError> {
         // TODO - discuss unbounded, crossbeam, etc.
         let (dispatcher_command_sender, dispatcher_command_receiver) =
             mpsc::channel(TRIGGER_CHANNEL_SIZE);
@@ -438,7 +445,9 @@ impl TriggerManager {
                                 contract_address.clone(),
                                 event.ty.clone(),
                             )) {
-                                for trigger_config in self.lookup_maps.get_trigger_configs(lookup_ids) {
+                                for trigger_config in
+                                    self.lookup_maps.get_trigger_configs(lookup_ids)
+                                {
                                     dispatcher_commands.push(DispatcherCommand::Trigger(
                                         TriggerAction {
                                             data: TriggerData::CosmosContractEvent {
@@ -469,12 +478,10 @@ impl TriggerManager {
                     lookup_ids,
                 } => {
                     for trigger_config in self.lookup_maps.get_trigger_configs(&lookup_ids) {
-                        dispatcher_commands.push(DispatcherCommand::Trigger(
-                            TriggerAction {
-                                data: TriggerData::Cron { trigger_time },
-                                config: trigger_config.clone(),
-                            },
-                        ));
+                        dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                            data: TriggerData::Cron { trigger_time },
+                            config: trigger_config.clone(),
+                        }));
                     }
                 }
             }
@@ -527,7 +534,8 @@ impl TriggerManager {
 
         // Convert lookup_ids to TriggerActions
         if !firing_lookup_ids.is_empty() {
-            let dispatcher_commands = self.lookup_maps.get_trigger_configs(&firing_lookup_ids)
+            self.lookup_maps
+                .get_trigger_configs(&firing_lookup_ids)
                 .into_iter()
                 .map(|trigger_config| {
                     DispatcherCommand::Trigger(TriggerAction {
@@ -538,10 +546,7 @@ impl TriggerManager {
                         config: trigger_config,
                     })
                 })
-                .collect();
-
-
-            dispatcher_commands
+                .collect()
         } else {
             Vec::new()
         }

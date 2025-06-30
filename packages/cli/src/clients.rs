@@ -129,7 +129,8 @@ impl HttpClient {
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
-        let text = self.inner
+        let text = self
+            .inner
             .get(format!("{}/service-key/{service_id}", self.endpoint))
             .send()
             .await?
@@ -140,7 +141,10 @@ impl HttpClient {
             Ok(response) => Ok(response),
             Err(_) => {
                 // If the response is not JSON, return it as an error
-                Err(anyhow::anyhow!("Failed to parse response as SigningKeyResponse: {}", text))
+                Err(anyhow::anyhow!(
+                    "Failed to parse response as SigningKeyResponse: {}",
+                    text
+                ))
             }
         }
     }
@@ -155,28 +159,26 @@ impl HttpClient {
             .map_err(|e| e.into())
     }
 
-    pub async fn wait_for_service_update(&self, service: &Service, timeout: Option<Duration>) -> Result<()> {
+    pub async fn wait_for_service_update(
+        &self,
+        service: &Service,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
         // wait until WAVS sees the new service
         let service_hash = service.hash()?;
         tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(120)), async {
             loop {
                 tracing::warn!("Waiting for service update: {}", service.id);
 
-                let current_service_hash = self
-                    .get_service_from_node(&service.id)
-                    .await?
-                    .hash()?;
+                let current_service_hash = self.get_service_from_node(&service.id).await?.hash()?;
 
                 if current_service_hash == service_hash {
                     break Ok(());
                 }
-
 
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         })
         .await?
     }
-
-
 }

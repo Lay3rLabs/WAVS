@@ -31,11 +31,9 @@ impl Services {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
     pub fn get(&self, service_id: &ServiceID) -> Result<Service> {
-        match self
-            .try_get(service_id)?
-        {
+        match self.try_get(service_id)? {
             Some(service) => Ok(service),
-            None => Err(ServicesError::UnknownService(service_id.clone()))
+            None => Err(ServicesError::UnknownService(service_id.clone())),
         }
     }
 
@@ -48,11 +46,9 @@ impl Services {
     }
 
     pub fn is_active(&self, service_id: &ServiceID) -> Result<bool> {
-        self.get(service_id).map(|service| {
-            match service.status {
-                ServiceStatus::Active => true,
-                ServiceStatus::Paused => false,
-            }
+        self.get(service_id).map(|service| match service.status {
+            ServiceStatus::Active => true,
+            ServiceStatus::Paused => false,
         })
     }
 
@@ -71,11 +67,7 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn list(
-        &self,
-        bounds_start: Bound<&str>,
-        bounds_end: Bound<&str>,
-    ) -> Result<Vec<Service>> {
+    pub fn list(&self, bounds_start: Bound<&str>, bounds_end: Bound<&str>) -> Result<Vec<Service>> {
         let res = self
             .db_storage
             .map_table_read(SERVICE_TABLE, |table| match table {
@@ -163,7 +155,6 @@ impl Services {
         Ok(res)
     }
 }
-
 
 #[derive(Error, Debug)]
 pub enum ServicesError {

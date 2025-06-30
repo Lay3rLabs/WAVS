@@ -5,7 +5,10 @@ use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, Workfl
 
 use layer_climb::prelude::*;
 use utils::{
-    config::{ChainConfigs, CosmosChainConfig, EvmChainConfig}, storage::db::RedbStorage, telemetry::TriggerMetrics, test_utils::address::{rand_address_evm, rand_event_evm}
+    config::{ChainConfigs, CosmosChainConfig, EvmChainConfig},
+    storage::db::RedbStorage,
+    telemetry::TriggerMetrics,
+    test_utils::address::{rand_address_evm, rand_event_evm},
 };
 
 #[test]
@@ -43,13 +46,13 @@ fn core_trigger_lookups() {
     };
 
     let data_dir = tempfile::tempdir().unwrap();
-    let services = wavs::services::Services::new(
-        Arc::new(RedbStorage::new(data_dir.path().join("db")).unwrap())
-    );
+    let services = wavs::services::Services::new(Arc::new(
+        RedbStorage::new(data_dir.path().join("db")).unwrap(),
+    ));
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
-        services
+        services,
     )
     .unwrap();
 
@@ -197,13 +200,13 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     };
 
     let data_dir = tempfile::tempdir().unwrap();
-    let services = wavs::services::Services::new(
-        Arc::new(RedbStorage::new(data_dir.path().join("db")).unwrap())
-    );
+    let services = wavs::services::Services::new(Arc::new(
+        RedbStorage::new(data_dir.path().join("db")).unwrap(),
+    ));
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
-        services
+        services,
     )
     .unwrap();
 
@@ -296,13 +299,13 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     let config = Config::default();
 
     let data_dir = tempfile::tempdir().unwrap();
-    let services = wavs::services::Services::new(
-        Arc::new(RedbStorage::new(data_dir.path().join("db")).unwrap())
-    );
+    let services = wavs::services::Services::new(Arc::new(
+        RedbStorage::new(data_dir.path().join("db")).unwrap(),
+    ));
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
-        services
+        services,
     )
     .unwrap();
 

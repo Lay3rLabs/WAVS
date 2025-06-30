@@ -5,7 +5,12 @@ use utils::storage::{db::RedbStorage, fs::FileStorage};
 use utils::telemetry::Metrics;
 use utils::test_utils::address::rand_address_evm;
 use wavs::{
-    dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE}, services::Services, subsystems::{engine::{wasm_engine::WasmEngine, EngineManager}, submission::chain_message::ChainMessage}
+    dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE},
+    services::Services,
+    subsystems::{
+        engine::{wasm_engine::WasmEngine, EngineManager},
+        submission::chain_message::ChainMessage,
+    },
 };
 use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};
 use wavs_types::{Service, TriggerAction};
@@ -71,8 +76,13 @@ impl SystemSetup {
         }
 
         // Create the MultiEngineRunner
-        let db_storage = Arc::new(RedbStorage::new(engine_setup.data_dir.path().join("db")).unwrap());
-        let engine_manager = EngineManager::new(wasm_engine, system_config.thread_count, Services::new(db_storage));
+        let db_storage =
+            Arc::new(RedbStorage::new(engine_setup.data_dir.path().join("db")).unwrap());
+        let engine_manager = EngineManager::new(
+            wasm_engine,
+            system_config.thread_count,
+            Services::new(db_storage),
+        );
 
         // Create a Service that matches our workflow
         let service = Service {

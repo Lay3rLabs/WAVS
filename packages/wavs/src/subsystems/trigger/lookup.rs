@@ -7,10 +7,13 @@ use bimap::BiMap;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{ByteArray, ChainName, ServiceID, Trigger, TriggerConfig, WorkflowID};
 
-use crate::{services::Services, subsystems::trigger::{
-    error::TriggerError,
-    schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronIntervalState},
-}};
+use crate::{
+    services::Services,
+    subsystems::trigger::{
+        error::TriggerError,
+        schedulers::{block_scheduler::BlockIntervalState, cron_scheduler::CronIntervalState},
+    },
+};
 
 use super::schedulers::{block_scheduler::BlockSchedulers, cron_scheduler::CronScheduler};
 
@@ -61,45 +64,36 @@ impl LookupMaps {
         let trigger_config = match trigger_configs.get(&lookup_id).cloned() {
             Some(config) => config,
             None => {
-                self.metrics.increment_total_errors(
-                    "evm event trigger config not found",
-                );
+                self.metrics
+                    .increment_total_errors("evm event trigger config not found");
                 tracing::error!("Trigger config not found for lookup_id {}", lookup_id);
                 return None;
-            },
+            }
         };
 
         match self.services.is_active(&trigger_config.service_id) {
             Ok(true) => Some(trigger_config),
-            _ => None 
+            _ => None,
         }
     }
 
-    pub fn get_trigger_configs<'a>(&self, lookup_ids: impl IntoIterator<Item = &'a LookupId>) -> Vec<TriggerConfig> {
+    pub fn get_trigger_configs<'a>(
+        &self,
+        lookup_ids: impl IntoIterator<Item = &'a LookupId>,
+    ) -> Vec<TriggerConfig> {
         let trigger_configs = self.trigger_configs.read().unwrap();
         lookup_ids
             .into_iter()
-            .filter_map(|id| {
-                match trigger_configs.get(id) {
-                    Some(config) => Some(config.clone()),
-                    None => {
-                        self.metrics.increment_total_errors(
-                            "evm event trigger config not found",
-                        );
-                        tracing::error!(
-                            "Trigger config not found for lookup_id {}",
-                            id
-                        );
-                        None
-                    }
+            .filter_map(|id| match trigger_configs.get(id) {
+                Some(config) => Some(config.clone()),
+                None => {
+                    self.metrics
+                        .increment_total_errors("evm event trigger config not found");
+                    tracing::error!("Trigger config not found for lookup_id {}", id);
+                    None
                 }
             })
-            .filter(|config| {
-                self.services
-                    .is_active(&config.service_id)
-                    .unwrap_or(false)
-            })
-            .map(|config| config.clone())
+            .filter(|config| self.services.is_active(&config.service_id).unwrap_or(false))
             .collect()
     }
 
