@@ -160,10 +160,7 @@ impl MockE2ETestRunner {
             },
         );
 
-        self.dispatcher
-            .add_service_direct(service, None)
-            .await
-            .unwrap();
+        self.dispatcher.add_service_direct(service).await.unwrap();
     }
 
     #[instrument(level = "debug", skip(self))]

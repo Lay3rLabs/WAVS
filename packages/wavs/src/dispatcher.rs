@@ -231,7 +231,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         )
         .await?;
 
-        self.add_service_direct(service.clone(), None).await?;
+        self.add_service_direct(service.clone()).await?;
 
         // Get current service count for logging
         let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
@@ -244,11 +244,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(service)
     }
 
-    pub async fn add_service_direct(
-        &self,
-        service: Service,
-        hd_index: Option<u32>,
-    ) -> Result<(), DispatcherError> {
+    // this is public just so we can call it from tests
+    pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         tracing::info!("Adding service: {}", service.id);
         // Check if service is already registered
         if self.services.exists(&service.id)? {
@@ -268,7 +265,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             service,
             &self.trigger_manager,
             &self.submission_manager,
-            hd_index,
+            None,
         )?;
 
         Ok(())
@@ -330,11 +327,35 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             tracing::info!("hash {} to {}", old_service.hash()?, service.hash()?);
         }
 
-        // Remove the old service
+        // We can't exactly just remove the service and then call `add_service_direct` here because it's async
+        // and the runtime may delay calling it, thereby introducing a window where the service is gone.
+        // so we do the same steps manually and call the async part of the flow (adding components)
+        // _before_ removing the service.
+
+        // Store components
+        self.engine_manager
+            .store_components_for_service(&service)
+            .await?;
+
+        // Remove the old service - after this, no await points until the new service is added
         self.remove_service(service_id.clone())?;
 
-        // Add the new service
-        self.add_service_direct(service, Some(hd_index)).await?;
+        tracing::info!("Adding service: {}", service.id);
+        // Sanity check: check if service is already registered
+        if self.services.exists(&service.id)? {
+            return Err(DispatcherError::ServiceRegistered(service.id));
+        }
+
+        // Store the service
+        self.services.save(&service)?;
+
+        // Set up triggers and submissions
+        add_service_to_managers(
+            service,
+            &self.trigger_manager,
+            &self.submission_manager,
+            Some(hd_index),
+        )?;
 
         Ok(())
     }
