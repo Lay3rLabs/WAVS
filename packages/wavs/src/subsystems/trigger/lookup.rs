@@ -65,7 +65,7 @@ impl LookupMaps {
             Some(config) => config,
             None => {
                 self.metrics
-                    .increment_total_errors("evm event trigger config not found");
+                    .increment_total_errors("trigger config not found");
                 tracing::error!("Trigger config not found for lookup_id {}", lookup_id);
                 return None;
             }
@@ -88,7 +88,7 @@ impl LookupMaps {
                 Some(config) => Some(config.clone()),
                 None => {
                     self.metrics
-                        .increment_total_errors("evm event trigger config not found");
+                        .increment_total_errors("trigger config not found");
                     tracing::error!("Trigger config not found for lookup_id {}", id);
                     None
                 }
