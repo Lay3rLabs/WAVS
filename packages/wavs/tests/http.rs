@@ -230,53 +230,6 @@ fn test_add_chain_cosmos_success() {
 }
 
 #[test]
-fn test_add_chain_duplicate_name() {
-    let app = TestHttpApp::new();
-    let chain_name: ChainName = "duplicate-chain".try_into().unwrap();
-    let chain_config = create_test_evm_chain_config();
-
-    let request_body = serde_json::json!({
-        "chain_name": chain_name,
-        "chain_config": chain_config
-    });
-
-    let body = Body::from(serde_json::to_vec(&request_body).unwrap());
-
-    let req1 = Request::builder()
-        .method(Method::POST)
-        .header("Content-Type", "application/json")
-        .uri("/add-chain")
-        .body(body)
-        .unwrap();
-
-    let response1 = app.clone().ctx.rt.block_on({
-        let mut app = app.clone();
-        async move { app.http_router().await.call(req1).await.unwrap() }
-    });
-
-    assert_eq!(response1.status(), 200);
-
-    let request_body2 = serde_json::json!({
-        "chain_name": chain_name,
-        "chain_config": chain_config
-    });
-
-    let req2 = Request::builder()
-        .method(Method::POST)
-        .header("Content-Type", "application/json")
-        .uri("/add-chain")
-        .body(Body::from(serde_json::to_vec(&request_body2).unwrap()))
-        .unwrap();
-
-    let response2 = app.clone().ctx.rt.block_on({
-        let mut app = app.clone();
-        async move { app.http_router().await.call(req2).await.unwrap() }
-    });
-
-    assert_eq!(response2.status(), 500);
-}
-
-#[test]
 fn test_add_chain_invalid_json() {
     let app = TestHttpApp::new();
 
@@ -321,4 +274,59 @@ fn test_add_chain_invalid_config() {
     });
 
     assert_eq!(response.status(), 422);
+}
+
+#[test]
+fn test_add_chain_prevents_duplicates() {
+    let app = TestHttpApp::new();
+    let chain_name: ChainName = "test-duplicate-chain".try_into().unwrap();
+    let chain_config = create_test_evm_chain_config();
+
+    // add chain first time
+    let add_request1 = serde_json::json!({
+        "chain_name": chain_name,
+        "chain_config": chain_config
+    });
+
+    let req1 = Request::builder()
+        .method(Method::POST)
+        .header("Content-Type", "application/json")
+        .uri("/add-chain")
+        .body(Body::from(serde_json::to_vec(&add_request1).unwrap()))
+        .unwrap();
+
+    let response1 = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req1).await.unwrap() }
+    });
+
+    assert_eq!(
+        response1.status(),
+        200,
+        "First chain addition should succeed"
+    );
+
+    // Try to add same chain again - should fail
+    let add_request2 = serde_json::json!({
+        "chain_name": chain_name,
+        "chain_config": chain_config
+    });
+
+    let req2 = Request::builder()
+        .method(Method::POST)
+        .header("Content-Type", "application/json")
+        .uri("/add-chain")
+        .body(Body::from(serde_json::to_vec(&add_request2).unwrap()))
+        .unwrap();
+
+    let response2 = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req2).await.unwrap() }
+    });
+
+    assert_eq!(
+        response2.status(),
+        500,
+        "Duplicate chain addition should fail with 500"
+    );
 }
