@@ -1,11 +1,20 @@
 use example_helpers::bindings::world::{host, Guest, TriggerAction, WasmResponse};
 use example_helpers::export_layer_trigger_world;
 
+wit_bindgen::generate!({
+    world: "layer-trigger-world",
+    path: "../../../wit",
+    additional_derives: [serde::Deserialize, serde::Serialize],
+    generate_all,
+});
+
+use wasi::keyvalue::store::{open, get, set};
+
 struct Counter;
 
 impl Guest for Counter {
     fn run(trigger_action: TriggerAction) -> Result<Option<WasmResponse>, String> {
-        log(LogLevel::Info, "Counter component triggered".to_string());
+        host::log(host::LogLevel::Info, "Counter component triggered");
 
         // Open the keyvalue store
         let store = open("").map_err(|e| format!("Failed to open store: {:?}", e))?;
@@ -24,9 +33,9 @@ impl Guest for Counter {
         set(&store, "counter", new_count.to_string().as_bytes().to_vec())
             .map_err(|e| format!("Failed to store counter: {:?}", e))?;
 
-        log(
-            LogLevel::Info,
-            format!(
+        host::log(
+            host::LogLevel::Info,
+            &format!(
                 "Counter incremented from {} to {}",
                 current_count, new_count
             ),
@@ -39,4 +48,4 @@ impl Guest for Counter {
     }
 }
 
-export!(Counter);
+export_layer_trigger_world!(Counter);

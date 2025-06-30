@@ -4359,6 +4359,8 @@ name = "kv-store"
 version = "0.5.0-alpha.2"
 dependencies = [
  "example-helpers",
+ "serde",
+ "wit-bindgen",
  "wstd",
 ]
 

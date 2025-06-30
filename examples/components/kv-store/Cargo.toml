@@ -9,6 +9,8 @@ repository.workspace = true
 [dependencies]
 wstd = { workspace = true }
 example-helpers = { workspace = true }
+wit-bindgen = { workspace = true }
+serde = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
