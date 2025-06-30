@@ -10,8 +10,7 @@ use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::InstanceDepsBuilder;
 use wavs_types::{
-    ChainName, ComponentSource, Digest, ServiceID, TriggerAction, WasmResponse, Workflow,
-    WorkflowID,
+    ComponentSource, Digest, ServiceID, TriggerAction, WasmResponse, Workflow, WorkflowID,
 };
 
 use utils::storage::{CAStorage, CAStorageError};
@@ -238,21 +237,6 @@ impl<S: CAStorage> WasmEngine<S> {
             .unwrap();
 
         rt.block_on(fut)
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    pub fn add_chain(
-        &self,
-        chain_name: &ChainName,
-        chain_config: &utils::config::AnyChainConfig,
-    ) -> Result<(), EngineError> {
-        self.chain_configs
-            .write()
-            .unwrap()
-            .add_chain(chain_name.clone(), chain_config.clone())
-            .map_err(|e| EngineError::ChainConfig(format!("Failed to add chain: {}", e)))?;
-        tracing::info!("WasmEngine: Chain added successfully");
-        Ok(())
     }
 }
 

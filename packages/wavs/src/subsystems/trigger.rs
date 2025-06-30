@@ -114,21 +114,6 @@ impl TriggerManager {
         self.lookup_maps.remove_service(service_id.clone())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn add_chain(
-        &self,
-        chain_name: &ChainName,
-        chain_config: &AnyChainConfig,
-    ) -> Result<(), TriggerError> {
-        self.chain_configs
-            .write()
-            .unwrap()
-            .add_chain(chain_name.clone(), chain_config.clone())
-            .map_err(|e| TriggerError::Config(format!("Failed to add chain: {}", e)))?;
-        tracing::info!("TriggerManager: Chain added successfully");
-        Ok(())
-    }
-
     #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
     pub fn start(
         &self,

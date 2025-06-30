@@ -412,9 +412,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .unwrap()
             .add_chain(chain_name.clone(), chain_config.clone())?;
 
-        self.engine_manager.add_chain(&chain_name, &chain_config)?;
-        self.trigger_manager.add_chain(&chain_name, &chain_config)?;
-
         tracing::info!("Chain added dynamically: {:?}", chain_config);
         Ok(())
     }
