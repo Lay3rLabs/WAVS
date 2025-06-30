@@ -39,4 +39,3 @@ impl WasiHttpView for HostComponent {
         &mut self.http
     }
 }
-
