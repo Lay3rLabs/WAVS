@@ -58,4 +58,7 @@ pub enum ChainConfigError {
 
     #[error("Duplicate chain name for {0}")]
     DuplicateChainName(ChainName),
+
+    #[error("Invalid chain name: {0}")]
+    InvalidChainName(#[from] wavs_types::IDError),
 }

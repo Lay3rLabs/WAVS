@@ -86,6 +86,14 @@ impl<S: CAStorage> EngineManager<S> {
         Ok(digests)
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    pub fn add_chain(
+        &self,
+        chain_config: &utils::config::AnyChainConfig,
+    ) -> Result<(), EngineError> {
+        self.engine.add_chain(chain_config)
+    }
+
     fn run_trigger(
         &self,
         action: TriggerAction,

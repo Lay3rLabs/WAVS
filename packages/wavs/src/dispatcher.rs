@@ -406,8 +406,15 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub async fn add_chain(&self, chain_config: AnyChainConfig) -> Result<(), DispatcherError> {
+        // Add to dispatcher's chain configs
+        // Note: We can't update self.chain_configs directly since we don't have &mut self
+        // The chain configs are cloned to each subsystem, so we update them individually
+
+        // Update engine manager with new chain config
+        self.engine_manager.add_chain(&chain_config)?;
+
         tracing::info!("Chain added dynamically: {:?}", chain_config);
-        todo!("Implement subsystem chain addition")
+        Ok(())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]

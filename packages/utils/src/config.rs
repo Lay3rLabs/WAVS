@@ -251,7 +251,7 @@ pub struct ChainConfigs {
     pub evm: BTreeMap<ChainName, EvmChainConfig>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AnyChainConfig {
     Cosmos(CosmosChainConfig),
@@ -347,8 +347,8 @@ impl ChainConfigs {
         chain_config: AnyChainConfig,
     ) -> Result<ChainName, ChainConfigError> {
         let chain_name = match &chain_config {
-            AnyChainConfig::Evm(config) => ChainName::from(config.chain_id.clone()),
-            AnyChainConfig::Cosmos(config) => ChainName::from(config.chain_id.clone()),
+            AnyChainConfig::Evm(config) => ChainName::new(config.chain_id.clone())?,
+            AnyChainConfig::Cosmos(config) => ChainName::new(config.chain_id.clone())?,
         };
 
         // Check if chain already exists

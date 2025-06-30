@@ -41,4 +41,6 @@ pub enum TriggerError {
     IntervalStartAfterEnd,
     #[error("Send error: {0}")]
     ActionSendError(#[from] SendError<DispatcherCommand>),
+    #[error("Config error: {0}")]
+    Config(String),
 }
