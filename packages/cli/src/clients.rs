@@ -170,10 +170,10 @@ impl HttpClient {
             loop {
                 tracing::warn!("Waiting for service update: {}", service.id);
 
-                if let Ok(current_service) = self.get_service_from_node(&service.id).await {
-                    if current_service.hash()? == service_hash {
-                        break Ok(());
-                    }
+                let current_service_hash = self.get_service_from_node(&service.id).await?.hash()?;
+
+                if current_service_hash == service_hash {
+                    break Ok(());
                 }
 
                 tokio::time::sleep(Duration::from_millis(100)).await;
