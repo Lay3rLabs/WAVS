@@ -228,14 +228,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         address: Address,
     ) -> Result<Service, DispatcherError> {
         let chain_configs = self.chain_configs.read().unwrap().clone();
-
-        let service = query_service_from_address(
-            chain_name,
-            address,
-            &self.chain_configs,
-            &self.ipfs_gateway,
-        )
-        .await?;
+        let service =
+            query_service_from_address(chain_name, address, &chain_configs, &self.ipfs_gateway)
+                .await?;
 
         self.add_service_direct(service.clone(), None).await?;
 
