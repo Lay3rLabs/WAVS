@@ -351,12 +351,10 @@ impl ChainConfigs {
             AnyChainConfig::Cosmos(config) => ChainName::new(config.chain_id.clone())?,
         };
 
-        // Check if chain already exists
         if self.get_chain(&chain_name)?.is_some() {
             return Err(ChainConfigError::DuplicateChainName(chain_name.clone()));
         }
 
-        // Add to appropriate map
         match chain_config {
             AnyChainConfig::Evm(config) => {
                 self.evm.insert(chain_name.clone(), config);

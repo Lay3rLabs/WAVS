@@ -29,7 +29,7 @@ use anyhow::Result;
 use layer_climb::prelude::Address;
 use redb::ReadableTable;
 use std::ops::Bound;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -69,7 +69,7 @@ pub struct Dispatcher<S: CAStorage> {
     pub engine_manager: EngineManager<S>,
     pub submission_manager: SubmissionManager,
     pub db_storage: Arc<RedbStorage>,
-    pub chain_configs: ChainConfigs,
+    pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
 }
@@ -105,7 +105,7 @@ impl Dispatcher<FileStorage> {
             engine_manager,
             submission_manager,
             db_storage,
-            chain_configs: config.chains.clone(),
+            chain_configs: Arc::new(RwLock::new(config.chains.clone())),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
         })
@@ -227,13 +227,10 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         chain_name: ChainName,
         address: Address,
     ) -> Result<(), DispatcherError> {
-        let service = query_service_from_address(
-            chain_name,
-            address,
-            &self.chain_configs,
-            &self.ipfs_gateway,
-        )
-        .await?;
+        let chain_configs = self.chain_configs.read().unwrap().clone();
+        let service =
+            query_service_from_address(chain_name, address, &chain_configs, &self.ipfs_gateway)
+                .await?;
 
         self.add_service_direct(service.clone(), None).await?;
 
@@ -406,11 +403,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub async fn add_chain(&self, chain_config: AnyChainConfig) -> Result<(), DispatcherError> {
-        // Add to dispatcher's chain configs
-        // Note: We can't update self.chain_configs directly since we don't have &mut self
-        // The chain configs are cloned to each subsystem, so we update them individually
+        self.chain_configs
+            .write()
+            .unwrap()
+            .add_chain(chain_config.clone())?;
 
-        // Update engine manager with new chain config
         self.engine_manager.add_chain(&chain_config)?;
 
         tracing::info!("Chain added dynamically: {:?}", chain_config);
