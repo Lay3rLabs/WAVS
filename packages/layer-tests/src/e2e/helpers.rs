@@ -156,7 +156,7 @@ pub async fn deploy_service_for_test(
     // 3. Setting that URI on the service manager
     // 4. waiting for that updated service to be observable on WAVS
 
-    // service.status = ServiceStatus::Active;
+    service.status = ServiceStatus::Active;
 
     let service_url = DeployService::save_service(&clients.cli_ctx, &service)
         .await
