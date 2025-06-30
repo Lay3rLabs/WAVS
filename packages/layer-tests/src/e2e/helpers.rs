@@ -43,6 +43,8 @@ use super::{
     test_registry::CosmosTriggerCodeMap,
 };
 
+static SERVICE_UPDATE_TIMEOUT: Duration = Duration::from_secs(60 * 15);
+
 /// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
     test: &mut TestDefinition,
@@ -173,7 +175,7 @@ pub async fn deploy_service_for_test(
     // wait until WAVS sees the new service
     clients
         .http_client
-        .wait_for_service_update(&service, None)
+        .wait_for_service_update(&service, Some(SERVICE_UPDATE_TIMEOUT))
         .await
         .unwrap();
 
@@ -603,7 +605,7 @@ pub async fn change_service_for_test(
     // wait until WAVS sees the new service
     clients
         .http_client
-        .wait_for_service_update(&new_service, None)
+        .wait_for_service_update(&new_service, Some(SERVICE_UPDATE_TIMEOUT))
         .await
         .unwrap();
 }
