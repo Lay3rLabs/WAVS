@@ -27,7 +27,6 @@
 use alloy_provider::ProviderBuilder;
 use anyhow::Result;
 use layer_climb::prelude::Address;
-use redb::ReadableTable;
 use std::ops::Bound;
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,6 +44,7 @@ use wavs_types::{
 };
 
 use crate::config::Config;
+use crate::services::{Services, ServicesError};
 use crate::subsystems::engine::error::EngineError;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
 use crate::subsystems::engine::EngineManager;
@@ -54,7 +54,7 @@ use crate::subsystems::submission::SubmissionManager;
 use crate::subsystems::trigger::error::TriggerError;
 use crate::subsystems::trigger::TriggerManager;
 use crate::AppContext;
-use utils::storage::db::{DBError, RedbStorage, Table, JSON};
+use utils::storage::db::{DBError, RedbStorage};
 use utils::storage::{CAStorage, CAStorageError};
 use wasm_pkg_common::Error as RegistryError;
 
@@ -62,13 +62,11 @@ pub const TRIGGER_CHANNEL_SIZE: usize = 100;
 pub const ENGINE_CHANNEL_SIZE: usize = 20;
 pub const SUBMISSION_CHANNEL_SIZE: usize = 20;
 
-const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
-
 pub struct Dispatcher<S: CAStorage> {
     pub trigger_manager: TriggerManager,
     pub engine_manager: EngineManager<S>,
     pub submission_manager: SubmissionManager,
-    pub db_storage: Arc<RedbStorage>,
+    pub services: Services,
     pub chain_configs: ChainConfigs,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
@@ -84,7 +82,9 @@ impl Dispatcher<FileStorage> {
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
 
-        let trigger_manager = TriggerManager::new(config, metrics.trigger)?;
+        let services = Services::new(db_storage);
+
+        let trigger_manager = TriggerManager::new(config, metrics.trigger, services.clone())?;
 
         let app_storage = config.data.join("app");
         let engine = WasmEngine::new(
@@ -96,15 +96,16 @@ impl Dispatcher<FileStorage> {
             Some(config.max_execution_seconds),
             metrics.engine,
         );
-        let engine_manager = EngineManager::new(engine, config.wasm_threads);
+        let engine_manager = EngineManager::new(engine, config.wasm_threads, services.clone());
 
-        let submission_manager = SubmissionManager::new(config, metrics.submission)?;
+        let submission_manager =
+            SubmissionManager::new(config, metrics.submission, services.clone())?;
 
         Ok(Self {
             trigger_manager,
             engine_manager,
             submission_manager,
-            db_storage,
+            services,
             chain_configs: config.chains.clone(),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
@@ -132,7 +133,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .start(ctx.clone(), wasi_result_receiver)?;
 
         // populate the initial triggers
-        let initial_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
+        let initial_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
         let total_workflows: usize = initial_services.iter().map(|s| s.workflows.len()).sum();
         tracing::info!(
             "Initializing dispatcher: services={}, workflows={}, components={}",
@@ -142,7 +143,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         );
         for service in initial_services {
             add_service_to_managers(
-                service,
+                &service,
                 &self.trigger_manager,
                 &self.submission_manager,
                 None,
@@ -164,14 +165,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         action.config.workflow_id
                     );
 
-                    let service = match self
-                        .db_storage
-                        .get(SERVICE_TABLE, action.config.service_id.as_ref())?
-                    {
-                        Some(service) => service.value(),
-                        None => {
-                            let err =
-                                DispatcherError::UnknownService(action.config.service_id.clone());
+                    let service = match self.services.get(&action.config.service_id) {
+                        Ok(service) => service,
+                        Err(err) => {
                             tracing::error!("{}", err);
                             continue;
                         }
@@ -235,10 +231,10 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         )
         .await?;
 
-        self.add_service_direct(service.clone(), None).await?;
+        self.add_service_direct(service.clone()).await?;
 
         // Get current service count for logging
-        let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
+        let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
         let total_services = current_services.len();
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
@@ -248,18 +244,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(service)
     }
 
-    pub async fn add_service_direct(
-        &self,
-        service: Service,
-        hd_index: Option<u32>,
-    ) -> Result<(), DispatcherError> {
+    // this is public just so we can call it from tests
+    pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         tracing::info!("Adding service: {}", service.id);
         // Check if service is already registered
-        if self
-            .db_storage
-            .get(SERVICE_TABLE, service.id.as_ref())?
-            .is_some()
-        {
+        if self.services.exists(&service.id)? {
             return Err(DispatcherError::ServiceRegistered(service.id));
         }
 
@@ -269,38 +258,29 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .await?;
 
         // Store the service
-        self.db_storage
-            .set(SERVICE_TABLE, service.id.as_ref(), &service)?;
+        self.services.save(&service)?;
 
         // Set up triggers and submissions
         add_service_to_managers(
-            service,
+            &service,
             &self.trigger_manager,
             &self.submission_manager,
-            hd_index,
+            None,
         )?;
 
         Ok(())
     }
 
-    pub fn get_service(&self, id: &ServiceID) -> Result<Option<Service>, DispatcherError> {
-        match self.db_storage.get(SERVICE_TABLE, id.as_ref()) {
-            Ok(Some(service)) => Ok(Some(service.value())),
-            Ok(None) => Ok(None),
-            Err(err) => Err(err.into()),
-        }
-    }
-
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceID) -> Result<(), DispatcherError> {
         tracing::info!("Removing service: {}", id);
-        self.db_storage.remove(SERVICE_TABLE, id.as_ref())?;
+        self.services.remove(&id)?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
         // no need to remove from submission manager, it has nothing to do
 
         // Get current service count for logging
-        let current_services = self.list_services(Bound::Unbounded, Bound::Unbounded)?;
+        let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
         tracing::info!(
@@ -311,99 +291,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         );
 
         Ok(())
-    }
-
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn list_services(
-        &self,
-        bounds_start: Bound<&str>,
-        bounds_end: Bound<&str>,
-    ) -> Result<Vec<Service>, DispatcherError> {
-        let res = self
-            .db_storage
-            .map_table_read(SERVICE_TABLE, |table| match table {
-                // TODO: try to refactor. There's a couple areas of improvement:
-                //
-                // 1. just taking in a RangeBounds<&str> instead of two Bound<&str>
-                // 2. just calling `.range()` on the range once
-                Some(table) => match (bounds_start, bounds_end) {
-                    (Bound::Unbounded, Bound::Unbounded) => {
-                        let res = table
-                            .iter()?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-                        Ok(res)
-                    }
-                    (Bound::Unbounded, Bound::Included(y)) => {
-                        let res = table
-                            .range(..=y)?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Unbounded, Bound::Excluded(y)) => {
-                        let res = table
-                            .range(..y)?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Included(x), Bound::Unbounded) => {
-                        let res = table
-                            .range(x..)?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Excluded(x), Bound::Unbounded) => {
-                        let res = table
-                            .range(x..)?
-                            .skip(1)
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Included(x), Bound::Included(y)) => {
-                        let res = table
-                            .range(x..=y)?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Included(x), Bound::Excluded(y)) => {
-                        let res = table
-                            .range(x..y)?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Excluded(x), Bound::Included(y)) => {
-                        let res = table
-                            .range(x..=y)?
-                            .skip(1)
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-                        Ok(res)
-                    }
-                    (Bound::Excluded(x), Bound::Excluded(y)) => {
-                        let res = table
-                            .range(x..y)?
-                            .skip(1)
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<Result<Vec<_>, redb::StorageError>>()?;
-                        Ok(res)
-                    }
-                },
-                None => Ok(Vec::new()),
-            })?;
-
-        Ok(res)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
@@ -434,21 +321,35 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .get_service_key(service_id.clone())?;
 
         if tracing::enabled!(tracing::Level::INFO) {
-            let old_service = self
-                .db_storage
-                .get(SERVICE_TABLE, service_id.as_ref())?
-                .map(|s| s.value())
-                .ok_or_else(|| DispatcherError::UnknownService(service_id.clone()))?;
+            let old_service = self.services.get(&service_id)?;
 
             tracing::info!("Changing service from {:?} to {:?}", old_service, service);
             tracing::info!("hash {} to {}", old_service.hash()?, service.hash()?);
         }
 
-        // Remove the old service
+        // We can't exactly just remove the service and then call `add_service_direct` here because it's async
+        // and the runtime may delay calling it, thereby introducing a window where the service is gone.
+        // so we do the same steps manually and call the async part of the flow (adding components)
+        // _before_ removing the service.
+
+        // Store components
+        self.engine_manager
+            .store_components_for_service(&service)
+            .await?;
+
+        // Remove the old service - after this, no await points until the new service is added
         self.remove_service(service_id.clone())?;
 
-        // Add the new service
-        self.add_service_direct(service, Some(hd_index)).await?;
+        // Set up triggers and submissions
+        add_service_to_managers(
+            &service,
+            &self.trigger_manager,
+            &self.submission_manager,
+            Some(hd_index),
+        )?;
+
+        // Store the service
+        self.services.save(&service)?;
 
         Ok(())
     }
@@ -502,17 +403,17 @@ async fn query_service_from_address(
 
 // called at init and when a new service is added
 fn add_service_to_managers(
-    service: Service,
+    service: &Service,
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service(&service, hd_index) {
+    if let Err(err) = submissions.add_service_key(service.id.clone(), hd_index) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }
 
-    if let Err(err) = triggers.add_service(&service) {
+    if let Err(err) = triggers.add_service(service) {
         tracing::error!("Error adding service to trigger manager: {:?}", err);
         return Err(err.into());
     }
@@ -525,8 +426,8 @@ pub enum DispatcherError {
     #[error("Service {0} already registered")]
     ServiceRegistered(ServiceID),
 
-    #[error("Unknown Service {0}")]
-    UnknownService(ServiceID),
+    #[error("{0:?}")]
+    UnknownService(#[from] ServicesError),
 
     #[error("Invalid ID: {0}")]
     ID(#[from] IDError),

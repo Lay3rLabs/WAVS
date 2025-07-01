@@ -33,4 +33,7 @@ pub enum EngineError {
 
     #[error("could not encode EventOrder {0:?}")]
     EncodeEventOrder(bincode::error::EncodeError),
+
+    #[error("{0:?}")]
+    Services(#[from] crate::services::ServicesError),
 }

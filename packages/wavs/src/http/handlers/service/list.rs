@@ -23,7 +23,8 @@ pub async fn handle_list_services(State(state): State<HttpState>) -> impl IntoRe
 async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesResponse> {
     let services_list = state
         .dispatcher
-        .list_services(Bound::Unbounded, Bound::Unbounded)?;
+        .services
+        .list(Bound::Unbounded, Bound::Unbounded)?;
 
     let mut services = Vec::with_capacity(services_list.len());
 

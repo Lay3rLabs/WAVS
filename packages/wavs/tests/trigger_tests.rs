@@ -1,11 +1,16 @@
-use std::num::NonZero;
+use std::{num::NonZero, sync::Arc};
 
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
-use wavs_types::{ChainName, ServiceID, Timestamp, Trigger, TriggerConfig, WorkflowID};
+use wavs_types::{
+    Aggregator, ChainName, Component, ComponentSource, Digest, EvmContractSubmission, Service,
+    ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow,
+    WorkflowID,
+};
 
 use layer_climb::prelude::*;
 use utils::{
     config::{ChainConfigs, CosmosChainConfig, EvmChainConfig},
+    storage::db::RedbStorage,
     telemetry::TriggerMetrics,
     test_utils::address::{rand_address_evm, rand_event_evm},
 };
@@ -44,9 +49,14 @@ fn core_trigger_lookups() {
         ..Default::default()
     };
 
+    let data_dir = tempfile::tempdir().unwrap();
+    let services = wavs::services::Services::new(Arc::new(
+        RedbStorage::new(data_dir.path().join("db")).unwrap(),
+    ));
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
+        services,
     )
     .unwrap();
 
@@ -193,9 +203,14 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         ..Default::default()
     };
 
+    let data_dir = tempfile::tempdir().unwrap();
+    let services = wavs::services::Services::new(Arc::new(
+        RedbStorage::new(data_dir.path().join("db")).unwrap(),
+    ));
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
+        services.clone(),
     )
     .unwrap();
 
@@ -212,6 +227,39 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         n_blocks,
     )
     .unwrap();
+
+    let service = Service {
+        id: service_id.clone(),
+        name: "Big Square AVS".to_string(),
+        workflows: [(
+            workflow_id.clone(),
+            Workflow {
+                component: Component::new(ComponentSource::Digest(Digest::new(&[0; 32]))),
+                trigger: Trigger::BlockInterval {
+                    chain_name: chain_name.clone(),
+                    n_blocks,
+                    start_block: None,
+                    end_block: None,
+                },
+                submit: Submit::Aggregator {
+                    url: "http://example.com/aggregator".to_string(),
+                },
+                aggregators: vec![Aggregator::Evm(EvmContractSubmission {
+                    chain_name: chain_name.parse().unwrap(),
+                    address: rand_address_evm(),
+                    max_gas: None,
+                })],
+            },
+        )]
+        .into(),
+        status: ServiceStatus::Active,
+        manager: ServiceManager::Evm {
+            chain_name: ChainName::new("evm").unwrap(),
+            address: rand_address_evm(),
+        },
+    };
+    services.save(&service).unwrap();
+
     manager
         .get_lookup_maps()
         .add_trigger(trigger.clone())
@@ -229,6 +277,12 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         .get_lookup_maps()
         .add_trigger(trigger.clone())
         .unwrap();
+
+    let service = Service {
+        id: service_id2.clone(),
+        ..service
+    };
+    services.save(&service).unwrap();
 
     // Verify we have two scheduled triggers
     assert_eq!(
@@ -287,9 +341,14 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     // Setup configuration and manager
     let config = Config::default();
 
+    let data_dir = tempfile::tempdir().unwrap();
+    let services = wavs::services::Services::new(Arc::new(
+        RedbStorage::new(data_dir.path().join("db")).unwrap(),
+    ));
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
+        services,
     )
     .unwrap();
 

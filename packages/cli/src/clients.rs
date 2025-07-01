@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
@@ -127,22 +129,65 @@ impl HttpClient {
     }
 
     pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
-        self.inner
+        let text = self
+            .inner
             .get(format!("{}/service-key/{service_id}", self.endpoint))
             .send()
             .await?
-            .json()
-            .await
-            .map_err(|e| e.into())
+            .text()
+            .await?;
+
+        match serde_json::from_str(&text) {
+            Ok(response) => Ok(response),
+            Err(_) => {
+                // If the response is not JSON, return it as an error
+                Err(anyhow::anyhow!(
+                    "Failed to parse response as SigningKeyResponse: {}",
+                    text
+                ))
+            }
+        }
     }
 
     pub async fn get_service_from_node(&self, service_id: &ServiceID) -> Result<Service> {
-        self.inner
+        let text = self
+            .inner
             .get(format!("{}/service/{}", self.endpoint, service_id))
             .send()
             .await?
-            .json()
-            .await
-            .map_err(|e| e.into())
+            .text()
+            .await?;
+
+        match serde_json::from_str(&text) {
+            Ok(service) => Ok(service),
+            Err(err) => Err(anyhow::anyhow!(
+                "Failed to parse response as Service [{}]: {}",
+                err,
+                text
+            )),
+        }
+    }
+
+    pub async fn wait_for_service_update(
+        &self,
+        service: &Service,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        // wait until WAVS sees the new service
+        let service_hash = service.hash()?;
+        tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(30)), async {
+            loop {
+                tracing::warn!("Waiting for service update: {}", service.id);
+
+                if let Ok(current_service) = self.get_service_from_node(&service.id).await {
+                    if current_service.hash()? == service_hash {
+                        break Ok(());
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await?
     }
 }
