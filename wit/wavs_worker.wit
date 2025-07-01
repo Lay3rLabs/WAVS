@@ -144,6 +144,7 @@ world layer-trigger-world {
   include wasi:cli/imports@0.2.0;
   import wasi:http/types@0.2.0;
   import wasi:http/outgoing-handler@0.2.0;
+  import wasi:keyvalue/store@0.2.0-draft;
 
   import host: interface {
     use layer-types.{evm-chain-config, cosmos-chain-config, log-level};
