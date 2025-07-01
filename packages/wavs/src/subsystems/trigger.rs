@@ -367,13 +367,26 @@ impl TriggerManager {
                     if let Some(event_hash) = log.topic0() {
                         let contract_address = log.address();
 
+                        // Debug logging for all incoming event hashes
+                        tracing::info!(
+                            "EVM Event received - Chain: {}, Contract: {}, Event Hash: {}, Expected ServiceURIUpdated Hash: {}",
+                            chain_name,
+                            contract_address,
+                            event_hash,
+                            IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH
+                        );
+
                         if *event_hash == IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH {
+                            tracing::info!("✓ ServiceURIUpdated event detected! Processing...");
+
                             // 3. Decode the event data
                             match IWavsServiceManager::ServiceURIUpdated::decode_log_data(
                                 log.data(),
                             ) {
                                 Ok(decoded_event) => {
                                     let service_uri: String = decoded_event.serviceURI;
+                                    tracing::info!("Successfully decoded ServiceURIUpdated - URI: {}", service_uri);
+
                                     // check if this is a service we're interested in
                                     if let Some(service_id) = self
                                         .lookup_maps
@@ -382,11 +395,21 @@ impl TriggerManager {
                                         .unwrap()
                                         .get_by_right(&contract_address.into())
                                     {
+                                        tracing::info!(
+                                            "Found matching service ID: {} for contract: {}",
+                                            service_id,
+                                            contract_address
+                                        );
                                         dispatcher_commands.push(
                                             DispatcherCommand::ChangeServiceUri {
                                                 service_id: service_id.clone(),
                                                 uri: service_uri,
                                             },
+                                        );
+                                    } else {
+                                        tracing::warn!(
+                                            "No service ID found for contract address: {}",
+                                            contract_address
                                         );
                                     }
                                 }
@@ -397,6 +420,12 @@ impl TriggerManager {
                                     );
                                 }
                             }
+                        } else {
+                            tracing::debug!(
+                                "Event hash mismatch - Received: {}, Expected: {}",
+                                event_hash,
+                                IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH
+                            );
                         }
 
                         let triggers_by_contract_event_lock = self
