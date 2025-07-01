@@ -152,6 +152,10 @@ pub enum ChangeServiceDefinition {
         workflow_id: WorkflowID,
         component: ComponentDefinition,
     },
+    AddWorkflow {
+        workflow_id: WorkflowID,
+        workflow: WorkflowDefinition,
+    },
     // TODO: status etc.
 }
 

@@ -286,9 +286,7 @@ impl LookupMaps {
         let mut triggers_by_service_workflow_lock =
             self.triggers_by_service_workflow.write().unwrap();
 
-        let workflow_map = triggers_by_service_workflow_lock
-            .get(&service_id)
-            .ok_or_else(|| TriggerError::NoSuchService(service_id.clone()))?;
+        let maybe_workflow_map = triggers_by_service_workflow_lock.get(&service_id);
 
         // Remove the service manager
         self.service_manager
@@ -296,73 +294,75 @@ impl LookupMaps {
             .unwrap()
             .remove_by_left(&service_id);
 
-        // Collect all lookup IDs to be removed
-        let lookup_ids: Vec<LookupId> = workflow_map.values().copied().collect();
+        if let Some(workflow_map) = maybe_workflow_map {
+            // Collect all lookup IDs to be removed
+            let lookup_ids: Vec<LookupId> = workflow_map.values().copied().collect();
 
-        // Remove triggers from all collections
-        for lookup_id in &lookup_ids {
-            if let Some(config) = trigger_configs.get(lookup_id) {
-                match &config.trigger {
-                    Trigger::EvmContractEvent {
-                        address,
-                        chain_name,
-                        event_hash,
-                    } => {
-                        if let Some(set) = triggers_by_evm_contract_event.get_mut(&(
-                            chain_name.clone(),
-                            *address,
-                            *event_hash,
-                        )) {
-                            set.remove(lookup_id);
-                            if set.is_empty() {
-                                triggers_by_evm_contract_event.remove(&(
-                                    chain_name.clone(),
-                                    *address,
-                                    *event_hash,
-                                ));
+            // Remove triggers from all collections
+            for lookup_id in &lookup_ids {
+                if let Some(config) = trigger_configs.get(lookup_id) {
+                    match &config.trigger {
+                        Trigger::EvmContractEvent {
+                            address,
+                            chain_name,
+                            event_hash,
+                        } => {
+                            if let Some(set) = triggers_by_evm_contract_event.get_mut(&(
+                                chain_name.clone(),
+                                *address,
+                                *event_hash,
+                            )) {
+                                set.remove(lookup_id);
+                                if set.is_empty() {
+                                    triggers_by_evm_contract_event.remove(&(
+                                        chain_name.clone(),
+                                        *address,
+                                        *event_hash,
+                                    ));
+                                }
                             }
                         }
-                    }
-                    Trigger::CosmosContractEvent {
-                        address,
-                        chain_name,
-                        event_type,
-                    } => {
-                        if let Some(set) = triggers_by_cosmos_contract_event.get_mut(&(
-                            chain_name.clone(),
-                            address.clone(),
-                            event_type.clone(),
-                        )) {
-                            set.remove(lookup_id);
-                            if set.is_empty() {
-                                triggers_by_cosmos_contract_event.remove(&(
-                                    chain_name.clone(),
-                                    address.clone(),
-                                    event_type.clone(),
-                                ));
+                        Trigger::CosmosContractEvent {
+                            address,
+                            chain_name,
+                            event_type,
+                        } => {
+                            if let Some(set) = triggers_by_cosmos_contract_event.get_mut(&(
+                                chain_name.clone(),
+                                address.clone(),
+                                event_type.clone(),
+                            )) {
+                                set.remove(lookup_id);
+                                if set.is_empty() {
+                                    triggers_by_cosmos_contract_event.remove(&(
+                                        chain_name.clone(),
+                                        address.clone(),
+                                        event_type.clone(),
+                                    ));
+                                }
                             }
                         }
-                    }
-                    Trigger::BlockInterval { chain_name, .. } => {
-                        // Remove from block scheduler
-                        if let Some(mut scheduler) = self.block_schedulers.get_mut(chain_name) {
-                            scheduler.remove_trigger(*lookup_id);
+                        Trigger::BlockInterval { chain_name, .. } => {
+                            // Remove from block scheduler
+                            if let Some(mut scheduler) = self.block_schedulers.get_mut(chain_name) {
+                                scheduler.remove_trigger(*lookup_id);
+                            }
                         }
+                        Trigger::Cron { .. } => {
+                            self.cron_scheduler
+                                .lock()
+                                .unwrap()
+                                .remove_trigger(*lookup_id);
+                        }
+                        Trigger::Manual => {}
                     }
-                    Trigger::Cron { .. } => {
-                        self.cron_scheduler
-                            .lock()
-                            .unwrap()
-                            .remove_trigger(*lookup_id);
-                    }
-                    Trigger::Manual => {}
                 }
             }
-        }
 
-        // Remove all trigger configs
-        for lookup_id in &lookup_ids {
-            trigger_configs.remove(lookup_id);
+            // Remove all trigger configs
+            for lookup_id in &lookup_ids {
+                trigger_configs.remove(lookup_id);
+            }
         }
 
         // Remove from service_workflow_lookup_map

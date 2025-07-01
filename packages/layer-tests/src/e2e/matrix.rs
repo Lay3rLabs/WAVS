@@ -29,6 +29,7 @@ pub enum EvmService {
     BlockInterval,
     BlockIntervalStartStop,
     CronInterval,
+    EmptyToEchoData,
 }
 
 #[derive(
@@ -137,6 +138,7 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::BlockInterval => vec![ComponentName::EchoBlockInterval],
             EvmService::BlockIntervalStartStop => vec![ComponentName::EchoBlockInterval],
             EvmService::CronInterval => vec![ComponentName::EchoCronInterval],
+            EvmService::EmptyToEchoData => vec![ComponentName::EchoData],
         }
     }
 }

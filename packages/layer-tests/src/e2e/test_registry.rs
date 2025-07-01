@@ -164,6 +164,9 @@ impl TestRegistry {
                 EvmService::CronInterval => {
                     registry.register_evm_cron_interval_test(chain, aggregator_endpoint);
                 }
+                EvmService::EmptyToEchoData => {
+                    registry.register_evm_empty_to_echo_data_test(chain, aggregator_endpoint);
+                }
             }
         }
 
@@ -289,6 +292,38 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(secondary_chain)
+                .build(),
+        )
+    }
+
+    fn register_evm_empty_to_echo_data_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_empty_to_echo_data")
+                .with_description("Tests going from empty service workflows to some")
+                .with_service_manager_chain(chain)
+                .with_change_service(ChangeServiceDefinition::AddWorkflow {
+                    workflow_id: WorkflowID::new("echo_data").unwrap(),
+                    workflow: WorkflowBuilder::new()
+                        .with_component(ComponentName::EchoData.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
+                            chain_name: chain.clone(),
+                        })
+                        .with_input_data(InputData::Text("The times".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("The times".to_string()))
+                        .build(),
+                })
                 .build(),
         )
     }
