@@ -1,7 +1,7 @@
 use alloy_primitives::LogData;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::num::{NonZeroU32, NonZeroU64};
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
@@ -32,6 +32,19 @@ impl Service {
     pub fn hash(&self) -> anyhow::Result<Digest> {
         let service_bytes = serde_json::to_vec(self)?;
         Ok(Digest::new(&service_bytes))
+    }
+
+    pub fn get_unique_aggregator_urls(&self) -> HashSet<&String> {
+        self.workflows
+            .values()
+            .filter_map(|workflow| {
+                if let Submit::Aggregator { url } = &workflow.submit {
+                    Some(url)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
