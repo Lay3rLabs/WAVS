@@ -1,9 +1,8 @@
 use thiserror::Error;
-use utils::{
-    error::{ChainConfigError, EvmClientError},
-    storage::db::DBError,
+use utils::{error::EvmClientError, storage::db::DBError};
+use wavs_types::{
+    ChainConfigError, ChainName, EnvelopeError, ServiceID, ServiceManagerError, WorkflowID,
 };
-use wavs_types::{ChainName, EnvelopeError, ServiceID, ServiceManagerError, WorkflowID};
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
 

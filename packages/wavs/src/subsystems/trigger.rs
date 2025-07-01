@@ -27,7 +27,7 @@ use streams::{
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    config::{AnyChainConfig, ChainConfigs},
+    config::{AnyChainConfig, ChainConfigs, CosmosChainConfigExt, EvmChainConfigExt},
     evm_client::EvmQueryClient,
     telemetry::TriggerMetrics,
 };
@@ -272,10 +272,12 @@ impl TriggerManager {
 
                             match chain_config {
                                 AnyChainConfig::Cosmos(chain_config) => {
-                                    let cosmos_client =
-                                        QueryClient::new(chain_config.clone().into(), None)
-                                            .await
-                                            .map_err(TriggerError::Climb)?;
+                                    let cosmos_client = QueryClient::new(
+                                        chain_config.clone().to_chain_config(),
+                                        None,
+                                    )
+                                    .await
+                                    .map_err(TriggerError::Climb)?;
 
                                     cosmos_clients
                                         .insert(chain_name.clone(), cosmos_client.clone());

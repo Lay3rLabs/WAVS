@@ -1,6 +1,6 @@
 pub mod aggregator;
 use super::{Permissions, ServiceID, ServiceStatus, Trigger};
-use crate::{digest::Digest, ChainName, ComponentSource};
+use crate::{digest::Digest, AnyChainConfig, ChainName, ComponentSource};
 use layer_climb_address::Address;
 use serde::{
     de::{self, Visitor},
@@ -25,6 +25,12 @@ pub struct AddServiceRequest {
     pub chain_name: ChainName,
     #[schema(value_type = Object)]
     pub address: Address,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+pub struct AddChainRequest {
+    pub chain_name: ChainName,
+    pub chain_config: AnyChainConfig,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

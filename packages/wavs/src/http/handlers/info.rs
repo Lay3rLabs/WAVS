@@ -3,6 +3,7 @@ use anyhow::Context;
 use axum::{extract::State, response::IntoResponse, Json};
 use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
+use utils::config::CosmosChainConfigExt;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -39,7 +40,7 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
         .next()
         .context("no active cosmos chain")?
         .clone()
-        .into();
+        .to_chain_config();
 
     let mnemonic = state
         .config

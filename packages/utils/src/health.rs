@@ -5,10 +5,13 @@ use thiserror::Error;
 use wavs_types::ChainName;
 
 use crate::{
-    config::{AnyChainConfig, ChainConfigs, CosmosChainConfig, EvmChainConfig},
+    config::{
+        ChainConfigs, CosmosChainConfig, CosmosChainConfigExt, EvmChainConfig, EvmChainConfigExt,
+    },
     error::EvmClientError,
     evm_client::EvmQueryClient,
 };
+use wavs_types::AnyChainConfig;
 
 pub async fn health_check_chains_query<'a>(
     chain_configs: &ChainConfigs,
@@ -83,7 +86,7 @@ async fn check_cosmos_chain_health_query(
     chain_name: &ChainName,
     config: CosmosChainConfig,
 ) -> Result<()> {
-    let client = layer_climb::querier::QueryClient::new(config.into(), None)
+    let client = layer_climb::querier::QueryClient::new(config.to_chain_config(), None)
         .await
         .map_err(|e| HealthCheckError::CosmosCreateClient(chain_name, e))?;
 

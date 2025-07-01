@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 
 use deadpool::managed::Pool;
 use layer_climb::pool::{SigningClientPool, SigningClientPoolManager};
-use utils::evm_client::EvmSigningClient;
+use utils::{config::EvmChainConfigExt, evm_client::EvmSigningClient};
 use wavs_cli::clients::HttpClient;
 use wavs_types::ChainName;
 

@@ -1,16 +1,7 @@
 use axum::{extract::State, response::IntoResponse, Json};
-use serde::{Deserialize, Serialize};
-use utils::config::AnyChainConfig;
-use utoipa::ToSchema;
-use wavs_types::ChainName;
+use wavs_types::{AddChainRequest, AnyChainConfig, ChainName};
 
 use crate::http::{error::HttpResult, state::HttpState};
-
-#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
-pub struct AddChainRequest {
-    pub chain_name: ChainName,
-    pub chain_config: AnyChainConfig,
-}
 
 #[utoipa::path(
     post,

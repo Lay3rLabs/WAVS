@@ -1,5 +1,8 @@
 use layer_climb::prelude::*;
-use utils::{config::CosmosChainConfig, context::AppContext};
+use utils::{
+    config::{CosmosChainConfig, CosmosChainConfigExt},
+    context::AppContext,
+};
 
 use crate::e2e::config::Configs;
 
@@ -11,7 +14,8 @@ impl CosmosInstance {
     pub fn spawn(ctx: AppContext, configs: &Configs, chain_config: CosmosChainConfig) -> Self {
         let mnemonic = configs.cli.cosmos_mnemonic.as_ref().unwrap();
 
-        let chain_config: layer_climb::prelude::ChainConfig = chain_config.clone().into();
+        let chain_config: layer_climb::prelude::ChainConfig =
+            chain_config.clone().to_chain_config();
         let signer = layer_climb::prelude::KeySigner::new_mnemonic_str(mnemonic, None).unwrap();
 
         let addr = ctx.rt.block_on(async {

@@ -35,10 +35,10 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
-use utils::error::ChainConfigError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
+use wavs_types::ChainConfigError;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
