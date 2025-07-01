@@ -286,15 +286,13 @@ impl LookupMaps {
         let mut triggers_by_service_workflow_lock =
             self.triggers_by_service_workflow.write().unwrap();
 
-        let maybe_workflow_map = triggers_by_service_workflow_lock.get(&service_id);
-
         // Remove the service manager
         self.service_manager
             .write()
             .unwrap()
             .remove_by_left(&service_id);
 
-        if let Some(workflow_map) = maybe_workflow_map {
+        if let Some(workflow_map) = triggers_by_service_workflow_lock.get(&service_id) {
             // Collect all lookup IDs to be removed
             let lookup_ids: Vec<LookupId> = workflow_map.values().copied().collect();
 
@@ -363,10 +361,10 @@ impl LookupMaps {
             for lookup_id in &lookup_ids {
                 trigger_configs.remove(lookup_id);
             }
-        }
 
-        // Remove from service_workflow_lookup_map
-        triggers_by_service_workflow_lock.remove(&service_id);
+            // Remove from service_workflow_lookup_map
+            triggers_by_service_workflow_lock.remove(&service_id);
+        }
 
         Ok(())
     }
