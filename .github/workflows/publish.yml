@@ -45,6 +45,7 @@ jobs:
           # Get the HTTP status code when checking if the crate exists
           # We expect either 200 (exists) or 404 (doesn't exist)
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "User-Agent: wavs-ci (https://github.com/Lay3rLabs/WAVS)" \
             https://crates.io/api/v1/crates/${{ env.CRATE_NAME }}/${{ steps.version.outputs.version }})
 
           # Handle status codes appropriately
