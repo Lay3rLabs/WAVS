@@ -72,7 +72,7 @@ impl LookupMaps {
         };
 
         match self.services.is_active(&trigger_config.service_id) {
-            Ok(true) => Some(trigger_config),
+            true => Some(trigger_config),
             _ => None,
         }
     }
@@ -93,7 +93,7 @@ impl LookupMaps {
                     None
                 }
             })
-            .filter(|config| self.services.is_active(&config.service_id).unwrap_or(false))
+            .filter(|config| self.services.is_active(&config.service_id))
             .collect()
     }
 

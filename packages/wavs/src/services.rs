@@ -45,11 +45,13 @@ impl Services {
         }
     }
 
-    pub fn is_active(&self, service_id: &ServiceID) -> Result<bool> {
-        self.get(service_id).map(|service| match service.status {
-            ServiceStatus::Active => true,
-            ServiceStatus::Paused => false,
-        })
+    pub fn is_active(&self, service_id: &ServiceID) -> bool {
+        self.get(service_id)
+            .map(|service| match service.status {
+                ServiceStatus::Active => true,
+                ServiceStatus::Paused => false,
+            })
+            .unwrap_or(false)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]

@@ -91,15 +91,11 @@ impl SubmissionManager {
 
                             // Check if the service is active
                             match _self.services.is_active(&packet_route.service_id) {
-                                Ok(true) => {
+                                true => {
                                     // Service is active, proceed with submission
                                 }
-                                Ok(false) => {
+                                false => {
                                     tracing::warn!("Service {} is not active, skipping message", packet_route.service_id);
-                                    continue;
-                                }
-                                Err(e) => {
-                                    tracing::error!("Failed to check service status: {:?}", e);
                                     continue;
                                 }
                             }

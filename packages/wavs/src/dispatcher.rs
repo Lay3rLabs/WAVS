@@ -143,7 +143,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         );
         for service in initial_services {
             add_service_to_managers(
-                service,
+                &service,
                 &self.trigger_manager,
                 &self.submission_manager,
                 None,
@@ -262,7 +262,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
         // Set up triggers and submissions
         add_service_to_managers(
-            service,
+            &service,
             &self.trigger_manager,
             &self.submission_manager,
             None,
@@ -340,22 +340,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         // Remove the old service - after this, no await points until the new service is added
         self.remove_service(service_id.clone())?;
 
-        tracing::info!("Adding service: {}", service.id);
-        // Sanity check: check if service is already registered
-        if self.services.exists(&service.id)? {
-            return Err(DispatcherError::ServiceRegistered(service.id));
-        }
-
-        // Store the service
-        self.services.save(&service)?;
-
         // Set up triggers and submissions
         add_service_to_managers(
-            service,
+            &service,
             &self.trigger_manager,
             &self.submission_manager,
             Some(hd_index),
         )?;
+
+        // Store the service
+        self.services.save(&service)?;
 
         Ok(())
     }
@@ -409,17 +403,17 @@ async fn query_service_from_address(
 
 // called at init and when a new service is added
 fn add_service_to_managers(
-    service: Service,
+    service: &Service,
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service(&service, hd_index) {
+    if let Err(err) = submissions.add_service(service, hd_index) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }
 
-    if let Err(err) = triggers.add_service(&service) {
+    if let Err(err) = triggers.add_service(service) {
         tracing::error!("Error adding service to trigger manager: {:?}", err);
         return Err(err.into());
     }

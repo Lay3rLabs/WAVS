@@ -97,7 +97,7 @@ impl<S: CAStorage> EngineManager<S> {
         result_sender: mpsc::Sender<ChainMessage>,
     ) -> Result<(), EngineError> {
         // early-exit without an error if the service is not active
-        if !self.services.is_active(&action.config.service_id)? {
+        if !self.services.is_active(&action.config.service_id) {
             tracing::info!(
                 "Service is not active, skipping action: service_id={}",
                 action.config.service_id

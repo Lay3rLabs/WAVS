@@ -56,7 +56,7 @@ impl HttpState {
         match self.dispatcher.services.get(service_id) {
             Ok(service) => Ok(service),
             _ => Err(anyhow::anyhow!(
-                "Service Hash {service_id} has not been set on the http server",
+                "Service ID {service_id} has not been set on the http server",
             )),
         }
     }

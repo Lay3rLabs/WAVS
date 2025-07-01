@@ -150,13 +150,22 @@ impl HttpClient {
     }
 
     pub async fn get_service_from_node(&self, service_id: &ServiceID) -> Result<Service> {
-        self.inner
+        let text = self
+            .inner
             .get(format!("{}/service/{}", self.endpoint, service_id))
             .send()
             .await?
-            .json()
-            .await
-            .map_err(|e| e.into())
+            .text()
+            .await?;
+
+        match serde_json::from_str(&text) {
+            Ok(service) => Ok(service),
+            Err(err) => Err(anyhow::anyhow!(
+                "Failed to parse response as Service [{}]: {}",
+                err,
+                text
+            )),
+        }
     }
 
     pub async fn wait_for_service_update(
@@ -170,10 +179,10 @@ impl HttpClient {
             loop {
                 tracing::warn!("Waiting for service update: {}", service.id);
 
-                let current_service_hash = self.get_service_from_node(&service.id).await?.hash()?;
-
-                if current_service_hash == service_hash {
-                    break Ok(());
+                if let Ok(current_service) = self.get_service_from_node(&service.id).await {
+                    if current_service.hash()? == service_hash {
+                        break Ok(());
+                    }
                 }
 
                 tokio::time::sleep(Duration::from_millis(100)).await;
