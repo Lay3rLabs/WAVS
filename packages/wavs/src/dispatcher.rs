@@ -408,7 +408,7 @@ fn add_service_to_managers(
     submissions: &SubmissionManager,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service(service, hd_index) {
+    if let Err(err) = submissions.add_service_key(service.id.clone(), hd_index) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }

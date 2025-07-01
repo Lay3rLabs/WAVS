@@ -42,7 +42,7 @@ fn collect_messages_with_wait() {
     let data_dir = tempfile::tempdir().unwrap();
     let data_dir = data_dir.path().join("db");
     let services = wavs::services::Services::new(Arc::new(RedbStorage::new(data_dir).unwrap()));
-    let submission_manager = SubmissionManager::new(&config, metrics, services).unwrap();
+    let submission_manager = SubmissionManager::new(&config, metrics, services.clone()).unwrap();
 
     assert_eq!(submission_manager.get_message_count(), 0);
 
@@ -50,21 +50,20 @@ fn collect_messages_with_wait() {
     let (send, rx) = mpsc::channel::<ChainMessage>(2);
     submission_manager.start(ctx.clone(), rx).unwrap();
 
+    let service = wavs_types::Service {
+        name: "serv1".to_string(),
+        status: wavs_types::ServiceStatus::Active,
+        id: "serv1".parse().unwrap(),
+        manager: ServiceManager::Evm {
+            chain_name: ChainName::new("evm").unwrap(),
+            address: rand_address_evm(),
+        },
+        workflows: Default::default(),
+    };
+    services.save(&service).unwrap();
     ctx.rt.block_on(async {
         submission_manager
-            .add_service(
-                &wavs_types::Service {
-                    name: "serv1".to_string(),
-                    status: wavs_types::ServiceStatus::Active,
-                    id: "serv1".parse().unwrap(),
-                    manager: ServiceManager::Evm {
-                        chain_name: ChainName::new("evm").unwrap(),
-                        address: rand_address_evm(),
-                    },
-                    workflows: Default::default(),
-                },
-                None,
-            )
+            .add_service_key(service.id, None)
             .unwrap();
     });
 

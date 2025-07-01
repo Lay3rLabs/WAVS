@@ -154,9 +154,9 @@ impl SubmissionManager {
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     // Adds a service to the submission manager, creating a new signer for it.
     // if no hd_index is provided, it will be automatically assigned.
-    pub fn add_service(
+    pub fn add_service_key(
         &self,
-        service: &wavs_types::Service,
+        service_id: ServiceID,
         hd_index: Option<u32>,
     ) -> Result<(), SubmissionError> {
         let hd_index = hd_index.unwrap_or(
@@ -170,18 +170,18 @@ impl SubmissionManager {
                 .ok_or(SubmissionError::MissingMnemonic)?,
             Some(hd_index),
         )
-        .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service.id.clone(), e))?;
+        .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
 
         tracing::info!(
             "Created new signing client for service {} -> {}",
-            service.id,
+            service_id,
             signer.address()
         );
 
         self.evm_signers
             .write()
             .unwrap()
-            .insert(service.id.clone(), SignerInfo { signer, hd_index });
+            .insert(service_id, SignerInfo { signer, hd_index });
 
         Ok(())
     }
