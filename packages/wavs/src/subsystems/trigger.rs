@@ -96,7 +96,7 @@ impl TriggerManager {
         let manager_chain_command = LocalStreamCommand::StartListeningChain {
             chain_name: service.manager.chain_name().clone(),
         };
-        
+
         match self.local_command_sender.lock().unwrap().as_ref() {
             Some(sender) => {
                 sender.send(manager_chain_command).unwrap();
