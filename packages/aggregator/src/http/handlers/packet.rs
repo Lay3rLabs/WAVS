@@ -484,9 +484,9 @@ mod test {
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
             let packet = packet_from_service(
-                &signer,
+                signer,
                 &service,
-                &service.workflows.keys().next().unwrap(),
+                service.workflows.keys().next().unwrap(),
                 &envelope,
             );
             let state = deps.state.clone();
@@ -526,9 +526,9 @@ mod test {
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
             let packet = packet_from_service(
-                &signer,
+                signer,
                 &service,
-                &service.workflows.keys().next().unwrap(),
+                service.workflows.keys().next().unwrap(),
                 &envelope,
             );
             let state = deps.state.clone();
@@ -577,9 +577,9 @@ mod test {
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
             let packet = packet_from_service(
-                &signer,
+                signer,
                 &service,
-                &service.workflows.keys().next().unwrap(),
+                service.workflows.keys().next().unwrap(),
                 &envelope,
             );
             let state = deps.state.clone();
@@ -668,7 +668,7 @@ mod test {
         let packet = packet_from_service(
             &signer,
             &service,
-            &service.workflows.keys().next().unwrap(),
+            service.workflows.keys().next().unwrap(),
             &envelope,
         );
 
@@ -747,9 +747,9 @@ mod test {
         if !concurrent {
             for (index, signer) in signers.iter().enumerate() {
                 let packet = packet_from_service(
-                    &signer,
+                    signer,
                     &service,
-                    &service.workflows.keys().next().unwrap(),
+                    service.workflows.keys().next().unwrap(),
                     &envelope,
                 );
                 let resp = process_packet(deps.state.clone(), &packet)
@@ -787,9 +787,9 @@ mod test {
             // in concurrent mode, just fire off exactly NUM_THRESHHOLD signers
             for signer in signers.iter().take(NUM_THRESHOLD) {
                 let packet = packet_from_service(
-                    &signer,
+                    signer,
                     &service,
-                    &service.workflows.keys().next().unwrap(),
+                    service.workflows.keys().next().unwrap(),
                     &envelope,
                 );
                 futures.push({
@@ -817,7 +817,7 @@ mod test {
         let packet = packet_from_service(
             signers.last().unwrap(),
             &service,
-            &service.workflows.keys().next().unwrap(),
+            service.workflows.keys().next().unwrap(),
             &envelope,
         );
         let responses = process_packet(deps.state.clone(), &packet).await.unwrap();
