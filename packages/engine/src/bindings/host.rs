@@ -1,4 +1,3 @@
-use wasmtime_wasi_keyvalue::WasiKeyValue;
 use wavs_types::ChainName;
 
 use crate::HostComponent;

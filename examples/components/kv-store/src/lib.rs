@@ -28,7 +28,7 @@ impl Guest for Counter {
 
         // Store the new count
         bucket
-            .set("counter", &new_count.to_string().as_bytes().to_vec())
+            .set("counter", new_count.to_string().as_bytes())
             .map_err(|e| format!("Failed to store counter: {:?}", e))?;
         host::log(
             host::LogLevel::Info,
