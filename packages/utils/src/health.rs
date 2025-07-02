@@ -6,7 +6,7 @@ use wavs_types::ChainName;
 
 use crate::{
     config::{
-        ChainConfigs, CosmosChainConfig, CosmosChainConfigExt, EvmChainConfig, EvmChainConfigExt,
+        ChainConfigs, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt,
     },
     error::EvmClientError,
     evm_client::EvmQueryClient,

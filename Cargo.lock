@@ -9401,6 +9401,7 @@ dependencies = [
  "chrono",
  "const-hex",
  "cosmwasm-std",
+ "layer-climb",
  "layer-climb-address",
  "ripemd",
  "semver 1.0.26",

@@ -5,7 +5,7 @@ use alloy_provider::Provider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
-    config::{AnyChainConfig, CosmosChainConfigExt, EvmChainConfigExt},
+    config::{AnyChainConfig, EvmChainConfigExt},
     evm_client::EvmSigningClient,
 };
 use wavs_types::ChainName;

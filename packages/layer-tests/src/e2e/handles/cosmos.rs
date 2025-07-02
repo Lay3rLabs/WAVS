@@ -1,6 +1,6 @@
 use layer_climb::prelude::*;
 use utils::{
-    config::{CosmosChainConfig, CosmosChainConfigExt},
+    config::CosmosChainConfig,
     context::AppContext,
 };
 

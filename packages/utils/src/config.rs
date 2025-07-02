@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use figment::{providers::Format, Figment};
-use layer_climb::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 use utoipa::ToSchema;
@@ -265,44 +264,6 @@ impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
     }
 }
 
-pub trait AnyChainConfigExt {
-    fn to_cosmos_config(&self) -> Result<CosmosChainConfig, ChainConfigError>;
-    fn to_evm_config(&self) -> Result<EvmChainConfig, ChainConfigError>;
-    fn to_layer_climb_config(&self) -> Result<layer_climb::prelude::ChainConfig, ChainConfigError>;
-    fn from_layer_climb_config(
-        config: layer_climb::prelude::ChainConfig,
-    ) -> Result<Self, ChainConfigError>
-    where
-        Self: Sized;
-}
-
-impl AnyChainConfigExt for AnyChainConfig {
-    fn to_cosmos_config(&self) -> Result<CosmosChainConfig, ChainConfigError> {
-        match self {
-            AnyChainConfig::Cosmos(config) => Ok(config.clone()),
-            AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedCosmosChain),
-        }
-    }
-
-    fn to_evm_config(&self) -> Result<EvmChainConfig, ChainConfigError> {
-        match self {
-            AnyChainConfig::Evm(config) => Ok(config.clone()),
-            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
-        }
-    }
-
-    fn to_layer_climb_config(&self) -> Result<layer_climb::prelude::ChainConfig, ChainConfigError> {
-        let cosmos_config = self.to_cosmos_config()?;
-        Ok(cosmos_config.to_chain_config())
-    }
-
-    fn from_layer_climb_config(
-        config: layer_climb::prelude::ChainConfig,
-    ) -> Result<Self, ChainConfigError> {
-        let cosmos_config = CosmosChainConfig::from_chain_config(config)?;
-        Ok(AnyChainConfig::Cosmos(cosmos_config))
-    }
-}
 
 impl ChainConfigs {
     pub fn get_chain(
@@ -355,13 +316,6 @@ pub trait EvmChainConfigExt {
     fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError>;
 }
 
-pub trait CosmosChainConfigExt {
-    fn to_chain_config(&self) -> ChainConfig;
-    fn from_chain_config(config: ChainConfig) -> Result<Self, ChainConfigError>
-    where
-        Self: Sized;
-}
-
 impl EvmChainConfigExt for EvmChainConfig {
     fn signing_client_config(
         &self,
@@ -395,37 +349,6 @@ impl EvmChainConfigExt for EvmChainConfig {
                 "No endpoint provided".to_string(),
             )),
         }
-    }
-}
-
-impl CosmosChainConfigExt for CosmosChainConfig {
-    fn to_chain_config(&self) -> ChainConfig {
-        ChainConfig {
-            chain_id: ChainId::new(self.chain_id.clone()),
-            rpc_endpoint: self.rpc_endpoint.clone(),
-            grpc_endpoint: self.grpc_endpoint.clone(),
-            grpc_web_endpoint: None,
-            gas_price: self.gas_price,
-            gas_denom: self.gas_denom.clone(),
-            address_kind: AddrKind::Cosmos {
-                prefix: self.bech32_prefix.clone(),
-            },
-        }
-    }
-
-    fn from_chain_config(config: ChainConfig) -> Result<Self, ChainConfigError> {
-        Ok(Self {
-            chain_id: config.chain_id.to_string(),
-            bech32_prefix: match config.address_kind {
-                AddrKind::Cosmos { prefix } => prefix,
-                _ => return Err(ChainConfigError::ExpectedCosmosChain),
-            },
-            rpc_endpoint: config.rpc_endpoint,
-            grpc_endpoint: config.grpc_endpoint,
-            gas_price: config.gas_price,
-            gas_denom: config.gas_denom,
-            faucet_endpoint: None,
-        })
     }
 }
 

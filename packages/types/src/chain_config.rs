@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use layer_climb::prelude::*;
 
 use crate::{ChainName, IDError};
 
@@ -73,5 +74,95 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
             AnyChainConfig::Evm(config) => Ok(config),
             AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
         }
+    }
+}
+
+// Cosmos chain implementations
+impl From<CosmosChainConfig> for ChainConfig {
+    fn from(config: CosmosChainConfig) -> Self {
+        Self {
+            chain_id: ChainId::new(config.chain_id),
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            grpc_web_endpoint: None,
+            gas_price: config.gas_price,
+            gas_denom: config.gas_denom,
+            address_kind: AddrKind::Cosmos {
+                prefix: config.bech32_prefix,
+            },
+        }
+    }
+}
+
+impl TryFrom<ChainConfig> for CosmosChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: ChainConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: config.chain_id.to_string(),
+            bech32_prefix: match config.address_kind {
+                AddrKind::Cosmos { prefix } => prefix,
+                _ => return Err(ChainConfigError::ExpectedCosmosChain),
+            },
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            gas_price: config.gas_price,
+            gas_denom: config.gas_denom,
+            faucet_endpoint: None,
+        })
+    }
+}
+
+impl CosmosChainConfig {
+    pub fn to_chain_config(&self) -> ChainConfig {
+        self.clone().into()
+    }
+
+    pub fn from_chain_config(config: ChainConfig) -> Result<Self, ChainConfigError> {
+        config.try_into()
+    }
+}
+
+impl TryFrom<AnyChainConfig> for ChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: AnyChainConfig) -> Result<Self, Self::Error> {
+        CosmosChainConfig::try_from(config).map(Into::into)
+    }
+}
+
+impl TryFrom<ChainConfig> for AnyChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: ChainConfig) -> Result<Self, Self::Error> {
+        Ok(CosmosChainConfig::try_from(config)?.into())
+    }
+}
+
+impl AnyChainConfig {
+    pub fn to_cosmos_config(&self) -> Result<CosmosChainConfig, ChainConfigError> {
+        match self {
+            AnyChainConfig::Cosmos(config) => Ok(config.clone()),
+            AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedCosmosChain),
+        }
+    }
+
+    pub fn to_evm_config(&self) -> Result<EvmChainConfig, ChainConfigError> {
+        match self {
+            AnyChainConfig::Evm(config) => Ok(config.clone()),
+            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
+        }
+    }
+
+    pub fn to_layer_climb_config(&self) -> Result<ChainConfig, ChainConfigError> {
+        let cosmos_config = self.to_cosmos_config()?;
+        Ok(cosmos_config.to_chain_config())
+    }
+
+    pub fn from_layer_climb_config(
+        config: ChainConfig,
+    ) -> Result<Self, ChainConfigError> {
+        let cosmos_config = CosmosChainConfig::from_chain_config(config)?;
+        Ok(AnyChainConfig::Cosmos(cosmos_config))
     }
 }

@@ -28,7 +28,7 @@ use streams::{
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
-    config::{AnyChainConfig, ChainConfigs, CosmosChainConfigExt, EvmChainConfigExt},
+    config::{AnyChainConfig, ChainConfigs, EvmChainConfigExt},
     evm_client::EvmQueryClient,
     telemetry::TriggerMetrics,
 };
