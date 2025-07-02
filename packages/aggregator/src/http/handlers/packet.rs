@@ -472,9 +472,11 @@ mod test {
             .await;
 
         // Make sure we properly collect errors without actually erroring out
+        let service_id = "service-1".parse().unwrap();
+        deps.state.register_service(&service_id).unwrap();
         let mut service = deps
             .create_service(
-                "service-1".parse().unwrap(),
+                service_id,
                 "workflow-1".parse().unwrap(),
                 *service_manager.address(),
                 vec![*service_handler.address(), Address::ZERO],
@@ -656,9 +658,11 @@ mod test {
             .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
+        let service_id = "service-burn-test".parse().unwrap();
+        deps.state.register_service(&service_id).unwrap();
         let service = deps
             .create_service(
-                "service-burn-test".parse().unwrap(),
+                service_id,
                 "workflow-1".parse().unwrap(),
                 *service_manager.address(),
                 vec![*service_handler.address()],
@@ -696,9 +700,11 @@ mod test {
             .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
+        let service_id = "service-2".parse().unwrap();
+        deps.state.register_service(&service_id).unwrap();
         let service = deps
             .create_service(
-                "service-2".parse().unwrap(),
+                service_id,
                 "workflow-1".parse().unwrap(),
                 *service_manager.address(),
                 vec![*service_handler.address()],
