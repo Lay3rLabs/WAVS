@@ -3,6 +3,7 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU32, NonZeroU64};
+use std::str::FromStr;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
@@ -329,6 +330,18 @@ pub enum ServiceStatus {
     // Service is paused, no workflows will be executed
     // however the service can still be queried for AVS Key etc.
     Paused,
+}
+
+impl FromStr for ServiceStatus {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(ServiceStatus::Active),
+            "paused" => Ok(ServiceStatus::Paused),
+            _ => Err(anyhow::anyhow!("Invalid service status: {}", s)),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]

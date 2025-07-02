@@ -186,6 +186,10 @@ pub async fn handle_service_command(
                 display_result(ctx, result, json)?;
             }
         },
+        ServiceCommand::UpdateStatus { status } => {
+            let result = update_status(&file, status)?;
+            display_result(ctx, result, json)?;
+        }
         ServiceCommand::Validate {} => {
             let result = validate_service(&file, Some(ctx)).await?;
             display_result(ctx, result, json)?;
@@ -522,6 +526,23 @@ impl std::fmt::Display for EvmManagerResult {
         writeln!(f, "EVM manager set successfully!")?;
         writeln!(f, "  Address:      {}", self.address)?;
         writeln!(f, "  Chain:        {}", self.chain_name)?;
+        writeln!(f, "  Updated:      {}", self.file_path.display())
+    }
+}
+
+/// Result of updating the service status
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdateStatusResult {
+    /// The updated status
+    pub status: ServiceStatus,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for UpdateStatusResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Status updated successfully!")?;
+        writeln!(f, "  Status:        {:#?}", self.status)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
     }
 }
@@ -1377,6 +1398,20 @@ pub fn set_evm_manager(
             EvmManagerResult {
                 chain_name,
                 address,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+fn update_status(file_path: &PathBuf, status: ServiceStatus) -> Result<UpdateStatusResult> {
+    modify_service_file(file_path, |mut service| {
+        service.status = status;
+
+        Ok((
+            service,
+            UpdateStatusResult {
+                status,
                 file_path: file_path.to_path_buf(),
             },
         ))
@@ -2436,6 +2471,34 @@ mod tests {
         let workflow_error_msg = workflow_error.unwrap_err().to_string();
         assert!(workflow_error_msg.contains(&non_existent_workflow.to_string()));
         assert!(workflow_error_msg.contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_update_status() {
+        // Create a temporary directory and file
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("update_status.json");
+
+        // Initialize a service
+        let service_id = ServiceID::new("test-service-id").unwrap();
+        init_service(
+            &file_path,
+            "Test Service".to_string(),
+            Some(service_id.clone()),
+        )
+        .unwrap();
+
+        // Update the status to Paused
+        let result = update_status(&file_path, ServiceStatus::Paused).unwrap();
+
+        // Assert the result reflects the new status and correct file path
+        assert_eq!(result.status, ServiceStatus::Paused);
+        assert_eq!(result.file_path, file_path);
+
+        // Re-read the service file and assert the status was updated
+        let contents = std::fs::read_to_string(&file_path).unwrap();
+        let service: ServiceJson = serde_json::from_str(&contents).unwrap();
+        assert_eq!(service.status, ServiceStatus::Paused);
     }
 
     #[tokio::test]

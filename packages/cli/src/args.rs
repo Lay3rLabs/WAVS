@@ -10,7 +10,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainName, Digest, ServiceID, Timestamp, WorkflowID};
+use wavs_types::{ChainName, Digest, ServiceID, ServiceStatus, Timestamp, WorkflowID};
 
 use crate::config::Config;
 
@@ -118,6 +118,11 @@ pub enum ServiceCommand {
     Manager {
         #[clap(subcommand)]
         command: ManagerCommand,
+    },
+    /// Update the service status
+    UpdateStatus {
+        #[clap(long)]
+        status: ServiceStatus,
     },
     /// Validates the service JSON
     Validate {},
