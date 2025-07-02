@@ -1,14 +1,11 @@
-use anyhow::Result;
 use dashmap::DashMap;
 use regex::Regex;
-use reqwest::Client;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::{ChainName, ServiceID, Trigger, WorkflowID};
+use wavs_types::{ChainName, Trigger, WorkflowID};
 
 use super::chain_names::ChainNames;
 use super::clients::Clients;
@@ -58,35 +55,6 @@ impl TestRegistry {
             map.entry(test.group).or_default().push(test);
         }
         map
-    }
-
-    /// Registers a service on the aggregator
-    pub async fn register_to_aggregator(
-        aggregator_url: &str,
-        service_id: &ServiceID,
-        service_uri: &str,
-    ) -> Result<()> {
-        let http_client = Client::new();
-
-        let endpoint = format!("{}/register-service", aggregator_url);
-        let payload = RegisterServiceRequest {
-            uri: service_uri.to_string(),
-        };
-
-        tracing::info!(
-            "Registering service {} with aggregator at {}",
-            service_id,
-            endpoint
-        );
-
-        http_client
-            .post(&endpoint)
-            .json(&payload)
-            .send()
-            .await?
-            .error_for_status()?;
-
-        Ok(())
     }
 
     /// Create a registry based on the test mode

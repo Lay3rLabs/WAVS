@@ -8,7 +8,7 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
-        handle_config, handle_info, handle_not_found, handle_packet, handle_register_service,
+        handle_config, handle_info, handle_not_found, handle_packet,
         ApiDoc,
     },
     state::HttpState,
@@ -49,7 +49,6 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         .route("/config", get(handle_config))
         .route("/info", get(handle_info))
         .route("/packet", post(handle_packet))
-        .route("/register-service", post(handle_register_service))
         .fallback(handle_not_found)
         .with_state(state);
 

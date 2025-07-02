@@ -11,7 +11,7 @@ use utils::{
     evm_client::EvmSigningClient,
     storage::db::{RedbStorage, Table, JSON},
 };
-use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service, ServiceID};
+use wavs_types::{ChainName, EventId, Packet, Service, ServiceID};
 
 use crate::{
     config::Config,
@@ -136,33 +136,5 @@ impl HttpState {
         queue: PacketQueue,
     ) -> AggregatorResult<()> {
         Ok(self.storage.set(PACKET_QUEUES, &id.to_bytes()?, &queue)?)
-    }
-
-    pub fn get_service(&self, route: &PacketRoute) -> AggregatorResult<Service> {
-        match self.storage.get(SERVICES, &route.service_id)? {
-            Some(destination) => Ok(destination.value()),
-            None => Err(AggregatorError::MissingService(route.service_id.clone())),
-        }
-    }
-
-    #[instrument(level = "debug", skip(self, service), fields(service_id = %service.id))]
-    pub fn register_service(&self, service: &Service) -> AggregatorResult<()> {
-        if self.storage.get(SERVICES, &service.id)?.is_none() {
-            tracing::info!("Registering aggregator for service {}", service.id);
-
-            self.storage.set(SERVICES, &service.id, service)?;
-        } else {
-            tracing::warn!("Attempted to register duplicate service: {}", service.id);
-            return Err(AggregatorError::RepeatService(service.id.clone()));
-        }
-
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn unchecked_save_service(&self, service: &Service) -> AggregatorResult<()> {
-        self.storage.set(SERVICES, &service.id, service)?;
-
-        Ok(())
     }
 }

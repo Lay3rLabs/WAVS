@@ -59,7 +59,6 @@ async fn process_packet(
         route.workflow_id
     );
 
-    let service = state.get_service(&packet.route)?;
     let workflow = &service.workflows[&packet.route.workflow_id];
     let aggregators = &workflow.aggregators;
 

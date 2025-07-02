@@ -3,7 +3,6 @@
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::collections::HashSet;
 use std::time::Instant;
 use std::{collections::HashMap, sync::Arc};
 use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
@@ -105,14 +104,11 @@ async fn run_test(
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> anyhow::Result<()> {
-    let aggregator_registered_service_ids = Arc::new(std::sync::Mutex::new(HashSet::new()));
-
     let service = deploy_service_for_test(
         test,
         clients,
         component_sources,
         cosmos_trigger_code_map.clone(),
-        aggregator_registered_service_ids,
     )
     .await;
 
