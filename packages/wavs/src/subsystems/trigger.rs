@@ -91,15 +91,13 @@ impl TriggerManager {
 
         self.lookup_maps.add_service(service)?;
 
-        // Ensure the service manager's chain is being listened to for service change events
-        // This is needed even if the service has no workflows, so service URI changes can be detected
-        let manager_chain_command = LocalStreamCommand::StartListeningChain {
-            chain_name: service.manager.chain_name().clone(),
-        };
-
         match self.local_command_sender.lock().unwrap().as_ref() {
             Some(sender) => {
-                sender.send(manager_chain_command).unwrap();
+                // Ensure the service manager's chain is being listened to for service change events
+                // This is needed even if the service has no workflows, so service URI changes can be detected
+                sender.send(LocalStreamCommand::StartListeningChain {
+                    chain_name: service.manager.chain_name().clone(),
+                })?;
             }
             None => {
                 tracing::warn!(
@@ -119,7 +117,7 @@ impl TriggerManager {
             if let Some(command) = LocalStreamCommand::new(&config) {
                 match self.local_command_sender.lock().unwrap().as_ref() {
                     Some(sender) => {
-                        sender.send(command).unwrap();
+                        sender.send(command)?;
                     }
                     None => {
                         tracing::warn!(
