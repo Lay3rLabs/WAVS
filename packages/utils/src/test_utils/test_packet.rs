@@ -2,25 +2,57 @@ use alloy_primitives::{Bytes, FixedBytes};
 use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
 use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::SolValue;
-use wavs_types::{Envelope, EnvelopeExt, EnvelopeSignature, Packet, PacketRoute, ServiceID};
+use wavs_types::{Aggregator, Component, ComponentSource, Digest, Envelope, EnvelopeExt, EnvelopeSignature, EvmContractSubmission, Packet, Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID};
+
+use crate::test_utils::address::rand_address_evm;
 
 use super::test_contracts::ISimpleSubmit::DataWithId;
 
-pub fn mock_packet(
+pub fn packet_from_service(
     signer: &LocalSigner<SigningKey>,
+    service: &Service,
+    workflow_id: &WorkflowID,
     envelope: &Envelope,
-    service_id: ServiceID,
 ) -> Packet {
     let signature = signer.sign_hash_sync(&envelope.eip191_hash()).unwrap();
 
     Packet {
+        service: service.clone(),
+        workflow_id: workflow_id.clone(),
         envelope: envelope.clone(),
-        route: PacketRoute {
-            service_id,
-            workflow_id: "workflow".parse().unwrap(),
-        },
         signature: EnvelopeSignature::Secp256k1(signature),
     }
+}
+pub fn mock_packet(
+    signer: &LocalSigner<SigningKey>,
+    envelope: &Envelope,
+    service_id: ServiceID,
+    workflow_id: WorkflowID,
+) -> Packet {
+    let service = Service {
+            id: service_id,
+            name: "mock packet service".to_string(),
+            workflows: [(workflow_id.clone(), Workflow {
+                trigger: Trigger::Manual,
+                component: Component::new(ComponentSource::Digest(
+                   Digest::new(&[0;32]) 
+                )),
+                submit: Submit::None, 
+                aggregators: vec![
+                    Aggregator::Evm(EvmContractSubmission {
+                        chain_name: "evm".parse().unwrap(),
+                        address: rand_address_evm(),
+                        max_gas: None,
+                    })
+                ], 
+            })].into(),
+            status: ServiceStatus::Active,
+            manager: ServiceManager::Evm { 
+                chain_name: "evm".parse().unwrap(), 
+                address: rand_address_evm() 
+            },
+    };
+    packet_from_service(signer, &service, &workflow_id, envelope)
 }
 
 pub fn mock_signer() -> LocalSigner<SigningKey> {

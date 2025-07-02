@@ -11,7 +11,7 @@ use utils::{
     evm_client::EvmSigningClient,
     storage::db::{RedbStorage, Table, JSON},
 };
-use wavs_types::{ChainName, EventId, Packet, Service, ServiceID};
+use wavs_types::{ChainName, EventId, Packet};
 
 use crate::{
     config::Config,
@@ -26,7 +26,6 @@ const PACKET_QUEUES: Table<&[u8], JSON<PacketQueue>> = Table::new("packet_queues
 )]
 pub struct PacketQueueId {
     pub event_id: EventId,
-    pub service_id: ServiceID,
     pub aggregator_index: usize,
 }
 
@@ -40,8 +39,6 @@ impl PacketQueueId {
     }
 }
 
-// key is ServiceId
-const SERVICES: Table<&str, JSON<Service>> = Table::new("services");
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]

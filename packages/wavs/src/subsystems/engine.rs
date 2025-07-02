@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{
-    Digest, Envelope, EventId, EventOrder, PacketRoute, Service, TriggerAction, WorkflowID,
+    Digest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowID,
 };
 
 use crate::services::Services;
@@ -135,10 +135,11 @@ impl<S: CAStorage> EngineManager<S> {
             let workflow_id = trigger_config.workflow_id.clone();
 
             let msg = ChainMessage {
-                packet_route: PacketRoute::new_trigger_config(&trigger_config),
+                service_id: trigger_config.service_id,
+                workflow_id: trigger_config.workflow_id,
                 envelope: Envelope {
                     payload: wasm_response.payload.into(),
-                    eventId: EventId::try_from(&action)
+                    eventId: EventId::try_from((&service, &action))
                         .map_err(EngineError::EncodeEventId)?
                         .into(),
                     ordering: match wasm_response.ordering {

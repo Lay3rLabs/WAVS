@@ -29,7 +29,7 @@ pub enum EngineError {
     RegistryError(#[from] anyhow::Error),
 
     #[error("could not encode EventId {0:?}")]
-    EncodeEventId(bincode::error::EncodeError),
+    EncodeEventId(anyhow::Error),
 
     #[error("could not encode EventOrder {0:?}")]
     EncodeEventOrder(bincode::error::EncodeError),

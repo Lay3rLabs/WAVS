@@ -1,7 +1,6 @@
 pub use crate::solidity_types::Envelope;
 use crate::{
-    ServiceID, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction,
-    TriggerConfig, WorkflowID,
+    Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction, WorkflowID, 
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_signer::Signer;
@@ -17,7 +16,8 @@ use utoipa::ToSchema;
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Packet {
-    pub route: PacketRoute,
+    pub service: Service,
+    pub workflow_id: WorkflowID,
     #[schema(value_type  = Object)]
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,
@@ -129,22 +129,6 @@ impl Packet {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct PacketRoute {
-    pub service_id: ServiceID,
-    pub workflow_id: WorkflowID,
-}
-
-impl PacketRoute {
-    pub fn new_trigger_config(trigger_config: &TriggerConfig) -> Self {
-        Self {
-            service_id: trigger_config.service_id.clone(),
-            workflow_id: trigger_config.workflow_id.clone(),
-        }
-    }
-}
-
 #[derive(
     Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Hash, bincode::Decode, bincode::Encode,
 )]
@@ -163,14 +147,16 @@ impl From<EventId> for FixedBytes<20> {
     }
 }
 
-impl TryFrom<&TriggerAction> for EventId {
-    type Error = bincode::error::EncodeError;
+impl TryFrom<(&Service, &TriggerAction)> for EventId {
+    type Error = anyhow::Error;
 
-    fn try_from(trigger_action: &TriggerAction) -> std::result::Result<EventId, Self::Error> {
-        let bytes = bincode::encode_to_vec(trigger_action, bincode::config::standard())?;
+    fn try_from((service, trigger_action): (&Service, &TriggerAction)) -> std::result::Result<EventId, Self::Error> {
+        let service_digest = service.hash()?;
+        let action_bytes = bincode::encode_to_vec(trigger_action, bincode::config::standard())?;
 
         let mut hasher = Ripemd160::new();
-        hasher.update(&bytes);
+        hasher.update(&service_digest);
+        hasher.update(&action_bytes);
         let result = hasher.finalize();
 
         Ok(EventId(result.into()))
