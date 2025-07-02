@@ -326,7 +326,9 @@ impl EvmContractSubmission {
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {
     Active,
-    // we could have more like Stopped, Failed, Cooldown, etc.
+    // Service is paused, no workflows will be executed
+    // however the service can still be queried for AVS Key etc.
+    Paused,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]

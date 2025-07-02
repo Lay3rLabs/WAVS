@@ -6,6 +6,7 @@ pub mod streams;
 use crate::{
     config::Config,
     dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
+    services::Services,
     AppContext,
 };
 use alloy_sol_types::SolEvent;
@@ -45,19 +46,24 @@ pub struct TriggerManager {
     metrics: TriggerMetrics,
     #[cfg(debug_assertions)]
     pub disable_networking: bool,
+    pub services: Services,
 }
 
 impl TriggerManager {
     #[allow(clippy::new_without_default)]
-    #[instrument(level = "debug", fields(subsys = "TriggerManager"))]
-    pub fn new(config: &Config, metrics: TriggerMetrics) -> Result<Self, TriggerError> {
+    #[instrument(level = "debug", skip(services), fields(subsys = "TriggerManager"))]
+    pub fn new(
+        config: &Config,
+        metrics: TriggerMetrics,
+        services: Services,
+    ) -> Result<Self, TriggerError> {
         // TODO - discuss unbounded, crossbeam, etc.
         let (dispatcher_command_sender, dispatcher_command_receiver) =
             mpsc::channel(TRIGGER_CHANNEL_SIZE);
 
         Ok(Self {
             chain_configs: Arc::new(std::sync::RwLock::new(config.chains.clone())),
-            lookup_maps: Arc::new(LookupMaps::new()),
+            lookup_maps: Arc::new(LookupMaps::new(services.clone(), metrics.clone())),
             dispatcher_command_sender: Arc::new(std::sync::Mutex::new(Some(
                 dispatcher_command_sender,
             ))),
@@ -68,6 +74,7 @@ impl TriggerManager {
             metrics,
             #[cfg(debug_assertions)]
             disable_networking: false,
+            services,
         })
     }
 
@@ -409,34 +416,18 @@ impl TriggerManager {
                             contract_address,
                             ByteArray::new(**event_hash),
                         )) {
-                            let trigger_configs_lock =
-                                self.lookup_maps.trigger_configs.read().unwrap();
-
-                            for id in lookup_ids {
-                                match trigger_configs_lock.get(id) {
-                                    Some(trigger_config) => {
-                                        dispatcher_commands.push(DispatcherCommand::Trigger(
-                                            TriggerAction {
-                                                data: TriggerData::EvmContractEvent {
-                                                    contract_address,
-                                                    chain_name: chain_name.clone(),
-                                                    log: log.inner.data.clone(),
-                                                    block_height,
-                                                },
-                                                config: trigger_config.clone(),
-                                            },
-                                        ));
-                                    }
-                                    None => {
-                                        self.metrics.increment_total_errors(
-                                            "evm event trigger config not found",
-                                        );
-                                        tracing::error!(
-                                            "Trigger config not found for lookup_id {}",
-                                            id
-                                        );
-                                    }
-                                }
+                            for trigger_config in self.lookup_maps.get_trigger_configs(lookup_ids) {
+                                dispatcher_commands.push(DispatcherCommand::Trigger(
+                                    TriggerAction {
+                                        data: TriggerData::EvmContractEvent {
+                                            contract_address,
+                                            chain_name: chain_name.clone(),
+                                            log: log.inner.data.clone(),
+                                            block_height,
+                                        },
+                                        config: trigger_config.clone(),
+                                    },
+                                ));
                             }
                         }
                     }
@@ -454,39 +445,26 @@ impl TriggerManager {
                             .read()
                             .unwrap();
 
-                        let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-
                         for (contract_address, event) in contract_events {
                             if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
                                 chain_name.clone(),
                                 contract_address.clone(),
                                 event.ty.clone(),
                             )) {
-                                for id in lookup_ids {
-                                    match trigger_configs_lock.get(id) {
-                                        Some(trigger_config) => {
-                                            dispatcher_commands.push(DispatcherCommand::Trigger(
-                                                TriggerAction {
-                                                    data: TriggerData::CosmosContractEvent {
-                                                        contract_address: contract_address.clone(),
-                                                        chain_name: chain_name.clone(),
-                                                        event: event.clone(),
-                                                        block_height,
-                                                    },
-                                                    config: trigger_config.clone(),
-                                                },
-                                            ));
-                                        }
-                                        None => {
-                                            self.metrics.increment_total_errors(
-                                                "cosmos event trigger config not found",
-                                            );
-                                            tracing::error!(
-                                                "Trigger config not found for lookup_id {}",
-                                                id
-                                            );
-                                        }
-                                    }
+                                for trigger_config in
+                                    self.lookup_maps.get_trigger_configs(lookup_ids)
+                                {
+                                    dispatcher_commands.push(DispatcherCommand::Trigger(
+                                        TriggerAction {
+                                            data: TriggerData::CosmosContractEvent {
+                                                contract_address: contract_address.clone(),
+                                                chain_name: chain_name.clone(),
+                                                event: event.clone(),
+                                                block_height,
+                                            },
+                                            config: trigger_config.clone(),
+                                        },
+                                    ));
                                 }
                             }
                         }
@@ -505,27 +483,11 @@ impl TriggerManager {
                     trigger_time,
                     lookup_ids,
                 } => {
-                    let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-
-                    for lookup_id in lookup_ids {
-                        match trigger_configs_lock.get(&lookup_id) {
-                            Some(trigger_config) => {
-                                dispatcher_commands.push(DispatcherCommand::Trigger(
-                                    TriggerAction {
-                                        data: TriggerData::Cron { trigger_time },
-                                        config: trigger_config.clone(),
-                                    },
-                                ));
-                            }
-                            None => {
-                                self.metrics
-                                    .increment_total_errors("cron trigger config not found");
-                                tracing::warn!(
-                                    "Trigger config not found for cron lookup_id {}",
-                                    lookup_id
-                                );
-                            }
-                        }
+                    for trigger_config in self.lookup_maps.get_trigger_configs(&lookup_ids) {
+                        dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                            data: TriggerData::Cron { trigger_time },
+                            config: trigger_config.clone(),
+                        }));
                     }
                 }
             }
@@ -578,27 +540,19 @@ impl TriggerManager {
 
         // Convert lookup_ids to TriggerActions
         if !firing_lookup_ids.is_empty() {
-            let trigger_configs_lock = self.lookup_maps.trigger_configs.read().unwrap();
-
-            let mut dispatcher_commands = Vec::with_capacity(firing_lookup_ids.len());
-
-            for lookup_id in firing_lookup_ids {
-                if let Some(trigger_config) = trigger_configs_lock.get(&lookup_id) {
-                    dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+            self.lookup_maps
+                .get_trigger_configs(&firing_lookup_ids)
+                .into_iter()
+                .map(|trigger_config| {
+                    DispatcherCommand::Trigger(TriggerAction {
                         data: TriggerData::BlockInterval {
                             chain_name: chain_name.clone(),
                             block_height: block_height.get(),
                         },
-                        config: trigger_config.clone(),
-                    }));
-                } else {
-                    self.metrics
-                        .increment_total_errors("block interval trigger config not found");
-                    tracing::warn!("Missing trigger config for block interval id {}", lookup_id);
-                }
-            }
-
-            dispatcher_commands
+                        config: trigger_config,
+                    })
+                })
+                .collect()
         } else {
             Vec::new()
         }

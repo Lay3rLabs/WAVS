@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use crate::{config::Config, AppContext};
+use crate::{config::Config, services::Services, AppContext};
 use alloy_signer_local::PrivateKeySigner;
 use chain_message::ChainMessage;
 use error::SubmissionError;
@@ -34,6 +34,7 @@ pub struct SubmissionManager {
     pub debug_packets: Arc<RwLock<Vec<Packet>>>,
     #[cfg(debug_assertions)]
     pub disable_networking: bool,
+    pub services: Services,
 }
 
 struct SignerInfo {
@@ -43,8 +44,12 @@ struct SignerInfo {
 
 impl SubmissionManager {
     #[allow(clippy::new_without_default)]
-    #[instrument(level = "debug", fields(subsys = "Submission"))]
-    pub fn new(config: &Config, metrics: SubmissionMetrics) -> Result<Self, SubmissionError> {
+    #[instrument(level = "debug", skip(services), fields(subsys = "Submission"))]
+    pub fn new(
+        config: &Config,
+        metrics: SubmissionMetrics,
+        services: Services,
+    ) -> Result<Self, SubmissionError> {
         Ok(Self {
             http_client: reqwest::Client::new(),
             evm_signers: Arc::new(RwLock::new(HashMap::new())),
@@ -56,6 +61,7 @@ impl SubmissionManager {
             debug_packets: Arc::new(RwLock::new(Vec::new())),
             #[cfg(debug_assertions)]
             disable_networking: false,
+            services,
         })
     }
 
@@ -77,13 +83,26 @@ impl SubmissionManager {
                     _ = async move {
                     } => {
                         while let Some(msg) = rx.recv().await {
-                            _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
                             let ChainMessage {
                                 packet_route,
                                 envelope,
                                 submit
                             } = msg;
+
+                            // Check if the service is active
+                            match _self.services.is_active(&packet_route.service_id) {
+                                true => {
+                                    // Service is active, proceed with submission
+                                }
+                                false => {
+                                    tracing::warn!("Service {} is not active, skipping message", packet_route.service_id);
+                                    continue;
+                                }
+                            }
+
+
+                            _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
 
 
                             let packet = match _self.make_packet(packet_route, envelope).await {
@@ -135,9 +154,9 @@ impl SubmissionManager {
     #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
     // Adds a service to the submission manager, creating a new signer for it.
     // if no hd_index is provided, it will be automatically assigned.
-    pub fn add_service(
+    pub fn add_service_key(
         &self,
-        service: &wavs_types::Service,
+        service_id: ServiceID,
         hd_index: Option<u32>,
     ) -> Result<(), SubmissionError> {
         let hd_index = hd_index.unwrap_or(
@@ -151,18 +170,18 @@ impl SubmissionManager {
                 .ok_or(SubmissionError::MissingMnemonic)?,
             Some(hd_index),
         )
-        .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service.id.clone(), e))?;
+        .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
 
         tracing::info!(
             "Created new signing client for service {} -> {}",
-            service.id,
+            service_id,
             signer.address()
         );
 
         self.evm_signers
             .write()
             .unwrap()
-            .insert(service.id.clone(), SignerInfo { signer, hd_index });
+            .insert(service_id, SignerInfo { signer, hd_index });
 
         Ok(())
     }
@@ -184,7 +203,7 @@ impl SubmissionManager {
             .read()
             .unwrap()
             .get(&service_id)
-            .ok_or(SubmissionError::MissingMnemonic)
+            .ok_or(SubmissionError::MissingServiceKey { service_id })
             .map(
                 |SignerInfo { signer, hd_index }| SigningKeyResponse::Secp256k1 {
                     hd_index: *hd_index,

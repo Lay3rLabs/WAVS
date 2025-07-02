@@ -21,7 +21,7 @@ split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
-version = "0.5.0-alpha.2"
+version = "0.5.0-alpha.3"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -83,7 +83,7 @@ async-trait = "0.1.88"
 
 # collections
 dashmap = "6.1.0"
-bimap = {version = "0.6.3", features = ["serde"]}
+bimap = { version = "0.6.3", features = ["serde"] }
 
 # fs
 tempfile = "3.19.1"

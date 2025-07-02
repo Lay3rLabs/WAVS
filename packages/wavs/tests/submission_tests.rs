@@ -1,11 +1,12 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
 use wavs_types::{ChainName, Envelope, PacketRoute, ServiceManager, Submit};
 
 use utils::{
-    context::AppContext, telemetry::SubmissionMetrics, test_utils::address::rand_address_evm,
+    context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
+    test_utils::address::rand_address_evm,
 };
 
 mod wavs_systems;
@@ -38,7 +39,10 @@ fn collect_messages_with_wait() {
     };
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = SubmissionMetrics::new(&meter);
-    let submission_manager = SubmissionManager::new(&config, metrics).unwrap();
+    let data_dir = tempfile::tempdir().unwrap();
+    let data_dir = data_dir.path().join("db");
+    let services = wavs::services::Services::new(Arc::new(RedbStorage::new(data_dir).unwrap()));
+    let submission_manager = SubmissionManager::new(&config, metrics, services.clone()).unwrap();
 
     assert_eq!(submission_manager.get_message_count(), 0);
 
@@ -46,21 +50,20 @@ fn collect_messages_with_wait() {
     let (send, rx) = mpsc::channel::<ChainMessage>(2);
     submission_manager.start(ctx.clone(), rx).unwrap();
 
+    let service = wavs_types::Service {
+        name: "serv1".to_string(),
+        status: wavs_types::ServiceStatus::Active,
+        id: "serv1".parse().unwrap(),
+        manager: ServiceManager::Evm {
+            chain_name: ChainName::new("evm").unwrap(),
+            address: rand_address_evm(),
+        },
+        workflows: Default::default(),
+    };
+    services.save(&service).unwrap();
     ctx.rt.block_on(async {
         submission_manager
-            .add_service(
-                &wavs_types::Service {
-                    name: "serv1".to_string(),
-                    status: wavs_types::ServiceStatus::Active,
-                    id: "serv1".parse().unwrap(),
-                    manager: ServiceManager::Evm {
-                        chain_name: ChainName::new("evm").unwrap(),
-                        address: rand_address_evm(),
-                    },
-                    workflows: Default::default(),
-                },
-                None,
-            )
+            .add_service_key(service.id, None)
             .unwrap();
     });
 
