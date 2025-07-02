@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
-use wavs_types::{ChainName, Envelope, PacketRoute, ServiceManager, Submit};
+use wavs_types::{ChainName, Envelope, ServiceManager, Submit};
 
 use utils::{
     context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
@@ -16,10 +16,8 @@ use wavs_systems::mock_submissions::{
 
 fn dummy_message(service: &str, payload: &str) -> ChainMessage {
     ChainMessage {
-        packet_route: PacketRoute {
-            service_id: service.parse().unwrap(),
-            workflow_id: service.parse().unwrap(),
-        },
+        service_id: service.parse().unwrap(),
+        workflow_id: service.parse().unwrap(),
         envelope: Envelope {
             payload: payload.as_bytes().to_vec().into(),
             eventId: mock_event_id().into(),
@@ -78,9 +76,9 @@ fn collect_messages_with_wait() {
         submission_manager
             .get_debug_packets()
             .into_iter()
-            .map(|x| x.route)
+            .map(|x| (x.service.id, x.workflow_id))
             .collect::<Vec<_>>(),
-        vec![msg1.packet_route.clone()]
+        vec![(msg1.service_id.clone(), msg1.workflow_id.clone())]
     );
 
     send.blocking_send(msg2.clone()).unwrap();
@@ -91,9 +89,13 @@ fn collect_messages_with_wait() {
         submission_manager
             .get_debug_packets()
             .into_iter()
-            .map(|x| x.route)
+            .map(|x| (x.service.id, x.workflow_id))
             .collect::<Vec<_>>(),
-        vec![msg1.packet_route, msg2.packet_route, msg3.packet_route]
+        vec![
+            (msg1.service_id.clone(), msg1.workflow_id.clone()),
+            (msg2.service_id.clone(), msg2.workflow_id.clone()),
+            (msg3.service_id.clone(), msg3.workflow_id.clone()),
+        ]
     );
 
     // show this doesn't loop forever if the 4th never appears

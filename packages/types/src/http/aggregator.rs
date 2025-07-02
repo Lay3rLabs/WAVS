@@ -2,7 +2,7 @@ use alloy_rpc_types_eth::TransactionReceipt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::Packet;
+use crate::{Packet, ServiceID};
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -26,10 +26,9 @@ pub enum AddPacketResponse {
     },
 }
 
-// Only the operator can call this endoint
-// TODO: AUTH - one idea: separate port that only allows from localhost?
+// TODO: AUTH
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct RegisterServiceRequest {
-    pub uri: String,
+    pub service_id: ServiceID,
 }

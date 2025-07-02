@@ -18,7 +18,7 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Envelope, EnvelopeExt, Packet, PacketRoute, ServiceID, SigningKeyResponse, Submit,
+    Envelope, EnvelopeExt, Packet, ServiceID, SigningKeyResponse, Submit, WorkflowID,
 };
 
 #[derive(Clone)]
@@ -84,18 +84,19 @@ impl SubmissionManager {
                     } => {
                         while let Some(msg) = rx.recv().await {
                             let ChainMessage {
-                                packet_route,
+                                service_id,
+                                workflow_id,
                                 envelope,
                                 submit
                             } = msg;
 
                             // Check if the service is active
-                            match _self.services.is_active(&packet_route.service_id) {
+                            match _self.services.is_active(&service_id) {
                                 true => {
                                     // Service is active, proceed with submission
                                 }
                                 false => {
-                                    tracing::warn!("Service {} is not active, skipping message", packet_route.service_id);
+                                    tracing::warn!("Service {} is not active, skipping message", service_id);
                                     continue;
                                 }
                             }
@@ -105,7 +106,7 @@ impl SubmissionManager {
 
 
 
-                            let packet = match _self.make_packet(packet_route, envelope).await {
+                            let packet = match _self.make_packet(service_id, workflow_id, envelope).await {
                                 Ok(packet) => packet,
                                 Err(e) => {
                                     tracing::error!("Failed to make packet: {:?}", e);
@@ -214,13 +215,14 @@ impl SubmissionManager {
 
     async fn make_packet(
         &self,
-        route: PacketRoute,
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
         envelope: Envelope,
     ) -> Result<Packet, SubmissionError> {
         let evm_signer = {
             let lock = self.evm_signers.read().unwrap();
-            lock.get(&route.service_id)
-                .ok_or(SubmissionError::MissingEvmSigner(route.service_id.clone()))?
+            lock.get(&service_id)
+                .ok_or(SubmissionError::MissingEvmSigner(service_id.clone()))?
                 .signer
                 .clone()
         };
@@ -230,8 +232,11 @@ impl SubmissionManager {
             .await
             .map_err(SubmissionError::FailedToSignEnvelope)?;
 
+        let service = self.services.get(&service_id)?;
+
         Ok(Packet {
-            route,
+            service,
+            workflow_id,
             envelope,
             signature,
         })
@@ -243,7 +248,7 @@ impl SubmissionManager {
         url: String,
         packet: Packet,
     ) -> Result<(), SubmissionError> {
-        let service_id = packet.route.service_id.clone();
+        let service_id = packet.service.id.clone();
         let response = self
             .http_client
             .post(format!("{url}/packet"))

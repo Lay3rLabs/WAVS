@@ -11,7 +11,7 @@ use utils::{
     evm_client::EvmSigningClient,
     storage::db::{RedbStorage, Table, JSON},
 };
-use wavs_types::{ChainName, EventId, Packet, PacketRoute, Service, ServiceID};
+use wavs_types::{ChainName, EventId, Packet, ServiceID};
 
 use crate::{
     config::Config,
@@ -26,7 +26,6 @@ const PACKET_QUEUES: Table<&[u8], JSON<PacketQueue>> = Table::new("packet_queues
 )]
 pub struct PacketQueueId {
     pub event_id: EventId,
-    pub service_id: ServiceID,
     pub aggregator_index: usize,
 }
 
@@ -39,9 +38,6 @@ impl PacketQueueId {
         Ok(bincode::borrow_decode_from_slice(bytes, bincode::config::standard())?.0)
     }
 }
-
-// key is ServiceId
-const SERVICES: Table<&str, JSON<Service>> = Table::new("services");
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -65,6 +61,9 @@ pub struct HttpState {
     storage: Arc<RedbStorage>,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
 }
+
+// key is ServiceId
+const SERVICES: Table<&str, ()> = Table::new("services");
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
@@ -138,31 +137,25 @@ impl HttpState {
         Ok(self.storage.set(PACKET_QUEUES, &id.to_bytes()?, &queue)?)
     }
 
-    pub fn get_service(&self, route: &PacketRoute) -> AggregatorResult<Service> {
-        match self.storage.get(SERVICES, &route.service_id)? {
-            Some(destination) => Ok(destination.value()),
-            None => Err(AggregatorError::MissingService(route.service_id.clone())),
-        }
+    #[instrument(level = "debug", skip(self))]
+    pub fn service_registered(&self, service_id: &ServiceID) -> bool {
+        self.storage
+            .get(SERVICES, service_id)
+            .ok()
+            .flatten()
+            .is_some()
     }
 
-    #[instrument(level = "debug", skip(self, service), fields(service_id = %service.id))]
-    pub fn register_service(&self, service: &Service) -> AggregatorResult<()> {
-        if self.storage.get(SERVICES, &service.id)?.is_none() {
-            tracing::info!("Registering aggregator for service {}", service.id);
+    #[instrument(level = "debug", skip(self))]
+    pub fn register_service(&self, service_id: &ServiceID) -> AggregatorResult<()> {
+        if self.storage.get(SERVICES, service_id)?.is_none() {
+            tracing::info!("Registering aggregator for service {}", service_id);
 
-            self.storage.set(SERVICES, &service.id, service)?;
+            self.storage.set(SERVICES, service_id, &())?;
         } else {
-            tracing::warn!("Attempted to register duplicate service: {}", service.id);
-            return Err(AggregatorError::RepeatService(service.id.clone()));
+            tracing::warn!("Attempted to register duplicate service: {}", service_id);
+            return Err(AggregatorError::RepeatService(service_id.clone()));
         }
-
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn unchecked_save_service(&self, service: &Service) -> AggregatorResult<()> {
-        self.storage.set(SERVICES, &service.id, service)?;
-
         Ok(())
     }
 }

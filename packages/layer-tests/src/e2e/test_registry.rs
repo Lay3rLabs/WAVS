@@ -1,7 +1,5 @@
-use anyhow::Result;
 use dashmap::DashMap;
 use regex::Regex;
-use reqwest::Client;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -64,13 +62,12 @@ impl TestRegistry {
     pub async fn register_to_aggregator(
         aggregator_url: &str,
         service_id: &ServiceID,
-        service_uri: &str,
-    ) -> Result<()> {
-        let http_client = Client::new();
+    ) -> anyhow::Result<()> {
+        let http_client = reqwest::Client::new();
 
         let endpoint = format!("{}/register-service", aggregator_url);
         let payload = RegisterServiceRequest {
-            uri: service_uri.to_string(),
+            service_id: service_id.clone(),
         };
 
         tracing::info!(

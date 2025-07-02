@@ -14,12 +14,6 @@ pub enum AggregatorError {
         service_id: ServiceID,
     },
 
-    #[error("Service already registered: {0}")]
-    RepeatService(ServiceID),
-
-    #[error("No such service registered: {0}")]
-    MissingService(ServiceID),
-
     #[error("DB: {0}")]
     DBError(#[from] DBError),
 
@@ -76,6 +70,12 @@ pub enum AggregatorError {
 
     #[error("Unable to look up service manager from service handler: {0:?}")]
     ServiceManagerLookup(alloy_contract::Error),
+
+    #[error("Service already registered: {0}")]
+    RepeatService(ServiceID),
+
+    #[error("No such service registered: {0}")]
+    MissingService(ServiceID),
 }
 
 #[derive(Error, Debug)]

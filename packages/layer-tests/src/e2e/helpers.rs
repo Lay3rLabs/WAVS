@@ -112,7 +112,7 @@ pub async fn deploy_service_for_test(
             .insert(service.id.clone())
         {
             let SubmitDefinition::Aggregator { url } = &workflow.submit;
-            TestRegistry::register_to_aggregator(url, &service.id, &service_url)
+            TestRegistry::register_to_aggregator(url, &service.id)
                 .await
                 .unwrap();
         }

@@ -2,6 +2,8 @@ use thiserror::Error;
 use utils::error::EvmClientError;
 use wavs_types::{ChainName, EnvelopeError, ServiceID};
 
+use crate::services::ServicesError;
+
 #[derive(Error, Debug)]
 pub enum SubmissionError {
     #[error("EVM client: {0}")]
@@ -54,4 +56,6 @@ pub enum SubmissionError {
     MissingEvmSendingClient(ChainName),
     #[error("envelope {0:?}")]
     Envelope(#[from] EnvelopeError),
+    #[error("services {0:?}")]
+    Services(#[from] ServicesError),
 }
