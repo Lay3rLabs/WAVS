@@ -557,7 +557,7 @@ pub async fn change_service_for_test(
     old_service: &Service,
     clients: &Clients,
     component_sources: &ComponentSources,
-    _cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) {
     let mut new_service = old_service.clone();
 
@@ -576,6 +576,24 @@ pub async fn change_service_for_test(
                 .expect("Workflow not found in service");
 
             workflow.component = component;
+        }
+        ChangeServiceDefinition::AddWorkflow {
+            workflow_id,
+            workflow,
+        } => {
+            let deployed_workflow = deploy_workflow(
+                workflow_id,
+                workflow,
+                new_service.manager.evm_address_unchecked(),
+                clients,
+                component_sources,
+                cosmos_trigger_code_map,
+            )
+            .await;
+
+            new_service
+                .workflows
+                .insert(workflow_id.clone(), deployed_workflow);
         }
     }
 
