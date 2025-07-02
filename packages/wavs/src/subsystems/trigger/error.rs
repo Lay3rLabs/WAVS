@@ -3,7 +3,10 @@ use tokio::sync::mpsc::error::SendError;
 use utils::error::EvmClientError;
 use wavs_types::{ByteArray, ChainName, ServiceID, WorkflowID};
 
-use crate::dispatcher::DispatcherCommand;
+use crate::{
+    dispatcher::DispatcherCommand,
+    subsystems::trigger::streams::local_command_stream::LocalStreamCommand,
+};
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
@@ -39,8 +42,10 @@ pub enum TriggerError {
     Cron { expression: String, reason: String },
     #[error("Interval start time cannot be after end time")]
     IntervalStartAfterEnd,
-    #[error("Send error: {0}")]
-    ActionSendError(#[from] SendError<DispatcherCommand>),
     #[error("Config error: {0}")]
     Config(String),
+    #[error("Dispatcher command send error: {0}")]
+    DispatcherCommandSendError(#[from] SendError<DispatcherCommand>),
+    #[error("Local command send error: {0}")]
+    LocalCommandError(#[from] SendError<LocalStreamCommand>),
 }
