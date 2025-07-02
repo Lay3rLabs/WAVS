@@ -16,7 +16,7 @@ use crate::{
         (status = 400, description = "Invalid service configuration"),
         (status = 500, description = "Internal server error during service registration")
     ),
-    description = "Registers a new service with the aggregator. The service definition includes workflows, aggregation settings, and contract details."
+    description = "Registers a new service with the aggregator."
 )]
 #[axum::debug_handler]
 #[instrument(level = "info", skip(state, req), fields(service_id = %req.service_id))]
