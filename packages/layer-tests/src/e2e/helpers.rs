@@ -3,7 +3,7 @@ use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     num::NonZero,
     sync::Arc,
     time::Duration,
@@ -26,6 +26,7 @@ use crate::{
             AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
             TestDefinition, TriggerDefinition,
         },
+        test_registry::TestRegistry,
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
@@ -50,6 +51,7 @@ pub async fn deploy_service_for_test(
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<ServiceID>>>,
 ) -> Service {
     tracing::info!("Deploying service for test: {}", test.name);
 
@@ -101,6 +103,20 @@ pub async fn deploy_service_for_test(
     let service_url = DeployService::save_service(&clients.cli_ctx, &service)
         .await
         .unwrap();
+
+    // First, register the service to the aggregator if needed
+    for workflow in test.workflows.values() {
+        if aggregator_registered_service_ids
+            .lock()
+            .unwrap()
+            .insert(service.id.clone())
+        {
+            let SubmitDefinition::Aggregator { url } = &workflow.submit;
+            TestRegistry::register_to_aggregator(url, &service.id)
+                .await
+                .unwrap();
+        }
+    }
 
     // Deploy the service on WAVS
     DeployService::run(

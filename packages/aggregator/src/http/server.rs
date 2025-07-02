@@ -1,4 +1,4 @@
-use crate::{config::Config, AppContext};
+use crate::{config::Config, http::handlers::handle_register_service, AppContext};
 use axum::routing::{get, post};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::instrument;
@@ -7,10 +7,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
 
 use super::{
-    handlers::{
-        handle_config, handle_info, handle_not_found, handle_packet,
-        ApiDoc,
-    },
+    handlers::{handle_config, handle_info, handle_not_found, handle_packet, ApiDoc},
     state::HttpState,
 };
 
@@ -49,6 +46,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         .route("/config", get(handle_config))
         .route("/info", get(handle_info))
         .route("/packet", post(handle_packet))
+        .route("/register-service", post(handle_register_service))
         .fallback(handle_not_found)
         .with_state(state);
 

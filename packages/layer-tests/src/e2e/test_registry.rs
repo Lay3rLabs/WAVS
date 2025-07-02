@@ -3,9 +3,10 @@ use regex::Regex;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::{ChainName, Trigger, WorkflowID};
+use wavs_types::{ChainName, ServiceID, Trigger, WorkflowID};
 
 use super::chain_names::ChainNames;
 use super::clients::Clients;
@@ -55,6 +56,34 @@ impl TestRegistry {
             map.entry(test.group).or_default().push(test);
         }
         map
+    }
+
+    /// Registers a service on the aggregator
+    pub async fn register_to_aggregator(
+        aggregator_url: &str,
+        service_id: &ServiceID,
+    ) -> anyhow::Result<()> {
+        let http_client = reqwest::Client::new();
+
+        let endpoint = format!("{}/register-service", aggregator_url);
+        let payload = RegisterServiceRequest {
+            service_id: service_id.clone(),
+        };
+
+        tracing::info!(
+            "Registering service {} with aggregator at {}",
+            service_id,
+            endpoint
+        );
+
+        http_client
+            .post(&endpoint)
+            .json(&payload)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
     }
 
     /// Create a registry based on the test mode

@@ -7,6 +7,7 @@ use utoipa::OpenApi;
         config::handle_config,
         info::handle_info,
         packet::handle_packet,
+        register_service::handle_register_service
     ),
     info(
         title = "WAVS Aggregator API",

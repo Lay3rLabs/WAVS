@@ -11,7 +11,7 @@ use utils::{
     evm_client::EvmSigningClient,
     storage::db::{RedbStorage, Table, JSON},
 };
-use wavs_types::{ChainName, EventId, Packet};
+use wavs_types::{ChainName, EventId, Packet, ServiceID};
 
 use crate::{
     config::Config,
@@ -39,7 +39,6 @@ impl PacketQueueId {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum PacketQueue {
@@ -62,6 +61,9 @@ pub struct HttpState {
     storage: Arc<RedbStorage>,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
 }
+
+// key is ServiceId
+const SERVICES: Table<&str, ()> = Table::new("services");
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
@@ -133,5 +135,27 @@ impl HttpState {
         queue: PacketQueue,
     ) -> AggregatorResult<()> {
         Ok(self.storage.set(PACKET_QUEUES, &id.to_bytes()?, &queue)?)
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    pub fn service_registered(&self, service_id: &ServiceID) -> bool {
+        self.storage
+            .get(SERVICES, service_id)
+            .ok()
+            .flatten()
+            .is_some()
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    pub fn register_service(&self, service_id: &ServiceID) -> AggregatorResult<()> {
+        if self.storage.get(SERVICES, service_id)?.is_none() {
+            tracing::info!("Registering aggregator for service {}", service_id);
+
+            self.storage.set(SERVICES, service_id, &())?;
+        } else {
+            tracing::warn!("Attempted to register duplicate service: {}", service_id);
+            return Err(AggregatorError::RepeatService(service_id.clone()));
+        }
+        Ok(())
     }
 }

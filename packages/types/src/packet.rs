@@ -1,6 +1,7 @@
 pub use crate::solidity_types::Envelope;
 use crate::{
-    Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction, WorkflowID, 
+    Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction,
+    WorkflowID,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_signer::Signer;
@@ -150,7 +151,9 @@ impl From<EventId> for FixedBytes<20> {
 impl TryFrom<(&Service, &TriggerAction)> for EventId {
     type Error = anyhow::Error;
 
-    fn try_from((service, trigger_action): (&Service, &TriggerAction)) -> std::result::Result<EventId, Self::Error> {
+    fn try_from(
+        (service, trigger_action): (&Service, &TriggerAction),
+    ) -> std::result::Result<EventId, Self::Error> {
         let service_digest = service.hash()?;
         let action_bytes = bincode::encode_to_vec(trigger_action, bincode::config::standard())?;
 

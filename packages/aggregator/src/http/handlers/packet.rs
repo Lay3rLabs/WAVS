@@ -50,6 +50,9 @@ async fn process_packet(
     state: HttpState,
     packet: &Packet,
 ) -> AggregatorResult<Vec<AddPacketResponse>> {
+    if !state.service_registered(&packet.service.id) {
+        return Err(AggregatorError::MissingService(packet.service.id.clone()));
+    }
     let event_id = packet.event_id();
 
     tracing::info!(
@@ -76,7 +79,9 @@ async fn process_packet(
     // but drop it after this scope so we don't confuse it with the service manager
     // that is used for the actual submission
     let signer = {
-        let service_manager_client = state.get_evm_client(packet.service.manager.chain_name()).await?;
+        let service_manager_client = state
+            .get_evm_client(packet.service.manager.chain_name())
+            .await?;
         let service_manager = IWavsServiceManagerInstance::new(
             packet.service.manager.evm_address_unchecked(),
             service_manager_client.provider,
@@ -354,7 +359,12 @@ mod test {
         let envelope_1 = mock_envelope(1, [1, 2, 3]);
         let envelope_2 = mock_envelope(2, [4, 5, 6]);
 
-        let packet_1 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap(), "workflow-1".parse().unwrap());
+        let packet_1 = mock_packet(
+            &signer_1,
+            &envelope_1,
+            "service-1".parse().unwrap(),
+            "workflow-1".parse().unwrap(),
+        );
 
         let derived_signer_1_address = packet_1
             .signature
@@ -366,7 +376,12 @@ mod test {
         let queue = add_packet_to_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
 
         // succeeds, replaces the packet for the signer
-        let packet_2 = mock_packet(&signer_1, &envelope_1, "service-1".parse().unwrap(), "workflow-1".parse().unwrap());
+        let packet_2 = mock_packet(
+            &signer_1,
+            &envelope_1,
+            "service-1".parse().unwrap(),
+            "workflow-1".parse().unwrap(),
+        );
         let queue = add_packet_to_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
         assert_eq!(queue.len(), 1);
         assert_eq!(
@@ -375,11 +390,21 @@ mod test {
         );
 
         // "fails" (expectedly) because the envelope is different
-        let packet_3 = mock_packet(&signer_2, &envelope_2, "service-1".parse().unwrap(), "workflow-1".parse().unwrap());
+        let packet_3 = mock_packet(
+            &signer_2,
+            &envelope_2,
+            "service-1".parse().unwrap(),
+            "workflow-1".parse().unwrap(),
+        );
         add_packet_to_queue(&packet_3, queue.clone(), signer_2.address()).unwrap_err();
 
         // passes because the signer is different but envelope is the same
-        let packet_3 = mock_packet(&signer_2, &envelope_1, "service-1".parse().unwrap(), "workflow-1".parse().unwrap());
+        let packet_3 = mock_packet(
+            &signer_2,
+            &envelope_1,
+            "service-1".parse().unwrap(),
+            "workflow-1".parse().unwrap(),
+        );
         add_packet_to_queue(&packet_3, queue, signer_2.address()).unwrap();
     }
 
@@ -458,7 +483,12 @@ mod test {
 
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
-            let packet = packet_from_service(&signer, &service, &service.workflows.keys().next().unwrap(), &envelope);
+            let packet = packet_from_service(
+                &signer,
+                &service,
+                &service.workflows.keys().next().unwrap(),
+                &envelope,
+            );
             let state = deps.state.clone();
             let results = process_packet(state.clone(), &packet).await.unwrap();
             all_results.push(results);
@@ -495,7 +525,12 @@ mod test {
         // now try again, for the same envelope - should be similar except we get burn results
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
-            let packet = packet_from_service(&signer, &service, &service.workflows.keys().next().unwrap(), &envelope);
+            let packet = packet_from_service(
+                &signer,
+                &service,
+                &service.workflows.keys().next().unwrap(),
+                &envelope,
+            );
             let state = deps.state.clone();
             let results = process_packet(state.clone(), &packet).await.unwrap();
             all_results.push(results);
@@ -541,7 +576,12 @@ mod test {
 
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
-            let packet = packet_from_service(&signer, &service, &service.workflows.keys().next().unwrap(), &envelope);
+            let packet = packet_from_service(
+                &signer,
+                &service,
+                &service.workflows.keys().next().unwrap(),
+                &envelope,
+            );
             let state = deps.state.clone();
             let results = process_packet(state.clone(), &packet).await.unwrap();
             all_results.push(results);
@@ -625,7 +665,12 @@ mod test {
             )
             .await;
 
-        let packet = packet_from_service(&signer, &service, &service.workflows.keys().next().unwrap(), &envelope);
+        let packet = packet_from_service(
+            &signer,
+            &service,
+            &service.workflows.keys().next().unwrap(),
+            &envelope,
+        );
 
         // First packet: should be validated and sent
         let responses = process_packet(deps.state.clone(), &packet).await.unwrap();
@@ -701,7 +746,12 @@ mod test {
 
         if !concurrent {
             for (index, signer) in signers.iter().enumerate() {
-                let packet = packet_from_service(&signer, &service, &service.workflows.keys().next().unwrap(), &envelope);
+                let packet = packet_from_service(
+                    &signer,
+                    &service,
+                    &service.workflows.keys().next().unwrap(),
+                    &envelope,
+                );
                 let resp = process_packet(deps.state.clone(), &packet)
                     .await
                     .unwrap()
@@ -736,8 +786,12 @@ mod test {
             let mut futures = FuturesUnordered::new();
             // in concurrent mode, just fire off exactly NUM_THRESHHOLD signers
             for signer in signers.iter().take(NUM_THRESHOLD) {
-
-                let packet = packet_from_service(&signer, &service, &service.workflows.keys().next().unwrap(), &envelope);
+                let packet = packet_from_service(
+                    &signer,
+                    &service,
+                    &service.workflows.keys().next().unwrap(),
+                    &envelope,
+                );
                 futures.push({
                     let state = deps.state.clone();
                     let seen_count = seen_count.clone();
@@ -760,7 +814,12 @@ mod test {
         }
 
         // last one should be burned
-        let packet = packet_from_service(signers.last().unwrap(), &service, &service.workflows.keys().next().unwrap(), &envelope);
+        let packet = packet_from_service(
+            signers.last().unwrap(),
+            &service,
+            &service.workflows.keys().next().unwrap(),
+            &envelope,
+        );
         let responses = process_packet(deps.state.clone(), &packet).await.unwrap();
         for resp in responses {
             assert!(matches!(resp, AddPacketResponse::Burned));
