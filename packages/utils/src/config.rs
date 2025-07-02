@@ -264,7 +264,6 @@ impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
     }
 }
 
-
 impl ChainConfigs {
     pub fn get_chain(
         &self,

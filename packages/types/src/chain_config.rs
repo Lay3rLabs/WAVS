@@ -1,6 +1,6 @@
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use layer_climb::prelude::*;
 
 use crate::{ChainName, IDError};
 
@@ -77,7 +77,6 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
     }
 }
 
-// Cosmos chain implementations
 impl From<CosmosChainConfig> for ChainConfig {
     fn from(config: CosmosChainConfig) -> Self {
         Self {
@@ -159,9 +158,7 @@ impl AnyChainConfig {
         Ok(cosmos_config.to_chain_config())
     }
 
-    pub fn from_layer_climb_config(
-        config: ChainConfig,
-    ) -> Result<Self, ChainConfigError> {
+    pub fn from_layer_climb_config(config: ChainConfig) -> Result<Self, ChainConfigError> {
         let cosmos_config = CosmosChainConfig::from_chain_config(config)?;
         Ok(AnyChainConfig::Cosmos(cosmos_config))
     }

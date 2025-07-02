@@ -5,9 +5,7 @@ use thiserror::Error;
 use wavs_types::ChainName;
 
 use crate::{
-    config::{
-        ChainConfigs, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt,
-    },
+    config::{ChainConfigs, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
     error::EvmClientError,
     evm_client::EvmQueryClient,
 };
