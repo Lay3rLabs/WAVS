@@ -1721,7 +1721,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-network",
  "anyhow",
@@ -2069,7 +2069,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -2988,21 +2988,21 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-cron-interval"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3180,7 +3180,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -4479,7 +4479,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5497,7 +5497,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "permissions"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -7210,7 +7210,7 @@ checksum = "3b9b39299b249ad65f3b7e96443bad61c02ca5cd3589f46cb6d610a0fd6c0d6a"
 
 [[package]]
 name = "square"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",
  "serde",
@@ -8268,7 +8268,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -9238,7 +9238,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -9296,7 +9296,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9327,7 +9327,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-benchmark-common"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "tempfile",
  "utils",
@@ -9338,7 +9338,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -9368,7 +9368,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -9384,7 +9384,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
