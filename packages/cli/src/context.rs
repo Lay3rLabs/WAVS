@@ -4,7 +4,10 @@ use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
 use alloy_provider::Provider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
-use utils::{config::AnyChainConfig, evm_client::EvmSigningClient};
+use utils::{
+    config::{AnyChainConfig, EvmChainConfigExt},
+    evm_client::EvmSigningClient,
+};
 use wavs_types::ChainName;
 
 use crate::{args::Command, deploy::Deployment};
@@ -89,7 +92,7 @@ impl CliContext {
             None,
         )?;
 
-        let climb_chain_config: ChainConfig = chain_config.into();
+        let climb_chain_config: ChainConfig = chain_config.to_chain_config();
         SigningClient::new(climb_chain_config, key_signer, None).await
     }
 

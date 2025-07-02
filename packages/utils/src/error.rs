@@ -1,8 +1,6 @@
 use alloy_rpc_types_eth::TransactionReceipt;
 use thiserror::Error;
 
-use wavs_types::ChainName;
-
 #[derive(Debug, Error)]
 pub enum EvmClientError {
     #[error("HD index must be zero when using a private key (use mnemonic instead)")]
@@ -46,16 +44,4 @@ pub enum EvmClientError {
 
     #[error("Unable to get block height")]
     BlockHeight,
-}
-
-#[derive(Debug, Error)]
-pub enum ChainConfigError {
-    #[error("Expected EVM chain")]
-    ExpectedEvmChain,
-
-    #[error("Expected Cosmos chain")]
-    ExpectedCosmosChain,
-
-    #[error("Duplicate chain name for {0}")]
-    DuplicateChainName(ChainName),
 }

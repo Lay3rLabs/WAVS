@@ -39,7 +39,7 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
         .next()
         .context("no active cosmos chain")?
         .clone()
-        .into();
+        .to_chain_config();
 
     let mnemonic = state
         .config

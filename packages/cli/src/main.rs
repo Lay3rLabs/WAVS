@@ -3,7 +3,10 @@ use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::service::fetch_service;
-use utils::{config::ConfigExt, evm_client::EvmSigningClient};
+use utils::{
+    config::{ConfigExt, EvmChainConfigExt},
+    evm_client::EvmSigningClient,
+};
 use wavs_cli::command::deploy_service::SetServiceUrlArgs;
 use wavs_cli::{
     args::Command,

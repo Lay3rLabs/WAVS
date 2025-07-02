@@ -42,6 +42,8 @@ pub enum TriggerError {
     Cron { expression: String, reason: String },
     #[error("Interval start time cannot be after end time")]
     IntervalStartAfterEnd,
+    #[error("Config error: {0}")]
+    Config(String),
     #[error("Dispatcher command send error: {0}")]
     DispatcherCommandSendError(#[from] SendError<DispatcherCommand>),
     #[error("Local command send error: {0}")]

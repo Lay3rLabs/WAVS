@@ -1,7 +1,7 @@
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
@@ -18,7 +18,7 @@ use utils::storage::{CAStorage, CAStorageError};
 use super::error::EngineError;
 
 pub struct WasmEngine<S: CAStorage> {
-    chain_configs: ChainConfigs,
+    chain_configs: Arc<RwLock<ChainConfigs>>,
     wasm_storage: S,
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
@@ -60,7 +60,7 @@ impl<S: CAStorage> WasmEngine<S> {
             wasm_engine,
             memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
-            chain_configs,
+            chain_configs: Arc::new(RwLock::new(chain_configs)),
             max_execution_seconds,
             max_wasm_fuel,
             metrics,
@@ -192,7 +192,7 @@ impl<S: CAStorage> WasmEngine<S> {
             data_dir: self
                 .app_data_dir
                 .join(trigger_action.config.service_id.as_ref()),
-            chain_configs: &self.chain_configs,
+            chain_configs: &self.chain_configs.read().unwrap(),
             log,
             max_execution_seconds: self.max_execution_seconds,
             max_wasm_fuel: self.max_wasm_fuel,

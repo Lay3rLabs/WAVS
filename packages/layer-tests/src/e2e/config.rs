@@ -4,7 +4,7 @@ use alloy_provider::Provider;
 use alloy_rpc_types_eth::TransactionRequest;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
-    config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EvmChainConfig},
+    config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
     evm_client::EvmSigningClient,
     filesystem::workspace_path,
 };

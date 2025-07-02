@@ -1,4 +1,5 @@
 mod bytes;
+mod chain_config;
 mod digest;
 mod http;
 mod id;
@@ -7,6 +8,7 @@ mod service;
 mod solidity_types;
 mod timestamp;
 pub use bytes::*;
+pub use chain_config::*;
 pub use digest::*;
 pub use http::*;
 pub use id::*;

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utils::{
     async_transaction::AsyncTransaction,
-    config::EvmChainConfig,
+    config::{EvmChainConfig, EvmChainConfigExt},
     evm_client::EvmSigningClient,
     storage::db::{RedbStorage, Table, JSON},
 };

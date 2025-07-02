@@ -28,16 +28,16 @@ use alloy_provider::ProviderBuilder;
 use anyhow::Result;
 use layer_climb::prelude::Address;
 use std::ops::Bound;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
-use utils::error::ChainConfigError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
+use wavs_types::ChainConfigError;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
@@ -67,7 +67,7 @@ pub struct Dispatcher<S: CAStorage> {
     pub engine_manager: EngineManager<S>,
     pub submission_manager: SubmissionManager,
     pub services: Services,
-    pub chain_configs: ChainConfigs,
+    pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
 }
@@ -106,7 +106,7 @@ impl Dispatcher<FileStorage> {
             engine_manager,
             submission_manager,
             services,
-            chain_configs: config.chains.clone(),
+            chain_configs: Arc::new(RwLock::new(config.chains.clone())),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
         })
@@ -223,13 +223,10 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         chain_name: ChainName,
         address: Address,
     ) -> Result<Service, DispatcherError> {
-        let service = query_service_from_address(
-            chain_name,
-            address,
-            &self.chain_configs,
-            &self.ipfs_gateway,
-        )
-        .await?;
+        let chain_configs = self.chain_configs.read().unwrap().clone();
+        let service =
+            query_service_from_address(chain_name, address, &chain_configs, &self.ipfs_gateway)
+                .await?;
 
         self.add_service_direct(service.clone()).await?;
 
@@ -238,7 +235,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let total_services = current_services.len();
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
-        tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}", 
+        tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}",
             service.id, service.workflows.len(), total_services, total_workflows);
 
         Ok(service)
