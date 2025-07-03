@@ -205,13 +205,10 @@ fn dispatcher_node_status() {
             .unwrap();
     });
 
-    assert_eq!(
-        dispatcher
-            .submission_manager
-            .services
-            .is_active(&service_id),
-        false
-    );
+    assert!(!dispatcher
+        .submission_manager
+        .services
+        .is_active(&service_id),);
 
     // Ensure we have no messages for a disabled service
     thread::sleep(SUBMISSION_TIMEOUT);
