@@ -28,6 +28,7 @@ impl CommandDeployResult for DeployService {
 #[derive(Clone)]
 pub struct DeployServiceArgs {
     pub service: Service,
+    pub is_enabled: Option<bool>,
     pub set_service_url_args: Option<SetServiceUrlArgs>,
 }
 
@@ -45,7 +46,7 @@ impl DeployService {
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
         http_client
-            .create_service(service, args.set_service_url_args.clone())
+            .create_service(service, args.is_enabled, args.set_service_url_args.clone())
             .await
             .context(format!("Failed to deploy service with ID '{}'", service_id))?;
 

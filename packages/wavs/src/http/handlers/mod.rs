@@ -4,6 +4,7 @@ mod info;
 mod not_found;
 pub(crate) mod openapi;
 pub mod service;
+pub mod services;
 
 pub use chain::add::handle_add_chain;
 pub use config::handle_config;

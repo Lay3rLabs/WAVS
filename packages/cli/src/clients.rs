@@ -50,6 +50,7 @@ impl HttpClient {
     pub async fn create_service(
         &self,
         service: Service,
+        is_enabled: Option<bool>,
         save_service_args: Option<SetServiceUrlArgs>,
     ) -> Result<()> {
         if let Some(save_service) = save_service_args {
@@ -63,6 +64,7 @@ impl HttpClient {
 
         let body: String = serde_json::to_string(&AddServiceRequest {
             chain_name: service.manager.chain_name().clone(),
+            is_enabled,
             address: Address::Evm(service.manager.evm_address_unchecked().into()),
         })?;
 

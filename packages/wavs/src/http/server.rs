@@ -1,6 +1,11 @@
 use crate::{
-    config::Config, dispatcher::Dispatcher,
-    http::handlers::service::get::handle_get_service_by_hash, AppContext,
+    config::Config,
+    dispatcher::Dispatcher,
+    http::handlers::{
+        service::get::handle_get_service_by_hash,
+        services::status::post::handle_post_service_status,
+    },
+    AppContext,
 };
 use axum::{
     extract::DefaultBodyLimit,
@@ -81,6 +86,10 @@ pub async fn make_router(
         )
         .route("/service-key/{service_id}", get(handle_get_service_key))
         .route("/save-service", post(handle_save_service))
+        .route(
+            "/services/{service_id}/status",
+            post(handle_post_service_status),
+        )
         .route("/app", get(handle_list_services))
         .route("/app", post(handle_add_service))
         .route("/app", delete(handle_delete_service))

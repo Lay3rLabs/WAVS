@@ -1,7 +1,11 @@
 use axum::{extract::State, response::IntoResponse, Json};
 use reqwest::StatusCode;
 
-use crate::http::{error::HttpResult, state::HttpState};
+use crate::http::{
+    error::HttpResult,
+    handlers::services::status::post::{post_service_status, ServiceStatusRequest},
+    state::HttpState,
+};
 use wavs_types::AddServiceRequest;
 
 #[utoipa::path(
@@ -31,9 +35,20 @@ async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResu
     let AddServiceRequest {
         chain_name,
         address,
+        is_enabled,
     } = req;
 
-    state.dispatcher.add_service(chain_name, address).await?;
+    let service = state.dispatcher.add_service(chain_name, address).await?;
+
+    // Services are enabled by default, so only update state if we need to disable on init
+    if !is_enabled.unwrap_or(true) {
+        post_service_status(
+            &state,
+            service.id,
+            ServiceStatusRequest { is_enabled: false },
+        )
+        .await?;
+    }
 
     state.metrics.increment_registered_services();
 

@@ -25,6 +25,8 @@ pub struct AddServiceRequest {
     pub chain_name: ChainName,
     #[schema(value_type = Object)]
     pub address: Address,
+    /// Optionally configure the service to be initialized as enabled/disabled on the node (defaults to enabled)
+    pub is_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]

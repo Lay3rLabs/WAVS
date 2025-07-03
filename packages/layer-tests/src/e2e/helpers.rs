@@ -123,6 +123,7 @@ pub async fn deploy_service_for_test(
         &clients.cli_ctx,
         DeployServiceArgs {
             service: service.clone(),
+            is_enabled: None,
             set_service_url_args: Some(SetServiceUrlArgs {
                 provider: submit_client.provider.clone(),
                 service_url: service_url.clone(),

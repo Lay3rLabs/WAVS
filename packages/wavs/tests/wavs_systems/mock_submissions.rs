@@ -17,7 +17,7 @@ pub fn mock_event_order() -> EventOrder {
     FixedBytes::new([0; 12]).into()
 }
 
-const SUBMISSION_TIMEOUT: Duration = Duration::from_secs(1);
+pub(crate) const SUBMISSION_TIMEOUT: Duration = Duration::from_secs(1);
 const SUBMISSION_POLL: Duration = Duration::from_millis(50);
 
 /// This will block until n messages arrive in the inbox, or until custom Duration passes

@@ -71,6 +71,7 @@ async fn main() {
         Command::DeployService {
             service_url,
             set_url,
+            is_enabled,
             args: _,
         } => {
             let service = fetch_service(&service_url, &ctx.config.ipfs_gateway)
@@ -98,6 +99,7 @@ async fn main() {
                 &ctx,
                 DeployServiceArgs {
                     service,
+                    is_enabled,
                     set_service_url_args,
                 },
             )

@@ -1,5 +1,6 @@
 use std::{ops::Bound, sync::Arc};
 
+use dashmap::DashSet;
 use redb::ReadableTable;
 use thiserror::Error;
 use tracing::instrument;
@@ -13,11 +14,15 @@ type Result<T> = std::result::Result<T, ServicesError>;
 #[derive(Clone)]
 pub struct Services {
     db_storage: Arc<RedbStorage>,
+    disabled_services: Arc<DashSet<ServiceID>>,
 }
 
 impl Services {
     pub fn new(db_storage: Arc<RedbStorage>) -> Self {
-        Self { db_storage }
+        Self {
+            db_storage,
+            disabled_services: Arc::new(DashSet::new()),
+        }
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
@@ -46,12 +51,28 @@ impl Services {
     }
 
     pub fn is_active(&self, service_id: &ServiceID) -> bool {
+        if self.disabled_services.contains(service_id) {
+            return false;
+        }
+
         self.get(service_id)
             .map(|service| match service.status {
                 ServiceStatus::Active => true,
                 ServiceStatus::Paused => false,
             })
             .unwrap_or(false)
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    pub fn update_node_service_status(&self, service_id: ServiceID, is_enabled: bool) {
+        match is_enabled {
+            true => {
+                self.disabled_services.remove(&service_id);
+            }
+            false => {
+                self.disabled_services.insert(service_id);
+            }
+        }
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
