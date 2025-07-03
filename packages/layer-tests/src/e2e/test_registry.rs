@@ -497,11 +497,13 @@ impl TestRegistry {
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multi_workflow")
-                .with_description("Tests multiple workflows in a single service on EVM chain")
+                .with_description(
+                    "Tests multiple workflows with shared keyvalue store on EVM chain",
+                )
                 .add_workflow(
-                    WorkflowID::new("square_workflow").unwrap(),
+                    WorkflowID::new("kv_writer_workflow").unwrap(),
                     WorkflowBuilder::new()
-                        .with_component(ComponentName::Square.into())
+                        .with_component(ComponentName::KvWriter.into())
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -514,13 +516,13 @@ impl TestRegistry {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Square { x: 10 })
-                        .with_expected_output(ExpectedOutput::Square { y: 100 })
+                        .with_expected_output(ExpectedOutput::Text("{\"saved_x\":10}".to_string()))
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("echo_data_workflow").unwrap(),
+                    WorkflowID::new("kv_reader_workflow").unwrap(),
                     WorkflowBuilder::new()
-                        .with_component(ComponentName::EchoData.into())
+                        .with_component(ComponentName::KvReader.into())
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -532,8 +534,8 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Text("Multi-workflow".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("Multi-workflow".to_string()))
+                        .with_input_data(InputData::Text("read_data".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("{\"read_x\":10}".to_string()))
                         .build(),
                 )
                 .build(),

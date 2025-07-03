@@ -10,7 +10,7 @@ log_level = ["info", "wavs=debug"]
 
 # Run a specific test
 mode = {"isolated" = [
-    {evm = "kv_store"},
+    {evm = "multi_workflow"},
 ]}
 
 # Run a few specific tests

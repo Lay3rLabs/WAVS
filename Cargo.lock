@@ -4355,13 +4355,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "kv-reader"
+version = "0.5.0-alpha.4"
+dependencies = [
+ "example-helpers",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "kv-store"
-version = "0.5.0-alpha.3"
+version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",
  "serde",
  "wit-bindgen",
  "wstd",
+]
+
+[[package]]
+name = "kv-writer"
+version = "0.5.0-alpha.4"
+dependencies = [
+ "example-helpers",
+ "serde",
+ "serde_json",
+ "wit-bindgen",
 ]
 
 [[package]]

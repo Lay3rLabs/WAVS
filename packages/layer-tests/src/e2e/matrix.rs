@@ -135,7 +135,7 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::KvStore => vec![ComponentName::KvStore],
             EvmService::Permissions => vec![ComponentName::Permissions],
             EvmService::Square => vec![ComponentName::Square],
-            EvmService::MultiWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
+            EvmService::MultiWorkflow => vec![ComponentName::KvWriter, ComponentName::KvReader],
             EvmService::MultiTrigger => vec![ComponentName::EchoData],
             EvmService::BlockInterval => vec![ComponentName::EchoBlockInterval],
             EvmService::BlockIntervalStartStop => vec![ComponentName::EchoBlockInterval],
