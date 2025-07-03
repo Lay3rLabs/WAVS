@@ -44,4 +44,28 @@ impl super::world::host::Host for HostComponent {
             message,
         );
     }
+
+    fn shared_kv_get(&mut self, key: String) -> Option<Vec<u8>> {
+        self.shared_keyvalue_store
+            .read()
+            .unwrap()
+            .get(&key)
+            .cloned()
+    }
+
+    fn shared_kv_set(&mut self, key: String, value: Vec<u8>) -> Result<(), String> {
+        self.shared_keyvalue_store
+            .write()
+            .unwrap()
+            .insert(key, value);
+        Ok(())
+    }
+
+    fn shared_kv_delete(&mut self, key: String) -> Result<(), String> {
+        self.shared_keyvalue_store
+            .write()
+            .unwrap()
+            .remove(&key);
+        Ok(())
+    }
 }

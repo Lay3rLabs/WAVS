@@ -5,7 +5,6 @@ use example_helpers::{
     export_layer_trigger_world,
 };
 use serde::{Deserialize, Serialize};
-use example_helpers::bindings::world::wasi;
 
 struct Component;
 
@@ -13,18 +12,15 @@ impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> Result<Option<WasmResponse>, String> {
         host::log(host::LogLevel::Info, "KV Writer component triggered");
 
-        let trigger_id = 1u64;
+        let (trigger_id, _req) =
+            decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
         
         let test_input = SquareRequest { x: 10 };
 
-        // Open the keyvalue store using generated bindings
-        let bucket = wasi::keyvalue::store::open("").map_err(|e| format!("Failed to open store: {:?}", e))?;
-
-        // Save the input data
+        // Save the input data using shared keyvalue
         let data = serde_json::to_string(&test_input).map_err(|e| e.to_string())?;
-        bucket
-            .set("square_input", data.as_bytes())
-            .map_err(|e| format!("Failed to store data: {:?}", e))?;
+        host::shared_kv_set("square_input", data.as_bytes())
+            .map_err(|e| format!("Failed to store data: {}", e))?;
 
         host::log(
             host::LogLevel::Info,

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use utils::config::ChainConfigs;
 use wasmtime_wasi::{IoView, WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
@@ -17,6 +19,7 @@ pub struct HostComponent {
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,
     pub(crate) keyvalue: WasiKeyValueCtx,
+    pub(crate) shared_keyvalue_store: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     pub(crate) inner_log: HostComponentLogger,
 }
 
