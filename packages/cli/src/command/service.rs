@@ -4,8 +4,17 @@ mod validate;
 #[cfg(test)]
 mod tests;
 
-pub use types::*;
-pub use validate::*;
+pub use types::{
+    ChainType, ComponentConfigResult, ComponentEnvKeysResult, ComponentFuelLimitResult,
+    ComponentPermissionsResult, ComponentSourceDigestResult, ComponentSourceRegistryResult,
+    ComponentTimeLimitResult, EvmManagerResult, ServiceInitResult, ServiceValidationResult,
+    UpdateStatusResult, WorkflowAddAggregatorResult, WorkflowAddResult, WorkflowDeleteResult,
+    WorkflowSetSubmitAggregatorResult, WorkflowTriggerResult,
+};
+pub use validate::{
+    check_cosmos_contract_exists, check_evm_contract_exists, validate_contracts_exist,
+    validate_registry_availability, validate_workflow_trigger,
+};
 
 use alloy_json_abi::Event;
 use alloy_provider::Provider;
