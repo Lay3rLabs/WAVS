@@ -119,7 +119,7 @@ pub enum ServiceCommand {
         #[clap(subcommand)]
         command: ManagerCommand,
     },
-    /// Update the service status
+    /// Update the service status to Active or Paused
     UpdateStatus {
         #[clap(long)]
         status: ServiceStatus,
