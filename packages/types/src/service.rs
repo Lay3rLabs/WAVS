@@ -336,7 +336,7 @@ impl FromStr for ServiceStatus {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        match s.to_lowercase().as_str() {
             "active" => Ok(ServiceStatus::Active),
             "paused" => Ok(ServiceStatus::Paused),
             _ => Err(anyhow::anyhow!("Invalid service status: {}", s)),
