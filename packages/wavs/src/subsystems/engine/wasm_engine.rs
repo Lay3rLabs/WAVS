@@ -18,6 +18,9 @@ use utils::storage::{CAStorage, CAStorageError};
 
 use super::error::EngineError;
 
+type SharedKeyValueStore = Arc<RwLock<HashMap<String, Vec<u8>>>>;
+type KeyValueStores = Arc<RwLock<HashMap<ServiceID, SharedKeyValueStore>>>;
+
 pub struct WasmEngine<S: CAStorage> {
     chain_configs: Arc<RwLock<ChainConfigs>>,
     wasm_storage: S,
@@ -28,7 +31,7 @@ pub struct WasmEngine<S: CAStorage> {
     max_execution_seconds: Option<u64>,
     metrics: EngineMetrics,
     // Shared keyvalue stores per service
-    keyvalue_stores: Arc<RwLock<HashMap<ServiceID, Arc<RwLock<HashMap<String, Vec<u8>>>>>>>,
+    keyvalue_stores: KeyValueStores,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -203,7 +206,7 @@ impl<S: CAStorage> WasmEngine<S> {
             log,
             max_execution_seconds: self.max_execution_seconds,
             max_wasm_fuel: self.max_wasm_fuel,
-            shared_keyvalue_store: shared_keyvalue_store,
+            shared_keyvalue_store,
         }
         .build()?;
 
@@ -215,10 +218,7 @@ impl<S: CAStorage> WasmEngine<S> {
     }
 
     /// Get or create a shared keyvalue store for a service
-    fn get_or_create_keyvalue_store(
-        &self,
-        service_id: &ServiceID,
-    ) -> Arc<RwLock<HashMap<String, Vec<u8>>>> {
+    fn get_or_create_keyvalue_store(&self, service_id: &ServiceID) -> SharedKeyValueStore {
         let mut stores = self.keyvalue_stores.write().unwrap();
         stores
             .entry(service_id.clone())
