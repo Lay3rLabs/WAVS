@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-type SharedKeyValueStore = Arc<RwLock<HashMap<String, Vec<u8>>>>;
-
 use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
 use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
@@ -13,6 +11,8 @@ use wasmtime_wasi_keyvalue::WasiKeyValue;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
 use crate::{EngineError, HostComponent, HostComponentLogger};
+
+type SharedKeyValueStore = Arc<RwLock<HashMap<String, Vec<u8>>>>;
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
