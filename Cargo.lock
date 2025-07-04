@@ -4364,16 +4364,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kv-store"
-version = "0.5.0-alpha.4"
-dependencies = [
- "example-helpers",
- "serde",
- "wit-bindgen",
- "wstd",
-]
-
-[[package]]
 name = "kv-writer"
 version = "0.5.0-alpha.4"
 dependencies = [
