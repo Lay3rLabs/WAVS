@@ -1,6 +1,6 @@
-use crate::{bindings::world::wavs::worker::layer_types as component, EngineError};
+use crate::{bindings::world::wavs::types::core as component_core, bindings::world::wavs::types::service as component_service, EngineError};
 
-impl From<wavs_types::WasmResponse> for component::WasmResponse {
+impl From<wavs_types::WasmResponse> for component_core::WasmResponse {
     fn from(src: wavs_types::WasmResponse) -> Self {
         Self {
             payload: src.payload,
@@ -9,8 +9,8 @@ impl From<wavs_types::WasmResponse> for component::WasmResponse {
     }
 }
 
-impl From<component::WasmResponse> for wavs_types::WasmResponse {
-    fn from(src: component::WasmResponse) -> Self {
+impl From<component_core::WasmResponse> for wavs_types::WasmResponse {
+    fn from(src: component_core::WasmResponse) -> Self {
         Self {
             payload: src.payload,
             ordering: src.ordering,
@@ -18,7 +18,7 @@ impl From<component::WasmResponse> for wavs_types::WasmResponse {
     }
 }
 
-impl TryFrom<wavs_types::TriggerAction> for component::TriggerAction {
+impl TryFrom<wavs_types::TriggerAction> for component_core::TriggerAction {
     type Error = EngineError;
 
     fn try_from(src: wavs_types::TriggerAction) -> Result<Self, Self::Error> {
@@ -29,26 +29,26 @@ impl TryFrom<wavs_types::TriggerAction> for component::TriggerAction {
     }
 }
 
-impl TryFrom<wavs_types::TriggerConfig> for component::TriggerConfig {
+impl TryFrom<wavs_types::TriggerConfig> for component_core::TriggerConfig {
     type Error = EngineError;
 
     fn try_from(src: wavs_types::TriggerConfig) -> Result<Self, Self::Error> {
         Ok(Self {
             service_id: src.service_id.to_string(),
             workflow_id: src.workflow_id.to_string(),
-            trigger_source: src.trigger.try_into()?,
+            trigger: src.trigger.try_into()?,
         })
     }
 }
 
-impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
+impl TryFrom<wavs_types::Trigger> for component_core::Trigger {
     type Error = EngineError;
 
     fn try_from(src: wavs_types::Trigger) -> Result<Self, Self::Error> {
         Ok(match src {
             wavs_types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
-                crate::bindings::world::wavs::worker::layer_types::TriggerSource::CosmosContractEvent(
-                    crate::bindings::world::wavs::worker::layer_types::TriggerSourceCosmosContractEvent {
+                component_core::Trigger::CosmosContractEvent(
+                    component_core::TriggerSourceCosmosContractEvent {
                         address: address.try_into()?,
                         chain_name: chain_name.to_string(),
                         event_type,
@@ -56,8 +56,8 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
                 )
             },
             wavs_types::Trigger::EvmContractEvent { address, chain_name, event_hash } => {
-                crate::bindings::world::wavs::worker::layer_types::TriggerSource::EvmContractEvent(
-                    crate::bindings::world::wavs::worker::layer_types::TriggerSourceEvmContractEvent {
+                component_core::Trigger::EvmContractEvent(
+                    component_core::TriggerSourceEvmContractEvent {
                         address: address.into(),
                         chain_name: chain_name.to_string(),
                         event_hash: event_hash.as_slice().to_vec(),
@@ -65,8 +65,8 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
                 )
             },
             wavs_types::Trigger::BlockInterval { chain_name, n_blocks, start_block, end_block } => {
-                crate::bindings::world::wavs::worker::layer_types::TriggerSource::BlockInterval(
-                    crate::bindings::world::wavs::worker::layer_types::BlockIntervalSource {
+                component_core::Trigger::BlockInterval(
+                    component_core::BlockIntervalSource {
                         chain_name: chain_name.to_string(),
                         n_blocks: n_blocks.into(),
                         start_block: start_block.map(Into::into),
@@ -75,10 +75,10 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
                 )
             },
             wavs_types::Trigger::Manual => {
-                crate::bindings::world::wavs::worker::layer_types::TriggerSource::Manual
+                component_core::Trigger::Manual
             },
             wavs_types::Trigger::Cron { schedule, start_time, end_time } => {
-                crate::bindings::world::wavs::worker::layer_types::TriggerSource::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerSourceCron{
+                component_core::Trigger::Cron(component_core::TriggerSourceCron{
                     schedule: schedule.to_string(), start_time: start_time.map(Into::into), end_time: end_time.map(Into::into)
                 })
             }
@@ -86,7 +86,7 @@ impl TryFrom<wavs_types::Trigger> for component::TriggerSource {
     }
 }
 
-impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
+impl TryFrom<wavs_types::TriggerData> for component_core::TriggerData {
     type Error = EngineError;
 
     fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
@@ -97,13 +97,13 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                 log,
                 block_height,
             } => {
-                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::EvmContractEvent(
-                    crate::bindings::world::wavs::worker::layer_types::TriggerDataEvmContractEvent {
-                        contract_address: crate::bindings::world::wavs::worker::layer_types::EvmAddress {
+                Ok(component_core::TriggerData::EvmContractEvent(
+                    component_core::TriggerDataEvmContractEvent {
+                        contract_address: component_core::EvmAddress {
                             raw_bytes: contract_address.to_vec()
                         },
                         chain_name: chain_name.to_string(),
-                        log: crate::bindings::world::wavs::worker::layer_types::EvmEventLogData {
+                        log: component_core::EvmEventLogData {
                             topics: log
                                 .topics()
                                 .iter()
@@ -116,11 +116,11 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                 ))
             },
             wavs_types::TriggerData::CosmosContractEvent { contract_address, chain_name, event, block_height } => {
-                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::CosmosContractEvent(
-                    crate::bindings::world::wavs::worker::layer_types::TriggerDataCosmosContractEvent {
+                Ok(component_core::TriggerData::CosmosContractEvent(
+                    component_core::TriggerDataCosmosContractEvent {
                         contract_address: contract_address.try_into()?,
                         chain_name: chain_name.to_string(),
-                        event: crate::bindings::world::wavs::worker::layer_types::CosmosEvent {
+                        event: component_core::CosmosEvent {
                             ty: event.ty,
                             attributes: event
                                 .attributes
@@ -133,22 +133,22 @@ impl TryFrom<wavs_types::TriggerData> for component::TriggerData {
                 ))
             },
             wavs_types::TriggerData::BlockInterval { chain_name, block_height } => {
-                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::BlockInterval(
-                    crate::bindings::world::wavs::worker::layer_types::BlockIntervalData {
+                Ok(component_core::TriggerData::BlockInterval(
+                    component_core::BlockIntervalData {
                         chain_name: chain_name.to_string(),
                         block_height,
                     }
                 ))
             },
-            wavs_types::TriggerData::Cron { trigger_time } => Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Cron(crate::bindings::world::wavs::worker::layer_types::TriggerDataCron {  trigger_time: trigger_time.into() })),
+            wavs_types::TriggerData::Cron { trigger_time } => Ok(component_core::TriggerData::Cron(component_core::TriggerDataCron {  trigger_time: trigger_time.into() })),
             wavs_types::TriggerData::Raw(data) => {
-                Ok(crate::bindings::world::wavs::worker::layer_types::TriggerData::Raw(data))
+                Ok(component_core::TriggerData::Raw(data))
             },
         }
     }
 }
 
-impl TryFrom<layer_climb::prelude::Address> for component::CosmosAddress {
+impl TryFrom<layer_climb::prelude::Address> for component_core::CosmosAddress {
     type Error = EngineError;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
@@ -171,7 +171,7 @@ impl TryFrom<layer_climb::prelude::Address> for component::CosmosAddress {
     }
 }
 
-impl TryFrom<layer_climb::prelude::Address> for component::EvmAddress {
+impl TryFrom<layer_climb::prelude::Address> for component_core::EvmAddress {
     type Error = EngineError;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
@@ -186,7 +186,7 @@ impl TryFrom<layer_climb::prelude::Address> for component::EvmAddress {
     }
 }
 
-impl From<alloy_primitives::Address> for component::EvmAddress {
+impl From<alloy_primitives::Address> for component_core::EvmAddress {
     fn from(address: alloy_primitives::Address) -> Self {
         Self {
             raw_bytes: address.to_vec(),
@@ -218,16 +218,16 @@ impl From<utils::config::EvmChainConfig> for super::world::host::EvmChainConfig 
     }
 }
 
-impl From<wavs_types::Timestamp> for component::Timestamp {
+impl From<wavs_types::Timestamp> for component_core::Timestamp {
     fn from(src: wavs_types::Timestamp) -> Self {
-        component::Timestamp {
+        component_core::Timestamp {
             nanos: src.as_nanos(),
         }
     }
 }
 
-impl From<component::Timestamp> for wavs_types::Timestamp {
-    fn from(src: component::Timestamp) -> Self {
+impl From<component_core::Timestamp> for wavs_types::Timestamp {
+    fn from(src: component_core::Timestamp) -> Self {
         wavs_types::Timestamp::from_nanos(src.nanos)
     }
 }

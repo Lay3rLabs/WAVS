@@ -3,8 +3,8 @@
 use wasmtime::component::bindgen;
 
 bindgen!({
-    world: "layer-trigger-world",
-    path: "../../wit",
+    world: "wavs-world",
+    path: "../../wit-definitions/worker/wit",
     async: {
         only_imports: []
     }

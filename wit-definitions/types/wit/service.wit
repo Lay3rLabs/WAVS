@@ -1,0 +1,108 @@
+interface service {
+    // Basic types
+    type service-id = string;
+    type workflow-id = string;
+    type package-ref = string;
+    type semver-version = string;
+
+    use core.{chain-name, evm-address, trigger, digest};
+
+    // Service types
+    record service {
+        id: service-id,
+        name: string,
+        workflows: list<tuple<workflow-id, workflow>>,
+        status: service-status,
+        manager: service-manager,
+    }
+
+    variant service-status {
+        active,
+        paused,
+    }
+
+    variant service-manager {
+        evm(evm-manager),
+    }
+
+    record evm-manager {
+        chain-name: chain-name,
+        address: evm-address,
+    }
+
+
+    // Workflow types
+    record workflow {
+        trigger: trigger,
+        component: component,
+        submit: submit,
+        aggregators: list<aggregator>,
+    }
+
+    // Component types
+    record component {
+        source: component-source,
+        permissions: permissions,
+        fuel-limit: option<u64>,
+        time-limit-seconds: option<u64>,
+        config: list<tuple<string, string>>,
+        env-keys: list<string>,
+    }
+
+    variant component-source {
+        download(component-source-download),
+        registry(registry),
+        digest(digest),
+    }
+
+    record component-source-download {
+        url: string,
+        digest: digest,
+    }
+
+    record registry {
+        digest: digest,
+        domain: option<string>,
+        version: option<semver-version>,
+        pkg: package-ref,
+    }
+
+    // Permissions types
+    record permissions {
+        allowed-http-hosts: allowed-host-permission,
+        file-system: bool,
+    }
+
+    variant allowed-host-permission {
+        all,
+        only(list<string>),
+        none,
+    }
+
+    // Submit types
+    variant submit {
+        none,
+        aggregator(aggregator-submit),
+    }
+
+    record aggregator-submit {
+        url: string,
+    }
+
+    // Aggregator types
+    variant aggregator {
+        evm(evm-contract-submission),
+    }
+
+    record evm-contract-submission {
+        chain-name: chain-name,
+        address: evm-address,
+        max-gas: option<u64>,
+    }
+
+    // Response type
+    record wasm-response {
+        payload: list<u8>,
+        ordering: option<u64>,
+    }
+}

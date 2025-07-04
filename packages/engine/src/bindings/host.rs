@@ -35,6 +35,11 @@ impl super::world::host::Host for HostComponent {
         self.workflow.component.config.get(&key).cloned()
     }
 
+    fn get_service(&mut self) -> Option<(super::world::host::Service,super::world::host::WorkflowId)> {
+        // TODO
+        None
+    }
+
     fn log(&mut self, level: LogLevel, message: String) {
         (self.inner_log)(
             &self.service_id,

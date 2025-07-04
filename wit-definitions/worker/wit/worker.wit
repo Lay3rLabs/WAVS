@@ -1,0 +1,39 @@
+package wavs:worker@0.5.0-alpha.7;
+
+use wasi:io/poll@0.2.0;
+use wasi:clocks/monotonic-clock@0.2.0;
+use wasi:io/error@0.2.0;
+use wasi:io/streams@0.2.0;
+use wasi:http/types@0.2.0 as http-types;
+use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
+
+use wavs:types/core@0.5.0-alpha.7 as core-types;
+use wavs:types/service@0.5.0-alpha.7 as service-types;
+
+world wavs-world {
+  // includes and imports for golang support
+  include wasi:cli/imports@0.2.0;
+  import wasi:http/types@0.2.0;
+  import wasi:http/outgoing-handler@0.2.0;
+
+  import host: interface {
+    use core-types.{evm-chain-config, cosmos-chain-config, log-level};
+    use service-types.{service, service-id, workflow-id, workflow};
+
+    get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
+    get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
+
+    config-var: func(key: string) -> option<string>;
+
+    log: func(level: log-level, message: string);
+
+    // gets the service and workflow id that called this component 
+    // this will be none if the component was not called by a service or the service was removed
+    // by the time the component called this function 
+    get-service: func() -> option<tuple<service, workflow-id>>;
+  }
+
+  use core-types.{trigger-action, wasm-response};
+
+  export run: func(trigger-action: trigger-action) -> result<option<wasm-response>, string>;
+}

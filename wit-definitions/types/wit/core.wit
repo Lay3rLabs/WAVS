@@ -1,13 +1,8 @@
-package wavs:worker@0.5.0-alpha.1;
+interface core {
+    // Basic types
+    type chain-name = string;
+    type digest = string;
 
-use wasi:io/poll@0.2.0;
-use wasi:clocks/monotonic-clock@0.2.0;
-use wasi:io/error@0.2.0;
-use wasi:io/streams@0.2.0;
-use wasi:http/types@0.2.0 as http-types;
-use wasi:http/outgoing-handler@0.2.0 as http-outgoing-handler;
-
-interface layer-types {
   record timestamp {
     nanos: u64
   }
@@ -58,10 +53,10 @@ interface layer-types {
   record trigger-config {
     service-id: string,
     workflow-id: string,
-    trigger-source: trigger-source
+    trigger: trigger
   }
 
-  variant trigger-source {
+  variant trigger {
     evm-contract-event(trigger-source-evm-contract-event),
     cosmos-contract-event(trigger-source-cosmos-contract-event),
     block-interval(block-interval-source),
@@ -137,26 +132,4 @@ interface layer-types {
     debug,
     trace
   }
-}
-
-world layer-trigger-world {
-  // includes and imports for golang support
-  include wasi:cli/imports@0.2.0;
-  import wasi:http/types@0.2.0;
-  import wasi:http/outgoing-handler@0.2.0;
-
-  import host: interface {
-    use layer-types.{evm-chain-config, cosmos-chain-config, log-level};
-
-    get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
-    get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
-
-    config-var: func(key: string) -> option<string>;
-
-    log: func(level: log-level, message: string);
-  }
-
-  use layer-types.{trigger-action, wasm-response};
-
-  export run: func(trigger-action: trigger-action) -> result<option<wasm-response>, string>;
 }

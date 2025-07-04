@@ -1,0 +1,250 @@
+package wavs:types@0.5.0-alpha.7;
+
+interface core {
+  /// Basic types
+  type chain-name = string;
+
+  type digest = string;
+
+  record timestamp {
+    nanos: u64,
+  }
+
+  record cosmos-address {
+    bech32-addr: string,
+    /// prefix is the first part of the bech32 address
+    prefix-len: u32,
+  }
+
+  record cosmos-event {
+    ty: string,
+    attributes: list<tuple<string, string>>,
+  }
+
+  record cosmos-chain-config {
+    chain-id: string,
+    rpc-endpoint: option<string>,
+    grpc-endpoint: option<string>,
+    grpc-web-endpoint: option<string>,
+    gas-price: f32,
+    gas-denom: string,
+    bech32-prefix: string,
+  }
+
+  record evm-address {
+    raw-bytes: list<u8>,
+  }
+
+  record evm-event-log-data {
+    /// the raw log topics that can be decoded into an event
+    topics: list<list<u8>>,
+    /// the raw log data that can be decoded into an event
+    data: list<u8>,
+  }
+
+  record evm-chain-config {
+    chain-id: string,
+    ws-endpoint: option<string>,
+    http-endpoint: option<string>,
+  }
+
+  record trigger-source-evm-contract-event {
+    address: evm-address,
+    chain-name: string,
+    event-hash: list<u8>,
+  }
+
+  record trigger-source-cosmos-contract-event {
+    address: cosmos-address,
+    chain-name: string,
+    event-type: string,
+  }
+
+  record block-interval-source {
+    chain-name: string,
+    n-blocks: u32,
+    start-block: option<u64>,
+    end-block: option<u64>,
+  }
+
+  record trigger-source-cron {
+    schedule: string,
+    start-time: option<timestamp>,
+    end-time: option<timestamp>,
+  }
+
+  variant trigger {
+    evm-contract-event(trigger-source-evm-contract-event),
+    cosmos-contract-event(trigger-source-cosmos-contract-event),
+    block-interval(block-interval-source),
+    cron(trigger-source-cron),
+    manual,
+  }
+
+  record trigger-config {
+    service-id: string,
+    workflow-id: string,
+    trigger: trigger,
+  }
+
+  record trigger-data-evm-contract-event {
+    contract-address: evm-address,
+    chain-name: string,
+    log: evm-event-log-data,
+    block-height: u64,
+  }
+
+  record trigger-data-cosmos-contract-event {
+    contract-address: cosmos-address,
+    chain-name: string,
+    event: cosmos-event,
+    block-height: u64,
+  }
+
+  record block-interval-data {
+    chain-name: string,
+    block-height: u64,
+  }
+
+  record trigger-data-cron {
+    trigger-time: timestamp,
+  }
+
+  variant trigger-data {
+    evm-contract-event(trigger-data-evm-contract-event),
+    cosmos-contract-event(trigger-data-cosmos-contract-event),
+    block-interval(block-interval-data),
+    cron(trigger-data-cron),
+    raw(list<u8>),
+  }
+
+  record trigger-action {
+    config: trigger-config,
+    data: trigger-data,
+  }
+
+  record wasm-response {
+    payload: list<u8>,
+    ordering: option<u64>,
+  }
+
+  variant log-level {
+    error,
+    warn,
+    info,
+    debug,
+    trace,
+  }
+}
+
+interface service {
+  use core.{chain-name, evm-address, trigger, digest};
+
+  /// Basic types
+  type service-id = string;
+
+  type workflow-id = string;
+
+  type package-ref = string;
+
+  type semver-version = string;
+
+  variant service-status {
+    active,
+    paused,
+  }
+
+  record evm-manager {
+    chain-name: chain-name,
+    address: evm-address,
+  }
+
+  variant service-manager {
+    evm(evm-manager),
+  }
+
+  record component-source-download {
+    url: string,
+    digest: digest,
+  }
+
+  record registry {
+    digest: digest,
+    domain: option<string>,
+    version: option<semver-version>,
+    pkg: package-ref,
+  }
+
+  variant component-source {
+    download(component-source-download),
+    registry(registry),
+    digest(digest),
+  }
+
+  variant allowed-host-permission {
+    all,
+    only(list<string>),
+    none,
+  }
+
+  /// Permissions types
+  record permissions {
+    allowed-http-hosts: allowed-host-permission,
+    file-system: bool,
+  }
+
+  /// Component types
+  record component {
+    source: component-source,
+    permissions: permissions,
+    fuel-limit: option<u64>,
+    time-limit-seconds: option<u64>,
+    config: list<tuple<string, string>>,
+    env-keys: list<string>,
+  }
+
+  record aggregator-submit {
+    url: string,
+  }
+
+  /// Submit types
+  variant submit {
+    none,
+    aggregator(aggregator-submit),
+  }
+
+  record evm-contract-submission {
+    chain-name: chain-name,
+    address: evm-address,
+    max-gas: option<u64>,
+  }
+
+  /// Aggregator types
+  variant aggregator {
+    evm(evm-contract-submission),
+  }
+
+  /// Workflow types
+  record workflow {
+    trigger: trigger,
+    component: component,
+    submit: submit,
+    aggregators: list<aggregator>,
+  }
+
+  /// Service types
+  record service {
+    id: service-id,
+    name: string,
+    workflows: list<tuple<workflow-id, workflow>>,
+    status: service-status,
+    manager: service-manager,
+  }
+
+  /// Response type
+  record wasm-response {
+    payload: list<u8>,
+    ordering: option<u64>,
+  }
+}
+

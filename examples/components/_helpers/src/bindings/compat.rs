@@ -1,4 +1,4 @@
-pub use super::world::wavs::worker::layer_types::*;
+pub use super::world::wavs::types::core::*;
 
 impl From<CosmosEvent> for cosmwasm_std::Event {
     fn from(event: CosmosEvent) -> Self {
