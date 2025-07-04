@@ -62,10 +62,7 @@ impl super::world::host::Host for HostComponent {
     }
 
     fn shared_kv_delete(&mut self, key: String) -> Result<(), String> {
-        self.shared_keyvalue_store
-            .write()
-            .unwrap()
-            .remove(&key);
+        self.shared_keyvalue_store.write().unwrap().remove(&key);
         Ok(())
     }
 }

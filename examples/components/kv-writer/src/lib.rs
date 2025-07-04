@@ -14,7 +14,7 @@ impl Guest for Component {
 
         let (trigger_id, _req) =
             decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
-        
+
         let test_input = SquareRequest { x: 10 };
 
         // Save the input data using shared keyvalue
@@ -27,9 +27,11 @@ impl Guest for Component {
             &format!("Saved square input: x={}", test_input.x),
         );
 
-        let response = Response { saved_x: test_input.x };
+        let response = Response {
+            saved_x: test_input.x,
+        };
         let resp = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
-        
+
         Ok(Some(encode_trigger_output(trigger_id, resp)))
     }
 }

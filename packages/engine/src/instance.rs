@@ -7,7 +7,7 @@ use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_http::WasiHttpCtx;
-use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx};
+use wasmtime_wasi_keyvalue::WasiKeyValue;
 use wavs_types::{AllowedHostPermission, ServiceID, Workflow, WorkflowID};
 
 use crate::{EngineError, HostComponent, HostComponentLogger};

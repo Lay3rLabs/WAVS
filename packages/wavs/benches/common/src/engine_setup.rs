@@ -95,6 +95,9 @@ impl EngineSetup {
             log,
             max_wasm_fuel: None,
             max_execution_seconds: None,
+            shared_keyvalue_store: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
         };
 
         builder.build().unwrap()

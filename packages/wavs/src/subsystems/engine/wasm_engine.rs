@@ -181,7 +181,8 @@ impl<S: CAStorage> WasmEngine<S> {
 
         let digest = workflow.component.source.digest().clone();
 
-        let shared_keyvalue_store = self.get_or_create_keyvalue_store(&trigger_action.config.service_id);
+        let shared_keyvalue_store =
+            self.get_or_create_keyvalue_store(&trigger_action.config.service_id);
 
         let mut instance_deps = InstanceDepsBuilder {
             workflow,
@@ -214,13 +215,14 @@ impl<S: CAStorage> WasmEngine<S> {
     }
 
     /// Get or create a shared keyvalue store for a service
-    fn get_or_create_keyvalue_store(&self, service_id: &ServiceID) -> Arc<RwLock<HashMap<String, Vec<u8>>>> {
+    fn get_or_create_keyvalue_store(
+        &self,
+        service_id: &ServiceID,
+    ) -> Arc<RwLock<HashMap<String, Vec<u8>>>> {
         let mut stores = self.keyvalue_stores.write().unwrap();
         stores
             .entry(service_id.clone())
-            .or_insert_with(|| {
-                Arc::new(RwLock::new(HashMap::new()))
-            })
+            .or_insert_with(|| Arc::new(RwLock::new(HashMap::new())))
             .clone()
     }
 
