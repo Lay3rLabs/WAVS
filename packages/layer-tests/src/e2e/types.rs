@@ -58,4 +58,5 @@ pub struct PermissionsResponse {
     pub filename: PathBuf,
     pub contents: String,
     pub filecount: usize,
+    pub digest: String,
 }

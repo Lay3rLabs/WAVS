@@ -232,8 +232,9 @@ async fn run_test(
             };
 
             for data in signed_data {
-                expected_output.validate(&data.data)?;
+                expected_output.validate(&test, &clients, &component_sources, &data.data)?;
             }
+
         }
     }
 

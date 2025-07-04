@@ -122,7 +122,7 @@ impl<S: CAStorage> EngineManager<S> {
             workflow.component.source.digest()
         );
 
-        let wasm_response = self.engine.execute(workflow.clone(), action.clone())?;
+        let wasm_response = self.engine.execute(service.clone(), action.clone())?;
 
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)

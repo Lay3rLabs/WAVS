@@ -12,6 +12,12 @@ pub enum EngineError {
     #[error("Component returned an error: {0}")]
     ComponentError(anyhow::Error),
 
+    #[error("Workflow {workflow_id} not found for service {service_id}")]
+    WorkflowNotFound {
+        service_id: ServiceID,
+        workflow_id: WorkflowID,
+    },
+
     #[error{"Unable to get component input: {0}"}]
     Input(anyhow::Error),
 
