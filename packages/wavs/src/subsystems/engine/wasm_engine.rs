@@ -1,5 +1,4 @@
 use lru::LruCache;
-use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -18,8 +17,7 @@ use utils::storage::{CAStorage, CAStorageError};
 
 use super::error::EngineError;
 
-type SharedKeyValueStore = Arc<RwLock<HashMap<String, Vec<u8>>>>;
-type KeyValueStores = Arc<RwLock<HashMap<ServiceID, SharedKeyValueStore>>>;
+// We don't actually need to store keyvalue contexts since wasmtime handles storage internally
 
 pub struct WasmEngine<S: CAStorage> {
     chain_configs: Arc<RwLock<ChainConfigs>>,
@@ -30,8 +28,6 @@ pub struct WasmEngine<S: CAStorage> {
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
     metrics: EngineMetrics,
-    // Shared keyvalue stores per service
-    keyvalue_stores: KeyValueStores,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -70,7 +66,6 @@ impl<S: CAStorage> WasmEngine<S> {
             max_execution_seconds,
             max_wasm_fuel,
             metrics,
-            keyvalue_stores: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -194,8 +189,6 @@ impl<S: CAStorage> WasmEngine<S> {
 
         let digest = workflow.component.source.digest().clone();
 
-        let shared_keyvalue_store =
-            self.get_or_create_keyvalue_store(&trigger_action.config.service_id);
 
         let mut instance_deps = InstanceDepsBuilder {
             service,
@@ -215,7 +208,6 @@ impl<S: CAStorage> WasmEngine<S> {
             log,
             max_execution_seconds: self.max_execution_seconds,
             max_wasm_fuel: self.max_wasm_fuel,
-            shared_keyvalue_store,
         }
         .build()?;
 
@@ -226,13 +218,6 @@ impl<S: CAStorage> WasmEngine<S> {
         })
     }
 
-    fn get_or_create_keyvalue_store(&self, service_id: &ServiceID) -> SharedKeyValueStore {
-        let mut stores = self.keyvalue_stores.write().unwrap();
-        stores
-            .entry(service_id.clone())
-            .or_insert_with(|| Arc::new(RwLock::new(HashMap::new())))
-            .clone()
-    }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
     pub fn remove_storage(&self, service_id: &ServiceID) {
@@ -252,7 +237,7 @@ impl<S: CAStorage> WasmEngine<S> {
         }
 
         // also remove the keyvalue store for this service
-        self.keyvalue_stores.write().unwrap().remove(service_id);
+        // keyvalue stores are now handled per-component, no cleanup needed
     }
 
     fn block_on_run<F, T>(&self, fut: F) -> T

@@ -1,7 +1,7 @@
 use example_helpers::bindings::world::WasmResponse;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use example_helpers::{
-    bindings::world::{host, Guest, TriggerAction},
+    bindings::world::{host, wasi::keyvalue::store, Guest, TriggerAction},
     export_layer_trigger_world,
 };
 use serde::{Deserialize, Serialize};
@@ -17,10 +17,13 @@ impl Guest for Component {
 
         let test_input = SquareRequest { x: 10 };
 
-        // Save the input data using shared keyvalue
+        // Save the input data using wasi:keyvalue
         let data = serde_json::to_string(&test_input).map_err(|e| e.to_string())?;
-        host::shared_kv_set("square_input", data.as_bytes())
-            .map_err(|e| format!("Failed to store data: {}", e))?;
+        let bucket =
+            store::open("default").map_err(|e| format!("Failed to open bucket: {:?}", e))?;
+        bucket
+            .set("square_input", data.as_bytes())
+            .map_err(|e| format!("Failed to store data: {:?}", e))?;
 
         host::log(
             host::LogLevel::Info,
