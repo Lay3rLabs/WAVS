@@ -129,9 +129,6 @@ impl ExecComponent {
             log: log_wasi,
             max_execution_seconds: Some(u64::MAX),
             max_wasm_fuel: Some(u64::MAX),
-            shared_keyvalue_store: std::sync::Arc::new(std::sync::RwLock::new(
-                std::collections::HashMap::new(),
-            )),
         }
         .build()
         .context("Failed to build instance dependencies for component execution")?;

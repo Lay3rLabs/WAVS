@@ -156,10 +156,6 @@ world layer-trigger-world {
 
     log: func(level: log-level, message: string);
 
-    // Shared keyvalue functions that work across components in the same service
-    shared-kv-get: func(key: string) -> option<list<u8>>;
-    shared-kv-set: func(key: string, value: list<u8>) -> result<_, string>;
-    shared-kv-delete: func(key: string) -> result<_, string>;
   }
 
   use layer-types.{trigger-action, wasm-response};

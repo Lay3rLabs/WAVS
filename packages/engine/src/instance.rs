@@ -1,6 +1,4 @@
-use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
 
 use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
 use wasmtime::Store;
@@ -12,7 +10,6 @@ use wavs_types::{AllowedHostPermission, ServiceID, Workflow, WorkflowID};
 
 use crate::{EngineError, HostComponent, HostComponentLogger};
 
-type SharedKeyValueStore = Arc<RwLock<HashMap<String, Vec<u8>>>>;
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
@@ -25,7 +22,6 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub log: HostComponentLogger,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
-    pub shared_keyvalue_store: SharedKeyValueStore,
 }
 
 pub struct InstanceDeps {
@@ -48,7 +44,6 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             log,
             max_execution_seconds,
             max_wasm_fuel,
-            shared_keyvalue_store,
         } = self;
 
         let permissions = &workflow.component.permissions;
@@ -118,11 +113,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         let ctx = builder.build();
 
-        // create keyvalue context - will be replaced with shared store in HostComponent
-        let keyvalue = {
-            use wasmtime_wasi_keyvalue::WasiKeyValueCtxBuilder;
-            WasiKeyValueCtxBuilder::new().build()
-        };
+        // create keyvalue context - each component gets its own but they share buckets by name
+        let keyvalue = wasmtime_wasi_keyvalue::WasiKeyValueCtxBuilder::new().build();
 
         // create host (what is this actually? some state needed for the linker?)
         let host = HostComponent {
@@ -134,7 +126,6 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             ctx,
             http: WasiHttpCtx::new(),
             keyvalue,
-            shared_keyvalue_store,
             inner_log: log,
         };
 
