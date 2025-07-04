@@ -24,7 +24,7 @@ impl Digest {
 }
 
 impl From<[u8; 32]> for Digest {
-    fn from(value: [u8;32]) -> Self {
+    fn from(value: [u8; 32]) -> Self {
         Digest(value)
     }
 }

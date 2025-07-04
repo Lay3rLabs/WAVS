@@ -253,7 +253,13 @@ pub enum ExpectedOutput {
 
 pub trait ExpectedOutputCallback: Send + Sync + std::fmt::Debug + 'static {
     /// Validate the actual output against the expected output
-    fn validate(&self, test: &TestDefinition, clients: &super::clients::Clients, component_sources: &ComponentSources, actual: &[u8]) -> anyhow::Result<()>;
+    fn validate(
+        &self,
+        test: &TestDefinition,
+        clients: &super::clients::Clients,
+        component_sources: &ComponentSources,
+        actual: &[u8],
+    ) -> anyhow::Result<()>;
 }
 
 /// For validating structure without checking values
@@ -427,11 +433,12 @@ impl WorkflowBuilder {
 /// Helper methods for testing the output
 impl ExpectedOutput {
     /// Check if the actual output matches the expected output
-    pub fn validate(&self, 
+    pub fn validate(
+        &self,
         test: &TestDefinition,
         clients: &super::clients::Clients,
         component_sources: &ComponentSources,
-        actual: &[u8]
+        actual: &[u8],
     ) -> anyhow::Result<()> {
         let is_valid = match self {
             ExpectedOutput::Raw(expected) => expected == actual,

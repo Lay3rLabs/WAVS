@@ -10,7 +10,7 @@ use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::InstanceDepsBuilder;
 use wavs_types::{
-    ComponentSource, Digest, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID
+    ComponentSource, Digest, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
 };
 
 use utils::storage::{CAStorage, CAStorageError};
@@ -178,7 +178,12 @@ impl<S: CAStorage> WasmEngine<S> {
         let workflow = service
             .workflows
             .get(&trigger_action.config.workflow_id)
-            .ok_or_else(|| EngineError::UnknownWorkflow(service.id.clone(), trigger_action.config.workflow_id.clone()))?;
+            .ok_or_else(|| {
+                EngineError::UnknownWorkflow(
+                    service.id.clone(),
+                    trigger_action.config.workflow_id.clone(),
+                )
+            })?;
 
         let digest = workflow.component.source.digest().clone();
 
@@ -250,7 +255,7 @@ pub mod tests {
 
     use utils::{storage::memory::MemoryStorage, test_utils::address::rand_address_evm};
     use wavs_types::{
-        ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, WorkflowID, Workflow,
+        ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, Workflow, WorkflowID,
     };
 
     use utils::test_utils::{
@@ -349,14 +354,14 @@ pub mod tests {
         let service_id = ServiceID::new("foobar").unwrap();
 
         let service = wavs_types::Service {
-            id: service_id.clone(), 
+            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "evm".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: Default::default(),
+            },
         };
 
         // execute it and get bytes back
@@ -408,14 +413,14 @@ pub mod tests {
         let service_id = ServiceID::new("foobar").unwrap();
 
         let service = wavs_types::Service {
-            id: service_id.clone(), 
+            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "evm".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: Default::default(),
+            },
         };
 
         // verify service config kv is accessible
@@ -502,14 +507,14 @@ pub mod tests {
         let service_id = ServiceID::new("foobar").unwrap();
 
         let service = wavs_types::Service {
-            id: service_id.clone(), 
+            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "evm".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: Default::default(),
+            },
         };
 
         // execute it and get the error
@@ -518,7 +523,7 @@ pub mod tests {
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(), 
+                        service_id: service.id.clone(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -621,14 +626,14 @@ pub mod tests {
         let service_id = ServiceID::new("foobar").unwrap();
 
         let service = wavs_types::Service {
-            id: service_id.clone(), 
+            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "evm".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: Default::default(),
+            },
         };
 
         engine
@@ -636,7 +641,7 @@ pub mod tests {
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(), 
+                        service_id: service.id.clone(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -657,14 +662,14 @@ pub mod tests {
             .insert("sleep-kind".to_string(), "sync".to_string());
 
         let service = wavs_types::Service {
-            id: service_id.clone(), 
+            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "evm".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: Default::default(),
+            },
         };
 
         engine
@@ -693,14 +698,14 @@ pub mod tests {
             .insert("sleep-kind".to_string(), "async".to_string());
 
         let service = wavs_types::Service {
-            id: service_id.clone(), 
+            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "evm".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: Default::default(),
+            },
         };
 
         let err = engine
@@ -708,7 +713,7 @@ pub mod tests {
                 service,
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service_id.clone(), 
+                        service_id: service_id.clone(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -734,21 +739,21 @@ pub mod tests {
             .insert("sleep-kind".to_string(), "sync".to_string());
 
         let service = wavs_types::Service {
-            id: service_id.clone(), 
+            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "evm".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: Default::default(),
+            },
         };
         let err = engine
             .execute(
                 service,
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service_id.clone(), 
+                        service_id: service_id.clone(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },

@@ -123,10 +123,10 @@ impl ExecComponent {
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(trigger_action.config.workflow_id.clone(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm { 
-                chain_name: "exec".parse().unwrap(), 
-                address: Default::default()
-            }
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "exec".parse().unwrap(),
+                address: Default::default(),
+            },
         };
 
         let mut instance_deps = InstanceDepsBuilder {

@@ -42,11 +42,14 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             max_wasm_fuel,
         } = self;
 
-        let workflow = service.workflows.get(&workflow_id)
-            .ok_or_else(|| EngineError::WorkflowNotFound {
-                service_id: service.id.clone(),
-                workflow_id: workflow_id.clone(),
-            })?;
+        let workflow =
+            service
+                .workflows
+                .get(&workflow_id)
+                .ok_or_else(|| EngineError::WorkflowNotFound {
+                    service_id: service.id.clone(),
+                    workflow_id: workflow_id.clone(),
+                })?;
 
         let permissions = &workflow.component.permissions;
 

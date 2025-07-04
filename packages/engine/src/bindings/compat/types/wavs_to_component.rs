@@ -1,55 +1,62 @@
 use crate::{
-    bindings::world::wavs::types::core as component_core, 
+    bindings::world::wavs::types::chain as component_chain,
+    bindings::world::wavs::types::core as component_core,
     bindings::world::wavs::types::service as component_service,
-    bindings::world::wavs::types::chain as component_chain
 };
-
 
 impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
     type Error = anyhow::Error;
 
     fn try_from(src: wavs_types::Trigger) -> Result<Self, Self::Error> {
         Ok(match src {
-            wavs_types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
-                component_service::Trigger::CosmosContractEvent(
-                    component_service::TriggerCosmosContractEvent {
-                        address: address.try_into()?,
-                        chain_name: chain_name.to_string(),
-                        event_type,
-                    }
-                )
-            },
-            wavs_types::Trigger::EvmContractEvent { address, chain_name, event_hash } => {
-                component_service::Trigger::EvmContractEvent(
-                    component_service::TriggerEvmContractEvent {
-                        address: address.into(),
-                        chain_name: chain_name.to_string(),
-                        event_hash: event_hash.as_slice().to_vec(),
-                    }
-                )
-            },
-            wavs_types::Trigger::BlockInterval { chain_name, n_blocks, start_block, end_block } => {
-                component_service::Trigger::BlockInterval(
-                    component_service::TriggerBlockInterval {
-                        chain_name: chain_name.to_string(),
-                        n_blocks: n_blocks.into(),
-                        start_block: start_block.map(Into::into),
-                        end_block: end_block.map(Into::into),
-                    }
-                )
-            },
-            wavs_types::Trigger::Manual => {
-                component_service::Trigger::Manual
-            },
-            wavs_types::Trigger::Cron { schedule, start_time, end_time } => {
-                component_service::Trigger::Cron(component_service::TriggerCron {
-                    schedule: schedule.to_string(), start_time: start_time.map(Into::into), end_time: end_time.map(Into::into)
+            wavs_types::Trigger::CosmosContractEvent {
+                address,
+                chain_name,
+                event_type,
+            } => component_service::Trigger::CosmosContractEvent(
+                component_service::TriggerCosmosContractEvent {
+                    address: address.try_into()?,
+                    chain_name: chain_name.to_string(),
+                    event_type,
+                },
+            ),
+            wavs_types::Trigger::EvmContractEvent {
+                address,
+                chain_name,
+                event_hash,
+            } => component_service::Trigger::EvmContractEvent(
+                component_service::TriggerEvmContractEvent {
+                    address: address.into(),
+                    chain_name: chain_name.to_string(),
+                    event_hash: event_hash.as_slice().to_vec(),
+                },
+            ),
+            wavs_types::Trigger::BlockInterval {
+                chain_name,
+                n_blocks,
+                start_block,
+                end_block,
+            } => {
+                component_service::Trigger::BlockInterval(component_service::TriggerBlockInterval {
+                    chain_name: chain_name.to_string(),
+                    n_blocks: n_blocks.into(),
+                    start_block: start_block.map(Into::into),
+                    end_block: end_block.map(Into::into),
                 })
             }
+            wavs_types::Trigger::Manual => component_service::Trigger::Manual,
+            wavs_types::Trigger::Cron {
+                schedule,
+                start_time,
+                end_time,
+            } => component_service::Trigger::Cron(component_service::TriggerCron {
+                schedule: schedule.to_string(),
+                start_time: start_time.map(Into::into),
+                end_time: end_time.map(Into::into),
+            }),
         })
     }
 }
-
 
 impl TryFrom<layer_climb::prelude::Address> for component_chain::CosmosAddress {
     type Error = anyhow::Error;
@@ -60,11 +67,7 @@ impl TryFrom<layer_climb::prelude::Address> for component_chain::CosmosAddress {
                 bech32_addr,
                 prefix_len,
             } => (bech32_addr, prefix_len),
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Not a cosmos address"
-                ))
-            }
+            _ => return Err(anyhow::anyhow!("Not a cosmos address")),
         };
 
         Ok(Self {
@@ -74,7 +77,6 @@ impl TryFrom<layer_climb::prelude::Address> for component_chain::CosmosAddress {
     }
 }
 
-
 impl TryFrom<layer_climb::prelude::Address> for component_chain::EvmAddress {
     type Error = anyhow::Error;
 
@@ -83,9 +85,7 @@ impl TryFrom<layer_climb::prelude::Address> for component_chain::EvmAddress {
             layer_climb::prelude::Address::Evm(addr) => Ok(Self {
                 raw_bytes: addr.as_bytes().to_vec(),
             }),
-            _ => Err(anyhow::anyhow!(
-                "Not an EVM address"
-            )),
+            _ => Err(anyhow::anyhow!("Not an EVM address")),
         }
     }
 }
@@ -97,7 +97,6 @@ impl From<alloy_primitives::Address> for component_chain::EvmAddress {
         }
     }
 }
-
 
 impl From<utils::config::CosmosChainConfig> for crate::bindings::world::host::CosmosChainConfig {
     fn from(config: utils::config::CosmosChainConfig) -> Self {
@@ -138,11 +137,17 @@ impl TryFrom<wavs_types::Service> for component_service::Service {
         Ok(Self {
             id: src.id.to_string(),
             name: src.name,
-            workflows: src.workflows.into_iter().map(|(workflow_id, workflow)| {
-                workflow.try_into().map(|workflow| (workflow_id.to_string(), workflow))
-            }).collect::<anyhow::Result<Vec<(String, component_service::Workflow)>>>()?,
+            workflows: src
+                .workflows
+                .into_iter()
+                .map(|(workflow_id, workflow)| {
+                    workflow
+                        .try_into()
+                        .map(|workflow| (workflow_id.to_string(), workflow))
+                })
+                .collect::<anyhow::Result<Vec<(String, component_service::Workflow)>>>()?,
             status: src.status.into(),
-            manager: src.manager.try_into()?
+            manager: src.manager.into(),
         })
     }
 }
@@ -153,15 +158,19 @@ impl TryFrom<wavs_types::Workflow> for component_service::Workflow {
     fn try_from(src: wavs_types::Workflow) -> Result<Self, Self::Error> {
         Ok(Self {
             trigger: src.trigger.try_into()?,
-            component: src.component.try_into()?,
+            component: src.component.into(),
             submit: src.submit.into(),
-            aggregators: src.aggregators.into_iter().map(|aggregator| aggregator.into()).collect::<Vec<component_service::Aggregator>>(),
+            aggregators: src
+                .aggregators
+                .into_iter()
+                .map(|aggregator| aggregator.into())
+                .collect::<Vec<component_service::Aggregator>>(),
         })
     }
 }
 
 impl From<wavs_types::Component> for component_service::Component {
-    fn from(src: wavs_types::Component) -> Self { 
+    fn from(src: wavs_types::Component) -> Self {
         Self {
             source: src.source.into(),
             permissions: src.permissions.into(),
@@ -174,17 +183,19 @@ impl From<wavs_types::Component> for component_service::Component {
 }
 
 impl From<wavs_types::ComponentSource> for component_service::ComponentSource {
-    fn from(src: wavs_types::ComponentSource) -> Self { 
+    fn from(src: wavs_types::ComponentSource) -> Self {
         match src {
             wavs_types::ComponentSource::Digest(digest) => {
                 component_service::ComponentSource::Digest(digest.to_string())
-            },
+            }
             wavs_types::ComponentSource::Download { url, digest } => {
-                component_service::ComponentSource::Download(component_service::ComponentSourceDownload {
-                    url: url.to_string(),
-                    digest: digest.to_string() 
-                })
-            },
+                component_service::ComponentSource::Download(
+                    component_service::ComponentSourceDownload {
+                        url: url.to_string(),
+                        digest: digest.to_string(),
+                    },
+                )
+            }
             wavs_types::ComponentSource::Registry { registry } => {
                 component_service::ComponentSource::Registry(registry.into())
             }
@@ -193,12 +204,12 @@ impl From<wavs_types::ComponentSource> for component_service::ComponentSource {
 }
 
 impl From<wavs_types::Registry> for component_service::Registry {
-    fn from(src: wavs_types::Registry) -> Self { 
-       Self {
+    fn from(src: wavs_types::Registry) -> Self {
+        Self {
             digest: src.digest.to_string(),
             domain: src.domain,
             version: src.version.map(|v| v.to_string()),
-            pkg: src.package.to_string()
+            pkg: src.package.to_string(),
         }
     }
 }
@@ -207,7 +218,7 @@ impl From<wavs_types::Permissions> for component_service::Permissions {
     fn from(src: wavs_types::Permissions) -> Self {
         Self {
             allowed_http_hosts: src.allowed_http_hosts.into(),
-            file_system: src.file_system
+            file_system: src.file_system,
         }
     }
 }
@@ -216,7 +227,9 @@ impl From<wavs_types::Submit> for component_service::Submit {
     fn from(src: wavs_types::Submit) -> Self {
         match src {
             wavs_types::Submit::None => component_service::Submit::None,
-            wavs_types::Submit::Aggregator { url } => component_service::Submit::Aggregator(component_service::AggregatorSubmit { url })
+            wavs_types::Submit::Aggregator { url } => {
+                component_service::Submit::Aggregator(component_service::AggregatorSubmit { url })
+            }
         }
     }
 }
@@ -225,8 +238,12 @@ impl From<wavs_types::AllowedHostPermission> for component_service::AllowedHostP
     fn from(src: wavs_types::AllowedHostPermission) -> Self {
         match src {
             wavs_types::AllowedHostPermission::All => component_service::AllowedHostPermission::All,
-            wavs_types::AllowedHostPermission::None => component_service::AllowedHostPermission::None,
-            wavs_types::AllowedHostPermission::Only(hosts) => component_service::AllowedHostPermission::Only(hosts),
+            wavs_types::AllowedHostPermission::None => {
+                component_service::AllowedHostPermission::None
+            }
+            wavs_types::AllowedHostPermission::Only(hosts) => {
+                component_service::AllowedHostPermission::Only(hosts)
+            }
         }
     }
 }
@@ -243,10 +260,13 @@ impl From<wavs_types::ServiceStatus> for component_service::ServiceStatus {
 impl From<wavs_types::ServiceManager> for component_service::ServiceManager {
     fn from(src: wavs_types::ServiceManager) -> Self {
         match src {
-            wavs_types::ServiceManager::Evm { chain_name, address } => component_service::ServiceManager::Evm(component_service::EvmManager { 
-                chain_name: chain_name.to_string(), 
-                address: address.into()
-            })
+            wavs_types::ServiceManager::Evm {
+                chain_name,
+                address,
+            } => component_service::ServiceManager::Evm(component_service::EvmManager {
+                chain_name: chain_name.to_string(),
+                address: address.into(),
+            }),
         }
     }
 }
@@ -254,7 +274,7 @@ impl From<wavs_types::ServiceManager> for component_service::ServiceManager {
 impl From<wavs_types::Aggregator> for component_service::Aggregator {
     fn from(src: wavs_types::Aggregator) -> Self {
         match src {
-            wavs_types::Aggregator::Evm(evm) => component_service::Aggregator::Evm(evm.into())
+            wavs_types::Aggregator::Evm(evm) => component_service::Aggregator::Evm(evm.into()),
         }
     }
 }

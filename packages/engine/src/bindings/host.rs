@@ -34,17 +34,25 @@ impl super::world::host::Host for HostComponent {
     fn get_service(&mut self) -> ServiceAndWorkflowId {
         ServiceAndWorkflowId {
             service: self.service.clone().try_into().unwrap(),
-            workflow_id: self.workflow_id.to_string()
+            workflow_id: self.workflow_id.to_string(),
         }
     }
 
-    fn get_workflow(&mut self,) -> WorkflowAndWorkflowId {
-        let workflow = self.service.workflows.get(&self.workflow_id).cloned().unwrap_or_else(|| {
-            panic!("Workflow with ID {} not found in service {}", self.workflow_id, self.service.id)
-        });
+    fn get_workflow(&mut self) -> WorkflowAndWorkflowId {
+        let workflow = self
+            .service
+            .workflows
+            .get(&self.workflow_id)
+            .cloned()
+            .unwrap_or_else(|| {
+                panic!(
+                    "Workflow with ID {} not found in service {}",
+                    self.workflow_id, self.service.id
+                )
+            });
         WorkflowAndWorkflowId {
             workflow: workflow.try_into().unwrap(),
-            workflow_id: self.workflow_id.to_string()
+            workflow_id: self.workflow_id.to_string(),
         }
     }
 
@@ -56,22 +64,19 @@ impl super::world::host::Host for HostComponent {
             .cloned()
     }
 
-
     fn log(&mut self, level: LogLevel, message: String) {
-        let digest = self.service
+        let digest = self
+            .service
             .workflows
             .get(&self.workflow_id)
             .map(|workflow| workflow.component.source.digest())
             .unwrap_or_else(|| {
-                panic!("Workflow with ID {} not found in service {}", self.workflow_id, self.service.id)
+                panic!(
+                    "Workflow with ID {} not found in service {}",
+                    self.workflow_id, self.service.id
+                )
             });
 
-        (self.inner_log)(
-            &self.service.id,
-            &self.workflow_id,
-            digest,
-            level,
-            message,
-        );
+        (self.inner_log)(&self.service.id, &self.workflow_id, digest, level, message);
     }
 }

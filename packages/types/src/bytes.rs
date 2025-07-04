@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use thiserror::Error;
 use std::fmt::{self, Debug, Display, Formatter};
+use thiserror::Error;
 use utoipa::ToSchema;
 
 /// A newtype that wraps a `[u8; N]` using const generics.
@@ -34,7 +34,7 @@ impl<const N: usize> ByteArray<N> {
     }
 }
 
-impl <const N: usize> TryFrom<Vec<u8>> for ByteArray<N> {
+impl<const N: usize> TryFrom<Vec<u8>> for ByteArray<N> {
     type Error = ByteArrayError<N>;
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {

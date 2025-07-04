@@ -429,10 +429,8 @@ impl TestRegistry {
         chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
-
         #[derive(Debug)]
-        struct PermissionsCallback {
-        }
+        struct PermissionsCallback {}
 
         impl PermissionsCallback {
             pub fn new() -> Arc<Self> {
@@ -441,23 +439,31 @@ impl TestRegistry {
         }
 
         impl ExpectedOutputCallback for PermissionsCallback {
-            fn validate(&self, 
+            fn validate(
+                &self,
                 _test: &TestDefinition,
                 _clients: &super::clients::Clients,
                 component_sources: &ComponentSources,
-                actual: &[u8]
+                actual: &[u8],
             ) -> anyhow::Result<()> {
-                let response: PermissionsResponse = serde_json::from_slice(actual)
-                    .map_err(|e| anyhow::anyhow!("Failed to deserialize permissions response: {}", e))?;
+                let response: PermissionsResponse =
+                    serde_json::from_slice(actual).map_err(|e| {
+                        anyhow::anyhow!("Failed to deserialize permissions response: {}", e)
+                    })?;
 
                 let digest = component_sources
                     .lookup
                     .get(&ComponentName::Permissions)
-                    .ok_or_else(|| anyhow::anyhow!("Failed to get digest for Permissions component"))?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Failed to get digest for Permissions component")
+                    })?
                     .digest()
                     .to_string();
 
-                anyhow::ensure!(response.digest == digest, "Unexpected digest in permissions response");
+                anyhow::ensure!(
+                    response.digest == digest,
+                    "Unexpected digest in permissions response"
+                );
                 Ok(())
             }
         }
