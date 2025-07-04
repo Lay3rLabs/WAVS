@@ -5,15 +5,14 @@ use utils::{config::ChainConfigs, filesystem::workspace_path};
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, Digest, ServiceID, TriggerAction, TriggerConfig, TriggerData, Workflow,
-    WorkflowID,
+    AllowedHostPermission, Digest, Service, ServiceID, TriggerAction, TriggerConfig, TriggerData,
+    Workflow, WorkflowID,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
 pub struct EngineSetup {
     pub engine: WTEngine,
-    pub workflow: Workflow,
-    pub service_id: ServiceID,
+    pub service: Service,
     pub workflow_id: WorkflowID,
     pub chain_configs: ChainConfigs,
     pub component: Component,
@@ -64,18 +63,35 @@ impl EngineSetup {
             aggregators: Vec::new(),
         };
 
+        let service = wavs_types::Service {
+            id: service_id.clone(),
+            name: "Exec Service".to_string(),
+            workflows: BTreeMap::from([(workflow_id.clone(), workflow)]),
+            status: wavs_types::ServiceStatus::Active,
+            manager: wavs_types::ServiceManager::Evm {
+                chain_name: "exec".parse().unwrap(),
+                address: Default::default(),
+            },
+        };
+
         let chain_configs = ChainConfigs::default();
 
         Arc::new(EngineSetup {
             engine,
-            workflow,
+            service,
             component,
             component_bytes,
-            service_id,
             workflow_id,
             chain_configs,
             data_dir,
         })
+    }
+
+    pub fn workflow(&self) -> &Workflow {
+        self.service
+            .workflows
+            .get(&self.workflow_id)
+            .expect("Workflow not found")
     }
 
     /// Create a new InstanceDeps for execution
@@ -86,8 +102,7 @@ impl EngineSetup {
 
         let builder = InstanceDepsBuilder {
             component: self.component.clone(),
-            workflow: self.workflow.clone(),
-            service_id: self.service_id.clone(),
+            service: self.service.clone(),
             workflow_id: self.workflow_id.clone(),
             engine: &self.engine,
             data_dir: self.data_dir.path().to_path_buf(),
@@ -104,7 +119,7 @@ impl EngineSetup {
     pub fn create_trigger_action(&self, data: Vec<u8>) -> TriggerAction {
         TriggerAction {
             config: TriggerConfig {
-                service_id: self.service_id.clone(),
+                service_id: self.service.id.clone(),
                 workflow_id: self.workflow_id.clone(),
                 trigger: wavs_types::Trigger::Manual,
             },

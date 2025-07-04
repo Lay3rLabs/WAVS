@@ -1,0 +1,41 @@
+interface chain {
+    type chain-name = string;
+
+    record cosmos-address {
+        bech32-addr: string,
+        // prefix is the first part of the bech32 address
+        prefix-len: u32
+    }
+
+    record cosmos-event {
+        ty: string,
+        attributes: list<tuple<string, string>>,
+    }
+
+    record cosmos-chain-config {
+        chain-id: string,
+        rpc-endpoint: option<string>,
+        grpc-endpoint: option<string>,
+        grpc-web-endpoint: option<string>,
+        gas-price: f32,
+        gas-denom: string,
+        bech32-prefix: string,
+    }
+
+    record evm-address {
+        raw-bytes: list<u8>
+    }
+
+    record evm-event-log-data {
+        // the raw log topics that can be decoded into an event
+        topics: list<list<u8>>,
+        // the raw log data that can be decoded into an event
+        data: list<u8>,
+    }
+
+    record evm-chain-config {
+        chain-id: string,
+        ws-endpoint: option<string>,
+        http-endpoint: option<string>,
+    }
+}

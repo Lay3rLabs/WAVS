@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
@@ -6,7 +7,7 @@ use regex::Regex;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{ChainName, Trigger, WorkflowID};
 
-use crate::e2e::components::ComponentName;
+use crate::e2e::components::{ComponentName, ComponentSources};
 use crate::e2e::types::{
     CosmosQueryRequest, CosmosQueryResponse, PermissionsRequest, PermissionsResponse,
     SquareRequest, SquareResponse,
@@ -243,9 +244,22 @@ pub enum ExpectedOutput {
     EchoSquare { x: u64 },
     /// Expect specific structure, but don't check values
     StructureOnly(OutputStructure),
+    /// For a dynamic callback that checks the output
+    Callback(Arc<dyn ExpectedOutputCallback>),
     /// Deferred value
     /// Block interval start stop uses this to dynamically expect a value
     Deferred,
+}
+
+pub trait ExpectedOutputCallback: Send + Sync + std::fmt::Debug + 'static {
+    /// Validate the actual output against the expected output
+    fn validate(
+        &self,
+        test: &TestDefinition,
+        clients: &super::clients::Clients,
+        component_sources: &ComponentSources,
+        actual: &[u8],
+    ) -> anyhow::Result<()>;
 }
 
 /// For validating structure without checking values
@@ -419,7 +433,13 @@ impl WorkflowBuilder {
 /// Helper methods for testing the output
 impl ExpectedOutput {
     /// Check if the actual output matches the expected output
-    pub fn validate(&self, actual: &[u8]) -> anyhow::Result<()> {
+    pub fn validate(
+        &self,
+        test: &TestDefinition,
+        clients: &super::clients::Clients,
+        component_sources: &ComponentSources,
+        actual: &[u8],
+    ) -> anyhow::Result<()> {
         let is_valid = match self {
             ExpectedOutput::Raw(expected) => expected == actual,
             ExpectedOutput::Text(expected) => {
@@ -452,6 +472,10 @@ impl ExpectedOutput {
                     serde_json::from_slice::<PermissionsResponse>(actual).is_ok()
                 }
             },
+            ExpectedOutput::Callback(callback) => {
+                callback.validate(test, clients, component_sources, actual)?;
+                return Ok(());
+            }
             ExpectedOutput::Deferred => {
                 bail!("Invalid configuration: Deferred values must be set dynamically")
             }

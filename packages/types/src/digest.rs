@@ -23,6 +23,12 @@ impl Digest {
     }
 }
 
+impl From<[u8; 32]> for Digest {
+    fn from(value: [u8; 32]) -> Self {
+        Digest(value)
+    }
+}
+
 impl AsRef<[u8]> for Digest {
     fn as_ref(&self) -> &[u8] {
         &self.0

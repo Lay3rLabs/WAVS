@@ -161,12 +161,15 @@ download-wit branch="main":
     git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
 
     # Clear existing content and create wit directory
-    rm -rf wit
-    mkdir -p wit
+    rm -rf wit-definitions
+    mkdir -p wit-definitions
 
-    # Copy just the wit directory and lock file from the cloned repo
-    cp -r temp_clone/wavs-wasi/wit/* wit/
-    cp -r temp_clone/wavs-wasi/wkg.lock wkg.lock
+    # Copy it over
+    cp -r temp_clone/wavs-wasi/wit-definitions/* wit-definitions/
+
+    # Fetch deps
+    cd wit-definitions/worker && wkg wit fetch
+    cd wit-definitions/types && wkg wit fetch
 
     # Clean up
     rm -rf temp_clone

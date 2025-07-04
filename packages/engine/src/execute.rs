@@ -11,8 +11,8 @@ pub async fn execute(
 ) -> Result<Option<WasmResponse>, EngineError> {
     let service_id = trigger.config.service_id.clone();
     let workflow_id = trigger.config.workflow_id.clone();
-    let input: crate::bindings::world::wavs::worker::layer_types::TriggerAction =
-        trigger.try_into()?;
+    let input: crate::bindings::world::wavs::worker::input::TriggerAction =
+        trigger.try_into().map_err(EngineError::Input)?;
 
     // Even though we have epochs forcing timeouts within WASI
     // we still need to set a timeout on the host side
@@ -21,7 +21,7 @@ pub async fn execute(
         let service_id = service_id.clone();
         let workflow_id = workflow_id.clone();
         async move {
-            crate::bindings::world::LayerTriggerWorld::instantiate_async(
+            crate::bindings::world::WavsWorld::instantiate_async(
                 &mut deps.store,
                 &deps.component,
                 &deps.linker,

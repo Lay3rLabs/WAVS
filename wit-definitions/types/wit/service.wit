@@ -1,0 +1,139 @@
+interface service {
+    // Basic types
+    type service-id = string;
+    type workflow-id = string;
+    type package-ref = string;
+    type semver-version = string;
+
+    use core.{digest, timestamp};
+    use chain.{chain-name, evm-address, cosmos-address};
+
+    // Service types
+    record service {
+        id: service-id,
+        name: string,
+        workflows: list<tuple<workflow-id, workflow>>,
+        status: service-status,
+        manager: service-manager,
+    }
+
+    variant service-status {
+        active,
+        paused,
+    }
+
+    variant service-manager {
+        evm(evm-manager),
+    }
+
+    record evm-manager {
+        chain-name: chain-name,
+        address: evm-address,
+    }
+
+
+    // Workflow types
+    record workflow {
+        trigger: trigger,
+        component: component,
+        submit: submit,
+        aggregators: list<aggregator>,
+    }
+
+    // Component types
+    record component {
+        source: component-source,
+        permissions: permissions,
+        fuel-limit: option<u64>,
+        time-limit-seconds: option<u64>,
+        config: list<tuple<string, string>>,
+        env-keys: list<string>,
+    }
+
+    variant component-source {
+        download(component-source-download),
+        registry(registry),
+        digest(digest),
+    }
+
+    record component-source-download {
+        url: string,
+        digest: digest,
+    }
+
+    record registry {
+        digest: digest,
+        domain: option<string>,
+        version: option<semver-version>,
+        pkg: package-ref,
+    }
+
+    // Permissions types
+    record permissions {
+        allowed-http-hosts: allowed-host-permission,
+        file-system: bool,
+    }
+
+    variant allowed-host-permission {
+        all,
+        only(list<string>),
+        none,
+    }
+
+    // Trigger types
+    variant trigger {
+        evm-contract-event(trigger-evm-contract-event),
+        cosmos-contract-event(trigger-cosmos-contract-event),
+        block-interval(trigger-block-interval),
+        cron(trigger-cron),
+        manual
+    }
+
+    record trigger-evm-contract-event {
+        address: evm-address,
+        chain-name: chain-name,
+        event-hash: list<u8>
+    }
+
+    record trigger-cosmos-contract-event {
+        address: cosmos-address,
+        chain-name: chain-name,
+        event-type: string
+    }
+
+    record trigger-block-interval {
+        chain-name: chain-name,
+        n-blocks: u32,
+        start-block: option<u64>,
+        end-block: option<u64>
+    }
+
+    record trigger-cron {
+        schedule: string,
+        start-time: option<timestamp>,
+        end-time: option<timestamp>
+    }
+
+
+    // Submit types
+    variant submit {
+        none,
+        aggregator(aggregator-submit),
+    }
+
+    record aggregator-submit {
+        url: string,
+    }
+
+    // Aggregator types
+    variant aggregator {
+        evm(evm-contract-submission),
+    }
+
+    record evm-contract-submission {
+        chain-name: chain-name,
+        address: evm-address,
+        max-gas: option<u64>,
+    }
+
+}

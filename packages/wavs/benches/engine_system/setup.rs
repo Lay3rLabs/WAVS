@@ -3,7 +3,6 @@ use std::{collections::BTreeMap, sync::Arc};
 use opentelemetry::global::meter;
 use utils::storage::{db::RedbStorage, fs::FileStorage};
 use utils::telemetry::Metrics;
-use utils::test_utils::address::rand_address_evm;
 use wavs::{
     dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE},
     services::Services,
@@ -71,7 +70,7 @@ impl SystemSetup {
             .unwrap();
 
         // just a sanity check to ensure the digest matches
-        if digest != *engine_setup.workflow.component.source.digest() {
+        if digest != *engine_setup.workflow().component.source.digest() {
             panic!("Component digest mismatch");
         }
 
@@ -84,28 +83,12 @@ impl SystemSetup {
             Services::new(db_storage),
         );
 
-        // Create a Service that matches our workflow
-        let service = Service {
-            id: engine_setup.service_id.clone(),
-            name: "Benchmark System Service".to_string(),
-            workflows: [(
-                engine_setup.workflow_id.clone(),
-                engine_setup.workflow.clone(),
-            )]
-            .into(),
-            status: wavs_types::ServiceStatus::Active,
-            manager: wavs_types::ServiceManager::Evm {
-                chain_name: wavs_types::ChainName::new("benchmark-chain".to_string()).unwrap(),
-                address: rand_address_evm(),
-            },
-        };
-
         let trigger_actions = (1..=system_config.n_actions)
             .enumerate()
             .map(|(i, _)| {
                 let data = format!("Action number {}", i).into_bytes();
                 let action = engine_setup.create_trigger_action(data);
-                (action, service.clone())
+                (action, engine_setup.service.clone())
             })
             .collect::<Vec<_>>();
 
