@@ -1,10 +1,18 @@
-use example_helpers::bindings::compat::LogLevel;
-use example_helpers::bindings::world::WasmResponse;
-use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
-use example_helpers::{
-    bindings::world::{host, Guest, TriggerAction},
-    export_layer_trigger_world,
+use example_helpers::bindings::world::{
+    host,
+    wavs::{
+        types::service::ComponentSource,
+        worker::{
+            helpers::{LogLevel, ServiceAndWorkflowId},
+            input::TriggerAction,
+            output::WasmResponse,
+        },
+    },
+    Guest,
 };
+
+use example_helpers::export_layer_trigger_world;
+use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use std::{
     fs,
     io::Write,
@@ -75,10 +83,34 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
 
     let responses_count = fs::read_dir(responses_path)?.count();
 
+    let ServiceAndWorkflowId {
+        service,
+        workflow_id,
+    } = host::get_service();
+
+    let workflow = service
+        .workflows
+        .into_iter()
+        .find_map(|(id, workflow)| {
+            if id == workflow_id {
+                Some(workflow)
+            } else {
+                None
+            }
+        })
+        .ok_or(anyhow::anyhow!("Failed to find workflow"))?;
+
+    let digest = match workflow.component.source {
+        ComponentSource::Download(component_source_download) => component_source_download.digest,
+        ComponentSource::Registry(registry) => registry.digest,
+        ComponentSource::Digest(digest) => digest,
+    };
+
     Ok(Response {
         filename: response_path.to_path_buf(),
         contents,
         filecount: responses_count,
+        digest,
     })
 }
 
@@ -95,6 +127,8 @@ struct Response {
     pub filename: PathBuf,
     pub contents: String,
     pub filecount: usize,
+    // derived from host get-service call
+    pub digest: String,
 }
 
 export_layer_trigger_world!(Component);

@@ -1,6 +1,6 @@
 // Helpers to work with "trigger id" flows - which our example components do
-use crate::bindings::compat::{
-    TriggerData, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent, WasmResponse,
+use crate::bindings::world::wavs::{
+    worker::input as component_input, worker::output as component_output,
 };
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
@@ -10,15 +10,19 @@ use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
 use serde::{Deserialize, Serialize};
 use wavs_wasi_utils::decode_event_log_data;
 
-pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)> {
+pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Result<(u64, Vec<u8>)> {
     match trigger_data {
-        TriggerData::CosmosContractEvent(TriggerDataCosmosContractEvent { event, .. }) => {
+        component_input::TriggerData::CosmosContractEvent(
+            component_input::TriggerDataCosmosContractEvent { event, .. },
+        ) => {
             let event = cosmwasm_std::Event::from(event);
             let event = cosmos_contract_simple_example::event::NewMessageEvent::try_from(event)?;
 
             Ok((event.id.u64(), event.data))
         }
-        TriggerData::EvmContractEvent(TriggerDataEvmContractEvent { log, .. }) => {
+        component_input::TriggerData::EvmContractEvent(
+            component_input::TriggerDataEvmContractEvent { log, .. },
+        ) => {
             let event: NewTrigger = decode_event_log_data!(log)?;
 
             let trigger_info = TriggerInfo::abi_decode(&event._0)?;
@@ -28,8 +32,11 @@ pub fn decode_trigger_event(trigger_data: TriggerData) -> Result<(u64, Vec<u8>)>
     }
 }
 
-pub fn encode_trigger_output(trigger_id: u64, output: impl AsRef<[u8]>) -> WasmResponse {
-    WasmResponse {
+pub fn encode_trigger_output(
+    trigger_id: u64,
+    output: impl AsRef<[u8]>,
+) -> component_output::WasmResponse {
+    component_output::WasmResponse {
         payload: DataWithId {
             triggerId: trigger_id,
             data: output.as_ref().to_vec().into(),

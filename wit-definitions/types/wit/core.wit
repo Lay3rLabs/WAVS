@@ -1,0 +1,7 @@
+interface core {
+  type digest = string;
+
+  record timestamp {
+    nanos: u64
+  }
+}

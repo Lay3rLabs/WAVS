@@ -18,9 +18,10 @@ use super::test_definition::{
     OutputStructure, SubmitDefinition, TestBuilder, TestDefinition, TriggerDefinition,
     WorkflowBuilder,
 };
+use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
-use crate::e2e::test_definition::ChangeServiceDefinition;
-use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest};
+use crate::e2e::test_definition::{ChangeServiceDefinition, ExpectedOutputCallback};
+use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, PermissionsResponse};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
@@ -462,6 +463,45 @@ impl TestRegistry {
         chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
+        #[derive(Debug)]
+        struct PermissionsCallback {}
+
+        impl PermissionsCallback {
+            pub fn new() -> Arc<Self> {
+                Arc::new(PermissionsCallback {})
+            }
+        }
+
+        impl ExpectedOutputCallback for PermissionsCallback {
+            fn validate(
+                &self,
+                _test: &TestDefinition,
+                _clients: &super::clients::Clients,
+                component_sources: &ComponentSources,
+                actual: &[u8],
+            ) -> anyhow::Result<()> {
+                let response: PermissionsResponse =
+                    serde_json::from_slice(actual).map_err(|e| {
+                        anyhow::anyhow!("Failed to deserialize permissions response: {}", e)
+                    })?;
+
+                let digest = component_sources
+                    .lookup
+                    .get(&ComponentName::Permissions)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Failed to get digest for Permissions component")
+                    })?
+                    .digest()
+                    .to_string();
+
+                anyhow::ensure!(
+                    response.digest == digest,
+                    "Unexpected digest in permissions response"
+                );
+                Ok(())
+            }
+        }
+
         self.register(
             TestBuilder::new("evm_permissions")
                 .with_description("Tests permissions for HTTP and file system access on EVM chain")
@@ -481,9 +521,7 @@ impl TestRegistry {
                             chain_name: chain.clone(),
                         })
                         .with_input_data(InputData::Permissions(create_permissions_request()))
-                        .with_expected_output(ExpectedOutput::StructureOnly(
-                            OutputStructure::PermissionsResponse,
-                        ))
+                        .with_expected_output(ExpectedOutput::Callback(PermissionsCallback::new()))
                         .build(),
                 )
                 .build(),

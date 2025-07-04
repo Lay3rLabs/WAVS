@@ -8,14 +8,13 @@ use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wasmtime_wasi_keyvalue::WasiKeyValue;
-use wavs_types::{AllowedHostPermission, ServiceID, Workflow, WorkflowID};
+use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
 use crate::{EngineError, HostComponent, HostComponentLogger};
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
-    pub workflow: Workflow,
-    pub service_id: ServiceID,
+    pub service: Service,
     pub workflow_id: WorkflowID,
     pub engine: &'a WTEngine,
     pub data_dir: P,
@@ -37,8 +36,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
     pub fn build(self) -> Result<InstanceDeps, EngineError> {
         let Self {
             component,
-            workflow,
-            service_id,
+            service,
             workflow_id,
             engine,
             data_dir,
@@ -48,6 +46,15 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             max_wasm_fuel,
             shared_keyvalue_store,
         } = self;
+
+        let workflow =
+            service
+                .workflows
+                .get(&workflow_id)
+                .ok_or_else(|| EngineError::WorkflowNotFound {
+                    service_id: service.id.clone(),
+                    workflow_id: workflow_id.clone(),
+                })?;
 
         let permissions = &workflow.component.permissions;
 
@@ -124,8 +131,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // create host (what is this actually? some state needed for the linker?)
         let host = HostComponent {
-            workflow,
-            service_id,
+            service,
             workflow_id,
             chain_configs: chain_configs.clone(),
             table: wasmtime::component::ResourceTable::new(),

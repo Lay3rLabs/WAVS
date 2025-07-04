@@ -1,0 +1,113 @@
+package wavs:worker@0.5.0-alpha.13;
+
+use wavs:types/core@0.5.0-alpha.13 as core-types;
+use wavs:types/service@0.5.0-alpha.13 as service-types;
+use wavs:types/chain@0.5.0-alpha.13 as chain-types;
+
+use wasi:http/types@0.2.0;
+use wasi:http/outgoing-handler@0.2.0;
+
+interface input {
+    use core-types.{timestamp};
+    use service-types.{service-id, workflow-id, trigger};
+    use chain-types.{chain-name, evm-address, evm-event-log-data, cosmos-address, cosmos-event};
+
+    record trigger-action {
+        config: trigger-config,
+        data: trigger-data
+    }
+
+    record trigger-config {
+        service-id: service-id,
+        workflow-id: workflow-id,
+        trigger: trigger
+    }
+
+    variant trigger-data {
+        evm-contract-event(trigger-data-evm-contract-event),
+        cosmos-contract-event(trigger-data-cosmos-contract-event),
+        block-interval(trigger-data-block-interval),
+        cron(trigger-data-cron),
+        raw(list<u8>)
+    }
+
+    record trigger-data-evm-contract-event {
+        contract-address: evm-address,
+        chain-name: chain-name,
+        log: evm-event-log-data,
+        block-height: u64
+    }
+
+    record trigger-data-cosmos-contract-event {
+        contract-address: cosmos-address,
+        chain-name: chain-name,
+        event: cosmos-event,
+        block-height: u64
+    }
+
+    record trigger-data-block-interval {
+        chain-name: chain-name,
+        block-height: u64
+    }
+
+    record trigger-data-cron {
+        trigger-time: timestamp
+    }
+}
+
+interface output {
+    record wasm-response {
+        payload: list<u8>,
+        ordering: option<u64>
+    }
+}
+
+interface helpers {
+    use service-types.{service, workflow, workflow-id};
+
+    variant log-level {
+        error,
+        warn,
+        info,
+        debug,
+        trace
+    }
+
+    record service-and-workflow-id {
+        service: service,
+        workflow-id: workflow-id
+    }
+
+    record workflow-and-workflow-id {
+        workflow: workflow,
+        workflow-id: workflow-id
+    }
+}
+
+world wavs-world {
+    // include needed for golang support
+    include wasi:cli/imports@0.2.0;
+
+    import host: interface {
+        use chain-types.{evm-chain-config, cosmos-chain-config};
+        use helpers.{log-level, service-and-workflow-id, workflow-and-workflow-id};
+
+        get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
+        get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
+
+        config-var: func(key: string) -> option<string>;
+
+        log: func(level: log-level, message: string);
+
+        // gets the service and workflow id that called this component 
+        get-service: func() -> service-and-workflow-id;
+
+        // convenience function to get the workflow without having to walk service.workflows
+        get-workflow: func() -> workflow-and-workflow-id;
+    }
+
+    use input.{trigger-action};
+    use output.{wasm-response};
+
+    export run: func(trigger-action: trigger-action) -> result<option<wasm-response>, string>;
+}

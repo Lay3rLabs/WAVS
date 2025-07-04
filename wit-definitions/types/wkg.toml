@@ -1,0 +1,6 @@
+[metadata]
+author = "Lay3r Labs Team"
+description = "WAVS WASI types"
+license = "MIT"
+homepage = "https://www.wavs.xyz/"
+repository = "https://github.com/Lay3rLabs/wavs-wasi"
