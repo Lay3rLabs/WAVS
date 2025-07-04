@@ -121,9 +121,6 @@ impl TestRegistry {
                 EvmService::Square => {
                     registry.register_evm_square_test(chain, aggregator_endpoint);
                 }
-                EvmService::KvStore => {
-                    registry.register_evm_kv_store_test(chain, aggregator_endpoint);
-                }
                 EvmService::ChainTriggerLookup => {
                     registry.register_evm_chain_trigger_lookup_test(chain, aggregator_endpoint);
                 }
@@ -354,37 +351,6 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::Square { x: 3 })
                         .with_expected_output(ExpectedOutput::Square { y: 9 })
-                        .build(),
-                )
-                .build(),
-        )
-    }
-
-    fn register_evm_kv_store_test(
-        &mut self,
-        chain: &ChainName,
-        aggregator_endpoint: &str,
-    ) -> &mut Self {
-        self.register(
-            TestBuilder::new("evm_kv_store")
-                .with_description("Tests the KvStore component on EVM chain")
-                .add_workflow(
-                    WorkflowID::new("kv_store").unwrap(),
-                    WorkflowBuilder::new()
-                        .with_component(ComponentName::KvStore.into())
-                        .with_trigger(TriggerDefinition::NewEvmContract(
-                            EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
-                            },
-                        ))
-                        .with_submit(SubmitDefinition::Aggregator {
-                            url: aggregator_endpoint.to_string(),
-                        })
-                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
-                            chain_name: chain.clone(),
-                        })
-                        .with_input_data(InputData::Text("test".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("count:1".to_string()))
                         .build(),
                 )
                 .build(),

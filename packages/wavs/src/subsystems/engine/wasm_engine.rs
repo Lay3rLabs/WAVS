@@ -226,7 +226,6 @@ impl<S: CAStorage> WasmEngine<S> {
         })
     }
 
-    /// Get or create a shared keyvalue store for a service
     fn get_or_create_keyvalue_store(&self, service_id: &ServiceID) -> SharedKeyValueStore {
         let mut stores = self.keyvalue_stores.write().unwrap();
         stores
@@ -252,7 +251,7 @@ impl<S: CAStorage> WasmEngine<S> {
             tracing::warn!("Storage directory {:?} does not exist", dir_path);
         }
 
-        // Also remove the keyvalue store for this service
+        // also remove the keyvalue store for this service
         self.keyvalue_stores.write().unwrap().remove(service_id);
     }
 

@@ -141,7 +141,7 @@ impl ExecComponent {
             max_wasm_fuel: Some(u64::MAX),
             shared_keyvalue_store: std::sync::Arc::new(std::sync::RwLock::new(
                 std::collections::HashMap::new(),
-            )), // CLI uses empty keyvalue store
+            )),
         }
         .build()
         .context("Failed to build instance dependencies for component execution")?;
