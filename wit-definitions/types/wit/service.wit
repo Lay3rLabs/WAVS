@@ -5,7 +5,8 @@ interface service {
     type package-ref = string;
     type semver-version = string;
 
-    use core.{chain-name, evm-address, trigger, digest};
+    use core.{digest, timestamp};
+    use chain.{chain-name, evm-address, cosmos-address};
 
     // Service types
     record service {
@@ -79,6 +80,41 @@ interface service {
         none,
     }
 
+    // Trigger types
+    variant trigger {
+        evm-contract-event(trigger-evm-contract-event),
+        cosmos-contract-event(trigger-cosmos-contract-event),
+        block-interval(trigger-block-interval),
+        cron(trigger-cron),
+        manual
+    }
+
+    record trigger-evm-contract-event {
+        address: evm-address,
+        chain-name: chain-name,
+        event-hash: list<u8>
+    }
+
+    record trigger-cosmos-contract-event {
+        address: cosmos-address,
+        chain-name: chain-name,
+        event-type: string
+    }
+
+    record trigger-block-interval {
+        chain-name: chain-name,
+        n-blocks: u32,
+        start-block: option<u64>,
+        end-block: option<u64>
+    }
+
+    record trigger-cron {
+        schedule: string,
+        start-time: option<timestamp>,
+        end-time: option<timestamp>
+    }
+
+
     // Submit types
     variant submit {
         none,
@@ -100,9 +136,4 @@ interface service {
         max-gas: option<u64>,
     }
 
-    // Response type
-    record wasm-response {
-        payload: list<u8>,
-        ordering: option<u64>,
-    }
 }

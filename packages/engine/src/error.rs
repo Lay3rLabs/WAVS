@@ -12,8 +12,8 @@ pub enum EngineError {
     #[error("Component returned an error: {0}")]
     ComponentError(anyhow::Error),
 
-    #[error{"Unable to get trigger data as component input: {0}"}]
-    TriggerData(anyhow::Error),
+    #[error{"Unable to get component input: {0}"}]
+    Input(anyhow::Error),
 
     #[error{"Filesystem: {0}"}]
     Filesystem(anyhow::Error),

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use thiserror::Error;
 use std::fmt::{self, Debug, Display, Formatter};
 use utoipa::ToSchema;
 
@@ -30,6 +31,19 @@ impl<const N: usize> ByteArray<N> {
 
     pub fn is_empty(&self) -> bool {
         N == 0
+    }
+}
+
+impl <const N: usize> TryFrom<Vec<u8>> for ByteArray<N> {
+    type Error = ByteArrayError<N>;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        if value.len() != N {
+            return Err(ByteArrayError { length: N });
+        }
+        let mut array = [0u8; N];
+        array.copy_from_slice(&value);
+        Ok(ByteArray(array))
     }
 }
 
@@ -106,4 +120,10 @@ mod tests {
         assert_eq!(format!("{:?}", data), "0xdeadbeef");
         assert_eq!(format!("{:#?}", data), "0xdeadbeef");
     }
+}
+
+#[derive(Error, Debug)]
+#[error("ByteArray<{N}> must be exactly {N} bytes long")]
+pub struct ByteArrayError<const N: usize> {
+    pub length: usize,
 }

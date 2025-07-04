@@ -1,14 +1,7 @@
-package wavs:types@0.5.0-alpha.7;
+package wavs:types@0.5.0-alpha.9;
 
-interface core {
-  /// Basic types
+interface chain {
   type chain-name = string;
-
-  type digest = string;
-
-  record timestamp {
-    nanos: u64,
-  }
 
   record cosmos-address {
     bech32-addr: string,
@@ -47,98 +40,19 @@ interface core {
     ws-endpoint: option<string>,
     http-endpoint: option<string>,
   }
+}
 
-  record trigger-source-evm-contract-event {
-    address: evm-address,
-    chain-name: string,
-    event-hash: list<u8>,
-  }
+interface core {
+  type digest = string;
 
-  record trigger-source-cosmos-contract-event {
-    address: cosmos-address,
-    chain-name: string,
-    event-type: string,
-  }
-
-  record block-interval-source {
-    chain-name: string,
-    n-blocks: u32,
-    start-block: option<u64>,
-    end-block: option<u64>,
-  }
-
-  record trigger-source-cron {
-    schedule: string,
-    start-time: option<timestamp>,
-    end-time: option<timestamp>,
-  }
-
-  variant trigger {
-    evm-contract-event(trigger-source-evm-contract-event),
-    cosmos-contract-event(trigger-source-cosmos-contract-event),
-    block-interval(block-interval-source),
-    cron(trigger-source-cron),
-    manual,
-  }
-
-  record trigger-config {
-    service-id: string,
-    workflow-id: string,
-    trigger: trigger,
-  }
-
-  record trigger-data-evm-contract-event {
-    contract-address: evm-address,
-    chain-name: string,
-    log: evm-event-log-data,
-    block-height: u64,
-  }
-
-  record trigger-data-cosmos-contract-event {
-    contract-address: cosmos-address,
-    chain-name: string,
-    event: cosmos-event,
-    block-height: u64,
-  }
-
-  record block-interval-data {
-    chain-name: string,
-    block-height: u64,
-  }
-
-  record trigger-data-cron {
-    trigger-time: timestamp,
-  }
-
-  variant trigger-data {
-    evm-contract-event(trigger-data-evm-contract-event),
-    cosmos-contract-event(trigger-data-cosmos-contract-event),
-    block-interval(block-interval-data),
-    cron(trigger-data-cron),
-    raw(list<u8>),
-  }
-
-  record trigger-action {
-    config: trigger-config,
-    data: trigger-data,
-  }
-
-  record wasm-response {
-    payload: list<u8>,
-    ordering: option<u64>,
-  }
-
-  variant log-level {
-    error,
-    warn,
-    info,
-    debug,
-    trace,
+  record timestamp {
+    nanos: u64,
   }
 }
 
 interface service {
-  use core.{chain-name, evm-address, trigger, digest};
+  use core.{digest, timestamp};
+  use chain.{chain-name, evm-address, cosmos-address};
 
   /// Basic types
   type service-id = string;
@@ -203,6 +117,40 @@ interface service {
     env-keys: list<string>,
   }
 
+  record trigger-evm-contract-event {
+    address: evm-address,
+    chain-name: chain-name,
+    event-hash: list<u8>,
+  }
+
+  record trigger-cosmos-contract-event {
+    address: cosmos-address,
+    chain-name: chain-name,
+    event-type: string,
+  }
+
+  record trigger-block-interval {
+    chain-name: chain-name,
+    n-blocks: u32,
+    start-block: option<u64>,
+    end-block: option<u64>,
+  }
+
+  record trigger-cron {
+    schedule: string,
+    start-time: option<timestamp>,
+    end-time: option<timestamp>,
+  }
+
+  /// Trigger types
+  variant trigger {
+    evm-contract-event(trigger-evm-contract-event),
+    cosmos-contract-event(trigger-cosmos-contract-event),
+    block-interval(trigger-block-interval),
+    cron(trigger-cron),
+    manual,
+  }
+
   record aggregator-submit {
     url: string,
   }
@@ -239,12 +187,6 @@ interface service {
     workflows: list<tuple<workflow-id, workflow>>,
     status: service-status,
     manager: service-manager,
-  }
-
-  /// Response type
-  record wasm-response {
-    payload: list<u8>,
-    ordering: option<u64>,
   }
 }
 

@@ -1,9 +1,10 @@
-use example_helpers::bindings::world::WasmResponse;
-use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
-use example_helpers::{
-    bindings::world::{Guest, TriggerAction},
-    export_layer_trigger_world,
+use example_helpers::bindings::world::{
+    wavs::worker::{input::TriggerAction, output::WasmResponse},
+    Guest,
 };
+
+use example_helpers::export_layer_trigger_world;
+use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use serde::{Deserialize, Serialize};
 
 struct Component;

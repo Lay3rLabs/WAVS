@@ -1,5 +1,11 @@
-use example_helpers::bindings::compat::TriggerData;
-use example_helpers::bindings::world::{host, Guest, TriggerAction, WasmResponse};
+use example_helpers::bindings::world::{
+    host,
+    wavs::worker::{
+        input::{TriggerAction, TriggerData},
+        output::WasmResponse,
+    },
+    Guest,
+};
 use example_helpers::export_layer_trigger_world;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use wstd::runtime::block_on;

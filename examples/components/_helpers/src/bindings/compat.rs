@@ -1,14 +1,14 @@
-pub use super::world::wavs::types::core::*;
+use super::world::wavs::{types::chain as component_chain, worker::input as component_input};
 
-impl From<CosmosEvent> for cosmwasm_std::Event {
-    fn from(event: CosmosEvent) -> Self {
+impl From<component_chain::CosmosEvent> for cosmwasm_std::Event {
+    fn from(event: component_chain::CosmosEvent) -> Self {
         cosmwasm_std::Event::new(event.ty).add_attributes(event.attributes)
     }
 }
 
-impl From<cosmwasm_std::Event> for CosmosEvent {
+impl From<cosmwasm_std::Event> for component_chain::CosmosEvent {
     fn from(event: cosmwasm_std::Event) -> Self {
-        CosmosEvent {
+        component_chain::CosmosEvent {
             ty: event.ty,
             attributes: event
                 .attributes
@@ -19,9 +19,9 @@ impl From<cosmwasm_std::Event> for CosmosEvent {
     }
 }
 
-impl From<alloy_primitives::LogData> for EvmEventLogData {
+impl From<alloy_primitives::LogData> for component_input::EvmEventLogData {
     fn from(log_data: alloy_primitives::LogData) -> Self {
-        EvmEventLogData {
+        component_input::EvmEventLogData {
             topics: log_data
                 .topics()
                 .iter()
@@ -32,8 +32,8 @@ impl From<alloy_primitives::LogData> for EvmEventLogData {
     }
 }
 
-impl From<EvmEventLogData> for alloy_primitives::LogData {
-    fn from(log_data: EvmEventLogData) -> Self {
+impl From<component_input::EvmEventLogData> for alloy_primitives::LogData {
+    fn from(log_data: component_input::EvmEventLogData) -> Self {
         alloy_primitives::LogData::new(
             log_data
                 .topics
@@ -46,7 +46,7 @@ impl From<EvmEventLogData> for alloy_primitives::LogData {
     }
 }
 
-impl TryFrom<layer_climb::prelude::Address> for CosmosAddress {
+impl TryFrom<layer_climb::prelude::Address> for component_chain::CosmosAddress {
     type Error = anyhow::Error;
 
     fn try_from(addr: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
@@ -54,7 +54,7 @@ impl TryFrom<layer_climb::prelude::Address> for CosmosAddress {
             layer_climb::prelude::Address::Cosmos {
                 bech32_addr,
                 prefix_len,
-            } => Ok(CosmosAddress {
+            } => Ok(component_chain::CosmosAddress {
                 bech32_addr,
                 prefix_len: prefix_len as u32,
             }),
@@ -63,8 +63,8 @@ impl TryFrom<layer_climb::prelude::Address> for CosmosAddress {
     }
 }
 
-impl From<CosmosAddress> for layer_climb::prelude::Address {
-    fn from(addr: CosmosAddress) -> Self {
+impl From<component_chain::CosmosAddress> for layer_climb::prelude::Address {
+    fn from(addr: component_chain::CosmosAddress) -> Self {
         layer_climb::prelude::Address::Cosmos {
             bech32_addr: addr.bech32_addr,
             prefix_len: addr.prefix_len as usize,
@@ -72,12 +72,12 @@ impl From<CosmosAddress> for layer_climb::prelude::Address {
     }
 }
 
-impl TryFrom<layer_climb::prelude::Address> for EvmAddress {
+impl TryFrom<layer_climb::prelude::Address> for component_chain::EvmAddress {
     type Error = anyhow::Error;
 
     fn try_from(addr: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         match addr {
-            layer_climb::prelude::Address::Evm(eth) => Ok(EvmAddress {
+            layer_climb::prelude::Address::Evm(eth) => Ok(component_chain::EvmAddress {
                 raw_bytes: eth.as_bytes().to_vec(),
             }),
             _ => Err(anyhow::anyhow!("Cannot convert to EthAddr")),
@@ -85,28 +85,28 @@ impl TryFrom<layer_climb::prelude::Address> for EvmAddress {
     }
 }
 
-impl From<EvmAddress> for layer_climb::prelude::Address {
-    fn from(addr: EvmAddress) -> Self {
+impl From<component_chain::EvmAddress> for layer_climb::prelude::Address {
+    fn from(addr: component_chain::EvmAddress) -> Self {
         alloy_primitives::Address::from(addr).into()
     }
 }
 
-impl From<alloy_primitives::Address> for EvmAddress {
+impl From<alloy_primitives::Address> for component_chain::EvmAddress {
     fn from(addr: alloy_primitives::Address) -> Self {
-        EvmAddress {
+        component_chain::EvmAddress {
             raw_bytes: addr.to_vec(),
         }
     }
 }
 
-impl From<EvmAddress> for alloy_primitives::Address {
-    fn from(addr: EvmAddress) -> Self {
+impl From<component_chain::EvmAddress> for alloy_primitives::Address {
+    fn from(addr: component_chain::EvmAddress) -> Self {
         alloy_primitives::Address::from_slice(&addr.raw_bytes)
     }
 }
 
-impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
-    fn from(config: CosmosChainConfig) -> layer_climb::prelude::ChainConfig {
+impl From<component_chain::CosmosChainConfig> for layer_climb::prelude::ChainConfig {
+    fn from(config: component_chain::CosmosChainConfig) -> layer_climb::prelude::ChainConfig {
         layer_climb::prelude::ChainConfig {
             chain_id: layer_climb::prelude::ChainId::new(config.chain_id),
             rpc_endpoint: config.rpc_endpoint,
@@ -121,9 +121,9 @@ impl From<CosmosChainConfig> for layer_climb::prelude::ChainConfig {
     }
 }
 
-impl From<layer_climb::prelude::ChainConfig> for CosmosChainConfig {
-    fn from(config: layer_climb::prelude::ChainConfig) -> CosmosChainConfig {
-        CosmosChainConfig {
+impl From<layer_climb::prelude::ChainConfig> for component_chain::CosmosChainConfig {
+    fn from(config: layer_climb::prelude::ChainConfig) -> component_chain::CosmosChainConfig {
+        component_chain::CosmosChainConfig {
             chain_id: config.chain_id.as_str().to_string(),
             rpc_endpoint: config.rpc_endpoint,
             grpc_endpoint: config.grpc_endpoint,

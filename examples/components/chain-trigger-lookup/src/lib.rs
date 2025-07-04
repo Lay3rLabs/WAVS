@@ -1,10 +1,14 @@
 use alloy_network::Ethereum;
 use anyhow::Context;
-use example_helpers::bindings::{
-    compat::{
-        TriggerData, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent, WasmResponse,
+use example_helpers::bindings::world::{
+    host,
+    wavs::worker::{
+        input::{
+            TriggerAction, TriggerData, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent,
+        },
+        output::WasmResponse,
     },
-    world::{host, Guest, TriggerAction},
+    Guest,
 };
 use example_helpers::{
     export_layer_trigger_world,
