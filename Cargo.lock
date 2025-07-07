@@ -9194,16 +9194,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmtime-wasi-keyvalue"
-version = "32.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d75a0a2fd6041fe7182d7553b36351525bd0e70605b5259ebf5cfd9fb58e40a9"
-dependencies = [
- "anyhow",
- "wasmtime",
-]
-
-[[package]]
 name = "wasmtime-winch"
 version = "32.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9329,7 +9319,6 @@ dependencies = [
  "utoipa-swagger-ui",
  "wasm-pkg-common",
  "wasmtime",
- "wasmtime-wasi-keyvalue",
  "wavs-benchmark-common",
  "wavs-engine",
  "wavs-types",
@@ -9374,7 +9363,6 @@ dependencies = [
  "tempfile",
  "utils",
  "wasmtime",
- "wasmtime-wasi-keyvalue",
  "wavs-engine",
  "wavs-types",
 ]
@@ -9405,7 +9393,6 @@ dependencies = [
  "uuid",
  "wasm-pkg-client",
  "wasmtime",
- "wasmtime-wasi-keyvalue",
  "wavs-engine",
  "wavs-types",
 ]
@@ -9423,7 +9410,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
- "wasmtime-wasi-keyvalue",
  "wavs-types",
 ]
 

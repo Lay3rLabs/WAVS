@@ -41,7 +41,6 @@ cosmwasm-std = { workspace = true }
 reqwest = { workspace = true }
 rand = { workspace = true }
 wasmtime = { workspace = true }
-wasmtime-wasi-keyvalue = { workspace = true }
 lru = { workspace = true }
 rayon = { workspace = true }
 url = { workspace = true }
