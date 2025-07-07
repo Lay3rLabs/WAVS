@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning].
 - CI Publishing
 - Register operator before running full e2e test
 
+### Changed
+
+- Pass Service through to Aggregator (upgrades come along for the ride)
+
 ## [v0.5.0-alpha.2]
 
 ### Added
