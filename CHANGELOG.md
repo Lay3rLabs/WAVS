@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [unreleased]
+
+### Added
+
+- Upgrade services (via on-chain event when ServiceManager URI is changed)
+- Add new chain on the fly
+- Supported `ServiceStatus::Paused`
+- Pass `Service` and `WorkflowID` to Component (and updated WIT)
+
+### Fixed
+
+- CI Publishing
+- Register operator before running full e2e test
+
 ## [v0.5.0-alpha.2]
 
 ### Added
