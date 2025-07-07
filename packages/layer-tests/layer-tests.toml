@@ -8,6 +8,11 @@ mode = "all"
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
 
+# Run a specific test
+# mode = {"isolated" = [
+#     {evm = "echo_data"},
+# ]}
+
 # Run a few specific tests
 # mode = {"isolated" = [
 #     {evm = "echo_data"},
