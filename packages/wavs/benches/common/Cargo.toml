@@ -13,5 +13,6 @@ publish = false
 tempfile = { workspace = true }
 utils = { workspace = true }
 wasmtime = { workspace = true }
+wasmtime-wasi-keyvalue = { workspace = true }
 wavs-engine = { workspace = true }
 wavs-types = { workspace = true }

@@ -1,11 +1,12 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
 use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_http::WasiHttpCtx;
-use wasmtime_wasi_keyvalue::WasiKeyValue;
+use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx};
 use wavs_types::{AllowedHostPermission, ServiceID, Workflow, WorkflowID};
 
 use crate::{EngineError, HostComponent, HostComponentLogger};
@@ -22,6 +23,7 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub log: HostComponentLogger,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
+    pub keyvalue_ctx: Arc<WasiKeyValueCtx>,
 }
 
 pub struct InstanceDeps {
@@ -44,6 +46,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             log,
             max_execution_seconds,
             max_wasm_fuel,
+            keyvalue_ctx,
         } = self;
 
         let permissions = &workflow.component.permissions;
@@ -113,8 +116,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         let ctx = builder.build();
 
-        // create keyvalue context - each component gets its own but they share buckets by name
-        let keyvalue = wasmtime_wasi_keyvalue::WasiKeyValueCtxBuilder::new().build();
+        // try to clone the keyvalue context to see if it implements Clone
+        let keyvalue = (*keyvalue_ctx).clone();
 
         // create host (what is this actually? some state needed for the linker?)
         let host = HostComponent {
