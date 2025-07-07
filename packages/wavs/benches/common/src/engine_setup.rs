@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use utils::{config::ChainConfigs, filesystem::workspace_path};
 use wasmtime::{component::Component, Engine as WTEngine};
+use wasmtime_wasi_keyvalue::{WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
     AllowedHostPermission, Digest, ServiceID, TriggerAction, TriggerConfig, TriggerData, Workflow,
@@ -19,6 +20,7 @@ pub struct EngineSetup {
     pub component: Component,
     pub component_bytes: Vec<u8>,
     pub data_dir: TempDir,
+    pub keyvalue: Arc<WasiKeyValueCtx>,
 }
 
 impl EngineSetup {
@@ -75,6 +77,7 @@ impl EngineSetup {
             workflow_id,
             chain_configs,
             data_dir,
+            keyvalue: Arc::new(WasiKeyValueCtxBuilder::new().build())
         })
     }
 
@@ -95,6 +98,7 @@ impl EngineSetup {
             log,
             max_wasm_fuel: None,
             max_execution_seconds: None,
+            keyvalue: self.keyvalue.clone(),
         };
 
         builder.build().unwrap()

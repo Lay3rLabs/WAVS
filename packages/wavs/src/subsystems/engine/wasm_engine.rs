@@ -1,4 +1,6 @@
 use lru::LruCache;
+use wasmtime_wasi_keyvalue::{WasiKeyValueCtx, WasiKeyValueCtxBuilder};
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -26,6 +28,7 @@ pub struct WasmEngine<S: CAStorage> {
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
     metrics: EngineMetrics,
+    keyvalue_stores: RwLock<HashMap<ServiceID, Arc<WasiKeyValueCtx>>>,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -64,6 +67,7 @@ impl<S: CAStorage> WasmEngine<S> {
             max_execution_seconds,
             max_wasm_fuel,
             metrics,
+            keyvalue_stores: RwLock::new(HashMap::new()),
         }
     }
 
@@ -177,6 +181,16 @@ impl<S: CAStorage> WasmEngine<S> {
 
         let digest = workflow.component.source.digest().clone();
 
+        let keyvalue = match self.keyvalue_stores.read().unwrap().get(&trigger_action.config.service_id).cloned() {
+            Some(kv_ctx) => kv_ctx.clone(),
+            None => {
+                let kv_ctx = WasiKeyValueCtxBuilder::new().build();
+                let kv_ctx = Arc::new(kv_ctx);
+                self.keyvalue_stores.write().unwrap().insert(trigger_action.config.service_id.clone(), kv_ctx.clone());
+                kv_ctx
+            } 
+        };
+
         let mut instance_deps = InstanceDepsBuilder {
             workflow,
             service_id: trigger_action.config.service_id.clone(),
@@ -196,6 +210,7 @@ impl<S: CAStorage> WasmEngine<S> {
             log,
             max_execution_seconds: self.max_execution_seconds,
             max_wasm_fuel: self.max_wasm_fuel,
+            keyvalue
         }
         .build()?;
 

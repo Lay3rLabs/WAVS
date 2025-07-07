@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, time::Instant};
+use std::{collections::BTreeMap, sync::Arc, time::Instant};
 
 use anyhow::{Context, Result};
 use utils::config::WAVS_ENV_PREFIX;
@@ -129,6 +129,7 @@ impl ExecComponent {
             log: log_wasi,
             max_execution_seconds: Some(u64::MAX),
             max_wasm_fuel: Some(u64::MAX),
+            keyvalue: Arc::new(wasmtime_wasi_keyvalue::WasiKeyValueCtxBuilder::new().build())
         }
         .build()
         .context("Failed to build instance dependencies for component execution")?;
