@@ -1,5 +1,5 @@
 [package]
-name = "kv-writer"
+name = "kv-store"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
@@ -16,4 +16,4 @@ serde_json = { workspace = true }
 crate-type = ["cdylib"]
 
 [package.metadata.component]
-package = "wavs-tests:kv-writer"
+package = "wavs-tests:kv-store"

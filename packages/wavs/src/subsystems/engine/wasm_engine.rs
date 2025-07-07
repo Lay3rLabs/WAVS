@@ -1,5 +1,4 @@
 use lru::LruCache;
-use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -9,7 +8,6 @@ use utils::config::ChainConfigs;
 use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
-use wasmtime_wasi_keyvalue::WasiKeyValueCtx;
 use wavs_engine::InstanceDepsBuilder;
 use wavs_types::{
     ComponentSource, Digest, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
@@ -24,8 +22,6 @@ pub struct WasmEngine<S: CAStorage> {
     wasm_storage: S,
     wasm_engine: WTEngine,
     memory_cache: RwLock<LruCache<Digest, Component>>,
-    // Cache keyvalue contexts per service so components within the same service share buckets
-    keyvalue_contexts: RwLock<HashMap<ServiceID, Arc<WasiKeyValueCtx>>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
@@ -63,23 +59,12 @@ impl<S: CAStorage> WasmEngine<S> {
             wasm_storage,
             wasm_engine,
             memory_cache: RwLock::new(LruCache::new(lru_size)),
-            keyvalue_contexts: RwLock::new(HashMap::new()),
             app_data_dir,
             chain_configs: Arc::new(RwLock::new(chain_configs)),
             max_execution_seconds,
             max_wasm_fuel,
             metrics,
         }
-    }
-
-    fn get_keyvalue_context(&self, service_id: &ServiceID) -> Arc<WasiKeyValueCtx> {
-        let mut contexts = self.keyvalue_contexts.write().unwrap();
-        contexts
-            .entry(service_id.clone())
-            .or_insert_with(|| {
-                Arc::new(wasmtime_wasi_keyvalue::WasiKeyValueCtxBuilder::new().build())
-            })
-            .clone()
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
@@ -202,9 +187,6 @@ impl<S: CAStorage> WasmEngine<S> {
 
         let digest = workflow.component.source.digest().clone();
 
-
-        let keyvalue_ctx = self.get_keyvalue_context(&trigger_action.config.service_id);
-
         let mut instance_deps = InstanceDepsBuilder {
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
@@ -223,7 +205,6 @@ impl<S: CAStorage> WasmEngine<S> {
             log,
             max_execution_seconds: self.max_execution_seconds,
             max_wasm_fuel: self.max_wasm_fuel,
-            keyvalue_ctx,
         }
         .build()?;
 
@@ -233,7 +214,6 @@ impl<S: CAStorage> WasmEngine<S> {
                 .map_err(|e| e.into())
         })
     }
-
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
     pub fn remove_storage(&self, service_id: &ServiceID) {
@@ -251,9 +231,6 @@ impl<S: CAStorage> WasmEngine<S> {
         } else {
             tracing::warn!("Storage directory {:?} does not exist", dir_path);
         }
-
-        // also remove the keyvalue context for this service
-        self.keyvalue_contexts.write().unwrap().remove(service_id);
     }
 
     fn block_on_run<F, T>(&self, fut: F) -> T

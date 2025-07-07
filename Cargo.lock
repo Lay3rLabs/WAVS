@@ -4355,16 +4355,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kv-reader"
-version = "0.5.0-alpha.4"
-dependencies = [
- "example-helpers",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "kv-writer"
+name = "kv-store"
 version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",

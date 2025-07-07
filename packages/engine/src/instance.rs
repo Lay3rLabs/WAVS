@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::sync::Arc;
 
 use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
 use wasmtime::Store;
@@ -11,7 +10,6 @@ use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx};
 
 use crate::{EngineError, HostComponent, HostComponentLogger};
 
-
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
@@ -22,7 +20,6 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub log: HostComponentLogger,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
-    pub keyvalue_ctx: Arc<WasiKeyValueCtx>,
 }
 
 pub struct InstanceDeps {
@@ -44,7 +41,6 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             log,
             max_execution_seconds,
             max_wasm_fuel,
-            keyvalue_ctx,
         } = self;
 
         let workflow =
@@ -123,8 +119,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         let ctx = builder.build();
 
-        // try to clone the keyvalue context to see if it implements Clone
-        let keyvalue = (*keyvalue_ctx).clone();
+        // create keyvalue context - each component gets its own
+        let keyvalue = wasmtime_wasi_keyvalue::WasiKeyValueCtxBuilder::new().build();
 
         // create host (what is this actually? some state needed for the linker?)
         let host = HostComponent {
