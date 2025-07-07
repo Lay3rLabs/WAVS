@@ -89,7 +89,7 @@ fn write_value(key: &str, value: u64) -> Result<(), String> {
         fs::create_dir_all(storage_path).map_err(|e| e.to_string())?;
     }
 
-    let storage_path = storage_path.join(&format!("{}.txt", key));
+    let storage_path = storage_path.join(format!("{}.txt", key));
     let mut storage_file = fs::File::create(&storage_path).map_err(|e| e.to_string())?;
 
     storage_file
