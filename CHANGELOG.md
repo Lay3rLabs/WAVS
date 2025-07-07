@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning].
 
 - Upgrade services (via on-chain event when ServiceManager URI is changed)
 - Add new chain on the fly
-- Supported `ServiceStatus::Paused`
+- Support `ServiceStatus::Paused`
 - Pass `Service` and `WorkflowID` to Component (and updated WIT)
 
 ### Fixed
