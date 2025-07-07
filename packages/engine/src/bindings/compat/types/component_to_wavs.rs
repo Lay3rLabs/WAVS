@@ -104,14 +104,6 @@ impl TryFrom<component_service::Workflow> for wavs_types::Workflow {
             trigger: src.trigger.try_into()?,
             component: src.component.try_into()?,
             submit: src.submit.into(),
-            aggregators: src
-                .aggregators
-                .into_iter()
-                .map(|aggregator| {
-                    let aggregator: wavs_types::Aggregator = aggregator.try_into()?;
-                    Ok(aggregator)
-                })
-                .collect::<anyhow::Result<Vec<wavs_types::Aggregator>>>()?,
         })
     }
 }
@@ -217,7 +209,11 @@ impl From<component_service::Submit> for wavs_types::Submit {
         match src {
             component_service::Submit::None => wavs_types::Submit::None,
             component_service::Submit::Aggregator(component_service::AggregatorSubmit { url }) => {
-                wavs_types::Submit::Aggregator { url }
+                wavs_types::Submit::Aggregator { 
+                    url,
+                    component: None,
+                    evm_contracts: None,
+                }
             }
         }
     }

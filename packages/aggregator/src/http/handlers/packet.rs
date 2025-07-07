@@ -62,7 +62,12 @@ async fn process_packet(
     );
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
-    let aggregators = &workflow.aggregators;
+    let aggregators = match &workflow.submit {
+        wavs_types::Submit::Aggregator { evm_contracts: Some(contracts), .. } => {
+            contracts.iter().map(|c| wavs_types::Aggregator::Evm(c.clone())).collect::<Vec<_>>()
+        },
+        _ => Vec::new(),
+    };
 
     if aggregators.is_empty() {
         return Err(AggregatorError::MissingWorkflow {

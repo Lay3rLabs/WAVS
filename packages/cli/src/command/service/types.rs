@@ -242,7 +242,7 @@ impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
             Submit::None => {
                 writeln!(f, "  Submit Type: None")?;
             }
-            Submit::Aggregator { url } => {
+            Submit::Aggregator { url, .. } => {
                 writeln!(f, "  Submit Type: Aggregator")?;
                 writeln!(f, "    Url:    {}", url)?;
                 match &self.aggregator_submit {

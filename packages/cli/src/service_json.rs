@@ -158,7 +158,7 @@ impl ServiceJson {
                                 ));
                             }
                         }
-                        Submit::Aggregator { url } => {
+                        Submit::Aggregator { url, .. } => {
                             if reqwest::Url::parse(url).is_err() {
                                 errors.push(format!(
                                     "Workflow '{}' has an invalid URL: {}",

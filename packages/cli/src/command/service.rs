@@ -857,7 +857,11 @@ pub fn set_aggregator_submit(
         })?;
 
         // Update the submit
-        let submit = Submit::Aggregator { url };
+        let submit = Submit::Aggregator {
+            url,
+            component: None,
+            evm_contracts: None,
+        };
         workflow.submit = SubmitJson::Submit(submit.clone());
 
         let aggregator_submit = Aggregator::Evm(EvmContractSubmission {
