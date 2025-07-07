@@ -127,6 +127,9 @@ impl TestRegistry {
                     let cosmos = chain_names.primary_cosmos().unwrap();
                     registry.register_evm_cosmos_query_test(chain, cosmos, aggregator_endpoint);
                 }
+                EvmService::KvStore => {
+                    registry.register_evm_kv_store_test(chain, aggregator_endpoint);
+                }
                 EvmService::Permissions => {
                     registry.register_evm_permissions_test(chain, aggregator_endpoint);
                 }
@@ -456,6 +459,62 @@ impl TestRegistry {
         )
     }
 
+    fn register_evm_kv_store_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_kv_store")
+                .with_description(
+                    "Tests counter component running twice to verify keyvalue persistence",
+                )
+                .add_workflow(
+                    WorkflowID::new("counter_first").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_component(ComponentName::KvStore.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
+                            chain_name: chain.clone(),
+                        })
+                        .with_input_data(InputData::Text("increment".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "{\"previous_value\":0,\"new_value\":1}".to_string(),
+                        ))
+                        .build(),
+                )
+                .add_workflow(
+                    WorkflowID::new("counter_second").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_component(ComponentName::KvStore.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                        })
+                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
+                            chain_name: chain.clone(),
+                        })
+                        .with_input_data(InputData::Text("increment".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "{\"previous_value\":1,\"new_value\":2}".to_string(),
+                        ))
+                        .build(),
+                )
+                .build(),
+        )
+    }
+
     fn register_evm_multi_workflow_test(
         &mut self,
         chain: &ChainName,
@@ -463,13 +522,11 @@ impl TestRegistry {
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multi_workflow")
-                .with_description(
-                    "Tests multiple workflows with shared keyvalue store on EVM chain",
-                )
+                .with_description("Tests multiple workflows with different components on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("kv_writer_workflow").unwrap(),
+                    WorkflowID::new("square_workflow").unwrap(),
                     WorkflowBuilder::new()
-                        .with_component(ComponentName::KvWriter.into())
+                        .with_component(ComponentName::Square.into())
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -481,14 +538,14 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Square { x: 10 })
-                        .with_expected_output(ExpectedOutput::Text("{\"saved_x\":10}".to_string()))
+                        .with_input_data(InputData::Square { x: 5 })
+                        .with_expected_output(ExpectedOutput::Square { y: 25 })
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("kv_reader_workflow").unwrap(),
+                    WorkflowID::new("echo_workflow").unwrap(),
                     WorkflowBuilder::new()
-                        .with_component(ComponentName::KvReader.into())
+                        .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -500,8 +557,8 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Text("read_data".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("{\"read_x\":10}".to_string()))
+                        .with_input_data(InputData::Text("hello workflows".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("hello workflows".to_string()))
                         .build(),
                 )
                 .build(),
