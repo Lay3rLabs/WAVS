@@ -9383,6 +9383,7 @@ dependencies = [
  "tempfile",
  "utils",
  "wasmtime",
+ "wasmtime-wasi-keyvalue",
  "wavs-engine",
  "wavs-types",
 ]
@@ -9413,6 +9414,7 @@ dependencies = [
  "uuid",
  "wasm-pkg-client",
  "wasmtime",
+ "wasmtime-wasi-keyvalue",
  "wavs-engine",
  "wavs-types",
 ]

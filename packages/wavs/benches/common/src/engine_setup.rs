@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use utils::{config::ChainConfigs, filesystem::workspace_path};
 use wasmtime::{component::Component, Engine as WTEngine};
+use wasmtime_wasi_keyvalue;
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
     AllowedHostPermission, Digest, Service, ServiceID, TriggerAction, TriggerConfig, TriggerData,
@@ -110,9 +111,9 @@ impl EngineSetup {
             log,
             max_wasm_fuel: None,
             max_execution_seconds: None,
-            shared_keyvalue_store: std::sync::Arc::new(std::sync::RwLock::new(
-                std::collections::HashMap::new(),
-            )),
+            keyvalue_ctx: std::sync::Arc::new(
+                wasmtime_wasi_keyvalue::WasiKeyValueCtxBuilder::new().build(),
+            ),
         };
 
         builder.build().unwrap()

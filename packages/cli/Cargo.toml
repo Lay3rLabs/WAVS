@@ -26,6 +26,7 @@ const-hex = { workspace = true }
 reqwest = { workspace = true }
 layer-climb = { workspace = true }
 wasmtime = { workspace = true }
+wasmtime-wasi-keyvalue = { workspace = true }
 tempfile = { workspace = true }
 shellexpand = { workspace = true }
 uuid = { workspace = true }
