@@ -131,7 +131,7 @@ impl SubmissionManager {
                             }
 
                             match submit {
-                                Submit::Aggregator{url} => {
+                                Submit::Aggregator{url, ..} => {
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
                                         tracing::error!("{:?}", e);
                                     }

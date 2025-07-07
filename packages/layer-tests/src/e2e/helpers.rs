@@ -258,7 +258,6 @@ async fn deploy_workflow(
         trigger: trigger.clone(), // Clone for possible use in multi-trigger service
         component,
         submit: submit.clone(),
-        aggregators,
     }
 }
 
@@ -378,7 +377,11 @@ pub async fn create_submit_from_config(
     _service_manager_address: alloy_primitives::Address,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::Aggregator { url } => Ok(Submit::Aggregator { url: url.clone() }),
+        SubmitDefinition::Aggregator { url } => Ok(Submit::Aggregator {
+            url: url.clone(),
+            component: None,
+            evm_contracts: None,
+        }),
     }
 }
 

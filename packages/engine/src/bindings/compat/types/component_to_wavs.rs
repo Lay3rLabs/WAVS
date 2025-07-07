@@ -209,7 +209,7 @@ impl From<component_service::Submit> for wavs_types::Submit {
         match src {
             component_service::Submit::None => wavs_types::Submit::None,
             component_service::Submit::Aggregator(component_service::AggregatorSubmit { url }) => {
-                wavs_types::Submit::Aggregator { 
+                wavs_types::Submit::Aggregator {
                     url,
                     component: None,
                     evm_contracts: None,

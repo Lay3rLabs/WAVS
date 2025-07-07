@@ -198,33 +198,34 @@ async fn run_test(
             ))?;
 
             let signed_data = match &workflow.submit {
-                Submit::Aggregator { .. } => {
+                Submit::Aggregator { evm_contracts, .. } => {
                     let mut signed_data = vec![];
-                    for aggregator in workflow.aggregators.iter() {
-                        match aggregator {
-                            wavs_types::Aggregator::Evm(EvmContractSubmission {
-                                chain_name,
-                                address,
-                                ..
-                            }) => {
-                                let client = clients.get_evm_client(chain_name);
-                                let submit_start_block =
-                                    client.provider.get_block_number().await.map_err(|e| {
-                                        anyhow!("Failed to get block number: {}", e)
-                                    })?;
+                    let empty_vec = Vec::new();
+                    let contracts = evm_contracts.as_ref().unwrap_or(&empty_vec);
+                    for contract in contracts.iter() {
+                        let EvmContractSubmission {
+                            chain_name,
+                            address,
+                            ..
+                        } = contract;
 
-                                signed_data.push(
-                                    wait_for_task_to_land(
-                                        client,
-                                        *address,
-                                        trigger_id,
-                                        submit_start_block,
-                                        *timeout,
-                                    )
-                                    .await?,
-                                );
-                            }
-                        }
+                        let client = clients.get_evm_client(&chain_name);
+                        let submit_start_block = client
+                            .provider
+                            .get_block_number()
+                            .await
+                            .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
+
+                        signed_data.push(
+                            wait_for_task_to_land(
+                                client,
+                                *address,
+                                trigger_id,
+                                submit_start_block,
+                                *timeout,
+                            )
+                            .await?,
+                        );
                     }
 
                     signed_data
