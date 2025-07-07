@@ -20,6 +20,7 @@ pub struct ComponentSources {
 pub enum ComponentName {
     ChainTriggerLookup,
     CosmosQuery,
+    KvStore,
     EchoData,
     Permissions,
     Square,
@@ -32,6 +33,7 @@ impl ComponentName {
         match self {
             ComponentName::ChainTriggerLookup => "chain_trigger_lookup",
             ComponentName::CosmosQuery => "cosmos_query",
+            ComponentName::KvStore => "kv_store",
             ComponentName::EchoData => "echo_data",
             ComponentName::Permissions => "permissions",
             ComponentName::Square => "square",

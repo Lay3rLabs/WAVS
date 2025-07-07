@@ -9,6 +9,7 @@ members = [
   "examples/components/echo-block-interval",
   "examples/components/echo-cron-interval",
   "examples/components/_helpers",
+  "examples/components/kv-store",
   "examples/contracts/cosmwasm/simple",
 ]
 resolver = "2"
