@@ -29,7 +29,7 @@ pub async fn execute_component<D: DeserializeOwned>(wasm_bytes: &[u8], input: im
         data_dir: data_dir.path().to_path_buf(),
         chain_configs: &Default::default(),
         log: log_wasi,
-        max_execution_seconds: Some(3),
+        max_execution_seconds: Some(10),
         max_wasm_fuel: Some(u64::MAX),
     }
     .build()
