@@ -4,11 +4,16 @@ use wavs_types::{
     Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID,
 };
 
-pub fn make_trigger_action(service: &Service, workflow_id: Option<WorkflowID>, input_data: Vec<u8>) -> TriggerAction {
+pub fn make_trigger_action(
+    service: &Service,
+    workflow_id: Option<WorkflowID>,
+    input_data: Vec<u8>,
+) -> TriggerAction {
     TriggerAction {
         config: TriggerConfig {
             service_id: service.id.clone(),
-            workflow_id: workflow_id.unwrap_or_else(|| service.workflows.keys().next().cloned().unwrap()),
+            workflow_id: workflow_id
+                .unwrap_or_else(|| service.workflows.keys().next().cloned().unwrap()),
             trigger: service.workflows.values().next().unwrap().trigger.clone(),
         },
         data: TriggerData::Raw(input_data),
