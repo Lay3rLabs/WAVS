@@ -51,7 +51,7 @@ fn log_wasi(
     level: LogLevel,
     message: String,
 ) {
-    let message = format!("[{}:{}:{}] {}", service_id, workflow_id, digest, message);
+    let message = format!("[{service_id}:{workflow_id}:{digest}] {message}");
 
     match level {
         LogLevel::Error => tracing::error!("{}", message),
