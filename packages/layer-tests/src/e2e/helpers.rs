@@ -111,7 +111,7 @@ pub async fn deploy_service_for_test(
             .unwrap()
             .insert(service.id.clone())
         {
-            let SubmitDefinition::Aggregator { url } = &workflow.submit;
+            let SubmitDefinition::Aggregator { url, .. } = &workflow.submit;
             TestRegistry::register_to_aggregator(url, &service.id)
                 .await
                 .unwrap();
@@ -222,23 +222,22 @@ async fn deploy_workflow(
     tracing::info!("[{}] Creating submit from config", test_name);
 
     // Create the submit based on test configuration
-    let chain_name = if let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) =
-        workflow_definition.aggregators.first()
-    {
-        chain_name
-    } else {
-        &"local-evm".parse().unwrap() // fallback
+    let chain_name = {
+        let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_definition.submit;
+        if let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) =
+            aggregators.first()
+        {
+            chain_name
+        } else {
+            &"local-evm".parse().unwrap() // fallback
+        }
     };
     let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
         .await
         .unwrap();
-    let submit = create_submit_from_config(
-        &workflow_definition.submit,
-        workflow_definition.aggregators.clone(),
-        &submission_contract,
-    )
-    .await
-    .unwrap();
+    let submit = create_submit_from_config(&workflow_definition.submit, &submission_contract)
+        .await
+        .unwrap();
 
     tracing::info!("[{}] Creating trigger from config", test_name);
     // Create the trigger based on test configuration
@@ -370,11 +369,10 @@ pub async fn create_trigger_from_config(
 /// Create a submit based on test configuration
 pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
-    aggregators: Vec<AggregatorDefinition>,
     submission_contract: &Address,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::Aggregator { url } => {
+        SubmitDefinition::Aggregator { url, aggregators } => {
             let evm_contracts = if aggregators.is_empty() {
                 None
             } else {
@@ -384,7 +382,7 @@ pub async fn create_submit_from_config(
                         .map(|agg| match agg {
                             AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
                                 EvmContractSubmission {
-                                    chain_name,
+                                    chain_name: chain_name.clone(),
                                     address: *submission_contract,
                                     max_gas: None,
                                 }
