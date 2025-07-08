@@ -3,9 +3,10 @@
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
+use ordermap::OrderMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Instant;
-use std::{collections::HashMap, sync::Arc};
 use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
@@ -127,7 +128,7 @@ async fn run_test(
     }
 
     // Group workflows by trigger to handle multi-triggers
-    let mut trigger_groups: HashMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = HashMap::new();
+    let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = OrderMap::new();
 
     for (workflow_id, workflow) in service.workflows.iter() {
         trigger_groups
