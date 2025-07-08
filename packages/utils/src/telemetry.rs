@@ -14,7 +14,7 @@ pub fn setup_tracing(
     filters: tracing_subscriber::EnvFilter,
 ) -> SdkTracerProvider {
     global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
-    let endpoint = format!("{}/v1/traces", collector);
+    let endpoint = format!("{collector}/v1/traces");
     let exporter = SpanExporter::builder()
         .with_tonic()
         .with_endpoint(endpoint)
@@ -33,7 +33,7 @@ pub fn setup_tracing(
         )
         .build();
     global::set_tracer_provider(provider.clone());
-    let tracer = provider.tracer(format!("{}-tracer", service_name));
+    let tracer = provider.tracer(format!("{service_name}-tracer"));
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
     let subscriber = tracing_subscriber::Registry::default()
@@ -49,7 +49,7 @@ pub fn setup_tracing(
 }
 
 pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
-    let endpoint = format!("{}/api/v1/otlp/v1/metrics", collector);
+    let endpoint = format!("{collector}/api/v1/otlp/v1/metrics");
 
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_http()

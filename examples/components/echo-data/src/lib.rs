@@ -59,7 +59,7 @@ impl Guest for Component {
                         ordering: None,
                     }));
                 } else {
-                    return Err(format!("env var {} not found", env_var));
+                    return Err(format!("env var {env_var} not found"));
                 }
             } else if input_str.contains("configvar:") {
                 let config_var = input_str.split("configvar:").nth(1).unwrap();
@@ -72,7 +72,7 @@ impl Guest for Component {
                         ordering: None,
                     }));
                 } else {
-                    return Err(format!("config var {} not found", config_var));
+                    return Err(format!("config var {config_var} not found"));
                 }
             }
         }

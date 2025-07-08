@@ -13,7 +13,9 @@ pub struct Message {
 }
 
 pub fn get_message(store: &dyn Storage, id: Uint64) -> Result<Message> {
-    MESSAGES.load(store, id.u64()).map_err(Into::into)
+    MESSAGES
+        .load(store, id.u64())
+        .map_err(|e| anyhow::anyhow!("Failed to load message with id {}: {}", id, e))
 }
 
 pub fn get_messages(
@@ -35,7 +37,7 @@ pub fn get_messages(
                 id: id.into(),
                 data: msg.data,
             })
-            .map_err(Into::into)
+            .map_err(|e| anyhow::anyhow!("Failed to map message: {}", e))
         })
         .collect::<Result<_>>()?;
 
@@ -46,8 +48,11 @@ pub fn push_message(store: &mut dyn Storage, data: Vec<u8>) -> Result<Uint64> {
     let next_index = MESSAGES
         .keys(store, None, None, Order::Descending)
         .next()
-        .unwrap_or(Ok(0))?
+        .unwrap_or(Ok(0))
+        .map_err(|e| anyhow::anyhow!("Failed to get next index: {}", e))?
         + 1;
-    MESSAGES.save(store, next_index, &Message { data })?;
+    MESSAGES
+        .save(store, next_index, &Message { data })
+        .map_err(|e| anyhow::anyhow!("failed to save message: {}", e))?;
     Ok(next_index.into())
 }

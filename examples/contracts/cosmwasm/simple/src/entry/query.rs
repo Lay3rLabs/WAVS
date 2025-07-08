@@ -48,5 +48,5 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<QueryResponse> {
             to_json_binary(&TriggerResponse { data: message.data })
         }
     }
-    .map_err(|e| e.into())
+    .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))
 }

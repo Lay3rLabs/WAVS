@@ -72,6 +72,7 @@ pub struct Dispatcher<S: CAStorage> {
     pub ipfs_gateway: String,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
     ChangeServiceUri { service_id: ServiceID, uri: String },

@@ -145,7 +145,7 @@ async fn test_validate_function() {
                 assert_eq!(quorum_err.thresholdWeight, U256::from(NUM_THRESHOLD as u64));
                 assert_eq!(quorum_err.totalWeight, U256::from(NUM_SIGNERS as u64));
             }
-            Some(_) => panic!("Unexpected error type received: {:?}", err),
+            Some(_) => panic!("Unexpected error type received: {err:?}"),
             None => panic!("Failed to decode service manager errors"),
         },
     }

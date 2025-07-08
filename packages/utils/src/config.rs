@@ -195,7 +195,7 @@ impl ConfigFilePath {
 
         // here we want to check the user's home directory directly, not in the `.config` subdirectory
         // in this case, to not pollute the home directory, it looks for ~/.{dirname}/{filename} (e.g. ~/.wavs/wavs.toml)
-        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(format!(".{}", DIRNAME))) {
+        if let Some(dir) = dirs::home_dir().map(|dir| dir.join(format!(".{DIRNAME}"))) {
             dirs.push(dir);
         }
 
@@ -462,7 +462,7 @@ mod test {
         let default_dirs = filepaths(None);
         for i in 1..=10 {
             assert!(!default_dirs
-                .contains(&PathBuf::from(format!("/tmp{}", i)).join(TestConfig::FILENAME)));
+                .contains(&PathBuf::from(format!("/tmp{i}")).join(TestConfig::FILENAME)));
         }
 
         // if provide a specific home directory, then it is the first one to try

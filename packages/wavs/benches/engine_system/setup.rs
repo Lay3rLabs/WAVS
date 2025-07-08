@@ -86,7 +86,7 @@ impl SystemSetup {
         let trigger_actions = (1..=system_config.n_actions)
             .enumerate()
             .map(|(i, _)| {
-                let data = format!("Action number {}", i).into_bytes();
+                let data = format!("Action number {i}").into_bytes();
                 let action = engine_setup.create_trigger_action(data);
                 (action, engine_setup.service.clone())
             })

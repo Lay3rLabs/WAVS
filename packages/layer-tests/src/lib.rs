@@ -1,5 +1,8 @@
 #![allow(clippy::match_like_matches_macro)]
 #![allow(clippy::match_single_binding)]
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::result_large_err)]
 
 pub mod args;
 pub mod config;
