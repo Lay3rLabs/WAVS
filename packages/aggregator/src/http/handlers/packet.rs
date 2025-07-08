@@ -571,19 +571,19 @@ mod test {
         // now let's change reality, make the second aggregator valid
         // we should get essentially the same as previous attempt, but second aggregator should succeed
 
-        *service
-            .workflows
-            .iter_mut()
-            .next()
-            .unwrap()
-            .1
-            .aggregators
-            .get_mut(1)
-            .unwrap() = wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
-            chain_name: deps.contracts.chain_name.clone(),
-            address: *fixed_second_service_handler.address(),
-            max_gas: None,
-        });
+        if let wavs_types::Submit::Aggregator {
+            evm_contracts: Some(ref mut contracts),
+            ..
+        } = &mut service.workflows.iter_mut().next().unwrap().1.submit
+        {
+            if let Some(contract) = contracts.get_mut(1) {
+                *contract = wavs_types::EvmContractSubmission {
+                    chain_name: deps.contracts.chain_name.clone(),
+                    address: *fixed_second_service_handler.address(),
+                    max_gas: None,
+                };
+            }
+        }
 
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
@@ -856,17 +856,20 @@ mod test {
                 component: wavs_types::Component::new(wavs_types::ComponentSource::Digest(
                     wavs_types::Digest::new(&[0; 32]),
                 )),
-                submit: wavs_types::Submit::None,
-                aggregators: service_handler_addresses
-                    .into_iter()
-                    .map(|address| {
-                        wavs_types::Aggregator::Evm(wavs_types::EvmContractSubmission {
-                            chain_name: chain_name.clone(),
-                            address,
-                            max_gas: None,
-                        })
-                    })
-                    .collect(),
+                submit: wavs_types::Submit::Aggregator {
+                    url: "http://dummy".to_string(),
+                    component: None,
+                    evm_contracts: Some(
+                        service_handler_addresses
+                            .into_iter()
+                            .map(|address| wavs_types::EvmContractSubmission {
+                                chain_name: chain_name.clone(),
+                                address,
+                                max_gas: None,
+                            })
+                            .collect(),
+                    ),
+                },
             },
         );
 

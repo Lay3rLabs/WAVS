@@ -265,9 +265,6 @@ pub struct WorkflowJson {
     pub trigger: TriggerJson,
     pub component: ComponentJson,
     pub submit: SubmitJson,
-    /// If submit is `Submit::Aggregator`, this is
-    /// the required data for the aggregator to submit this workflow
-    pub aggregators: Vec<Aggregator>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

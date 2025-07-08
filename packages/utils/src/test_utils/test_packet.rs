@@ -3,9 +3,8 @@ use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
 use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::SolValue;
 use wavs_types::{
-    Aggregator, Component, ComponentSource, Digest, Envelope, EnvelopeExt, EnvelopeSignature,
-    EvmContractSubmission, Packet, Service, ServiceID, ServiceManager, ServiceStatus, Submit,
-    Trigger, Workflow, WorkflowID,
+    Component, ComponentSource, Digest, Envelope, EnvelopeExt, EnvelopeSignature, Packet, Service,
+    ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::test_utils::address::rand_address_evm;
@@ -42,11 +41,6 @@ pub fn mock_packet(
                 trigger: Trigger::Manual,
                 component: Component::new(ComponentSource::Digest(Digest::new(&[0; 32]))),
                 submit: Submit::None,
-                aggregators: vec![Aggregator::Evm(EvmContractSubmission {
-                    chain_name: "evm".parse().unwrap(),
-                    address: rand_address_evm(),
-                    max_gas: None,
-                })],
             },
         )]
         .into(),
