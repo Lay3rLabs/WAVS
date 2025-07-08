@@ -9,7 +9,7 @@ use crate::helpers::service::{make_service, make_trigger_action};
 
 pub async fn execute_component<D: DeserializeOwned>(wasm_bytes: &[u8], input: impl Serialize) -> D {
     let service = make_service(Digest::new(wasm_bytes));
-    let trigger_action = make_trigger_action(&service, serde_json::to_vec(&input).unwrap());
+    let trigger_action = make_trigger_action(&service, None, serde_json::to_vec(&input).unwrap());
 
     let mut wt_config = WTConfig::new();
 
