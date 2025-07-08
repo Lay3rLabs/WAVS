@@ -10,13 +10,12 @@ use std::{
 };
 use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
-use wavs::subsystems::submission;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
-    Permissions, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
-    Trigger, Workflow,
+    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
+    Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger,
+    Workflow,
 };
 
 use crate::{
@@ -223,13 +222,19 @@ async fn deploy_workflow(
     tracing::info!("[{}] Creating submit from config", test_name);
 
     // Create the submit based on test configuration
-    let submission_contract =
-        deploy_submit_contract(clients, &contract.chain_name, service_manager_address)
-            .await
-            .unwrap();
+    let chain_name = if let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) =
+        workflow_definition.aggregators.first()
+    {
+        chain_name
+    } else {
+        &"local-evm".parse().unwrap() // fallback
+    };
+    let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
+        .await
+        .unwrap();
     let submit = create_submit_from_config(
         &workflow_definition.submit,
-        &workflow_definition.aggregators,
+        workflow_definition.aggregators.clone(),
         &submission_contract,
     )
     .await
@@ -380,7 +385,7 @@ pub async fn create_submit_from_config(
                             AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
                                 EvmContractSubmission {
                                     chain_name,
-                                    address: submission_contract,
+                                    address: *submission_contract,
                                     max_gas: None,
                                 }
                             }

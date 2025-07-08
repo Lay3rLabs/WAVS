@@ -73,7 +73,6 @@ fn db_service_store() {
                 trigger: mock_evm_event_trigger(),
                 component: Component::new(ComponentSource::Digest(Digest::new(b"digest-1"))),
                 submit: Submit::None,
-                aggregators: Vec::new(),
             },
         ),
         (
@@ -82,7 +81,6 @@ fn db_service_store() {
                 trigger: mock_evm_event_trigger(),
                 component: Component::new(ComponentSource::Digest(Digest::new(b"digest-2"))),
                 submit: Submit::None,
-                aggregators: Vec::new(),
             },
         ),
     ]

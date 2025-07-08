@@ -3,8 +3,7 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Aggregator, Component, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger,
-    WorkflowID,
+    Component, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -151,14 +150,10 @@ impl ServiceJson {
                     match submit {
                         Submit::None => {
                             // None submit type is always valid
-                            if !workflow.aggregators.is_empty() {
-                                errors.push(format!(
-                                    "Workflow '{}' has no submit, but it has an aggregator defined",
-                                    workflow_id
-                                ));
-                            }
                         }
-                        Submit::Aggregator { url, .. } => {
+                        Submit::Aggregator {
+                            url, evm_contracts, ..
+                        } => {
                             if reqwest::Url::parse(url).is_err() {
                                 errors.push(format!(
                                     "Workflow '{}' has an invalid URL: {}",
@@ -166,24 +161,26 @@ impl ServiceJson {
                                 ))
                             }
 
-                            if workflow.aggregators.is_empty() {
-                                errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
+                            if evm_contracts.as_ref().map_or(true, |c| c.is_empty()) {
+                                errors.push(format!("Workflow '{}' submits with aggregator, but no EVM contracts are defined", workflow_id));
                             }
                         }
                     }
                 }
             }
             // Check if max_gas is reasonable if specified
-            for aggregator in &workflow.aggregators {
-                match aggregator {
-                    Aggregator::Evm(evm_contract_submission) => {
-                        if let Some(max_gas) = evm_contract_submission.max_gas {
-                            if max_gas == 0 {
-                                errors.push(format!(
-                                    "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
-                                    workflow_id
-                                ));
-                            }
+            if let SubmitJson::Submit(Submit::Aggregator {
+                evm_contracts: Some(contracts),
+                ..
+            }) = &workflow.submit
+            {
+                for evm_contract_submission in contracts {
+                    if let Some(max_gas) = evm_contract_submission.max_gas {
+                        if max_gas == 0 {
+                            errors.push(format!(
+                                "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
+                                workflow_id
+                            ));
                         }
                     }
                 }

@@ -397,7 +397,6 @@ pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<Workflow
             trigger,
             component,
             submit,
-            aggregators: Vec::new(),
         };
 
         // Add the workflow to the service
@@ -857,21 +856,19 @@ pub fn set_aggregator_submit(
         })?;
 
         // Update the submit
-        let submit = Submit::Aggregator {
-            url,
-            component: None,
-            evm_contracts: None,
-        };
-        workflow.submit = SubmitJson::Submit(submit.clone());
-
-        let aggregator_submit = Aggregator::Evm(EvmContractSubmission {
+        let evm_contract = EvmContractSubmission {
             chain_name,
             address,
             max_gas,
-        });
+        };
+        let submit = Submit::Aggregator {
+            url,
+            component: None,
+            evm_contracts: Some(vec![evm_contract.clone()]),
+        };
+        workflow.submit = SubmitJson::Submit(submit.clone());
 
-        // Set the workflow aggregator
-        workflow.aggregators = vec![aggregator_submit.clone()];
+        let aggregator_submit = Aggregator::Evm(evm_contract);
 
         Ok((
             service,
@@ -912,16 +909,32 @@ pub fn add_aggregator_submit(
             );
         }
 
-        // Set the workflow aggregator
-        workflow
-            .aggregators
-            .push(Aggregator::Evm(EvmContractSubmission {
+        // Add the EVM contract to the Submit variant
+        if let SubmitJson::Submit(Submit::Aggregator { evm_contracts, .. }) = &mut workflow.submit {
+            let new_contract = EvmContractSubmission {
                 chain_name,
                 address,
                 max_gas,
-            }));
+            };
 
-        let aggregator_submits = workflow.aggregators.clone();
+            match evm_contracts {
+                Some(contracts) => contracts.push(new_contract),
+                None => *evm_contracts = Some(vec![new_contract]),
+            }
+        }
+
+        let aggregator_submits = if let SubmitJson::Submit(Submit::Aggregator {
+            evm_contracts: Some(contracts),
+            ..
+        }) = &workflow.submit
+        {
+            contracts
+                .iter()
+                .map(|c| Aggregator::Evm(c.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         Ok((
             service,
@@ -987,23 +1000,19 @@ pub async fn validate_service(
 
     // All remaining validation needs CliContext, so only do it if ctx is provided
     if let Some(ctx) = ctx {
-        // Check component availability (can we download it?)
         validate_registry_availability(&ctx.config.wavs_endpoint, &mut errors).await;
 
-        // Collect all triggers and submits for later validation
         let mut chains_to_validate = HashSet::new();
         let mut triggers = Vec::new();
         let mut submits = Vec::new();
-        let mut aggregators = Vec::new();
+        let mut aggregators: Vec<(&WorkflowID, Aggregator)> = Vec::new();
 
-        // Collect information for network-dependent validation
         for (workflow_id, workflow) in &service.workflows {
             if let TriggerJson::Trigger(trigger) = &workflow.trigger {
                 match trigger {
                     Trigger::CosmosContractEvent { chain_name, .. } => {
                         chains_to_validate.insert((chain_name.clone(), ChainType::Cosmos));
 
-                        // Cosmos-specific validation with client
                         if let Ok(client) = ctx.new_cosmos_client(chain_name).await {
                             validate_workflow_trigger(
                                 workflow_id,
@@ -1014,7 +1023,8 @@ pub async fn validate_service(
                             .await;
                         } else {
                             errors.push(format!(
-                                "Workflow '{}' uses chain '{}' in Cosmos trigger, but client configuration is invalid",
+                                "Workflow '{}' uses chain '{}' in Cosmos trigger,
+  but client configuration is invalid",
                                 workflow_id, chain_name
                             ));
                         }
@@ -1030,9 +1040,10 @@ pub async fn validate_service(
                     } => match ctx.config.chains.get_chain(chain_name).unwrap() {
                         None => {
                             errors.push(format!(
-                                    "Workflow '{}' uses chain '{}' in BlockInterval trigger, but chain is missing",
-                                    workflow_id, chain_name
-                                ));
+                                "Workflow '{}' uses chain '{}' in BlockInterval
+   trigger, but chain is missing",
+                                workflow_id, chain_name
+                            ));
                         }
                         Some(AnyChainConfig::Cosmos(_)) => {
                             let cosmos_client = ctx.new_cosmos_client(chain_name).await?;
@@ -1043,7 +1054,8 @@ pub async fn validate_service(
                                 block_height,
                             ) {
                                 errors.push(format!(
-                                    "Workflow '{}' has invalid block interval configuration: {}",
+                                    "Workflow '{}' has invalid block interval
+  configuration: {}",
                                     workflow_id, err
                                 ));
                             }
@@ -1057,7 +1069,8 @@ pub async fn validate_service(
                                 block_height,
                             ) {
                                 errors.push(format!(
-                                    "Workflow '{}' has invalid block interval configuration: {}",
+                                    "Workflow '{}' has invalid block interval
+  configuration: {}",
                                     workflow_id, err
                                 ));
                             }
@@ -1066,23 +1079,23 @@ pub async fn validate_service(
                     _ => {}
                 }
 
-                // Collect trigger for contract existence check
                 triggers.push((workflow_id, trigger));
             }
 
             if let SubmitJson::Submit(submit) = &workflow.submit {
-                // Collect submit for contract existence check
                 submits.push((workflow_id, submit));
-            }
 
-            for aggregator in &workflow.aggregators {
-                match aggregator {
-                    Aggregator::Evm(evm_contract_submission) => {
-                        chains_to_validate
-                            .insert((evm_contract_submission.chain_name.clone(), ChainType::EVM));
+                if let Submit::Aggregator {
+                    evm_contracts: Some(contracts),
+                    ..
+                } = submit
+                {
+                    for contract in contracts {
+                        chains_to_validate.insert((contract.chain_name.clone(), ChainType::EVM));
+                        let aggregator = Aggregator::Evm(contract.clone());
+                        aggregators.push((workflow_id, aggregator));
                     }
-                };
-                aggregators.push((workflow_id, aggregator));
+                }
             }
         }
 
@@ -1124,7 +1137,7 @@ pub async fn validate_service(
             if let Err(err) = validate_contracts_exist(
                 service.id.as_ref(),
                 triggers,
-                aggregators,
+                aggregators.iter().map(|(id, agg)| (*id, agg)).collect(),
                 service_manager,
                 &evm_providers,
                 &cosmos_clients,
