@@ -1,9 +1,10 @@
 use std::path::Path;
 
 use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
+use wasmtime::component::HasSelf;
 use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
+use wasmtime_wasi::{DirPerms, FilePerms, p2::WasiCtxBuilder};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
@@ -55,10 +56,10 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // create linker
         let mut linker = Linker::new(engine);
-        crate::bindings::world::host::add_to_linker(&mut linker, |state| state).unwrap();
+        crate::bindings::world::host::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state).unwrap();
         // wasmtime_wasi::add_to_linker_sync(&mut linker).unwrap();
         // wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker).unwrap();
-        wasmtime_wasi::add_to_linker_async(&mut linker).unwrap();
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker).unwrap();
         // don't add http support if we don't allow it
         // FIXME: we need to apply Only(host) checks as well, but that involves some wat magic
         if permissions.allowed_http_hosts != AllowedHostPermission::None {
