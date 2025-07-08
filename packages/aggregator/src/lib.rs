@@ -1,3 +1,6 @@
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::result_large_err)]
 pub mod args;
 pub mod config;
 pub mod error;

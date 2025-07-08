@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use chrono::{DateTime, Duration, Timelike, Utc};
 use wavs::subsystems::trigger::{
     error::TriggerError,
@@ -230,6 +231,6 @@ fn test_cron_parsing() {
 
     for expr in invalid_exprs {
         let state = make_state(1, expr, None, None);
-        assert!(state.is_err(), "Should have failed to parse: {}", expr);
+        assert!(state.is_err(), "Should have failed to parse: {expr}");
     }
 }

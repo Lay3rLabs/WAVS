@@ -261,8 +261,7 @@ impl NonceManager for FastNonceManager {
         if let Some(check_address) = self.address {
             if check_address != address {
                 return Err(TransportErrorKind::custom_str(&format!(
-                    "nonce manager address mismatch: expected {}, got {}",
-                    check_address, address
+                    "nonce manager address mismatch: expected {check_address}, got {address}"
                 )));
             }
         }

@@ -29,14 +29,14 @@ pub fn run_simulation(setup: Arc<ExecuteSetup>) {
                     assert_eq!(payload, echo_data, "Payload mismatch");
                 }
                 Err(err) => {
-                    panic!("Execution failed: {:?}", err);
+                    panic!("Execution failed: {err:?}");
                 }
             }
 
             count += 1;
         }
 
-        println!("Completed {} engine executions", count);
+        println!("Completed {count} engine executions");
     });
 }
 

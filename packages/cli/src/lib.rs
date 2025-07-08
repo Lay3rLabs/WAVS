@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::uninlined_format_args)]
 pub mod args;
 pub mod clients;
 pub mod command;

@@ -174,12 +174,12 @@ mod tests {
     fn invalid_id_deserialize() {
         // baseline, make sure we can deserialize properly
         let id_str = "foo";
-        let id_obj: ServiceID = serde_json::from_str(&format!("\"{}\"", id_str)).unwrap();
+        let id_obj: ServiceID = serde_json::from_str(&format!("\"{id_str}\"")).unwrap();
         assert_eq!(id_obj.to_string(), id_str);
 
         // now do a bad id
         let id_str = "THIS/IS/BAD";
-        serde_json::from_str::<ServiceID>(&format!("\"{}\"", id_str)).unwrap_err();
+        serde_json::from_str::<ServiceID>(&format!("\"{id_str}\"")).unwrap_err();
     }
 
     #[test]

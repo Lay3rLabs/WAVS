@@ -52,7 +52,7 @@ impl ExecuteSetup {
 
         let trigger_actions = (1..=execute_config.n_executions)
             .map(|execution_count| {
-                let echo_data = format!("Execution number {}", execution_count).into_bytes();
+                let echo_data = format!("Execution number {execution_count}").into_bytes();
                 let action = engine_setup.create_trigger_action(echo_data.clone());
                 (action, echo_data)
             })

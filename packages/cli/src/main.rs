@@ -149,7 +149,7 @@ async fn main() {
             {
                 Ok(result) => result,
                 Err(e) => {
-                    eprintln!("Failed to execute component: {}", e);
+                    eprintln!("Failed to execute component: {e}");
                     std::process::exit(1);
                 }
             };

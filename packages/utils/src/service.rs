@@ -69,9 +69,9 @@ pub fn ipfs_to_gateway_url(ipfs_url: &Url, ipfs_gateway: &str) -> Result<String>
     // Build the gateway URL: gateway + CID + path
     let path = ipfs_url.path().trim_start_matches('/');
     if path.is_empty() {
-        Ok(format!("{}{}", ipfs_gateway, cid))
+        Ok(format!("{ipfs_gateway}{cid}"))
     } else {
-        Ok(format!("{}{}/{}", ipfs_gateway, cid, path))
+        Ok(format!("{ipfs_gateway}{cid}/{path}"))
     }
 }
 

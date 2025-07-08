@@ -129,6 +129,7 @@ impl HttpState {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn save_packet_queue(
         &self,
         id: &PacketQueueId,
@@ -147,6 +148,7 @@ impl HttpState {
     }
 
     #[instrument(level = "debug", skip(self))]
+    #[allow(clippy::result_large_err)]
     pub fn register_service(&self, service_id: &ServiceID) -> AggregatorResult<()> {
         if self.storage.get(SERVICES, service_id)?.is_none() {
             tracing::info!("Registering aggregator for service {}", service_id);

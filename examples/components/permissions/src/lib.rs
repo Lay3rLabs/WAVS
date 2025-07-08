@@ -32,11 +32,11 @@ impl Guest for Component {
             let (trigger_id, req) =
                 decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
 
-            println!("(permissions println!) trigger id: {}", trigger_id);
-            eprintln!("(permissions eprintln!) trigger id: {}", trigger_id);
+            println!("(permissions println!) trigger id: {trigger_id}");
+            eprintln!("(permissions eprintln!) trigger id: {trigger_id}");
             host::log(
                 LogLevel::Info,
-                &format!("(permissions host log) trigger id: {}", trigger_id),
+                &format!("(permissions host log) trigger id: {trigger_id}"),
             );
 
             let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
@@ -74,10 +74,7 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
         ));
     }
 
-    let contents = format!(
-        "GET RESPONSE: {}\n\nPOST RESPONSE: {:?}",
-        get_response, post_response
-    );
+    let contents = format!("GET RESPONSE: {get_response}\n\nPOST RESPONSE: {post_response:?}");
 
     response_file.write_all(contents.as_bytes())?;
 

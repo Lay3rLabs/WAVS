@@ -87,5 +87,5 @@ fn run_simulation(setup: Arc<Setup>) {
 
     assert_eq!(received_count, total_triggers);
 
-    println!("Processed {} triggers", received_count);
+    println!("Processed {received_count} triggers");
 }

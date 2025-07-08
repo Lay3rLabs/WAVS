@@ -51,7 +51,7 @@ impl<const N: usize> Display for ByteArray<N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // Encode the byte array as hex using `const_hex::encode`.
         let hex_string = const_hex::encode(self.0);
-        write!(f, "0x{}", hex_string)
+        write!(f, "0x{hex_string}")
     }
 }
 
@@ -97,7 +97,7 @@ mod tests {
     #[test]
     fn test_display() {
         let data = ByteArray::<4>([0xDE, 0xAD, 0xBE, 0xEF]);
-        assert_eq!(format!("{}", data), "0xdeadbeef");
+        assert_eq!(format!("{data}"), "0xdeadbeef");
     }
 
     #[test]
@@ -117,8 +117,8 @@ mod tests {
     #[test]
     fn test_debug() {
         let data = ByteArray::<4>([0xDE, 0xAD, 0xBE, 0xEF]);
-        assert_eq!(format!("{:?}", data), "0xdeadbeef");
-        assert_eq!(format!("{:#?}", data), "0xdeadbeef");
+        assert_eq!(format!("{data:?}"), "0xdeadbeef");
+        assert_eq!(format!("{data:#?}"), "0xdeadbeef");
     }
 }
 

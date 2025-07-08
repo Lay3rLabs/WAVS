@@ -34,10 +34,7 @@ impl Guest for Component {
 
         host::log(
             host::LogLevel::Info,
-            &format!(
-                "KV Store counter incremented from {} to {}",
-                current_counter, new_counter
-            ),
+            &format!("KV Store counter incremented from {current_counter} to {new_counter}"),
         );
 
         let response = KvStoreResponse {
@@ -54,7 +51,7 @@ fn read_value(key: &str) -> Result<Option<u64>, String> {
     // TODO - bring back `store`
     // for right now, just using local file system to simulate key-value store
 
-    let storage_path = Path::new("./keyvalue").join(format!("{}.txt", key));
+    let storage_path = Path::new("./keyvalue").join(format!("{key}.txt"));
     if !storage_path.exists() {
         return Ok(None);
     }
@@ -63,7 +60,7 @@ fn read_value(key: &str) -> Result<Option<u64>, String> {
     let mut buffer = [0; 8]; // u64 is 8 bytes
     storage_file
         .read_exact(&mut buffer)
-        .map_err(|e| format!("Failed to read from storage file: {}", e))?;
+        .map_err(|e| format!("Failed to read from storage file: {e}"))?;
 
     let value = u64::from_be_bytes(buffer);
     Ok(Some(value))
@@ -89,7 +86,7 @@ fn write_value(key: &str, value: u64) -> Result<(), String> {
         fs::create_dir_all(storage_path).map_err(|e| e.to_string())?;
     }
 
-    let storage_path = storage_path.join(format!("{}.txt", key));
+    let storage_path = storage_path.join(format!("{key}.txt"));
     let mut storage_file = fs::File::create(&storage_path).map_err(|e| e.to_string())?;
 
     storage_file
