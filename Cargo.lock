@@ -9570,10 +9570,16 @@ name = "wavs-engine"
 version = "0.5.0-alpha.4"
 dependencies = [
  "alloy-primitives",
+ "alloy-sol-types",
  "anyhow",
  "layer-climb",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "utils",
  "wasmtime",
  "wasmtime-wasi",
