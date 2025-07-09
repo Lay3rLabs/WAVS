@@ -521,9 +521,9 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                        })
-                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
-                            chain_name: chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
+                                chain_name: chain.clone(),
+                            }],
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Write {
                             key: "hello".to_string(),
@@ -544,9 +544,9 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                        })
-                        .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
-                            chain_name: chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
+                                chain_name: chain.clone(),
+                            }],
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Read {
                             key: "hello".to_string(),

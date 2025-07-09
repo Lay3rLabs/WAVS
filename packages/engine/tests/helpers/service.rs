@@ -38,7 +38,6 @@ pub fn make_service(wasm_digest: Digest) -> Service {
             env_keys: Default::default(),
         },
         submit: Submit::None,
-        aggregators: Vec::new(),
     };
 
     Service {
