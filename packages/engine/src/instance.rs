@@ -8,7 +8,7 @@ use wasmtime_wasi::{p2::WasiCtxBuilder, DirPerms, FilePerms};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
-use crate::{EngineError, HostComponent, HostComponentLogger};
+use crate::{EngineError, HostComponent, HostComponentLogger, KeyValueCtx};
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
@@ -20,6 +20,7 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub log: HostComponentLogger,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
+    pub keyvalue_ctx: KeyValueCtx,
 }
 
 pub struct InstanceDeps {
@@ -39,6 +40,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             data_dir,
             chain_configs,
             log,
+            keyvalue_ctx,
             max_execution_seconds,
             max_wasm_fuel,
         } = self;
@@ -66,6 +68,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         if permissions.allowed_http_hosts != AllowedHostPermission::None {
             wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
         }
+
+        KeyValueCtx::add_to_linker(&mut linker)?;
 
         // create wasi context
         let mut builder = WasiCtxBuilder::new();
@@ -123,6 +127,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             chain_configs: chain_configs.clone(),
             table: wasmtime::component::ResourceTable::new(),
             ctx,
+            keyvalue_ctx,
             http: WasiHttpCtx::new(),
             inner_log: log,
         };
