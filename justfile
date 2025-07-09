@@ -61,7 +61,7 @@ wasi-build COMPONENT="*":
     fi
 
     @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
-        if [ "{{COMPONENT}}" != "_helpers" ]; then \
+        if [ "{{COMPONENT}}" != "_helpers" ] && [ "{{COMPONENT}}" != "_types" ]; then \
             echo "Building WASI component in $(dirname $C)"; \
             ( cd $(dirname $C) && cargo component build --release && cargo fmt); \
         fi; \
