@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, time::Instant};
 
 use anyhow::{Context, Result};
-use utils::config::WAVS_ENV_PREFIX;
+use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
@@ -138,6 +138,10 @@ impl ExecComponent {
             log: log_wasi,
             max_execution_seconds: Some(u64::MAX),
             max_wasm_fuel: Some(u64::MAX),
+            keyvalue_ctx: wavs_engine::KeyValueCtx::new(
+                RedbStorage::new(tempfile::tempdir()?.keep()).unwrap(),
+                "exec_component".to_string(),
+            ),
         }
         .build()
         .context("Failed to build instance dependencies for component execution")?;

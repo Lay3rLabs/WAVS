@@ -1,4 +1,4 @@
-use std::{num::NonZero, sync::Arc};
+use std::num::NonZero;
 
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
 use wavs_types::{
@@ -49,9 +49,8 @@ fn core_trigger_lookups() {
     };
 
     let data_dir = tempfile::tempdir().unwrap();
-    let services = wavs::services::Services::new(Arc::new(
-        RedbStorage::new(data_dir.path().join("db")).unwrap(),
-    ));
+    let services =
+        wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
@@ -203,9 +202,8 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     };
 
     let data_dir = tempfile::tempdir().unwrap();
-    let services = wavs::services::Services::new(Arc::new(
-        RedbStorage::new(data_dir.path().join("db")).unwrap(),
-    ));
+    let services =
+        wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
@@ -342,9 +340,8 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     let config = Config::default();
 
     let data_dir = tempfile::tempdir().unwrap();
-    let services = wavs::services::Services::new(Arc::new(
-        RedbStorage::new(data_dir.path().join("db")).unwrap(),
-    ));
+    let services =
+        wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),

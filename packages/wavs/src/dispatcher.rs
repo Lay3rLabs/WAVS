@@ -81,9 +81,9 @@ pub enum DispatcherCommand {
 impl Dispatcher<FileStorage> {
     pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
         let file_storage = FileStorage::new(config.data.join("ca"))?;
-        let db_storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
+        let db_storage = RedbStorage::new(config.data.join("db"))?;
 
-        let services = Services::new(db_storage);
+        let services = Services::new(db_storage.clone());
 
         let trigger_manager = TriggerManager::new(config, metrics.trigger, services.clone())?;
 
@@ -96,6 +96,7 @@ impl Dispatcher<FileStorage> {
             Some(config.max_wasm_fuel),
             Some(config.max_execution_seconds),
             metrics.engine,
+            db_storage,
         );
         let engine_manager = EngineManager::new(engine, config.wasm_threads, services.clone());
 

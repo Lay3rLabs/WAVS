@@ -55,6 +55,7 @@ impl SystemSetup {
 
         // Create a WasmEngine similar to how it's done in CoreDispatcher
         let app_storage = engine_setup.data_dir.path().join("app");
+        let db_storage = RedbStorage::new(engine_setup.data_dir.path().join("db")).unwrap();
         let wasm_engine = WasmEngine::new(
             file_storage,
             app_storage,
@@ -63,6 +64,7 @@ impl SystemSetup {
             None,                // No fuel limit for benchmarks
             None,                // No time limit for benchmarks
             metrics.wavs.engine, // Engine metrics
+            db_storage.clone(),
         );
 
         let digest = wasm_engine
@@ -75,8 +77,6 @@ impl SystemSetup {
         }
 
         // Create the MultiEngineRunner
-        let db_storage =
-            Arc::new(RedbStorage::new(engine_setup.data_dir.path().join("db")).unwrap());
         let engine_manager = EngineManager::new(
             wasm_engine,
             system_config.thread_count,

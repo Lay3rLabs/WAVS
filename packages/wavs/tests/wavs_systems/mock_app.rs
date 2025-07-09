@@ -8,12 +8,12 @@ use axum::{
 use serde::Serialize;
 use tower::Service as _;
 use tracing::instrument;
-use utils::test_utils::address::rand_address_evm;
 use utils::{
     context::AppContext,
     storage::{fs::FileStorage, memory::MemoryStorage},
     telemetry::{EngineMetrics, Metrics},
 };
+use utils::{storage::db::RedbStorage, test_utils::address::rand_address_evm};
 use wavs::{
     dispatcher::{Dispatcher, DispatcherCommand},
     subsystems::engine::wasm_engine::WasmEngine,
@@ -43,6 +43,8 @@ impl MockE2ETestRunner {
         let app_data = tempfile::tempdir().unwrap();
         let metrics = metrics
             .unwrap_or_else(|| EngineMetrics::new(&opentelemetry::global::meter("wavs_metrics")));
+        let db_dir = tempfile::tempdir().unwrap();
+
         WasmEngine::new(
             memory_storage,
             app_data,
@@ -51,6 +53,7 @@ impl MockE2ETestRunner {
             None,
             None,
             metrics,
+            RedbStorage::new(db_dir.path()).unwrap(),
         )
     }
     #[instrument(level = "debug", skip(_ctx, data_dir))]

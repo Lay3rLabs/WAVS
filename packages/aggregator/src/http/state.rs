@@ -58,7 +58,7 @@ pub struct QueuedPacket {
 pub struct HttpState {
     pub config: Config,
     pub queue_transaction: AsyncTransaction<PacketQueueId>,
-    storage: Arc<RedbStorage>,
+    storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
 }
 
@@ -69,7 +69,7 @@ const SERVICES: Table<&str, ()> = Table::new("services");
 impl HttpState {
     #[instrument(level = "debug", skip(config))]
     pub fn new(config: Config) -> AggregatorResult<Self> {
-        let storage = Arc::new(RedbStorage::new(config.data.join("db"))?);
+        let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
 
         Ok(Self {

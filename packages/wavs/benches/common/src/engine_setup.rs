@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use tempfile::{tempdir, TempDir};
-use utils::{config::ChainConfigs, filesystem::workspace_path};
+use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbStorage};
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
@@ -18,6 +18,8 @@ pub struct EngineSetup {
     pub component: Component,
     pub component_bytes: Vec<u8>,
     pub data_dir: TempDir,
+    pub db_dir: TempDir,
+    pub keyvalue_ctx: wavs_engine::KeyValueCtx,
 }
 
 impl EngineSetup {
@@ -45,6 +47,7 @@ impl EngineSetup {
         let workflow_id = WorkflowID::new("benchmark-workflow".to_string()).unwrap();
 
         let data_dir = tempdir().unwrap();
+        let db_dir = tempdir().unwrap();
 
         let workflow = Workflow {
             trigger: wavs_types::Trigger::Manual,
@@ -75,6 +78,11 @@ impl EngineSetup {
 
         let chain_configs = ChainConfigs::default();
 
+        let keyvalue_ctx = wavs_engine::KeyValueCtx::new(
+            RedbStorage::new(db_dir.path()).unwrap(),
+            "engine".to_string(),
+        );
+
         Arc::new(EngineSetup {
             engine,
             service,
@@ -83,6 +91,8 @@ impl EngineSetup {
             workflow_id,
             chain_configs,
             data_dir,
+            db_dir,
+            keyvalue_ctx,
         })
     }
 
@@ -109,6 +119,7 @@ impl EngineSetup {
             log,
             max_wasm_fuel: None,
             max_execution_seconds: None,
+            keyvalue_ctx: self.keyvalue_ctx.clone(),
         };
 
         builder.build().unwrap()
