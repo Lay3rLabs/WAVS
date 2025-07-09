@@ -162,7 +162,7 @@ impl ServiceJson {
                             }
 
                             if evm_contracts.as_ref().map_or(true, |c| c.is_empty()) {
-                                errors.push(format!("Workflow '{}' submits with aggregator, but no EVM contracts are defined", workflow_id));
+                                errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
                             }
                         }
                     }
