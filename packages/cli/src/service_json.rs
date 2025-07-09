@@ -161,7 +161,7 @@ impl ServiceJson {
                     // validate aggregator is defined
                     if evm_contracts.as_ref().is_none_or(|c| c.is_empty()) {
                         errors.push(format!(
-                            "Workflow '{}' submits with aggregator, but no aggregator is defined",
+                            "Workflow '{}' submits with aggregator, but no aggregator contracts are defined",
                             workflow_id
                         ));
                     }

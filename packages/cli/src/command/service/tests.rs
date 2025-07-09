@@ -1533,9 +1533,8 @@ async fn test_service_validation() {
             "No aggregator service should have validation errors"
         );
         assert!(
-            result.errors.iter().any(
-                |error| error.contains("submits with aggregator, but no aggregator is defined")
-            ),
+            result.errors.iter().any(|error| error
+                .contains("submits with aggregator, but no aggregator contracts are defined")),
             "Validation should catch submit with aggregator but no aggregator defined"
         );
     }
