@@ -909,32 +909,31 @@ pub fn add_aggregator_submit(
             );
         }
 
-        // Add the EVM contract to the Submit variant
-        if let SubmitJson::Submit(Submit::Aggregator { evm_contracts, .. }) = &mut workflow.submit {
-            let new_contract = EvmContractSubmission {
-                chain_name,
-                address,
-                max_gas,
+        // Add the EVM contract to the Submit variant and collect aggregator submits
+        let aggregator_submits =
+            if let SubmitJson::Submit(Submit::Aggregator { evm_contracts, .. }) =
+                &mut workflow.submit
+            {
+                let new_contract = EvmContractSubmission {
+                    chain_name,
+                    address,
+                    max_gas,
+                };
+
+                match evm_contracts {
+                    Some(contracts) => contracts.push(new_contract),
+                    None => *evm_contracts = Some(vec![new_contract]),
+                }
+
+                evm_contracts
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|c| Aggregator::Evm(c.clone()))
+                    .collect()
+            } else {
+                Vec::new()
             };
-
-            match evm_contracts {
-                Some(contracts) => contracts.push(new_contract),
-                None => *evm_contracts = Some(vec![new_contract]),
-            }
-        }
-
-        let aggregator_submits = if let SubmitJson::Submit(Submit::Aggregator {
-            evm_contracts: Some(contracts),
-            ..
-        }) = &workflow.submit
-        {
-            contracts
-                .iter()
-                .map(|c| Aggregator::Evm(c.clone()))
-                .collect()
-        } else {
-            Vec::new()
-        };
 
         Ok((
             service,
