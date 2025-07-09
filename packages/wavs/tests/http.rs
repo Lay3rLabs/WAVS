@@ -5,7 +5,7 @@ use axum::{
 use tower::Service;
 use utils::{
     config::{AnyChainConfig, CosmosChainConfig, EvmChainConfig},
-    test_utils::{address::rand_address_evm, mock_engine::COMPONENT_SQUARE},
+    test_utils::{address::rand_address_evm, mock_engine::COMPONENT_SQUARE_BYTES},
 };
 use wavs::config::Config;
 mod wavs_systems;
@@ -57,11 +57,11 @@ fn http_config() {
 
 #[test]
 fn http_upload_component() {
-    let digest = Digest::new(COMPONENT_SQUARE);
+    let digest = Digest::new(COMPONENT_SQUARE_BYTES);
 
     let app = TestHttpApp::new();
 
-    let body = Body::from(COMPONENT_SQUARE);
+    let body = Body::from(COMPONENT_SQUARE_BYTES);
 
     let req = Request::builder()
         .method(Method::POST)

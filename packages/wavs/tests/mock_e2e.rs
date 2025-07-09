@@ -2,11 +2,12 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
+use example_square::types::SquareRequest;
 use utils::{
     context::AppContext,
     test_utils::{
         address::{rand_address_cosmos, rand_address_evm},
-        mock_engine::{SquareIn, COMPONENT_ECHO_DATA, COMPONENT_SQUARE},
+        mock_engine::{COMPONENT_ECHO_DATA_BYTES, COMPONENT_SQUARE_BYTES},
     },
 };
 mod wavs_systems;
@@ -30,7 +31,7 @@ fn mock_e2e_trigger_flow() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(COMPONENT_SQUARE)
+                .store_component_bytes(COMPONENT_SQUARE_BYTES)
                 .unwrap();
             runner
                 .create_service(service_id.clone(), ComponentSource::Digest(digest))
@@ -48,7 +49,7 @@ fn mock_e2e_trigger_flow() {
                     &service_id,
                     &WorkflowID::default(),
                     &task_queue_address.clone(),
-                    &SquareIn { x: 3 },
+                    &SquareRequest { x: 3 },
                     "evm",
                 )
                 .await;
@@ -57,7 +58,7 @@ fn mock_e2e_trigger_flow() {
                     &service_id,
                     &WorkflowID::default(),
                     &task_queue_address,
-                    &SquareIn { x: 21 },
+                    &SquareRequest { x: 21 },
                     "evm",
                 )
                 .await;
@@ -91,7 +92,7 @@ fn mock_e2e_service_lifecycle() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(COMPONENT_SQUARE)
+                .store_component_bytes(COMPONENT_SQUARE_BYTES)
                 .unwrap();
 
             let service_id2 = ServiceID::new("service2").unwrap();
@@ -117,7 +118,7 @@ fn mock_e2e_service_lifecycle() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(COMPONENT_ECHO_DATA)
+                .store_component_bytes(COMPONENT_ECHO_DATA_BYTES)
                 .unwrap();
 
             let services = runner.list_services().await;
@@ -164,7 +165,7 @@ fn mock_e2e_component_none() {
                 .dispatcher
                 .engine_manager
                 .engine
-                .store_component_bytes(COMPONENT_SQUARE)
+                .store_component_bytes(COMPONENT_SQUARE_BYTES)
                 .unwrap();
 
             runner
@@ -183,7 +184,7 @@ fn mock_e2e_component_none() {
                     &service_id,
                     &WorkflowID::default(),
                     &task_queue_address.into(),
-                    &SquareIn { x: 3 },
+                    &SquareRequest { x: 3 },
                     "evm",
                 )
                 .await;

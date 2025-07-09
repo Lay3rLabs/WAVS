@@ -1,4 +1,8 @@
 use dashmap::DashMap;
+use example_cosmos_query::types::CosmosQueryRequest;
+use example_kv_store::types::{KvStoreRequest, KvStoreResponse};
+use example_permissions::types::{PermissionsRequest, PermissionsResponse};
+use example_square::types::{SquareRequest, SquareResponse};
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;
@@ -21,7 +25,6 @@ use super::test_definition::{
 use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
 use crate::e2e::test_definition::{ChangeServiceDefinition, ExpectedOutputCallback};
-use crate::e2e::types::{CosmosQueryRequest, PermissionsRequest, PermissionsResponse};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
@@ -352,8 +355,8 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Square { x: 3 })
-                        .with_expected_output(ExpectedOutput::Square { y: 9 })
+                        .with_input_data(InputData::Square(SquareRequest { x: 3 }))
+                        .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 9 }))
                         .build(),
                 )
                 .build(),
@@ -416,7 +419,7 @@ impl TestRegistry {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
-                            chain_name: cosmos_chain.clone(),
+                            chain_name: cosmos_chain.to_string(),
                         }))
                         .with_expected_output(ExpectedOutput::StructureOnly(
                             OutputStructure::CosmosQueryResponse,
@@ -522,10 +525,12 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Text("increment".to_string()))
-                        .with_expected_output(ExpectedOutput::Text(
-                            "{\"previous_value\":0,\"new_value\":1}".to_string(),
-                        ))
+                        .with_input_data(InputData::KvStore(KvStoreRequest::Write {
+                            key: "hello".to_string(),
+                            value: b"world".to_vec(),
+                            read_immediately: false,
+                        }))
+                        .with_expected_output(ExpectedOutput::KvStore(KvStoreResponse::Write))
                         .build(),
                 )
                 .add_workflow(
@@ -543,10 +548,12 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Text("increment".to_string()))
-                        .with_expected_output(ExpectedOutput::Text(
-                            "{\"previous_value\":1,\"new_value\":2}".to_string(),
-                        ))
+                        .with_input_data(InputData::KvStore(KvStoreRequest::Read {
+                            key: "hello".to_string(),
+                        }))
+                        .with_expected_output(ExpectedOutput::KvStore(KvStoreResponse::Read {
+                            value: b"world".to_vec(),
+                        }))
                         .build(),
                 )
                 .build(),
@@ -576,8 +583,8 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Square { x: 5 })
-                        .with_expected_output(ExpectedOutput::Square { y: 25 })
+                        .with_input_data(InputData::Square(SquareRequest { x: 5 }))
+                        .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 25 }))
                         .build(),
                 )
                 .add_workflow(
@@ -628,7 +635,7 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: chain.clone(),
                         })
-                        .with_input_data(InputData::Square { x: 10 })
+                        .with_input_data(InputData::Square(SquareRequest { x: 10 }))
                         // the original component is square, and so we expect '{"y": 100}'
                         // but when we swap the component, we just get the original trigger echoed back
                         .with_expected_output(ExpectedOutput::EchoSquare { x: 10 })
@@ -849,8 +856,8 @@ impl TestRegistry {
                         .with_aggregator(AggregatorDefinition::NewEvmAggregatorSubmit {
                             chain_name: evm_chain.clone(),
                         })
-                        .with_input_data(InputData::Square { x: 3 })
-                        .with_expected_output(ExpectedOutput::Square { y: 9 })
+                        .with_input_data(InputData::Square(SquareRequest { x: 3 }))
+                        .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 9 }))
                         .build(),
                 )
                 .build(),
@@ -914,7 +921,7 @@ impl TestRegistry {
                             chain_name: evm_chain.clone(),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
-                            chain_name: cosmos_chain.clone(),
+                            chain_name: cosmos_chain.to_string(),
                         }))
                         .with_expected_output(ExpectedOutput::StructureOnly(
                             OutputStructure::CosmosQueryResponse,

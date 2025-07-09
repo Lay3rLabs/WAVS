@@ -10,7 +10,6 @@ license.workspace = true
 publish = false
 
 [dependencies]
-simple-example-cosmos = { path = "../../examples/contracts/cosmwasm/simple", package = "simple-example" }
 wasm-pkg-common = { workspace = true }
 wavs = { workspace = true }
 wavs-types = { workspace = true }
@@ -46,3 +45,8 @@ regex = "1.11.1"
 reqwest = { workspace = true }
 dashmap = { workspace = true }
 ordermap = "0.5.8"
+example-kv-store= { workspace = true} 
+example-square = { workspace = true } 
+example-permissions = { workspace = true } 
+example-cosmos-query = { workspace = true } 
+example-contract-cosmos-simple = { workspace = true } 

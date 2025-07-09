@@ -4,6 +4,6 @@
 93d2cea43d9eef0be921a47ef6c6056fec9647739cc8381c2bc5e72a33b3911d  ./examples/build/components/echo_cron_interval.wasm
 531ef0ab4a63e5e7cede299eed9f948c980545ea7dd1106ac4b8f36e7b9c3767  ./examples/build/components/echo_data.wasm
 2eb23e68da3039a1f039ad2f42e621d951148e7bf1e12b22d8ac8aba2cb8ac7e  ./examples/build/components/example_helpers.wasm
-31cbdf3d6b34d78b25c812b644a9636b38ba1fceadb174564791244fcf819bb4  ./examples/build/components/kv_store.wasm
+1efd255e5f3ef0268d69b9f170278a38c9ed8bd2bd17b5affb45e95af7fd204f  ./examples/build/components/kv_store.wasm
 073d2bd04a71381104aa9434bc17ddaff4f194bfafcd02b98625cadaa42eeaad  ./examples/build/components/permissions.wasm
-4027150c2baff9bcac9b322d3e269096e0edada5e156ed48f5a7793e36b18b1a  ./examples/build/components/square.wasm
+9257a2dcb875dfa801f545e265391ee32492d7d605f704518d5a82c9af1832e7  ./examples/build/components/square.wasm

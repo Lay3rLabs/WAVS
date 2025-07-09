@@ -1,3 +1,5 @@
+pub mod types;
+
 use example_helpers::bindings::world::{
     host,
     wavs::{
@@ -13,16 +15,14 @@ use example_helpers::bindings::world::{
 
 use example_helpers::export_layer_trigger_world;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
-use std::{
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::{fs, io::Write, path::Path};
 use wavs_wasi_utils::http::{fetch_json, fetch_string, http_request_get, http_request_post_json};
 use wstd::runtime::block_on;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+
+use crate::types::{PermissionsRequest, PermissionsResponse};
 
 struct Component;
 
@@ -39,7 +39,8 @@ impl Guest for Component {
                 &format!("(permissions host log) trigger id: {trigger_id}"),
             );
 
-            let req: PermissionsInput = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
+            let req: PermissionsRequest =
+                serde_json::from_slice(&req).map_err(|e| e.to_string())?;
             let resp = inner_run_task(req).await.map_err(|e| e.to_string())?;
             let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
             Ok(Some(encode_trigger_output(trigger_id, resp)))
@@ -47,7 +48,7 @@ impl Guest for Component {
     }
 }
 
-async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
+async fn inner_run_task(input: PermissionsRequest) -> Result<PermissionsResponse> {
     const DIRECTORY_NAME: &str = "./responses";
 
     let responses_path = Path::new(DIRECTORY_NAME);
@@ -103,29 +104,12 @@ async fn inner_run_task(input: PermissionsInput) -> Result<Response> {
         ComponentSource::Digest(digest) => digest,
     };
 
-    Ok(Response {
+    Ok(PermissionsResponse {
         filename: response_path.to_path_buf(),
         contents,
         filecount: responses_count,
         digest,
     })
-}
-
-#[derive(Deserialize, Serialize)]
-struct PermissionsInput {
-    pub get_url: String,
-    pub post_url: String,
-    pub post_data: (String, String),
-    pub timestamp: u64,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-struct Response {
-    pub filename: PathBuf,
-    pub contents: String,
-    pub filecount: usize,
-    // derived from host get-service call
-    pub digest: String,
 }
 
 export_layer_trigger_world!(Component);

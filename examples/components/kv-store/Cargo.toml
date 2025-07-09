@@ -11,9 +11,10 @@ example-helpers = { workspace = true }
 wit-bindgen = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["rlib", "cdylib"]
 
 [package.metadata.component]
 package = "wavs-tests:kv-store"

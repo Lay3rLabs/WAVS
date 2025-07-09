@@ -3,15 +3,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
+use example_cosmos_query::types::{CosmosQueryRequest, CosmosQueryResponse};
+use example_kv_store::types::{KvStoreRequest, KvStoreResponse};
+use example_permissions::types::{PermissionsRequest, PermissionsResponse};
+use example_square::types::{SquareRequest, SquareResponse};
 use regex::Regex;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{ChainName, Trigger, WorkflowID};
 
 use crate::e2e::components::{ComponentName, ComponentSources};
-use crate::e2e::types::{
-    CosmosQueryRequest, CosmosQueryResponse, PermissionsRequest, PermissionsResponse,
-    SquareRequest, SquareResponse,
-};
 
 use super::config::DEFAULT_CHAIN_ID;
 
@@ -204,7 +204,9 @@ pub enum InputData {
     /// String data
     Text(String),
     /// Square request
-    Square { x: u64 },
+    Square(SquareRequest),
+    /// KvStore request
+    KvStore(KvStoreRequest),
     /// Cosmos query
     CosmosQuery(CosmosQueryRequest),
     /// Permissions request
@@ -220,7 +222,8 @@ impl InputData {
         match self {
             InputData::Raw(data) => Some(data.clone()),
             InputData::Text(text) => Some(text.as_bytes().to_vec()),
-            InputData::Square { x } => Some(serde_json::to_vec(&SquareRequest { x: *x }).unwrap()),
+            InputData::Square(req) => Some(req.to_vec()),
+            InputData::KvStore(req) => Some(req.to_vec()),
             InputData::CosmosQuery(req) => Some(req.to_vec()),
             InputData::Permissions(req) => Some(req.to_vec()),
             InputData::None => None,
@@ -239,9 +242,12 @@ pub enum ExpectedOutput {
     /// A regex match
     Regex(Regex),
     /// Square response
-    Square { y: u64 },
+    Square(SquareResponse),
+    KvStore(KvStoreResponse),
     /// Square input, echoed back (used in "change service" tests)
-    EchoSquare { x: u64 },
+    EchoSquare {
+        x: u64,
+    },
     /// Expect specific structure, but don't check values
     StructureOnly(OutputStructure),
     /// For a dynamic callback that checks the output
@@ -444,21 +450,32 @@ impl ExpectedOutput {
             ExpectedOutput::Raw(expected) => expected == actual,
             ExpectedOutput::Text(expected) => {
                 let actual_str = std::str::from_utf8(actual)?;
+                tracing::info!("Text response: {actual_str}");
                 expected == actual_str
             }
             ExpectedOutput::Regex(regex) => {
                 let actual_str = std::str::from_utf8(actual)?;
                 regex.is_match(actual_str)
             }
-            ExpectedOutput::Square { y } => {
+            ExpectedOutput::Square(expected) => {
                 if let Ok(response) = serde_json::from_slice::<SquareResponse>(actual) {
-                    &response.y == y
+                    tracing::info!("Square response: {response:?}");
+                    response.y == expected.y
+                } else {
+                    false
+                }
+            }
+            ExpectedOutput::KvStore(expected) => {
+                if let Ok(response) = serde_json::from_slice::<KvStoreResponse>(actual) {
+                    tracing::info!("KvStore response: {response:?}");
+                    response == *expected
                 } else {
                     false
                 }
             }
             ExpectedOutput::EchoSquare { x } => {
                 if let Ok(response) = serde_json::from_slice::<SquareRequest>(actual) {
+                    tracing::info!("Echo square response: {response:?}");
                     &response.x == x
                 } else {
                     false

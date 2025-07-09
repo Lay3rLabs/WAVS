@@ -1,3 +1,5 @@
+pub mod types;
+
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -8,7 +10,8 @@ use example_helpers::{
     bindings::world::{host, Guest, TriggerAction},
     export_layer_trigger_world,
 };
-use serde::Serialize;
+
+use crate::types::{KvStoreError, KvStoreRequest, KvStoreResponse, KvStoreResult};
 
 // use example_helpers::bindings::world::wasi::keyvalue::store;
 
@@ -20,50 +23,55 @@ impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> Result<Option<WasmResponse>, String> {
         host::log(host::LogLevel::Info, "KV Store component triggered");
 
-        let (trigger_id, _req) =
+        let (trigger_id, req) =
             decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
 
-        // Read current counter value, defaulting to 0 if not found
-        let current_counter = read_value("counter")?.unwrap_or(0);
-
-        // Increment counter
-        let new_counter = current_counter + 1;
-
-        // Save the new counter value
-        write_value("counter", new_counter)?;
-
-        host::log(
-            host::LogLevel::Info,
-            &format!("KV Store counter incremented from {current_counter} to {new_counter}"),
-        );
-
-        let response = KvStoreResponse {
-            previous_value: current_counter,
-            new_value: new_counter,
+        let resp = match serde_json::from_slice::<KvStoreRequest>(&req) {
+            Ok(KvStoreRequest::Write {
+                key,
+                value,
+                read_immediately,
+            }) => {
+                write_value(&key, value).map_err(|e| e.to_string())?;
+                match read_immediately {
+                    true => {
+                        let value = read_value(&key).map_err(|e| e.to_string())?;
+                        KvStoreResponse::Read { value }
+                    }
+                    false => KvStoreResponse::Write,
+                }
+            }
+            Ok(KvStoreRequest::Read { key }) => {
+                let value = read_value(&key).map_err(|e| e.to_string())?;
+                KvStoreResponse::Read { value }
+            }
+            Err(e) => {
+                return Err(format!("Failed to parse request: {e}"));
+            }
         };
-        let resp = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
 
-        Ok(Some(encode_trigger_output(trigger_id, resp)))
+        let resp_bytes =
+            serde_json::to_vec(&resp).map_err(|e| format!("Failed to serialize response: {e}"))?;
+
+        Ok(Some(encode_trigger_output(trigger_id, resp_bytes)))
     }
 }
 
-fn read_value(key: &str) -> Result<Option<u64>, String> {
+fn read_value(key: &str) -> KvStoreResult<Vec<u8>> {
     // TODO - bring back `store`
     // for right now, just using local file system to simulate key-value store
 
     let storage_path = Path::new("./keyvalue").join(format!("{key}.txt"));
     if !storage_path.exists() {
-        return Ok(None);
+        return Err(KvStoreError::KeyNotFound(key.to_string()));
     }
 
-    let mut storage_file = fs::File::open(&storage_path).map_err(|e| e.to_string())?;
-    let mut buffer = [0; 8]; // u64 is 8 bytes
-    storage_file
-        .read_exact(&mut buffer)
-        .map_err(|e| format!("Failed to read from storage file: {e}"))?;
+    let mut storage_file = fs::File::open(&storage_path)?;
 
-    let value = u64::from_be_bytes(buffer);
-    Ok(Some(value))
+    let mut value = Vec::new();
+    storage_file.read_to_end(&mut value)?;
+
+    Ok(value)
 
     // let bucket = store::open("default").map_err(|e| format!("Failed to open bucket: {:?}", e))?;
     // match bucket.get(key).map_err(|e| format!("Failed to get key {}: {:?}", key, e))? {
@@ -78,20 +86,18 @@ fn read_value(key: &str) -> Result<Option<u64>, String> {
     // }
 }
 
-fn write_value(key: &str, value: u64) -> Result<(), String> {
+fn write_value(key: &str, value: Vec<u8>) -> KvStoreResult<()> {
     // TODO - bring back `store`
     // for right now, just using local file system to simulate key-value store
     let storage_path = Path::new("./keyvalue");
     if !storage_path.exists() {
-        fs::create_dir_all(storage_path).map_err(|e| e.to_string())?;
+        fs::create_dir_all(storage_path)?;
     }
 
     let storage_path = storage_path.join(format!("{key}.txt"));
-    let mut storage_file = fs::File::create(&storage_path).map_err(|e| e.to_string())?;
+    let mut storage_file = fs::File::create(&storage_path)?;
 
-    storage_file
-        .write_all(&value.to_be_bytes())
-        .map_err(|e| e.to_string())?;
+    storage_file.write_all(&value)?;
 
     Ok(())
 
@@ -99,12 +105,6 @@ fn write_value(key: &str, value: u64) -> Result<(), String> {
     // bucket
     //     .set(key, value.to_string().as_bytes())
     //     .map_err(|e| format!("Failed to set key {}: {:?}", key, e))
-}
-
-#[derive(Serialize, Debug)]
-pub struct KvStoreResponse {
-    pub previous_value: u64,
-    pub new_value: u64,
 }
 
 export_layer_trigger_world!(Component);
