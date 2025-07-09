@@ -14,7 +14,6 @@ use example_helpers::{
     export_layer_trigger_world,
     trigger::{decode_trigger_event, encode_trigger_output, ChainQuerierExt},
 };
-use serde::{Deserialize, Serialize};
 use wavs_wasi_utils::evm::new_evm_provider;
 
 struct Component;
@@ -66,12 +65,6 @@ impl Guest for Component {
         .map_err(|e| e.to_string())
         .map(Some)
     }
-}
-
-// The response from the contract query
-#[derive(Deserialize, Serialize)]
-struct TriggerDataResp {
-    pub data: String,
 }
 
 export_layer_trigger_world!(Component);

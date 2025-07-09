@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use alloy_sol_types::SolValue;
-use example_square::types::{SquareRequest, SquareResponse};
+use example_types::{SquareRequest, SquareResponse};
 use utils::test_utils::test_contracts::ISimpleSubmit::DataWithId;
 use utils::{
     context::AppContext,

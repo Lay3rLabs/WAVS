@@ -3,7 +3,7 @@ mod helpers;
 use crate::helpers::exec::execute_component;
 use utils::{init_tracing_tests, test_utils::mock_engine::COMPONENT_SQUARE_BYTES};
 
-use example_square::types::{SquareRequest, SquareResponse};
+use example_types::{SquareRequest, SquareResponse};
 
 #[tokio::test]
 async fn basic_execution() {

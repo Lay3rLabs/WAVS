@@ -1,5 +1,3 @@
-pub mod types;
-
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -10,8 +8,7 @@ use example_helpers::{
     bindings::world::{host, Guest, TriggerAction},
     export_layer_trigger_world,
 };
-
-use crate::types::{KvStoreError, KvStoreRequest, KvStoreResponse, KvStoreResult};
+use example_types::{KvStoreError, KvStoreRequest, KvStoreResponse, KvStoreResult};
 
 // use example_helpers::bindings::world::wasi::keyvalue::store;
 

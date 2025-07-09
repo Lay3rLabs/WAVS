@@ -1,5 +1,3 @@
-pub mod types;
-
 use anyhow::anyhow;
 use example_helpers::bindings::world::{host, Guest, TriggerAction, WasmResponse};
 use example_helpers::{
@@ -8,7 +6,7 @@ use example_helpers::{
 };
 use wstd::runtime::block_on;
 
-use crate::types::{CosmosQueryRequest, CosmosQueryResponse};
+use example_types::{CosmosQueryRequest, CosmosQueryResponse};
 
 struct Component;
 

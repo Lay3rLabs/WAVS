@@ -1,8 +1,8 @@
 use dashmap::DashMap;
-use example_cosmos_query::types::CosmosQueryRequest;
-use example_kv_store::types::{KvStoreRequest, KvStoreResponse};
-use example_permissions::types::{PermissionsRequest, PermissionsResponse};
-use example_square::types::{SquareRequest, SquareResponse};
+use example_types::{
+    CosmosQueryRequest, KvStoreRequest, KvStoreResponse, PermissionsRequest, PermissionsResponse,
+    SquareRequest, SquareResponse,
+};
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::num::NonZeroU32;

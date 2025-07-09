@@ -9,6 +9,7 @@ members = [
   "examples/components/echo-block-interval",
   "examples/components/echo-cron-interval",
   "examples/components/_helpers",
+  "examples/components/_types",
   "examples/components/kv-store",
   "examples/contracts/cosmwasm/simple",
 ]
@@ -171,8 +172,5 @@ wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
-example-kv-store= { path = "examples/components/kv-store", package = "kv-store" }
-example-square = { path = "examples/components/square", package = "square" }
-example-permissions = { path = "examples/components/permissions", package = "permissions" }
-example-cosmos-query = { path = "examples/components/cosmos-query", package = "cosmos-query" }
-example-contract-cosmos-simple = { path = "examples/contracts/cosmwasm/simple", package = "simple-example" }
+example-types = { path = "examples/components/_types" }
+example-contract-cosmwasm-simple = { path = "examples/contracts/cosmwasm/simple", package = "simple-example" }

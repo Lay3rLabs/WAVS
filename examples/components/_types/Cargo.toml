@@ -1,21 +1,16 @@
 [package]
-name = "kv-store"
+name = "example-types"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
-[dependencies]
-example-helpers = { workspace = true }
-example-types = { workspace = true }
-wit-bindgen = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-
 [lib]
 crate-type = ["rlib", "cdylib"]
 
-[package.metadata.component]
-package = "wavs-tests:kv-store"
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+layer-climb-address = {workspace = true} 

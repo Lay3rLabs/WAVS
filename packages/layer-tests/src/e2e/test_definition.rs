@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
-use example_cosmos_query::types::{CosmosQueryRequest, CosmosQueryResponse};
-use example_kv_store::types::{KvStoreRequest, KvStoreResponse};
-use example_permissions::types::{PermissionsRequest, PermissionsResponse};
-use example_square::types::{SquareRequest, SquareResponse};
+use example_types::{
+    CosmosQueryRequest, CosmosQueryResponse, KvStoreRequest, KvStoreResponse, PermissionsRequest,
+    PermissionsResponse, SquareRequest, SquareResponse,
+};
 use regex::Regex;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{ChainName, Trigger, WorkflowID};

@@ -68,7 +68,7 @@ bimap = { workspace = true }
 criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
-example-square = {workspace = true}
+example-types = {workspace = true}
 
 [[bench]]
 name = "intervals"

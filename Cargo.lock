@@ -1825,6 +1825,7 @@ dependencies = [
  "alloy-network",
  "anyhow",
  "example-helpers",
+ "example-types",
  "layer-climb",
  "serde",
  "wavs-wasi-utils",
@@ -2175,6 +2176,7 @@ version = "0.5.0-alpha.4"
 dependencies = [
  "anyhow",
  "example-helpers",
+ "example-types",
  "layer-climb",
  "serde",
  "serde_json",
@@ -3316,6 +3318,16 @@ dependencies = [
  "simple-example",
  "wavs-wasi-utils",
  "wit-bindgen",
+]
+
+[[package]]
+name = "example-types"
+version = "0.5.0-alpha.4"
+dependencies = [
+ "layer-climb-address",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4502,6 +4514,7 @@ name = "kv-store"
 version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",
+ "example-types",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -4647,24 +4660,21 @@ dependencies = [
  "anyhow",
  "clap 4.5.40",
  "const-hex",
- "cosmos-query",
  "cosmwasm-std",
  "dashmap",
  "deadpool",
  "derive-enum-all-values",
+ "example-types",
  "futures",
- "kv-store",
  "layer-climb",
  "layer-climb-cli",
  "opentelemetry",
  "ordermap",
- "permissions",
  "regex",
  "reqwest",
  "serde",
  "serde_json",
  "simple-example",
- "square",
  "tempfile",
  "tokio",
  "tracing",
@@ -5693,6 +5703,7 @@ version = "0.5.0-alpha.4"
 dependencies = [
  "anyhow",
  "example-helpers",
+ "example-types",
  "serde",
  "serde_json",
  "wavs-wasi-utils",
@@ -7440,6 +7451,7 @@ name = "square"
 version = "0.5.0-alpha.4"
 dependencies = [
  "example-helpers",
+ "example-types",
  "serde",
  "serde_json",
 ]
@@ -9477,6 +9489,7 @@ dependencies = [
  "cron",
  "ctrlc",
  "dashmap",
+ "example-types",
  "futures",
  "http-body-util",
  "layer-climb",
@@ -9488,7 +9501,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "square",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
@@ -9588,11 +9600,10 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "anyhow",
- "kv-store",
+ "example-types",
  "layer-climb",
  "serde",
  "serde_json",
- "square",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",

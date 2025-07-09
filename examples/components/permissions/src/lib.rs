@@ -1,5 +1,3 @@
-pub mod types;
-
 use example_helpers::bindings::world::{
     host,
     wavs::{
@@ -22,7 +20,7 @@ use wstd::runtime::block_on;
 use anyhow::Result;
 use serde::Deserialize;
 
-use crate::types::{PermissionsRequest, PermissionsResponse};
+use example_types::{PermissionsRequest, PermissionsResponse};
 
 struct Component;
 

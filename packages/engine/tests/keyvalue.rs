@@ -1,7 +1,7 @@
 mod helpers;
 
 use crate::helpers::exec::execute_component;
-use example_kv_store::types::{KvStoreRequest, KvStoreResponse};
+use example_types::{KvStoreRequest, KvStoreResponse};
 use utils::{init_tracing_tests, test_utils::mock_engine::COMPONENT_KV_STORE_BYTES};
 
 #[tokio::test]

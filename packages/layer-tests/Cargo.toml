@@ -45,8 +45,5 @@ regex = "1.11.1"
 reqwest = { workspace = true }
 dashmap = { workspace = true }
 ordermap = "0.5.8"
-example-kv-store= { workspace = true} 
-example-square = { workspace = true } 
-example-permissions = { workspace = true } 
-example-cosmos-query = { workspace = true } 
-example-contract-cosmos-simple = { workspace = true } 
+example-types = { workspace = true} 
+example-contract-cosmwasm-simple = { workspace = true } 

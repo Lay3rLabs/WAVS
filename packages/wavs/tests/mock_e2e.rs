@@ -2,7 +2,7 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use example_square::types::SquareRequest;
+use example_types::SquareRequest;
 use utils::{
     context::AppContext,
     test_utils::{
