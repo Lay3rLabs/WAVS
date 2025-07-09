@@ -74,9 +74,7 @@ pub enum KvStoreError {
     #[error("Failed to write key: {0}")]
     StoreWriteKey(String),
     #[error("Missing key: {key}")]
-    MissingKey {
-        key: String,
-    },
+    MissingKey { key: String },
 }
 
 pub type KvStoreResult<T> = Result<T, KvStoreError>;
