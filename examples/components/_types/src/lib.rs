@@ -67,6 +67,16 @@ pub enum KvStoreError {
     KeyNotFound(String),
     #[error("IoError: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Failed to open bucket: {0}")]
+    StoreBucketOpen(String),
+    #[error("Failed to read key: {0}")]
+    StoreReadKey(String),
+    #[error("Failed to write key: {0}")]
+    StoreWriteKey(String),
+    #[error("Missing key: {key}")]
+    MissingKey {
+        key: String,
+    },
 }
 
 pub type KvStoreResult<T> = Result<T, KvStoreError>;
