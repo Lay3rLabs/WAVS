@@ -160,7 +160,6 @@ impl TryFrom<wavs_types::Workflow> for component_service::Workflow {
             trigger: src.trigger.try_into()?,
             component: src.component.into(),
             submit: src.submit.into(),
-            aggregators: vec![], // TODO: Remove when WIT bindings are regenerated
         })
     }
 }
