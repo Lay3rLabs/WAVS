@@ -208,13 +208,20 @@ impl From<component_service::Submit> for wavs_types::Submit {
     fn from(src: component_service::Submit) -> Self {
         match src {
             component_service::Submit::None => wavs_types::Submit::None,
-            component_service::Submit::Aggregator(component_service::AggregatorSubmit { url }) => {
-                wavs_types::Submit::Aggregator {
-                    url,
-                    component: None,
-                    evm_contracts: None,
-                }
-            }
+            component_service::Submit::Aggregator(component_service::AggregatorSubmit {
+                url,
+                component,
+                evm_contracts,
+            }) => wavs_types::Submit::Aggregator {
+                url,
+                component: component.map(|c| Box::new(c.try_into().unwrap())),
+                evm_contracts: evm_contracts.map(|contracts| {
+                    contracts
+                        .into_iter()
+                        .map(|c| c.try_into().unwrap())
+                        .collect()
+                }),
+            },
         }
     }
 }

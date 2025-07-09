@@ -153,6 +153,8 @@ interface service {
 
   record aggregator-submit {
     url: string,
+    component: option<component>,
+    evm-contracts: option<list<evm-contract-submission>>,
   }
 
   /// Submit types

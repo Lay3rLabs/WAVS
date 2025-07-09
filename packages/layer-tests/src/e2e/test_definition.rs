@@ -412,7 +412,6 @@ impl WorkflowBuilder {
         let submit = self.submit.expect("Submit not set");
         let expected_output = self.expected_output.expect("Expected output not set");
 
-        // Validate that aggregator submit has aggregators set
         let SubmitDefinition::Aggregator { aggregators, .. } = &submit;
         if aggregators.is_empty() {
             panic!("No aggregators set when submit is aggregator")
