@@ -209,7 +209,7 @@ async fn run_test(
                             ..
                         } = contract;
 
-                        let client = clients.get_evm_client(&chain_name);
+                        let client = clients.get_evm_client(chain_name);
                         let submit_start_block = client
                             .provider
                             .get_block_number()

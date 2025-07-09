@@ -161,7 +161,7 @@ impl ServiceJson {
                                 ))
                             }
 
-                            if evm_contracts.as_ref().map_or(true, |c| c.is_empty()) {
+                            if evm_contracts.as_ref().is_none_or(|c| c.is_empty()) {
                                 errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
                             }
                         }

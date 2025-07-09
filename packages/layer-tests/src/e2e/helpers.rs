@@ -376,7 +376,7 @@ pub async fn create_submit_from_config(
             } else {
                 Some(
                     aggregators
-                        .into_iter()
+                        .iter()
                         .map(|agg| match agg {
                             AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
                                 EvmContractSubmission {
