@@ -145,42 +145,38 @@ impl ServiceJson {
                 SubmitJson::Json(_) => {
                     errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
                 }
-                SubmitJson::Submit(submit) => {
-                    // Basic submit validation
-                    match submit {
-                        Submit::None => {
-                            // None submit type is always valid
-                        }
-                        Submit::Aggregator {
-                            url, evm_contracts, ..
-                        } => {
-                            if reqwest::Url::parse(url).is_err() {
-                                errors.push(format!(
-                                    "Workflow '{}' has an invalid URL: {}",
-                                    workflow_id, url
-                                ))
-                            }
-
-                            if evm_contracts.as_ref().is_none_or(|c| c.is_empty()) {
-                                errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
-                            }
-                        }
-                    }
+                SubmitJson::Submit(Submit::None) => {
+                    // None submit type is always valid
                 }
-            }
-            // Check if max_gas is reasonable if specified
-            if let SubmitJson::Submit(Submit::Aggregator {
-                evm_contracts: Some(contracts),
-                ..
-            }) = &workflow.submit
-            {
-                for evm_contract_submission in contracts {
-                    if let Some(max_gas) = evm_contract_submission.max_gas {
-                        if max_gas == 0 {
-                            errors.push(format!(
-                                "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
-                                workflow_id
-                            ));
+                SubmitJson::Submit(Submit::Aggregator {
+                    url, evm_contracts, ..
+                }) => {
+                    if reqwest::Url::parse(url).is_err() {
+                        errors.push(format!(
+                            "Workflow '{}' has an invalid URL: {}",
+                            workflow_id, url
+                        ));
+                    }
+
+                    // validate aggregator is defined
+                    if evm_contracts.as_ref().is_none_or(|c| c.is_empty()) {
+                        errors.push(format!(
+                            "Workflow '{}' submits with aggregator, but no aggregator is defined",
+                            workflow_id
+                        ));
+                    }
+
+                    // Check if max_gas is reasonable if specified
+                    if let Some(contracts) = evm_contracts {
+                        for evm_contract_submission in contracts {
+                            if let Some(max_gas) = evm_contract_submission.max_gas {
+                                if max_gas == 0 {
+                                    errors.push(format!(
+                                        "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
+                                        workflow_id
+                                    ));
+                                }
+                            }
                         }
                     }
                 }
