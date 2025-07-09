@@ -3,8 +3,7 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Aggregator, Component, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger,
-    WorkflowID,
+    Component, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -146,43 +145,37 @@ impl ServiceJson {
                 SubmitJson::Json(_) => {
                     errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
                 }
-                SubmitJson::Submit(submit) => {
-                    // Basic submit validation
-                    match submit {
-                        Submit::None => {
-                            // None submit type is always valid
-                            if !workflow.aggregators.is_empty() {
-                                errors.push(format!(
-                                    "Workflow '{}' has no submit, but it has an aggregator defined",
-                                    workflow_id
-                                ));
-                            }
-                        }
-                        Submit::Aggregator { url } => {
-                            if reqwest::Url::parse(url).is_err() {
-                                errors.push(format!(
-                                    "Workflow '{}' has an invalid URL: {}",
-                                    workflow_id, url
-                                ))
-                            }
-
-                            if workflow.aggregators.is_empty() {
-                                errors.push(format!("Workflow '{}' submits with aggregator, but no aggregator is defined", workflow_id));
-                            }
-                        }
-                    }
+                SubmitJson::Submit(Submit::None) => {
+                    // None submit type is always valid
                 }
-            }
-            // Check if max_gas is reasonable if specified
-            for aggregator in &workflow.aggregators {
-                match aggregator {
-                    Aggregator::Evm(evm_contract_submission) => {
-                        if let Some(max_gas) = evm_contract_submission.max_gas {
-                            if max_gas == 0 {
-                                errors.push(format!(
-                                    "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
-                                    workflow_id
-                                ));
+                SubmitJson::Submit(Submit::Aggregator {
+                    url, evm_contracts, ..
+                }) => {
+                    if reqwest::Url::parse(url).is_err() {
+                        errors.push(format!(
+                            "Workflow '{}' has an invalid URL: {}",
+                            workflow_id, url
+                        ));
+                    }
+
+                    // validate aggregator is defined
+                    if evm_contracts.as_ref().is_none_or(|c| c.is_empty()) {
+                        errors.push(format!(
+                            "Workflow '{}' submits with aggregator, but no aggregator contracts are defined",
+                            workflow_id
+                        ));
+                    }
+
+                    // Check if max_gas is reasonable if specified
+                    if let Some(contracts) = evm_contracts {
+                        for evm_contract_submission in contracts {
+                            if let Some(max_gas) = evm_contract_submission.max_gas {
+                                if max_gas == 0 {
+                                    errors.push(format!(
+                                        "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
+                                        workflow_id
+                                    ));
+                                }
                             }
                         }
                     }
@@ -265,9 +258,6 @@ pub struct WorkflowJson {
     pub trigger: TriggerJson,
     pub component: ComponentJson,
     pub submit: SubmitJson,
-    /// If submit is `Submit::Aggregator`, this is
-    /// the required data for the aggregator to submit this workflow
-    pub aggregators: Vec<Aggregator>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

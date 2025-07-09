@@ -75,7 +75,6 @@ impl Service {
             trigger,
             component: Component::new(source),
             submit,
-            aggregators: Vec::new(),
         };
 
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
@@ -163,10 +162,6 @@ pub struct Workflow {
 
     /// How to submit the result of the component.
     pub submit: Submit,
-
-    /// If submit is `Submit::Aggregator`, this is
-    /// the required data for the aggregator to submit this workflow
-    pub aggregators: Vec<Aggregator>,
 }
 
 impl Workflow {
@@ -287,6 +282,12 @@ pub enum Submit {
     Aggregator {
         /// The aggregator endpoint
         url: String,
+        /// component dynamically determines the destination
+        // only non-optional for backwards-compatibility, once everything is working - becomes mandatory!
+        // Boxed in order to save memory (vs the None enum variant)
+        component: Option<Box<Component>>,
+        // temporary backwards-compatibility only!! so we can merge incremental PRs and keep tests passing
+        evm_contracts: Option<Vec<EvmContractSubmission>>,
     },
 }
 

@@ -358,7 +358,6 @@ pub mod tests {
             ),
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregators: Vec::new(),
         };
 
         let service_id = ServiceID::new("foobar").unwrap();
@@ -416,7 +415,6 @@ pub mod tests {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregators: Vec::new(),
         };
 
         workflow.component.env_keys = ["WAVS_ENV_TEST".to_string()].into_iter().collect();
@@ -513,7 +511,6 @@ pub mod tests {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregators: Vec::new(),
         };
 
         workflow.component.fuel_limit = Some(low_fuel_limit);
@@ -625,7 +622,6 @@ pub mod tests {
             trigger: Trigger::Manual,
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
-            aggregators: Vec::new(),
         };
 
         // first, check that it works with enough time and async sleep

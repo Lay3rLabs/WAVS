@@ -2,9 +2,8 @@ use std::{num::NonZero, sync::Arc};
 
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
 use wavs_types::{
-    Aggregator, ChainName, Component, ComponentSource, Digest, EvmContractSubmission, Service,
-    ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow,
-    WorkflowID,
+    ChainName, Component, ComponentSource, Digest, EvmContractSubmission, Service, ServiceID,
+    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowID,
 };
 
 use layer_climb::prelude::*;
@@ -243,12 +242,13 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
                 },
                 submit: Submit::Aggregator {
                     url: "http://example.com/aggregator".to_string(),
+                    component: None,
+                    evm_contracts: Some(vec![EvmContractSubmission {
+                        chain_name: chain_name.parse().unwrap(),
+                        address: rand_address_evm(),
+                        max_gas: None,
+                    }]),
                 },
-                aggregators: vec![Aggregator::Evm(EvmContractSubmission {
-                    chain_name: chain_name.parse().unwrap(),
-                    address: rand_address_evm(),
-                    max_gas: None,
-                })],
             },
         )]
         .into(),

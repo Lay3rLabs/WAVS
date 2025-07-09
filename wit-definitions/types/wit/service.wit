@@ -37,7 +37,6 @@ interface service {
         trigger: trigger,
         component: component,
         submit: submit,
-        aggregators: list<aggregator>,
     }
 
     // Component types
@@ -122,7 +121,9 @@ interface service {
     }
 
     record aggregator-submit {
-        url: string,
+        url: string,        
+        component: option<component>,
+        evm-contracts: option<list<evm-contract-submission>>,
     }
 
     // Aggregator types

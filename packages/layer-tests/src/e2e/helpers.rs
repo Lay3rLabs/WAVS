@@ -1,4 +1,4 @@
-use alloy_primitives::U256;
+use alloy_primitives::{Address, U256};
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
@@ -13,9 +13,9 @@ use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
-    Permissions, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
-    Trigger, Workflow,
+    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
+    Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger,
+    Workflow,
 };
 
 use crate::{
@@ -111,7 +111,7 @@ pub async fn deploy_service_for_test(
             .unwrap()
             .insert(service.id.clone())
         {
-            let SubmitDefinition::Aggregator { url } = &workflow.submit;
+            let SubmitDefinition::Aggregator { url, .. } = &workflow.submit;
             TestRegistry::register_to_aggregator(url, &service.id)
                 .await
                 .unwrap();
@@ -222,26 +222,20 @@ async fn deploy_workflow(
     tracing::info!("[{}] Creating submit from config", test_name);
 
     // Create the submit based on test configuration
-    let submit = create_submit_from_config(
-        &workflow_definition.submit,
-        clients,
-        service_manager_address,
-    )
-    .await
-    .unwrap();
-
-    let mut aggregators = vec![];
-    for aggregator in &workflow_definition.aggregators {
-        let aggregator = match aggregator {
-            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
-                deploy_submit(clients, chain_name, service_manager_address)
-                    .await
-                    .unwrap()
-            }
+    let chain_name = {
+        let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_definition.submit;
+        let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) = aggregators.first()
+        else {
+            panic!("Expected at least one NewEvmAggregatorSubmit aggregator, but found none");
         };
-
-        aggregators.push(aggregator);
-    }
+        chain_name
+    };
+    let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
+        .await
+        .unwrap();
+    let submit = create_submit_from_config(&workflow_definition.submit, &submission_contract)
+        .await
+        .unwrap();
 
     tracing::info!("[{}] Creating trigger from config", test_name);
     // Create the trigger based on test configuration
@@ -258,7 +252,6 @@ async fn deploy_workflow(
         trigger: trigger.clone(), // Clone for possible use in multi-trigger service
         component,
         submit: submit.clone(),
-        aggregators,
     }
 }
 
@@ -374,11 +367,35 @@ pub async fn create_trigger_from_config(
 /// Create a submit based on test configuration
 pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
-    _clients: &Clients,
-    _service_manager_address: alloy_primitives::Address,
+    submission_contract: &Address,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::Aggregator { url } => Ok(Submit::Aggregator { url: url.clone() }),
+        SubmitDefinition::Aggregator { url, aggregators } => {
+            let evm_contracts = if aggregators.is_empty() {
+                None
+            } else {
+                Some(
+                    aggregators
+                        .iter()
+                        .map(|agg| match agg {
+                            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
+                                EvmContractSubmission {
+                                    chain_name: chain_name.clone(),
+                                    address: *submission_contract,
+                                    max_gas: None,
+                                }
+                            }
+                        })
+                        .collect(),
+                )
+            };
+
+            Ok(Submit::Aggregator {
+                url: url.clone(),
+                component: None,
+                evm_contracts,
+            })
+        }
     }
 }
 
@@ -418,13 +435,12 @@ pub async fn deploy_service_manager(
     Ok(address)
 }
 
-/// Deploy submit contract and create an Aggregator from it
-pub async fn deploy_submit(
+/// Deploy submit contract and return its address
+pub async fn deploy_submit_contract(
     clients: &Clients,
     chain_name: &ChainName,
     service_manager_address: alloy_primitives::Address,
-) -> Result<Aggregator> {
-    // Deploy the contract
+) -> Result<alloy_primitives::Address> {
     let evm_client = clients.get_evm_client(chain_name);
 
     tracing::info!(
@@ -443,11 +459,7 @@ pub async fn deploy_submit(
     let address = *result.address();
     tracing::info!("Submit contract deployed at address: {}", address);
 
-    Ok(Aggregator::Evm(EvmContractSubmission {
-        chain_name: chain_name.clone(),
-        address,
-        max_gas: None,
-    }))
+    Ok(address)
 }
 
 /// Deploy submit contract and create a Submit from it

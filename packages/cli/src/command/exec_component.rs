@@ -115,7 +115,6 @@ impl ExecComponent {
                 env_keys,
             },
             submit: Submit::None,
-            aggregators: Vec::new(),
         };
 
         let service = wavs_types::Service {

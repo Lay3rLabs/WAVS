@@ -907,7 +907,7 @@ fn test_workflow_submit_operations() {
 
     // Verify aggregator submit result
     assert_eq!(aggregator_result.workflow_id, workflow_id);
-    if let Submit::Aggregator { url } = &aggregator_result.submit {
+    if let Submit::Aggregator { url, .. } = &aggregator_result.submit {
         assert_eq!(url, &aggregator_url);
     } else {
         panic!("Expected Aggregator submit");
@@ -922,17 +922,19 @@ fn test_workflow_submit_operations() {
         .unwrap();
 
     // Handle SubmitJson wrapper
-    if let SubmitJson::Submit(submit) = &aggregator_workflow.submit {
-        if let Submit::Aggregator { url } = submit {
+    let aggregators = match &aggregator_workflow.submit {
+        SubmitJson::Submit(Submit::Aggregator {
+            url,
+            evm_contracts: Some(contracts),
+            ..
+        }) => {
             assert_eq!(url, &aggregator_url);
-        } else {
-            panic!("Expected Aggregator submit in service");
+            contracts
         }
-    } else {
-        panic!("Expected SubmitJson::Submit");
-    }
+        _ => panic!("Expected Aggregator submit with evm_contracts"),
+    };
 
-    let Aggregator::Evm(evm) = &aggregator_workflow.aggregators[0];
+    let evm = &aggregators[0];
     assert_eq!(evm.chain_name, evm_chain);
     assert_eq!(evm.address, evm_address);
     assert_eq!(evm.max_gas, max_gas);
@@ -954,8 +956,15 @@ fn test_workflow_submit_operations() {
         .workflows
         .get(&workflow_id)
         .unwrap();
+    let aggregator = match &aggregator_workflow.submit {
+        SubmitJson::Submit(Submit::Aggregator {
+            evm_contracts: Some(contracts),
+            ..
+        }) => contracts,
+        _ => panic!("Expected Aggregator submit with evm_contracts"),
+    };
 
-    let Aggregator::Evm(evm) = &aggregator_workflow.aggregators[0];
+    let evm = &aggregator[0];
     assert_eq!(evm.chain_name, evm_chain);
     assert_eq!(evm.address, evm_address);
     assert_eq!(evm.max_gas, None);
@@ -1000,11 +1009,18 @@ fn test_workflow_submit_operations() {
         .workflows
         .get(&workflow_id)
         .unwrap();
+    let two_aggregators = match &workflow_with_two.submit {
+        SubmitJson::Submit(Submit::Aggregator {
+            evm_contracts: Some(contracts),
+            ..
+        }) => contracts,
+        _ => panic!("Expected Aggregator submit with evm_contracts"),
+    };
 
-    assert_eq!(workflow_with_two.aggregators.len(), 2);
+    assert_eq!(two_aggregators.len(), 2);
 
     // Check second aggregator was added
-    let Aggregator::Evm(second_evm) = &workflow_with_two.aggregators[1];
+    let second_evm = &two_aggregators[1];
     assert_eq!(second_evm.chain_name, second_chain);
     assert_eq!(second_evm.address, second_address);
     assert_eq!(second_evm.max_gas, second_max_gas);
@@ -1052,14 +1068,16 @@ async fn test_service_validation() {
         event_hash: wavs_types::ByteArray::new([1u8; 32]),
     };
 
-    let aggregator = Aggregator::Evm(EvmContractSubmission {
+    let aggregator = EvmContractSubmission {
         address: evm_address,
         chain_name: evm_chain.clone(),
         max_gas: Some(1000000u64),
-    });
+    };
 
     let submit = Submit::Aggregator {
         url: "https://api.example.com/aggregator".to_string(),
+        component: None,
+        evm_contracts: Some(vec![aggregator]),
     };
 
     // Create service manager
@@ -1077,7 +1095,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: vec![aggregator.clone()],
             },
         );
 
@@ -1111,7 +1128,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1123,7 +1139,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::new_unset(),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1166,7 +1181,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::Component(zero_fuel_component),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1206,7 +1220,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1248,7 +1261,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::Component(env_component),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1287,7 +1299,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Json(Json::Unset),
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1320,11 +1331,6 @@ async fn test_service_validation() {
     // Test zero max_gas in aggregator
     {
         let mut workflows = BTreeMap::new();
-        let zero_gas_aggregator = Aggregator::Evm(EvmContractSubmission {
-            address: evm_address,
-            chain_name: evm_chain.clone(),
-            max_gas: Some(0u64), // Zero gas
-        });
 
         workflows.insert(
             workflow_id.clone(),
@@ -1333,8 +1339,13 @@ async fn test_service_validation() {
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(Submit::Aggregator {
                     url: "https://api.example.com/aggregator".to_string(),
+                    component: None,
+                    evm_contracts: Some(vec![EvmContractSubmission {
+                        address: evm_address,
+                        chain_name: evm_chain.clone(),
+                        max_gas: Some(0u64), // Zero gas
+                    }]),
                 }),
-                aggregators: vec![zero_gas_aggregator],
             },
         );
 
@@ -1373,7 +1384,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Json(Json::Unset),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1406,11 +1416,11 @@ async fn test_service_validation() {
     // Test invalid URL in Aggregator submit
     {
         let mut workflows = BTreeMap::new();
-        let aggregators = vec![Aggregator::Evm(EvmContractSubmission {
+        let aggregators = vec![EvmContractSubmission {
             address: evm_address,
             chain_name: evm_chain.clone(),
             max_gas: Some(1000000u64),
-        })];
+        }];
 
         workflows.insert(
             workflow_id.clone(),
@@ -1419,8 +1429,9 @@ async fn test_service_validation() {
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(Submit::Aggregator {
                     url: "not-a-valid-url".to_string(),
+                    component: None,
+                    evm_contracts: Some(aggregators),
                 }),
-                aggregators,
             },
         );
 
@@ -1459,7 +1470,6 @@ async fn test_service_validation() {
                 trigger: TriggerJson::Trigger(trigger.clone()),
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(submit.clone()),
-                aggregators: Vec::new(),
             },
         );
 
@@ -1499,8 +1509,9 @@ async fn test_service_validation() {
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(Submit::Aggregator {
                     url: "https://example.com".to_string(),
+                    component: None,
+                    evm_contracts: None,
                 }),
-                aggregators: Vec::new(), // No aggregator defined
             },
         );
 
@@ -1522,55 +1533,9 @@ async fn test_service_validation() {
             "No aggregator service should have validation errors"
         );
         assert!(
-            result.errors.iter().any(
-                |error| error.contains("submits with aggregator, but no aggregator is defined")
-            ),
+            result.errors.iter().any(|error| error
+                .contains("submits with aggregator, but no aggregator contracts are defined")),
             "Validation should catch submit with aggregator but no aggregator defined"
-        );
-    }
-
-    // Test no submit but aggregator defined
-    {
-        let mut workflows = BTreeMap::new();
-        let aggregators = vec![Aggregator::Evm(EvmContractSubmission {
-            address: evm_address,
-            chain_name: evm_chain.clone(),
-            max_gas: Some(1000000u64),
-        })];
-
-        workflows.insert(
-            workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(Submit::None),
-                aggregators,
-            },
-        );
-
-        let none_submit_with_aggregator = ServiceJson {
-            id: service_id.clone(),
-            name: "Test Service".to_string(),
-            workflows,
-            status: ServiceStatus::Active,
-            manager: manager.clone(),
-        };
-
-        let file_path = temp_dir.path().join("none_submit_with_aggregator.json");
-        let service_json = serde_json::to_string_pretty(&none_submit_with_aggregator).unwrap();
-        std::fs::write(&file_path, service_json).unwrap();
-
-        let result = validate_service(&file_path, None).await.unwrap();
-        assert!(
-            !result.errors.is_empty(),
-            "None submit with aggregator service should have validation errors"
-        );
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|error| error.contains("has no submit, but it has an aggregator defined")),
-            "Validation should catch no submit but aggregator defined"
         );
     }
 }

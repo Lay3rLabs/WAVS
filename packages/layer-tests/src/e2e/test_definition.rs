@@ -127,9 +127,6 @@ pub struct WorkflowDefinition {
     /// Submit configuration
     pub submit: SubmitDefinition,
 
-    /// Aggregators configuration
-    pub aggregators: Vec<AggregatorDefinition>,
-
     /// Input data to send to the trigger
     pub input_data: InputData,
 
@@ -192,7 +189,10 @@ pub enum EvmTriggerDefinition {
 /// Configuration for a submit
 #[derive(Clone, Debug)]
 pub enum SubmitDefinition {
-    Aggregator { url: String },
+    Aggregator {
+        url: String,
+        aggregators: Vec<AggregatorDefinition>,
+    },
 }
 
 /// Different types of input data
@@ -342,7 +342,6 @@ pub struct WorkflowBuilder {
     component: Option<ComponentDefinition>,
     trigger: Option<TriggerDefinition>,
     submit: Option<SubmitDefinition>,
-    aggregators: Vec<AggregatorDefinition>,
     input_data: InputData,
     expected_output: Option<ExpectedOutput>,
     timeout: Option<Duration>,
@@ -381,12 +380,6 @@ impl WorkflowBuilder {
         self
     }
 
-    /// Add an aggregator
-    pub fn with_aggregator(mut self, aggregator: AggregatorDefinition) -> Self {
-        self.aggregators.push(aggregator);
-        self
-    }
-
     /// Set the input data
     pub fn with_input_data(mut self, input_data: InputData) -> Self {
         self.input_data = input_data;
@@ -419,8 +412,8 @@ impl WorkflowBuilder {
         let submit = self.submit.expect("Submit not set");
         let expected_output = self.expected_output.expect("Expected output not set");
 
-        let SubmitDefinition::Aggregator { .. } = submit;
-        if self.aggregators.is_empty() {
+        let SubmitDefinition::Aggregator { aggregators, .. } = &submit;
+        if aggregators.is_empty() {
             panic!("No aggregators set when submit is aggregator")
         }
 
@@ -428,7 +421,6 @@ impl WorkflowBuilder {
             component,
             trigger,
             submit,
-            aggregators: self.aggregators,
             input_data: self.input_data,
             expected_output,
             timeout: self.timeout.unwrap_or(Duration::from_secs(30)),

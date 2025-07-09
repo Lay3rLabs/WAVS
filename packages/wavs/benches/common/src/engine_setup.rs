@@ -60,7 +60,6 @@ impl EngineSetup {
                 env_keys: std::collections::BTreeSet::new(),
             },
             submit: wavs_types::Submit::None,
-            aggregators: Vec::new(),
         };
 
         let service = wavs_types::Service {
