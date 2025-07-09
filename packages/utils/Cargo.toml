@@ -10,7 +10,10 @@ license.workspace = true
 publish = false
 
 [features]
-test-utils = ["dep:rand", "dep:bip39"]
+test-utils = [
+    "dep:rand", 
+    "dep:bip39",
+]
 
 [dependencies]
 wasm-pkg-client = { workspace = true }

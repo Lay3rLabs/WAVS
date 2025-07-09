@@ -8,7 +8,6 @@ mod matrix;
 mod runner;
 mod test_definition;
 mod test_registry;
-mod types;
 
 use components::ComponentSources;
 use config::Configs;

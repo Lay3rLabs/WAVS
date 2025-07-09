@@ -4,9 +4,9 @@ use example_helpers::{
     export_layer_trigger_world,
     trigger::{decode_trigger_event, encode_trigger_output},
 };
-use layer_climb::prelude::Address;
-use serde::{Deserialize, Serialize};
 use wstd::runtime::block_on;
+
+use example_types::{CosmosQueryRequest, CosmosQueryResponse};
 
 struct Component;
 
@@ -59,25 +59,6 @@ impl Guest for Component {
         .map_err(|e| e.to_string())
         .map(Some)
     }
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum CosmosQueryRequest {
-    BlockHeight {
-        chain_name: String,
-    },
-    Balance {
-        chain_name: String,
-        address: Address,
-    },
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum CosmosQueryResponse {
-    BlockHeight(u64),
-    Balance(String),
 }
 
 export_layer_trigger_world!(Component);

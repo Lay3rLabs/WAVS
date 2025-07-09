@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use alloy_sol_types::SolValue;
+use example_types::{SquareRequest, SquareResponse};
 use utils::test_utils::test_contracts::ISimpleSubmit::DataWithId;
 use utils::{
     context::AppContext,
     test_utils::{
         address::{rand_address_cosmos, rand_address_evm},
-        mock_engine::{SquareIn, SquareOut, COMPONENT_SQUARE},
+        mock_engine::COMPONENT_SQUARE_BYTES,
     },
 };
 use wavs::dispatcher::DispatcherCommand;
@@ -40,14 +41,14 @@ fn dispatcher_pipeline() {
             &service_id,
             &workflow_id,
             &contract_address,
-            &SquareIn::new(3),
+            &SquareRequest::new(3),
             &chain_name,
         ),
         mock_real_trigger_action(
             &service_id,
             &workflow_id,
             &contract_address,
-            &SquareIn::new(21),
+            &SquareRequest::new(21),
             &chain_name,
         ),
     ];
@@ -59,7 +60,7 @@ fn dispatcher_pipeline() {
     let digest = dispatcher
         .engine_manager
         .engine
-        .store_component_bytes(COMPONENT_SQUARE)
+        .store_component_bytes(COMPONENT_SQUARE_BYTES)
         .unwrap();
 
     // Register a service to handle this action
@@ -113,13 +114,13 @@ fn dispatcher_pipeline() {
     assert_eq!(processed.len(), 2);
 
     let payload_1: DataWithId = DataWithId::abi_decode(&processed[0].envelope.payload).unwrap();
-    let data_1: SquareOut = serde_json::from_slice(&payload_1.data).unwrap();
+    let data_1: SquareResponse = serde_json::from_slice(&payload_1.data).unwrap();
 
     let payload_2: DataWithId = DataWithId::abi_decode(&processed[1].envelope.payload).unwrap();
-    let data_2: SquareOut = serde_json::from_slice(&payload_2.data).unwrap();
+    let data_2: SquareResponse = serde_json::from_slice(&payload_2.data).unwrap();
 
     // Check the payloads
-    assert_eq!(data_1, SquareOut::new(9));
+    assert_eq!(data_1, SquareResponse::new(9));
 
-    assert_eq!(data_2, SquareOut::new(441));
+    assert_eq!(data_2, SquareResponse::new(441));
 }

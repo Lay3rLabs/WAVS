@@ -9,6 +9,7 @@ members = [
   "examples/components/echo-block-interval",
   "examples/components/echo-cron-interval",
   "examples/components/_helpers",
+  "examples/components/_types",
   "examples/components/kv-store",
   "examples/contracts/cosmwasm/simple",
 ]
@@ -169,5 +170,7 @@ wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
 wavs-aggregator = { path = "packages/aggregator" }
-example-helpers = { path = "examples/components/_helpers" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
+example-helpers = { path = "examples/components/_helpers" }
+example-types = { path = "examples/components/_types" }
+example-contract-cosmwasm-simple = { path = "examples/contracts/cosmwasm/simple", package = "simple-example" }
