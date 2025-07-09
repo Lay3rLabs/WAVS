@@ -224,13 +224,11 @@ async fn deploy_workflow(
     // Create the submit based on test configuration
     let chain_name = {
         let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_definition.submit;
-        if let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) =
-            aggregators.first()
-        {
-            chain_name
-        } else {
-            &"local-evm".parse().unwrap() // fallback
-        }
+        let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) = aggregators.first()
+        else {
+            panic!("Expected at least one NewEvmAggregatorSubmit aggregator, but found none");
+        };
+        chain_name
     };
     let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
         .await

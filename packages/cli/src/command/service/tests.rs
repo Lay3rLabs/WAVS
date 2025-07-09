@@ -1539,54 +1539,6 @@ async fn test_service_validation() {
             "Validation should catch submit with aggregator but no aggregator defined"
         );
     }
-
-    // Test no submit but aggregator defined
-    {
-        let mut workflows = BTreeMap::new();
-        let aggregators = vec![EvmContractSubmission {
-            address: evm_address,
-            chain_name: evm_chain.clone(),
-            max_gas: Some(1000000u64),
-        }];
-
-        workflows.insert(
-            workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(Submit::Aggregator {
-                    url: "https://example.com".to_string(),
-                    component: None,
-                    evm_contracts: Some(aggregators),
-                }),
-            },
-        );
-
-        let none_submit_with_aggregator = ServiceJson {
-            id: service_id.clone(),
-            name: "Test Service".to_string(),
-            workflows,
-            status: ServiceStatus::Active,
-            manager: manager.clone(),
-        };
-
-        let file_path = temp_dir.path().join("none_submit_with_aggregator.json");
-        let service_json = serde_json::to_string_pretty(&none_submit_with_aggregator).unwrap();
-        std::fs::write(&file_path, service_json).unwrap();
-
-        let result = validate_service(&file_path, None).await.unwrap();
-        assert!(
-            !result.errors.is_empty(),
-            "None submit with aggregator service should have validation errors"
-        );
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|error| error.contains("has no submit, but it has an aggregator defined")),
-            "Validation should catch no submit but aggregator defined"
-        );
-    }
 }
 
 #[tokio::test]
