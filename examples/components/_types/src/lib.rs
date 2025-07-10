@@ -38,8 +38,29 @@ pub enum CosmosQueryResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum KvStoreRequest {
-    Write { key: String, value: Vec<u8> },
-    Read { key: String },
+    Write {
+        bucket: String,
+        key: String,
+        value: Vec<u8>,
+    },
+    Read {
+        bucket: String,
+        key: String,
+    },
+    AtomicIncrement {
+        bucket: String,
+        key: String,
+        delta: i64,
+    },
+    AtomicSwap {
+        bucket: String,
+        key: String,
+        value: Vec<u8>,
+    },
+    AtomicRead {
+        bucket: String,
+        key: String,
+    },
 }
 
 impl KvStoreRequest {
@@ -53,6 +74,10 @@ impl KvStoreRequest {
 pub enum KvStoreResponse {
     Write,
     Read { value: Vec<u8> },
+    // returns the new value after increment
+    AtomicIncrement { value: i64 },
+    AtomicSwap,
+    AtomicRead { value: Vec<u8> },
 }
 
 #[derive(Error, Debug)]
@@ -61,14 +86,47 @@ pub enum KvStoreError {
     KeyNotFound(String),
     #[error("IoError: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Failed to open bucket: {0}")]
-    StoreBucketOpen(String),
-    #[error("Failed to read key: {0}")]
-    StoreReadKey(String),
-    #[error("Failed to write key: {0}")]
-    StoreWriteKey(String),
-    #[error("Missing key: {key}")]
-    MissingKey { key: String },
+    #[error("Failed to open bucket {id}: {reason}")]
+    BucketOpen { id: String, reason: String },
+    #[error("Failed to read key {key} for bucket {bucket}: {reason}")]
+    ReadKey {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Failed to writekey {key} for bucket {bucket}: {reason}")]
+    WriteKey {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Missing key: {key} for bucket {bucket}")]
+    MissingKey { bucket: String, key: String },
+    #[error("Failed to atomically increment bucket {bucket}, key {key}, delta {delta}: {reason}")]
+    AtomicIncrement {
+        bucket: String,
+        key: String,
+        delta: i64,
+        reason: String,
+    },
+    #[error("Failed to atomically swap bucket {bucket}, key {key}: {reason}")]
+    AtomicSwap {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Failed to acquire atomic CAS lock for bucket {bucket}, key {key}: {reason}")]
+    AtomicCasResource {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Failed to read atomic value for bucket {bucket}, key {key}: {reason}")]
+    AtomicRead {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
 }
 
 pub type KvStoreResult<T> = Result<T, KvStoreError>;
