@@ -38,14 +38,8 @@ pub enum CosmosQueryResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum KvStoreRequest {
-    Write {
-        key: String,
-        value: Vec<u8>,
-        read_immediately: bool, // Optional flag to read immediately after writing
-    },
-    Read {
-        key: String,
-    },
+    Write { key: String, value: Vec<u8> },
+    Read { key: String },
 }
 
 impl KvStoreRequest {
