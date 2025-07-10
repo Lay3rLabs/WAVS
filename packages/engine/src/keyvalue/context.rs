@@ -142,10 +142,7 @@ impl store::HostBucket for KeyValueState<'_> {
     }
 
     fn exists(&mut self, bucket: Resource<KeyValueBucket>, key: String) -> StoreResult<bool> {
-        match self.get(bucket, key)? {
-            Some(_) => Ok(true),
-            None => Ok(false),
-        }
+        self.get(bucket, key).map(|x| x.is_some())
     }
 
     // TODO - test me!
