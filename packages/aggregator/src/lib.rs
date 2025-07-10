@@ -3,6 +3,7 @@
 #![allow(clippy::result_large_err)]
 pub mod args;
 pub mod config;
+pub mod engine;
 pub mod error;
 pub mod http;
 
