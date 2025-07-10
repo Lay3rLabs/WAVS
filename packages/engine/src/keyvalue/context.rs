@@ -136,9 +136,7 @@ impl store::HostBucket for KeyValueState<'_> {
         let key = self.key(bucket, &key)?;
         self.db.remove(KV_TABLE, key.as_ref()).map_err(|e| {
             store::Error::Other(format!("Failed to delete key from keyvalue store: {}", e))
-        })?;
-
-        Ok(())
+        })
     }
 
     fn exists(&mut self, bucket: Resource<KeyValueBucket>, key: String) -> StoreResult<bool> {
