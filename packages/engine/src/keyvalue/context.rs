@@ -127,9 +127,7 @@ impl store::HostBucket for KeyValueState<'_> {
 
         self.db.set(KV_TABLE, key.as_ref(), &value).map_err(|e| {
             store::Error::Other(format!("Failed to set key in keyvalue store: {}", e))
-        })?;
-
-        Ok(())
+        })
     }
 
     fn delete(&mut self, bucket: Resource<KeyValueBucket>, key: String) -> StoreResult<()> {
