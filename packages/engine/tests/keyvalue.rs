@@ -5,7 +5,7 @@ use example_types::{KvStoreError, KvStoreRequest, KvStoreResponse};
 use utils::{
     init_tracing_tests, storage::db::RedbStorage, test_utils::mock_engine::COMPONENT_KV_STORE_BYTES,
 };
-use wavs_engine::KeyValueCtx;
+use wavs_engine::context::KeyValueCtx;
 
 #[tokio::test]
 async fn keyvalue_basic() {
@@ -209,7 +209,7 @@ async fn keyvalue_atomic_increment() {
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::AtomicIncrement {
             bucket: BUCKET.to_string(),
-            key: KEY_1.to_string(),
+            key: KEY_2.to_string(),
             delta: 3,
         },
     )

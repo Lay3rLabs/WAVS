@@ -3,7 +3,7 @@ use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_types::{Digest, Service, ServiceID, WorkflowID};
 
-use crate::{bindings::world::host::LogLevel, KeyValueCtx};
+use crate::{bindings::world::host::LogLevel, keyvalue::context::KeyValueCtx};
 
 // TODO: revisit this an understand it.
 // Copied blindly from old code

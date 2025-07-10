@@ -138,7 +138,7 @@ impl ExecComponent {
             log: log_wasi,
             max_execution_seconds: Some(u64::MAX),
             max_wasm_fuel: Some(u64::MAX),
-            keyvalue_ctx: wavs_engine::KeyValueCtx::new(
+            keyvalue_ctx: wavs_engine::context::KeyValueCtx::new(
                 RedbStorage::new(tempfile::tempdir()?.keep()).unwrap(),
                 "exec_component".to_string(),
             ),
