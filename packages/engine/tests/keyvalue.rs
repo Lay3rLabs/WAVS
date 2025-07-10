@@ -314,20 +314,19 @@ async fn keyvalue_atomic_swap() {
     );
 }
 
-
 #[tokio::test]
 async fn keyvalue_batch() {
     init_tracing_tests();
-    
+
     const BUCKET: &str = "test_bucket";
     let db_dir = tempfile::tempdir().unwrap();
     let db = RedbStorage::new(db_dir.path()).unwrap();
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Prepare batch data
-    let mut values:HashMap<String, Vec<u8>> = HashMap::new();
+    let mut values: HashMap<String, Vec<u8>> = HashMap::new();
     for i in 1..=10 {
-        values.insert(format!("key_{}", i), format!("value_{}", i).into_bytes());
+        values.insert(format!("key_{i}"), format!("value_{i}").into_bytes());
     }
 
     // Perform batch write
@@ -355,7 +354,9 @@ async fn keyvalue_batch() {
     .await;
 
     match resp {
-        KvStoreResponse::BatchRead { values: read_values } => {
+        KvStoreResponse::BatchRead {
+            values: read_values,
+        } => {
             // Verify all keys were read correctly
             for (key, expected_value) in &values {
                 assert_eq!(read_values.get(key).unwrap(), expected_value);
@@ -365,7 +366,11 @@ async fn keyvalue_batch() {
     }
 
     // Delete a few keys
-    let keys_to_delete: Vec<String> = vec!["key_1".to_string(), "key_5".to_string(), "key_7".to_string()];
+    let keys_to_delete: Vec<String> = vec![
+        "key_1".to_string(),
+        "key_5".to_string(),
+        "key_7".to_string(),
+    ];
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Some(keyvalue_ctx.clone()),
@@ -390,11 +395,16 @@ async fn keyvalue_batch() {
     .await;
 
     match resp {
-        KvStoreResponse::BatchRead { values: read_values } => {
+        KvStoreResponse::BatchRead {
+            values: read_values,
+        } => {
             // Verify deleted keys are no longer present
             for (key, expected_value) in &values {
                 if keys_to_delete.contains(key) {
-                    assert!(!read_values.contains_key(key), "Key {} should have been deleted", key);
+                    assert!(
+                        !read_values.contains_key(key),
+                        "Key {key} should have been deleted",
+                    );
                 } else {
                     // For keys that were not deleted, verify their values
                     assert_eq!(read_values.get(key).unwrap(), expected_value);
@@ -409,25 +419,26 @@ async fn keyvalue_batch() {
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
         Some(keyvalue_ctx.clone()),
-        KvStoreRequest::Read { 
+        KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
-            key: "key_1".to_string(), 
+            key: "key_2".to_string(),
         },
     )
     .await;
 
     assert_eq!(
         resp,
-        KvStoreResponse::Read { value: values.get("key_1").unwrap().clone() } 
+        KvStoreResponse::Read {
+            value: values.get("key_2").unwrap().clone()
+        }
     );
-
 
     let err = try_execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
         Some(keyvalue_ctx),
-        KvStoreRequest::Read { 
+        KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
-            key: "key_5".to_string(), 
+            key: "key_5".to_string(),
         },
     )
     .await
@@ -441,6 +452,4 @@ async fn keyvalue_batch() {
         }
         .to_string()
     );
-
-
 }

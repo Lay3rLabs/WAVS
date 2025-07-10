@@ -2,8 +2,7 @@ use utils::storage::db::RedbStorage;
 use wasmtime::component::HasData;
 use wasmtime_wasi::ResourceTable;
 
-use crate::bindings::world::wasi::keyvalue::atomics;
-use crate::bindings::world::wasi::keyvalue::store;
+use crate::bindings::world::wasi::keyvalue::{atomics, batch, store};
 use crate::{EngineError, HostComponent};
 
 #[derive(Clone)]
@@ -38,6 +37,16 @@ impl KeyValueCtx {
         .map_err(EngineError::AddToLinker)?;
 
         atomics::add_to_linker::<HostComponent, KeyValueCtx>(linker, |state| {
+            KeyValueState::new(
+                state.keyvalue_ctx.db.clone(),
+                state.keyvalue_ctx.namespace.clone(),
+                &mut state.table,
+                state.keyvalue_ctx.page_size,
+            )
+        })
+        .map_err(EngineError::AddToLinker)?;
+
+        batch::add_to_linker::<HostComponent, KeyValueCtx>(linker, |state| {
             KeyValueState::new(
                 state.keyvalue_ctx.db.clone(),
                 state.keyvalue_ctx.namespace.clone(),
