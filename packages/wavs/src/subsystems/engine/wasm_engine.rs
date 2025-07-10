@@ -5,10 +5,11 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
+use utils::storage::db::RedbStorage;
 use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::InstanceDepsBuilder;
+use wavs_engine::{InstanceDepsBuilder, KeyValueCtx};
 use wavs_types::{
     ComponentSource, Digest, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
 };
@@ -26,6 +27,7 @@ pub struct WasmEngine<S: CAStorage> {
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
     metrics: EngineMetrics,
+    db: RedbStorage,
 }
 
 impl<S: CAStorage> WasmEngine<S> {
@@ -39,6 +41,7 @@ impl<S: CAStorage> WasmEngine<S> {
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         metrics: EngineMetrics,
+        db: RedbStorage,
     ) -> Self {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -64,6 +67,7 @@ impl<S: CAStorage> WasmEngine<S> {
             max_execution_seconds,
             max_wasm_fuel,
             metrics,
+            db,
         }
     }
 
@@ -188,6 +192,7 @@ impl<S: CAStorage> WasmEngine<S> {
         let digest = workflow.component.source.digest().clone();
 
         let mut instance_deps = InstanceDepsBuilder {
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), service.id.to_string()),
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: match self.memory_cache.write().unwrap().get(&digest) {
@@ -274,6 +279,8 @@ pub mod tests {
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
+        let db_dir = tempfile::tempdir().unwrap();
+
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -282,6 +289,7 @@ pub mod tests {
             None,
             None,
             metrics(),
+            RedbStorage::new(db_dir.path()).unwrap(),
         );
 
         // store two blobs
@@ -304,6 +312,7 @@ pub mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
+        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -312,6 +321,7 @@ pub mod tests {
             None,
             None,
             metrics(),
+            RedbStorage::new(db_dir.path()).unwrap(),
         );
 
         // store valid wasm
@@ -330,6 +340,7 @@ pub mod tests {
     fn execute_echo() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
+        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -338,6 +349,7 @@ pub mod tests {
             None,
             None,
             metrics(),
+            RedbStorage::new(db_dir.path()).unwrap(),
         );
 
         // store echo digest
@@ -395,6 +407,7 @@ pub mod tests {
     fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
+        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -403,6 +416,7 @@ pub mod tests {
             None,
             None,
             metrics(),
+            RedbStorage::new(db_dir.path()).unwrap(),
         );
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
@@ -493,6 +507,7 @@ pub mod tests {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let low_fuel_limit = 1;
+        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -501,6 +516,7 @@ pub mod tests {
             None,
             None,
             metrics(),
+            RedbStorage::new(db_dir.path()).unwrap(),
         );
 
         // store square digest
@@ -555,6 +571,7 @@ pub mod tests {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let app_data_path = app_data.path().to_path_buf();
+        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data_path,
@@ -563,6 +580,7 @@ pub mod tests {
             None,
             None,
             metrics(),
+            RedbStorage::new(db_dir.path()).unwrap(),
         );
 
         // Create a service ID
@@ -603,6 +621,7 @@ pub mod tests {
     fn execute_with_low_time_limit() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
+        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -611,6 +630,7 @@ pub mod tests {
             None,
             None,
             metrics(),
+            RedbStorage::new(db_dir.path()).unwrap(),
         );
 
         engine.start().unwrap();

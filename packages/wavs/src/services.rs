@@ -1,4 +1,4 @@
-use std::{ops::Bound, sync::Arc};
+use std::ops::Bound;
 
 use redb::ReadableTable;
 use thiserror::Error;
@@ -12,11 +12,11 @@ type Result<T> = std::result::Result<T, ServicesError>;
 
 #[derive(Clone)]
 pub struct Services {
-    db_storage: Arc<RedbStorage>,
+    db_storage: RedbStorage,
 }
 
 impl Services {
-    pub fn new(db_storage: Arc<RedbStorage>) -> Self {
+    pub fn new(db_storage: RedbStorage) -> Self {
         Self { db_storage }
     }
 

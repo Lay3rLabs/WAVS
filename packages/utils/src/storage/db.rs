@@ -1,12 +1,13 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use redb::{AccessGuard, Database, Key, ReadOnlyTable, TableError, TypeName, Value};
 use serde::{de::Deserialize, Serialize};
 use std::any::type_name;
 use tracing::instrument;
 
+#[derive(Clone)]
 pub struct RedbStorage {
-    db: Database,
+    db: Arc<Database>,
 }
 
 pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
@@ -16,7 +17,17 @@ impl RedbStorage {
     #[instrument(level = "debug", skip(path), fields(subsys = "DbStorage"))]
     #[allow(clippy::result_large_err)]
     pub fn new(path: impl AsRef<Path>) -> Result<Self, DBError> {
-        let db = redb::Database::create(path)?;
+        let path = if path.as_ref().is_dir() {
+            tracing::warn!(
+                "RedbStorage: Path {} is a directory, creating database in it.",
+                path.as_ref().display()
+            );
+
+            path.as_ref().join("db").to_path_buf()
+        } else {
+            path.as_ref().to_path_buf()
+        };
+        let db = Arc::new(redb::Database::create(path)?);
         Ok(RedbStorage { db })
     }
 }

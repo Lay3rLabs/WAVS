@@ -19,7 +19,7 @@ pub struct HttpState {
     pub dispatcher: Arc<Dispatcher<FileStorage>>,
     pub is_mock_chain_client: bool,
     pub http_client: reqwest::Client,
-    pub storage: Arc<RedbStorage>,
+    pub storage: RedbStorage,
     pub metrics: HttpMetrics,
 }
 
@@ -40,7 +40,7 @@ impl HttpState {
             })?;
         }
 
-        let storage = Arc::new(RedbStorage::new(config.data.join("http-db"))?);
+        let storage = RedbStorage::new(config.data.join("http-db"))?;
 
         Ok(Self {
             config,

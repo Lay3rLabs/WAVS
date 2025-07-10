@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
@@ -39,7 +39,7 @@ fn collect_messages_with_wait() {
     let metrics = SubmissionMetrics::new(&meter);
     let data_dir = tempfile::tempdir().unwrap();
     let data_dir = data_dir.path().join("db");
-    let services = wavs::services::Services::new(Arc::new(RedbStorage::new(data_dir).unwrap()));
+    let services = wavs::services::Services::new(RedbStorage::new(data_dir).unwrap());
     let submission_manager = SubmissionManager::new(&config, metrics, services.clone()).unwrap();
 
     assert_eq!(submission_manager.get_message_count(), 0);

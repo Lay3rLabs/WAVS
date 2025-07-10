@@ -60,7 +60,7 @@ impl Setup {
         let data_dir = tempfile::tempdir().unwrap();
         let metrics = Metrics::new(&meter("wavs-benchmark"));
 
-        let db_storage = Arc::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
+        let db_storage = RedbStorage::new(data_dir.path().join("db")).unwrap();
         let trigger_manager =
             TriggerManager::new(&config, metrics.wavs.trigger, Services::new(db_storage)).unwrap();
         let receiver = trigger_manager.start(APP_CONTEXT.clone()).unwrap();

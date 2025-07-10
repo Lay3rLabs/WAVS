@@ -1,6 +1,6 @@
 use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
-use utils::test_utils::test_contracts::ISimpleSubmit::DataWithId;
+use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{Digest, ServiceID, WorkflowID};
@@ -20,6 +20,9 @@ pub async fn execute_component<D: DeserializeOwned>(wasm_bytes: &[u8], input: im
     let engine = WTEngine::new(&wt_config).unwrap();
 
     let data_dir = tempfile::tempdir().unwrap();
+    let db_dir = tempfile::tempdir().unwrap();
+    let keyvalue_ctx =
+        wavs_engine::KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string());
 
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),
@@ -31,6 +34,7 @@ pub async fn execute_component<D: DeserializeOwned>(wasm_bytes: &[u8], input: im
         log: log_wasi,
         max_execution_seconds: Some(10),
         max_wasm_fuel: Some(u64::MAX),
+        keyvalue_ctx,
     }
     .build()
     .unwrap();
