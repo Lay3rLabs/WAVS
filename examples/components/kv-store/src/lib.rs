@@ -21,19 +21,9 @@ impl Guest for Component {
             decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
 
         let resp = match serde_json::from_slice::<KvStoreRequest>(&req) {
-            Ok(KvStoreRequest::Write {
-                key,
-                value,
-                read_immediately,
-            }) => {
+            Ok(KvStoreRequest::Write { key, value }) => {
                 write_value(&key, &value).map_err(|e| e.to_string())?;
-                match read_immediately {
-                    true => {
-                        let value = read_value(&key).map_err(|e| e.to_string())?;
-                        KvStoreResponse::Read { value }
-                    }
-                    false => KvStoreResponse::Write,
-                }
+                KvStoreResponse::Write
             }
             Ok(KvStoreRequest::Read { key }) => {
                 let value = read_value(&key).map_err(|e| e.to_string())?;

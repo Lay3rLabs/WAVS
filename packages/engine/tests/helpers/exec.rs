@@ -2,12 +2,26 @@ use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
 use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
+use wavs_engine::{bindings::world::host::LogLevel, EngineError, InstanceDepsBuilder, KeyValueCtx};
 use wavs_types::{Digest, ServiceID, WorkflowID};
 
 use crate::helpers::service::{make_service, make_trigger_action};
 
-pub async fn execute_component<D: DeserializeOwned>(wasm_bytes: &[u8], input: impl Serialize) -> D {
+pub async fn execute_component<D: DeserializeOwned>(
+    wasm_bytes: &[u8],
+    keyvalue_ctx: Option<KeyValueCtx>,
+    input: impl Serialize,
+) -> D {
+    try_execute_component(wasm_bytes, keyvalue_ctx, input)
+        .await
+        .unwrap()
+}
+
+pub async fn try_execute_component<D: DeserializeOwned>(
+    wasm_bytes: &[u8],
+    keyvalue_ctx: Option<KeyValueCtx>,
+    input: impl Serialize,
+) -> std::result::Result<D, String> {
     let service = make_service(Digest::new(wasm_bytes));
     let trigger_action = make_trigger_action(&service, None, serde_json::to_vec(&input).unwrap());
 
@@ -21,8 +35,9 @@ pub async fn execute_component<D: DeserializeOwned>(wasm_bytes: &[u8], input: im
 
     let data_dir = tempfile::tempdir().unwrap();
     let db_dir = tempfile::tempdir().unwrap();
-    let keyvalue_ctx =
-        wavs_engine::KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string());
+    let keyvalue_ctx = keyvalue_ctx.unwrap_or_else(|| {
+        wavs_engine::KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string())
+    });
 
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),
@@ -39,13 +54,22 @@ pub async fn execute_component<D: DeserializeOwned>(wasm_bytes: &[u8], input: im
     .build()
     .unwrap();
 
-    let payload = wavs_engine::execute(&mut instance_deps, trigger_action)
-        .await
-        .unwrap()
-        .unwrap()
-        .payload;
-    let data_with_id: DataWithId = DataWithId::abi_decode(&payload).unwrap();
-    serde_json::from_slice(&data_with_id.data).unwrap()
+    let resp = wavs_engine::execute(&mut instance_deps, trigger_action).await;
+
+    match resp {
+        Ok(Some(response)) => {
+            let data_with_id: DataWithId = DataWithId::abi_decode(&response.payload).unwrap();
+            Ok(serde_json::from_slice::<D>(&data_with_id.data).unwrap())
+        }
+        Ok(None) => Err("No response from component".to_string()),
+        Err(e) => {
+            match e {
+                // return the inner error directly so callers can handle it
+                EngineError::ExecResult(err) => Err(err),
+                _ => Err(e.to_string()),
+            }
+        }
+    }
 }
 
 fn log_wasi(

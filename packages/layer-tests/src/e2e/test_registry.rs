@@ -528,7 +528,6 @@ impl TestRegistry {
                         .with_input_data(InputData::KvStore(KvStoreRequest::Write {
                             key: "hello".to_string(),
                             value: b"world".to_vec(),
-                            read_immediately: false,
                         }))
                         .with_expected_output(ExpectedOutput::KvStore(KvStoreResponse::Write))
                         .build(),
