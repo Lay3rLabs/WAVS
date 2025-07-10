@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 wavs-types = { workspace = true }
+wavs-engine = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 tracing-subscriber = { workspace = true }
