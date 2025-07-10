@@ -9602,6 +9602,7 @@ dependencies = [
  "anyhow",
  "example-types",
  "layer-climb",
+ "redb",
  "serde",
  "serde_json",
  "tempfile",

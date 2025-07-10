@@ -12,7 +12,7 @@ pub struct KeyValueCtx {
     // this is *not* the namespace per-bucket, each KeyValueCtx may have multiple buckets
     namespace: String,
     // for pagination
-    page_size: Option<usize>,
+    pub page_size: Option<usize>,
 }
 
 impl KeyValueCtx {

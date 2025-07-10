@@ -453,3 +453,115 @@ async fn keyvalue_batch() {
         .to_string()
     );
 }
+
+#[tokio::test]
+async fn keyvalue_list() {
+    init_tracing_tests();
+
+    const BUCKET: &str = "test_bucket";
+    let db_dir = tempfile::tempdir().unwrap();
+    let db = RedbStorage::new(db_dir.path()).unwrap();
+    let mut keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
+
+    // Prepare batch data
+    let mut values: HashMap<String, Vec<u8>> = HashMap::new();
+    for i in 1..=10 {
+        values.insert(format!("key_{i}"), format!("foo_{i}").into_bytes());
+        values.insert(format!("abc_{i}"), format!("bar_{i}").into_bytes());
+    }
+
+    // Perform batch write
+    let _: KvStoreResponse = execute_component(
+        COMPONENT_KV_STORE_BYTES,
+        Some(keyvalue_ctx.clone()),
+        KvStoreRequest::BatchWrite {
+            bucket: BUCKET.to_string(),
+            values: values.clone(),
+        },
+    )
+    .await;
+
+    // list all keys
+    let resp = execute_component::<KvStoreResponse>(
+        COMPONENT_KV_STORE_BYTES,
+        Some(keyvalue_ctx.clone()),
+        KvStoreRequest::ListKeys {
+            bucket: BUCKET.to_string(),
+            cursor: None,
+        },
+    )
+    .await;
+
+    let mut next_cursor = None;
+    match resp {
+        KvStoreResponse::ListKeys { keys, cursor } => {
+            // Verify all keys are present
+            for (i, key) in keys.iter().enumerate() {
+                assert!(values.contains_key(key), "Key {key} should be present");
+                // start the next cursor after 5 keys
+                if i == 5 {
+                    next_cursor = Some(key.clone());
+                }
+            }
+
+            assert!(cursor.is_none(), "Cursor should be None");
+        }
+        _ => panic!("Expected ListKeys response"),
+    }
+
+    // list all keys with a cursor
+    let resp = execute_component::<KvStoreResponse>(
+        COMPONENT_KV_STORE_BYTES,
+        Some(keyvalue_ctx.clone()),
+        KvStoreRequest::ListKeys {
+            bucket: BUCKET.to_string(),
+            cursor: next_cursor.clone(),
+        },
+    )
+    .await;
+
+    match resp {
+        KvStoreResponse::ListKeys { keys, cursor: _ } => {
+            // Verify all keys are present
+            for key in keys.iter() {
+                assert!(values.contains_key(key), "Key {key} should be present");
+            }
+
+            // should have only iterated after cursor
+            assert_eq!(
+                keys.len(),
+                values.len() - 5,
+                "Expected remaining keys after cursor"
+            );
+            assert_eq!(keys.first().unwrap(), next_cursor.as_ref().unwrap());
+        }
+        _ => panic!("Expected ListKeys response"),
+    }
+
+    // change page size
+    keyvalue_ctx.page_size = Some(3);
+
+    let resp = execute_component::<KvStoreResponse>(
+        COMPONENT_KV_STORE_BYTES,
+        Some(keyvalue_ctx.clone()),
+        KvStoreRequest::ListKeys {
+            bucket: BUCKET.to_string(),
+            cursor: next_cursor.clone(),
+        },
+    )
+    .await;
+
+    match resp {
+        KvStoreResponse::ListKeys { keys, cursor: _ } => {
+            // Verify all keys are present
+            for key in keys.iter() {
+                assert!(values.contains_key(key), "Key {key} should be present");
+            }
+
+            // limited responses
+            assert_eq!(keys.len(), 3, "Expected 3 keys per page");
+            assert_eq!(keys.first().unwrap(), next_cursor.as_ref().unwrap());
+        }
+        _ => panic!("Expected ListKeys response"),
+    }
+}

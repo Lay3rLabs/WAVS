@@ -4,6 +4,7 @@ use wasmtime::component::Resource;
 use crate::bindings::world::wasi::keyvalue::store::{self, KeyResponse};
 use crate::bucket_keys::{Key, KeyPrefix, KeyValueBucket};
 use crate::context::KeyValueState;
+use redb::ReadableTable;
 
 pub type StoreResult<T> = std::result::Result<T, store::Error>;
 
@@ -84,31 +85,39 @@ impl store::HostBucket for KeyValueState<'_> {
         bucket: Resource<KeyValueBucket>,
         cursor: Option<String>,
     ) -> StoreResult<KeyResponse> {
-        let prefix = self.get_key_prefix_store(&bucket)?.to_string();
-        let cursor = cursor.unwrap_or(prefix.clone());
-
+        let prefix = self.get_key_prefix_store(&bucket)?;
         let res = self
             .db
             .map_table_read(KV_STORE_TABLE, |table| match table {
                 Some(table) => {
-                    let cursor: &str = &cursor;
-                    let iter = table.range(cursor..)?.map(|i| i.map(|(key, _)| key));
+                    let prefix_str = format!("{prefix}/");
+                    let iter = match cursor {
+                        Some(cursor) => {
+                            let cursor_key = Key::new(prefix, cursor).to_string();
+                            Box::new(table.range(cursor_key.as_str()..)?)
+                        }
+                        None => Box::new(table.iter()?),
+                    }
+                    .map(|i| i.map(|(key, _)| key));
 
                     let mut keys: Vec<String> = Vec::new();
                     let mut cursor = None;
                     let mut count = 0;
                     for key in iter {
                         let key = key?.value().to_string();
-                        if key.starts_with(&prefix) {
+                        if key.starts_with(&prefix_str) {
                             count += 1;
                             if let Some(page_size) = self.page_size {
-                                if count >= page_size {
+                                if count > page_size {
                                     cursor = Some(key);
                                     break;
                                 }
                             }
 
-                            keys.push(key[prefix.len()..].to_string());
+                            let chopped_key = key[prefix_str.len()..].to_string();
+                            keys.push(chopped_key);
+                        } else {
+                            break;
                         }
                     }
 
