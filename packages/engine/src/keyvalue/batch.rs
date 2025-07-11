@@ -48,15 +48,25 @@ impl batch::Host for KeyValueState<'_> {
     ) -> BatchResult<()> {
         // TODO - try to make db.map_table_write()
         let prefix = self.get_key_prefix(&bucket).map_err(batch::Error::Other)?;
-        for (key, value) in key_values {
-            let key = Key::new(prefix.clone(), key);
-
-            self.db
-                .set(KV_STORE_TABLE, key.to_string().as_ref(), &value)
-                .map_err(|e| {
-                    batch::Error::Other(format!("Failed to set key in keyvalue batch: {}", e))
-                })?;
+        let write_txn = self
+            .db
+            .inner
+            .begin_write()
+            .map_err(|e| batch::Error::Other(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(KV_STORE_TABLE)
+                .map_err(|e| batch::Error::Other(e.to_string()))?;
+            for (key, value) in key_values {
+                let key = Key::new(prefix.clone(), key).to_string();
+                table
+                    .insert(key.as_str(), &value)
+                    .map_err(|e| batch::Error::Other(e.to_string()))?;
+            }
         }
+        write_txn
+            .commit()
+            .map_err(|e| batch::Error::Other(e.to_string()))?;
 
         Ok(())
     }
@@ -68,14 +78,25 @@ impl batch::Host for KeyValueState<'_> {
     ) -> BatchResult<()> {
         // TODO - try to make db.map_table_write()
         let keys = self.get_keys_batch(&bucket, keys)?;
-        for key in keys {
-            self.db
-                .remove(KV_STORE_TABLE, key.to_string().as_ref())
-                .map_err(|e| {
-                    batch::Error::Other(format!("Failed to delete key in keyvalue batch: {}", e))
-                })?;
+        let write_txn = self
+            .db
+            .inner
+            .begin_write()
+            .map_err(|e| batch::Error::Other(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(KV_STORE_TABLE)
+                .map_err(|e| batch::Error::Other(e.to_string()))?;
+            for key in keys {
+                let key = key.to_string();
+                table
+                    .remove(key.as_str())
+                    .map_err(|e| batch::Error::Other(e.to_string()))?;
+            }
         }
-
+        write_txn
+            .commit()
+            .map_err(|e| batch::Error::Other(e.to_string()))?;
         Ok(())
     }
 }
