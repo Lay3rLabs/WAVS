@@ -32,9 +32,7 @@ impl batch::Host for KeyValueState<'_> {
                     let mut results = Vec::with_capacity(keys.len());
                     for (i, original_key) in original_keys.into_iter().enumerate() {
                         let key = keys[i].to_string();
-                        if let Some(value) = table.get(&*key)? {
-                            results.push(Some((original_key, value.value())));
-                        }
+                        results.push(table.get(&*key)?.map(|value| (original_key, value.value())));
                     }
                     Ok(results)
                 }
