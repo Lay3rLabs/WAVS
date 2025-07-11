@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use example_helpers::bindings::world::wasi::keyvalue::store::KeyResponse;
 use example_helpers::bindings::world::wasi::keyvalue::{atomics, batch, store};
 use example_helpers::bindings::world::WasmResponse;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
@@ -50,6 +51,11 @@ impl Guest for Component {
             Ok(KvStoreRequest::BatchDelete { bucket, keys }) => {
                 batch_delete(&bucket, &keys).map_err(|e| e.to_string())?;
                 KvStoreResponse::BatchDelete
+            }
+            Ok(KvStoreRequest::ListKeys { bucket, cursor }) => {
+                let KeyResponse { keys, cursor } =
+                    list_keys(&bucket, cursor.as_deref()).map_err(|e| e.to_string())?;
+                KvStoreResponse::ListKeys { keys, cursor }
             }
 
             Err(e) => {
@@ -165,6 +171,18 @@ fn batch_delete(bucket_id: &str, keys: &[String]) -> KvStoreResult<()> {
         bucket: bucket_id.to_string(),
         reason: e.to_string(),
     })
+}
+
+fn list_keys(bucket_id: &str, cursor: Option<&str>) -> KvStoreResult<store::KeyResponse> {
+    let bucket = open_bucket(bucket_id)?;
+
+    bucket
+        .list_keys(cursor)
+        .map_err(|e| KvStoreError::ListKeys {
+            bucket: bucket_id.to_string(),
+            reason: e.to_string(),
+            cursor: cursor.map(|c| c.to_string()),
+        })
 }
 
 export_layer_trigger_world!(Component);

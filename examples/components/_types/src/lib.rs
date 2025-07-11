@@ -73,6 +73,10 @@ pub enum KvStoreRequest {
         bucket: String,
         keys: Vec<String>,
     },
+    ListKeys {
+        bucket: String,
+        cursor: Option<String>,
+    },
 }
 
 impl KvStoreRequest {
@@ -85,14 +89,26 @@ impl KvStoreRequest {
 #[serde(rename_all = "snake_case")]
 pub enum KvStoreResponse {
     Write,
-    Read { value: Vec<u8> },
+    Read {
+        value: Vec<u8>,
+    },
     // returns the new value after increment
-    AtomicIncrement { value: i64 },
+    AtomicIncrement {
+        value: i64,
+    },
     AtomicSwap,
-    AtomicRead { value: Vec<u8> },
-    BatchRead { values: HashMap<String, Vec<u8>> },
+    AtomicRead {
+        value: Vec<u8>,
+    },
+    BatchRead {
+        values: HashMap<String, Vec<u8>>,
+    },
     BatchWrite,
     BatchDelete,
+    ListKeys {
+        keys: Vec<String>,
+        cursor: Option<String>,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -148,6 +164,12 @@ pub enum KvStoreError {
     BatchWrite { bucket: String, reason: String },
     #[error("Failed to perform batch delete for bucket {bucket}, {reason}")]
     BatchDelete { bucket: String, reason: String },
+    #[error("Failed to list keys for bucket {bucket}, cursor: {cursor:?}: {reason}")]
+    ListKeys {
+        bucket: String,
+        cursor: Option<String>,
+        reason: String,
+    },
 }
 
 pub type KvStoreResult<T> = Result<T, KvStoreError>;
