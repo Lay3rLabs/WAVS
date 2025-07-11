@@ -43,7 +43,7 @@ impl batch::Host for KeyValueState<'_> {
 
     fn set_many(
         &mut self,
-        bucket: Resource<batch::Bucket>,
+        bucket: Resource<KeyValueBucket>,
         key_values: Vec<(String, Vec<u8>)>,
     ) -> BatchResult<()> {
         // TODO - try to make db.map_table_write()
@@ -73,7 +73,7 @@ impl batch::Host for KeyValueState<'_> {
 
     fn delete_many(
         &mut self,
-        bucket: Resource<batch::Bucket>,
+        bucket: Resource<KeyValueBucket>,
         keys: Vec<String>,
     ) -> BatchResult<()> {
         // TODO - try to make db.map_table_write()
