@@ -526,6 +526,7 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Write {
+                            bucket: "test_bucket".to_string(),
                             key: "hello".to_string(),
                             value: b"world".to_vec(),
                         }))
@@ -548,6 +549,7 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Read {
+                            bucket: "test_bucket".to_string(),
                             key: "hello".to_string(),
                         }))
                         .with_expected_output(ExpectedOutput::KvStore(KvStoreResponse::Read {

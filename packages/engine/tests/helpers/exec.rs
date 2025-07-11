@@ -2,7 +2,9 @@ use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
 use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{bindings::world::host::LogLevel, EngineError, InstanceDepsBuilder, KeyValueCtx};
+use wavs_engine::{
+    bindings::world::host::LogLevel, context::KeyValueCtx, EngineError, InstanceDepsBuilder,
+};
 use wavs_types::{Digest, ServiceID, WorkflowID};
 
 use crate::helpers::service::{make_service, make_trigger_action};
@@ -36,7 +38,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     let data_dir = tempfile::tempdir().unwrap();
     let db_dir = tempfile::tempdir().unwrap();
     let keyvalue_ctx = keyvalue_ctx.unwrap_or_else(|| {
-        wavs_engine::KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string())
+        KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string())
     });
 
     let mut instance_deps = InstanceDepsBuilder {

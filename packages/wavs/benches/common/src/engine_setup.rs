@@ -19,7 +19,7 @@ pub struct EngineSetup {
     pub component_bytes: Vec<u8>,
     pub data_dir: TempDir,
     pub db_dir: TempDir,
-    pub keyvalue_ctx: wavs_engine::KeyValueCtx,
+    pub keyvalue_ctx: wavs_engine::context::KeyValueCtx,
 }
 
 impl EngineSetup {
@@ -78,7 +78,7 @@ impl EngineSetup {
 
         let chain_configs = ChainConfigs::default();
 
-        let keyvalue_ctx = wavs_engine::KeyValueCtx::new(
+        let keyvalue_ctx = wavs_engine::context::KeyValueCtx::new(
             RedbStorage::new(db_dir.path()).unwrap(),
             "engine".to_string(),
         );

@@ -9,7 +9,7 @@ use utils::storage::db::RedbStorage;
 use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{InstanceDepsBuilder, KeyValueCtx};
+use wavs_engine::{context::KeyValueCtx, InstanceDepsBuilder};
 use wavs_types::{
     ComponentSource, Digest, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
 };

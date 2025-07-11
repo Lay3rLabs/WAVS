@@ -8,7 +8,7 @@ use wasmtime_wasi::{p2::WasiCtxBuilder, DirPerms, FilePerms};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
-use crate::{EngineError, HostComponent, HostComponentLogger, KeyValueCtx};
+use crate::{keyvalue::context::KeyValueCtx, EngineError, HostComponent, HostComponentLogger};
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
