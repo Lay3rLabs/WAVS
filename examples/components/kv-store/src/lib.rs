@@ -1,4 +1,6 @@
-use example_helpers::bindings::world::wasi::keyvalue::{atomics, store};
+use std::collections::HashMap;
+
+use example_helpers::bindings::world::wasi::keyvalue::{atomics, batch, store};
 use example_helpers::bindings::world::WasmResponse;
 use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 use example_helpers::{
@@ -36,6 +38,18 @@ impl Guest for Component {
             Ok(KvStoreRequest::AtomicRead { bucket, key }) => {
                 let value = atomic_read(&bucket, &key).map_err(|e| e.to_string())?;
                 KvStoreResponse::AtomicRead { value }
+            }
+            Ok(KvStoreRequest::BatchRead { bucket, keys }) => {
+                let values = batch_read(&bucket, &keys).map_err(|e| e.to_string())?;
+                KvStoreResponse::BatchRead { values }
+            }
+            Ok(KvStoreRequest::BatchWrite { bucket, values }) => {
+                batch_write(&bucket, values).map_err(|e| e.to_string())?;
+                KvStoreResponse::BatchWrite
+            }
+            Ok(KvStoreRequest::BatchDelete { bucket, keys }) => {
+                batch_delete(&bucket, &keys).map_err(|e| e.to_string())?;
+                KvStoreResponse::BatchDelete
             }
 
             Err(e) => {
@@ -121,6 +135,36 @@ fn atomic_read(bucket_id: &str, key: &str) -> KvStoreResult<Vec<u8>> {
             bucket: bucket_id.to_string(),
             key: key.to_string(),
         })
+}
+
+fn batch_read(bucket_id: &str, keys: &[String]) -> KvStoreResult<HashMap<String, Vec<u8>>> {
+    let bucket = open_bucket(bucket_id)?;
+    Ok(batch::get_many(&bucket, keys)
+        .map_err(|e| KvStoreError::BatchRead {
+            bucket: bucket_id.to_string(),
+            reason: e.to_string(),
+        })?
+        .into_iter()
+        .flatten()
+        .collect::<HashMap<_, _>>())
+}
+
+fn batch_write(bucket_id: &str, values: HashMap<String, Vec<u8>>) -> KvStoreResult<()> {
+    let bucket = open_bucket(bucket_id)?;
+    let values = values.into_iter().collect::<Vec<(String, Vec<u8>)>>();
+
+    batch::set_many(&bucket, &values).map_err(|e| KvStoreError::BatchWrite {
+        bucket: bucket_id.to_string(),
+        reason: e.to_string(),
+    })
+}
+
+fn batch_delete(bucket_id: &str, keys: &[String]) -> KvStoreResult<()> {
+    let bucket = open_bucket(bucket_id)?;
+    batch::delete_many(&bucket, keys).map_err(|e| KvStoreError::BatchDelete {
+        bucket: bucket_id.to_string(),
+        reason: e.to_string(),
+    })
 }
 
 export_layer_trigger_world!(Component);

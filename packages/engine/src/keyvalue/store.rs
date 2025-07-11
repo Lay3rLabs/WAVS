@@ -7,7 +7,7 @@ use crate::context::KeyValueState;
 
 pub type StoreResult<T> = std::result::Result<T, store::Error>;
 
-const KV_STORE_TABLE: Table<&str, Vec<u8>> = Table::new("kv_store");
+pub const KV_STORE_TABLE: Table<&str, Vec<u8>> = Table::new("kv_store");
 
 impl<'a> KeyValueState<'a> {
     fn get_key_prefix_store(&self, bucket: &Resource<KeyValueBucket>) -> StoreResult<KeyPrefix> {

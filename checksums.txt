@@ -5,6 +5,6 @@
 71e957fa6dd410ef918bbe95239070f28f76c003e0bcfb0c464bb6d6b87faacf  ./examples/build/components/echo_data.wasm
 d1581c1410c6519f2a5205d8315e010d5940b7bfe54a55b6bebc1c69dbc8ee9d  ./examples/build/components/example_helpers.wasm
 b6b66d9f7d330e5c7adfb66fd04b5842acb6342e5778b91c09aec50c94dc4fd6  ./examples/build/components/example_types.wasm
-fafa488c27c1e1af7b95f35dad39412ea710c41ea51bfab9e6eb602a8d4294c2  ./examples/build/components/kv_store.wasm
+c6d32febf981373385ff06d1ea98659a55888faa6c65fb4635a7d86b6dbf0542  ./examples/build/components/kv_store.wasm
 4105c68d9719036a68a2efeda0ca2df845ab2e88051925171fad7f29faa11844  ./examples/build/components/permissions.wasm
 5f11116ff50e2631c2d803758b2c3e0214a14741952da05ad557eaf06261a8f3  ./examples/build/components/square.wasm

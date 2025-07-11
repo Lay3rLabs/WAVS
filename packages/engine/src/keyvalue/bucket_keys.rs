@@ -33,8 +33,24 @@ impl<'a> KeyValueState<'a> {
             key: key.to_string(),
         })
     }
+
+    pub fn get_keys(
+        &self,
+        bucket: &Resource<KeyValueBucket>,
+        keys: Vec<String>,
+    ) -> std::result::Result<Vec<Key>, String> {
+        let prefix = self.get_key_prefix(bucket)?;
+        Ok(keys
+            .into_iter()
+            .map(|key| Key {
+                prefix: prefix.clone(),
+                key,
+            })
+            .collect())
+    }
 }
 
+#[derive(Clone)]
 pub struct KeyPrefix {
     namespace: String,
     bucket_id: String,
@@ -49,6 +65,12 @@ impl std::fmt::Display for KeyPrefix {
 pub struct Key {
     prefix: KeyPrefix,
     key: String,
+}
+
+impl Key {
+    pub fn new(prefix: KeyPrefix, key: String) -> Self {
+        Key { prefix, key }
+    }
 }
 
 impl std::fmt::Display for Key {

@@ -7,7 +7,7 @@ use tracing::instrument;
 
 #[derive(Clone)]
 pub struct RedbStorage {
-    db: Arc<Database>,
+    pub inner: Arc<Database>,
 }
 
 pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
@@ -27,8 +27,8 @@ impl RedbStorage {
         } else {
             path.as_ref().to_path_buf()
         };
-        let db = Arc::new(redb::Database::create(path)?);
-        Ok(RedbStorage { db })
+        let inner = Arc::new(redb::Database::create(path)?);
+        Ok(RedbStorage { inner })
     }
 }
 
@@ -41,7 +41,7 @@ impl RedbStorage {
         key: K::SelfType<'_>,
         value: &V::SelfType<'_>,
     ) -> Result<(), DBError> {
-        let write_txn = self.db.begin_write()?;
+        let write_txn = self.inner.begin_write()?;
         {
             let mut table = write_txn.open_table(table)?;
             table.insert(key, value)?;
@@ -57,7 +57,7 @@ impl RedbStorage {
         table: Table<K, V>,
         key: K::SelfType<'_>,
     ) -> Result<Option<AccessGuard<'static, V>>, DBError> {
-        let read_txn = self.db.begin_read()?;
+        let read_txn = self.inner.begin_read()?;
         match read_txn.open_table(table) {
             Ok(table) => Ok(table.get(key)?),
             // If we read before the first write, we get this error.
@@ -74,7 +74,7 @@ impl RedbStorage {
         table: Table<K, V>,
         key: K::SelfType<'_>,
     ) -> Result<(), DBError> {
-        let write_txn = self.db.begin_write()?;
+        let write_txn = self.inner.begin_write()?;
         {
             let mut table = write_txn.open_table(table)?;
             table.remove(key)?;
@@ -92,7 +92,7 @@ impl RedbStorage {
         V: Value + 'a,
         F: FnOnce(Option<ReadOnlyTable<K, V>>) -> Result<R, DBError>,
     {
-        let read_txn = self.db.begin_read()?;
+        let read_txn = self.inner.begin_read()?;
         match read_txn.open_table(table) {
             Ok(table) => f(Some(table)),
             Err(TableError::TableDoesNotExist(_)) => f(None),

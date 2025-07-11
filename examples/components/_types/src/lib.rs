@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use layer_climb_address::Address;
 use serde::{Deserialize, Serialize};
@@ -61,6 +61,18 @@ pub enum KvStoreRequest {
         bucket: String,
         key: String,
     },
+    BatchRead {
+        bucket: String,
+        keys: Vec<String>,
+    },
+    BatchWrite {
+        bucket: String,
+        values: HashMap<String, Vec<u8>>,
+    },
+    BatchDelete {
+        bucket: String,
+        keys: Vec<String>,
+    },
 }
 
 impl KvStoreRequest {
@@ -78,6 +90,9 @@ pub enum KvStoreResponse {
     AtomicIncrement { value: i64 },
     AtomicSwap,
     AtomicRead { value: Vec<u8> },
+    BatchRead { values: HashMap<String, Vec<u8>> },
+    BatchWrite,
+    BatchDelete,
 }
 
 #[derive(Error, Debug)]
@@ -127,6 +142,12 @@ pub enum KvStoreError {
         key: String,
         reason: String,
     },
+    #[error("Failed to perform batch operation for bucket {bucket}, {reason}")]
+    BatchRead { bucket: String, reason: String },
+    #[error("Failed to perform batch write for bucket {bucket}, {reason}")]
+    BatchWrite { bucket: String, reason: String },
+    #[error("Failed to perform batch delete for bucket {bucket}, {reason}")]
+    BatchDelete { bucket: String, reason: String },
 }
 
 pub type KvStoreResult<T> = Result<T, KvStoreError>;
