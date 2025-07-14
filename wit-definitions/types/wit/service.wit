@@ -10,7 +10,6 @@ interface service {
 
     // Service types
     record service {
-        id: service-id,
         name: string,
         workflows: list<tuple<workflow-id, workflow>>,
         status: service-status,

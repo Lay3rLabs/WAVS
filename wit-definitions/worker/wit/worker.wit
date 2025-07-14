@@ -1,8 +1,8 @@
-package wavs:worker@0.5.0-alpha.18;
+package wavs:worker@0.5.0-alpha.19;
 
-use wavs:types/core@0.5.0-alpha.18 as core-types;
-use wavs:types/service@0.5.0-alpha.18 as service-types;
-use wavs:types/chain@0.5.0-alpha.18 as chain-types;
+use wavs:types/core@0.5.0-alpha.19 as core-types;
+use wavs:types/service@0.5.0-alpha.19 as service-types;
+use wavs:types/chain@0.5.0-alpha.19 as chain-types;
 
 interface input {
     use core-types.{timestamp};
@@ -60,7 +60,7 @@ interface output {
 }
 
 interface helpers {
-    use service-types.{service, workflow, workflow-id};
+    use service-types.{service, service-id, workflow, workflow-id};
 
     variant log-level {
         error,
@@ -72,6 +72,7 @@ interface helpers {
 
     record service-and-workflow-id {
         service: service,
+        service-id: service-id,
         workflow-id: workflow-id
     }
 
