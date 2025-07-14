@@ -41,7 +41,7 @@ pub trait CAStorage: Send + Sync {
 
     fn digests(
         &self,
-    ) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, CAStorageError>;
+    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>>>, CAStorageError>;
 }
 
 /// Represents an error returned by storage implementation.

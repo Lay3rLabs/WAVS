@@ -60,10 +60,10 @@ impl CAStorage for MemoryStorage {
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
     fn digests(
         &self,
-    ) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, CAStorageError> {
+    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>>>, CAStorageError> {
         let tree = self.data.read()?;
         let it: Vec<_> = tree.keys().map(|d| Ok(d.clone())).collect();
-        Ok(it.into_iter())
+        Ok(Box::new(it.into_iter()))
     }
 }
 

@@ -94,7 +94,7 @@ impl CAStorage for FileStorage {
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
     fn digests(
         &self,
-    ) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, CAStorageError> {
+    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>>>, CAStorageError> {
         let it = walkdir::WalkDir::new(&self.data_dir)
             .into_iter()
             .filter_map(|entry| {
@@ -108,7 +108,7 @@ impl CAStorage for FileStorage {
                 }
             });
 
-        Ok(it)
+        Ok(Box::new(it))
     }
 }
 
