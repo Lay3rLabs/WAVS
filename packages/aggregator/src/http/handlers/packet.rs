@@ -5,14 +5,14 @@ use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
+    Aggregator, ChainName, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,
 };
 
 use crate::{
-    engine::AggregatorAction,
+    engine::{AggregatorAction, SubmitAction},
     error::{AggregatorError, AggregatorResult, PacketValidationError},
     http::{
         error::AnyError,
@@ -327,7 +327,7 @@ async fn get_submission_service_manager(
 }
 
 async fn process_aggregator_actions(
-    _state: &HttpState,
+    state: &HttpState,
     packet: &Packet,
     mut queue: Vec<QueuedPacket>,
     signer: Address,
@@ -364,7 +364,15 @@ async fn process_aggregator_actions(
                     submit_action.chain_name,
                     submit_action.contract_address
                 );
-                todo!("Handle custom submit destinations");
+
+                match handle_custom_submit(state, packet, &queue, submit_action).await {
+                    Ok(_) => {
+                        tracing::info!("Custom submit completed successfully");
+                    }
+                    Err(e) => {
+                        tracing::error!("Custom submit failed: {}", e);
+                    }
+                }
             }
             AggregatorAction::Timer(timer_action) => {
                 tracing::info!(
@@ -377,6 +385,62 @@ async fn process_aggregator_actions(
     }
 
     Ok(queue)
+}
+
+async fn handle_custom_submit(
+    state: &HttpState,
+    packet: &Packet,
+    queue: &[QueuedPacket],
+    submit_action: SubmitAction,
+) -> AggregatorResult<()> {
+    let chain_name = ChainName::new(submit_action.chain_name)
+        .map_err(|e| AggregatorError::Engine(e.to_string()))?;
+    let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
+
+    let client = state.get_evm_client(&chain_name).await?;
+
+    let service_handler =
+        IWavsServiceHandlerInstance::new(contract_address, client.provider.clone());
+    let service_manager_address = service_handler
+        .getServiceManager()
+        .call()
+        .await
+        .map_err(AggregatorError::ServiceManagerLookup)?;
+
+    let service_manager =
+        IWavsServiceManagerInstance::new(service_manager_address, client.provider.clone());
+
+    let block_height_minus_one = service_manager
+        .provider()
+        .get_block_number()
+        .await
+        .map_err(|e| AggregatorError::BlockNumber(e.into()))?
+        - 1;
+
+    let signatures: Vec<EnvelopeSignature> = queue
+        .iter()
+        .map(|queued| queued.packet.signature.clone())
+        .collect();
+
+    let signature_data = packet
+        .envelope
+        .signature_data(signatures, block_height_minus_one)?;
+
+    let tx_receipt = client
+        .send_envelope_signatures(
+            packet.envelope.clone(),
+            signature_data,
+            contract_address,
+            None,
+        )
+        .await?;
+
+    tracing::info!(
+        "Custom submit transaction sent: {:?}",
+        tx_receipt.transaction_hash
+    );
+
+    Ok(())
 }
 
 fn add_packet_to_queue(
@@ -427,6 +491,7 @@ mod test {
         sync::{Arc, Mutex},
     };
 
+    use utils::storage::{FileStorage, MemoryStorage};
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
@@ -435,7 +500,9 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ChainName, Service, ServiceID, WorkflowID};
+    use wavs_types::{
+        ChainName, Component, ComponentSource, Digest, Service, ServiceID, WorkflowID,
+    };
 
     #[test]
     fn packet_validation() {

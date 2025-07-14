@@ -14,7 +14,9 @@ use wavs_types::Digest;
 use wavs_types::{Component, Packet};
 
 // Use the WIT-generated aggregator types
-pub use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::AggregatorAction;
+pub use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::{
+    AggregatorAction, SubmitAction,
+};
 use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::{
     Envelope as WitEnvelope, EnvelopeSignature as WitEnvelopeSignature, Packet as WitPacket,
     Secp256k1Signature, TxResult,
