@@ -98,6 +98,14 @@ macro_rules! new_string_id_type {
                 Ok(id.clone())
             }
         }
+
+        impl FromStr for $type_name {
+            type Err = IDError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                $type_name::new(s.to_string())
+            }
+        }
     };
 }
 
@@ -225,8 +233,12 @@ macro_rules! new_hash_id_type {
     };
 }
 
-new_string_id_type!(ServiceID);
 new_string_id_type!(WorkflowID);
+impl Default for WorkflowID {
+    fn default() -> Self {
+        WorkflowID::new("default").unwrap()
+    }
+}
 // Distinct from a ChainConfig's ChainID - this is the *name* used within WAVS
 // It's allowed for multiple chains to have the same ChainID, but ChainName is unique
 new_string_id_type!(ChainName);
@@ -238,36 +250,10 @@ new_hash_id_type!(ServiceDigest, true);
 // Digest of the component source (e.g. wasm bytecode)
 new_hash_id_type!(ComponentDigest, true);
 
-// Define FromStr for ServiceID to enable parsing from command line strings
-impl FromStr for ServiceID {
-    type Err = IDError;
+// ServiceID is a unique identifier for a service
+// it's a hash of the ServiceManager definition (chain and address)
+new_hash_id_type!(ServiceID, true);
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ServiceID::new(s.to_string())
-    }
-}
-
-impl FromStr for WorkflowID {
-    type Err = IDError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        WorkflowID::new(s.to_string())
-    }
-}
-
-impl FromStr for ChainName {
-    type Err = IDError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ChainName::new(s.to_string())
-    }
-}
-
-impl Default for WorkflowID {
-    fn default() -> Self {
-        WorkflowID::new("default").unwrap()
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -275,49 +261,49 @@ mod tests {
 
     #[test]
     fn valid_ids() {
-        ServiceID::new("foobar").unwrap();
-        ServiceID::new("foot123").unwrap();
-        ServiceID::new("123foot").unwrap();
-        ServiceID::new("two_words").unwrap();
-        ServiceID::new("kebab-case").unwrap();
-        ServiceID::new("pretty-1234321-long").unwrap();
+        WorkflowID::new("foobar").unwrap();
+        WorkflowID::new("foot123").unwrap();
+        WorkflowID::new("123foot").unwrap();
+        WorkflowID::new("two_words").unwrap();
+        WorkflowID::new("kebab-case").unwrap();
+        WorkflowID::new("pretty-1234321-long").unwrap();
         // 32 chars
-        ServiceID::new("12345678901234567890123456789012").unwrap();
+        WorkflowID::new("12345678901234567890123456789012").unwrap();
     }
 
     #[test]
     fn invalid_ids() {
         // test length
-        let err = ServiceID::new("fo").unwrap_err();
+        let err = WorkflowID::new("fo").unwrap_err();
         assert_eq!(err, IDError::LengthError);
-        let err = ServiceID::new("1234567890123456789012345678901234567").unwrap_err();
+        let err = WorkflowID::new("1234567890123456789012345678901234567").unwrap_err();
         assert_eq!(err, IDError::LengthError);
 
         // test chars
-        let err = ServiceID::new("with space").unwrap_err();
+        let err = WorkflowID::new("with space").unwrap_err();
         assert_eq!(err, IDError::CharError);
-        ServiceID::new("UPPER_SPACE").unwrap_err();
-        ServiceID::new("Capitalized").unwrap_err();
-        ServiceID::new("../../etc/passwd").unwrap_err();
-        ServiceID::new("c:\\\\badfile").unwrap_err();
+        WorkflowID::new("UPPER_SPACE").unwrap_err();
+        WorkflowID::new("Capitalized").unwrap_err();
+        WorkflowID::new("../../etc/passwd").unwrap_err();
+        WorkflowID::new("c:\\\\badfile").unwrap_err();
     }
 
     #[test]
     fn invalid_id_deserialize() {
         // baseline, make sure we can deserialize properly
         let id_str = "foo";
-        let id_obj: ServiceID = serde_json::from_str(&format!("\"{id_str}\"")).unwrap();
+        let id_obj: WorkflowID = serde_json::from_str(&format!("\"{id_str}\"")).unwrap();
         assert_eq!(id_obj.to_string(), id_str);
 
         // now do a bad id
         let id_str = "THIS/IS/BAD";
-        serde_json::from_str::<ServiceID>(&format!("\"{id_str}\"")).unwrap_err();
+        serde_json::from_str::<WorkflowID>(&format!("\"{id_str}\"")).unwrap_err();
     }
 
     #[test]
     fn proper_representation() {
         let name = "fly2you";
-        let id = ServiceID::new(name).unwrap();
+        let id = WorkflowID::new(name).unwrap();
         // same string rep
         assert_eq!(id.to_string(), name.to_string());
         // can be used AsRef
