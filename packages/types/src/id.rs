@@ -219,7 +219,7 @@ macro_rules! new_hash_id_type {
     (@intoany $type_name:ident) => {
         impl From<$type_name> for AnyDigest {
             fn from(digest: $type_name) -> Self {
-                AnyDigest::new(digest.as_ref())
+                AnyDigest(digest.inner())
             }
         }
     };
