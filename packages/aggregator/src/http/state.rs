@@ -9,12 +9,16 @@ use utils::{
     async_transaction::AsyncTransaction,
     config::{EvmChainConfig, EvmChainConfigExt},
     evm_client::EvmSigningClient,
-    storage::db::{RedbStorage, Table, JSON},
+    storage::{
+        db::{RedbStorage, Table, JSON},
+        CAStorage,
+    },
 };
 use wavs_types::{ChainName, EventId, Packet, ServiceID};
 
 use crate::{
     config::Config,
+    engine::AggregatorEngine,
     error::{AggregatorError, AggregatorResult},
 };
 
@@ -60,6 +64,7 @@ pub struct HttpState {
     pub queue_transaction: AsyncTransaction<PacketQueueId>,
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
+    pub aggregator_engine: Option<Arc<AggregatorEngine>>,
 }
 
 // key is ServiceId
@@ -77,6 +82,38 @@ impl HttpState {
             storage,
             evm_clients,
             queue_transaction: AsyncTransaction::new(false),
+            aggregator_engine: None,
+        })
+    }
+
+    #[instrument(level = "debug", skip(config, ca_storage))]
+    pub fn new_with_engine(
+        config: Config,
+        ca_storage: Arc<dyn CAStorage + Send + Sync>,
+    ) -> AggregatorResult<Self> {
+        let storage = RedbStorage::new(config.data.join("db"))?;
+        let evm_clients = Arc::new(RwLock::new(HashMap::new()));
+
+        let engine = AggregatorEngine::new(
+            config.data.join("wasm"),
+            config.chains.clone(),
+            None, // max_wasm_fuel
+            None, // max_execution_seconds
+            storage.clone(),
+            ca_storage,
+        )
+        .map_err(|e| AggregatorError::Engine(e.to_string()))?;
+
+        engine
+            .start()
+            .map_err(|e| AggregatorError::Engine(e.to_string()))?;
+
+        Ok(Self {
+            config,
+            storage,
+            evm_clients,
+            queue_transaction: AsyncTransaction::new(false),
+            aggregator_engine: Some(Arc::new(engine)),
         })
     }
 

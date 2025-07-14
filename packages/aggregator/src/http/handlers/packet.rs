@@ -12,6 +12,7 @@ use wavs_types::{
 };
 
 use crate::{
+    engine::AggregatorAction,
     error::{AggregatorError, AggregatorResult, PacketValidationError},
     http::{
         error::AnyError,
@@ -30,7 +31,6 @@ use crate::{
     ),
     description = "Validates and processes a packet, adding it to the aggregation queue. When enough packets from different signers accumulate to meet the threshold, the aggregated packet is sent to the target contract."
 )]
-#[axum::debug_handler]
 #[instrument(level = "info", skip(state, req), fields(service_id = %req.packet.service.id, workflow_id = %req.packet.workflow_id))]
 pub async fn handle_packet(
     State(state): State<HttpState>,
@@ -177,8 +177,31 @@ impl AggregatorProcess<'_> {
                     .run(queue_id.clone(), move || async move {
                         let queue = match state.get_packet_queue(&queue_id)? {
                             PacketQueue::Alive(queue) => {
-                                // this will also locally validate the packet
-                                add_packet_to_queue(packet, queue, signer)?
+                                // Use custom aggregator logic if component is specified
+                                if let Some(engine) = &state.aggregator_engine {
+                                    if let Some(component) = packet.service.workflows[&packet.workflow_id]
+                                        .submit
+                                        .aggregator_component()
+                                    {
+                                        // Call custom aggregator component for validation
+                                        match engine.process_packet(component, packet).await {
+                                            Ok(actions) => {
+                                                // Process the actions returned by the component
+                                                process_aggregator_actions(state, packet, queue, signer, actions).await?
+                                            }
+                                            Err(e) => {
+                                                tracing::error!("Custom aggregator component failed: {}", e);
+                                                return Err(AggregatorError::Engine(e.to_string()));
+                                            }
+                                        }
+                                    } else {
+                                        // Fall back to hardcoded logic if no component specified
+                                        add_packet_to_queue(packet, queue, signer)?
+                                    }
+                                } else {
+                                    // Fall back to hardcoded logic if no engine available
+                                    add_packet_to_queue(packet, queue, signer)?
+                                }
                             }
                             PacketQueue::Burned => {
                                 return Ok(AddPacketResponse::Burned);
@@ -301,6 +324,59 @@ async fn get_submission_service_manager(
             ))
         }
     }
+}
+
+async fn process_aggregator_actions(
+    _state: &HttpState,
+    packet: &Packet,
+    mut queue: Vec<QueuedPacket>,
+    signer: Address,
+    actions: Vec<AggregatorAction>,
+) -> AggregatorResult<Vec<QueuedPacket>> {
+    tracing::info!(
+        "Custom aggregator component returned {} actions",
+        actions.len()
+    );
+
+    for queued_packet in queue.iter_mut() {
+        if signer == queued_packet.signer {
+            *queued_packet = QueuedPacket {
+                packet: packet.clone(),
+                signer,
+            };
+            return Ok(queue);
+        }
+    }
+
+    queue.push(QueuedPacket {
+        packet: packet.clone(),
+        signer,
+    });
+
+    for action in actions {
+        match action {
+            AggregatorAction::Nothing => {
+                tracing::debug!("Component returned 'nothing' action");
+            }
+            AggregatorAction::Submit(submit_action) => {
+                tracing::info!(
+                    "Component requested submit to chain: {}, contract: {:?}",
+                    submit_action.chain_name,
+                    submit_action.contract_address
+                );
+                todo!("Handle custom submit destinations");
+            }
+            AggregatorAction::Timer(timer_action) => {
+                tracing::info!(
+                    "Component requested timer callback in {} seconds",
+                    timer_action.delay
+                );
+                todo!("Implement timer scheduling system");
+            }
+        }
+    }
+
+    Ok(queue)
 }
 
 fn add_packet_to_queue(

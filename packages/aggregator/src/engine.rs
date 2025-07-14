@@ -13,15 +13,18 @@ use wavs_types::{Component, Packet};
 // Use the WIT-generated aggregator types
 pub use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::AggregatorAction;
 use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::{
-    Packet as WitPacket, TxResult, Envelope as WitEnvelope, EnvelopeSignature as WitEnvelopeSignature, Secp256k1Signature
+    Envelope as WitEnvelope, EnvelopeSignature as WitEnvelopeSignature, Packet as WitPacket,
+    Secp256k1Signature, TxResult,
 };
 use wavs_engine::bindings::world::aggregator::AggregatorWorld;
 use wavs_engine::bindings::world::wavs::worker::helpers::LogLevel;
 
-use wavs_engine::bindings::world::wavs as wavs_world;
 use wavs_engine::bindings::world::aggregator::wavs as agg_world;
+use wavs_engine::bindings::world::wavs as wavs_world;
 
-fn convert_service_to_aggregator(wavs_service: wavs_world::types::service::Service) -> agg_world::types::service::Service {
+fn convert_service_to_aggregator(
+    wavs_service: wavs_world::types::service::Service,
+) -> agg_world::types::service::Service {
     unsafe { std::mem::transmute(wavs_service) }
 }
 
@@ -53,24 +56,24 @@ fn packet_to_wit_packet(packet: &Packet) -> Result<WitPacket> {
     })
 }
 
-pub struct AggregatorEngine<S: CAStorage> {
+pub struct AggregatorEngine {
     wasm_engine: WTEngine,
     chain_configs: Arc<RwLock<ChainConfigs>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
     db: RedbStorage,
-    storage: S,
+    storage: Arc<dyn CAStorage + Send + Sync>,
 }
 
-impl<S: CAStorage> AggregatorEngine<S> {
+impl AggregatorEngine {
     pub fn new(
         app_data_dir: impl Into<PathBuf>,
         chain_configs: ChainConfigs,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         db: RedbStorage,
-        storage: S,
+        storage: Arc<dyn CAStorage + Send + Sync>,
     ) -> Result<Self> {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);

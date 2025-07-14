@@ -291,6 +291,15 @@ pub enum Submit {
     },
 }
 
+impl Submit {
+    pub fn aggregator_component(&self) -> Option<&Component> {
+        match self {
+            Submit::Aggregator { component, .. } => component.as_deref(),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Aggregator {

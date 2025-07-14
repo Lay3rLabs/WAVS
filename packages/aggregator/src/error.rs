@@ -76,6 +76,9 @@ pub enum AggregatorError {
 
     #[error("No such service registered: {0}")]
     MissingService(ServiceID),
+
+    #[error("Aggregator engine error: {0}")]
+    Engine(String),
 }
 
 #[derive(Error, Debug)]
