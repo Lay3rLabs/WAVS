@@ -32,7 +32,7 @@ impl Service {
     // this is only used for local/tests, but we want to keep it consistent
     pub fn hash(&self) -> anyhow::Result<ServiceDigest> {
         let service_bytes = serde_json::to_vec(self)?;
-        Ok(ServiceDigest::new(&service_bytes))
+        Ok(ServiceDigest::hash(&service_bytes))
     }
 }
 

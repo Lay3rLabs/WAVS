@@ -9,7 +9,7 @@ pub mod castorage {
         let loaded = store.get_data(&digest).unwrap();
         assert_eq!(data, loaded.as_slice());
 
-        let missing = AnyDigest::new(b"missing");
+        let missing = AnyDigest::hash(b"missing");
         let err = store.get_data(&missing).unwrap_err();
         assert!(matches!(err, CAStorageError::NotFound(_)));
     }

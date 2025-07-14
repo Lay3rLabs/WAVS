@@ -128,7 +128,7 @@ macro_rules! new_hash_id_type {
         pub struct $type_name([u8; 32]);
 
         impl $type_name {
-            pub fn new(bytes: impl AsRef<[u8]>) -> Self {
+            pub fn hash(bytes: impl AsRef<[u8]>) -> Self {
                 let mut digest = [0u8; 32];
                 let mut hasher = Sha256::new();
                 hasher.update(bytes);

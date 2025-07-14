@@ -24,7 +24,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     keyvalue_ctx: Option<KeyValueCtx>,
     input: impl Serialize,
 ) -> std::result::Result<D, String> {
-    let service = make_service(ComponentDigest::new(wasm_bytes));
+    let service = make_service(ComponentDigest::hash(wasm_bytes));
     let trigger_action = make_trigger_action(&service, None, serde_json::to_vec(&input).unwrap());
 
     let mut wt_config = WTConfig::new();

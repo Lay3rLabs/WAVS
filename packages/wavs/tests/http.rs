@@ -57,7 +57,7 @@ fn http_config() {
 
 #[test]
 fn http_upload_component() {
-    let digest = ComponentDigest::new(COMPONENT_SQUARE_BYTES);
+    let digest = ComponentDigest::hash(COMPONENT_SQUARE_BYTES);
 
     let app = TestHttpApp::new();
 
@@ -90,7 +90,7 @@ fn http_save_service() {
         ServiceID::new("service-1").unwrap(),
         Some("My amazing service".to_string()),
         mock_evm_event_trigger(),
-        ComponentSource::Digest(ComponentDigest::new([1, 2, 3])),
+        ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
         wavs_types::Submit::Aggregator {
             url: "http://example.com/aggregator".to_string(),
             component: None,

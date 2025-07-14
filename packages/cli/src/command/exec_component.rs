@@ -104,7 +104,7 @@ impl ExecComponent {
         let workflow = Workflow {
             trigger: trigger_action.config.trigger.clone(),
             component: wavs_types::Component {
-                source: ComponentSource::Digest(ComponentDigest::new(&wasm_bytes)),
+                source: ComponentSource::Digest(ComponentDigest::hash(&wasm_bytes)),
                 permissions: Permissions {
                     allowed_http_hosts: AllowedHostPermission::All,
                     file_system: true,

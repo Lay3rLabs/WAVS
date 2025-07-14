@@ -41,7 +41,7 @@ impl MockServiceBuilder {
     }
 
     pub fn build(self) -> App {
-        static DIGEST: LazyLock<Digest> = LazyLock::new(|| Digest::new([0; 32]));
+        static DIGEST: LazyLock<Digest> = LazyLock::new(|| Digest::hash([0; 32]));
 
         App {
             trigger: self.trigger.unwrap_or(Trigger::Queue {

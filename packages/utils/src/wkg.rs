@@ -128,7 +128,7 @@ url = "http://localhost:8090"
             content.append(&mut chunk.to_vec());
         }
 
-        let digest = ComponentDigest::new(&content);
+        let digest = ComponentDigest::hash(&content);
         Ok((content, digest))
     }
 

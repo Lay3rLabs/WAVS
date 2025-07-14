@@ -60,7 +60,7 @@ impl CAStorage for FileStorage {
     /// look for file by key and only write if not present
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
     fn set_data(&self, data: &[u8]) -> Result<AnyDigest, CAStorageError> {
-        let digest = AnyDigest::new(data);
+        let digest = AnyDigest::hash(data);
         let path = self.digest_to_path(&digest)?;
         if !path.exists() {
             // Question: do we need file locks?

@@ -34,7 +34,7 @@ impl CAStorage for MemoryStorage {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
     fn set_data(&self, data: &[u8]) -> Result<AnyDigest, CAStorageError> {
-        let digest = AnyDigest::new(data);
+        let digest = AnyDigest::hash(data);
         let mut tree = self.data.write()?;
         if !tree.contains_key(&digest) {
             tree.insert(digest.clone(), data.to_vec());

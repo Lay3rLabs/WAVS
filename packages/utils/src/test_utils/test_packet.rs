@@ -39,7 +39,7 @@ pub fn mock_packet(
             workflow_id.clone(),
             Workflow {
                 trigger: Trigger::Manual,
-                component: Component::new(ComponentSource::Digest(ComponentDigest::new([0; 32]))),
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash([0; 32]))),
                 submit: Submit::None,
             },
         )]

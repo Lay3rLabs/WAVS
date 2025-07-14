@@ -40,7 +40,7 @@ impl EngineSetup {
             .join("echo_data.wasm");
         let component_bytes = std::fs::read(&component_path).unwrap();
         let component_source =
-            wavs_types::ComponentSource::Digest(ComponentDigest::new(&component_bytes));
+            wavs_types::ComponentSource::Digest(ComponentDigest::hash(&component_bytes));
         let component = Component::new(&engine, &component_bytes).unwrap();
 
         // Create a simple workflow

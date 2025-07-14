@@ -71,7 +71,7 @@ fn db_service_store() {
             WorkflowID::new("workflow-id-1").unwrap(),
             Workflow {
                 trigger: mock_evm_event_trigger(),
-                component: Component::new(ComponentSource::Digest(ComponentDigest::new(
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
                     b"digest-1",
                 ))),
                 submit: Submit::None,
@@ -81,7 +81,7 @@ fn db_service_store() {
             WorkflowID::new("workflow-id-2").unwrap(),
             Workflow {
                 trigger: mock_evm_event_trigger(),
-                component: Component::new(ComponentSource::Digest(ComponentDigest::new(
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
                     b"digest-2",
                 ))),
                 submit: Submit::None,

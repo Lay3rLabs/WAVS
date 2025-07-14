@@ -232,7 +232,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         workflows: [(
             workflow_id.clone(),
             Workflow {
-                component: Component::new(ComponentSource::Digest(ComponentDigest::new([0; 32]))),
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash([0; 32]))),
                 trigger: Trigger::BlockInterval {
                     chain_name: chain_name.clone(),
                     n_blocks,
