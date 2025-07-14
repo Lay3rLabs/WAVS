@@ -8,22 +8,48 @@ use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{InstanceDepsBuilder, KeyValueCtx};
-use wavs_types::{Component, ComponentSource, Packet, ServiceID, WorkflowID};
+use wavs_types::{Component, Packet};
 
 // Use the WIT-generated aggregator types
-use wavs_engine::bindings::world::aggregator::wavs::types::service::Service as WitService;
 pub use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::AggregatorAction;
 use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::{
-    Packet as WitPacket, TxResult,
+    Packet as WitPacket, TxResult, Envelope as WitEnvelope, EnvelopeSignature as WitEnvelopeSignature, Secp256k1Signature
 };
 use wavs_engine::bindings::world::aggregator::AggregatorWorld;
 use wavs_engine::bindings::world::wavs::worker::helpers::LogLevel;
 
+use wavs_engine::bindings::world::wavs as wavs_world;
+use wavs_engine::bindings::world::aggregator::wavs as agg_world;
+
+fn convert_service_to_aggregator(wavs_service: wavs_world::types::service::Service) -> agg_world::types::service::Service {
+    unsafe { std::mem::transmute(wavs_service) }
+}
+
 fn packet_to_wit_packet(packet: &Packet) -> Result<WitPacket> {
-    Ok(WitPacket {
-        service: packet.service.clone().try_into()?,
-        workflow_id: packet.workflow_id.to_string(),
+    let wavs_service: wavs_world::types::service::Service = packet.service.clone().try_into()?;
+    let wit_service = convert_service_to_aggregator(wavs_service);
+
+    // Convert envelope
+    let wit_envelope = WitEnvelope {
+        event_id: packet.envelope.eventId.to_vec(),
+        ordering: packet.envelope.ordering.to_vec(),
         payload: packet.envelope.payload.to_vec(),
+    };
+
+    // Convert signature
+    let wit_signature = match &packet.signature {
+        wavs_types::EnvelopeSignature::Secp256k1(sig) => {
+            WitEnvelopeSignature::Secp256k1(Secp256k1Signature {
+                signature_data: sig.as_bytes().to_vec(),
+            })
+        }
+    };
+
+    Ok(WitPacket {
+        service: wit_service,
+        workflow_id: packet.workflow_id.to_string(),
+        envelope: wit_envelope,
+        signature: wit_signature,
     })
 }
 

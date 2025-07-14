@@ -120,10 +120,25 @@ interface aggregator {
     use service-types.{service, workflow-id};
     use chain-types.{chain-name, evm-address};
     
+    record envelope {
+        event-id: list<u8>,
+        ordering: list<u8>, 
+        payload: list<u8>,  
+    }
+    
+    record secp256k1-signature {
+        signature-data: list<u8>,
+    }
+    
+    variant envelope-signature {
+        secp256k1(secp256k1-signature),
+    }
+    
     record packet {
         service: service,
         workflow-id: workflow-id,
-        payload: list<u8>
+        envelope: envelope,
+        signature: envelope-signature,
     }
     
     variant aggregator-action {
