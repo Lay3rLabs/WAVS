@@ -237,7 +237,6 @@ new_hash_id_type!(AnyDigest, false);
 new_hash_id_type!(ServiceDigest, true);
 // Digest of the component source (e.g. wasm bytecode)
 new_hash_id_type!(ComponentDigest, true);
-// Digest of any data, used for generic storage
 
 // Define FromStr for ServiceID to enable parsing from command line strings
 impl FromStr for ServiceID {
