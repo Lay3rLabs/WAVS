@@ -9538,6 +9538,7 @@ dependencies = [
  "clap 4.5.40",
  "ctrlc",
  "futures",
+ "lru 0.16.0",
  "serde",
  "tempfile",
  "thiserror 2.0.12",

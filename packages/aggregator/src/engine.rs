@@ -1,4 +1,6 @@
 use anyhow::Result;
+use lru::LruCache;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -8,6 +10,7 @@ use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{InstanceDepsBuilder, KeyValueCtx};
+use wavs_types::Digest;
 use wavs_types::{Component, Packet};
 
 // Use the WIT-generated aggregator types
@@ -59,6 +62,7 @@ fn packet_to_wit_packet(packet: &Packet) -> Result<WitPacket> {
 pub struct AggregatorEngine {
     wasm_engine: WTEngine,
     chain_configs: Arc<RwLock<ChainConfigs>>,
+    memory_cache: RwLock<LruCache<Digest, WasmComponent>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
@@ -70,6 +74,7 @@ impl AggregatorEngine {
     pub fn new(
         app_data_dir: impl Into<PathBuf>,
         chain_configs: ChainConfigs,
+        lru_size: usize,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         db: RedbStorage,
@@ -82,6 +87,7 @@ impl AggregatorEngine {
         config.epoch_interruption(true);
         let wasm_engine = WTEngine::new(&config)?;
 
+        let lru_size = NonZeroUsize::new(lru_size).unwrap_or(NonZeroUsize::new(10).unwrap());
         let app_data_dir = app_data_dir.into();
         if !app_data_dir.is_dir() {
             std::fs::create_dir_all(&app_data_dir)?;
@@ -90,6 +96,7 @@ impl AggregatorEngine {
         Ok(Self {
             wasm_engine,
             chain_configs: Arc::new(RwLock::new(chain_configs)),
+            memory_cache: RwLock::new(LruCache::new(lru_size)),
             app_data_dir,
             max_wasm_fuel,
             max_execution_seconds,
@@ -163,8 +170,19 @@ impl AggregatorEngine {
 
     fn load_component(&self, component: &Component) -> Result<WasmComponent> {
         let digest = component.source.digest().clone();
+
+        if let Some(cached_component) = self.memory_cache.write().unwrap().get(&digest) {
+            return Ok(cached_component.clone());
+        }
+
         let component_bytes = self.storage.get_data(&digest)?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
+
+        self.memory_cache
+            .write()
+            .unwrap()
+            .put(digest, wasm_component.clone());
+
         Ok(wasm_component)
     }
 

@@ -97,6 +97,7 @@ impl HttpState {
         let engine = AggregatorEngine::new(
             config.data.join("wasm"),
             config.chains.clone(),
+            config.wasm_lru_size,
             None, // max_wasm_fuel
             None, // max_execution_seconds
             storage.clone(),

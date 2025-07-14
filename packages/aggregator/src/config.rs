@@ -48,6 +48,9 @@ pub struct Config {
 
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
+
+    /// LRU cache size for compiled WASM components
+    pub wasm_lru_size: usize,
 }
 
 /// Default values for the config struct
@@ -68,6 +71,7 @@ impl Default for Config {
                 evm: Default::default(),
             },
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
+            wasm_lru_size: 20,
         }
     }
 }
