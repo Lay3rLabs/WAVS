@@ -82,6 +82,7 @@ async fn inner_run_task(input: PermissionsRequest) -> Result<PermissionsResponse
     let ServiceAndWorkflowId {
         service,
         workflow_id,
+        service_id: _,
     } = host::get_service();
 
     let workflow = service
