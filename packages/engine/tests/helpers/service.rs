@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use wavs_types::{
-    AllowedHostPermission, ComponentSource, Digest, Permissions, Service, ServiceID, Submit,
-    Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID,
+    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, ServiceID,
+    Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID,
 };
 
 pub fn make_trigger_action(
@@ -20,7 +20,7 @@ pub fn make_trigger_action(
     }
 }
 
-pub fn make_service(wasm_digest: Digest) -> Service {
+pub fn make_service(wasm_digest: ComponentDigest) -> Service {
     let service_id = ServiceID::new("service-1").unwrap();
     let workflow_id = WorkflowID::new("workflow-1").unwrap();
 

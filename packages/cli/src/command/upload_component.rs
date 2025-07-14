@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use wavs_types::Digest;
+use wavs_types::ComponentDigest;
 
 use crate::{clients::HttpClient, config::Config, util::read_component};
 
 pub struct UploadComponent {
-    pub digest: Digest,
+    pub digest: ComponentDigest,
 }
 
 impl std::fmt::Display for UploadComponent {

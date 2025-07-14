@@ -10,7 +10,9 @@ use rayon::ThreadPoolBuilder;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
-use wavs_types::{Digest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowID};
+use wavs_types::{
+    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowID,
+};
 
 use crate::services::Services;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
@@ -74,7 +76,7 @@ impl<S: CAStorage> EngineManager<S> {
     pub async fn store_components_for_service(
         &self,
         service: &Service,
-    ) -> Result<HashMap<WorkflowID, Digest>, EngineError> {
+    ) -> Result<HashMap<WorkflowID, ComponentDigest>, EngineError> {
         let mut digests = HashMap::new();
 
         for (workflow_id, workflow) in service.workflows.iter() {

@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use utils::storage::db::{RedbStorage, Table, JSON};
 use utils::test_utils::address::rand_address_evm;
 use wavs_types::{
-    Component, ComponentSource, Digest, Service, ServiceID, ServiceManager, ServiceStatus, Submit,
-    Workflow, WorkflowID,
+    Component, ComponentDigest, ComponentSource, Service, ServiceID, ServiceManager, ServiceStatus,
+    Submit, Workflow, WorkflowID,
 };
 
 use redb::ReadableTable;
@@ -71,7 +71,9 @@ fn db_service_store() {
             WorkflowID::new("workflow-id-1").unwrap(),
             Workflow {
                 trigger: mock_evm_event_trigger(),
-                component: Component::new(ComponentSource::Digest(Digest::new(b"digest-1"))),
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
+                    b"digest-1",
+                ))),
                 submit: Submit::None,
             },
         ),
@@ -79,7 +81,9 @@ fn db_service_store() {
             WorkflowID::new("workflow-id-2").unwrap(),
             Workflow {
                 trigger: mock_evm_event_trigger(),
-                component: Component::new(ComponentSource::Digest(Digest::new(b"digest-2"))),
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
+                    b"digest-2",
+                ))),
                 submit: Submit::None,
             },
         ),

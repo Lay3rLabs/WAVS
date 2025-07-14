@@ -5,8 +5,8 @@ use std::{
 };
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ChainName, Digest, EvmContractSubmission, Permissions,
-    ServiceStatus, Submit, Trigger, WorkflowID,
+    Aggregator, AllowedHostPermission, ChainName, ComponentDigest, EvmContractSubmission,
+    Permissions, ServiceStatus, Submit, Trigger, WorkflowID,
 };
 
 use crate::service_json::ServiceJson;
@@ -39,7 +39,7 @@ impl std::fmt::Display for ServiceInitResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct ComponentSourceDigestResult {
     /// The component digest
-    pub digest: Digest,
+    pub digest: ComponentDigest,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -60,7 +60,7 @@ pub struct ComponentSourceRegistryResult {
     /// The package reference
     pub package: PackageRef,
     /// The component digest (retrieved from registry)
-    pub digest: Digest,
+    pub digest: ComponentDigest,
     /// The version
     pub version: Version,
     /// The file path where the updated service JSON was saved

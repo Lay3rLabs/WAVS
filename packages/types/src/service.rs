@@ -7,7 +7,7 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
-use crate::{ByteArray, Digest, Timestamp};
+use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainName, ServiceID, WorkflowID};
 
@@ -30,9 +30,9 @@ pub struct Service {
 
 impl Service {
     // this is only used for local/tests, but we want to keep it consistent
-    pub fn hash(&self) -> anyhow::Result<Digest> {
+    pub fn hash(&self) -> anyhow::Result<ServiceDigest> {
         let service_bytes = serde_json::to_vec(self)?;
-        Ok(Digest::new(&service_bytes))
+        Ok(ServiceDigest::hash(&service_bytes))
     }
 }
 
@@ -117,16 +117,19 @@ pub struct Component {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
-    Download { url: String, digest: Digest },
+    Download {
+        url: String,
+        digest: ComponentDigest,
+    },
     /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
     Registry { registry: Registry },
     /// An already deployed component
-    Digest(Digest),
+    Digest(ComponentDigest),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub struct Registry {
-    pub digest: Digest,
+    pub digest: ComponentDigest,
     /// Optional domain to use for a registry (such as ghcr.io)
     /// if default of wa.dev (or whatever wavs uses in the future)
     /// is not desired by user
@@ -140,7 +143,7 @@ pub struct Registry {
 }
 
 impl ComponentSource {
-    pub fn digest(&self) -> &Digest {
+    pub fn digest(&self) -> &ComponentDigest {
         match self {
             ComponentSource::Download { digest, .. } => digest,
             ComponentSource::Registry { registry } => &registry.digest,

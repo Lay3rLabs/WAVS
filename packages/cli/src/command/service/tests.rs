@@ -74,9 +74,10 @@ fn test_workflow_component_operations() {
     let file_path = temp_dir.path().join("component_operations_test.json");
 
     // Create a test digest - raw 64-character hex string (32 bytes)
-    let test_digest =
-        Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-            .unwrap();
+    let test_digest = ComponentDigest::from_str(
+        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    )
+    .unwrap();
 
     // Initialize a service using the init_service method
     let service_id = ServiceID::new("test-service-id").unwrap();
@@ -1056,9 +1057,10 @@ async fn test_service_validation() {
     .unwrap();
 
     // Create component with digest
-    let test_digest =
-        Digest::from_str("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-            .unwrap();
+    let test_digest = ComponentDigest::from_str(
+        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    )
+    .unwrap();
     let component = Component::new(ComponentSource::Digest(test_digest.clone()));
 
     // Create a valid trigger and submit for the workflow

@@ -1,12 +1,11 @@
-use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use std::str::FromStr;
+use std::{fs::File, str::FromStr};
 
 use tracing::instrument;
+use wavs_types::AnyDigest;
 
 use super::prelude::*;
-use wavs_types::Digest;
 
 pub struct FileStorage {
     data_dir: PathBuf,
@@ -34,7 +33,7 @@ impl FileStorage {
     /// We store under `data_dir/<digest[0:2]>/<digest[2:4]>/<digest>`.
     /// This keeps the top two levels to 256 max, and it will be around 65 million files til the last dir has 1000 file descriptors.
     /// Keeping full hash as filename, as it is easier to debug later.
-    fn digest_to_path(&self, digest: &Digest) -> Result<PathBuf, CAStorageError> {
+    fn digest_to_path(&self, digest: &AnyDigest) -> Result<PathBuf, CAStorageError> {
         let digest = digest.to_string();
         let dir = self.data_dir.join(&digest[..2]).join(&digest[2..4]);
         self.ensure_dir(&dir)?;
@@ -60,8 +59,8 @@ impl CAStorage for FileStorage {
 
     /// look for file by key and only write if not present
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
-    fn set_data(&self, data: &[u8]) -> Result<Digest, CAStorageError> {
-        let digest = Digest::new(data);
+    fn set_data(&self, data: &[u8]) -> Result<AnyDigest, CAStorageError> {
+        let digest = AnyDigest::hash(data);
         let path = self.digest_to_path(&digest)?;
         if !path.exists() {
             // Question: do we need file locks?
@@ -70,8 +69,8 @@ impl CAStorage for FileStorage {
         Ok(digest)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
-    fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError> {
+    #[instrument(level = "debug", skip(self, digest), fields(subsys = "CaStorage"))]
+    fn get_data(&self, digest: &AnyDigest) -> Result<Vec<u8>, CAStorageError> {
         let path = self.digest_to_path(digest)?;
         if !path.exists() {
             return Err(CAStorageError::NotFound(digest.clone()));
@@ -84,7 +83,7 @@ impl CAStorage for FileStorage {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
-    fn data_exists(&self, digest: &Digest) -> Result<bool, CAStorageError> {
+    fn data_exists(&self, digest: &AnyDigest) -> Result<bool, CAStorageError> {
         let path = self.digest_to_path(digest)?;
         Ok(path.exists())
     }
@@ -94,7 +93,7 @@ impl CAStorage for FileStorage {
     #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
     fn digests(
         &self,
-    ) -> Result<impl Iterator<Item = Result<Digest, CAStorageError>>, CAStorageError> {
+    ) -> Result<impl Iterator<Item = Result<AnyDigest, CAStorageError>>, CAStorageError> {
         let it = walkdir::WalkDir::new(&self.data_dir)
             .into_iter()
             .filter_map(|entry| {
@@ -102,7 +101,7 @@ impl CAStorage for FileStorage {
                 let path = entry.path();
                 if path.is_file() {
                     let name = path.file_name()?.to_str()?;
-                    Some(Digest::from_str(name).map_err(CAStorageError::from))
+                    Some(AnyDigest::from_str(name).map_err(CAStorageError::from))
                 } else {
                     None
                 }

@@ -10,7 +10,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainName, Digest, ServiceID, ServiceStatus, Timestamp, WorkflowID};
+use wavs_types::{ChainName, ComponentDigest, ServiceID, ServiceStatus, Timestamp, WorkflowID};
 
 use crate::config::Config;
 
@@ -135,7 +135,7 @@ pub enum ComponentCommand {
     SetSourceDigest {
         /// The digest of the component to set
         #[clap(long)]
-        digest: Digest,
+        digest: ComponentDigest,
     },
     /// Set a component using a registry package reference
     SetSourceRegistry {

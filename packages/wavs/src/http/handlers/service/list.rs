@@ -48,7 +48,6 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
     }
 
     let digests = state.dispatcher.list_component_digests()?;
-    let digests = digests.into_iter().map(Into::into).collect();
 
     Ok(ListServicesResponse { services, digests })
 }
