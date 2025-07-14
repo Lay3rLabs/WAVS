@@ -5,7 +5,7 @@ use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, En
 use wavs_engine::{
     bindings::world::host::LogLevel, context::KeyValueCtx, EngineError, InstanceDepsBuilder,
 };
-use wavs_types::{Digest, ServiceID, WorkflowID};
+use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
 
 use crate::helpers::service::{make_service, make_trigger_action};
 
@@ -24,7 +24,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     keyvalue_ctx: Option<KeyValueCtx>,
     input: impl Serialize,
 ) -> std::result::Result<D, String> {
-    let service = make_service(Digest::new(wasm_bytes));
+    let service = make_service(ComponentDigest::new(wasm_bytes));
     let trigger_action = make_trigger_action(&service, None, serde_json::to_vec(&input).unwrap());
 
     let mut wt_config = WTConfig::new();
@@ -77,7 +77,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
 fn log_wasi(
     service_id: &ServiceID,
     workflow_id: &WorkflowID,
-    digest: &Digest,
+    digest: &ComponentDigest,
     level: LogLevel,
     message: String,
 ) {

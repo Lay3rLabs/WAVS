@@ -35,9 +35,9 @@ use utils::{
 use uuid::Uuid;
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Digest,
-    EvmContractSubmission, Registry, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp,
-    Trigger, WorkflowID,
+    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentDigest,
+    ComponentSource, EvmContractSubmission, Registry, ServiceID, ServiceManager, ServiceStatus,
+    Submit, Timestamp, Trigger, WorkflowID,
 };
 
 use crate::{
@@ -301,7 +301,7 @@ pub fn init_service(
 pub fn set_component_source_digest(
     file_path: &Path,
     workflow_id: WorkflowID,
-    digest: Digest,
+    digest: ComponentDigest,
 ) -> Result<ComponentSourceDigestResult> {
     modify_service_file(file_path, |mut service| {
         // Create a new component entry

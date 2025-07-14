@@ -2,8 +2,9 @@ use std::num::NonZero;
 
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
 use wavs_types::{
-    ChainName, Component, ComponentSource, Digest, EvmContractSubmission, Service, ServiceID,
-    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowID,
+    ChainName, Component, ComponentDigest, ComponentSource, EvmContractSubmission, Service,
+    ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow,
+    WorkflowID,
 };
 
 use layer_climb::prelude::*;
@@ -231,7 +232,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         workflows: [(
             workflow_id.clone(),
             Workflow {
-                component: Component::new(ComponentSource::Digest(Digest::new(&[0; 32]))),
+                component: Component::new(ComponentSource::Digest(ComponentDigest::new([0; 32]))),
                 trigger: Trigger::BlockInterval {
                     chain_name: chain_name.clone(),
                     n_blocks,

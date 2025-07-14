@@ -11,7 +11,7 @@ use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{context::KeyValueCtx, InstanceDepsBuilder};
 use wavs_types::{
-    ComponentSource, Digest, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
+    ComponentDigest, ComponentSource, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
 };
 
 use utils::storage::{CAStorage, CAStorageError};
@@ -22,7 +22,7 @@ pub struct WasmEngine<S: CAStorage> {
     chain_configs: Arc<RwLock<ChainConfigs>>,
     wasm_storage: S,
     wasm_engine: WTEngine,
-    memory_cache: RwLock<LruCache<Digest, Component>>,
+    memory_cache: RwLock<LruCache<ComponentDigest, Component>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
@@ -85,12 +85,12 @@ impl<S: CAStorage> WasmEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+    pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<ComponentDigest, EngineError> {
         // compile component (validate it is proper wasm)
         let cm = Component::new(&self.wasm_engine, bytecode).map_err(EngineError::Compile)?;
 
         // store original wasm
-        let digest = self.wasm_storage.set_data(bytecode)?;
+        let digest: ComponentDigest = self.wasm_storage.set_data(bytecode)?.inner().into();
 
         // // TODO: write precompiled wasm (huge optimization on restart)
         // tokio::fs::write(self.path_for_precompiled_wasm(digest), cm.serialize()?).await?;
@@ -104,13 +104,16 @@ impl<S: CAStorage> WasmEngine<S> {
     pub async fn store_component_from_source(
         &self,
         source: &ComponentSource,
-    ) -> Result<Digest, EngineError> {
+    ) -> Result<ComponentDigest, EngineError> {
         match source {
             // Leaving unimplemented for now, should do validations to confirm bytes
             // really are a wasm component before registring component
             ComponentSource::Download { .. } => todo!(),
             ComponentSource::Registry { registry } => {
-                if !(self.wasm_storage.data_exists(&registry.digest)?) {
+                if !(self
+                    .wasm_storage
+                    .data_exists(&registry.digest.clone().into())?)
+                {
                     // Fetches package from registry and validates it has the expected digest
                     let client =
                         WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
@@ -121,7 +124,7 @@ impl<S: CAStorage> WasmEngine<S> {
                 }
             }
             ComponentSource::Digest(digest) => {
-                if self.wasm_storage.data_exists(digest)? {
+                if self.wasm_storage.data_exists(&digest.clone().into())? {
                     Ok(digest.clone())
                 } else {
                     self.metrics.increment_total_errors("unknown digest");
@@ -133,8 +136,12 @@ impl<S: CAStorage> WasmEngine<S> {
 
     // TODO: paginate this
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    pub fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
-        let digests: Result<Vec<_>, CAStorageError> = self.wasm_storage.digests()?.collect();
+    pub fn list_digests(&self) -> Result<Vec<ComponentDigest>, EngineError> {
+        let digests: Result<Vec<_>, CAStorageError> = self
+            .wasm_storage
+            .digests()?
+            .map(|d| d.map(|d| ComponentDigest::from(d.inner())))
+            .collect();
         Ok(digests?)
     }
 
@@ -148,7 +155,7 @@ impl<S: CAStorage> WasmEngine<S> {
         fn log(
             service_id: &ServiceID,
             workflow_id: &WorkflowID,
-            digest: &Digest,
+            digest: &ComponentDigest,
             level: wavs_engine::bindings::world::host::LogLevel,
             message: String,
         ) {
@@ -198,7 +205,7 @@ impl<S: CAStorage> WasmEngine<S> {
             component: match self.memory_cache.write().unwrap().get(&digest) {
                 Some(cm) => cm.clone(),
                 None => {
-                    let bytes = self.wasm_storage.get_data(&digest)?;
+                    let bytes = self.wasm_storage.get_data(&digest.into())?;
                     Component::new(&self.wasm_engine, &bytes).map_err(EngineError::Compile)?
                 }
             },

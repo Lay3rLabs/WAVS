@@ -854,7 +854,7 @@ mod test {
             wavs_types::Workflow {
                 trigger: wavs_types::Trigger::Manual,
                 component: wavs_types::Component::new(wavs_types::ComponentSource::Digest(
-                    wavs_types::Digest::new(&[0; 32]),
+                    wavs_types::ComponentDigest::new([0; 32]),
                 )),
                 submit: wavs_types::Submit::Aggregator {
                     url: "http://dummy".to_string(),

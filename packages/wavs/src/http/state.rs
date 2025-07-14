@@ -7,7 +7,7 @@ use utils::{
     },
     telemetry::HttpMetrics,
 };
-use wavs_types::{Digest, Service, ServiceID};
+use wavs_types::{Service, ServiceDigest, ServiceID};
 
 use crate::{config::Config, dispatcher::Dispatcher};
 
@@ -63,7 +63,7 @@ impl HttpState {
 
     pub fn load_service_by_hash(
         &self,
-        service_hash: &Digest,
+        service_hash: &ServiceDigest,
     ) -> anyhow::Result<wavs_types::Service> {
         match self
             .storage
@@ -77,7 +77,7 @@ impl HttpState {
             Err(e) => Err(anyhow::anyhow!("Failed to load service by hash: {}", e)),
         }
     }
-    pub fn save_service_by_hash(&self, service: &Service) -> anyhow::Result<Digest> {
+    pub fn save_service_by_hash(&self, service: &Service) -> anyhow::Result<ServiceDigest> {
         let service_hash = service.hash()?;
         self.storage
             .set(LOCAL_SERVICE_BY_HASH_TABLE, service_hash.as_ref(), service)?;

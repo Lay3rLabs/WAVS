@@ -5,8 +5,8 @@ use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbS
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, Digest, Service, ServiceID, TriggerAction, TriggerConfig, TriggerData,
-    Workflow, WorkflowID,
+    AllowedHostPermission, ComponentDigest, Service, ServiceID, TriggerAction, TriggerConfig,
+    TriggerData, Workflow, WorkflowID,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
@@ -39,7 +39,8 @@ impl EngineSetup {
             .join("components")
             .join("echo_data.wasm");
         let component_bytes = std::fs::read(&component_path).unwrap();
-        let component_source = wavs_types::ComponentSource::Digest(Digest::new(&component_bytes));
+        let component_source =
+            wavs_types::ComponentSource::Digest(ComponentDigest::new(&component_bytes));
         let component = Component::new(&engine, &component_bytes).unwrap();
 
         // Create a simple workflow

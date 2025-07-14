@@ -1,6 +1,6 @@
 use thiserror::Error;
 use utils::storage::CAStorageError;
-use wavs_types::{Digest, ServiceID, WorkflowID};
+use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
 
 #[derive(Error, Debug)]
 pub enum EngineError {
@@ -14,7 +14,7 @@ pub enum EngineError {
     UnknownWorkflow(ServiceID, WorkflowID),
 
     #[error("No wasm found for digest {0}")]
-    UnknownDigest(Digest),
+    UnknownDigest(ComponentDigest),
 
     #[error{"{0}"}]
     Engine(#[from] wavs_engine::EngineError),

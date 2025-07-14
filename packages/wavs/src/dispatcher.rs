@@ -37,11 +37,9 @@ use utils::config::{AnyChainConfig, ChainConfigs};
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
-use wavs_types::ChainConfigError;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
-use wavs_types::{
-    ChainName, Digest, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction,
-};
+use wavs_types::{ChainConfigError, ComponentDigest};
+use wavs_types::{ChainName, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction};
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
@@ -207,13 +205,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn store_component_bytes(&self, source: Vec<u8>) -> Result<Digest, DispatcherError> {
+    pub fn store_component_bytes(
+        &self,
+        source: Vec<u8>,
+    ) -> Result<ComponentDigest, DispatcherError> {
         let digest = self.engine_manager.engine.store_component_bytes(&source)?;
         Ok(digest)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn list_component_digests(&self) -> Result<Vec<Digest>, DispatcherError> {
+    pub fn list_component_digests(&self) -> Result<Vec<ComponentDigest>, DispatcherError> {
         let digests = self.engine_manager.engine.list_digests()?;
 
         Ok(digests)
@@ -467,8 +468,8 @@ pub enum DispatcherError {
     #[error("No registry domain provided in configuration")]
     NoRegistry,
 
-    #[error("Unknown service digest: {0}")]
-    UnknownDigest(Digest),
+    #[error("Unknown component digest: {0}")]
+    UnknownComponentDigest(ComponentDigest),
 
     #[error("Config error: {0}")]
     Config(String),

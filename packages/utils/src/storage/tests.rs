@@ -1,7 +1,7 @@
 /// common tests for any castorage implementation
 pub mod castorage {
     use crate::storage::{CAStorage, CAStorageError};
-    use wavs_types::Digest;
+    use wavs_types::AnyDigest;
 
     pub fn test_set_and_get<S: CAStorage>(store: S) {
         let data = b"hello world";
@@ -9,7 +9,7 @@ pub mod castorage {
         let loaded = store.get_data(&digest).unwrap();
         assert_eq!(data, loaded.as_slice());
 
-        let missing = Digest::new(b"missing");
+        let missing = AnyDigest::new(b"missing");
         let err = store.get_data(&missing).unwrap_err();
         assert!(matches!(err, CAStorageError::NotFound(_)));
     }

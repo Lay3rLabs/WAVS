@@ -5,8 +5,8 @@ use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, ComponentSource, Digest, Permissions, ServiceID, Submit, Trigger,
-    TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,
+    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceID, Submit,
+    Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,
 };
 
 use crate::{
@@ -104,7 +104,7 @@ impl ExecComponent {
         let workflow = Workflow {
             trigger: trigger_action.config.trigger.clone(),
             component: wavs_types::Component {
-                source: ComponentSource::Digest(Digest::new(&wasm_bytes)),
+                source: ComponentSource::Digest(ComponentDigest::new(&wasm_bytes)),
                 permissions: Permissions {
                     allowed_http_hosts: AllowedHostPermission::All,
                     file_system: true,
@@ -172,7 +172,7 @@ impl ExecComponent {
 fn log_wasi(
     service_id: &ServiceID,
     workflow_id: &WorkflowID,
-    digest: &Digest,
+    digest: &ComponentDigest,
     level: LogLevel,
     message: String,
 ) {

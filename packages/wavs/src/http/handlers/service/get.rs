@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{Digest, ServiceID};
+use wavs_types::{ServiceDigest, ServiceID};
 
 #[utoipa::path(
     get,
@@ -63,7 +63,7 @@ async fn get_service_inner_hash(
     state: &HttpState,
     service_hash: String,
 ) -> HttpResult<wavs_types::Service> {
-    let service_hash = Digest::from_str(&service_hash)?;
+    let service_hash = ServiceDigest::from_str(&service_hash)?;
 
     Ok(state.load_service_by_hash(&service_hash)?)
 }

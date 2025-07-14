@@ -4,7 +4,7 @@ use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use wavs_types::{
-    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance,
+    AddServiceRequest, ComponentDigest, IWavsServiceManager::IWavsServiceManagerInstance,
     SaveServiceResponse, Service, ServiceID, SigningKeyResponse, UploadComponentResponse,
 };
 
@@ -34,7 +34,7 @@ impl HttpClient {
             .map_err(|e| e.into())
     }
 
-    pub async fn upload_component(&self, wasm_bytes: Vec<u8>) -> Result<Digest> {
+    pub async fn upload_component(&self, wasm_bytes: Vec<u8>) -> Result<ComponentDigest> {
         let response: UploadComponentResponse = self
             .inner
             .post(format!("{}/upload", self.endpoint))
@@ -44,7 +44,7 @@ impl HttpClient {
             .json()
             .await?;
 
-        Ok(response.digest.into())
+        Ok(response.digest)
     }
 
     pub async fn create_service(

@@ -6,7 +6,7 @@ use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     Client, Config, PackageRef, Release, Version,
 };
-use wavs_types::{Digest, Registry};
+use wavs_types::{ComponentDigest, Registry};
 
 pub struct WkgClient {
     // due to a bug in the client which can deadlock with the filesystem
@@ -113,7 +113,7 @@ url = "http://localhost:8090"
         client: &CachingClient<FileCache>,
         package: &PackageRef,
         release: &Release,
-    ) -> Result<(Vec<u8>, Digest)> {
+    ) -> Result<(Vec<u8>, ComponentDigest)> {
         let mut content_stream = client
             .get_content(package, release)
             .await
@@ -128,7 +128,7 @@ url = "http://localhost:8090"
             content.append(&mut chunk.to_vec());
         }
 
-        let digest = Digest::new(&content);
+        let digest = ComponentDigest::new(&content);
         Ok((content, digest))
     }
 
@@ -138,7 +138,7 @@ url = "http://localhost:8090"
         domain: Option<String>,
         package: &PackageRef,
         version: Option<&Version>,
-    ) -> Result<(Digest, Version)> {
+    ) -> Result<(ComponentDigest, Version)> {
         // Get the client
         let client = self.get_client(domain.as_ref()).await?;
 
