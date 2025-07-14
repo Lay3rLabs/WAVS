@@ -5,39 +5,46 @@ use std::time::Duration;
 use tracing::instrument;
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
+use utils::storage::CAStorage;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{InstanceDepsBuilder, KeyValueCtx};
-use wavs_types::{Component, Packet, ServiceID, WorkflowID};
+use wavs_types::{Component, ComponentSource, Packet, ServiceID, WorkflowID};
 
-// those should come from wit bindings
-#[derive(Debug, Clone)]
-pub enum AggregatorAction {
-    Timer {
-        delay: u64,
-    },
-    Submit {
-        chain_name: String,
-        contract_address: String,
-    },
-    Nothing,
+// Use the WIT-generated aggregator types
+use wavs_engine::bindings::world::aggregator::wavs::types::service::Service as WitService;
+pub use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::AggregatorAction;
+use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::{
+    Packet as WitPacket, TxResult,
+};
+use wavs_engine::bindings::world::aggregator::AggregatorWorld;
+use wavs_engine::bindings::world::wavs::worker::helpers::LogLevel;
+
+fn packet_to_wit_packet(packet: &Packet) -> Result<WitPacket> {
+    Ok(WitPacket {
+        service: packet.service.clone().try_into()?,
+        workflow_id: packet.workflow_id.to_string(),
+        payload: packet.envelope.payload.to_vec(),
+    })
 }
 
-pub struct AggregatorEngine {
+pub struct AggregatorEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     chain_configs: Arc<RwLock<ChainConfigs>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
     db: RedbStorage,
+    storage: S,
 }
 
-impl AggregatorEngine {
+impl<S: CAStorage> AggregatorEngine<S> {
     pub fn new(
         app_data_dir: impl Into<PathBuf>,
         chain_configs: ChainConfigs,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         db: RedbStorage,
+        storage: S,
     ) -> Result<Self> {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
@@ -58,6 +65,7 @@ impl AggregatorEngine {
             max_wasm_fuel,
             max_execution_seconds,
             db,
+            storage,
         })
     }
 
@@ -78,15 +86,166 @@ impl AggregatorEngine {
         component: &Component,
         packet: &Packet,
     ) -> Result<Vec<AggregatorAction>> {
-        // Implement the actual engine execution
-        // - load the component bytes
-        // - create instance dependencies with aggregator-world bindings
-        // - instantiate the component with aggregator-world
-        // - call process-packet on the component
-        // - return the aggregator actions
-
         tracing::info!("Processing packet with custom aggregator component");
 
-        Ok(vec![])
+        let wasm_component = self.load_component(component)?;
+
+        let mut instance_deps = InstanceDepsBuilder {
+            component: wasm_component,
+            service: packet.service.clone(),
+            workflow_id: packet.workflow_id.clone(),
+            engine: &self.wasm_engine,
+            data_dir: &self.app_data_dir,
+            chain_configs: &self.chain_configs.read().unwrap(),
+            log: |_service_id, _workflow_id, _digest, level, message| match level {
+                LogLevel::Error => tracing::error!("{}", message),
+                LogLevel::Warn => tracing::warn!("{}", message),
+                LogLevel::Info => tracing::info!("{}", message),
+                LogLevel::Debug => tracing::debug!("{}", message),
+                LogLevel::Trace => tracing::trace!("{}", message),
+            },
+            max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
+            max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id.to_string()),
+        }
+        .build()?;
+
+        let wit_packet = packet_to_wit_packet(packet)?;
+
+        let aggregator_world = AggregatorWorld::instantiate_async(
+            &mut instance_deps.store,
+            &instance_deps.component,
+            &instance_deps.linker,
+        )
+        .await?;
+
+        let result = aggregator_world
+            .call_process_packet(&mut instance_deps.store, &wit_packet)
+            .await?;
+
+        match result {
+            Ok(actions) => Ok(actions),
+            Err(error) => {
+                tracing::error!("Component execution failed: {}", error);
+                anyhow::bail!("Component execution failed: {}", error);
+            }
+        }
+    }
+
+    fn load_component(&self, component: &Component) -> Result<WasmComponent> {
+        let digest = component.source.digest().clone();
+        let component_bytes = self.storage.get_data(&digest)?;
+        let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
+        Ok(wasm_component)
+    }
+
+    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id, workflow_id = %packet.workflow_id))]
+    pub async fn handle_timer_callback(
+        &self,
+        component: &Component,
+        packet: &Packet,
+    ) -> Result<Vec<AggregatorAction>> {
+        tracing::info!("Handling timer callback with custom aggregator component");
+
+        let wasm_component = self.load_component(component)?;
+
+        let mut instance_deps = InstanceDepsBuilder {
+            component: wasm_component,
+            service: packet.service.clone(),
+            workflow_id: packet.workflow_id.clone(),
+            engine: &self.wasm_engine,
+            data_dir: &self.app_data_dir,
+            chain_configs: &self.chain_configs.read().unwrap(),
+            log: |_service_id, _workflow_id, _digest, level, message| match level {
+                LogLevel::Error => tracing::error!("{}", message),
+                LogLevel::Warn => tracing::warn!("{}", message),
+                LogLevel::Info => tracing::info!("{}", message),
+                LogLevel::Debug => tracing::debug!("{}", message),
+                LogLevel::Trace => tracing::trace!("{}", message),
+            },
+            max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
+            max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id.to_string()),
+        }
+        .build()?;
+
+        let wit_packet = packet_to_wit_packet(packet)?;
+
+        let aggregator_world = AggregatorWorld::instantiate_async(
+            &mut instance_deps.store,
+            &instance_deps.component,
+            &instance_deps.linker,
+        )
+        .await?;
+
+        let result = aggregator_world
+            .call_handle_timer_callback(&mut instance_deps.store, &wit_packet)
+            .await?;
+
+        match result {
+            Ok(actions) => Ok(actions),
+            Err(error) => {
+                tracing::error!("Timer callback execution failed: {}", error);
+                anyhow::bail!("Timer callback execution failed: {}", error);
+            }
+        }
+    }
+
+    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id, workflow_id = %packet.workflow_id))]
+    pub async fn handle_submit_callback(
+        &self,
+        component: &Component,
+        packet: &Packet,
+        tx_result: Result<String, String>,
+    ) -> Result<bool> {
+        tracing::info!("Handling submit callback with custom aggregator component");
+
+        let wasm_component = self.load_component(component)?;
+
+        let mut instance_deps = InstanceDepsBuilder {
+            component: wasm_component,
+            service: packet.service.clone(),
+            workflow_id: packet.workflow_id.clone(),
+            engine: &self.wasm_engine,
+            data_dir: &self.app_data_dir,
+            chain_configs: &self.chain_configs.read().unwrap(),
+            log: |_service_id, _workflow_id, _digest, level, message| match level {
+                LogLevel::Error => tracing::error!("{}", message),
+                LogLevel::Warn => tracing::warn!("{}", message),
+                LogLevel::Info => tracing::info!("{}", message),
+                LogLevel::Debug => tracing::debug!("{}", message),
+                LogLevel::Trace => tracing::trace!("{}", message),
+            },
+            max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
+            max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id.to_string()),
+        }
+        .build()?;
+
+        let wit_packet = packet_to_wit_packet(packet)?;
+
+        let wit_tx_result = match tx_result {
+            Ok(tx_hash) => TxResult::Success(tx_hash),
+            Err(error) => TxResult::Error(error),
+        };
+
+        let aggregator_world = AggregatorWorld::instantiate_async(
+            &mut instance_deps.store,
+            &instance_deps.component,
+            &instance_deps.linker,
+        )
+        .await?;
+
+        let result = aggregator_world
+            .call_handle_submit_callback(&mut instance_deps.store, &wit_packet, &wit_tx_result)
+            .await?;
+
+        match result {
+            Ok(success) => Ok(success),
+            Err(error) => {
+                tracing::error!("Submit callback execution failed: {}", error);
+                anyhow::bail!("Submit callback execution failed: {}", error);
+            }
+        }
     }
 }
