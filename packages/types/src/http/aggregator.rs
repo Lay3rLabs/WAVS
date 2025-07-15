@@ -2,7 +2,7 @@ use alloy_rpc_types_eth::TransactionReceipt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{Packet, ServiceID};
+use crate::{Packet, ServiceManager};
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -30,5 +30,5 @@ pub enum AddPacketResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct RegisterServiceRequest {
-    pub service_id: ServiceID,
+    pub service_manager: ServiceManager,
 }
