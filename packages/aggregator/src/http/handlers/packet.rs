@@ -1,5 +1,6 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
+use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
@@ -62,6 +63,67 @@ async fn process_packet(
     );
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
+
+    // engine execution in aggregator if component is specified
+    if let wavs_types::Submit::Aggregator {
+        component: Some(component),
+        ..
+    } = &workflow.submit
+    {
+        if let Some(engine) = &state.aggregator_engine {
+            tracing::debug!(
+                "Using custom aggregation with component: {}",
+                component.source.digest()
+            );
+            let actions = engine
+                .process_packet(component, packet)
+                .await
+                .map_err(|e| AggregatorError::Engine(e.to_string()))?;
+
+            let mut responses = Vec::new();
+            for action in actions {
+                match action {
+                    AggregatorAction::Submit(submit_action) => {
+                        tracing::info!(
+                            "Executing submit action to chain: {}",
+                            submit_action.chain_name
+                        );
+
+                        match handle_custom_submit(&state, packet, &[], submit_action).await {
+                            Ok(tx_receipt) => {
+                                responses.push(AddPacketResponse::Sent {
+                                    tx_receipt: Box::new(tx_receipt),
+                                    count: 1,
+                                });
+                            }
+                            Err(e) => {
+                                tracing::error!("Submit action failed: {}", e);
+                                responses.push(AddPacketResponse::Error {
+                                    reason: format!("Submit failed: {}", e),
+                                });
+                            }
+                        }
+                    }
+                    AggregatorAction::Timer { .. } => {
+                        tracing::info!("Timer action scheduled");
+                        responses.push(AddPacketResponse::Aggregated { count: 1 });
+                        todo!();
+                    }
+                    AggregatorAction::Nothing => {
+                        tracing::debug!("Component returned Nothing action");
+                        responses.push(AddPacketResponse::Aggregated { count: 1 });
+                        todo!();
+                    }
+                }
+            }
+
+            return Ok(responses);
+        } else {
+            tracing::warn!("Component specified but no aggregator engine available, falling back to legacy logic");
+        }
+    }
+
+    // fall back to legacy evm_contracts aggregation
     let aggregators = match &workflow.submit {
         wavs_types::Submit::Aggregator {
             evm_contracts: Some(contracts),
@@ -392,7 +454,7 @@ async fn handle_custom_submit(
     packet: &Packet,
     queue: &[QueuedPacket],
     submit_action: SubmitAction,
-) -> AggregatorResult<()> {
+) -> AggregatorResult<TransactionReceipt> {
     let chain_name = ChainName::new(submit_action.chain_name)
         .map_err(|e| AggregatorError::Engine(e.to_string()))?;
     let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
@@ -440,7 +502,7 @@ async fn handle_custom_submit(
         tx_receipt.transaction_hash
     );
 
-    Ok(())
+    Ok(tx_receipt)
 }
 
 fn add_packet_to_queue(

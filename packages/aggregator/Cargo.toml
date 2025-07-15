@@ -30,6 +30,7 @@ alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-contract = { workspace = true }
 alloy-provider = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
 utils = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
