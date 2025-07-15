@@ -1820,7 +1820,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-network",
  "anyhow",
@@ -2172,7 +2172,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3080,21 +3080,21 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-cron-interval"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3304,7 +3304,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -3322,7 +3322,7 @@ dependencies = [
 
 [[package]]
 name = "example-types"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "layer-climb-address",
  "serde",
@@ -4511,7 +4511,7 @@ dependencies = [
 
 [[package]]
 name = "kv-store"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -4647,7 +4647,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5699,7 +5699,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "permissions"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -7448,7 +7448,7 @@ dependencies = [
 
 [[package]]
 name = "square"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -8484,7 +8484,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -9464,7 +9464,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -9523,7 +9523,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9554,7 +9554,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-benchmark-common"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "tempfile",
  "utils",
@@ -9565,7 +9565,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -9595,7 +9595,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -9619,7 +9619,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "0.5.0-alpha.5"
+version = "0.5.0"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9652,9 +9652,9 @@ dependencies = [
 
 [[package]]
 name = "wavs-wasi-utils"
-version = "0.5.0-alpha.18"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb437f4aaf9f04cb06f8535d0c515386faddaa1ac37bdbc4a4d2c4de97594e93"
+checksum = "95ef1bd68d5bd40002ce807140d8861b0f1b51a3fac08c27713d3578dae7e8dc"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
