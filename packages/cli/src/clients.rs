@@ -3,8 +3,9 @@ use std::time::Duration;
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
-    AddServiceRequest, ComponentDigest, IWavsServiceManager::IWavsServiceManagerInstance,
-    SaveServiceResponse, Service, ServiceID, SigningKeyResponse, UploadComponentResponse,
+    AddServiceRequest, ComponentDigest, GetServiceKeyRequest, GetServiceRequest,
+    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
+    SigningKeyResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -126,10 +127,18 @@ impl HttpClient {
         ))
     }
 
-    pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
+    pub async fn get_service_key(
+        &self,
+        service_manager: ServiceManager,
+    ) -> Result<SigningKeyResponse> {
+        let body = serde_json::to_string(&GetServiceKeyRequest { service_manager })?;
+
+        let url = format!("{}/service-key", self.endpoint);
         let text = self
             .inner
-            .get(format!("{}/service-key/{service_id}", self.endpoint))
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(body)
             .send()
             .await?
             .text()
@@ -147,10 +156,15 @@ impl HttpClient {
         }
     }
 
-    pub async fn get_service_from_node(&self, service_id: &ServiceID) -> Result<Service> {
+    pub async fn get_service_from_node(&self, service_manager: ServiceManager) -> Result<Service> {
+        let body = serde_json::to_string(&GetServiceRequest { service_manager })?;
+
+        let url = format!("{}/service", self.endpoint);
         let text = self
             .inner
-            .get(format!("{}/service/{}", self.endpoint, service_id))
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(body)
             .send()
             .await?
             .text()
@@ -177,7 +191,9 @@ impl HttpClient {
             loop {
                 tracing::warn!("Waiting for service update: {}", service.id());
 
-                if let Ok(current_service) = self.get_service_from_node(&service.id()).await {
+                if let Ok(current_service) =
+                    self.get_service_from_node(service.manager.clone()).await
+                {
                     if current_service.hash()? == service_hash {
                         break Ok(());
                     }
