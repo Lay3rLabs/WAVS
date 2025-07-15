@@ -28,8 +28,14 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
 
     let component_digests = state.dispatcher.list_component_digests()?;
 
+    let service_ids = services
+        .iter()
+        .map(|service| service.id())
+        .collect::<Vec<_>>();
+
     Ok(ListServicesResponse {
         services,
+        service_ids,
         component_digests,
     })
 }
