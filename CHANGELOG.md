@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v0.5.1]
+
+### Fixed 
+- All endpoints take ServiceManager instead of ServiceID
+
 ## [v0.5.0]
 
 ### Added
