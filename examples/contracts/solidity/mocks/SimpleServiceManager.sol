@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.27;
 
 import {IWavsServiceManager} from "../interfaces/IWavsServiceManager.sol";
 import {IWavsServiceHandler} from "../interfaces/IWavsServiceHandler.sol";
@@ -12,11 +12,14 @@ contract SimpleServiceManager is IWavsServiceManager {
     uint256 private lastCheckpointTotalWeight;
 
     function validate(
-        IWavsServiceHandler.Envelope calldata /* envelope */,
+        IWavsServiceHandler.Envelope calldata, /* envelope */
         IWavsServiceHandler.SignatureData calldata signatureData
     ) external view override {
         // Input validation
-        if (signatureData.signers.length == 0 || signatureData.signers.length != signatureData.signatures.length) {
+        if (
+            signatureData.signers.length == 0
+                || signatureData.signers.length != signatureData.signatures.length
+        ) {
             revert IWavsServiceManager.InvalidSignatureLength();
         }
         if (signatureData.referenceBlock >= block.number) {
@@ -37,9 +40,11 @@ contract SimpleServiceManager is IWavsServiceManager {
             revert IWavsServiceManager.InsufficientQuorumZero();
         }
 
-        // Check if the total weight meets the last checkpoint threshold 
+        // Check if the total weight meets the last checkpoint threshold
         if (signedWeight < lastCheckpointThresholdWeight) {
-            revert IWavsServiceManager.InsufficientQuorum(signedWeight, lastCheckpointThresholdWeight, lastCheckpointTotalWeight);
+            revert IWavsServiceManager.InsufficientQuorum(
+                signedWeight, lastCheckpointThresholdWeight, lastCheckpointTotalWeight
+            );
         }
     }
 
@@ -70,7 +75,9 @@ contract SimpleServiceManager is IWavsServiceManager {
         return serviceURI;
     }
 
-    function setServiceURI(string calldata _serviceURI) external {
+    function setServiceURI(
+        string calldata _serviceURI
+    ) external {
         serviceURI = _serviceURI;
         emit ServiceURIUpdated(_serviceURI);
     }
@@ -79,11 +86,15 @@ contract SimpleServiceManager is IWavsServiceManager {
         operatorWeights[operator] = weight;
     }
 
-    function setLastCheckpointThresholdWeight(uint256 weight) external {
+    function setLastCheckpointThresholdWeight(
+        uint256 weight
+    ) external {
         lastCheckpointThresholdWeight = weight;
     }
 
-    function setLastCheckpointTotalWeight(uint256 weight) external {
+    function setLastCheckpointTotalWeight(
+        uint256 weight
+    ) external {
         lastCheckpointTotalWeight = weight;
     }
 
@@ -93,11 +104,7 @@ contract SimpleServiceManager is IWavsServiceManager {
         return operatorWeights[operator];
     }
 
-    function getLastCheckpointThresholdWeight()
-        external
-        view
-        returns (uint256)
-    {
+    function getLastCheckpointThresholdWeight() external view returns (uint256) {
         return lastCheckpointThresholdWeight;
     }
 
@@ -106,8 +113,8 @@ contract SimpleServiceManager is IWavsServiceManager {
     }
 
     function getLatestOperatorForSigningKey(
-        address signingKey
+        address signingKeyAddress
     ) external pure override returns (address) {
-        return signingKey;
+        return signingKeyAddress;
     }
 }

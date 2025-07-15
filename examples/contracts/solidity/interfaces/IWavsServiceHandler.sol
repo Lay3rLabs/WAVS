@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.27;
 
 interface IWavsServiceHandler {
     struct SignatureData {
@@ -7,6 +7,7 @@ interface IWavsServiceHandler {
         bytes[] signatures;
         uint32 referenceBlock;
     }
+
     struct Envelope {
         bytes20 eventId;
         // currently unused, for future version. added now for padding
@@ -18,7 +19,10 @@ interface IWavsServiceHandler {
      * @param envelope The envelope containing the data.
      * @param signatureData The signature data.
      */
-    function handleSignedEnvelope(Envelope calldata envelope, SignatureData calldata signatureData) external;
+    function handleSignedEnvelope(
+        Envelope calldata envelope,
+        SignatureData calldata signatureData
+    ) external;
 
     function getServiceManager() external view returns (address);
 }
