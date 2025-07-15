@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
-## [v0.5.0-alpha.5]
+## [v0.5.0]
 
 ### Added
 
@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning].
 - Support `ServiceStatus::Paused`
 - Pass `Service` and `WorkflowID` to Component (and updated WIT)
 - Support for `wasi::keyvalue` (built-in keyvalue stores, sandboxed per-service)
+- CLI: Add multiple aggregator submit
+- WAVS: Support for changing services
+- WAVS: get service by service ID endpoint for all added services (not just those saved by http)
 
 ### Fixed
 
@@ -26,26 +29,9 @@ and this project adheres to [Semantic Versioning].
 
 - Pass Service through to Aggregator (upgrades come along for the ride)
 - Workflow Aggregator config is now fully in `Submit::Aggregator`
-
-## [v0.5.0-alpha.2]
-
-### Added
-
-- WAVS: get service by service ID endpoint for all added services (not just those saved by http)
-
-### Changed
-
+- Deprecated `service.id` (changed to a method, internal-use only)
+- Aggregator opt-in now takes a `ServiceManager`
 - WAVS: changed endpoint for local service getting by hash to `/service-by-hash`
-
-## [v0.5.0-alpha.1]
-
-### Added
-
-- CLI: Add multiple aggregator submit
-- WAVS: Support for changing services
-
-### Changed
-
 - WAVS: Local save-service and get service endpoints are by hash instead of service ID
 
 ## [v0.4.0]
@@ -245,7 +231,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.0...HEAD
+[v0.5.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.1.0...v0.2.0

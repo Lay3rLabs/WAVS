@@ -1,4 +1,4 @@
-package wavs:types@0.5.0-alpha.19;
+package wavs:types@0.5.0;
 
 interface chain {
   type chain-name = string;
