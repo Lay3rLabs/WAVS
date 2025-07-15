@@ -645,8 +645,6 @@ mod test {
             .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
-        let service_id = "service-burn-test".parse().unwrap();
-        deps.state.register_service(&service_id).unwrap();
         let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
@@ -654,6 +652,7 @@ mod test {
                 vec![*service_handler.address()],
             )
             .await;
+        deps.state.register_service(&service.id()).unwrap();
 
         let packet = packet_from_service(
             &signer,
