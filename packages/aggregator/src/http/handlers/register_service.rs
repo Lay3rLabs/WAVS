@@ -2,10 +2,7 @@ use axum::{extract::State, http::Response, response::IntoResponse, Json};
 use tracing::instrument;
 use wavs_types::aggregator::RegisterServiceRequest;
 
-use crate::{
-    error::AggregatorError,
-    http::{error::*, state::HttpState},
-};
+use crate::http::{error::*, state::HttpState};
 
 #[utoipa::path(
     post,
@@ -19,18 +16,13 @@ use crate::{
     description = "Registers a new service with the aggregator."
 )]
 #[axum::debug_handler]
-#[instrument(level = "info", skip(state, req), fields(service_id = %req.service_id))]
+#[instrument(level = "info", skip(state, req), fields(service_id = %wavs_types::ServiceID::from(&req.service_manager)))]
 pub async fn handle_register_service(
     State(state): State<HttpState>,
     Json(req): Json<RegisterServiceRequest>,
 ) -> impl IntoResponse {
-    match inner(state, req).await {
+    match state.register_service(&wavs_types::ServiceID::from(&req.service_manager)) {
         Ok(_) => Response::new(().into()),
         Err(e) => AnyError::from(e).into_response(),
     }
-}
-
-#[instrument(level = "debug", skip(state), fields(service_id = %req.service_id))]
-async fn inner(state: HttpState, req: RegisterServiceRequest) -> Result<(), AggregatorError> {
-    state.register_service(&req.service_id)
 }

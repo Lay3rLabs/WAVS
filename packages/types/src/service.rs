@@ -33,18 +33,7 @@ impl Service {
     }
 
     pub fn id(&self) -> ServiceID {
-        let mut bytes = Vec::new();
-        match &self.manager {
-            ServiceManager::Evm {
-                chain_name,
-                address,
-            } => {
-                bytes.extend_from_slice(b"evm");
-                bytes.extend_from_slice(chain_name.to_string().as_bytes());
-                bytes.extend_from_slice(address.as_slice());
-            }
-        }
-        ServiceID::hash(bytes)
+        ServiceID::from(&self.manager)
     }
 }
 
@@ -56,6 +45,23 @@ pub enum ServiceManager {
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
     },
+}
+
+impl From<&ServiceManager> for ServiceID {
+    fn from(manager: &ServiceManager) -> Self {
+        match manager {
+            ServiceManager::Evm {
+                chain_name,
+                address,
+            } => {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"evm");
+                bytes.extend_from_slice(chain_name.as_bytes());
+                bytes.extend_from_slice(address.as_slice());
+                ServiceID::hash(bytes)
+            }
+        }
+    }
 }
 
 impl ServiceManager {
