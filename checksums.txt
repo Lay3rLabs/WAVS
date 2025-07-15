@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ee23f7b98391da3429d4f2ad3dc54dd5363e96d6882ebceb52474b02e562f3df  ./examples/build/components/chain_trigger_lookup.wasm
 dea73f27e16346e75467c1361e93a6641bc8263c1eef21364233fdd01d4268a0  ./examples/build/components/cosmos_query.wasm
 e27fcd7f739995a75faab9abdd05b03342c49c997afa080a75d53874bc412cee  ./examples/build/components/echo_block_interval.wasm
@@ -8,3 +9,15 @@ b6b66d9f7d330e5c7adfb66fd04b5842acb6342e5778b91c09aec50c94dc4fd6  ./examples/bui
 3c3895e99564d78c43b9307c1ad1fa15480d8277203878bc398ddfc970f48d63  ./examples/build/components/kv_store.wasm
 1878128fdc2c28eb03090b1d7d248dd7ea1a3ace68a27ce5ceef368ee3db5bf6  ./examples/build/components/permissions.wasm
 877026992e9043c596a75d845b525403ee45480621e324cbd82655f2fd04aea8  ./examples/build/components/square.wasm
+=======
+fedb3b60aa1a71d2f0481377ac7e90f5058d768570cb63b8e55e2985f16bf574  ./examples/build/components/chain_trigger_lookup.wasm
+43ff35f45f756e80aba638413904dcc138cb246bffe7dd6148fd1bcd32a9c7ec  ./examples/build/components/cosmos_query.wasm
+f78b103e42be4b14d63df34f0bc7f9477afc78ef13b4229e1d8b4fe334e25682  ./examples/build/components/echo_block_interval.wasm
+9ce00bfd781bd4f9668c0036c7a3368c5b404b2d8d6c3328fab7dc9582aab93a  ./examples/build/components/echo_cron_interval.wasm
+04bef787664a9f9f94fe15babc89528abb125e72a28a698cf9733438b3c1a062  ./examples/build/components/echo_data.wasm
+3e5f6d9956aee2287a78e14f8ed7467f4eefbd6cf416bdd891514a9a2b094098  ./examples/build/components/example_helpers.wasm
+b6b66d9f7d330e5c7adfb66fd04b5842acb6342e5778b91c09aec50c94dc4fd6  ./examples/build/components/example_types.wasm
+9f5bc19db376e7d5e3ac80a71cd23785a9431f32abdaf30ad7b834795bccd373  ./examples/build/components/kv_store.wasm
+c05fd56399da583959300b3d65dcc2d486ec66df455a166d3fa882975bb44b18  ./examples/build/components/permissions.wasm
+0ab66d4fd6030a3308c6e81dd3028eb5211e151685dfb8bbbc738af2b31bdaa7  ./examples/build/components/square.wasm
+>>>>>>> 2af2fe5a (rebuild components)
