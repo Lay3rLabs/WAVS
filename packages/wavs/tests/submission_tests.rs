@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
-use wavs_types::{ChainName, Envelope, ServiceManager, Submit};
+use wavs_types::{ChainName, Envelope, ServiceID, ServiceManager, Submit};
 
 use utils::{
     context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
@@ -14,10 +14,10 @@ use wavs_systems::mock_submissions::{
     mock_event_id, mock_event_order, wait_for_submission_messages,
 };
 
-fn dummy_message(service: &str, payload: &str) -> ChainMessage {
+fn dummy_message(service_id: ServiceID, payload: &str) -> ChainMessage {
     ChainMessage {
-        service_id: service.parse().unwrap(),
-        workflow_id: service.parse().unwrap(),
+        workflow_id: service_id.to_string().parse().unwrap(),
+        service_id,
         envelope: Envelope {
             payload: payload.as_bytes().to_vec().into(),
             eventId: mock_event_id().into(),
@@ -64,9 +64,9 @@ fn collect_messages_with_wait() {
             .unwrap();
     });
 
-    let msg1 = dummy_message("serv1", "foo");
-    let msg2 = dummy_message("serv1", "bar");
-    let msg3 = dummy_message("serv1", "baz");
+    let msg1 = dummy_message(ServiceID::hash("serv1"), "foo");
+    let msg2 = dummy_message(ServiceID::hash("serv1"), "bar");
+    let msg3 = dummy_message(ServiceID::hash("serv1"), "baz");
 
     send.blocking_send(msg1.clone()).unwrap();
     wait_for_submission_messages(&submission_manager, 1, None).unwrap();

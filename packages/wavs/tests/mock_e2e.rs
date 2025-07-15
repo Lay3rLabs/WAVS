@@ -79,10 +79,10 @@ fn mock_e2e_service_lifecycle() {
         let runner = runner.clone();
 
         async move {
-            let services = runner.list_services().await;
+            let resp = runner.list_services().await;
 
-            assert!(services.services.is_empty());
-            assert!(services.digests.is_empty());
+            assert!(resp.services.is_empty());
+            assert!(resp.component_digests.is_empty());
 
             // add services in order
             let digest = runner
@@ -104,13 +104,15 @@ fn mock_e2e_service_lifecycle() {
                 );
             }
 
-            let services = runner.list_services().await;
+            let mut resp = runner.list_services().await;
+            resp.services.sort_by(|a, b| a.id().cmp(&b.id()));
+            service_ids.sort();
 
-            assert_eq!(services.services.len(), 3);
-            assert_eq!(services.digests.len(), 1);
-            assert_eq!(services.services[0].id, service_ids[0]);
-            assert_eq!(services.services[1].id, service_ids[1]);
-            assert_eq!(services.services[2].id, service_ids[2]);
+            assert_eq!(resp.services.len(), 3);
+            assert_eq!(resp.component_digests.len(), 1);
+            assert_eq!(resp.services[0].id(), service_ids[0]);
+            assert_eq!(resp.services[1].id(), service_ids[1]);
+            assert_eq!(resp.services[2].id(), service_ids[2]);
 
             // add an orphaned digest
             let _orphaned_digest = runner
@@ -120,9 +122,9 @@ fn mock_e2e_service_lifecycle() {
                 .store_component_bytes(COMPONENT_ECHO_DATA_BYTES)
                 .unwrap();
 
-            let services = runner.list_services().await;
-            assert_eq!(services.services.len(), 3);
-            assert_eq!(services.digests.len(), 2);
+            let resp = runner.list_services().await;
+            assert_eq!(resp.services.len(), 3);
+            assert_eq!(resp.component_digests.len(), 2);
 
             // selectively delete services 1 and 3, leaving just 2
 
@@ -130,19 +132,19 @@ fn mock_e2e_service_lifecycle() {
                 .delete_services(vec![service_ids[0].clone(), service_ids[2].clone()])
                 .await;
 
-            let services = runner.list_services().await;
+            let resp = runner.list_services().await;
 
-            assert_eq!(services.services.len(), 1);
-            assert_eq!(services.digests.len(), 2);
-            assert_eq!(services.services[0].id, service_ids[1]);
+            assert_eq!(resp.services.len(), 1);
+            assert_eq!(resp.component_digests.len(), 2);
+            assert_eq!(resp.services[0].id(), service_ids[1]);
 
             // and make sure we can delete the last one but still get an empty list
             runner.delete_services(vec![service_ids[1].clone()]).await;
 
-            let services = runner.list_services().await;
+            let resp = runner.list_services().await;
 
-            assert!(services.services.is_empty());
-            assert_eq!(services.digests.len(), 2);
+            assert!(resp.services.is_empty());
+            assert_eq!(resp.component_digests.len(), 2);
         }
     });
 }
