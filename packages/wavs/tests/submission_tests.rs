@@ -15,8 +15,14 @@ use wavs_systems::mock_submissions::{
 };
 
 fn dummy_message(service_id: ServiceID, payload: &str) -> ChainMessage {
+    let workflow_id = {
+        // whatever, just use the first 24 chars of the service ID
+        let mut s = service_id.to_string();
+        s.truncate(24);
+        s.parse().unwrap()
+    };
     ChainMessage {
-        workflow_id: service_id.to_string().parse().unwrap(),
+        workflow_id,
         service_id,
         envelope: Envelope {
             payload: payload.as_bytes().to_vec().into(),
@@ -64,9 +70,9 @@ fn collect_messages_with_wait() {
             .unwrap();
     });
 
-    let msg1 = dummy_message(ServiceID::hash("serv1"), "foo");
-    let msg2 = dummy_message(ServiceID::hash("serv1"), "bar");
-    let msg3 = dummy_message(ServiceID::hash("serv1"), "baz");
+    let msg1 = dummy_message(service.id(), "foo");
+    let msg2 = dummy_message(service.id(), "bar");
+    let msg3 = dummy_message(service.id(), "baz");
 
     send.blocking_send(msg1.clone()).unwrap();
     wait_for_submission_messages(&submission_manager, 1, None).unwrap();
