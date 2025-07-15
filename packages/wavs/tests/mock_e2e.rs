@@ -12,7 +12,7 @@ use utils::{
 };
 mod wavs_systems;
 use wavs_systems::{mock_app::MockE2ETestRunner, mock_submissions::wait_for_submission_messages};
-use wavs_types::{ComponentSource, WorkflowID};
+use wavs_types::{ComponentSource, ServiceManager, WorkflowID};
 
 #[test]
 fn mock_e2e_trigger_flow() {
@@ -114,6 +114,9 @@ fn mock_e2e_service_lifecycle() {
             assert_eq!(resp.services[1].id(), service_ids[1]);
             assert_eq!(resp.services[2].id(), service_ids[2]);
 
+            let service_managers: Vec<ServiceManager> =
+                resp.services.iter().map(|s| s.manager.clone()).collect();
+
             // add an orphaned digest
             let _orphaned_digest = runner
                 .dispatcher
@@ -129,7 +132,10 @@ fn mock_e2e_service_lifecycle() {
             // selectively delete services 1 and 3, leaving just 2
 
             runner
-                .delete_services(vec![service_ids[0].clone(), service_ids[2].clone()])
+                .delete_services(vec![
+                    service_managers[0].clone(),
+                    service_managers[2].clone(),
+                ])
                 .await;
 
             let resp = runner.list_services().await;
@@ -139,7 +145,9 @@ fn mock_e2e_service_lifecycle() {
             assert_eq!(resp.services[0].id(), service_ids[1]);
 
             // and make sure we can delete the last one but still get an empty list
-            runner.delete_services(vec![service_ids[1].clone()]).await;
+            runner
+                .delete_services(vec![service_managers[1].clone()])
+                .await;
 
             let resp = runner.list_services().await;
 

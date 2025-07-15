@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
-use layer_climb::prelude::*;
 use wavs_types::{
     AddServiceRequest, ComponentDigest, IWavsServiceManager::IWavsServiceManagerInstance,
     SaveServiceResponse, Service, ServiceID, SigningKeyResponse, UploadComponentResponse,
@@ -62,8 +61,7 @@ impl HttpClient {
         }
 
         let body: String = serde_json::to_string(&AddServiceRequest {
-            chain_name: service.manager.chain_name().clone(),
-            address: Address::Evm(service.manager.evm_address_unchecked().into()),
+            service_manager: service.manager.clone(),
         })?;
 
         let url = format!("{}/app", self.endpoint);

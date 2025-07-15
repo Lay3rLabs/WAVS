@@ -74,12 +74,12 @@ pub async fn make_router(
         .layer(TraceLayer::new_for_http())
         .layer(OtelAxumLayer::default())
         .route("/config", get(handle_config))
-        .route("/service/{service_id}", get(handle_get_service))
+        .route("/service", post(handle_get_service))
         .route(
             "/service-by-hash/{service_hash}",
             get(handle_get_service_by_hash),
         )
-        .route("/service-key/{service_id}", get(handle_get_service_key))
+        .route("/service-key", post(handle_get_service_key))
         .route("/save-service", post(handle_save_service))
         .route("/app", get(handle_list_services))
         .route("/app", post(handle_add_service))

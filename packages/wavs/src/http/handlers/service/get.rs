@@ -2,14 +2,12 @@ use std::str::FromStr;
 
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{ServiceDigest, ServiceID};
+use wavs_types::{GetServiceRequest, ServiceDigest, ServiceID, ServiceManager};
 
 #[utoipa::path(
-    get,
-    path = "/service/{service_id}",
-    params(
-        ("service_id" = String, Path, description = "Unique identifier for the service")
-    ),
+    post,
+    path = "/service",
+    request_body = GetServiceRequest,
     responses(
         (status = 200, description = "Service found", body = wavs_types::Service),
         (status = 404, description = "Service not found"),
@@ -20,9 +18,9 @@ use wavs_types::{ServiceDigest, ServiceID};
 #[axum::debug_handler]
 pub async fn handle_get_service(
     State(state): State<HttpState>,
-    axum::extract::Path(service_id): axum::extract::Path<ServiceID>,
+    Json(req): Json<GetServiceRequest>,
 ) -> impl IntoResponse {
-    match get_service_inner(&state, service_id).await {
+    match get_service_inner(&state, req.service_manager).await {
         Ok(resp) => Json(resp).into_response(),
         Err(e) => e.into_response(),
     }
@@ -30,9 +28,9 @@ pub async fn handle_get_service(
 
 async fn get_service_inner(
     state: &HttpState,
-    service_id: ServiceID,
+    service_manager: ServiceManager,
 ) -> HttpResult<wavs_types::Service> {
-    Ok(state.load_service(&service_id)?)
+    Ok(state.load_service(&ServiceID::from(&service_manager))?)
 }
 
 #[utoipa::path(
