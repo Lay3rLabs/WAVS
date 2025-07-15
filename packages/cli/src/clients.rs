@@ -177,9 +177,9 @@ impl HttpClient {
         let service_hash = service.hash()?;
         tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(30)), async {
             loop {
-                tracing::warn!("Waiting for service update: {}", service.id);
+                tracing::warn!("Waiting for service update: {}", service.id());
 
-                if let Ok(current_service) = self.get_service_from_node(&service.id).await {
+                if let Ok(current_service) = self.get_service_from_node(&service.id()).await {
                     if current_service.hash()? == service_hash {
                         break Ok(());
                     }

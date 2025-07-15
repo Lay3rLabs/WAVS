@@ -9,7 +9,6 @@ use wavs_types::{
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct ServiceJson {
-    pub id: ServiceID,
     pub name: String,
     pub workflows: BTreeMap<WorkflowID, WorkflowJson>,
     pub status: ServiceStatus,
@@ -188,6 +187,10 @@ impl ServiceJson {
         }
 
         errors
+    }
+
+    pub fn id(&self) -> ServiceID {
+        ServiceID::hash(&self.name)
     }
 }
 

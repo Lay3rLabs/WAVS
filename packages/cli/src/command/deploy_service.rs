@@ -21,7 +21,7 @@ impl CommandDeployResult for DeployService {
     fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {
         deployment
             .services
-            .insert(self.args.service.id.clone(), self.args.service.clone());
+            .insert(self.args.service.id(), self.args.service.clone());
     }
 }
 
@@ -40,7 +40,7 @@ pub struct SetServiceUrlArgs {
 impl DeployService {
     pub async fn run(ctx: &CliContext, args: DeployServiceArgs) -> Result<Self> {
         let service = args.service.clone();
-        let service_id = service.id.clone();
+        let service_id = service.id();
 
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 

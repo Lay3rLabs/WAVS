@@ -248,7 +248,7 @@ impl SubmissionManager {
         url: String,
         packet: Packet,
     ) -> Result<(), SubmissionError> {
-        let service_id = packet.service.id.clone();
+        let service_id = packet.service.id();
         let response = self
             .http_client
             .post(format!("{url}/packet"))

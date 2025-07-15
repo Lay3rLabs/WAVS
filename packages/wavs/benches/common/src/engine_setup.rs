@@ -5,8 +5,8 @@ use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbS
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, Service, ServiceID, TriggerAction, TriggerConfig,
-    TriggerData, Workflow, WorkflowID,
+    AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,
+    Workflow, WorkflowID,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
@@ -44,7 +44,6 @@ impl EngineSetup {
         let component = Component::new(&engine, &component_bytes).unwrap();
 
         // Create a simple workflow
-        let service_id = ServiceID::new("benchmark-service".to_string()).unwrap();
         let workflow_id = WorkflowID::new("benchmark-workflow".to_string()).unwrap();
 
         let data_dir = tempdir().unwrap();
@@ -67,7 +66,6 @@ impl EngineSetup {
         };
 
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(workflow_id.clone(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
@@ -130,7 +128,7 @@ impl EngineSetup {
     pub fn create_trigger_action(&self, data: Vec<u8>) -> TriggerAction {
         TriggerAction {
             config: TriggerConfig {
-                service_id: self.service.id.clone(),
+                service_id: self.service.id(),
                 workflow_id: self.workflow_id.clone(),
                 trigger: wavs_types::Trigger::Manual,
             },

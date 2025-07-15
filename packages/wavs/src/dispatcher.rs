@@ -239,17 +239,18 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
         tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}",
-            service.id, service.workflows.len(), total_services, total_workflows);
+            service.id(), service.workflows.len(), total_services, total_workflows);
 
         Ok(service)
     }
 
     // this is public just so we can call it from tests
     pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
-        tracing::info!("Adding service: {}", service.id);
+        let service_id = service.id();
+        tracing::info!("Adding service: {}", service_id);
         // Check if service is already registered
-        if self.services.exists(&service.id)? {
-            return Err(DispatcherError::ServiceRegistered(service.id));
+        if self.services.exists(&service_id)? {
+            return Err(DispatcherError::ServiceRegistered(service_id));
         }
 
         // Store components
@@ -309,10 +310,10 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     ) -> Result<(), DispatcherError> {
         let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
 
-        if service.id != service_id {
+        if service.id() != service_id {
             return Err(DispatcherError::ChangeIdMismatch {
                 old_id: service_id,
-                new_id: service.id,
+                new_id: service.id(),
             });
         }
 
@@ -408,7 +409,7 @@ fn add_service_to_managers(
     submissions: &SubmissionManager,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service_key(service.id.clone(), hd_index) {
+    if let Err(err) = submissions.add_service_key(service.id(), hd_index) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }

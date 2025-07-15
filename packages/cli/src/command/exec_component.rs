@@ -83,18 +83,6 @@ impl ExecComponent {
         let engine = WTEngine::new(&wt_config)
             .context("Failed to create Wasmtime engine with the specified configuration")?;
 
-        let trigger_action = TriggerAction {
-            config: TriggerConfig {
-                service_id: ServiceID::new("service-1")?,
-                workflow_id: WorkflowID::default(),
-                trigger: Trigger::Manual,
-            },
-            data: TriggerData::Raw(input.decode().context(format!(
-                "Failed to decode input '{}' for component execution",
-                input.into_string()
-            ))?),
-        };
-
         // Automatically pick up all env vars with the WAVS_ENV_PREFIX
         let env_keys = std::env::vars()
             .map(|(key, _)| key)
@@ -102,7 +90,7 @@ impl ExecComponent {
             .collect();
 
         let workflow = Workflow {
-            trigger: trigger_action.config.trigger.clone(),
+            trigger: Trigger::Manual,
             component: wavs_types::Component {
                 source: ComponentSource::Digest(ComponentDigest::hash(&wasm_bytes)),
                 permissions: Permissions {
@@ -118,14 +106,25 @@ impl ExecComponent {
         };
 
         let service = wavs_types::Service {
-            id: trigger_action.config.service_id.clone(),
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(trigger_action.config.workflow_id.clone(), workflow)]),
+            workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
                 chain_name: "exec".parse().unwrap(),
                 address: Default::default(),
             },
+        };
+
+        let trigger_action = TriggerAction {
+            config: TriggerConfig {
+                service_id: service.id(),
+                workflow_id: WorkflowID::default(),
+                trigger: Trigger::Manual,
+            },
+            data: TriggerData::Raw(input.decode().context(format!(
+                "Failed to decode input '{}' for component execution",
+                input.into_string()
+            ))?),
         };
 
         let mut instance_deps = InstanceDepsBuilder {

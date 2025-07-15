@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
-use wavs_types::{ChainName, Envelope, ServiceManager, Submit};
+use wavs_types::{ChainName, Envelope, ServiceID, ServiceManager, Submit};
 
 use utils::{
     context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
@@ -14,10 +14,16 @@ use wavs_systems::mock_submissions::{
     mock_event_id, mock_event_order, wait_for_submission_messages,
 };
 
-fn dummy_message(service: &str, payload: &str) -> ChainMessage {
+fn dummy_message(service_id: ServiceID, payload: &str) -> ChainMessage {
+    let workflow_id = {
+        // whatever, just use the first 24 chars of the service ID
+        let mut s = service_id.to_string();
+        s.truncate(24);
+        s.parse().unwrap()
+    };
     ChainMessage {
-        service_id: service.parse().unwrap(),
-        workflow_id: service.parse().unwrap(),
+        workflow_id,
+        service_id,
         envelope: Envelope {
             payload: payload.as_bytes().to_vec().into(),
             eventId: mock_event_id().into(),
@@ -51,7 +57,6 @@ fn collect_messages_with_wait() {
     let service = wavs_types::Service {
         name: "serv1".to_string(),
         status: wavs_types::ServiceStatus::Active,
-        id: "serv1".parse().unwrap(),
         manager: ServiceManager::Evm {
             chain_name: ChainName::new("evm").unwrap(),
             address: rand_address_evm(),
@@ -61,13 +66,13 @@ fn collect_messages_with_wait() {
     services.save(&service).unwrap();
     ctx.rt.block_on(async {
         submission_manager
-            .add_service_key(service.id, None)
+            .add_service_key(service.id(), None)
             .unwrap();
     });
 
-    let msg1 = dummy_message("serv1", "foo");
-    let msg2 = dummy_message("serv1", "bar");
-    let msg3 = dummy_message("serv1", "baz");
+    let msg1 = dummy_message(service.id(), "foo");
+    let msg2 = dummy_message(service.id(), "bar");
+    let msg3 = dummy_message(service.id(), "baz");
 
     send.blocking_send(msg1.clone()).unwrap();
     wait_for_submission_messages(&submission_manager, 1, None).unwrap();
@@ -76,7 +81,7 @@ fn collect_messages_with_wait() {
         submission_manager
             .get_debug_packets()
             .into_iter()
-            .map(|x| (x.service.id, x.workflow_id))
+            .map(|x| (x.service.id(), x.workflow_id))
             .collect::<Vec<_>>(),
         vec![(msg1.service_id.clone(), msg1.workflow_id.clone())]
     );
@@ -89,7 +94,7 @@ fn collect_messages_with_wait() {
         submission_manager
             .get_debug_packets()
             .into_iter()
-            .map(|x| (x.service.id, x.workflow_id))
+            .map(|x| (x.service.id(), x.workflow_id))
             .collect::<Vec<_>>(),
         vec![
             (msg1.service_id.clone(), msg1.workflow_id.clone()),

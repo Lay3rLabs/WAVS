@@ -31,7 +31,7 @@ use crate::{
     description = "Validates and processes a packet, adding it to the aggregation queue. When enough packets from different signers accumulate to meet the threshold, the aggregated packet is sent to the target contract."
 )]
 #[axum::debug_handler]
-#[instrument(level = "info", skip(state, req), fields(service_id = %req.packet.service.id, workflow_id = %req.packet.workflow_id))]
+#[instrument(level = "info", skip(state, req), fields(service_id = %req.packet.service.id(), workflow_id = %req.packet.workflow_id))]
 pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
@@ -45,19 +45,19 @@ pub async fn handle_packet(
     }
 }
 
-#[instrument(level = "debug", skip(state, packet), fields(service_id = %packet.service.id, workflow_id = %packet.workflow_id))]
+#[instrument(level = "debug", skip(state, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
 async fn process_packet(
     state: HttpState,
     packet: &Packet,
 ) -> AggregatorResult<Vec<AddPacketResponse>> {
-    if !state.service_registered(&packet.service.id) {
-        return Err(AggregatorError::MissingService(packet.service.id.clone()));
+    if !state.service_registered(&packet.service.id()) {
+        return Err(AggregatorError::MissingService(packet.service.id()));
     }
     let event_id = packet.event_id();
 
     tracing::info!(
         "Processing packet for service: {}, workflow: {}",
-        packet.service.id,
+        packet.service.id(),
         packet.workflow_id
     );
 
@@ -76,7 +76,7 @@ async fn process_packet(
     if aggregators.is_empty() {
         return Err(AggregatorError::MissingWorkflow {
             workflow_id: packet.workflow_id.clone(),
-            service_id: packet.service.id.clone(),
+            service_id: packet.service.id(),
         });
     }
 
@@ -359,7 +359,7 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ChainName, Service, ServiceID, WorkflowID};
+    use wavs_types::{ChainName, Service, WorkflowID};
 
     #[test]
     fn packet_validation() {
@@ -368,12 +368,7 @@ mod test {
         let envelope_1 = mock_envelope(1, [1, 2, 3]);
         let envelope_2 = mock_envelope(2, [4, 5, 6]);
 
-        let packet_1 = mock_packet(
-            &signer_1,
-            &envelope_1,
-            "service-1".parse().unwrap(),
-            "workflow-1".parse().unwrap(),
-        );
+        let packet_1 = mock_packet(&signer_1, &envelope_1, "workflow-1".parse().unwrap());
 
         let derived_signer_1_address = packet_1
             .signature
@@ -385,12 +380,7 @@ mod test {
         let queue = add_packet_to_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
 
         // succeeds, replaces the packet for the signer
-        let packet_2 = mock_packet(
-            &signer_1,
-            &envelope_1,
-            "service-1".parse().unwrap(),
-            "workflow-1".parse().unwrap(),
-        );
+        let packet_2 = mock_packet(&signer_1, &envelope_1, "workflow-1".parse().unwrap());
         let queue = add_packet_to_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
         assert_eq!(queue.len(), 1);
         assert_eq!(
@@ -399,21 +389,11 @@ mod test {
         );
 
         // "fails" (expectedly) because the envelope is different
-        let packet_3 = mock_packet(
-            &signer_2,
-            &envelope_2,
-            "service-1".parse().unwrap(),
-            "workflow-1".parse().unwrap(),
-        );
+        let packet_3 = mock_packet(&signer_2, &envelope_2, "workflow-1".parse().unwrap());
         add_packet_to_queue(&packet_3, queue.clone(), signer_2.address()).unwrap_err();
 
         // passes because the signer is different but envelope is the same
-        let packet_3 = mock_packet(
-            &signer_2,
-            &envelope_1,
-            "service-1".parse().unwrap(),
-            "workflow-1".parse().unwrap(),
-        );
+        let packet_3 = mock_packet(&signer_2, &envelope_1, "workflow-1".parse().unwrap());
         add_packet_to_queue(&packet_3, queue, signer_2.address()).unwrap();
     }
 
@@ -481,16 +461,14 @@ mod test {
             .await;
 
         // Make sure we properly collect errors without actually erroring out
-        let service_id = "service-1".parse().unwrap();
-        deps.state.register_service(&service_id).unwrap();
         let mut service = deps
             .create_service(
-                service_id,
                 "workflow-1".parse().unwrap(),
                 *service_manager.address(),
                 vec![*service_handler.address(), Address::ZERO],
             )
             .await;
+        deps.state.register_service(&service.id()).unwrap();
 
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
@@ -667,16 +645,14 @@ mod test {
             .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
-        let service_id = "service-burn-test".parse().unwrap();
-        deps.state.register_service(&service_id).unwrap();
         let service = deps
             .create_service(
-                service_id,
                 "workflow-1".parse().unwrap(),
                 *service_manager.address(),
                 vec![*service_handler.address()],
             )
             .await;
+        deps.state.register_service(&service.id()).unwrap();
 
         let packet = packet_from_service(
             &signer,
@@ -709,16 +685,14 @@ mod test {
             .contracts
             .deploy_simple_service_handler(*service_manager.address())
             .await;
-        let service_id = "service-2".parse().unwrap();
-        deps.state.register_service(&service_id).unwrap();
         let service = deps
             .create_service(
-                service_id,
                 "workflow-1".parse().unwrap(),
                 *service_manager.address(),
                 vec![*service_handler.address()],
             )
             .await;
+        deps.state.register_service(&service.id()).unwrap();
 
         let mut signers = Vec::new();
         const NUM_SIGNERS: usize = 20;
@@ -843,7 +817,6 @@ mod test {
 
     async fn mock_service(
         chain_name: ChainName,
-        service_id: ServiceID,
         workflow_id: WorkflowID,
         service_manager_address: Address,
         service_handler_addresses: Vec<Address>,
@@ -874,7 +847,6 @@ mod test {
         );
 
         wavs_types::Service {
-            id: service_id,
             name: "service".to_string(),
             status: wavs_types::ServiceStatus::Active,
             workflows,
@@ -930,14 +902,12 @@ mod test {
 
         pub async fn create_service(
             &self,
-            service_id: ServiceID,
             workflow_id: WorkflowID,
             service_manager_address: Address,
             service_handler_addresses: Vec<Address>,
         ) -> Service {
             mock_service(
                 self.contracts.chain_name.clone(),
-                service_id,
                 workflow_id,
                 service_manager_address,
                 service_handler_addresses,

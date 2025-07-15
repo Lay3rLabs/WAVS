@@ -109,7 +109,7 @@ impl TriggerManager {
 
         for (id, workflow) in &service.workflows {
             let config = TriggerConfig {
-                service_id: service.id.clone(),
+                service_id: service.id(),
                 workflow_id: id.clone(),
                 trigger: workflow.trigger.clone(),
             };

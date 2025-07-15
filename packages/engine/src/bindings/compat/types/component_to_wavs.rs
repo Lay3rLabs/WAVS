@@ -79,7 +79,6 @@ impl TryFrom<component_service::Service> for wavs_types::Service {
 
     fn try_from(src: component_service::Service) -> Result<Self, Self::Error> {
         Ok(Self {
-            id: src.id.parse()?,
             name: src.name,
             workflows: src
                 .workflows

@@ -36,8 +36,8 @@ use uuid::Uuid;
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentDigest,
-    ComponentSource, EvmContractSubmission, Registry, ServiceID, ServiceManager, ServiceStatus,
-    Submit, Timestamp, Trigger, WorkflowID,
+    ComponentSource, EvmContractSubmission, Registry, ServiceManager, ServiceStatus, Submit,
+    Timestamp, Trigger, WorkflowID,
 };
 
 use crate::{
@@ -61,8 +61,8 @@ pub async fn handle_service_command(
     command: ServiceCommand,
 ) -> Result<()> {
     match command {
-        ServiceCommand::Init { name, id } => {
-            let result = init_service(&file, name, id)?;
+        ServiceCommand::Init { name } => {
+            let result = init_service(&file, name)?;
             display_result(ctx, result, json)?;
         }
         ServiceCommand::Workflow { command } => match command {
@@ -257,20 +257,9 @@ where
 }
 
 /// Run the service initialization
-pub fn init_service(
-    file_path: &Path,
-    name: String,
-    id: Option<ServiceID>,
-) -> Result<ServiceInitResult> {
-    // Generate service ID if not provided
-    let id = match id {
-        Some(id) => id,
-        None => ServiceID::new(Uuid::now_v7().as_hyphenated().to_string())?,
-    };
-
+pub fn init_service(file_path: &Path, name: String) -> Result<ServiceInitResult> {
     // Create the service
     let service = ServiceJson {
-        id,
         name,
         workflows: BTreeMap::new(),
         status: ServiceStatus::Active,
@@ -1134,7 +1123,7 @@ pub async fn validate_service(
         // Validate that referenced contracts exist on-chain
         if !cosmos_clients.is_empty() || !evm_providers.is_empty() {
             if let Err(err) = validate_contracts_exist(
-                service.id.as_ref(),
+                &service.id(),
                 triggers,
                 aggregators.iter().map(|(id, agg)| (*id, agg)).collect(),
                 service_manager,
@@ -1150,7 +1139,7 @@ pub async fn validate_service(
     }
 
     Ok(ServiceValidationResult {
-        service_id: service.id.to_string(),
+        service_id: service.id().to_string(),
         errors,
     })
 }

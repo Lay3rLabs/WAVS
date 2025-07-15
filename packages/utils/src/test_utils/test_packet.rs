@@ -4,7 +4,7 @@ use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::SolValue;
 use wavs_types::{
     Component, ComponentDigest, ComponentSource, Envelope, EnvelopeExt, EnvelopeSignature, Packet,
-    Service, ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::test_utils::address::rand_address_evm;
@@ -29,11 +29,9 @@ pub fn packet_from_service(
 pub fn mock_packet(
     signer: &LocalSigner<SigningKey>,
     envelope: &Envelope,
-    service_id: ServiceID,
     workflow_id: WorkflowID,
 ) -> Packet {
     let service = Service {
-        id: service_id,
         name: "mock packet service".to_string(),
         workflows: [(
             workflow_id.clone(),

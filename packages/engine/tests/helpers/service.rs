@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, ServiceID,
-    Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID,
+    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, Submit, Trigger,
+    TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID,
 };
 
 pub fn make_trigger_action(
@@ -11,7 +11,7 @@ pub fn make_trigger_action(
 ) -> TriggerAction {
     TriggerAction {
         config: TriggerConfig {
-            service_id: service.id.clone(),
+            service_id: service.id().clone(),
             workflow_id: workflow_id
                 .unwrap_or_else(|| service.workflows.keys().next().cloned().unwrap()),
             trigger: service.workflows.values().next().unwrap().trigger.clone(),
@@ -21,7 +21,6 @@ pub fn make_trigger_action(
 }
 
 pub fn make_service(wasm_digest: ComponentDigest) -> Service {
-    let service_id = ServiceID::new("service-1").unwrap();
     let workflow_id = WorkflowID::new("workflow-1").unwrap();
 
     let workflow = Workflow {
@@ -41,7 +40,6 @@ pub fn make_service(wasm_digest: ComponentDigest) -> Service {
     };
 
     Service {
-        id: service_id.clone(),
         name: "My Service".to_string(),
         workflows: BTreeMap::from([(workflow_id, workflow)]),
         status: wavs_types::ServiceStatus::Active,
