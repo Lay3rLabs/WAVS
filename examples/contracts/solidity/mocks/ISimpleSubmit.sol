@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.27;
 
 import {ISimpleTrigger} from "./ISimpleTrigger.sol";
 import {IWavsServiceHandler} from "../interfaces/IWavsServiceHandler.sol";
@@ -16,8 +16,12 @@ interface ISimpleSubmit {
         IWavsServiceHandler.Envelope envelope;
     }
 
-    function getSignedData(ISimpleTrigger.TriggerId triggerId) external view returns (SignedData memory);
+    function getSignedData(
+        ISimpleTrigger.TriggerId triggerId
+    ) external view returns (SignedData memory);
 
     // just so alloy can see the generated type
-    function getDataWithId(ISimpleTrigger.TriggerId triggerId) external view returns (DataWithId memory);
+    function getDataWithId(
+        ISimpleTrigger.TriggerId triggerId
+    ) external view returns (DataWithId memory);
 }
