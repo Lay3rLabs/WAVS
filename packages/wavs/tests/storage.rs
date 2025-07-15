@@ -62,9 +62,7 @@ fn db_service_store() {
     let file = tempfile::NamedTempFile::new().unwrap();
     let storage = RedbStorage::new(file.path()).unwrap();
 
-    const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("temp-services");
-
-    let service_id = ServiceID::new("service-id-1").unwrap();
+    const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("temp-services");
 
     let workflows: BTreeMap<WorkflowID, Workflow> = [
         (
@@ -91,8 +89,7 @@ fn db_service_store() {
     .into();
 
     let service = Service {
-        id: service_id.clone(),
-        name: service_id.to_string(),
+        name: "service-id-1".to_string(),
         workflows,
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
@@ -101,9 +98,14 @@ fn db_service_store() {
         },
     };
 
-    storage.set(SERVICE_TABLE, &service_id, &service).unwrap();
+    storage
+        .set(SERVICE_TABLE, service.id().inner(), &service)
+        .unwrap();
 
-    let service_stored = storage.get(SERVICE_TABLE, &service_id).unwrap().unwrap();
+    let service_stored = storage
+        .get(SERVICE_TABLE, service.id().inner())
+        .unwrap()
+        .unwrap();
 
     let expected_service_serialized = serde_json::to_vec(&service).unwrap();
     let service_stored_serialized = serde_json::to_vec(&service_stored.value()).unwrap();
@@ -118,13 +120,13 @@ fn db_service_store() {
                 .unwrap()
                 .map(|entry| {
                     let (k, _) = entry.unwrap();
-                    k.value().to_string()
+                    ServiceID::from(k.value())
                 })
-                .collect::<Vec<String>>())
+                .collect::<Vec<ServiceID>>())
         })
         .unwrap();
 
-    assert_eq!(vec![service_id.to_string()], keys);
+    assert_eq!(vec![service.id()], keys);
 
     let values = storage
         .map_table_read(SERVICE_TABLE, |table| {

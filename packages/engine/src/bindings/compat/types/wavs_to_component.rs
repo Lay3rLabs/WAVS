@@ -135,7 +135,6 @@ impl TryFrom<wavs_types::Service> for component_service::Service {
 
     fn try_from(src: wavs_types::Service) -> Result<Self, Self::Error> {
         Ok(Self {
-            id: src.id.to_string(),
             name: src.name,
             workflows: src
                 .workflows

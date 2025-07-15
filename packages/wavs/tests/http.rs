@@ -13,7 +13,7 @@ use wavs_systems::{
     http::{map_response, TestHttpApp},
     mock_trigger_manager::mock_evm_event_trigger,
 };
-use wavs_types::{ChainName, ComponentDigest, ComponentSource, ServiceID, UploadComponentResponse};
+use wavs_types::{ChainName, ComponentDigest, ComponentSource, UploadComponentResponse};
 
 #[test]
 fn http_not_found() {
@@ -87,7 +87,6 @@ fn http_save_service() {
     let app = TestHttpApp::new();
 
     let service = wavs_types::Service::new_simple(
-        ServiceID::new("service-1").unwrap(),
         Some("My amazing service".to_string()),
         mock_evm_event_trigger(),
         ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
@@ -154,7 +153,7 @@ fn http_save_service() {
 
     assert_eq!(response, service);
 
-    tracing::info!("Service: {} round-tripped!", response.id);
+    tracing::info!("Service: {} round-tripped!", response.id());
 }
 
 fn create_test_evm_chain_config() -> AnyChainConfig {

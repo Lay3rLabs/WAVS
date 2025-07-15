@@ -37,7 +37,7 @@ async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesRespon
                 source: component.source.clone(),
                 permissions: component.permissions.clone(),
                 status: service.status,
-                id: service.id.clone(),
+                id: service.id().clone(),
                 // just first workflow for now
                 trigger: match service.workflows.values().next() {
                     None => return Err(anyhow::anyhow!("No workflows found").into()),

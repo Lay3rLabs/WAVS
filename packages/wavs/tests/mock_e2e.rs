@@ -12,19 +12,17 @@ use utils::{
 };
 mod wavs_systems;
 use wavs_systems::{mock_app::MockE2ETestRunner, mock_submissions::wait_for_submission_messages};
-use wavs_types::{ComponentSource, ServiceID, WorkflowID};
+use wavs_types::{ComponentSource, WorkflowID};
 
 #[test]
 fn mock_e2e_trigger_flow() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
-    let service_id = ServiceID::new("service1").unwrap();
     let task_queue_address = rand_address_cosmos();
 
     // block and wait for creating the service
-    runner.ctx.rt.block_on({
+    let service_id = runner.ctx.rt.block_on({
         let runner = runner.clone();
-        let service_id = service_id.clone();
 
         async move {
             let digest = runner
@@ -34,8 +32,8 @@ fn mock_e2e_trigger_flow() {
                 .store_component_bytes(COMPONENT_SQUARE_BYTES)
                 .unwrap();
             runner
-                .create_service(service_id.clone(), ComponentSource::Digest(digest))
-                .await;
+                .create_service(None, ComponentSource::Digest(digest))
+                .await
         }
     });
 
@@ -46,7 +44,7 @@ fn mock_e2e_trigger_flow() {
         async move {
             runner
                 .send_trigger(
-                    &service_id,
+                    service_id.clone(),
                     &WorkflowID::default(),
                     &task_queue_address.clone(),
                     &SquareRequest { x: 3 },
@@ -55,7 +53,7 @@ fn mock_e2e_trigger_flow() {
                 .await;
             runner
                 .send_trigger(
-                    &service_id,
+                    service_id,
                     &WorkflowID::default(),
                     &task_queue_address,
                     &SquareRequest { x: 21 },
@@ -87,7 +85,6 @@ fn mock_e2e_service_lifecycle() {
             assert!(services.digests.is_empty());
 
             // add services in order
-            let service_id1 = ServiceID::new("service1").unwrap();
             let digest = runner
                 .dispatcher
                 .engine_manager
@@ -95,23 +92,25 @@ fn mock_e2e_service_lifecycle() {
                 .store_component_bytes(COMPONENT_SQUARE_BYTES)
                 .unwrap();
 
-            let service_id2 = ServiceID::new("service2").unwrap();
-
-            let service_id3 = ServiceID::new("service3").unwrap();
-
-            for service_id in [&service_id1, &service_id2, &service_id3] {
-                runner
-                    .create_service(service_id.clone(), ComponentSource::Digest(digest.clone()))
-                    .await;
+            let mut service_ids = Vec::new();
+            for i in 1..=3 {
+                service_ids.push(
+                    runner
+                        .create_service(
+                            Some(format!("service-{i}")),
+                            ComponentSource::Digest(digest.clone()),
+                        )
+                        .await,
+                );
             }
 
             let services = runner.list_services().await;
 
             assert_eq!(services.services.len(), 3);
             assert_eq!(services.digests.len(), 1);
-            assert_eq!(services.services[0].id, service_id1);
-            assert_eq!(services.services[1].id, service_id2);
-            assert_eq!(services.services[2].id, service_id3);
+            assert_eq!(services.services[0].id, service_ids[0]);
+            assert_eq!(services.services[1].id, service_ids[1]);
+            assert_eq!(services.services[2].id, service_ids[2]);
 
             // add an orphaned digest
             let _orphaned_digest = runner
@@ -128,17 +127,17 @@ fn mock_e2e_service_lifecycle() {
             // selectively delete services 1 and 3, leaving just 2
 
             runner
-                .delete_services(vec![service_id1.clone(), service_id3.clone()])
+                .delete_services(vec![service_ids[0].clone(), service_ids[2].clone()])
                 .await;
 
             let services = runner.list_services().await;
 
             assert_eq!(services.services.len(), 1);
             assert_eq!(services.digests.len(), 2);
-            assert_eq!(services.services[0].id, service_id2);
+            assert_eq!(services.services[0].id, service_ids[1]);
 
             // and make sure we can delete the last one but still get an empty list
-            runner.delete_services(vec![service_id2.clone()]).await;
+            runner.delete_services(vec![service_ids[1].clone()]).await;
 
             let services = runner.list_services().await;
 
@@ -152,13 +151,11 @@ fn mock_e2e_service_lifecycle() {
 fn mock_e2e_component_none() {
     let runner = MockE2ETestRunner::new(AppContext::new());
 
-    let service_id = ServiceID::new("service1").unwrap();
     let task_queue_address = rand_address_evm();
 
     // block and wait for creating the service
-    runner.ctx.rt.block_on({
+    let service_id = runner.ctx.rt.block_on({
         let runner = runner.clone();
-        let service_id = service_id.clone();
 
         async move {
             let digest = runner
@@ -169,8 +166,8 @@ fn mock_e2e_component_none() {
                 .unwrap();
 
             runner
-                .create_service(service_id.clone(), ComponentSource::Digest(digest))
-                .await;
+                .create_service(None, ComponentSource::Digest(digest))
+                .await
         }
     });
 
@@ -181,7 +178,7 @@ fn mock_e2e_component_none() {
         async move {
             runner
                 .send_trigger(
-                    &service_id,
+                    service_id,
                     &WorkflowID::default(),
                     &task_queue_address.into(),
                     &SquareRequest { x: 3 },

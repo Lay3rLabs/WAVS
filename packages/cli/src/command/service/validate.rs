@@ -7,7 +7,7 @@ use layer_climb::{
 use reqwest::Client;
 use std::collections::HashMap;
 use wavs_types::{
-    Aggregator, ChainName, EvmContractSubmission, ServiceManager, Trigger, WorkflowID,
+    Aggregator, ChainName, EvmContractSubmission, ServiceID, ServiceManager, Trigger, WorkflowID,
 };
 
 /// Validate a workflow trigger using a Cosmos query client
@@ -98,7 +98,7 @@ pub async fn validate_registry_availability(registry_url: &str, errors: &mut Vec
 
 /// Validation helper to check if contracts referenced in triggers exist on-chain
 pub async fn validate_contracts_exist(
-    service_id: &str,
+    service_id: &ServiceID,
     triggers: Vec<(&WorkflowID, &Trigger)>,
     aggregators: Vec<(&WorkflowID, &Aggregator)>,
     service_manager: Option<&ServiceManager>,

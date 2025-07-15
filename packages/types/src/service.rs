@@ -14,9 +14,6 @@ use super::{ChainName, ServiceID, WorkflowID};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
-    // Public identifier. Must be unique for all services
-    pub id: ServiceID,
-
     /// This is any utf-8 string, for human-readable display.
     pub name: String,
 
@@ -33,6 +30,21 @@ impl Service {
     pub fn hash(&self) -> anyhow::Result<ServiceDigest> {
         let service_bytes = serde_json::to_vec(self)?;
         Ok(ServiceDigest::hash(&service_bytes))
+    }
+
+    pub fn id(&self) -> ServiceID {
+        let mut bytes = Vec::new();
+        match &self.manager {
+            ServiceManager::Evm {
+                chain_name,
+                address,
+            } => {
+                bytes.extend_from_slice(b"evm");
+                bytes.extend_from_slice(chain_name.to_string().as_bytes());
+                bytes.extend_from_slice(address.as_slice());
+            }
+        }
+        ServiceID::hash(bytes)
     }
 }
 
@@ -62,7 +74,6 @@ impl ServiceManager {
 
 impl Service {
     pub fn new_simple(
-        id: ServiceID,
         name: Option<String>,
         trigger: Trigger,
         source: ComponentSource,
@@ -80,8 +91,7 @@ impl Service {
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
 
         Self {
-            name: name.unwrap_or_else(|| id.to_string()),
-            id,
+            name: name.unwrap_or_else(|| "Unknown".to_string()),
             workflows,
             status: ServiceStatus::Active,
             manager,
@@ -442,41 +452,41 @@ mod test_ext {
 
     impl TriggerConfig {
         pub fn cosmos_contract_event(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             contract_address: layer_climb_address::Address,
             chain_name: impl Into<ChainName>,
             event_type: impl ToString,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::cosmos_contract_event(contract_address, chain_name, event_type),
             })
         }
 
         pub fn evm_contract_event(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             contract_address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::evm_contract_event(contract_address, chain_name, event_hash),
             })
         }
 
         pub fn block_interval_event(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             chain_name: impl Into<ChainName>,
             n_blocks: NonZeroU32,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::BlockInterval {
                     chain_name: chain_name.into(),
@@ -489,11 +499,11 @@ mod test_ext {
 
         #[cfg(test)]
         pub fn manual(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::Manual,
             })

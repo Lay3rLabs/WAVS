@@ -13,8 +13,8 @@ use utils::{
 use wavs::dispatcher::DispatcherCommand;
 use wavs::init_tracing_tests;
 use wavs_types::{
-    ChainName, Component, ComponentSource, EvmContractSubmission, Service, ServiceID,
-    ServiceManager, ServiceStatus, Submit, Workflow, WorkflowID,
+    ChainName, Component, ComponentSource, EvmContractSubmission, Service, ServiceManager,
+    ServiceStatus, Submit, Workflow, WorkflowID,
 };
 mod wavs_systems;
 use wavs_systems::{
@@ -31,27 +31,8 @@ fn dispatcher_pipeline() {
     let data_dir = tempfile::tempdir().unwrap();
 
     // Prepare two actions to be squared
-    let service_id = ServiceID::new("service1").unwrap();
     let workflow_id = WorkflowID::new("workflow1").unwrap();
     let chain_name = "cosmos".to_string();
-
-    let contract_address = rand_address_cosmos();
-    let actions = vec![
-        mock_real_trigger_action(
-            &service_id,
-            &workflow_id,
-            &contract_address,
-            &SquareRequest::new(3),
-            &chain_name,
-        ),
-        mock_real_trigger_action(
-            &service_id,
-            &workflow_id,
-            &contract_address,
-            &SquareRequest::new(21),
-            &chain_name,
-        ),
-    ];
 
     let ctx = AppContext::new();
     let dispatcher = Arc::new(MockE2ETestRunner::create_dispatcher(ctx.clone(), &data_dir));
@@ -65,7 +46,6 @@ fn dispatcher_pipeline() {
 
     // Register a service to handle this action
     let service = Service {
-        id: service_id.clone(),
         name: "Big Square AVS".to_string(),
         workflows: [(
             workflow_id.clone(),
@@ -90,6 +70,24 @@ fn dispatcher_pipeline() {
             address: rand_address_evm(),
         },
     };
+
+    let contract_address = rand_address_cosmos();
+    let actions = vec![
+        mock_real_trigger_action(
+            service.id(),
+            &workflow_id,
+            &contract_address,
+            &SquareRequest::new(3),
+            &chain_name,
+        ),
+        mock_real_trigger_action(
+            service.id(),
+            &workflow_id,
+            &contract_address,
+            &SquareRequest::new(21),
+            &chain_name,
+        ),
+    ];
 
     // runs "forever" until the channel is closed, which should happen as soon as the one action is sent
     std::thread::spawn({

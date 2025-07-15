@@ -51,7 +51,6 @@ fn collect_messages_with_wait() {
     let service = wavs_types::Service {
         name: "serv1".to_string(),
         status: wavs_types::ServiceStatus::Active,
-        id: "serv1".parse().unwrap(),
         manager: ServiceManager::Evm {
             chain_name: ChainName::new("evm").unwrap(),
             address: rand_address_evm(),
@@ -61,7 +60,7 @@ fn collect_messages_with_wait() {
     services.save(&service).unwrap();
     ctx.rt.block_on(async {
         submission_manager
-            .add_service_key(service.id, None)
+            .add_service_key(service.id(), None)
             .unwrap();
     });
 
@@ -76,7 +75,7 @@ fn collect_messages_with_wait() {
         submission_manager
             .get_debug_packets()
             .into_iter()
-            .map(|x| (x.service.id, x.workflow_id))
+            .map(|x| (x.service.id(), x.workflow_id))
             .collect::<Vec<_>>(),
         vec![(msg1.service_id.clone(), msg1.workflow_id.clone())]
     );
@@ -89,7 +88,7 @@ fn collect_messages_with_wait() {
         submission_manager
             .get_debug_packets()
             .into_iter()
-            .map(|x| (x.service.id, x.workflow_id))
+            .map(|x| (x.service.id(), x.workflow_id))
             .collect::<Vec<_>>(),
         vec![
             (msg1.service_id.clone(), msg1.workflow_id.clone()),

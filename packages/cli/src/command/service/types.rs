@@ -29,7 +29,7 @@ pub struct ServiceInitResult {
 impl std::fmt::Display for ServiceInitResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Service JSON generated successfully!")?;
-        writeln!(f, "  ID:   {}", self.service.id)?;
+        writeln!(f, "  Local ID:   {}", self.service.id())?;
         writeln!(f, "  Name: {}", self.service.name)?;
         writeln!(f, "  File: {}", self.file_path.display())
     }

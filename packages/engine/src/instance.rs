@@ -50,7 +50,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 .workflows
                 .get(&workflow_id)
                 .ok_or_else(|| EngineError::WorkflowNotFound {
-                    service_id: service.id.clone(),
+                    service_id: service.id().clone(),
                     workflow_id: workflow_id.clone(),
                 })?;
 

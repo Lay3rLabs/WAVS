@@ -254,7 +254,6 @@ new_hash_id_type!(ComponentDigest, true);
 // it's a hash of the ServiceManager definition (chain and address)
 new_hash_id_type!(ServiceID, true);
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
