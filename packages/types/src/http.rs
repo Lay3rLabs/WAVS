@@ -1,7 +1,6 @@
 pub mod aggregator;
-use super::{Service, ServiceID};
-use crate::{AnyChainConfig, ChainName, ComponentDigest, ServiceDigest};
-use layer_climb_address::Address;
+use super::Service;
+use crate::{AnyChainConfig, ChainName, ComponentDigest, ServiceDigest, ServiceManager};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -18,9 +17,17 @@ pub enum SigningKeyResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct AddServiceRequest {
-    pub chain_name: ChainName,
-    #[schema(value_type = Object)]
-    pub address: Address,
+    pub service_manager: ServiceManager,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+pub struct GetServiceRequest {
+    pub service_manager: ServiceManager,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+pub struct GetServiceKeyRequest {
+    pub service_manager: ServiceManager,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
@@ -31,7 +38,7 @@ pub struct AddChainRequest {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct DeleteServicesRequest {
-    pub service_ids: Vec<ServiceID>,
+    pub service_managers: Vec<ServiceManager>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

@@ -38,7 +38,7 @@ use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
-use wavs_types::{ChainConfigError, ComponentDigest};
+use wavs_types::{ChainConfigError, ComponentDigest, ServiceManager};
 use wavs_types::{ChainName, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction};
 
 use crate::config::Config;
@@ -223,13 +223,22 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub async fn add_service(
         &self,
-        chain_name: ChainName,
-        address: Address,
+        service_manager: ServiceManager,
     ) -> Result<Service, DispatcherError> {
+        let (chain_name, address) = match service_manager {
+            ServiceManager::Evm {
+                chain_name,
+                address,
+            } => (chain_name, address),
+        };
         let chain_configs = self.chain_configs.read().unwrap().clone();
-        let service =
-            query_service_from_address(chain_name, address, &chain_configs, &self.ipfs_gateway)
-                .await?;
+        let service = query_service_from_address(
+            chain_name,
+            address.into(),
+            &chain_configs,
+            &self.ipfs_gateway,
+        )
+        .await?;
 
         self.add_service_direct(service.clone()).await?;
 

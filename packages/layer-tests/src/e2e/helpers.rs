@@ -133,7 +133,7 @@ pub async fn deploy_service_for_test(
     // give signer address some weight in the service manager
     let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients
         .http_client
-        .get_service_key(service.id())
+        .get_service_key(service.manager.clone())
         .await
         .unwrap();
 

@@ -174,8 +174,8 @@ impl MockE2ETestRunner {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn delete_services(&self, service_ids: Vec<ServiceID>) {
-        let body = serde_json::to_string(&DeleteServicesRequest { service_ids }).unwrap();
+    pub async fn delete_services(&self, service_managers: Vec<ServiceManager>) {
+        let body = serde_json::to_string(&DeleteServicesRequest { service_managers }).unwrap();
 
         let req = Request::builder()
             .method(Method::DELETE)
