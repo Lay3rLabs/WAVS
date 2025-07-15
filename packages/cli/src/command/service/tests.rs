@@ -48,7 +48,6 @@ fn test_service_init() {
     let auto_id_content = std::fs::read_to_string(auto_id_file_path).unwrap();
     let auto_id_parsed: ServiceJson = serde_json::from_str(&auto_id_content).unwrap();
 
-    assert_eq!(auto_id_parsed.id(), auto_id_result.service.id());
     assert_eq!(auto_id_parsed.name, "Auto ID Service");
 }
 

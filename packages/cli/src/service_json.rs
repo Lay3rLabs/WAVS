@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Component, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
+    Component, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -187,10 +187,6 @@ impl ServiceJson {
         }
 
         errors
-    }
-
-    pub fn id(&self) -> ServiceID {
-        ServiceID::hash(&self.name)
     }
 }
 

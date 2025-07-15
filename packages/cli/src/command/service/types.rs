@@ -29,7 +29,6 @@ pub struct ServiceInitResult {
 impl std::fmt::Display for ServiceInitResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Service JSON generated successfully!")?;
-        writeln!(f, "  Local ID:   {}", self.service.id())?;
         writeln!(f, "  Name: {}", self.service.name)?;
         writeln!(f, "  File: {}", self.file_path.display())
     }
@@ -346,8 +345,8 @@ impl std::fmt::Display for UpdateStatusResult {
 /// Result of service validation
 #[derive(Debug, Clone, Serialize)]
 pub struct ServiceValidationResult {
-    /// The service ID
-    pub service_id: String,
+    /// The service name
+    pub service_name: String,
     /// Any errors generated during validation
     pub errors: Vec<String>,
 }
@@ -356,10 +355,10 @@ impl std::fmt::Display for ServiceValidationResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.errors.is_empty() {
             writeln!(f, "✅ Service validation successful!")?;
-            writeln!(f, "   Service ID: {}", self.service_id)?;
-        } else {
+            writeln!(f, "   Service Name: {}", self.service_name)?;
+        } else  {
             writeln!(f, "❌ Service validation failed with errors")?;
-            writeln!(f, "   Service ID: {}", self.service_id)?;
+            writeln!(f, "   Service Name: {}", self.service_name)?;
             writeln!(f, "   Errors:")?;
             for (i, error) in self.errors.iter().enumerate() {
                 writeln!(f, "   {}: {}", i + 1, error)?;

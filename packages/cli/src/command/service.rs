@@ -1123,7 +1123,7 @@ pub async fn validate_service(
         // Validate that referenced contracts exist on-chain
         if !cosmos_clients.is_empty() || !evm_providers.is_empty() {
             if let Err(err) = validate_contracts_exist(
-                &service.id(),
+                &service.name,
                 triggers,
                 aggregators.iter().map(|(id, agg)| (*id, agg)).collect(),
                 service_manager,
@@ -1139,7 +1139,7 @@ pub async fn validate_service(
     }
 
     Ok(ServiceValidationResult {
-        service_id: service.id().to_string(),
+        service_name: service.name,
         errors,
     })
 }
