@@ -105,7 +105,7 @@ fn mock_e2e_service_lifecycle() {
             }
 
             let mut resp = runner.list_services().await;
-            resp.services.sort_by(|a, b| a.id().cmp(&b.id()));
+            resp.services.sort_by_key(|a| a.id());
             service_ids.sort();
 
             assert_eq!(resp.services.len(), 3);
