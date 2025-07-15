@@ -356,7 +356,7 @@ impl std::fmt::Display for ServiceValidationResult {
         if self.errors.is_empty() {
             writeln!(f, "✅ Service validation successful!")?;
             writeln!(f, "   Service Name: {}", self.service_name)?;
-        } else  {
+        } else {
             writeln!(f, "❌ Service validation failed with errors")?;
             writeln!(f, "   Service Name: {}", self.service_name)?;
             writeln!(f, "   Errors:")?;
