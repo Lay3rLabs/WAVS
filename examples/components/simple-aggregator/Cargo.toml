@@ -1,0 +1,16 @@
+[package]
+name = "simple-aggregator"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+wit-bindgen = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "wavs-tests:simple-aggregator"

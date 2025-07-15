@@ -140,6 +140,7 @@ pub struct WorkflowDefinition {
 #[derive(Clone, Debug)]
 pub enum AggregatorDefinition {
     NewEvmAggregatorSubmit { chain_name: ChainName },
+    ComponentBasedAggregator { component: ComponentDefinition, chain_name: ChainName },
 }
 
 #[derive(Clone, Debug)]

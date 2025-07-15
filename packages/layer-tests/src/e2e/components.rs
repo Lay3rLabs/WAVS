@@ -26,6 +26,7 @@ pub enum ComponentName {
     Square,
     EchoBlockInterval,
     EchoCronInterval,
+    SimpleAggregator,
 }
 
 impl ComponentName {
@@ -39,6 +40,7 @@ impl ComponentName {
             ComponentName::Square => "square",
             ComponentName::EchoBlockInterval => "echo_block_interval",
             ComponentName::EchoCronInterval => "echo_cron_interval",
+            ComponentName::SimpleAggregator => "simple_aggregator",
         }
     }
 }

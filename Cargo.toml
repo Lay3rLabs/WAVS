@@ -11,6 +11,7 @@ members = [
   "examples/components/_helpers",
   "examples/components/_types",
   "examples/components/kv-store",
+  "examples/components/simple-aggregator",
   "examples/contracts/cosmwasm/simple",
 ]
 resolver = "2"
