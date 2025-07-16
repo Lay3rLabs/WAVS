@@ -299,7 +299,15 @@ impl AggregatorEngine {
     }
 
     pub async fn upload_component(&self, component_bytes: Vec<u8>) -> Result<Digest> {
+        // compile component (validate it is proper wasm)
+        let cm = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
+        
+        // store original wasm
         let digest = self.storage.set_data(&component_bytes)?;
+        
+        // cache the compiled component
+        self.memory_cache.write().unwrap().put(digest.clone(), cm);
+        
         Ok(digest)
     }
 }
