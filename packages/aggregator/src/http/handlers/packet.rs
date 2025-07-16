@@ -553,7 +553,7 @@ mod test {
         sync::{Arc, Mutex},
     };
 
-    use utils::storage::{FileStorage, MemoryStorage};
+    use utils::storage::{fs::FileStorage, memory::MemoryStorage};
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
@@ -563,7 +563,7 @@ mod test {
         },
     };
     use wavs_types::{
-        ChainName, Component, ComponentSource, Digest, Service, ServiceID, WorkflowID,
+        ChainName, Service, ServiceID, WorkflowID,
     };
 
     #[test]

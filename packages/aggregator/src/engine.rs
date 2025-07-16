@@ -297,4 +297,9 @@ impl AggregatorEngine {
             }
         }
     }
+
+    pub async fn upload_component(&self, component_bytes: Vec<u8>) -> Result<Digest> {
+        let digest = self.storage.set_data(&component_bytes)?;
+        Ok(digest)
+    }
 }

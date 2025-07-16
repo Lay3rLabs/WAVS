@@ -235,9 +235,13 @@ async fn deploy_workflow(
     let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
         .await
         .unwrap();
-    let submit = create_submit_from_config(&workflow_definition.submit, &submission_contract, Some(component_sources))
-        .await
-        .unwrap();
+    let submit = create_submit_from_config(
+        &workflow_definition.submit,
+        &submission_contract,
+        Some(component_sources),
+    )
+    .await
+    .unwrap();
 
     tracing::info!("[{}] Creating trigger from config", test_name);
     // Create the trigger based on test configuration
@@ -386,11 +390,16 @@ pub async fn create_submit_from_config(
                             max_gas: None,
                         });
                     }
-                    AggregatorDefinition::ComponentBasedAggregator { component: component_def, .. } => {
+                    AggregatorDefinition::ComponentBasedAggregator {
+                        component: component_def,
+                        ..
+                    } => {
                         if let Some(sources) = component_sources {
-                            component = Some(deploy_component(sources, component_def));
+                            component = Some(Box::new(deploy_component(sources, component_def)));
                         } else {
-                            return Err(anyhow!("ComponentBasedAggregator requires component_sources"));
+                            return Err(anyhow!(
+                                "ComponentBasedAggregator requires component_sources"
+                            ));
                         }
                     }
                 }
@@ -399,7 +408,11 @@ pub async fn create_submit_from_config(
             Ok(Submit::Aggregator {
                 url: url.clone(),
                 component,
-                evm_contracts: if evm_contracts.is_empty() { None } else { Some(evm_contracts) },
+                evm_contracts: if evm_contracts.is_empty() {
+                    None
+                } else {
+                    Some(evm_contracts)
+                },
             })
         }
     }

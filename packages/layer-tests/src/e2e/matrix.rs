@@ -142,7 +142,9 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::BlockIntervalStartStop => vec![ComponentName::EchoBlockInterval],
             EvmService::CronInterval => vec![ComponentName::EchoCronInterval],
             EvmService::EmptyToEchoData => vec![ComponentName::EchoData],
-            EvmService::SimpleAggregator => vec![ComponentName::EchoData, ComponentName::SimpleAggregator],
+            EvmService::SimpleAggregator => {
+                vec![ComponentName::EchoData, ComponentName::SimpleAggregator]
+            }
         }
     }
 }

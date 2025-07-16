@@ -12,6 +12,7 @@ use super::config::Configs;
 #[derive(Clone)]
 pub struct Clients {
     pub http_client: HttpClient,
+    pub aggregator_client: HttpClient,
     pub cli_ctx: Arc<wavs_cli::context::CliContext>,
     pub evm_clients: Arc<HashMap<ChainName, EvmSigningClient>>,
     pub cosmos_client_pools: Arc<HashMap<ChainName, SigningClientPool>>,
@@ -20,6 +21,17 @@ pub struct Clients {
 impl Clients {
     pub async fn new(configs: &Configs) -> Self {
         let http_client = HttpClient::new(configs.cli.wavs_endpoint.clone());
+
+        // Get the first aggregator endpoint from config
+        let aggregator_endpoint = if let Some(aggregator_config) = configs.aggregators.first() {
+            format!(
+                "http://{}:{}",
+                aggregator_config.host, aggregator_config.port
+            )
+        } else {
+            panic!("No aggregator configuration found");
+        };
+        let aggregator_client = HttpClient::new(aggregator_endpoint);
 
         // give the server a bit of time to start
         tokio::time::timeout(Duration::from_secs(2), async {
@@ -97,6 +109,7 @@ impl Clients {
 
         Self {
             http_client,
+            aggregator_client,
             cli_ctx: Arc::new(cli_ctx),
             evm_clients: Arc::new(evm_clients),
             cosmos_client_pools: Arc::new(cosmos_client_pools),

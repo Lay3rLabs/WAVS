@@ -1,7 +1,7 @@
 mod world;
 
 use world::{
-    wavs::worker::aggregator::{AggregatorAction, Packet, SubmitAction, TxResult, EvmAddress},
+    wavs::worker::aggregator::{AggregatorAction, EvmAddress, Packet, SubmitAction, TxResult},
     Guest,
 };
 
