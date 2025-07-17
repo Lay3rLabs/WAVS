@@ -1,8 +1,8 @@
-package wavs:worker@0.5.0-alpha.18;
+package wavs:worker@0.6.0-alpha.1;
 
-use wavs:types/core@0.5.0-alpha.18 as core-types;
-use wavs:types/service@0.5.0-alpha.18 as service-types;
-use wavs:types/chain@0.5.0-alpha.18 as chain-types;
+use wavs:types/core@0.6.0-alpha.1 as core-types;
+use wavs:types/service@0.6.0-alpha.1 as service-types;
+use wavs:types/chain@0.6.0-alpha.1 as chain-types;
 
 interface input {
     use core-types.{timestamp};
@@ -59,28 +59,6 @@ interface output {
     }
 }
 
-interface helpers {
-    use service-types.{service, workflow, workflow-id};
-
-    variant log-level {
-        error,
-        warn,
-        info,
-        debug,
-        trace
-    }
-
-    record service-and-workflow-id {
-        service: service,
-        workflow-id: workflow-id
-    }
-
-    record workflow-and-workflow-id {
-        workflow: workflow,
-        workflow-id: workflow-id
-    }
-}
-
 world wavs-world {
     // include needed for golang support
     include wasi:cli/imports@0.2.0;
@@ -94,7 +72,8 @@ world wavs-world {
 
     import host: interface {
         use chain-types.{evm-chain-config, cosmos-chain-config};
-        use helpers.{log-level, service-and-workflow-id, workflow-and-workflow-id};
+        use service-types.{service-and-workflow-id, workflow-and-workflow-id};
+        use core-types.{log-level};
 
         get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
         get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
@@ -115,4 +94,3 @@ world wavs-world {
 
     export run: func(trigger-action: trigger-action) -> result<option<wasm-response>, string>;
 }
-

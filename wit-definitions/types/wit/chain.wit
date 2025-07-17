@@ -1,5 +1,6 @@
 interface chain {
     type chain-name = string;
+    type tx-hash = string;
 
     record cosmos-address {
         bech32-addr: string,

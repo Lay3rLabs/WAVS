@@ -1,74 +1,46 @@
-package wavs:aggregator@0.5.0-alpha.18;
+package wavs:aggregator@0.6.0-alpha.1;
 
-use wavs:types/core@0.5.0-alpha.18 as core-types;
-use wavs:types/service@0.5.0-alpha.18 as service-types;
-use wavs:types/chain@0.5.0-alpha.18 as chain-types;
-
-interface helpers {
-    use service-types.{service, workflow, workflow-id};
-
-    variant log-level {
-        error,
-        warn,
-        info,
-        debug,
-        trace
-    }
-
-    record service-and-workflow-id {
-        service: service,
-        workflow-id: workflow-id
-    }
-
-    record workflow-and-workflow-id {
-        workflow: workflow,
-        workflow-id: workflow-id
-    }
-}
+use wavs:types/core@0.6.0-alpha.1 as core-types;
+use wavs:types/service@0.6.0-alpha.1 as service-types;
+use wavs:types/chain@0.6.0-alpha.1 as chain-types;
 
 interface aggregator {
     use service-types.{service, workflow-id};
     use chain-types.{chain-name, evm-address};
-    
+
     record envelope {
         event-id: list<u8>,
-        ordering: list<u8>, 
-        payload: list<u8>,  
+        ordering: list<u8>,
+        payload: list<u8>,
     }
-    
+
     record secp256k1-signature {
         signature-data: list<u8>,
     }
-    
+
     variant envelope-signature {
         secp256k1(secp256k1-signature),
     }
-    
+
     record packet {
         service: service,
         workflow-id: workflow-id,
         envelope: envelope,
         signature: envelope-signature,
     }
-    
+
     variant aggregator-action {
         timer(timer-action),
         submit(submit-action),
-        nothing,
     }
-    
+
     record timer-action {
         delay: u64,
     }
-    
+
     record submit-action {
         chain-name: chain-name,
         contract-address: evm-address,
-    }
-    
-    variant tx-result {
-        success(string),
-        error(string),
     }
 }
 
@@ -85,7 +57,7 @@ world aggregator-world {
 
     import host: interface {
         use chain-types.{evm-chain-config, cosmos-chain-config};
-        use helpers.{log-level};
+        use core-types.{log-level};
 
         get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
         get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
@@ -95,11 +67,12 @@ world aggregator-world {
         log: func(level: log-level, message: string);
     }
 
-    use aggregator.{packet, aggregator-action, tx-result};
+    use aggregator.{packet, aggregator-action};
+    use chain-types.{tx-hash};
 
     export process-packet: func(packet: packet) -> result<list<aggregator-action>, string>;
 
     export handle-timer-callback: func(packet: packet) -> result<list<aggregator-action>, string>;
 
-    export handle-submit-callback: func(packet: packet, tx-result: tx-result) -> result<bool, string>;
+    export handle-submit-callback: func(packet: packet, tx-result: result<tx-hash, string>) -> result<bool, string>;
 }
