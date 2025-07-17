@@ -1,7 +1,9 @@
-package wavs:types@0.5.0-alpha.18;
+package wavs:types@0.6.0-alpha.1;
 
 interface chain {
   type chain-name = string;
+
+  type tx-hash = string;
 
   record cosmos-address {
     bech32-addr: string,
@@ -47,6 +49,14 @@ interface core {
 
   record timestamp {
     nanos: u64,
+  }
+
+  variant log-level {
+    error,
+    warn,
+    info,
+    debug,
+    trace,
   }
 }
 
@@ -178,7 +188,6 @@ interface service {
 
   /// Service types
   record service {
-    id: service-id,
     name: string,
     workflows: list<tuple<workflow-id, workflow>>,
     status: service-status,
@@ -188,6 +197,16 @@ interface service {
   /// Aggregator types
   variant aggregator {
     evm(evm-contract-submission),
+  }
+
+  record service-and-workflow-id {
+    service: service,
+    workflow-id: workflow-id,
+  }
+
+  record workflow-and-workflow-id {
+    workflow: workflow,
+    workflow-id: workflow-id,
   }
 }
 
