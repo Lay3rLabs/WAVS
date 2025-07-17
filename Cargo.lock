@@ -9625,6 +9625,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wavs-types",
+ "wit-bindgen",
 ]
 
 [[package]]

@@ -4,7 +4,7 @@ use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
 use wasmtime::component::HasSelf;
 use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
-use wasmtime_wasi::{p2::WasiCtxBuilder, DirPerms, FilePerms};
+use wasmtime_wasi::{p2::{WasiCtxBuilder, WasiCtx}, DirPerms, FilePerms};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
@@ -15,7 +15,7 @@ pub struct WorkerHostComponent {
     pub workflow_id: WorkflowID,
     pub chain_configs: ChainConfigs,
     pub inner_log: crate::HostComponentLogger,
-    pub wasi_ctx: wasmtime_wasi::WasiCtx,
+    pub wasi_ctx: WasiCtx,
     pub keyvalue_ctx: KeyValueCtx,
     pub http_ctx: WasiHttpCtx,
 }
@@ -65,7 +65,7 @@ impl<P: AsRef<Path>> WorkerInstanceDepsBuilder<'_, P> {
                 })?;
 
         let mut linker = Linker::new(engine);
-        super::bindings::world::Root::add_to_linker(&mut linker, |host| host)?;
+        crate::bindings::world::WavsWorld::add_to_linker(&mut linker, |host| host)?;
 
         let wasi_ctx = create_wasi_ctx(&workflow, &data_dir)?;
         let keyvalue_ctx = keyvalue_ctx.clone();
@@ -99,7 +99,7 @@ impl<P: AsRef<Path>> WorkerInstanceDepsBuilder<'_, P> {
 fn create_wasi_ctx<P: AsRef<Path>>(
     workflow: &Workflow,
     data_dir: P,
-) -> Result<wasmtime_wasi::WasiCtx, EngineError> {
+) -> Result<WasiCtx, EngineError> {
     let mut wasi_ctx = WasiCtxBuilder::new()
         .inherit_stdio()
         .inherit_stdout()

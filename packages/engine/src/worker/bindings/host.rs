@@ -1,14 +1,16 @@
 use wavs_types::ChainName;
 
-use crate::worker::HostComponent;
+use crate::worker::WorkerHostComponent;
 
-use super::world::host::{LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
+use crate::bindings::world::host::Host;
+use crate::bindings::world::wavs::types::core::LogLevel;
+use crate::bindings::world::wavs::types::service::{ServiceAndWorkflowId, WorkflowAndWorkflowId};
 
-impl super::world::host::Host for HostComponent {
+impl Host for WorkerHostComponent {
     fn get_cosmos_chain_config(
         &mut self,
         chain_name: String,
-    ) -> Option<super::world::host::CosmosChainConfig> {
+    ) -> Option<crate::bindings::world::wavs::types::chain::CosmosChainConfig> {
         let chain_name = ChainName::new(chain_name).ok()?;
 
         self.chain_configs
@@ -21,7 +23,7 @@ impl super::world::host::Host for HostComponent {
     fn get_evm_chain_config(
         &mut self,
         chain_name: String,
-    ) -> Option<super::world::host::EvmChainConfig> {
+    ) -> Option<crate::bindings::world::wavs::types::chain::EvmChainConfig> {
         let chain_name = ChainName::new(chain_name).ok()?;
 
         self.chain_configs

@@ -1,14 +1,15 @@
 use wavs_types::ChainName;
 
-use crate::aggregator::HostComponent;
+use crate::aggregator::AggregatorHostComponent;
 
-use super::world::host::LogLevel;
+use crate::bindings::world::aggregator::host::Host;
+use crate::bindings::world::aggregator::wavs::types::core::LogLevel;
 
-impl super::world::host::Host for HostComponent {
+impl Host for AggregatorHostComponent {
     fn get_cosmos_chain_config(
         &mut self,
         chain_name: String,
-    ) -> Option<super::world::host::CosmosChainConfig> {
+    ) -> Option<crate::bindings::world::aggregator::wavs::types::chain::CosmosChainConfig> {
         let chain_name = ChainName::new(chain_name).ok()?;
 
         self.chain_configs
@@ -21,7 +22,7 @@ impl super::world::host::Host for HostComponent {
     fn get_evm_chain_config(
         &mut self,
         chain_name: String,
-    ) -> Option<super::world::host::EvmChainConfig> {
+    ) -> Option<crate::bindings::world::aggregator::wavs::types::chain::EvmChainConfig> {
         let chain_name = ChainName::new(chain_name).ok()?;
 
         self.chain_configs
