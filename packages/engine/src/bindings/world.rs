@@ -18,7 +18,7 @@ pub mod aggregator {
 
     bindgen!({
         world: "aggregator-world",
-        path: "../../wit-definitions/worker/wit",
+        path: "../../wit-definitions/aggregator/wit",
         async: {
             only_imports: []
         },

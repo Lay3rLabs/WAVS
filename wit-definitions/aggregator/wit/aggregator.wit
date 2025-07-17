@@ -1,0 +1,105 @@
+package wavs:aggregator@0.5.0-alpha.18;
+
+use wavs:types/core@0.5.0-alpha.18 as core-types;
+use wavs:types/service@0.5.0-alpha.18 as service-types;
+use wavs:types/chain@0.5.0-alpha.18 as chain-types;
+
+interface helpers {
+    use service-types.{service, workflow, workflow-id};
+
+    variant log-level {
+        error,
+        warn,
+        info,
+        debug,
+        trace
+    }
+
+    record service-and-workflow-id {
+        service: service,
+        workflow-id: workflow-id
+    }
+
+    record workflow-and-workflow-id {
+        workflow: workflow,
+        workflow-id: workflow-id
+    }
+}
+
+interface aggregator {
+    use service-types.{service, workflow-id};
+    use chain-types.{chain-name, evm-address};
+    
+    record envelope {
+        event-id: list<u8>,
+        ordering: list<u8>, 
+        payload: list<u8>,  
+    }
+    
+    record secp256k1-signature {
+        signature-data: list<u8>,
+    }
+    
+    variant envelope-signature {
+        secp256k1(secp256k1-signature),
+    }
+    
+    record packet {
+        service: service,
+        workflow-id: workflow-id,
+        envelope: envelope,
+        signature: envelope-signature,
+    }
+    
+    variant aggregator-action {
+        timer(timer-action),
+        submit(submit-action),
+        nothing,
+    }
+    
+    record timer-action {
+        delay: u64,
+    }
+    
+    record submit-action {
+        chain-name: chain-name,
+        contract-address: evm-address,
+    }
+    
+    variant tx-result {
+        success(string),
+        error(string),
+    }
+}
+
+world aggregator-world {
+    // include needed for golang support
+    include wasi:cli/imports@0.2.0;
+
+    // wasi:http 0.2.6 uses the `imports` style, but for now import each interface separately
+    import wasi:http/types@0.2.0;
+    import wasi:http/outgoing-handler@0.2.0;
+
+    // for key-value store support
+    include wasi:keyvalue/imports@0.2.0-draft2;
+
+    import host: interface {
+        use chain-types.{evm-chain-config, cosmos-chain-config};
+        use helpers.{log-level};
+
+        get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
+        get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
+
+        config-var: func(key: string) -> option<string>;
+
+        log: func(level: log-level, message: string);
+    }
+
+    use aggregator.{packet, aggregator-action, tx-result};
+
+    export process-packet: func(packet: packet) -> result<list<aggregator-action>, string>;
+
+    export handle-timer-callback: func(packet: packet) -> result<list<aggregator-action>, string>;
+
+    export handle-submit-callback: func(packet: packet, tx-result: tx-result) -> result<bool, string>;
+}

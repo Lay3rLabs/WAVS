@@ -562,9 +562,7 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{
-        ChainName, Service, ServiceID, WorkflowID,
-    };
+    use wavs_types::{ChainName, Service, ServiceID, WorkflowID};
 
     #[test]
     fn packet_validation() {
