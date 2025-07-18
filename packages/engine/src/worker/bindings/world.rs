@@ -1,6 +1,12 @@
-wit_bindgen::generate!({
+use wasmtime::component::bindgen;
+
+bindgen!({
     world: "wavs-world",
     path: "../../wit-definitions/worker/wit",
-    pub_export_macro: true,
-    generate_all,
+    async: {
+        only_imports: []
+    },
+    with: {
+        "wasi:keyvalue/store/bucket": crate::KeyValueBucket,
+    },
 });

@@ -2,14 +2,14 @@ use wavs_types::ChainName;
 
 use crate::aggregator::AggregatorHostComponent;
 
-use crate::bindings::world::aggregator::host::Host;
-use crate::bindings::world::aggregator::wavs::types::core::LogLevel;
+use super::world::host::Host;
+use super::world::wavs::types::core::LogLevel;
 
 impl Host for AggregatorHostComponent {
     fn get_cosmos_chain_config(
         &mut self,
         chain_name: String,
-    ) -> Option<crate::bindings::world::aggregator::wavs::types::chain::CosmosChainConfig> {
+    ) -> Option<super::world::wavs::types::chain::CosmosChainConfig> {
         let chain_name = ChainName::new(chain_name).ok()?;
 
         self.chain_configs
@@ -22,7 +22,7 @@ impl Host for AggregatorHostComponent {
     fn get_evm_chain_config(
         &mut self,
         chain_name: String,
-    ) -> Option<crate::bindings::world::aggregator::wavs::types::chain::EvmChainConfig> {
+    ) -> Option<super::world::wavs::types::chain::EvmChainConfig> {
         let chain_name = ChainName::new(chain_name).ok()?;
 
         self.chain_configs
@@ -40,6 +40,6 @@ impl Host for AggregatorHostComponent {
     fn log(&mut self, level: LogLevel, message: String) {
         let digest = self.aggregator_component.source.digest();
 
-        (self.inner_log)(&self.service.id, &self.workflow_id, digest, level, message);
+        (self.inner_log)(&self.service.id, &self.workflow_id, digest, level.into(), message);
     }
 }
