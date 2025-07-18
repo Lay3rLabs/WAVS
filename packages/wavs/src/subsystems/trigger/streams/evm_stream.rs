@@ -36,7 +36,7 @@ pub async fn start_evm_event_stream(
                         block_number,
                         tx_hash,
                         log_index,
-                        log,
+                        log: Box::new(log),
                     }))
                 }
                 _ => {

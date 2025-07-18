@@ -184,7 +184,10 @@ impl TriggerManager {
             .clone()
             .unwrap();
         for command in commands {
-            dispatcher_command_sender.send(command).await?;
+            dispatcher_command_sender
+                .send(command)
+                .await
+                .map_err(Box::new)?;
         }
 
         Ok(())

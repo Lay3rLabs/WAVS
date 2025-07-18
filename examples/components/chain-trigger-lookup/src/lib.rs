@@ -40,7 +40,7 @@ impl Guest for Component {
                 }
                 TriggerData::EvmContractEvent(TriggerDataEvmContractEvent {
                     chain_name,
-                    contract_address,
+                    log,
                     ..
                 }) => {
                     let chain_config = host::get_evm_chain_config(&chain_name).ok_or(
@@ -52,7 +52,7 @@ impl Guest for Component {
                             .http_endpoint
                             .context("http_endpoint is missing")?,
                     )
-                    .trigger_data(contract_address.into(), trigger_id)
+                    .trigger_data(log.address.into(), trigger_id)
                     .await?
                 }
                 _ => {

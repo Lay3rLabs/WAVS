@@ -45,7 +45,7 @@ pub enum TriggerError {
     #[error("Config error: {0}")]
     Config(String),
     #[error("Dispatcher command send error: {0}")]
-    DispatcherCommandSendError(#[from] SendError<DispatcherCommand>),
+    DispatcherCommandSendError(#[from] Box<SendError<DispatcherCommand>>),
     #[error("Local command send error: {0}")]
     LocalCommandError(#[from] SendError<LocalStreamCommand>),
     #[error("Unable to convert event index: {0}")]

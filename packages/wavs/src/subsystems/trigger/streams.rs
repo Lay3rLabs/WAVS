@@ -28,7 +28,7 @@ pub enum StreamTriggers {
     },
     Evm {
         chain_name: ChainName,
-        log: alloy_rpc_types_eth::Log,
+        log: Box<alloy_rpc_types_eth::Log>,
         block_number: u64,
         tx_hash: alloy_primitives::TxHash,
         log_index: u64,
