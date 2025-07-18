@@ -13,7 +13,7 @@ use wavs_systems::{
     http::{map_response, TestHttpApp},
     mock_trigger_manager::mock_evm_event_trigger,
 };
-use wavs_types::{ChainName, ComponentSource, Digest, ServiceID, UploadComponentResponse};
+use wavs_types::{ChainName, ComponentDigest, ComponentSource, UploadComponentResponse};
 
 #[test]
 fn http_not_found() {
@@ -57,7 +57,7 @@ fn http_config() {
 
 #[test]
 fn http_upload_component() {
-    let digest = Digest::new(COMPONENT_SQUARE_BYTES);
+    let digest = ComponentDigest::hash(COMPONENT_SQUARE_BYTES);
 
     let app = TestHttpApp::new();
 
@@ -79,7 +79,7 @@ fn http_upload_component() {
 
     let response: UploadComponentResponse = app.ctx.rt.block_on(map_response(response));
 
-    assert_eq!(response.digest, digest.into());
+    assert_eq!(response.digest, digest);
 }
 
 #[test]
@@ -87,10 +87,9 @@ fn http_save_service() {
     let app = TestHttpApp::new();
 
     let service = wavs_types::Service::new_simple(
-        ServiceID::new("service-1").unwrap(),
         Some("My amazing service".to_string()),
         mock_evm_event_trigger(),
-        ComponentSource::Digest(Digest::new(&[1, 2, 3])),
+        ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
         wavs_types::Submit::Aggregator {
             url: "http://example.com/aggregator".to_string(),
             component: None,
@@ -154,7 +153,7 @@ fn http_save_service() {
 
     assert_eq!(response, service);
 
-    tracing::info!("Service: {} round-tripped!", response.id);
+    tracing::info!("Service: {} round-tripped!", response.id());
 }
 
 fn create_test_evm_chain_config() -> AnyChainConfig {

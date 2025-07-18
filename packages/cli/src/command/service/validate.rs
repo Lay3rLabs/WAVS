@@ -98,7 +98,7 @@ pub async fn validate_registry_availability(registry_url: &str, errors: &mut Vec
 
 /// Validation helper to check if contracts referenced in triggers exist on-chain
 pub async fn validate_contracts_exist(
-    service_id: &str,
+    service_name: &str,
     triggers: Vec<(&WorkflowID, &Trigger)>,
     aggregators: Vec<(&WorkflowID, &Aggregator)>,
     service_manager: Option<&ServiceManager>,
@@ -126,7 +126,7 @@ pub async fn validate_contracts_exist(
                         checked_evm_contracts.entry(key)
                     {
                         let context =
-                            format!("Service {} workflow {} trigger", service_id, workflow_id);
+                            format!("Service {} workflow {} trigger", service_name, workflow_id);
                         match check_evm_contract_exists(address, provider, errors, &context).await {
                             Ok(exists) => {
                                 e.insert(exists);
@@ -159,7 +159,7 @@ pub async fn validate_contracts_exist(
                         checked_cosmos_contracts.entry(key)
                     {
                         let context =
-                            format!("Service {} workflow {} trigger", service_id, workflow_id);
+                            format!("Service {} workflow {} trigger", service_name, workflow_id);
                         match check_cosmos_contract_exists(address, client, errors, &context).await
                         {
                             Ok(exists) => {
@@ -201,7 +201,7 @@ pub async fn validate_contracts_exist(
                         checked_evm_contracts.entry(key)
                     {
                         let context =
-                            format!("Service {} workflow {} submit", service_id, workflow_id);
+                            format!("Service {} workflow {} submit", service_name, workflow_id);
                         match check_evm_contract_exists(address, provider, errors, &context).await {
                             Ok(exists) => {
                                 e.insert(exists);
@@ -235,7 +235,7 @@ pub async fn validate_contracts_exist(
                     if let std::collections::hash_map::Entry::Vacant(e) =
                         checked_evm_contracts.entry(key)
                     {
-                        let context = format!("Service {} manager", service_id);
+                        let context = format!("Service {} manager", service_name);
                         match check_evm_contract_exists(address, provider, errors, &context).await {
                             Ok(exists) => {
                                 e.insert(exists);

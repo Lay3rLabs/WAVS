@@ -1,7 +1,7 @@
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
 use std::ops::Bound;
-use wavs_types::{ListServiceResponse, ListServicesResponse};
+use wavs_types::ListServicesResponse;
 
 #[utoipa::path(
     get,
@@ -21,34 +21,21 @@ pub async fn handle_list_services(State(state): State<HttpState>) -> impl IntoRe
 }
 
 async fn list_services_inner(state: &HttpState) -> HttpResult<ListServicesResponse> {
-    let services_list = state
+    let services = state
         .dispatcher
         .services
         .list(Bound::Unbounded, Bound::Unbounded)?;
 
-    let mut services = Vec::with_capacity(services_list.len());
+    let component_digests = state.dispatcher.list_component_digests()?;
 
-    // for backwards compatibility, we do some funky things here
-    // it will be nicer in 0.3
-    for service in services_list {
-        for workflow in service.workflows.values() {
-            let component = &workflow.component;
-            services.push(ListServiceResponse {
-                source: component.source.clone(),
-                permissions: component.permissions.clone(),
-                status: service.status,
-                id: service.id.clone(),
-                // just first workflow for now
-                trigger: match service.workflows.values().next() {
-                    None => return Err(anyhow::anyhow!("No workflows found").into()),
-                    Some(w) => w.trigger.clone(),
-                },
-            });
-        }
-    }
+    let service_ids = services
+        .iter()
+        .map(|service| service.id())
+        .collect::<Vec<_>>();
 
-    let digests = state.dispatcher.list_component_digests()?;
-    let digests = digests.into_iter().map(Into::into).collect();
-
-    Ok(ListServicesResponse { services, digests })
+    Ok(ListServicesResponse {
+        services,
+        service_ids,
+        component_digests,
+    })
 }

@@ -68,7 +68,7 @@ pub struct HttpState {
 }
 
 // key is ServiceId
-const SERVICES: Table<&str, ()> = Table::new("services");
+const SERVICES: Table<[u8; 32], ()> = Table::new("services");
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
@@ -179,7 +179,7 @@ impl HttpState {
     #[instrument(level = "debug", skip(self))]
     pub fn service_registered(&self, service_id: &ServiceID) -> bool {
         self.storage
-            .get(SERVICES, service_id)
+            .get(SERVICES, service_id.inner())
             .ok()
             .flatten()
             .is_some()
@@ -188,10 +188,10 @@ impl HttpState {
     #[instrument(level = "debug", skip(self))]
     #[allow(clippy::result_large_err)]
     pub fn register_service(&self, service_id: &ServiceID) -> AggregatorResult<()> {
-        if self.storage.get(SERVICES, service_id)?.is_none() {
+        if self.storage.get(SERVICES, service_id.inner())?.is_none() {
             tracing::info!("Registering aggregator for service {}", service_id);
 
-            self.storage.set(SERVICES, service_id, &())?;
+            self.storage.set(SERVICES, service_id.inner(), &())?;
         } else {
             tracing::warn!("Attempted to register duplicate service: {}", service_id);
             return Err(AggregatorError::RepeatService(service_id.clone()));

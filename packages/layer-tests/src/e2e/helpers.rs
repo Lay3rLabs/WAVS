@@ -56,7 +56,6 @@ pub async fn deploy_service_for_test(
     tracing::info!("Deploying service for test: {}", test.name);
 
     // Create unique service ID
-    let service_id = ServiceID::new(Uuid::now_v7().as_hyphenated().to_string()).unwrap();
     let mut workflows = BTreeMap::new();
 
     // Deploy the service manager contract
@@ -85,7 +84,6 @@ pub async fn deploy_service_for_test(
 
     // Create the service in Paused state
     let mut service = Service {
-        id: service_id,
         name: test.name.clone(),
         workflows,
         status: ServiceStatus::Paused,
@@ -97,7 +95,7 @@ pub async fn deploy_service_for_test(
 
     let submit_client = clients.get_evm_client(&test.service_manager_chain);
 
-    tracing::info!("[{}] Deploying service: {}", test.name, service.id);
+    tracing::info!("[{}] Deploying service: {}", test.name, service.id());
 
     // Save the service on WAVS endpoint (just a local test thing, real-world would be IPFS or similar)
     let service_url = DeployService::save_service(&clients.cli_ctx, &service)
@@ -109,10 +107,10 @@ pub async fn deploy_service_for_test(
         if aggregator_registered_service_ids
             .lock()
             .unwrap()
-            .insert(service.id.clone())
+            .insert(service.id())
         {
             let SubmitDefinition::Aggregator { url, .. } = &workflow.submit;
-            TestRegistry::register_to_aggregator(url, &service.id)
+            TestRegistry::register_to_aggregator(url, &service)
                 .await
                 .unwrap();
         }
@@ -135,7 +133,7 @@ pub async fn deploy_service_for_test(
     // give signer address some weight in the service manager
     let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients
         .http_client
-        .get_service_key(service.id.clone())
+        .get_service_key(service.manager.clone())
         .await
         .unwrap();
 

@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use thiserror::Error;
-
-use wavs_types::{Digest, DigestError};
+use wavs_types::AnyDigest;
 
 /*
   Documenting a design decisions here:
@@ -31,27 +30,27 @@ pub trait CAStorage: Send + Sync {
 
     /// Stores the given data and returns the digest to look it up later.
     /// If the data was already stored, this is a no-op but still returns the digest with no error.
-    fn set_data(&self, data: &[u8]) -> Result<Digest, CAStorageError>;
+    fn set_data(&self, data: &[u8]) -> Result<AnyDigest, CAStorageError>;
 
     /// Looks up the data for a given digest and returns it. If data not present, returns CAStorageError::NotFound(_)
-    fn get_data(&self, digest: &Digest) -> Result<Vec<u8>, CAStorageError>;
+    fn get_data(&self, digest: &AnyDigest) -> Result<Vec<u8>, CAStorageError>;
 
     /// Check if the data has been stored
-    fn data_exists(&self, digest: &Digest) -> Result<bool, CAStorageError>;
+    fn data_exists(&self, digest: &AnyDigest) -> Result<bool, CAStorageError>;
 
     fn digests(
         &self,
-    ) -> Result<Box<dyn Iterator<Item = Result<Digest, CAStorageError>>>, CAStorageError>;
+    ) -> Result<impl Iterator<Item = Result<AnyDigest, CAStorageError>>, CAStorageError>;
 }
 
 /// Represents an error returned by storage implementation.
 #[derive(Debug, Error)]
 pub enum CAStorageError {
     #[error("Digest not found: {0}")]
-    NotFound(Digest),
+    NotFound(AnyDigest),
 
-    #[error("{0}")]
-    Digest(#[from] DigestError),
+    #[error("Digest: {0}")]
+    Digest(#[from] const_hex::FromHexError),
 
     /// An error occurred doing IO in the storage implementation
     #[error("IO error: {0}")]

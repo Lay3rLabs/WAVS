@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use layer_climb_address::Address;
 use serde::{Deserialize, Serialize};
@@ -39,12 +39,43 @@ pub enum CosmosQueryResponse {
 #[serde(rename_all = "snake_case")]
 pub enum KvStoreRequest {
     Write {
+        bucket: String,
         key: String,
         value: Vec<u8>,
-        read_immediately: bool, // Optional flag to read immediately after writing
     },
     Read {
+        bucket: String,
         key: String,
+    },
+    AtomicIncrement {
+        bucket: String,
+        key: String,
+        delta: i64,
+    },
+    AtomicSwap {
+        bucket: String,
+        key: String,
+        value: Vec<u8>,
+    },
+    AtomicRead {
+        bucket: String,
+        key: String,
+    },
+    BatchRead {
+        bucket: String,
+        keys: Vec<String>,
+    },
+    BatchWrite {
+        bucket: String,
+        values: HashMap<String, Vec<u8>>,
+    },
+    BatchDelete {
+        bucket: String,
+        keys: Vec<String>,
+    },
+    ListKeys {
+        bucket: String,
+        cursor: Option<String>,
     },
 }
 
@@ -58,7 +89,26 @@ impl KvStoreRequest {
 #[serde(rename_all = "snake_case")]
 pub enum KvStoreResponse {
     Write,
-    Read { value: Vec<u8> },
+    Read {
+        value: Vec<u8>,
+    },
+    // returns the new value after increment
+    AtomicIncrement {
+        value: i64,
+    },
+    AtomicSwap,
+    AtomicRead {
+        value: Vec<u8>,
+    },
+    BatchRead {
+        values: HashMap<String, Vec<u8>>,
+    },
+    BatchWrite,
+    BatchDelete,
+    ListKeys {
+        keys: Vec<String>,
+        cursor: Option<String>,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -67,14 +117,59 @@ pub enum KvStoreError {
     KeyNotFound(String),
     #[error("IoError: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Failed to open bucket: {0}")]
-    StoreBucketOpen(String),
-    #[error("Failed to read key: {0}")]
-    StoreReadKey(String),
-    #[error("Failed to write key: {0}")]
-    StoreWriteKey(String),
-    #[error("Missing key: {key}")]
-    MissingKey { key: String },
+    #[error("Failed to open bucket {id}: {reason}")]
+    BucketOpen { id: String, reason: String },
+    #[error("Failed to read key {key} for bucket {bucket}: {reason}")]
+    ReadKey {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Failed to writekey {key} for bucket {bucket}: {reason}")]
+    WriteKey {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Missing key: {key} for bucket {bucket}")]
+    MissingKey { bucket: String, key: String },
+    #[error("Failed to atomically increment bucket {bucket}, key {key}, delta {delta}: {reason}")]
+    AtomicIncrement {
+        bucket: String,
+        key: String,
+        delta: i64,
+        reason: String,
+    },
+    #[error("Failed to atomically swap bucket {bucket}, key {key}: {reason}")]
+    AtomicSwap {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Failed to acquire atomic CAS lock for bucket {bucket}, key {key}: {reason}")]
+    AtomicCasResource {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Failed to read atomic value for bucket {bucket}, key {key}: {reason}")]
+    AtomicRead {
+        bucket: String,
+        key: String,
+        reason: String,
+    },
+    #[error("Failed to perform batch operation for bucket {bucket}, {reason}")]
+    BatchRead { bucket: String, reason: String },
+    #[error("Failed to perform batch write for bucket {bucket}, {reason}")]
+    BatchWrite { bucket: String, reason: String },
+    #[error("Failed to perform batch delete for bucket {bucket}, {reason}")]
+    BatchDelete { bucket: String, reason: String },
+    #[error("Failed to list keys for bucket {bucket}, cursor: {cursor:?}: {reason}")]
+    ListKeys {
+        bucket: String,
+        cursor: Option<String>,
+        reason: String,
+    },
 }
 
 pub type KvStoreResult<T> = Result<T, KvStoreError>;

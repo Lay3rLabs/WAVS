@@ -7,16 +7,13 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
-use crate::{ByteArray, Digest, Timestamp};
+use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainName, ServiceID, WorkflowID};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
-    // Public identifier. Must be unique for all services
-    pub id: ServiceID,
-
     /// This is any utf-8 string, for human-readable display.
     pub name: String,
 
@@ -30,9 +27,13 @@ pub struct Service {
 
 impl Service {
     // this is only used for local/tests, but we want to keep it consistent
-    pub fn hash(&self) -> anyhow::Result<Digest> {
+    pub fn hash(&self) -> anyhow::Result<ServiceDigest> {
         let service_bytes = serde_json::to_vec(self)?;
-        Ok(Digest::new(&service_bytes))
+        Ok(ServiceDigest::hash(&service_bytes))
+    }
+
+    pub fn id(&self) -> ServiceID {
+        ServiceID::from(&self.manager)
     }
 }
 
@@ -44,6 +45,23 @@ pub enum ServiceManager {
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
     },
+}
+
+impl From<&ServiceManager> for ServiceID {
+    fn from(manager: &ServiceManager) -> Self {
+        match manager {
+            ServiceManager::Evm {
+                chain_name,
+                address,
+            } => {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"evm");
+                bytes.extend_from_slice(chain_name.as_bytes());
+                bytes.extend_from_slice(address.as_slice());
+                ServiceID::hash(bytes)
+            }
+        }
+    }
 }
 
 impl ServiceManager {
@@ -62,7 +80,6 @@ impl ServiceManager {
 
 impl Service {
     pub fn new_simple(
-        id: ServiceID,
         name: Option<String>,
         trigger: Trigger,
         source: ComponentSource,
@@ -80,8 +97,7 @@ impl Service {
         let workflows = BTreeMap::from([(workflow_id, workflow)]);
 
         Self {
-            name: name.unwrap_or_else(|| id.to_string()),
-            id,
+            name: name.unwrap_or_else(|| "Unknown".to_string()),
             workflows,
             status: ServiceStatus::Active,
             manager,
@@ -117,16 +133,19 @@ pub struct Component {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
-    Download { url: String, digest: Digest },
+    Download {
+        url: String,
+        digest: ComponentDigest,
+    },
     /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
     Registry { registry: Registry },
     /// An already deployed component
-    Digest(Digest),
+    Digest(ComponentDigest),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub struct Registry {
-    pub digest: Digest,
+    pub digest: ComponentDigest,
     /// Optional domain to use for a registry (such as ghcr.io)
     /// if default of wa.dev (or whatever wavs uses in the future)
     /// is not desired by user
@@ -140,7 +159,7 @@ pub struct Registry {
 }
 
 impl ComponentSource {
-    pub fn digest(&self) -> &Digest {
+    pub fn digest(&self) -> &ComponentDigest {
         match self {
             ComponentSource::Download { digest, .. } => digest,
             ComponentSource::Registry { registry } => &registry.digest,
@@ -448,41 +467,41 @@ mod test_ext {
 
     impl TriggerConfig {
         pub fn cosmos_contract_event(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             contract_address: layer_climb_address::Address,
             chain_name: impl Into<ChainName>,
             event_type: impl ToString,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::cosmos_contract_event(contract_address, chain_name, event_type),
             })
         }
 
         pub fn evm_contract_event(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             contract_address: alloy_primitives::Address,
             chain_name: impl Into<ChainName>,
             event_hash: ByteArray<32>,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::evm_contract_event(contract_address, chain_name, event_hash),
             })
         }
 
         pub fn block_interval_event(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
             chain_name: impl Into<ChainName>,
             n_blocks: NonZeroU32,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::BlockInterval {
                     chain_name: chain_name.into(),
@@ -495,11 +514,11 @@ mod test_ext {
 
         #[cfg(test)]
         pub fn manual(
-            service_id: impl TryInto<ServiceID, Error = IDError>,
+            service_id: ServiceID,
             workflow_id: impl TryInto<WorkflowID, Error = IDError>,
         ) -> Result<Self, IDError> {
             Ok(Self {
-                service_id: service_id.try_into()?,
+                service_id,
                 workflow_id: workflow_id.try_into()?,
                 trigger: Trigger::Manual,
             })

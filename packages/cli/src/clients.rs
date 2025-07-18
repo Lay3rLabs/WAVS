@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
-use layer_climb::prelude::*;
 use wavs_types::{
-    AddServiceRequest, Digest, IWavsServiceManager::IWavsServiceManagerInstance,
-    SaveServiceResponse, Service, ServiceID, SigningKeyResponse, UploadComponentResponse,
+    AddServiceRequest, ComponentDigest, GetServiceKeyRequest, GetServiceRequest,
+    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
+    SigningKeyResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -34,7 +34,7 @@ impl HttpClient {
             .map_err(|e| e.into())
     }
 
-    pub async fn upload_component(&self, wasm_bytes: Vec<u8>) -> Result<Digest> {
+    pub async fn upload_component(&self, wasm_bytes: Vec<u8>) -> Result<ComponentDigest> {
         let response: UploadComponentResponse = self
             .inner
             .post(format!("{}/upload", self.endpoint))
@@ -44,7 +44,7 @@ impl HttpClient {
             .json()
             .await?;
 
-        Ok(response.digest.into())
+        Ok(response.digest)
     }
 
     pub async fn create_service(
@@ -62,8 +62,7 @@ impl HttpClient {
         }
 
         let body: String = serde_json::to_string(&AddServiceRequest {
-            chain_name: service.manager.chain_name().clone(),
-            address: Address::Evm(service.manager.evm_address_unchecked().into()),
+            service_manager: service.manager.clone(),
         })?;
 
         let url = format!("{}/app", self.endpoint);
@@ -128,10 +127,18 @@ impl HttpClient {
         ))
     }
 
-    pub async fn get_service_key(&self, service_id: ServiceID) -> Result<SigningKeyResponse> {
+    pub async fn get_service_key(
+        &self,
+        service_manager: ServiceManager,
+    ) -> Result<SigningKeyResponse> {
+        let body = serde_json::to_string(&GetServiceKeyRequest { service_manager })?;
+
+        let url = format!("{}/service-key", self.endpoint);
         let text = self
             .inner
-            .get(format!("{}/service-key/{service_id}", self.endpoint))
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(body)
             .send()
             .await?
             .text()
@@ -149,10 +156,15 @@ impl HttpClient {
         }
     }
 
-    pub async fn get_service_from_node(&self, service_id: &ServiceID) -> Result<Service> {
+    pub async fn get_service_from_node(&self, service_manager: ServiceManager) -> Result<Service> {
+        let body = serde_json::to_string(&GetServiceRequest { service_manager })?;
+
+        let url = format!("{}/service", self.endpoint);
         let text = self
             .inner
-            .get(format!("{}/service/{}", self.endpoint, service_id))
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(body)
             .send()
             .await?
             .text()
@@ -177,9 +189,11 @@ impl HttpClient {
         let service_hash = service.hash()?;
         tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(30)), async {
             loop {
-                tracing::warn!("Waiting for service update: {}", service.id);
+                tracing::warn!("Waiting for service update: {}", service.id());
 
-                if let Ok(current_service) = self.get_service_from_node(&service.id).await {
+                if let Ok(current_service) =
+                    self.get_service_from_node(service.manager.clone()).await
+                {
                     if current_service.hash()? == service_hash {
                         break Ok(());
                     }

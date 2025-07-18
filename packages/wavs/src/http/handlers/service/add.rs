@@ -2,7 +2,7 @@ use axum::{extract::State, response::IntoResponse, Json};
 use reqwest::StatusCode;
 
 use crate::http::{error::HttpResult, state::HttpState};
-use wavs_types::AddServiceRequest;
+use wavs_types::{AddServiceRequest, ServiceManager};
 
 #[utoipa::path(
     post,
@@ -21,19 +21,14 @@ pub async fn handle_add_service(
     State(state): State<HttpState>,
     Json(req): Json<AddServiceRequest>,
 ) -> impl IntoResponse {
-    match add_service_inner(state, req).await {
+    match add_service_inner(state, req.service_manager).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => e.into_response(),
     }
 }
 
-async fn add_service_inner(state: HttpState, req: AddServiceRequest) -> HttpResult<()> {
-    let AddServiceRequest {
-        chain_name,
-        address,
-    } = req;
-
-    state.dispatcher.add_service(chain_name, address).await?;
+async fn add_service_inner(state: HttpState, service_manager: ServiceManager) -> HttpResult<()> {
+    state.dispatcher.add_service(service_manager).await?;
 
     state.metrics.increment_registered_services();
 

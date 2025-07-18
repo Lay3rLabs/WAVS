@@ -9,9 +9,9 @@ use utils::storage::db::RedbStorage;
 use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{InstanceDepsBuilder, KeyValueCtx};
+use wavs_engine::{context::KeyValueCtx, InstanceDepsBuilder};
 use wavs_types::{
-    ComponentSource, Digest, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
+    ComponentDigest, ComponentSource, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
 };
 
 use utils::storage::{CAStorage, CAStorageError};
@@ -22,7 +22,7 @@ pub struct WasmEngine<S: CAStorage> {
     chain_configs: Arc<RwLock<ChainConfigs>>,
     wasm_storage: S,
     wasm_engine: WTEngine,
-    memory_cache: RwLock<LruCache<Digest, Component>>,
+    memory_cache: RwLock<LruCache<ComponentDigest, Component>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
@@ -85,12 +85,12 @@ impl<S: CAStorage> WasmEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<Digest, EngineError> {
+    pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<ComponentDigest, EngineError> {
         // compile component (validate it is proper wasm)
         let cm = Component::new(&self.wasm_engine, bytecode).map_err(EngineError::Compile)?;
 
         // store original wasm
-        let digest = self.wasm_storage.set_data(bytecode)?;
+        let digest: ComponentDigest = self.wasm_storage.set_data(bytecode)?.inner().into();
 
         // // TODO: write precompiled wasm (huge optimization on restart)
         // tokio::fs::write(self.path_for_precompiled_wasm(digest), cm.serialize()?).await?;
@@ -104,13 +104,16 @@ impl<S: CAStorage> WasmEngine<S> {
     pub async fn store_component_from_source(
         &self,
         source: &ComponentSource,
-    ) -> Result<Digest, EngineError> {
+    ) -> Result<ComponentDigest, EngineError> {
         match source {
             // Leaving unimplemented for now, should do validations to confirm bytes
             // really are a wasm component before registring component
             ComponentSource::Download { .. } => todo!(),
             ComponentSource::Registry { registry } => {
-                if !(self.wasm_storage.data_exists(&registry.digest)?) {
+                if !(self
+                    .wasm_storage
+                    .data_exists(&registry.digest.clone().into())?)
+                {
                     // Fetches package from registry and validates it has the expected digest
                     let client =
                         WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
@@ -121,7 +124,7 @@ impl<S: CAStorage> WasmEngine<S> {
                 }
             }
             ComponentSource::Digest(digest) => {
-                if self.wasm_storage.data_exists(digest)? {
+                if self.wasm_storage.data_exists(&digest.clone().into())? {
                     Ok(digest.clone())
                 } else {
                     self.metrics.increment_total_errors("unknown digest");
@@ -133,8 +136,12 @@ impl<S: CAStorage> WasmEngine<S> {
 
     // TODO: paginate this
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
-    pub fn list_digests(&self) -> Result<Vec<Digest>, EngineError> {
-        let digests: Result<Vec<_>, CAStorageError> = self.wasm_storage.digests()?.collect();
+    pub fn list_digests(&self) -> Result<Vec<ComponentDigest>, EngineError> {
+        let digests: Result<Vec<_>, CAStorageError> = self
+            .wasm_storage
+            .digests()?
+            .map(|d| d.map(|d| ComponentDigest::from(d.inner())))
+            .collect();
         Ok(digests?)
     }
 
@@ -148,7 +155,7 @@ impl<S: CAStorage> WasmEngine<S> {
         fn log(
             service_id: &ServiceID,
             workflow_id: &WorkflowID,
-            digest: &Digest,
+            digest: &ComponentDigest,
             level: wavs_engine::bindings::world::host::LogLevel,
             message: String,
         ) {
@@ -184,7 +191,7 @@ impl<S: CAStorage> WasmEngine<S> {
             .get(&trigger_action.config.workflow_id)
             .ok_or_else(|| {
                 EngineError::UnknownWorkflow(
-                    service.id.clone(),
+                    service.id(),
                     trigger_action.config.workflow_id.clone(),
                 )
             })?;
@@ -192,20 +199,20 @@ impl<S: CAStorage> WasmEngine<S> {
         let digest = workflow.component.source.digest().clone();
 
         let mut instance_deps = InstanceDepsBuilder {
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), service.id.to_string()),
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), service.id().to_string()),
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: match self.memory_cache.write().unwrap().get(&digest) {
                 Some(cm) => cm.clone(),
                 None => {
-                    let bytes = self.wasm_storage.get_data(&digest)?;
+                    let bytes = self.wasm_storage.get_data(&digest.into())?;
                     Component::new(&self.wasm_engine, &bytes).map_err(EngineError::Compile)?
                 }
             },
             engine: &self.wasm_engine,
             data_dir: self
                 .app_data_dir
-                .join(trigger_action.config.service_id.as_ref()),
+                .join(trigger_action.config.service_id.to_string()),
             chain_configs: &self.chain_configs.read().unwrap(),
             log,
             max_execution_seconds: self.max_execution_seconds,
@@ -222,7 +229,7 @@ impl<S: CAStorage> WasmEngine<S> {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
     pub fn remove_storage(&self, service_id: &ServiceID) {
-        let dir_path = self.app_data_dir.join(service_id.as_ref());
+        let dir_path = self.app_data_dir.join(service_id.to_string());
 
         if dir_path.exists() {
             match std::fs::remove_dir_all(&dir_path) {
@@ -372,10 +379,7 @@ pub mod tests {
             submit: Submit::None,
         };
 
-        let service_id = ServiceID::new("foobar").unwrap();
-
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
@@ -385,6 +389,7 @@ pub mod tests {
             },
         };
 
+        let service_id = service.id();
         // execute it and get bytes back
         let result = engine
             .execute(
@@ -434,10 +439,7 @@ pub mod tests {
         workflow.component.env_keys = ["WAVS_ENV_TEST".to_string()].into_iter().collect();
         workflow.component.config = [("foo".to_string(), "bar".to_string())].into();
 
-        let service_id = ServiceID::new("foobar").unwrap();
-
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
@@ -447,13 +449,15 @@ pub mod tests {
             },
         };
 
+        let service_id = service.id();
+
         // verify service config kv is accessible
         let result = engine
             .execute(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(),
+                        service_id: service_id.clone(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -470,7 +474,7 @@ pub mod tests {
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(),
+                        service_id: service_id.clone(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -487,7 +491,7 @@ pub mod tests {
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(),
+                        service_id,
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -531,10 +535,7 @@ pub mod tests {
 
         workflow.component.fuel_limit = Some(low_fuel_limit);
 
-        let service_id = ServiceID::new("foobar").unwrap();
-
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
@@ -544,13 +545,15 @@ pub mod tests {
             },
         };
 
+        let service_id = service.id();
+
         // execute it and get the error
         let err = engine
             .execute(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(),
+                        service_id,
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -584,10 +587,10 @@ pub mod tests {
         );
 
         // Create a service ID
-        let service_id = ServiceID::new("test-service").unwrap();
+        let service_id = ServiceID::hash(b"test-service");
 
         // Create a directory and a test file for the service
-        let service_dir = app_data_path.join(service_id.as_ref());
+        let service_dir = app_data_path.join(service_id.to_string());
         std::fs::create_dir_all(&service_dir).unwrap();
 
         let test_file = service_dir.join("test-data.txt");
@@ -604,8 +607,8 @@ pub mod tests {
         assert!(!service_dir.exists());
 
         // Test non-existent directory case
-        let nonexistent_id = ServiceID::new("nonexistent").unwrap();
-        let nonexistent_dir = app_data_path.join(nonexistent_id.as_ref());
+        let nonexistent_id = ServiceID::hash("nonexistent");
+        let nonexistent_dir = app_data_path.join(nonexistent_id.to_string());
 
         // Verify directory doesn't exist
         assert!(!nonexistent_dir.exists());
@@ -655,10 +658,7 @@ pub mod tests {
             .config
             .insert("sleep-kind".to_string(), "async".to_string());
 
-        let service_id = ServiceID::new("foobar").unwrap();
-
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
@@ -668,12 +668,14 @@ pub mod tests {
             },
         };
 
+        let service_id = service.id();
+
         engine
             .execute(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(),
+                        service_id: service_id.clone(),
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -694,7 +696,6 @@ pub mod tests {
             .insert("sleep-kind".to_string(), "sync".to_string());
 
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
@@ -704,12 +705,14 @@ pub mod tests {
             },
         };
 
+        let service_id = service.id();
+
         engine
             .execute(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service.id.clone(),
+                        service_id,
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -730,7 +733,6 @@ pub mod tests {
             .insert("sleep-kind".to_string(), "async".to_string());
 
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
@@ -740,12 +742,14 @@ pub mod tests {
             },
         };
 
+        let service_id = service.id();
+
         let err = engine
             .execute(
                 service,
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service_id.clone(),
+                        service_id,
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },
@@ -771,7 +775,6 @@ pub mod tests {
             .insert("sleep-kind".to_string(), "sync".to_string());
 
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
@@ -780,12 +783,15 @@ pub mod tests {
                 address: Default::default(),
             },
         };
+
+        let service_id = service.id();
+
         let err = engine
             .execute(
                 service,
                 TriggerAction {
                     config: TriggerConfig {
-                        service_id: service_id.clone(),
+                        service_id,
                         workflow_id: WorkflowID::default(),
                         trigger: Trigger::Manual,
                     },

@@ -34,6 +34,7 @@ impl super::world::host::Host for HostComponent {
     fn get_service(&mut self) -> ServiceAndWorkflowId {
         ServiceAndWorkflowId {
             service: self.service.clone().try_into().unwrap(),
+            service_id: self.service.id().to_string(),
             workflow_id: self.workflow_id.to_string(),
         }
     }
@@ -47,7 +48,8 @@ impl super::world::host::Host for HostComponent {
             .unwrap_or_else(|| {
                 panic!(
                     "Workflow with ID {} not found in service {}",
-                    self.workflow_id, self.service.id
+                    self.workflow_id,
+                    self.service.id()
                 )
             });
         WorkflowAndWorkflowId {
@@ -73,10 +75,17 @@ impl super::world::host::Host for HostComponent {
             .unwrap_or_else(|| {
                 panic!(
                     "Workflow with ID {} not found in service {}",
-                    self.workflow_id, self.service.id
+                    self.workflow_id,
+                    self.service.id()
                 )
             });
 
-        (self.inner_log)(&self.service.id, &self.workflow_id, digest, level, message);
+        (self.inner_log)(
+            &self.service.id(),
+            &self.workflow_id,
+            digest,
+            level,
+            message,
+        );
     }
 }

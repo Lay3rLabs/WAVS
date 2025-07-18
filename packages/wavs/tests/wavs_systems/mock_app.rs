@@ -105,7 +105,7 @@ impl MockE2ETestRunner {
     #[instrument(level = "debug", skip(self))]
     pub async fn send_trigger(
         &self,
-        service_id: impl TryInto<ServiceID, Error = IDError> + std::fmt::Debug,
+        service_id: ServiceID,
         workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
         contract_address: &layer_climb::prelude::Address,
         data: &(impl Serialize + std::fmt::Debug),
@@ -145,15 +145,18 @@ impl MockE2ETestRunner {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn create_service(&self, service_id: ServiceID, component_source: ComponentSource) {
+    pub async fn create_service(
+        &self,
+        name: Option<String>,
+        component_source: ComponentSource,
+    ) -> ServiceID {
         // but we can create a service via http router
         let trigger = mock_evm_event_trigger();
 
         let submit = Submit::None;
 
         let service = Service::new_simple(
-            service_id,
-            Some("mock-service".to_string()),
+            name,
             trigger,
             component_source,
             submit,
@@ -163,12 +166,16 @@ impl MockE2ETestRunner {
             },
         );
 
+        let service_id = service.id();
+
         self.dispatcher.add_service_direct(service).await.unwrap();
+
+        service_id
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn delete_services(&self, service_ids: Vec<ServiceID>) {
-        let body = serde_json::to_string(&DeleteServicesRequest { service_ids }).unwrap();
+    pub async fn delete_services(&self, service_managers: Vec<ServiceManager>) {
+        let body = serde_json::to_string(&DeleteServicesRequest { service_managers }).unwrap();
 
         let req = Request::builder()
             .method(Method::DELETE)

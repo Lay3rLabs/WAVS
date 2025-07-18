@@ -128,12 +128,12 @@ impl TryFrom<component_service::ComponentSource> for wavs_types::ComponentSource
     fn try_from(src: component_service::ComponentSource) -> Result<Self, Self::Error> {
         Ok(match src {
             component_service::ComponentSource::Digest(digest) => {
-                wavs_types::ComponentSource::Digest(wavs_types::Digest::from_str(&digest)?)
+                wavs_types::ComponentSource::Digest(wavs_types::ComponentDigest::from_str(&digest)?)
             }
             component_service::ComponentSource::Download(download) => {
                 wavs_types::ComponentSource::Download {
                     url: download.url,
-                    digest: wavs_types::Digest::from_str(&download.digest)?,
+                    digest: wavs_types::ComponentDigest::from_str(&download.digest)?,
                 }
             }
             component_service::ComponentSource::Registry(registry) => {
@@ -150,7 +150,7 @@ impl TryFrom<component_service::Registry> for wavs_types::Registry {
 
     fn try_from(src: component_service::Registry) -> Result<Self, Self::Error> {
         Ok(Self {
-            digest: wavs_types::Digest::from_str(&src.digest)?,
+            digest: wavs_types::ComponentDigest::from_str(&src.digest)?,
             domain: src.domain,
             version: src.version.map(|v| v.parse()).transpose()?,
             package: src.pkg.try_into()?,

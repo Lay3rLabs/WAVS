@@ -186,6 +186,70 @@ impl From<alloy_primitives::Address> for component_chain::EvmAddress {
     }
 }
 
+impl From<utils::config::CosmosChainConfig> for crate::bindings::world::host::CosmosChainConfig {
+    fn from(config: utils::config::CosmosChainConfig) -> Self {
+        Self {
+            chain_id: config.chain_id.as_str().to_string(),
+            rpc_endpoint: config.rpc_endpoint,
+            grpc_endpoint: config.grpc_endpoint,
+            grpc_web_endpoint: None,
+            gas_denom: config.gas_denom,
+            gas_price: config.gas_price,
+            bech32_prefix: config.bech32_prefix,
+        }
+    }
+}
+
+impl From<utils::config::EvmChainConfig> for crate::bindings::world::host::EvmChainConfig {
+    fn from(config: utils::config::EvmChainConfig) -> Self {
+        Self {
+            chain_id: config.chain_id,
+            ws_endpoint: config.ws_endpoint,
+            http_endpoint: config.http_endpoint,
+        }
+    }
+}
+
+impl From<wavs_types::Timestamp> for component_core::Timestamp {
+    fn from(src: wavs_types::Timestamp) -> Self {
+        component_core::Timestamp {
+            nanos: src.as_nanos(),
+        }
+    }
+}
+
+impl TryFrom<wavs_types::Service> for component_service::Service {
+    type Error = anyhow::Error;
+
+    fn try_from(src: wavs_types::Service) -> Result<Self, Self::Error> {
+        Ok(Self {
+            name: src.name,
+            workflows: src
+                .workflows
+                .into_iter()
+                .map(|(workflow_id, workflow)| {
+                    workflow
+                        .try_into()
+                        .map(|workflow| (workflow_id.to_string(), workflow))
+                })
+                .collect::<anyhow::Result<Vec<(String, component_service::Workflow)>>>()?,
+            status: src.status.into(),
+            manager: src.manager.into(),
+        })
+    }
+}
+
+impl TryFrom<wavs_types::Workflow> for component_service::Workflow {
+    type Error = anyhow::Error;
+
+    fn try_from(src: wavs_types::Workflow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            trigger: src.trigger.try_into()?,
+            component: src.component.into(),
+            submit: src.submit.into(),
+        })
+    }
+}
 impl From<wavs_types::Component> for component_service::Component {
     fn from(src: wavs_types::Component) -> Self {
         Self {

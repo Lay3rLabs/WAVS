@@ -6,7 +6,9 @@ use tracing::instrument;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
 use wavs_types::{Service, ServiceID, ServiceStatus};
 
-const SERVICE_TABLE: Table<&str, JSON<Service>> = Table::new("services");
+// key is ServiceID
+// TODO - use CAStorage instead?
+const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("services");
 
 type Result<T> = std::result::Result<T, ServicesError>;
 
@@ -22,7 +24,7 @@ impl Services {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
     pub fn try_get(&self, id: &ServiceID) -> Result<Option<Service>> {
-        match self.db_storage.get(SERVICE_TABLE, id.as_ref()) {
+        match self.db_storage.get(SERVICE_TABLE, id.inner()) {
             Ok(Some(service)) => Ok(Some(service.value())),
             Ok(None) => Ok(None),
             Err(err) => Err(err.into()),
@@ -39,7 +41,7 @@ impl Services {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
     pub fn exists(&self, service_id: &ServiceID) -> Result<bool> {
-        match self.db_storage.get(SERVICE_TABLE, service_id.as_ref())? {
+        match self.db_storage.get(SERVICE_TABLE, service_id.inner())? {
             Some(_) => Ok(true),
             None => Ok(false),
         }
@@ -57,19 +59,23 @@ impl Services {
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
     pub fn remove(&self, service_id: &ServiceID) -> Result<()> {
         self.db_storage
-            .remove(SERVICE_TABLE, service_id.as_ref())
+            .remove(SERVICE_TABLE, service_id.inner())
             .map_err(|e| e.into())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
     pub fn save(&self, service: &Service) -> Result<()> {
         self.db_storage
-            .set(SERVICE_TABLE, service.id.as_ref(), service)
+            .set(SERVICE_TABLE, service.id().inner(), service)
             .map_err(|e| e.into())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn list(&self, bounds_start: Bound<&str>, bounds_end: Bound<&str>) -> Result<Vec<Service>> {
+    pub fn list(
+        &self,
+        bounds_start: Bound<&ServiceID>,
+        bounds_end: Bound<&ServiceID>,
+    ) -> Result<Vec<Service>> {
         let res = self
             .db_storage
             .map_table_read(SERVICE_TABLE, |table| match table {
@@ -87,7 +93,7 @@ impl Services {
                     }
                     (Bound::Unbounded, Bound::Included(y)) => {
                         let res = table
-                            .range(..=y)?
+                            .range(..=y.inner())?
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
 
@@ -95,7 +101,7 @@ impl Services {
                     }
                     (Bound::Unbounded, Bound::Excluded(y)) => {
                         let res = table
-                            .range(..y)?
+                            .range(..y.inner())?
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
 
@@ -103,7 +109,7 @@ impl Services {
                     }
                     (Bound::Included(x), Bound::Unbounded) => {
                         let res = table
-                            .range(x..)?
+                            .range(x.inner()..)?
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
 
@@ -111,7 +117,7 @@ impl Services {
                     }
                     (Bound::Excluded(x), Bound::Unbounded) => {
                         let res = table
-                            .range(x..)?
+                            .range(x.inner()..)?
                             .skip(1)
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
@@ -120,7 +126,7 @@ impl Services {
                     }
                     (Bound::Included(x), Bound::Included(y)) => {
                         let res = table
-                            .range(x..=y)?
+                            .range(x.inner()..=y.inner())?
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
 
@@ -128,7 +134,7 @@ impl Services {
                     }
                     (Bound::Included(x), Bound::Excluded(y)) => {
                         let res = table
-                            .range(x..y)?
+                            .range(x.inner()..y.inner())?
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
 
@@ -136,7 +142,7 @@ impl Services {
                     }
                     (Bound::Excluded(x), Bound::Included(y)) => {
                         let res = table
-                            .range(x..=y)?
+                            .range(x.inner()..=y.inner())?
                             .skip(1)
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
@@ -144,7 +150,7 @@ impl Services {
                     }
                     (Bound::Excluded(x), Bound::Excluded(y)) => {
                         let res = table
-                            .range(x..y)?
+                            .range(x.inner()..y.inner())?
                             .skip(1)
                             .map(|i| i.map(|(_, value)| value.value()))
                             .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;

@@ -2,8 +2,9 @@ use std::num::NonZero;
 
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
 use wavs_types::{
-    ChainName, Component, ComponentSource, Digest, EvmContractSubmission, Service, ServiceID,
-    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowID,
+    ChainName, Component, ComponentDigest, ComponentSource, EvmContractSubmission, Service,
+    ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow,
+    WorkflowID,
 };
 
 use layer_climb::prelude::*;
@@ -58,10 +59,10 @@ fn core_trigger_lookups() {
     )
     .unwrap();
 
-    let service_id_1 = ServiceID::new("service-1").unwrap();
+    let service_id_1 = ServiceID::hash("service-1");
     let workflow_id_1 = WorkflowID::new("workflow-1").unwrap();
 
-    let service_id_2 = ServiceID::new("service-2").unwrap();
+    let service_id_2 = ServiceID::hash("service-2");
     let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
 
     let task_queue_addr_1_1 = rand_address_evm();
@@ -70,7 +71,7 @@ fn core_trigger_lookups() {
     let task_queue_addr_2_2 = rand_address_evm();
 
     let trigger_1_1 = TriggerConfig::evm_contract_event(
-        &service_id_1,
+        service_id_1.clone(),
         &workflow_id_1,
         task_queue_addr_1_1,
         ChainName::new("evm").unwrap(),
@@ -78,7 +79,7 @@ fn core_trigger_lookups() {
     )
     .unwrap();
     let trigger_1_2 = TriggerConfig::evm_contract_event(
-        &service_id_1,
+        service_id_1.clone(),
         &workflow_id_2,
         task_queue_addr_1_2,
         ChainName::new("evm").unwrap(),
@@ -86,7 +87,7 @@ fn core_trigger_lookups() {
     )
     .unwrap();
     let trigger_2_1 = TriggerConfig::evm_contract_event(
-        &service_id_2,
+        service_id_2.clone(),
         &workflow_id_1,
         task_queue_addr_2_1,
         ChainName::new("evm").unwrap(),
@@ -94,7 +95,7 @@ fn core_trigger_lookups() {
     )
     .unwrap();
     let trigger_2_2 = TriggerConfig::evm_contract_event(
-        &service_id_2,
+        service_id_2.clone(),
         &workflow_id_2,
         task_queue_addr_2_2,
         ChainName::new("evm").unwrap(),
@@ -211,27 +212,18 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     )
     .unwrap();
 
-    let service_id = ServiceID::new("service-1").unwrap();
     let workflow_id = WorkflowID::new("workflow-1").unwrap();
     let chain_name = ChainName::new("evm").unwrap();
 
     // set number of blocks to 1 to fire the trigger immediately
     let n_blocks = NonZero::new(1).unwrap();
-    let trigger = TriggerConfig::block_interval_event(
-        &service_id,
-        &workflow_id,
-        chain_name.clone(),
-        n_blocks,
-    )
-    .unwrap();
 
     let service = Service {
-        id: service_id.clone(),
         name: "Big Square AVS".to_string(),
         workflows: [(
             workflow_id.clone(),
             Workflow {
-                component: Component::new(ComponentSource::Digest(Digest::new(&[0; 32]))),
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash([0; 32]))),
                 trigger: Trigger::BlockInterval {
                     chain_name: chain_name.clone(),
                     n_blocks,
@@ -258,14 +250,29 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     };
     services.save(&service).unwrap();
 
+    let trigger = TriggerConfig::block_interval_event(
+        service.id(),
+        &workflow_id,
+        chain_name.clone(),
+        n_blocks,
+    )
+    .unwrap();
+
     manager
         .get_lookup_maps()
         .add_trigger(trigger.clone())
         .unwrap();
 
-    let service_id2 = ServiceID::new("service-2").unwrap();
+    let service_2 = Service {
+        manager: ServiceManager::Evm {
+            chain_name: ChainName::new("evm").unwrap(),
+            address: rand_address_evm(),
+        },
+        ..service.clone()
+    };
+
     let trigger = TriggerConfig::block_interval_event(
-        &service_id2,
+        service_2.id(),
         &workflow_id,
         chain_name.clone(),
         n_blocks,
@@ -276,11 +283,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         .add_trigger(trigger.clone())
         .unwrap();
 
-    let service = Service {
-        id: service_id2.clone(),
-        ..service
-    };
-    services.save(&service).unwrap();
+    services.save(&service_2).unwrap();
 
     // Verify we have two scheduled triggers
     assert_eq!(
@@ -296,7 +299,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     // Remove one trigger and verify we have one left
     manager
         .get_lookup_maps()
-        .remove_workflow(service_id.clone(), workflow_id.clone())
+        .remove_workflow(service.id(), workflow_id.clone())
         .unwrap();
 
     let trigger_actions = manager.process_blocks(chain_name.clone(), 10);
@@ -316,7 +319,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     // remove the last trigger config
     manager
         .get_lookup_maps()
-        .remove_workflow(service_id2.clone(), workflow_id.clone())
+        .remove_workflow(service_2.id(), workflow_id.clone())
         .unwrap();
 
     let trigger_actions = manager.process_blocks(chain_name.clone(), 20);
@@ -350,7 +353,7 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     .unwrap();
 
     // Create service and workflow IDs
-    let service_id = ServiceID::new("service-1").unwrap();
+    let service_id = ServiceID::hash("service-1");
     let workflow_id = WorkflowID::new("workflow-1").unwrap();
 
     // Set up the first trigger
@@ -366,7 +369,7 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     manager.get_lookup_maps().add_trigger(trigger1).unwrap();
 
     // Set up the second trigger
-    let service_id2 = ServiceID::new("service-2").unwrap();
+    let service_id2 = ServiceID::hash("service-2");
     let trigger2 = TriggerConfig {
         service_id: service_id2.clone(),
         workflow_id: workflow_id.clone(),

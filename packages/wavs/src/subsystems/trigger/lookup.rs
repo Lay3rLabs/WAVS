@@ -104,11 +104,11 @@ impl LookupMaps {
         self.service_manager
             .write()
             .unwrap()
-            .insert(service.id.clone(), manager_address);
+            .insert(service.id(), manager_address);
 
         for (id, workflow) in &service.workflows {
             let trigger = TriggerConfig {
-                service_id: service.id.clone(),
+                service_id: service.id(),
                 workflow_id: id.clone(),
                 trigger: workflow.trigger.clone(),
             };

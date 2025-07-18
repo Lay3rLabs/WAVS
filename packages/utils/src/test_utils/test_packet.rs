@@ -3,8 +3,8 @@ use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
 use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::SolValue;
 use wavs_types::{
-    Component, ComponentSource, Digest, Envelope, EnvelopeExt, EnvelopeSignature, Packet, Service,
-    ServiceID, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    Component, ComponentDigest, ComponentSource, Envelope, EnvelopeExt, EnvelopeSignature, Packet,
+    Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::test_utils::address::rand_address_evm;
@@ -29,17 +29,15 @@ pub fn packet_from_service(
 pub fn mock_packet(
     signer: &LocalSigner<SigningKey>,
     envelope: &Envelope,
-    service_id: ServiceID,
     workflow_id: WorkflowID,
 ) -> Packet {
     let service = Service {
-        id: service_id,
         name: "mock packet service".to_string(),
         workflows: [(
             workflow_id.clone(),
             Workflow {
                 trigger: Trigger::Manual,
-                component: Component::new(ComponentSource::Digest(Digest::new(&[0; 32]))),
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash([0; 32]))),
                 submit: Submit::None,
             },
         )]

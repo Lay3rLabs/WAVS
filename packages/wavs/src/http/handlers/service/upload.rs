@@ -35,8 +35,7 @@ async fn inner_handle_upload_service(
     })
     .await
     .unwrap()
-    .await?
-    .into();
+    .await?;
 
     Ok(UploadComponentResponse { digest })
 }

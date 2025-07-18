@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::{ChainName, ServiceID, Trigger, WorkflowID};
+use wavs_types::{ChainName, Service, Trigger, WorkflowID};
 
 use super::chain_names::ChainNames;
 use super::clients::Clients;
@@ -65,18 +65,18 @@ impl TestRegistry {
     /// Registers a service on the aggregator
     pub async fn register_to_aggregator(
         aggregator_url: &str,
-        service_id: &ServiceID,
+        service: &Service,
     ) -> anyhow::Result<()> {
         let http_client = reqwest::Client::new();
 
         let endpoint = format!("{}/register-service", aggregator_url);
         let payload = RegisterServiceRequest {
-            service_id: service_id.clone(),
+            service_manager: service.manager.clone(),
         };
 
         tracing::info!(
             "Registering service {} with aggregator at {}",
-            service_id,
+            service.id(),
             endpoint
         );
 
@@ -561,9 +561,9 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Write {
+                            bucket: "test_bucket".to_string(),
                             key: "hello".to_string(),
                             value: b"world".to_vec(),
-                            read_immediately: false,
                         }))
                         .with_expected_output(ExpectedOutput::KvStore(KvStoreResponse::Write))
                         .build(),
@@ -584,6 +584,7 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Read {
+                            bucket: "test_bucket".to_string(),
                             key: "hello".to_string(),
                         }))
                         .with_expected_output(ExpectedOutput::KvStore(KvStoreResponse::Read {

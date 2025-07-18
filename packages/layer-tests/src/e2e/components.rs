@@ -7,7 +7,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use utils::filesystem::workspace_path;
 use wasm_pkg_common::package::PackageRef;
 use wavs_cli::clients::HttpClient;
-use wavs_types::{ComponentSource, Digest, Registry};
+use wavs_types::{ComponentDigest, ComponentSource, Registry};
 
 use super::config::Configs;
 
@@ -153,7 +153,7 @@ async fn get_component_source(
 
         let source = ComponentSource::Registry {
             registry: Registry {
-                digest: Digest::from_str(digest_string).unwrap(),
+                digest: ComponentDigest::from_str(digest_string).unwrap(),
                 domain: None,
                 version: None,
                 package: PackageRef::try_from(format!("wavs-tests:{0}", pkg_name)).unwrap(),

@@ -3,13 +3,12 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Component, ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
+    Component, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct ServiceJson {
-    pub id: ServiceID,
     pub name: String,
     pub workflows: BTreeMap<WorkflowID, WorkflowJson>,
     pub status: ServiceStatus,

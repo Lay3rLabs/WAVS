@@ -5,8 +5,8 @@ use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, ComponentSource, Digest, Permissions, ServiceID, Submit, Trigger,
-    TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,
+    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceID, Submit,
+    Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,
 };
 
 use crate::{
@@ -83,18 +83,6 @@ impl ExecComponent {
         let engine = WTEngine::new(&wt_config)
             .context("Failed to create Wasmtime engine with the specified configuration")?;
 
-        let trigger_action = TriggerAction {
-            config: TriggerConfig {
-                service_id: ServiceID::new("service-1")?,
-                workflow_id: WorkflowID::default(),
-                trigger: Trigger::Manual,
-            },
-            data: TriggerData::Raw(input.decode().context(format!(
-                "Failed to decode input '{}' for component execution",
-                input.into_string()
-            ))?),
-        };
-
         // Automatically pick up all env vars with the WAVS_ENV_PREFIX
         let env_keys = std::env::vars()
             .map(|(key, _)| key)
@@ -102,9 +90,9 @@ impl ExecComponent {
             .collect();
 
         let workflow = Workflow {
-            trigger: trigger_action.config.trigger.clone(),
+            trigger: Trigger::Manual,
             component: wavs_types::Component {
-                source: ComponentSource::Digest(Digest::new(&wasm_bytes)),
+                source: ComponentSource::Digest(ComponentDigest::hash(&wasm_bytes)),
                 permissions: Permissions {
                     allowed_http_hosts: AllowedHostPermission::All,
                     file_system: true,
@@ -118,14 +106,25 @@ impl ExecComponent {
         };
 
         let service = wavs_types::Service {
-            id: trigger_action.config.service_id.clone(),
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(trigger_action.config.workflow_id.clone(), workflow)]),
+            workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
                 chain_name: "exec".parse().unwrap(),
                 address: Default::default(),
             },
+        };
+
+        let trigger_action = TriggerAction {
+            config: TriggerConfig {
+                service_id: service.id(),
+                workflow_id: WorkflowID::default(),
+                trigger: Trigger::Manual,
+            },
+            data: TriggerData::Raw(input.decode().context(format!(
+                "Failed to decode input '{}' for component execution",
+                input.into_string()
+            ))?),
         };
 
         let mut instance_deps = InstanceDepsBuilder {
@@ -138,7 +137,7 @@ impl ExecComponent {
             log: log_wasi,
             max_execution_seconds: Some(u64::MAX),
             max_wasm_fuel: Some(u64::MAX),
-            keyvalue_ctx: wavs_engine::KeyValueCtx::new(
+            keyvalue_ctx: wavs_engine::context::KeyValueCtx::new(
                 RedbStorage::new(tempfile::tempdir()?.keep()).unwrap(),
                 "exec_component".to_string(),
             ),
@@ -172,7 +171,7 @@ impl ExecComponent {
 fn log_wasi(
     service_id: &ServiceID,
     workflow_id: &WorkflowID,
-    digest: &Digest,
+    digest: &ComponentDigest,
     level: LogLevel,
     message: String,
 ) {

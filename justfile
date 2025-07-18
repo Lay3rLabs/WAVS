@@ -191,11 +191,11 @@ download-solidity branch="dev":
     mkdir -p examples/contracts/solidity/mocks
 
     # Copy just the interfaces
-    cp temp_clone/wavs-middleware/contracts/interfaces/*.sol contracts/solidity/interfaces/
+    cp temp_clone/wavs-middleware/contracts/src/eigenlayer/ecdsa/interfaces/*.sol contracts/solidity/interfaces/
 
     # and, for examples - interfaces and mocks
-    cp temp_clone/wavs-middleware/contracts/interfaces/*.sol examples/contracts/solidity/interfaces/
-    cp temp_clone/wavs-middleware/contracts/mocks/*.sol examples/contracts/solidity/mocks/
+    cp temp_clone/wavs-middleware/contracts/src/eigenlayer/ecdsa/interfaces/*.sol examples/contracts/solidity/interfaces/ 
+    cp temp_clone/wavs-middleware/contracts/src/eigenlayer/ecdsa/mocks/*.sol examples/contracts/solidity/mocks/
 
     # Clean up
     rm -rf temp_clone

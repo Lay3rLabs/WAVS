@@ -5,7 +5,7 @@ use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbS
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, Digest, Service, ServiceID, TriggerAction, TriggerConfig, TriggerData,
+    AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,
     Workflow, WorkflowID,
 };
 
@@ -19,7 +19,7 @@ pub struct EngineSetup {
     pub component_bytes: Vec<u8>,
     pub data_dir: TempDir,
     pub db_dir: TempDir,
-    pub keyvalue_ctx: wavs_engine::KeyValueCtx,
+    pub keyvalue_ctx: wavs_engine::context::KeyValueCtx,
 }
 
 impl EngineSetup {
@@ -39,11 +39,11 @@ impl EngineSetup {
             .join("components")
             .join("echo_data.wasm");
         let component_bytes = std::fs::read(&component_path).unwrap();
-        let component_source = wavs_types::ComponentSource::Digest(Digest::new(&component_bytes));
+        let component_source =
+            wavs_types::ComponentSource::Digest(ComponentDigest::hash(&component_bytes));
         let component = Component::new(&engine, &component_bytes).unwrap();
 
         // Create a simple workflow
-        let service_id = ServiceID::new("benchmark-service".to_string()).unwrap();
         let workflow_id = WorkflowID::new("benchmark-workflow".to_string()).unwrap();
 
         let data_dir = tempdir().unwrap();
@@ -66,7 +66,6 @@ impl EngineSetup {
         };
 
         let service = wavs_types::Service {
-            id: service_id.clone(),
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(workflow_id.clone(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
@@ -78,7 +77,7 @@ impl EngineSetup {
 
         let chain_configs = ChainConfigs::default();
 
-        let keyvalue_ctx = wavs_engine::KeyValueCtx::new(
+        let keyvalue_ctx = wavs_engine::context::KeyValueCtx::new(
             RedbStorage::new(db_dir.path()).unwrap(),
             "engine".to_string(),
         );
@@ -129,7 +128,7 @@ impl EngineSetup {
     pub fn create_trigger_action(&self, data: Vec<u8>) -> TriggerAction {
         TriggerAction {
             config: TriggerConfig {
-                service_id: self.service.id.clone(),
+                service_id: self.service.id(),
                 workflow_id: self.workflow_id.clone(),
                 trigger: wavs_types::Trigger::Manual,
             },

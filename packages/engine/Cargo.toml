@@ -23,6 +23,7 @@ alloy-primitives = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+redb = { workspace = true }
 
 [dev-dependencies]
 utils = { workspace = true, features = ["test-utils"] }

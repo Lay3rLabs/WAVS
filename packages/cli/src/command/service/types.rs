@@ -5,8 +5,8 @@ use std::{
 };
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ChainName, Digest, EvmContractSubmission, Permissions,
-    ServiceStatus, Submit, Trigger, WorkflowID,
+    Aggregator, AllowedHostPermission, ChainName, ComponentDigest, EvmContractSubmission,
+    Permissions, ServiceStatus, Submit, Trigger, WorkflowID,
 };
 
 use crate::service_json::ServiceJson;
@@ -29,7 +29,6 @@ pub struct ServiceInitResult {
 impl std::fmt::Display for ServiceInitResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Service JSON generated successfully!")?;
-        writeln!(f, "  ID:   {}", self.service.id)?;
         writeln!(f, "  Name: {}", self.service.name)?;
         writeln!(f, "  File: {}", self.file_path.display())
     }
@@ -39,7 +38,7 @@ impl std::fmt::Display for ServiceInitResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct ComponentSourceDigestResult {
     /// The component digest
-    pub digest: Digest,
+    pub digest: ComponentDigest,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -60,7 +59,7 @@ pub struct ComponentSourceRegistryResult {
     /// The package reference
     pub package: PackageRef,
     /// The component digest (retrieved from registry)
-    pub digest: Digest,
+    pub digest: ComponentDigest,
     /// The version
     pub version: Version,
     /// The file path where the updated service JSON was saved
@@ -346,8 +345,8 @@ impl std::fmt::Display for UpdateStatusResult {
 /// Result of service validation
 #[derive(Debug, Clone, Serialize)]
 pub struct ServiceValidationResult {
-    /// The service ID
-    pub service_id: String,
+    /// The service name
+    pub service_name: String,
     /// Any errors generated during validation
     pub errors: Vec<String>,
 }
@@ -356,10 +355,10 @@ impl std::fmt::Display for ServiceValidationResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.errors.is_empty() {
             writeln!(f, "✅ Service validation successful!")?;
-            writeln!(f, "   Service ID: {}", self.service_id)?;
+            writeln!(f, "   Service Name: {}", self.service_name)?;
         } else {
             writeln!(f, "❌ Service validation failed with errors")?;
-            writeln!(f, "   Service ID: {}", self.service_id)?;
+            writeln!(f, "   Service Name: {}", self.service_name)?;
             writeln!(f, "   Errors:")?;
             for (i, error) in self.errors.iter().enumerate() {
                 writeln!(f, "   {}: {}", i + 1, error)?;

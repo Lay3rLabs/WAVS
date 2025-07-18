@@ -59,6 +59,28 @@ interface output {
     }
 }
 
+interface helpers {
+    use service-types.{service, service-id, workflow, workflow-id};
+
+    variant log-level {
+        error,
+        warn,
+        info,
+        debug,
+        trace
+    }
+
+    record service-and-workflow-id {
+        service: service,
+        service-id: service-id,
+        workflow-id: workflow-id
+    }
+
+    record workflow-and-workflow-id {
+        workflow: workflow,
+        workflow-id: workflow-id
+    }
+}
 world wavs-world {
     // include needed for golang support
     include wasi:cli/imports@0.2.0;
