@@ -1,12 +1,11 @@
 use example_helpers::bindings::world::{
     host,
     wavs::{
-        types::service::ComponentSource,
-        worker::{
-            helpers::{LogLevel, ServiceAndWorkflowId},
-            input::TriggerAction,
-            output::WasmResponse,
+        types::{
+            core::LogLevel,
+            service::{ComponentSource, ServiceAndWorkflowId},
         },
+        worker::{input::TriggerAction, output::WasmResponse},
     },
     Guest,
 };
@@ -82,7 +81,6 @@ async fn inner_run_task(input: PermissionsRequest) -> Result<PermissionsResponse
     let ServiceAndWorkflowId {
         service,
         workflow_id,
-        service_id: _,
     } = host::get_service();
 
     let workflow = service

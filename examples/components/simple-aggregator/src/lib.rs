@@ -1,7 +1,8 @@
 mod world;
 
 use world::{
-    wavs::worker::aggregator::{AggregatorAction, EvmAddress, Packet, SubmitAction, TxResult},
+    wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction},
+    wavs::types::chain::{EvmAddress, TxHash},
     Guest,
 };
 
@@ -24,10 +25,13 @@ impl Guest for Component {
         Err("No timers used".to_string())
     }
 
-    fn handle_submit_callback(_packet: Packet, tx_result: TxResult) -> Result<bool, String> {
+    fn handle_submit_callback(
+        _packet: Packet,
+        tx_result: Result<TxHash, String>,
+    ) -> Result<bool, String> {
         match tx_result {
-            TxResult::Success(_) => Ok(true),
-            TxResult::Error(_) => Ok(false),
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
         }
     }
 }
