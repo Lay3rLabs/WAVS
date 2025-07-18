@@ -75,6 +75,27 @@ impl CliContext {
         Ok(evm_client)
     }
 
+    /// Creates an EVM client for read-only operations (validation, queries)
+    /// Uses a dummy credential if none is configured
+    pub(crate) async fn new_evm_client_read_only(&self, chain_name: &ChainName) -> Result<EvmSigningClient> {
+        let chain_config = self
+            .config
+            .chains
+            .evm
+            .get(chain_name)
+            .context(format!("chain {chain_name} not found"))?
+            .clone();
+
+        // Use actual credential if available, otherwise use a dummy one for read-only operations
+        let credential = self.config.evm_credential.clone()
+            .unwrap_or_else(|| "0x0000000000000000000000000000000000000000000000000000000000000001".to_string());
+
+        let client_config = chain_config.signing_client_config(credential)?;
+        let evm_client = EvmSigningClient::new(client_config).await?;
+
+        Ok(evm_client)
+    }
+
     pub async fn new_cosmos_client(&self, chain_name: &ChainName) -> Result<SigningClient> {
         let chain_config = self
             .config
