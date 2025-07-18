@@ -4,4 +4,12 @@ interface core {
   record timestamp {
     nanos: u64
   }
+
+  variant log-level {
+      error,
+      warn,
+      info,
+      debug,
+      trace
+  }
 }
