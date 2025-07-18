@@ -1,6 +1,6 @@
-use crate::bindings::world::{
-    aggregator::wavs::types::core as aggregator_core,
-    wavs::types::core as component_core,
+use crate::{
+    aggregator::bindings::world::wavs::types::core as aggregator_core,
+    bindings::world::wavs::types::core as component_core,
 };
 
 impl From<aggregator_core::LogLevel> for component_core::LogLevel {

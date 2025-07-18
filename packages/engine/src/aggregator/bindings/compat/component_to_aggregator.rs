@@ -1,4 +1,4 @@
-use crate::bindings::world::aggregator::wavs::types::chain as aggregator_chain;
+use crate::aggregator::bindings::world::wavs::types::chain as aggregator_chain;
 
 impl From<utils::config::CosmosChainConfig> for aggregator_chain::CosmosChainConfig {
     fn from(config: utils::config::CosmosChainConfig) -> Self {

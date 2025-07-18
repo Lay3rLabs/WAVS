@@ -1,4 +1,4 @@
-use crate::bindings::world::wavs::types::{
+use crate::worker::bindings::world::wavs::types::{
     chain as worker_chain,
     service as worker_service,
     core as worker_core,
@@ -33,7 +33,6 @@ impl TryFrom<wavs_types::Service> for worker_service::Service {
 
     fn try_from(src: wavs_types::Service) -> Result<Self, Self::Error> {
         Ok(Self {
-            id: src.id.to_string(),
             name: src.name,
             workflows: src
                 .workflows
