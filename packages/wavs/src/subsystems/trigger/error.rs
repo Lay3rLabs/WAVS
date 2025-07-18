@@ -48,4 +48,6 @@ pub enum TriggerError {
     DispatcherCommandSendError(#[from] SendError<DispatcherCommand>),
     #[error("Local command send error: {0}")]
     LocalCommandError(#[from] SendError<LocalStreamCommand>),
+    #[error("Unable to convert event index: {0}")]
+    EventIndexConversion(std::num::TryFromIntError),
 }

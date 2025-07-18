@@ -7,6 +7,7 @@ use crate::{
     config::Config,
     dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
     services::Services,
+    subsystems::trigger::streams::cosmos_stream::StreamTriggerCosmosContractEvent,
     AppContext,
 };
 use alloy_sol_types::SolEvent;
@@ -384,7 +385,9 @@ impl TriggerManager {
                 StreamTriggers::Evm {
                     log,
                     chain_name,
-                    block_height,
+                    block_number,
+                    tx_hash,
+                    log_index,
                 } => {
                     if let Some(event_hash) = log.topic0() {
                         let contract_address = log.address();
@@ -432,15 +435,23 @@ impl TriggerManager {
                             contract_address,
                             ByteArray::new(**event_hash),
                         )) {
+                            let trigger_data = TriggerData::EvmContractEvent {
+                                contract_address,
+                                chain_name,
+                                log_data: log.data().clone(),
+                                tx_hash,
+                                block_number,
+                                log_index,
+                                block_hash: log.block_hash,
+                                block_timestamp: log.block_timestamp,
+                                tx_index: log.transaction_index,
+                                removed: log.removed,
+                            };
+
                             for trigger_config in self.lookup_maps.get_trigger_configs(lookup_ids) {
                                 dispatcher_commands.push(DispatcherCommand::Trigger(
                                     TriggerAction {
-                                        data: TriggerData::EvmContractEvent {
-                                            contract_address,
-                                            chain_name: chain_name.clone(),
-                                            log: log.inner.data.clone(),
-                                            block_height,
-                                        },
+                                        data: trigger_data.clone(),
                                         config: trigger_config.clone(),
                                     },
                                 ));
@@ -461,23 +472,30 @@ impl TriggerManager {
                             .read()
                             .unwrap();
 
-                        for (contract_address, event) in contract_events {
+                        for StreamTriggerCosmosContractEvent {
+                            contract_address,
+                            event,
+                            event_index,
+                        } in contract_events
+                        {
                             if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
                                 chain_name.clone(),
                                 contract_address.clone(),
                                 event.ty.clone(),
                             )) {
+                                let trigger_data = TriggerData::CosmosContractEvent {
+                                    contract_address,
+                                    chain_name: chain_name.clone(),
+                                    event,
+                                    event_index,
+                                    block_height,
+                                };
                                 for trigger_config in
                                     self.lookup_maps.get_trigger_configs(lookup_ids)
                                 {
                                     dispatcher_commands.push(DispatcherCommand::Trigger(
                                         TriggerAction {
-                                            data: TriggerData::CosmosContractEvent {
-                                                contract_address: contract_address.clone(),
-                                                chain_name: chain_name.clone(),
-                                                event: event.clone(),
-                                                block_height,
-                                            },
+                                            data: trigger_data.clone(),
                                             config: trigger_config.clone(),
                                         },
                                     ));

@@ -3,6 +3,8 @@ pub mod cron_stream;
 pub mod evm_stream;
 pub mod local_command_stream;
 
+use crate::subsystems::trigger::streams::cosmos_stream::StreamTriggerCosmosContractEvent;
+
 use super::{error::TriggerError, lookup::LookupId};
 use futures::{stream::SelectAll, Stream};
 use local_command_stream::LocalStreamCommand;
@@ -21,13 +23,15 @@ pub enum StreamTriggers {
     Cosmos {
         chain_name: ChainName,
         // these are not filtered yet, just all the contract-based events
-        contract_events: Vec<(layer_climb::prelude::Address, cosmwasm_std::Event)>,
+        contract_events: Vec<StreamTriggerCosmosContractEvent>,
         block_height: u64,
     },
     Evm {
         chain_name: ChainName,
         log: alloy_rpc_types_eth::Log,
-        block_height: u64,
+        block_number: u64,
+        tx_hash: alloy_primitives::TxHash,
+        log_index: u64,
     },
     // We need a separate stream for EVM block interval triggers
     EvmBlock {

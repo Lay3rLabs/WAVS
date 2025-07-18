@@ -120,7 +120,7 @@ interface service {
     }
 
     record aggregator-submit {
-        url: string,        
+        url: string,
         component: option<component>,
         evm-contracts: option<list<evm-contract-submission>>,
     }
@@ -136,4 +136,13 @@ interface service {
         max-gas: option<u64>,
     }
 
+    record service-and-workflow-id {
+        service: service,
+        workflow-id: workflow-id
+    }
+
+    record workflow-and-workflow-id {
+        workflow: workflow,
+        workflow-id: workflow-id
+    }
 }

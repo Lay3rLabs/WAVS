@@ -2,7 +2,7 @@ use alloy_provider::Provider;
 use alloy_rpc_types_eth::Filter;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
-use utils::{error::EvmClientError, evm_client::EvmQueryClient, telemetry::TriggerMetrics};
+use utils::{evm_client::EvmQueryClient, telemetry::TriggerMetrics};
 use wavs_types::ChainName;
 
 use crate::subsystems::trigger::error::TriggerError;
@@ -26,14 +26,25 @@ pub async fn start_evm_event_stream(
 
     let chain_name = chain_name.clone();
 
-    let event_stream = Box::pin(stream.map(move |log| {
-        Ok(StreamTriggers::Evm {
-            chain_name: chain_name.clone(),
-            block_height: log.block_number.ok_or_else(|| {
-                TriggerError::EvmClient(chain_name.clone(), EvmClientError::BlockHeight)
-            })?,
-            log,
-        })
+    let event_stream = Box::pin(stream.filter_map(move |log| {
+        let chain_name = chain_name.clone();
+        async move {
+            match (log.block_number, log.transaction_hash, log.log_index) {
+                (Some(block_number), Some(tx_hash), Some(log_index)) => {
+                    Some(Ok(StreamTriggers::Evm {
+                        chain_name: chain_name.clone(),
+                        block_number,
+                        tx_hash,
+                        log_index,
+                        log,
+                    }))
+                }
+                _ => {
+                    tracing::warn!("Received incomplete EVM log: {:?}", log);
+                    None
+                }
+            }
+        }
     }));
 
     Ok(event_stream)

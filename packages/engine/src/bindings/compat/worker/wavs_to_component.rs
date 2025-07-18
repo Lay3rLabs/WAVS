@@ -1,3 +1,4 @@
+use crate::bindings::world::wavs::types::chain as component_chain;
 use crate::bindings::world::wavs::worker::input as component_input;
 use crate::bindings::world::wavs::worker::output as component_output;
 
@@ -39,27 +40,44 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
     fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
         match src {
             wavs_types::TriggerData::EvmContractEvent {
-                contract_address,
                 chain_name,
-                log,
-                block_height,
+                contract_address,
+                log_data,
+                tx_hash,
+                block_number,
+                log_index,
+                block_hash,
+                block_timestamp,
+                tx_index,
+                removed,
             } => Ok(component_input::TriggerData::EvmContractEvent(
                 component_input::TriggerDataEvmContractEvent {
-                    contract_address: component_input::EvmAddress {
-                        raw_bytes: contract_address.to_vec(),
-                    },
                     chain_name: chain_name.to_string(),
-                    log: component_input::EvmEventLogData {
-                        topics: log.topics().iter().map(|topic| topic.to_vec()).collect(),
-                        data: log.data.to_vec(),
+                    log: component_input::EvmEventLog {
+                        address: contract_address.into(),
+                        data: component_chain::EvmEventLogData {
+                            topics: log_data
+                                .topics()
+                                .iter()
+                                .map(|topic| topic.to_vec())
+                                .collect(),
+                            data: log_data.data.to_vec(),
+                        },
+                        tx_hash: tx_hash.to_vec(),
+                        block_number,
+                        log_index,
+                        block_hash: block_hash.map(|hash| hash.to_vec()),
+                        block_timestamp,
+                        tx_index,
+                        removed,
                     },
-                    block_height,
                 },
             )),
             wavs_types::TriggerData::CosmosContractEvent {
                 contract_address,
                 chain_name,
                 event,
+                event_index,
                 block_height,
             } => Ok(component_input::TriggerData::CosmosContractEvent(
                 component_input::TriggerDataCosmosContractEvent {
@@ -73,6 +91,7 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                             .map(|attr| (attr.key, attr.value))
                             .collect(),
                     },
+                    event_index,
                     block_height,
                 },
             )),
