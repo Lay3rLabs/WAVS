@@ -8,7 +8,7 @@ use wasmtime_wasi::{p2::{WasiCtxBuilder, WasiCtx, WasiView, IoView}, DirPerms, F
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
-use crate::{EngineError, KeyValueCtx};
+use crate::{EngineError, keyvalue::context::KeyValueCtx};
 
 pub struct WorkerHostComponent {
     pub service: Service,
@@ -62,7 +62,7 @@ impl<P: AsRef<Path>> WorkerInstanceDepsBuilder<'_, P> {
                 .get(&workflow_id)
                 .ok_or_else(|| EngineError::WorkflowNotFound {
                     workflow_id: workflow_id.clone(),
-                    service_id: service.id.clone(),
+                    service_id: service.id().clone(),
                 })?;
 
         let mut linker = Linker::<WorkerHostComponent>::new(engine);
@@ -109,7 +109,8 @@ fn create_wasi_ctx<P: AsRef<Path>>(
     workflow: &Workflow,
     data_dir: P,
 ) -> Result<WasiCtx, EngineError> {
-    let mut wasi_ctx = WasiCtxBuilder::new()
+    let mut binding = WasiCtxBuilder::new();
+    let mut wasi_ctx = binding
         .inherit_stdio()
         .inherit_stdout()
         .inherit_stderr();

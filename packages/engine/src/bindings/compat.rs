@@ -1,1 +1,1 @@
-mod types;
+pub use crate::worker::bindings::compat::*;

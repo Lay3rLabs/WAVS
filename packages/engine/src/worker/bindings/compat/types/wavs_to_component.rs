@@ -186,70 +186,6 @@ impl From<alloy_primitives::Address> for component_chain::EvmAddress {
     }
 }
 
-impl From<utils::config::CosmosChainConfig> for crate::bindings::world::host::CosmosChainConfig {
-    fn from(config: utils::config::CosmosChainConfig) -> Self {
-        Self {
-            chain_id: config.chain_id.as_str().to_string(),
-            rpc_endpoint: config.rpc_endpoint,
-            grpc_endpoint: config.grpc_endpoint,
-            grpc_web_endpoint: None,
-            gas_denom: config.gas_denom,
-            gas_price: config.gas_price,
-            bech32_prefix: config.bech32_prefix,
-        }
-    }
-}
-
-impl From<utils::config::EvmChainConfig> for crate::bindings::world::host::EvmChainConfig {
-    fn from(config: utils::config::EvmChainConfig) -> Self {
-        Self {
-            chain_id: config.chain_id,
-            ws_endpoint: config.ws_endpoint,
-            http_endpoint: config.http_endpoint,
-        }
-    }
-}
-
-impl From<wavs_types::Timestamp> for component_core::Timestamp {
-    fn from(src: wavs_types::Timestamp) -> Self {
-        component_core::Timestamp {
-            nanos: src.as_nanos(),
-        }
-    }
-}
-
-impl TryFrom<wavs_types::Service> for component_service::Service {
-    type Error = anyhow::Error;
-
-    fn try_from(src: wavs_types::Service) -> Result<Self, Self::Error> {
-        Ok(Self {
-            name: src.name,
-            workflows: src
-                .workflows
-                .into_iter()
-                .map(|(workflow_id, workflow)| {
-                    workflow
-                        .try_into()
-                        .map(|workflow| (workflow_id.to_string(), workflow))
-                })
-                .collect::<anyhow::Result<Vec<(String, component_service::Workflow)>>>()?,
-            status: src.status.into(),
-            manager: src.manager.into(),
-        })
-    }
-}
-
-impl TryFrom<wavs_types::Workflow> for component_service::Workflow {
-    type Error = anyhow::Error;
-
-    fn try_from(src: wavs_types::Workflow) -> Result<Self, Self::Error> {
-        Ok(Self {
-            trigger: src.trigger.try_into()?,
-            component: src.component.into(),
-            submit: src.submit.into(),
-        })
-    }
-}
 impl From<wavs_types::Component> for component_service::Component {
     fn from(src: wavs_types::Component) -> Self {
         Self {
@@ -350,6 +286,95 @@ impl From<wavs_types::EvmContractSubmission> for component_service::EvmContractS
             chain_name: src.chain_name.to_string(),
             address: src.address.into(),
             max_gas: src.max_gas,
+        }
+    }
+}
+
+impl TryFrom<wavs_types::TriggerAction> for crate::bindings::world::wavs::worker::input::TriggerAction {
+    type Error = anyhow::Error;
+
+    fn try_from(trigger: wavs_types::TriggerAction) -> Result<Self, Self::Error> {
+        Ok(Self {
+            config: trigger.config.try_into()?,
+            data: trigger.data.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<wavs_types::TriggerConfig> for crate::bindings::world::wavs::worker::input::TriggerConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(config: wavs_types::TriggerConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            service_id: config.service_id.to_string(),
+            workflow_id: config.workflow_id.to_string(),
+            trigger: config.trigger.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<wavs_types::TriggerData> for crate::bindings::world::wavs::worker::input::TriggerData {
+    type Error = anyhow::Error;
+
+    fn try_from(data: wavs_types::TriggerData) -> Result<Self, Self::Error> {
+        Ok(match data {
+            wavs_types::TriggerData::CosmosContractEvent {
+                contract_address,
+                chain_name,
+                event,
+                block_height,
+            } => crate::bindings::world::wavs::worker::input::TriggerData::CosmosContractEvent(
+                crate::bindings::world::wavs::worker::input::TriggerDataCosmosContractEvent {
+                    contract_address: contract_address.try_into()?,
+                    chain_name: chain_name.to_string(),
+                    event: crate::bindings::world::wavs::types::chain::CosmosEvent {
+                        ty: event.ty,
+                        attributes: event.attributes.into_iter().map(|attr| (attr.key, attr.value)).collect(),
+                    },
+                    block_height,
+                }
+            ),
+            wavs_types::TriggerData::EvmContractEvent {
+                contract_address,
+                chain_name,
+                log,
+                block_height,
+            } => crate::bindings::world::wavs::worker::input::TriggerData::EvmContractEvent(
+                crate::bindings::world::wavs::worker::input::TriggerDataEvmContractEvent {
+                    contract_address: contract_address.into(),
+                    chain_name: chain_name.to_string(),
+                    log: crate::bindings::world::wavs::types::chain::EvmEventLogData {
+                        topics: log.topics().iter().map(|t| t.to_vec()).collect(),
+                        data: log.data.to_vec(),
+                    },
+                    block_height,
+                }
+            ),
+            wavs_types::TriggerData::BlockInterval {
+                chain_name,
+                block_height,
+            } => crate::bindings::world::wavs::worker::input::TriggerData::BlockInterval(
+                crate::bindings::world::wavs::worker::input::TriggerDataBlockInterval {
+                    chain_name: chain_name.to_string(),
+                    block_height,
+                }
+            ),
+            wavs_types::TriggerData::Cron { trigger_time } => crate::bindings::world::wavs::worker::input::TriggerData::Cron(
+                crate::bindings::world::wavs::worker::input::TriggerDataCron {
+                    trigger_time: trigger_time.try_into()?,
+                }
+            ),
+            wavs_types::TriggerData::Raw(data) => crate::bindings::world::wavs::worker::input::TriggerData::Raw(data),
+        })
+    }
+}
+
+
+impl From<crate::bindings::world::wavs::worker::output::WasmResponse> for wavs_types::WasmResponse {
+    fn from(response: crate::bindings::world::wavs::worker::output::WasmResponse) -> Self {
+        Self {
+            payload: response.payload,
+            ordering: response.ordering,
         }
     }
 }

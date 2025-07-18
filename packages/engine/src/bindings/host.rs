@@ -34,7 +34,6 @@ impl super::world::host::Host for HostComponent {
     fn get_service(&mut self) -> ServiceAndWorkflowId {
         ServiceAndWorkflowId {
             service: self.service.clone().try_into().unwrap(),
-            service_id: self.service.id().to_string(),
             workflow_id: self.workflow_id.to_string(),
         }
     }

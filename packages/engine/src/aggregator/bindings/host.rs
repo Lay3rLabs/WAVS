@@ -40,6 +40,6 @@ impl Host for AggregatorHostComponent {
     fn log(&mut self, level: LogLevel, message: String) {
         let digest = self.aggregator_component.source.digest();
 
-        (self.inner_log)(&self.service.id, &self.workflow_id, digest, level.into(), message);
+        (self.inner_log)(&self.service.id(), &self.workflow_id, digest, level.into(), message);
     }
 }
