@@ -1,6 +1,6 @@
 use wasmtime::component::Resource;
 
-use crate::context::KeyValueState;
+use super::context::KeyValueState;
 
 impl<'a> KeyValueState<'a> {
     pub fn get_bucket(

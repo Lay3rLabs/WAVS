@@ -9,7 +9,7 @@ bindgen!({
         only_imports: []
     },
     with: {
-        "wasi:keyvalue/store/bucket": crate::keyvalue::bucket_keys::KeyValueBucket,
-        "wasi:keyvalue/atomics/cas": crate::keyvalue::atomics::KeyValueCas,
+        "wasi:keyvalue/store/bucket": crate::backend::wasi_keyvalue::bucket_keys::KeyValueBucket,
+        "wasi:keyvalue/atomics/cas": crate::backend::wasi_keyvalue::atomics::KeyValueCas,
     },
 });

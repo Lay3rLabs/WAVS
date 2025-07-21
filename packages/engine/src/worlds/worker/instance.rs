@@ -8,7 +8,8 @@ use wasmtime_wasi::{p2::WasiCtxBuilder, DirPerms, FilePerms};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
-use crate::{keyvalue::context::KeyValueCtx, EngineError, HostComponent, HostComponentLogger};
+use super::component::{HostComponent, HostComponentLogger};
+use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError};
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
@@ -58,8 +59,11 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // create linker
         let mut linker = Linker::new(engine);
-        super::bindings::world::host::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)
-            .unwrap();
+        crate::bindings::worker::world::host::add_to_linker::<_, HasSelf<_>>(
+            &mut linker,
+            |state| state,
+        )
+        .unwrap();
         // wasmtime_wasi::add_to_linker_sync(&mut linker).unwrap();
         // wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker).unwrap();
         wasmtime_wasi::p2::add_to_linker_async(&mut linker).unwrap();

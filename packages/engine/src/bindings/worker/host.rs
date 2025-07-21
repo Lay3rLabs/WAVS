@@ -1,6 +1,6 @@
 use wavs_types::ChainName;
 
-use crate::HostComponent;
+use crate::worlds::worker::component::HostComponent;
 
 use super::world::host::{LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
 
