@@ -1,7 +1,5 @@
 use crate::bindings::world::wavs::types::{
-    chain as component_chain,
-    service as component_service,
-    core as component_core,
+    chain as component_chain, core as component_core, service as component_service,
 };
 
 impl From<utils::config::CosmosChainConfig> for component_chain::CosmosChainConfig {
@@ -290,7 +288,9 @@ impl From<wavs_types::EvmContractSubmission> for component_service::EvmContractS
     }
 }
 
-impl TryFrom<wavs_types::TriggerAction> for crate::bindings::world::wavs::worker::input::TriggerAction {
+impl TryFrom<wavs_types::TriggerAction>
+    for crate::bindings::world::wavs::worker::input::TriggerAction
+{
     type Error = anyhow::Error;
 
     fn try_from(trigger: wavs_types::TriggerAction) -> Result<Self, Self::Error> {
@@ -301,7 +301,9 @@ impl TryFrom<wavs_types::TriggerAction> for crate::bindings::world::wavs::worker
     }
 }
 
-impl TryFrom<wavs_types::TriggerConfig> for crate::bindings::world::wavs::worker::input::TriggerConfig {
+impl TryFrom<wavs_types::TriggerConfig>
+    for crate::bindings::world::wavs::worker::input::TriggerConfig
+{
     type Error = anyhow::Error;
 
     fn try_from(config: wavs_types::TriggerConfig) -> Result<Self, Self::Error> {
@@ -329,10 +331,14 @@ impl TryFrom<wavs_types::TriggerData> for crate::bindings::world::wavs::worker::
                     chain_name: chain_name.to_string(),
                     event: crate::bindings::world::wavs::types::chain::CosmosEvent {
                         ty: event.ty,
-                        attributes: event.attributes.into_iter().map(|attr| (attr.key, attr.value)).collect(),
+                        attributes: event
+                            .attributes
+                            .into_iter()
+                            .map(|attr| (attr.key, attr.value))
+                            .collect(),
                     },
                     block_height,
-                }
+                },
             ),
             wavs_types::TriggerData::EvmContractEvent {
                 contract_address,
@@ -348,7 +354,7 @@ impl TryFrom<wavs_types::TriggerData> for crate::bindings::world::wavs::worker::
                         data: log.data.to_vec(),
                     },
                     block_height,
-                }
+                },
             ),
             wavs_types::TriggerData::BlockInterval {
                 chain_name,
@@ -357,18 +363,21 @@ impl TryFrom<wavs_types::TriggerData> for crate::bindings::world::wavs::worker::
                 crate::bindings::world::wavs::worker::input::TriggerDataBlockInterval {
                     chain_name: chain_name.to_string(),
                     block_height,
-                }
+                },
             ),
-            wavs_types::TriggerData::Cron { trigger_time } => crate::bindings::world::wavs::worker::input::TriggerData::Cron(
-                crate::bindings::world::wavs::worker::input::TriggerDataCron {
-                    trigger_time: trigger_time.try_into()?,
-                }
-            ),
-            wavs_types::TriggerData::Raw(data) => crate::bindings::world::wavs::worker::input::TriggerData::Raw(data),
+            wavs_types::TriggerData::Cron { trigger_time } => {
+                crate::bindings::world::wavs::worker::input::TriggerData::Cron(
+                    crate::bindings::world::wavs::worker::input::TriggerDataCron {
+                        trigger_time: trigger_time.try_into()?,
+                    },
+                )
+            }
+            wavs_types::TriggerData::Raw(data) => {
+                crate::bindings::world::wavs::worker::input::TriggerData::Raw(data)
+            }
         })
     }
 }
-
 
 impl From<crate::bindings::world::wavs::worker::output::WasmResponse> for wavs_types::WasmResponse {
     fn from(response: crate::bindings::world::wavs::worker::output::WasmResponse) -> Self {

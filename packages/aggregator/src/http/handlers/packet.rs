@@ -82,38 +82,39 @@ async fn process_packet(
                 .map_err(|e| AggregatorError::Engine(e.to_string()))?;
 
             let mut responses = Vec::new();
-            for action in actions {
-                match action {
-                    AggregatorAction::Submit(submit_action) => {
-                        tracing::info!(
-                            "Executing submit action to chain: {}",
-                            submit_action.chain_name
-                        );
 
-                        match handle_custom_submit(&state, packet, &[], submit_action).await {
-                            Ok(tx_receipt) => {
-                                responses.push(AddPacketResponse::Sent {
-                                    tx_receipt: Box::new(tx_receipt),
-                                    count: 1,
-                                });
-                            }
-                            Err(e) => {
-                                tracing::error!("Submit action failed: {}", e);
-                                responses.push(AddPacketResponse::Error {
-                                    reason: format!("Submit failed: {}", e),
-                                });
+            if actions.is_empty() {
+                tracing::debug!("Component returned no actions");
+                responses.push(AddPacketResponse::Aggregated { count: 1 });
+            } else {
+                for action in actions {
+                    match action {
+                        AggregatorAction::Submit(submit_action) => {
+                            tracing::info!(
+                                "Executing submit action to chain: {}",
+                                submit_action.chain_name
+                            );
+
+                            match handle_custom_submit(&state, packet, &[], submit_action).await {
+                                Ok(tx_receipt) => {
+                                    responses.push(AddPacketResponse::Sent {
+                                        tx_receipt: Box::new(tx_receipt),
+                                        count: 1,
+                                    });
+                                }
+                                Err(e) => {
+                                    tracing::error!("Submit action failed: {}", e);
+                                    responses.push(AddPacketResponse::Error {
+                                        reason: format!("Submit failed: {}", e),
+                                    });
+                                }
                             }
                         }
-                    }
-                    AggregatorAction::Timer { .. } => {
-                        tracing::info!("Timer action scheduled");
-                        responses.push(AddPacketResponse::Aggregated { count: 1 });
-                        todo!();
-                    }
-                    AggregatorAction::Nothing => {
-                        tracing::debug!("Component returned Nothing action");
-                        responses.push(AddPacketResponse::Aggregated { count: 1 });
-                        todo!();
+                        AggregatorAction::Timer { .. } => {
+                            tracing::info!("Timer action scheduled");
+                            responses.push(AddPacketResponse::Aggregated { count: 1 });
+                            todo!();
+                        }
                     }
                 }
             }
@@ -416,33 +417,34 @@ async fn process_aggregator_actions(
         signer,
     });
 
-    for action in actions {
-        match action {
-            AggregatorAction::Nothing => {
-                tracing::debug!("Component returned 'nothing' action");
-            }
-            AggregatorAction::Submit(submit_action) => {
-                tracing::info!(
-                    "Component requested submit to chain: {}, contract: {:?}",
-                    submit_action.chain_name,
-                    submit_action.contract_address
-                );
+    if actions.is_empty() {
+        tracing::debug!("Component returned no actions");
+    } else {
+        for action in actions {
+            match action {
+                AggregatorAction::Submit(submit_action) => {
+                    tracing::info!(
+                        "Component requested submit to chain: {}, contract: {:?}",
+                        submit_action.chain_name,
+                        submit_action.contract_address
+                    );
 
-                match handle_custom_submit(state, packet, &queue, submit_action).await {
-                    Ok(_) => {
-                        tracing::info!("Custom submit completed successfully");
-                    }
-                    Err(e) => {
-                        tracing::error!("Custom submit failed: {}", e);
+                    match handle_custom_submit(state, packet, &queue, submit_action).await {
+                        Ok(_) => {
+                            tracing::info!("Custom submit completed successfully");
+                        }
+                        Err(e) => {
+                            tracing::error!("Custom submit failed: {}", e);
+                        }
                     }
                 }
-            }
-            AggregatorAction::Timer(timer_action) => {
-                tracing::info!(
-                    "Component requested timer callback in {} seconds",
-                    timer_action.delay
-                );
-                todo!("Implement timer scheduling system");
+                AggregatorAction::Timer(timer_action) => {
+                    tracing::info!(
+                        "Component requested timer callback in {} seconds",
+                        timer_action.delay
+                    );
+                    todo!("Implement timer scheduling system");
+                }
             }
         }
     }

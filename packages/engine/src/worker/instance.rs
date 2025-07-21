@@ -4,11 +4,14 @@ use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
 use wasmtime::component::HasSelf;
 use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
-use wasmtime_wasi::{p2::{WasiCtxBuilder, WasiCtx, WasiView, IoView}, DirPerms, FilePerms};
+use wasmtime_wasi::{
+    p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView},
+    DirPerms, FilePerms,
+};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
 
-use crate::{EngineError, keyvalue::context::KeyValueCtx};
+use crate::{keyvalue::context::KeyValueCtx, EngineError};
 
 pub struct WorkerHostComponent {
     pub service: Service,
@@ -110,15 +113,12 @@ fn create_wasi_ctx<P: AsRef<Path>>(
     data_dir: P,
 ) -> Result<WasiCtx, EngineError> {
     let mut binding = WasiCtxBuilder::new();
-    let mut wasi_ctx = binding
-        .inherit_stdio()
-        .inherit_stdout()
-        .inherit_stderr();
+    let mut wasi_ctx = binding.inherit_stdio().inherit_stdout().inherit_stderr();
 
     if workflow.component.permissions.file_system {
-        wasi_ctx =
-            wasi_ctx.preopened_dir(data_dir.as_ref(), "/", DirPerms::all(), FilePerms::all())
-                .map_err(EngineError::Filesystem)?;
+        wasi_ctx = wasi_ctx
+            .preopened_dir(data_dir.as_ref(), "/", DirPerms::all(), FilePerms::all())
+            .map_err(EngineError::Filesystem)?;
     }
 
     let env: Vec<_> = std::env::vars()

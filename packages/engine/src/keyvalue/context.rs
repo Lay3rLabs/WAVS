@@ -28,9 +28,7 @@ impl KeyValueCtx {
             page_size: None,
         }
     }
-    pub fn add_to_linker<T>(
-        linker: &mut wasmtime::component::Linker<T>,
-    ) -> Result<(), EngineError>
+    pub fn add_to_linker<T>(linker: &mut wasmtime::component::Linker<T>) -> Result<(), EngineError>
     where
         T: KeyValueCtxProvider + Send,
     {
@@ -40,12 +38,7 @@ impl KeyValueCtx {
             let namespace = ctx.namespace.clone();
             let page_size = ctx.page_size;
             let table = state.table();
-            KeyValueState::new(
-                db,
-                namespace,
-                table,
-                page_size,
-            )
+            KeyValueState::new(db, namespace, table, page_size)
         })
         .map_err(EngineError::AddToLinker)?;
 
@@ -55,12 +48,7 @@ impl KeyValueCtx {
             let namespace = ctx.namespace.clone();
             let page_size = ctx.page_size;
             let table = state.table();
-            KeyValueState::new(
-                db,
-                namespace,
-                table,
-                page_size,
-            )
+            KeyValueState::new(db, namespace, table, page_size)
         })
         .map_err(EngineError::AddToLinker)?;
 
@@ -70,12 +58,7 @@ impl KeyValueCtx {
             let namespace = ctx.namespace.clone();
             let page_size = ctx.page_size;
             let table = state.table();
-            KeyValueState::new(
-                db,
-                namespace,
-                table,
-                page_size,
-            )
+            KeyValueState::new(db, namespace, table, page_size)
         })
         .map_err(EngineError::AddToLinker)?;
 
@@ -91,7 +74,7 @@ impl KeyValueCtxProvider for HostComponent {
     fn keyvalue_ctx(&self) -> &KeyValueCtx {
         &self.keyvalue_ctx
     }
-    
+
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
@@ -101,7 +84,7 @@ impl KeyValueCtxProvider for crate::aggregator::instance::AggregatorHostComponen
     fn keyvalue_ctx(&self) -> &KeyValueCtx {
         &self.keyvalue_ctx
     }
-    
+
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
@@ -111,7 +94,7 @@ impl KeyValueCtxProvider for crate::worker::instance::WorkerHostComponent {
     fn keyvalue_ctx(&self) -> &KeyValueCtx {
         &self.keyvalue_ctx
     }
-    
+
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }

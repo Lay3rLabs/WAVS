@@ -9,23 +9,25 @@ use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{InstanceDepsBuilder, KeyValueCtx};
-use wavs_types::Digest;
-use wavs_types::{Component, Packet};
+use wavs_engine::{
+    aggregator::AggregatorInstanceDepsBuilder as InstanceDepsBuilder, context::KeyValueCtx,
+};
+use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
 
 // Use the WIT-generated aggregator types
-pub use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::{
+pub use wavs_engine::aggregator::bindings::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
-use wavs_engine::bindings::world::aggregator::wavs::worker::aggregator::{
+use wavs_engine::aggregator::bindings::wavs::aggregator::aggregator::{
     Envelope as WitEnvelope, EnvelopeSignature as WitEnvelopeSignature, Packet as WitPacket,
-    Secp256k1Signature, TxResult,
+    Secp256k1Signature,
 };
-use wavs_engine::bindings::world::aggregator::AggregatorWorld;
-use wavs_engine::bindings::world::wavs::worker::helpers::LogLevel;
+use wavs_engine::aggregator::bindings::AggregatorWorld;
+// TODO: Those should be from aggregator as well
+use wavs_engine::worker::bindings::wavs::types::core::LogLevel;
 
-use wavs_engine::bindings::world::aggregator::wavs as agg_world;
-use wavs_engine::bindings::world::wavs as wavs_world;
+use wavs_engine::aggregator::bindings::wavs as agg_world;
+use wavs_engine::worker::bindings::wavs as wavs_world;
 
 fn convert_service_to_aggregator(
     wavs_service: wavs_world::types::service::Service,
@@ -64,7 +66,7 @@ fn packet_to_wit_packet(packet: &Packet) -> Result<WitPacket> {
 pub struct AggregatorEngine {
     wasm_engine: WTEngine,
     chain_configs: Arc<RwLock<ChainConfigs>>,
-    memory_cache: RwLock<LruCache<Digest, WasmComponent>>,
+    memory_cache: RwLock<LruCache<ComponentDigest, WasmComponent>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
@@ -118,7 +120,7 @@ impl AggregatorEngine {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id, workflow_id = %packet.workflow_id))]
+    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
     pub async fn process_packet(
         &self,
         component: &Component,
@@ -130,6 +132,7 @@ impl AggregatorEngine {
 
         let mut instance_deps = InstanceDepsBuilder {
             component: wasm_component,
+            aggregator_component: component.clone(),
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
             engine: &self.wasm_engine,
@@ -144,7 +147,7 @@ impl AggregatorEngine {
             },
             max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
             max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id.to_string()),
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id().to_string()),
         }
         .build()?;
 
@@ -177,7 +180,8 @@ impl AggregatorEngine {
             return Ok(cached_component.clone());
         }
 
-        let component_bytes = self.storage.get_data(&digest)?;
+        let any_digest = AnyDigest::from(*digest.as_ref());
+        let component_bytes = self.storage.get_data(&any_digest)?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         self.memory_cache
@@ -188,7 +192,7 @@ impl AggregatorEngine {
         Ok(wasm_component)
     }
 
-    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id, workflow_id = %packet.workflow_id))]
+    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
     pub async fn handle_timer_callback(
         &self,
         component: &Component,
@@ -200,6 +204,7 @@ impl AggregatorEngine {
 
         let mut instance_deps = InstanceDepsBuilder {
             component: wasm_component,
+            aggregator_component: component.clone(),
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
             engine: &self.wasm_engine,
@@ -214,7 +219,7 @@ impl AggregatorEngine {
             },
             max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
             max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id.to_string()),
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id().to_string()),
         }
         .build()?;
 
@@ -240,7 +245,7 @@ impl AggregatorEngine {
         }
     }
 
-    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id, workflow_id = %packet.workflow_id))]
+    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
     pub async fn handle_submit_callback(
         &self,
         component: &Component,
@@ -253,6 +258,7 @@ impl AggregatorEngine {
 
         let mut instance_deps = InstanceDepsBuilder {
             component: wasm_component,
+            aggregator_component: component.clone(),
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
             engine: &self.wasm_engine,
@@ -267,16 +273,16 @@ impl AggregatorEngine {
             },
             max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
             max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id.to_string()),
+            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id().to_string()),
         }
         .build()?;
 
         let wit_packet = packet_to_wit_packet(packet)?;
 
-        let wit_tx_result = match tx_result {
-            Ok(tx_hash) => TxResult::Success(tx_hash),
-            Err(error) => TxResult::Error(error),
-        };
+        let wit_tx_result = tx_result
+            .as_ref()
+            .map(|s| s as &String)
+            .map_err(|e| e.as_str());
 
         let aggregator_world = AggregatorWorld::instantiate_async(
             &mut instance_deps.store,
@@ -286,7 +292,7 @@ impl AggregatorEngine {
         .await?;
 
         let result = aggregator_world
-            .call_handle_submit_callback(&mut instance_deps.store, &wit_packet, &wit_tx_result)
+            .call_handle_submit_callback(&mut instance_deps.store, &wit_packet, wit_tx_result)
             .await?;
 
         match result {
@@ -298,16 +304,23 @@ impl AggregatorEngine {
         }
     }
 
-    pub async fn upload_component(&self, component_bytes: Vec<u8>) -> Result<Digest> {
+    pub async fn upload_component(&self, component_bytes: Vec<u8>) -> Result<ComponentDigest> {
         // compile component (validate it is proper wasm)
         let cm = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         // store original wasm
         let digest = self.storage.set_data(&component_bytes)?;
 
-        // cache the compiled component
-        self.memory_cache.write().unwrap().put(digest.clone(), cm);
+        let bytes: [u8; 32] = digest
+            .as_ref()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Invalid digest length"))?;
+        let component_digest = ComponentDigest::from(bytes);
+        self.memory_cache
+            .write()
+            .unwrap()
+            .put(component_digest.clone(), cm);
 
-        Ok(digest)
+        Ok(component_digest)
     }
 }
