@@ -63,7 +63,7 @@ fn packet_to_wit_packet(packet: &Packet) -> Result<WitPacket> {
     })
 }
 
-pub struct AggregatorEngine {
+pub struct AggregatorEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     chain_configs: Arc<RwLock<ChainConfigs>>,
     memory_cache: RwLock<LruCache<ComponentDigest, WasmComponent>>,
@@ -71,10 +71,10 @@ pub struct AggregatorEngine {
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
     db: RedbStorage,
-    storage: Arc<dyn CAStorage + Send + Sync>,
+    storage: Arc<S>,
 }
 
-impl AggregatorEngine {
+impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     pub fn new(
         app_data_dir: impl Into<PathBuf>,
         chain_configs: ChainConfigs,
@@ -82,7 +82,7 @@ impl AggregatorEngine {
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         db: RedbStorage,
-        storage: Arc<dyn CAStorage + Send + Sync>,
+        storage: Arc<S>,
     ) -> Result<Self> {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);

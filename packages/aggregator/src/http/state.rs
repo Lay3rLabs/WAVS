@@ -11,6 +11,7 @@ use utils::{
     evm_client::EvmSigningClient,
     storage::{
         db::{RedbStorage, Table, JSON},
+        fs::FileStorage,
         CAStorage,
     },
 };
@@ -64,7 +65,7 @@ pub struct HttpState {
     pub queue_transaction: AsyncTransaction<PacketQueueId>,
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
-    pub aggregator_engine: Option<Arc<AggregatorEngine>>,
+    pub aggregator_engine: Option<Arc<AggregatorEngine<FileStorage>>>,
 }
 
 // key is ServiceId
@@ -89,7 +90,7 @@ impl HttpState {
     #[instrument(level = "debug", skip(config, ca_storage))]
     pub fn new_with_engine(
         config: Config,
-        ca_storage: Arc<dyn CAStorage + Send + Sync>,
+        ca_storage: Arc<FileStorage>,
     ) -> AggregatorResult<Self> {
         let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
