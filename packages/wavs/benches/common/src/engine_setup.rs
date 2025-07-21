@@ -3,7 +3,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbStorage};
 use wasmtime::{component::Component, Engine as WTEngine};
-use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
+use wavs_engine::{
+    worker::instance::{InstanceDeps, InstanceDepsBuilder},
+    HostComponentLogger,
+};
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,
     Workflow, WorkflowID,

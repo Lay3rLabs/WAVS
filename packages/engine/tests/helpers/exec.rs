@@ -3,7 +3,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
-    bindings::world::host::LogLevel, context::KeyValueCtx, EngineError, InstanceDepsBuilder,
+    context::KeyValueCtx, worker::bindings::world::host::LogLevel,
+    worker::instance::InstanceDepsBuilder, EngineError,
 };
 use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
 

@@ -156,7 +156,7 @@ impl<S: CAStorage> WasmEngine<S> {
             service_id: &ServiceID,
             workflow_id: &WorkflowID,
             digest: &ComponentDigest,
-            level: wavs_engine::bindings::world::host::LogLevel,
+            level: wavs_engine::worker::bindings::world::host::LogLevel,
             message: String,
         ) {
             let span = span!(
@@ -168,19 +168,19 @@ impl<S: CAStorage> WasmEngine<S> {
             );
 
             match level {
-                wavs_engine::bindings::world::host::LogLevel::Error => {
+                wavs_engine::worker::bindings::world::host::LogLevel::Error => {
                     event!(parent: &span, tracing::Level::ERROR, "{}", message)
                 }
-                wavs_engine::bindings::world::host::LogLevel::Warn => {
+                wavs_engine::worker::bindings::world::host::LogLevel::Warn => {
                     event!(parent: &span, tracing::Level::WARN, "{}", message)
                 }
-                wavs_engine::bindings::world::host::LogLevel::Info => {
+                wavs_engine::worker::bindings::world::host::LogLevel::Info => {
                     event!(parent: &span, tracing::Level::INFO, "{}", message)
                 }
-                wavs_engine::bindings::world::host::LogLevel::Debug => {
+                wavs_engine::worker::bindings::world::host::LogLevel::Debug => {
                     event!(parent: &span, tracing::Level::DEBUG, "{}", message)
                 }
-                wavs_engine::bindings::world::host::LogLevel::Trace => {
+                wavs_engine::worker::bindings::world::host::LogLevel::Trace => {
                     event!(parent: &span, tracing::Level::TRACE, "{}", message)
                 }
             }
