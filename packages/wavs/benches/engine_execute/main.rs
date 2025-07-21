@@ -21,7 +21,7 @@ pub fn run_simulation(setup: Arc<ExecuteSetup>) {
             let mut deps = setup.engine_setup.create_instance_deps();
 
             // Execute the component and measure performance
-            match wavs_engine::execute(&mut deps, trigger_action).await {
+            match wavs_engine::worlds::worker::execute::execute(&mut deps, trigger_action).await {
                 Ok(response) => {
                     let payload = response
                         .expect("Execution failed to generate a response")

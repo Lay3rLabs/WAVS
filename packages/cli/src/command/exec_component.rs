@@ -3,7 +3,9 @@ use std::{collections::BTreeMap, time::Instant};
 use anyhow::{Context, Result};
 use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
+use wavs_engine::{
+    bindings::worker::world::host::LogLevel, worlds::worker::instance::InstanceDepsBuilder,
+};
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceID, Submit,
     Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,
@@ -137,7 +139,7 @@ impl ExecComponent {
             log: log_wasi,
             max_execution_seconds: Some(u64::MAX),
             max_wasm_fuel: Some(u64::MAX),
-            keyvalue_ctx: wavs_engine::context::KeyValueCtx::new(
+            keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
                 RedbStorage::new(tempfile::tempdir()?.keep()).unwrap(),
                 "exec_component".to_string(),
             ),
@@ -150,13 +152,16 @@ impl ExecComponent {
             .get_fuel()
             .context("Failed to get initial fuel value from the instance store")?;
         let start_time = Instant::now();
-        let wasm_response = match wavs_engine::execute(&mut instance_deps, trigger_action).await {
-            Ok(response) => response,
-            Err(e) => {
-                eprintln!("Error executing component: {}", e);
-                return Err(anyhow::anyhow!("Component execution failed: {}", e));
-            }
-        };
+        let wasm_response =
+            match wavs_engine::worlds::worker::execute::execute(&mut instance_deps, trigger_action)
+                .await
+            {
+                Ok(response) => response,
+                Err(e) => {
+                    eprintln!("Error executing component: {}", e);
+                    return Err(anyhow::anyhow!("Component execution failed: {}", e));
+                }
+            };
 
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 

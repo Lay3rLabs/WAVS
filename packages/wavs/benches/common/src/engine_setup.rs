@@ -3,7 +3,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbStorage};
 use wasmtime::{component::Component, Engine as WTEngine};
-use wavs_engine::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
+use wavs_engine::{
+    worlds::worker::component::HostComponentLogger,
+    worlds::worker::instance::{InstanceDeps, InstanceDepsBuilder},
+};
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,
     Workflow, WorkflowID,
@@ -19,7 +22,7 @@ pub struct EngineSetup {
     pub component_bytes: Vec<u8>,
     pub data_dir: TempDir,
     pub db_dir: TempDir,
-    pub keyvalue_ctx: wavs_engine::context::KeyValueCtx,
+    pub keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx,
 }
 
 impl EngineSetup {
@@ -77,7 +80,7 @@ impl EngineSetup {
 
         let chain_configs = ChainConfigs::default();
 
-        let keyvalue_ctx = wavs_engine::context::KeyValueCtx::new(
+        let keyvalue_ctx = wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
             RedbStorage::new(db_dir.path()).unwrap(),
             "engine".to_string(),
         );

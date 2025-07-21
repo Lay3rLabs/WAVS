@@ -3,7 +3,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
-    bindings::world::host::LogLevel, context::KeyValueCtx, EngineError, InstanceDepsBuilder,
+    backend::wasi_keyvalue::context::KeyValueCtx, bindings::worker::world::host::LogLevel,
+    utils::error::EngineError, worlds::worker::instance::InstanceDepsBuilder,
 };
 use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
 
@@ -56,7 +57,8 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     .build()
     .unwrap();
 
-    let resp = wavs_engine::execute(&mut instance_deps, trigger_action).await;
+    let resp =
+        wavs_engine::worlds::worker::execute::execute(&mut instance_deps, trigger_action).await;
 
     match resp {
         Ok(Some(response)) => {

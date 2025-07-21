@@ -7,7 +7,7 @@ use example_types::{KvStoreError, KvStoreRequest, KvStoreResponse};
 use utils::{
     init_tracing_tests, storage::db::RedbStorage, test_utils::mock_engine::COMPONENT_KV_STORE_BYTES,
 };
-use wavs_engine::context::KeyValueCtx;
+use wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx;
 
 #[tokio::test]
 async fn keyvalue_basic() {

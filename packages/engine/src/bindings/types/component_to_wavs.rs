@@ -3,9 +3,10 @@ use std::{collections::BTreeMap, str::FromStr};
 use wavs_types::WorkflowID;
 
 use crate::{
-    bindings::world::wavs::types::chain as component_chain,
-    bindings::world::wavs::types::core as component_core,
-    bindings::world::wavs::types::service as component_service,
+    bindings::worker::world::wavs::types::chain as component_chain,
+    bindings::worker::world::wavs::types::core as component_core,
+    bindings::worker::world::wavs::types::service as component_service,
+    bindings::worker::world::wavs::worker::output as component_output,
 };
 
 impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
@@ -244,5 +245,14 @@ impl TryFrom<component_service::EvmContractSubmission> for wavs_types::EvmContra
             address: src.address.into(),
             max_gas: src.max_gas,
         })
+    }
+}
+
+impl From<component_output::WasmResponse> for wavs_types::WasmResponse {
+    fn from(src: component_output::WasmResponse) -> Self {
+        Self {
+            payload: src.payload,
+            ordering: src.ordering,
+        }
     }
 }

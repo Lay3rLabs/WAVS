@@ -1,11 +1,11 @@
 use wasmtime::component::Resource;
 
-use crate::{
-    bindings::world::wasi::keyvalue::batch,
+use super::{
     bucket_keys::{Key, KeyValueBucket},
     context::KeyValueState,
     store::KV_STORE_TABLE,
 };
+use crate::bindings::worker::world::wasi::keyvalue::batch;
 
 pub type BatchResult<T> = std::result::Result<T, batch::Error>;
 
