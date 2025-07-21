@@ -25,7 +25,7 @@ pub async fn start_cosmos_stream(
                     let mut contract_events = Vec::new();
                     let events = CosmosTxEvents::from(block_events.events);
 
-                    for event in events.events_iter() {
+                    for (index, event) in events.events_iter().enumerate() {
                         if event.ty().starts_with("wasm-") {
                             let contract_address = event.attributes().find_map(|attr| {
                                 if attr.key() == "_contract_address" {
@@ -38,7 +38,13 @@ pub async fn start_cosmos_stream(
                                 Some(contract_address) => {
                                     let mut event = cosmwasm_std::Event::from(event);
                                     event.ty = event.ty.strip_prefix("wasm-").unwrap().to_string();
-                                    contract_events.push((contract_address, event));
+                                    contract_events.push(StreamTriggerCosmosContractEvent {
+                                        contract_address,
+                                        event,
+                                        event_index: index
+                                            .try_into()
+                                            .map_err(TriggerError::EventIndexConversion)?,
+                                    });
                                 }
                                 None => {
                                     tracing::warn!(
@@ -64,4 +70,11 @@ pub async fn start_cosmos_stream(
     );
 
     Ok(stream)
+}
+
+#[derive(Debug)]
+pub struct StreamTriggerCosmosContractEvent {
+    pub contract_address: layer_climb::prelude::Address,
+    pub event: cosmwasm_std::Event,
+    pub event_index: u64,
 }

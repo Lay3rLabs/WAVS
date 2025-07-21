@@ -1,13 +1,13 @@
-package wavs:worker@0.6.0-alpha.1;
+package wavs:worker@0.6.0-alpha.2;
 
-use wavs:types/core@0.6.0-alpha.1 as core-types;
-use wavs:types/service@0.6.0-alpha.1 as service-types;
-use wavs:types/chain@0.6.0-alpha.1 as chain-types;
+use wavs:types/core@0.6.0-alpha.2 as core-types;
+use wavs:types/service@0.6.0-alpha.2 as service-types;
+use wavs:types/chain@0.6.0-alpha.2 as chain-types;
 
 interface input {
     use core-types.{timestamp};
     use service-types.{service-id, workflow-id, trigger};
-    use chain-types.{chain-name, evm-address, evm-event-log-data, cosmos-address, cosmos-event};
+    use chain-types.{chain-name, evm-address, evm-event-log, cosmos-address, cosmos-event};
 
     record trigger-action {
         config: trigger-config,
@@ -29,16 +29,15 @@ interface input {
     }
 
     record trigger-data-evm-contract-event {
-        contract-address: evm-address,
         chain-name: chain-name,
-        log: evm-event-log-data,
-        block-height: u64
+        log: evm-event-log,
     }
 
     record trigger-data-cosmos-contract-event {
         contract-address: cosmos-address,
         chain-name: chain-name,
         event: cosmos-event,
+        event-index: u64,
         block-height: u64
     }
 
@@ -59,28 +58,6 @@ interface output {
     }
 }
 
-interface helpers {
-    use service-types.{service, service-id, workflow, workflow-id};
-
-    variant log-level {
-        error,
-        warn,
-        info,
-        debug,
-        trace
-    }
-
-    record service-and-workflow-id {
-        service: service,
-        service-id: service-id,
-        workflow-id: workflow-id
-    }
-
-    record workflow-and-workflow-id {
-        workflow: workflow,
-        workflow-id: workflow-id
-    }
-}
 world wavs-world {
     // include needed for golang support
     include wasi:cli/imports@0.2.0;

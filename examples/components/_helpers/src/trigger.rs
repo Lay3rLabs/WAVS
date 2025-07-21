@@ -23,7 +23,7 @@ pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Resul
         component_input::TriggerData::EvmContractEvent(
             component_input::TriggerDataEvmContractEvent { log, .. },
         ) => {
-            let event: NewTrigger = decode_event_log_data!(log)?;
+            let event: NewTrigger = decode_event_log_data!(log.data)?;
 
             let trigger_info = TriggerInfo::abi_decode(&event._0)?;
             Ok((trigger_info.triggerId, trigger_info.data.to_vec()))

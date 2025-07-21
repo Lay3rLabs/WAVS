@@ -39,8 +39,14 @@ pub fn mock_real_trigger_action(
                     contract_address: contract_address.clone().try_into().unwrap(),
                     chain_name: ChainName::new(chain_name.to_string()).unwrap(),
                     // FIXME: this should be a proper EVM event, this is just a placeholder
-                    log: LogData::new(vec![event.into_inner().into()], data.into()).unwrap(),
-                    block_height: 1,
+                    log_data: LogData::new(vec![event.into_inner().into()], data.into()).unwrap(),
+                    tx_hash: [0; 32].into(),
+                    block_number: 1,
+                    log_index: 0,
+                    block_hash: None,
+                    block_timestamp: None,
+                    tx_index: None,
+                    removed: false,
                 },
             }
         }
@@ -64,6 +70,7 @@ pub fn mock_real_trigger_action(
                         ("data", const_hex::encode(data)),
                     ]),
                     block_height: 1,
+                    event_index: 0,
                 },
             }
         }
@@ -123,6 +130,7 @@ pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -
             .add_attribute("id", trigger_id.to_string())
             .add_attribute("data", const_hex::encode(data.as_ref())),
         block_height: 0,
+        event_index: 0,
     }
 }
 

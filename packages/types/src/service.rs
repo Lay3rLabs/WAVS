@@ -242,16 +242,31 @@ pub enum TriggerData {
         event: cosmwasm_std::Event,
         /// The block height where the event was emitted
         block_height: u64,
+        /// The index of the event in this block, required for unique identification
+        event_index: u64,
     },
     EvmContractEvent {
-        /// The address of the contract that emitted the event
-        contract_address: alloy_primitives::Address,
         /// The name of the chain where the event was emitted
         chain_name: ChainName,
-        /// The raw event log
-        log: LogData,
+        /// The address of the contract that emitted the event
+        contract_address: alloy_primitives::Address,
+        /// The log data
+        log_data: LogData,
+        /// The transaction hash where the event was emitted
+        tx_hash: alloy_primitives::TxHash,
         /// The block height where the event was emitted
-        block_height: u64,
+        block_number: u64,
+        /// The index of the log in the block
+        log_index: u64,
+        // these are all optional because they may not be present in the log and we don't need them
+        /// Hash of the block the transaction that emitted this log was mined in
+        block_hash: Option<alloy_primitives::B256>,
+        /// The timestamp of the block as proposed in: https://ethereum-magicians.org/t/proposal-for-adding-blocktimestamp-to-logs-object-returned-by-eth-getlogs-and-related-requests https://github.com/ethereum/execution-apis/issues/295
+        block_timestamp: Option<u64>,
+        /// Index of the Transaction in the block
+        tx_index: Option<u64>,
+        /// Geth Compatibility Field: whether this log was removed
+        removed: bool,
     },
     BlockInterval {
         /// The name of the chain where the blocks are checked

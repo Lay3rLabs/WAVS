@@ -1,6 +1,12 @@
 interface chain {
     type chain-name = string;
-    type tx-hash = string;
+    type evm-tx-hash = list<u8>; // 32 bytes, a keccak hash of an RLP encoded signed transaction
+    type cosmos-tx-hash = string;
+
+    variant any-tx-hash {
+        evm(evm-tx-hash),
+        cosmos(cosmos-tx-hash),
+    }
 
     record cosmos-address {
         bech32-addr: string,
@@ -25,6 +31,23 @@ interface chain {
 
     record evm-address {
         raw-bytes: list<u8>
+    }
+
+    // The overall idea is to map alloy_rpc_types_eth::Log<LogData>
+    record evm-event-log {
+        // These two fields are essentially alloy_primitives::Log<LogData>
+        address: evm-address,
+        data: evm-event-log-data,
+        // technically, these are optional, but we filter out logs without transaction hashes, log indices, and block numbers
+        // since if we don't have those, we can't reliably ensure uniqueness of the event
+        tx-hash: evm-tx-hash,
+        block-number: u64,
+        log-index: u64,
+        // these are all optional because they may not be present in the log and we don't need them
+        block-hash: option<list<u8>>, // 256 bytes
+        block-timestamp: option<u64>,
+        tx-index: option<u64>,
+        removed: bool
     }
 
     record evm-event-log-data {

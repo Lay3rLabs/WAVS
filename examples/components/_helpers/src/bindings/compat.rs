@@ -1,4 +1,4 @@
-use super::world::wavs::{types::chain as component_chain, worker::input as component_input};
+use super::world::wavs::types::chain as component_chain;
 
 impl From<component_chain::CosmosEvent> for cosmwasm_std::Event {
     fn from(event: component_chain::CosmosEvent) -> Self {
@@ -19,9 +19,9 @@ impl From<cosmwasm_std::Event> for component_chain::CosmosEvent {
     }
 }
 
-impl From<alloy_primitives::LogData> for component_input::EvmEventLogData {
+impl From<alloy_primitives::LogData> for component_chain::EvmEventLogData {
     fn from(log_data: alloy_primitives::LogData) -> Self {
-        component_input::EvmEventLogData {
+        component_chain::EvmEventLogData {
             topics: log_data
                 .topics()
                 .iter()
@@ -32,8 +32,8 @@ impl From<alloy_primitives::LogData> for component_input::EvmEventLogData {
     }
 }
 
-impl From<component_input::EvmEventLogData> for alloy_primitives::LogData {
-    fn from(log_data: component_input::EvmEventLogData) -> Self {
+impl From<component_chain::EvmEventLogData> for alloy_primitives::LogData {
+    fn from(log_data: component_chain::EvmEventLogData) -> Self {
         alloy_primitives::LogData::new(
             log_data
                 .topics

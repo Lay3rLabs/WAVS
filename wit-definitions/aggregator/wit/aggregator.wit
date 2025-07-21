@@ -1,8 +1,8 @@
-package wavs:aggregator@0.6.0-alpha.1;
+package wavs:aggregator@0.6.0-alpha.2;
 
-use wavs:types/core@0.6.0-alpha.1 as core-types;
-use wavs:types/service@0.6.0-alpha.1 as service-types;
-use wavs:types/chain@0.6.0-alpha.1 as chain-types;
+use wavs:types/core@0.6.0-alpha.2 as core-types;
+use wavs:types/service@0.6.0-alpha.2 as service-types;
+use wavs:types/chain@0.6.0-alpha.2 as chain-types;
 
 interface aggregator {
     use service-types.{service, workflow-id};
@@ -68,11 +68,11 @@ world aggregator-world {
     }
 
     use aggregator.{packet, aggregator-action};
-    use chain-types.{tx-hash};
+    use chain-types.{any-tx-hash};
 
     export process-packet: func(packet: packet) -> result<list<aggregator-action>, string>;
 
     export handle-timer-callback: func(packet: packet) -> result<list<aggregator-action>, string>;
 
-    export handle-submit-callback: func(packet: packet, tx-result: result<tx-hash, string>) -> result<bool, string>;
+    export handle-submit-callback: func(packet: packet, tx-result: result<any-tx-hash, string>) -> result<bool, string>;
 }
