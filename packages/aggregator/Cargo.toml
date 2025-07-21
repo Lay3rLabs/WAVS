@@ -11,6 +11,8 @@ publish = false
 
 [dependencies]
 wavs-types = { workspace = true }
+wavs-engine = { workspace = true }
+wasmtime = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -28,10 +30,12 @@ alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-contract = { workspace = true }
 alloy-provider = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
 utils = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 bincode = { workspace = true }
+lru = { workspace = true }
 
 [dev-dependencies]
 tempfile = {workspace = true}
