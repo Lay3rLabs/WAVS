@@ -17,7 +17,7 @@ pub enum EngineError {
     UnknownDigest(ComponentDigest),
 
     #[error{"{0}"}]
-    Engine(#[from] wavs_engine::EngineError),
+    Engine(#[from] wavs_engine::utils::error::EngineError),
 
     #[error{"Unable to send result after executing Service {0} / Workflow {1}"}]
     WasiResultSend(ServiceID, WorkflowID),

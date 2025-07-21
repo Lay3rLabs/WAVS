@@ -9,7 +9,9 @@ use utils::storage::db::RedbStorage;
 use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{context::KeyValueCtx, worker::instance::InstanceDepsBuilder};
+use wavs_engine::{
+    backend::wasi_keyvalue::context::KeyValueCtx, worlds::worker::instance::InstanceDepsBuilder,
+};
 use wavs_types::{
     ComponentDigest, ComponentSource, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
 };
@@ -156,7 +158,7 @@ impl<S: CAStorage> WasmEngine<S> {
             service_id: &ServiceID,
             workflow_id: &WorkflowID,
             digest: &ComponentDigest,
-            level: wavs_engine::worker::bindings::world::host::LogLevel,
+            level: wavs_engine::bindings::worker::world::host::LogLevel,
             message: String,
         ) {
             let span = span!(
@@ -168,19 +170,19 @@ impl<S: CAStorage> WasmEngine<S> {
             );
 
             match level {
-                wavs_engine::worker::bindings::world::host::LogLevel::Error => {
+                wavs_engine::bindings::worker::world::host::LogLevel::Error => {
                     event!(parent: &span, tracing::Level::ERROR, "{}", message)
                 }
-                wavs_engine::worker::bindings::world::host::LogLevel::Warn => {
+                wavs_engine::bindings::worker::world::host::LogLevel::Warn => {
                     event!(parent: &span, tracing::Level::WARN, "{}", message)
                 }
-                wavs_engine::worker::bindings::world::host::LogLevel::Info => {
+                wavs_engine::bindings::worker::world::host::LogLevel::Info => {
                     event!(parent: &span, tracing::Level::INFO, "{}", message)
                 }
-                wavs_engine::worker::bindings::world::host::LogLevel::Debug => {
+                wavs_engine::bindings::worker::world::host::LogLevel::Debug => {
                     event!(parent: &span, tracing::Level::DEBUG, "{}", message)
                 }
-                wavs_engine::worker::bindings::world::host::LogLevel::Trace => {
+                wavs_engine::bindings::worker::world::host::LogLevel::Trace => {
                     event!(parent: &span, tracing::Level::TRACE, "{}", message)
                 }
             }
@@ -221,7 +223,7 @@ impl<S: CAStorage> WasmEngine<S> {
         .build()?;
 
         self.block_on_run(async move {
-            wavs_engine::execute(&mut instance_deps, trigger_action)
+            wavs_engine::worlds::worker::execute::execute(&mut instance_deps, trigger_action)
                 .await
                 .map_err(|e| e.into())
         })
@@ -502,7 +504,7 @@ pub mod tests {
 
         assert!(matches!(
             result,
-            EngineError::Engine(wavs_engine::EngineError::ExecResult(_))
+            EngineError::Engine(wavs_engine::utils::error::EngineError::ExecResult(_))
         ));
     }
 
@@ -564,7 +566,7 @@ pub mod tests {
 
         assert!(matches!(
             err,
-            EngineError::Engine(wavs_engine::EngineError::OutOfFuel(_, _))
+            EngineError::Engine(wavs_engine::utils::error::EngineError::OutOfFuel(_, _))
         ));
     }
 
@@ -760,7 +762,7 @@ pub mod tests {
 
         assert!(matches!(
             err,
-            EngineError::Engine(wavs_engine::EngineError::OutOfTime(_, _))
+            EngineError::Engine(wavs_engine::utils::error::EngineError::OutOfTime(_, _))
         ));
 
         // and same thing with sync sleep
@@ -802,7 +804,7 @@ pub mod tests {
 
         assert!(matches!(
             err,
-            EngineError::Engine(wavs_engine::EngineError::OutOfTime(_, _))
+            EngineError::Engine(wavs_engine::utils::error::EngineError::OutOfTime(_, _))
         ));
     }
 }
