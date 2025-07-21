@@ -180,7 +180,11 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             return Ok(cached_component.clone());
         }
 
-        let any_digest = AnyDigest::from(*digest.as_ref());
+        let bytes: [u8; 32] = digest
+            .as_ref()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Invalid digest length"))?;
+        let any_digest = AnyDigest::from(bytes);
         let component_bytes = self.storage.get_data(&any_digest)?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 

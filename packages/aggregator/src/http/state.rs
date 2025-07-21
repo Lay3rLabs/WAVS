@@ -88,10 +88,7 @@ impl HttpState {
     }
 
     #[instrument(level = "debug", skip(config, ca_storage))]
-    pub fn new_with_engine(
-        config: Config,
-        ca_storage: Arc<FileStorage>,
-    ) -> AggregatorResult<Self> {
+    pub fn new_with_engine(config: Config, ca_storage: Arc<FileStorage>) -> AggregatorResult<Self> {
         let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
 
