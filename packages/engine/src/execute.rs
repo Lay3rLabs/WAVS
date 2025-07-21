@@ -3,7 +3,7 @@ use std::time::Duration;
 use wasmtime::Trap;
 use wavs_types::{TriggerAction, WasmResponse};
 
-use crate::{EngineError, InstanceDeps};
+use crate::{worker::instance::InstanceDeps, EngineError};
 
 pub async fn execute(
     deps: &mut InstanceDeps,
@@ -11,7 +11,7 @@ pub async fn execute(
 ) -> Result<Option<WasmResponse>, EngineError> {
     let service_id = trigger.config.service_id.clone();
     let workflow_id = trigger.config.workflow_id.clone();
-    let input: crate::bindings::world::wavs::worker::input::TriggerAction =
+    let input: crate::worker::bindings::world::wavs::worker::input::TriggerAction =
         trigger.try_into().map_err(EngineError::Input)?;
 
     // Even though we have epochs forcing timeouts within WASI
@@ -21,7 +21,7 @@ pub async fn execute(
         let service_id = service_id.clone();
         let workflow_id = workflow_id.clone();
         async move {
-            crate::bindings::world::WavsWorld::instantiate_async(
+            crate::worker::bindings::world::WavsWorld::instantiate_async(
                 &mut deps.store,
                 &deps.component,
                 &deps.linker,

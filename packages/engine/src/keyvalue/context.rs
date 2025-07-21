@@ -2,7 +2,7 @@ use utils::storage::db::RedbStorage;
 use wasmtime::component::HasData;
 use wasmtime_wasi::ResourceTable;
 
-use crate::bindings::world::wasi::keyvalue::{atomics, batch, store};
+use crate::worker::bindings::world::wasi::keyvalue::{atomics, batch, store};
 use crate::{EngineError, HostComponent};
 
 #[derive(Clone)]

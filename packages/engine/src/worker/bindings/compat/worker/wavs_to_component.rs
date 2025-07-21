@@ -1,6 +1,6 @@
-use crate::bindings::world::wavs::types::chain as component_chain;
-use crate::bindings::world::wavs::worker::input as component_input;
-use crate::bindings::world::wavs::worker::output as component_output;
+use crate::worker::bindings::world::wavs::types::chain as component_chain;
+use crate::worker::bindings::world::wavs::worker::input as component_input;
+use crate::worker::bindings::world::wavs::worker::output as component_output;
 
 impl From<wavs_types::WasmResponse> for component_output::WasmResponse {
     fn from(src: wavs_types::WasmResponse) -> Self {

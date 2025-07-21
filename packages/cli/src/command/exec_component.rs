@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, time::Instant};
 use anyhow::{Context, Result};
 use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{bindings::world::host::LogLevel, InstanceDepsBuilder};
+use wavs_engine::{worker::bindings::world::host::LogLevel, worker::instance::InstanceDepsBuilder};
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceID, Submit,
     Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,

@@ -1,9 +1,9 @@
 use utils::storage::db::Table;
 use wasmtime::component::Resource;
 
-use crate::bindings::world::wasi::keyvalue::store::{self, KeyResponse};
 use crate::bucket_keys::{Key, KeyPrefix, KeyValueBucket};
 use crate::context::KeyValueState;
+use crate::worker::bindings::world::wasi::keyvalue::store::{self, KeyResponse};
 use redb::ReadableTable;
 
 pub type StoreResult<T> = std::result::Result<T, store::Error>;

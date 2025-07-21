@@ -1,7 +1,7 @@
 use crate::{
-    bindings::world::wavs::types::chain as component_chain,
-    bindings::world::wavs::types::core as component_core,
-    bindings::world::wavs::types::service as component_service,
+    worker::bindings::world::wavs::types::chain as component_chain,
+    worker::bindings::world::wavs::types::core as component_core,
+    worker::bindings::world::wavs::types::service as component_service,
 };
 
 impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
@@ -98,7 +98,9 @@ impl From<alloy_primitives::Address> for component_chain::EvmAddress {
     }
 }
 
-impl From<utils::config::CosmosChainConfig> for crate::bindings::world::host::CosmosChainConfig {
+impl From<utils::config::CosmosChainConfig>
+    for crate::worker::bindings::world::host::CosmosChainConfig
+{
     fn from(config: utils::config::CosmosChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.as_str().to_string(),
@@ -112,7 +114,7 @@ impl From<utils::config::CosmosChainConfig> for crate::bindings::world::host::Co
     }
 }
 
-impl From<utils::config::EvmChainConfig> for crate::bindings::world::host::EvmChainConfig {
+impl From<utils::config::EvmChainConfig> for crate::worker::bindings::world::host::EvmChainConfig {
     fn from(config: utils::config::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id,

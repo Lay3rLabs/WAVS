@@ -2,9 +2,9 @@ use utils::storage::db::Table;
 use wasmtime::component::Resource;
 
 use crate::{
-    bindings::world::wasi::keyvalue::atomics,
     bucket_keys::{Key, KeyValueBucket},
     context::KeyValueState,
+    worker::bindings::world::wasi::keyvalue::atomics,
 };
 
 pub type AtomicsResult<T> = std::result::Result<T, atomics::Error>;
