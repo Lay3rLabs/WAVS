@@ -7375,6 +7375,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
+name = "simple-aggregator"
+version = "0.5.2"
+dependencies = [
+ "wit-bindgen",
+]
+
+[[package]]
 name = "simple-example"
 version = "0.0.0"
 dependencies = [
@@ -9529,6 +9536,7 @@ dependencies = [
  "alloy-node-bindings",
  "alloy-primitives",
  "alloy-provider",
+ "alloy-rpc-types-eth",
  "alloy-signer",
  "alloy-signer-local",
  "alloy-sol-types",
@@ -9538,6 +9546,7 @@ dependencies = [
  "clap 4.5.40",
  "ctrlc",
  "futures",
+ "lru 0.16.0",
  "serde",
  "tempfile",
  "thiserror 2.0.12",
@@ -9548,6 +9557,8 @@ dependencies = [
  "utils",
  "utoipa",
  "utoipa-swagger-ui",
+ "wasmtime",
+ "wavs-engine",
  "wavs-types",
  "wildmatch",
 ]
