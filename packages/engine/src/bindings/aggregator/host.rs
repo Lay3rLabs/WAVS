@@ -43,7 +43,7 @@ impl Host for AggregatorHostComponent {
             &self.service.id(),
             &self.workflow_id,
             digest,
-            level.into(),
+            level,
             message,
         );
     }
