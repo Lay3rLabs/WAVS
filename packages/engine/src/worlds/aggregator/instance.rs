@@ -11,7 +11,10 @@ use wasmtime_wasi::{
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_types::{AllowedHostPermission, Component, Service, WorkflowID};
 
-use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError, worlds::aggregator::HostComponentLogger};
+use crate::{
+    backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError,
+    worlds::aggregator::HostComponentLogger,
+};
 
 pub struct AggregatorHostComponent {
     pub service: Service,
@@ -63,8 +66,11 @@ impl<P: AsRef<Path>> AggregatorInstanceDepsBuilder<'_, P> {
         } = self;
 
         let mut linker = Linker::<AggregatorHostComponent>::new(engine);
-        crate::bindings::aggregator::world::host::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)
-            .unwrap();
+        crate::bindings::aggregator::world::host::add_to_linker::<_, HasSelf<_>>(
+            &mut linker,
+            |state| state,
+        )
+        .unwrap();
         wasmtime_wasi::p2::add_to_linker_async(&mut linker).unwrap();
         if aggregator_component.permissions.allowed_http_hosts != AllowedHostPermission::None {
             wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).unwrap();
@@ -122,40 +128,27 @@ impl WasiHttpView for AggregatorHostComponent {
 }
 
 fn create_wasi_ctx<P: AsRef<Path>>(
-    component: &Component,
+    aggregator_component: &Component,
     data_dir: P,
 ) -> Result<WasiCtx, EngineError> {
-    let mut builder = WasiCtxBuilder::new();
+    let mut binding = WasiCtxBuilder::new();
+    let mut wasi_ctx = binding.inherit_stdio().inherit_stdout().inherit_stderr();
 
-    if component.permissions.allowed_env_keys {
-        builder = builder.env(WAVS_ENV_PREFIX, "true");
-        for env_key in &component.env_keys {
-            if let Ok(env_val) = std::env::var(env_key) {
-                builder = builder.env(env_key, &env_val);
-            }
-        }
+    if aggregator_component.permissions.file_system {
+        wasi_ctx = wasi_ctx
+            .preopened_dir(data_dir.as_ref(), "/", DirPerms::all(), FilePerms::all())
+            .map_err(EngineError::Filesystem)?;
     }
 
-    if component.permissions.allowed_file_read {
-        builder = builder
-            .preopened_dir(
-                data_dir.as_ref(),
-                "/data",
-                DirPerms::READ,
-                FilePerms::READ,
-            )
-            .map_err(EngineError::FileSystemCapability)?;
-    }
-    if component.permissions.allowed_file_write {
-        builder = builder
-            .preopened_dir(
-                data_dir.as_ref(),
-                "/data",
-                DirPerms::all(),
-                FilePerms::all(),
-            )
-            .map_err(EngineError::FileSystemCapability)?;
+    let env: Vec<_> = std::env::vars()
+        .filter(|(key, _)| {
+            key.starts_with(WAVS_ENV_PREFIX) && aggregator_component.env_keys.contains(key)
+        })
+        .collect();
+
+    for (key, value) in env {
+        wasi_ctx = wasi_ctx.env(&key, &value);
     }
 
-    Ok(builder.build())
+    Ok(wasi_ctx.build())
 }

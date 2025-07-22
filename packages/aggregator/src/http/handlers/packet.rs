@@ -243,9 +243,7 @@ impl AggregatorProcess<'_> {
                             PacketQueue::Alive(queue) => {
                                 // Use custom aggregator logic if component is specified
                                 if let Some(engine) = &state.aggregator_engine {
-                                    if let Some(component) = packet.service.workflows[&packet.workflow_id]
-                                        .submit
-                                        .aggregator_component()
+                                    if let wavs_types::Submit::Aggregator { component: Some(component), .. } = &packet.service.workflows[&packet.workflow_id].submit
                                     {
                                         // Call custom aggregator component for validation
                                         match engine.process_packet(component, packet).await {

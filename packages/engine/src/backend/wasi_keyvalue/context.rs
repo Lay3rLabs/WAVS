@@ -3,7 +3,15 @@ use wasmtime::component::HasData;
 use wasmtime_wasi::ResourceTable;
 
 use crate::bindings::worker::world::wasi::keyvalue::{atomics, batch, store};
-use crate::{utils::error::EngineError, worlds::worker::component::HostComponent};
+use crate::{
+    utils::error::EngineError, worlds::aggregator::AggregatorHostComponent,
+    worlds::worker::component::HostComponent,
+};
+
+pub trait KeyValueCtxProvider {
+    fn keyvalue_ctx(&self) -> &KeyValueCtx;
+    fn table(&mut self) -> &mut ResourceTable;
+}
 
 #[derive(Clone)]
 pub struct KeyValueCtx {
@@ -23,36 +31,37 @@ impl KeyValueCtx {
             page_size: None,
         }
     }
-    pub fn add_to_linker(
-        linker: &mut wasmtime::component::Linker<HostComponent>,
-    ) -> Result<(), EngineError> {
-        store::add_to_linker::<HostComponent, KeyValueCtx>(linker, |state| {
-            KeyValueState::new(
-                state.keyvalue_ctx.db.clone(),
-                state.keyvalue_ctx.namespace.clone(),
-                &mut state.table,
-                state.keyvalue_ctx.page_size,
-            )
+    pub fn add_to_linker<T>(linker: &mut wasmtime::component::Linker<T>) -> Result<(), EngineError>
+    where
+        T: KeyValueCtxProvider + Send,
+    {
+        store::add_to_linker::<T, KeyValueCtx>(linker, |state| {
+            let ctx = state.keyvalue_ctx();
+            let db = ctx.db.clone();
+            let namespace = ctx.namespace.clone();
+            let page_size = ctx.page_size;
+            let table = state.table();
+            KeyValueState::new(db, namespace, table, page_size)
         })
         .map_err(EngineError::AddToLinker)?;
 
-        atomics::add_to_linker::<HostComponent, KeyValueCtx>(linker, |state| {
-            KeyValueState::new(
-                state.keyvalue_ctx.db.clone(),
-                state.keyvalue_ctx.namespace.clone(),
-                &mut state.table,
-                state.keyvalue_ctx.page_size,
-            )
+        atomics::add_to_linker::<T, KeyValueCtx>(linker, |state| {
+            let ctx = state.keyvalue_ctx();
+            let db = ctx.db.clone();
+            let namespace = ctx.namespace.clone();
+            let page_size = ctx.page_size;
+            let table = state.table();
+            KeyValueState::new(db, namespace, table, page_size)
         })
         .map_err(EngineError::AddToLinker)?;
 
-        batch::add_to_linker::<HostComponent, KeyValueCtx>(linker, |state| {
-            KeyValueState::new(
-                state.keyvalue_ctx.db.clone(),
-                state.keyvalue_ctx.namespace.clone(),
-                &mut state.table,
-                state.keyvalue_ctx.page_size,
-            )
+        batch::add_to_linker::<T, KeyValueCtx>(linker, |state| {
+            let ctx = state.keyvalue_ctx();
+            let db = ctx.db.clone();
+            let namespace = ctx.namespace.clone();
+            let page_size = ctx.page_size;
+            let table = state.table();
+            KeyValueState::new(db, namespace, table, page_size)
         })
         .map_err(EngineError::AddToLinker)?;
 
@@ -62,6 +71,26 @@ impl KeyValueCtx {
 
 impl HasData for KeyValueCtx {
     type Data<'a> = KeyValueState<'a>;
+}
+
+impl KeyValueCtxProvider for HostComponent {
+    fn keyvalue_ctx(&self) -> &KeyValueCtx {
+        &self.keyvalue_ctx
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.table
+    }
+}
+
+impl KeyValueCtxProvider for AggregatorHostComponent {
+    fn keyvalue_ctx(&self) -> &KeyValueCtx {
+        &self.keyvalue_ctx
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.table
+    }
 }
 
 pub struct KeyValueState<'a> {

@@ -10,24 +10,25 @@ use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
-    aggregator::AggregatorInstanceDepsBuilder as InstanceDepsBuilder, context::KeyValueCtx,
+    backend::wasi_keyvalue::context::KeyValueCtx,
+    worlds::aggregator::instance::AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
 };
 use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
 
 // Use the WIT-generated aggregator types
-pub use wavs_engine::aggregator::bindings::wavs::aggregator::aggregator::{
+pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
-use wavs_engine::aggregator::bindings::wavs::aggregator::aggregator::{
+use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     Envelope as WitEnvelope, EnvelopeSignature as WitEnvelopeSignature, Packet as WitPacket,
     Secp256k1Signature,
 };
-use wavs_engine::aggregator::bindings::AggregatorWorld;
+use wavs_engine::bindings::aggregator::world::AggregatorWorld;
 // TODO: Those should be from aggregator as well
-use wavs_engine::worker::bindings::wavs::types::core::LogLevel;
+use wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel;
 
-use wavs_engine::aggregator::bindings::wavs as agg_world;
-use wavs_engine::worker::bindings::wavs as wavs_world;
+use wavs_engine::bindings::aggregator::world::wavs as agg_world;
+use wavs_engine::bindings::worker::world::wavs as wavs_world;
 
 fn convert_service_to_aggregator(
     wavs_service: wavs_world::types::service::Service,
@@ -283,10 +284,14 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         let wit_packet = packet_to_wit_packet(packet)?;
 
-        let wit_tx_result = tx_result
+        let wit_tx_hash = tx_result
             .as_ref()
-            .map(|s| s as &String)
-            .map_err(|e| e.as_str());
+            .map(|s| match s.parse::<alloy_primitives::TxHash>() {
+                Ok(tx_hash) => agg_world::types::chain::AnyTxHash::Evm(tx_hash.to_vec()),
+                Err(_) => agg_world::types::chain::AnyTxHash::Cosmos(s.clone()),
+            });
+
+        let wit_tx_result = wit_tx_hash.as_ref().map_err(|e| e.as_str());
 
         let aggregator_world = AggregatorWorld::instantiate_async(
             &mut instance_deps.store,
