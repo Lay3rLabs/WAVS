@@ -69,3 +69,4 @@ tokio = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 temp-env = { workspace = true }
+utils = { path = ".", features = ["test-utils"] }

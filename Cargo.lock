@@ -8524,6 +8524,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "utils",
  "utoipa",
  "walkdir",
  "wasm-pkg-client",
