@@ -62,7 +62,7 @@ pub async fn execute_aggregator_component(
         .await
         .unwrap();
 
-    let wit_packet = packet.into();
+    let wit_packet = packet.try_into().unwrap();
 
     let result = aggregator_world
         .call_process_packet(&mut instance_deps.store, &wit_packet)

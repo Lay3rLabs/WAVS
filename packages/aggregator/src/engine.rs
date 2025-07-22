@@ -13,6 +13,7 @@ use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     worlds::aggregator::instance::AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
 };
+
 use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
 
 // Use the WIT-generated aggregator types
@@ -113,7 +114,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
         .build()?;
 
-        let wit_packet = packet.clone().into();
+        let wit_packet = packet.clone().try_into()?;
 
         let aggregator_world = AggregatorWorld::instantiate_async(
             &mut instance_deps.store,
@@ -189,7 +190,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
         .build()?;
 
-        let wit_packet = packet.clone().into();
+        let wit_packet = packet.clone().try_into()?;
 
         let aggregator_world = AggregatorWorld::instantiate_async(
             &mut instance_deps.store,
@@ -243,7 +244,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
         .build()?;
 
-        let wit_packet = packet.clone().into();
+        let wit_packet = packet.clone().try_into()?;
 
         let wit_tx_hash = tx_result
             .as_ref()

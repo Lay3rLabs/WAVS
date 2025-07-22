@@ -12,7 +12,6 @@ use utils::{
     storage::{
         db::{RedbStorage, Table, JSON},
         fs::FileStorage,
-        CAStorage,
     },
 };
 use wavs_types::{ChainName, EventId, Packet, ServiceID};

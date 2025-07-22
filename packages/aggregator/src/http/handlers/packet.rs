@@ -554,7 +554,6 @@ mod test {
         sync::{Arc, Mutex},
     };
 
-    use utils::storage::{fs::FileStorage, memory::MemoryStorage};
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
