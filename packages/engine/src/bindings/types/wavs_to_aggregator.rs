@@ -4,7 +4,8 @@ use crate::bindings::aggregator::world::wavs::{
         Secp256k1Signature as WitSecp256k1Signature,
     },
     types::{
-        chain::EvmAddress as WitEvmAddress,
+        chain::{CosmosAddress as WitCosmosAddress, EvmAddress as WitEvmAddress},
+        core::Timestamp as WitTimestamp,
         service::{
             AggregatorSubmit as WitAggregatorSubmit,
             AllowedHostPermission as WitAllowedHostPermission, Component as WitComponent,
@@ -14,6 +15,9 @@ use crate::bindings::aggregator::world::wavs::{
             Permissions as WitPermissions, Registry as WitRegistry, Service as WitService,
             ServiceManager as WitServiceManager, ServiceStatus as WitServiceStatus,
             Submit as WitSubmit, Trigger as WitTrigger,
+            TriggerBlockInterval as WitTriggerBlockInterval,
+            TriggerCosmosContractEvent as WitTriggerCosmosContractEvent,
+            TriggerCron as WitTriggerCron,
             TriggerEvmContractEvent as WitTriggerEvmContractEvent, Workflow as WitWorkflow,
         },
     },
@@ -222,11 +226,52 @@ impl TryFrom<wavs_types::Trigger> for WitTrigger {
                 chain_name: chain_name.to_string(),
                 event_hash: event_hash.as_slice().to_vec(),
             }),
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Trigger type not implemented for aggregator"
-                ))
+            wavs_types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
+                WitTrigger::CosmosContractEvent(WitTriggerCosmosContractEvent {
+                    address: address.try_into()?,
+                    chain_name: chain_name.to_string(),
+                    event_type,
+                })
+            }
+            wavs_types::Trigger::BlockInterval { chain_name, n_blocks, start_block, end_block } => {
+                WitTrigger::BlockInterval(WitTriggerBlockInterval {
+                    chain_name: chain_name.to_string(),
+                    n_blocks: n_blocks.into(),
+                    start_block: start_block.map(Into::into),
+                    end_block: end_block.map(Into::into),
+                })
+            }
+            wavs_types::Trigger::Cron { schedule, start_time, end_time } => {
+                WitTrigger::Cron(WitTriggerCron {
+                    schedule: schedule.to_string(),
+                    start_time: start_time.map(Into::into),
+                    end_time: end_time.map(Into::into),
+                })
             }
         })
+    }
+}
+
+impl TryFrom<layer_climb::prelude::Address> for WitCosmosAddress {
+    type Error = anyhow::Error;
+
+    fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
+        let (bech32_addr, prefix_len) = match address {
+            layer_climb::prelude::Address::Cosmos { bech32_addr, prefix_len } => (bech32_addr, prefix_len),
+            _ => return Err(anyhow::anyhow!("Not a cosmos address")),
+        };
+
+        Ok(Self {
+            bech32_addr,
+            prefix_len: prefix_len as u32,
+        })
+    }
+}
+
+impl From<wavs_types::Timestamp> for WitTimestamp {
+    fn from(timestamp: wavs_types::Timestamp) -> Self {
+        WitTimestamp {
+            nanos: timestamp.as_nanos(),
+        }
     }
 }
