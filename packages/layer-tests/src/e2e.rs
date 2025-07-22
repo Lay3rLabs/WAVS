@@ -72,7 +72,8 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     ctx.rt.block_on(async {
         let clients = clients::Clients::new(&configs).await;
 
-        let component_sources = ComponentSources::new(&configs, &clients.http_client).await;
+        let component_sources =
+            ComponentSources::new(&configs, &clients.http_client, &clients.aggregator_client).await;
 
         let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
 

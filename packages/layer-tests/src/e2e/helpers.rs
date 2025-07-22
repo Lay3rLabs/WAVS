@@ -222,18 +222,24 @@ async fn deploy_workflow(
     // Create the submit based on test configuration
     let chain_name = {
         let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_definition.submit;
-        let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) = aggregators.first()
-        else {
-            panic!("Expected at least one NewEvmAggregatorSubmit aggregator, but found none");
+        let Some(first_agg) = aggregators.first() else {
+            panic!("Expected at least one aggregator, but found none");
         };
-        chain_name
+        match first_agg {
+            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => chain_name,
+            AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } => chain_name,
+        }
     };
     let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
         .await
         .unwrap();
-    let submit = create_submit_from_config(&workflow_definition.submit, &submission_contract)
-        .await
-        .unwrap();
+    let submit = create_submit_from_config(
+        &workflow_definition.submit,
+        &submission_contract,
+        Some(component_sources),
+    )
+    .await
+    .unwrap();
 
     tracing::info!("[{}] Creating trigger from config", test_name);
     // Create the trigger based on test configuration
@@ -366,32 +372,45 @@ pub async fn create_trigger_from_config(
 pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
     submission_contract: &Address,
+    component_sources: Option<&ComponentSources>,
 ) -> Result<Submit> {
     match submit_config {
         SubmitDefinition::Aggregator { url, aggregators } => {
-            let evm_contracts = if aggregators.is_empty() {
-                None
-            } else {
-                Some(
-                    aggregators
-                        .iter()
-                        .map(|agg| match agg {
-                            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
-                                EvmContractSubmission {
-                                    chain_name: chain_name.clone(),
-                                    address: *submission_contract,
-                                    max_gas: None,
-                                }
-                            }
-                        })
-                        .collect(),
-                )
-            };
+            let mut evm_contracts = Vec::new();
+            let mut component = None;
+
+            for agg in aggregators {
+                match agg {
+                    AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
+                        evm_contracts.push(EvmContractSubmission {
+                            chain_name: chain_name.clone(),
+                            address: *submission_contract,
+                            max_gas: None,
+                        });
+                    }
+                    AggregatorDefinition::ComponentBasedAggregator {
+                        component: component_def,
+                        ..
+                    } => {
+                        if let Some(sources) = component_sources {
+                            component = Some(Box::new(deploy_component(sources, component_def)));
+                        } else {
+                            return Err(anyhow!(
+                                "ComponentBasedAggregator requires component_sources"
+                            ));
+                        }
+                    }
+                }
+            }
 
             Ok(Submit::Aggregator {
                 url: url.clone(),
-                component: None,
-                evm_contracts,
+                component,
+                evm_contracts: if evm_contracts.is_empty() {
+                    None
+                } else {
+                    Some(evm_contracts)
+                },
             })
         }
     }
