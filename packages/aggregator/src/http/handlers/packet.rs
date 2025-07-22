@@ -241,27 +241,17 @@ impl AggregatorProcess<'_> {
                     .run(queue_id.clone(), move || async move {
                         let queue = match state.get_packet_queue(&queue_id)? {
                             PacketQueue::Alive(queue) => {
-                                // Use custom aggregator logic if component is specified
-                                if let Some(engine) = &state.aggregator_engine {
-                                    if let wavs_types::Submit::Aggregator { component: Some(component), .. } = &packet.service.workflows[&packet.workflow_id].submit
-                                    {
-                                        // Call custom aggregator component for validation
-                                        match engine.process_packet(component, packet).await {
-                                            Ok(actions) => {
-                                                // Process the actions returned by the component
-                                                process_aggregator_actions(state, packet, queue, signer, actions).await?
-                                            }
-                                            Err(e) => {
-                                                tracing::error!("Custom aggregator component failed: {}", e);
-                                                return Err(AggregatorError::Engine(e.to_string()));
-                                            }
+                                if let (Some(engine), wavs_types::Submit::Aggregator { component: Some(component), .. }) =
+                                    (&state.aggregator_engine, &packet.service.workflows[&packet.workflow_id].submit)
+                                {
+                                    match engine.process_packet(component, packet).await {
+                                        Ok(actions) => process_aggregator_actions(state, packet, queue, signer, actions).await?,
+                                        Err(e) => {
+                                            tracing::error!("Custom aggregator component failed: {}", e);
+                                            return Err(AggregatorError::Engine(e.to_string()));
                                         }
-                                    } else {
-                                        // Fall back to hardcoded logic if no component specified
-                                        add_packet_to_queue(packet, queue, signer)?
                                     }
                                 } else {
-                                    // Fall back to hardcoded logic if no engine available
                                     add_packet_to_queue(packet, queue, signer)?
                                 }
                             }

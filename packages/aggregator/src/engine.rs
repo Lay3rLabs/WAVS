@@ -11,20 +11,17 @@ use utils::storage::CAStorage;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
+    bindings::aggregator::world::{
+        wavs::types::{chain::AnyTxHash, core::LogLevel},
+        AggregatorWorld,
+    },
     worlds::aggregator::instance::AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
 };
 
-use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
-
-// Use the WIT-generated aggregator types
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
-use wavs_engine::bindings::aggregator::world::AggregatorWorld;
-// TODO: Those should be from aggregator as well
-use wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel;
-
-use wavs_engine::bindings::aggregator::world::wavs as agg_world;
+use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
 
 pub struct AggregatorEngine<S: CAStorage> {
     wasm_engine: WTEngine,
@@ -114,21 +111,9 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
         .build()?;
 
-        let wit_packet = packet.clone().try_into()?;
-
-        let result = AggregatorWorld::instantiate_async(
-            &mut instance_deps.store,
-            &instance_deps.component,
-            &instance_deps.linker,
-        )
-        .await?
-        .call_process_packet(&mut instance_deps.store, &wit_packet)
-        .await?;
-
-        match result {
-            Ok(actions) => Ok(actions),
-            Err(error) => anyhow::bail!("Process packet execution failed: {}", error),
-        }
+        wavs_engine::worlds::aggregator::execute::execute(&mut instance_deps, packet)
+            .await
+            .map_err(Into::into)
     }
 
     fn load_component(&self, component: &Component) -> Result<WasmComponent> {
@@ -244,8 +229,8 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wit_tx_hash = tx_result
             .as_ref()
             .map(|s| match s.parse::<alloy_primitives::TxHash>() {
-                Ok(tx_hash) => agg_world::types::chain::AnyTxHash::Evm(tx_hash.to_vec()),
-                Err(_) => agg_world::types::chain::AnyTxHash::Cosmos(s.clone()),
+                Ok(tx_hash) => AnyTxHash::Evm(tx_hash.to_vec()),
+                Err(_) => AnyTxHash::Cosmos(s.clone()),
             });
 
         let wit_tx_result = wit_tx_hash.as_ref().map_err(|e| e.as_str());
