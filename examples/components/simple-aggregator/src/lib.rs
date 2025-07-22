@@ -11,9 +11,9 @@ struct Component;
 
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
-        let chain_name = host::config_var("chain_name").ok_or("chain_name config not found")?;
-        let contract_address_str =
-            host::config_var("contract_address").ok_or("contract_address config not found")?;
+        let chain_name = host::config_var("chain_name").unwrap_or_else(|| "31337".to_string());
+        let contract_address_str = host::config_var("contract_address")
+            .unwrap_or_else(|| "0x0000000000000000000000000000000000000000".to_string());
 
         let contract_address_bytes = const_hex::decode(
             contract_address_str

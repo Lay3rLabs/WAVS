@@ -9,6 +9,7 @@ use wavs_types::{Component, ComponentDigest, Packet, ServiceID, WorkflowID};
 
 use crate::helpers::service::make_service;
 
+#[allow(dead_code)]
 pub async fn execute_aggregator_component(
     wasm_bytes: &[u8],
     packet: Packet,
@@ -75,6 +76,7 @@ pub async fn execute_aggregator_component(
     }
 }
 
+#[allow(dead_code)]
 fn log_aggregator(
     service_id: &ServiceID,
     workflow_id: &WorkflowID,

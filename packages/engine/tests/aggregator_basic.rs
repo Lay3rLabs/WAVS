@@ -20,7 +20,7 @@ async fn basic_aggregator_execution() {
             workflows: Default::default(),
             status: ServiceStatus::Active,
             manager: ServiceManager::Evm {
-                chain_name: "ethereum".try_into().unwrap(),
+                chain_name: "31337".try_into().unwrap(),
                 address: [0u8; 20].into(),
             },
         },
@@ -42,7 +42,7 @@ async fn basic_aggregator_execution() {
     match &actions[0] {
         // currently hardcoded in the aggregator component
         AggregatorAction::Submit(submit_action) => {
-            assert_eq!(submit_action.chain_name, "ethereum");
+            assert_eq!(submit_action.chain_name, "31337");
             assert_eq!(submit_action.contract_address.raw_bytes, vec![0u8; 20]);
         }
         _ => panic!("Expected Submit action, got {:?}", &actions[0]),

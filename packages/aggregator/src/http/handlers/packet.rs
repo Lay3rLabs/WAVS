@@ -165,7 +165,6 @@ async fn process_packet(
             .await
             .map_err(AggregatorError::OperatorKeyLookup)?
     };
-
     tracing::debug!("Packet signer address: {:?}", signer);
 
     let mut responses: Vec<AddPacketResponse> = Vec::new();

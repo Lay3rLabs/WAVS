@@ -10,6 +10,7 @@ use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
 
 use crate::helpers::service::{make_service, make_trigger_action};
 
+#[allow(dead_code)]
 pub async fn execute_component<D: DeserializeOwned>(
     wasm_bytes: &[u8],
     keyvalue_ctx: Option<KeyValueCtx>,
@@ -20,6 +21,7 @@ pub async fn execute_component<D: DeserializeOwned>(
         .unwrap()
 }
 
+#[allow(dead_code)]
 pub async fn try_execute_component<D: DeserializeOwned>(
     wasm_bytes: &[u8],
     keyvalue_ctx: Option<KeyValueCtx>,
@@ -76,6 +78,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     }
 }
 
+#[allow(dead_code)]
 fn log_wasi(
     service_id: &ServiceID,
     workflow_id: &WorkflowID,
