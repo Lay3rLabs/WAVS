@@ -8,10 +8,9 @@ use tracing::instrument;
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
-use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine, Trap};
+use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
-    utils::error::EngineError,
     worlds::aggregator::instance::AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
 };
 
@@ -117,35 +116,19 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         let wit_packet = packet.clone().try_into()?;
 
-        let service_id = packet.service.id();
-        let workflow_id = packet.workflow_id.clone();
+        let result = AggregatorWorld::instantiate_async(
+            &mut instance_deps.store,
+            &instance_deps.component,
+            &instance_deps.linker,
+        )
+        .await?
+        .call_process_packet(&mut instance_deps.store, &wit_packet)
+        .await?;
 
-        let result = tokio::time::timeout(Duration::from_secs(instance_deps.time_limit_seconds), {
-            let service_id = service_id.clone();
-            let workflow_id = workflow_id.clone();
-            async move {
-                AggregatorWorld::instantiate_async(
-                    &mut instance_deps.store,
-                    &instance_deps.component,
-                    &instance_deps.linker,
-                )
-                .await
-                .map_err(EngineError::Instantiate)?
-                .call_process_packet(&mut instance_deps.store, &wit_packet)
-                .await
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
-                    Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
-                    _ => EngineError::ComponentError(e),
-                })?
-                .map_err(EngineError::ExecResult)
-            }
-        })
-        .await
-        .map_err(|_| EngineError::OutOfTime(service_id, workflow_id))?
-        .map_err(|e| anyhow::anyhow!("Aggregator engine error: {}", e))?;
-
-        Ok(result)
+        match result {
+            Ok(actions) => Ok(actions),
+            Err(error) => anyhow::bail!("Process packet execution failed: {}", error),
+        }
     }
 
     fn load_component(&self, component: &Component) -> Result<WasmComponent> {

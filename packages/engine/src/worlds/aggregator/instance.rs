@@ -96,15 +96,18 @@ impl<P: AsRef<Path>> AggregatorInstanceDepsBuilder<'_, P> {
 
         let mut store = Store::new(engine, host_component);
 
-        if let Some(fuel) = max_wasm_fuel {
-            store.set_fuel(fuel).map_err(EngineError::Store)?;
-        }
+        let fuel_limit = max_wasm_fuel.unwrap_or(wavs_types::Workflow::DEFAULT_FUEL_LIMIT);
+        store.set_fuel(fuel_limit).map_err(EngineError::Store)?;
+
+        let time_limit_seconds =
+            max_execution_seconds.unwrap_or(wavs_types::Workflow::DEFAULT_TIME_LIMIT_SECONDS);
+        store.set_epoch_deadline(time_limit_seconds);
 
         Ok(AggregatorInstanceDeps {
             store,
             component,
             linker,
-            time_limit_seconds: max_execution_seconds.unwrap_or(120),
+            time_limit_seconds,
         })
     }
 }

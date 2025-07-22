@@ -17,8 +17,8 @@ use crate::bindings::aggregator::world::wavs::{
             Submit as WitSubmit, Trigger as WitTrigger,
             TriggerBlockInterval as WitTriggerBlockInterval,
             TriggerCosmosContractEvent as WitTriggerCosmosContractEvent,
-            TriggerCron as WitTriggerCron,
-            TriggerEvmContractEvent as WitTriggerEvmContractEvent, Workflow as WitWorkflow,
+            TriggerCron as WitTriggerCron, TriggerEvmContractEvent as WitTriggerEvmContractEvent,
+            Workflow as WitWorkflow,
         },
     },
 };
@@ -226,28 +226,35 @@ impl TryFrom<wavs_types::Trigger> for WitTrigger {
                 chain_name: chain_name.to_string(),
                 event_hash: event_hash.as_slice().to_vec(),
             }),
-            wavs_types::Trigger::CosmosContractEvent { address, chain_name, event_type } => {
-                WitTrigger::CosmosContractEvent(WitTriggerCosmosContractEvent {
-                    address: address.try_into()?,
-                    chain_name: chain_name.to_string(),
-                    event_type,
-                })
-            }
-            wavs_types::Trigger::BlockInterval { chain_name, n_blocks, start_block, end_block } => {
-                WitTrigger::BlockInterval(WitTriggerBlockInterval {
-                    chain_name: chain_name.to_string(),
-                    n_blocks: n_blocks.into(),
-                    start_block: start_block.map(Into::into),
-                    end_block: end_block.map(Into::into),
-                })
-            }
-            wavs_types::Trigger::Cron { schedule, start_time, end_time } => {
-                WitTrigger::Cron(WitTriggerCron {
-                    schedule: schedule.to_string(),
-                    start_time: start_time.map(Into::into),
-                    end_time: end_time.map(Into::into),
-                })
-            }
+            wavs_types::Trigger::CosmosContractEvent {
+                address,
+                chain_name,
+                event_type,
+            } => WitTrigger::CosmosContractEvent(WitTriggerCosmosContractEvent {
+                address: address.try_into()?,
+                chain_name: chain_name.to_string(),
+                event_type,
+            }),
+            wavs_types::Trigger::BlockInterval {
+                chain_name,
+                n_blocks,
+                start_block,
+                end_block,
+            } => WitTrigger::BlockInterval(WitTriggerBlockInterval {
+                chain_name: chain_name.to_string(),
+                n_blocks: n_blocks.into(),
+                start_block: start_block.map(Into::into),
+                end_block: end_block.map(Into::into),
+            }),
+            wavs_types::Trigger::Cron {
+                schedule,
+                start_time,
+                end_time,
+            } => WitTrigger::Cron(WitTriggerCron {
+                schedule: schedule.to_string(),
+                start_time: start_time.map(Into::into),
+                end_time: end_time.map(Into::into),
+            }),
         })
     }
 }
@@ -257,7 +264,10 @@ impl TryFrom<layer_climb::prelude::Address> for WitCosmosAddress {
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
         let (bech32_addr, prefix_len) = match address {
-            layer_climb::prelude::Address::Cosmos { bech32_addr, prefix_len } => (bech32_addr, prefix_len),
+            layer_climb::prelude::Address::Cosmos {
+                bech32_addr,
+                prefix_len,
+            } => (bech32_addr, prefix_len),
             _ => return Err(anyhow::anyhow!("Not a cosmos address")),
         };
 
