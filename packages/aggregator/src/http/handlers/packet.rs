@@ -470,14 +470,42 @@ async fn handle_custom_submit(
         .map_err(|e| AggregatorError::BlockNumber(e.into()))?
         - 1;
 
-    let signatures: Vec<EnvelopeSignature> = queue
-        .iter()
-        .map(|queued| queued.packet.signature.clone())
-        .collect();
+    let signatures: Vec<EnvelopeSignature> = if queue.is_empty() {
+        vec![packet.signature.clone()]
+    } else {
+        queue
+            .iter()
+            .map(|queued| queued.packet.signature.clone())
+            .collect()
+    };
 
     let signature_data = packet
         .envelope
         .signature_data(signatures, block_height_minus_one)?;
+
+    let custom_aggregator = Aggregator::Evm(EvmContractSubmission {
+        chain_name: chain_name.clone(),
+        address: contract_address,
+        max_gas: None,
+    });
+    let service_manager = get_submission_service_manager(state, &custom_aggregator).await?;
+    let result = service_manager
+        .validate(
+            packet.envelope.clone().into(),
+            signature_data.clone().into(),
+        )
+        .call()
+        .await;
+
+    match result {
+        Ok(_) => {
+            tracing::info!("Service manager validation passed for custom submit");
+        }
+        Err(err) => {
+            tracing::error!("Service manager validation failed: {:?}", err);
+            return Err(AggregatorError::ServiceManagerValidateUnknown(err));
+        }
+    }
 
     let tx_receipt = client
         .send_envelope_signatures(
