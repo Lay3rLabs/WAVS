@@ -1,10 +1,14 @@
+use alloy_network::TransactionBuilder;
 use alloy_node_bindings::{Anvil, AnvilInstance};
-use alloy_primitives::Address;
-use alloy_provider::DynProvider;
+use alloy_primitives::{utils::parse_ether, Address};
+use alloy_provider::{DynProvider, Provider};
+use alloy_rpc_types_eth::TransactionRequest;
+use alloy_signer::k256::ecdsa::SigningKey;
+use alloy_signer_local::LocalSigner;
 use tempfile::TempDir;
-use wavs_types::{ChainName, IWavsServiceManager::{self, IWavsServiceManagerInstance}};
+use wavs_types::ChainName;
 
-use crate::{evm_client::EvmSigningClient, test_utils::deploy_service_manager::{ServiceManager, ServiceManagerConfig}};
+use crate::{evm_client::EvmSigningClient, test_utils::{deploy_service_manager::{HexEncodedPrivateKey, ServiceManager, ServiceManagerConfig}, test_packet::mock_signer}};
 
 pub mod service_handler {
     use alloy_sol_types::sol;
@@ -60,11 +64,44 @@ impl TestContractDeps {
         }
     }
 
+    pub async fn create_signers<const N: usize>(&self) -> Vec<LocalSigner<SigningKey>> {
+        let mut signers = Vec::with_capacity(N);
+
+        for _ in 0..N {
+            let signer = mock_signer();
+            self.transfer_funds("100", signer.address()).await;
+            signers.push(signer);
+        }
+        signers
+    }
+
+    pub async fn transfer_funds(&self, eth: &str, to: Address) {
+        let amount = parse_ether(eth).unwrap();
+        let tx = TransactionRequest::default()
+            .with_from(self.client.signer.address())
+            .with_to(to)
+            .with_value(amount);
+
+        self.client 
+            .provider
+            .send_transaction(tx)
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+    }
+
     pub async fn deploy_service_manager(
         &self,
-        config: ServiceManagerConfig
+        config: ServiceManagerConfig,
     ) -> ServiceManager {
-        ServiceManager::deploy(config, self._anvil.endpoint())
+        let deployer_key = HexEncodedPrivateKey::new_random();
+
+        self.transfer_funds("100", deployer_key.address)
+            .await;
+
+        ServiceManager::deploy(config, self._anvil.endpoint(), deployer_key)
             .await
             .unwrap()
     }

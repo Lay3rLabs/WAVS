@@ -535,11 +535,6 @@ fn add_packet_to_queue(
 mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
-    use alloy_primitives::utils::parse_ether;
-    use alloy_provider::network::TransactionBuilder;
-    use alloy_rpc_types_eth::TransactionRequest;
-    use alloy_signer::k256::ecdsa::SigningKey;
-    use alloy_signer_local::LocalSigner;
     use futures::{stream::FuturesUnordered, StreamExt};
     use std::{
         collections::{BTreeMap, HashSet},
@@ -776,7 +771,7 @@ mod test {
         let deps = TestDeps::new().await;
 
         // Configure the service with a threshold of 1 (first packet sends immediately)
-        let signers = deps.create_signers::<1>().await; 
+        let signers = deps.contracts.create_signers::<1>().await; 
 
         let service_manager = deps.contracts.deploy_service_manager(ServiceManagerConfig::with_signers(&signers, 1u64)).await;
 
@@ -1017,34 +1012,6 @@ mod test {
                 contracts: contract_deps,
                 state,
             }
-        }
-
-        pub async fn create_signers<const N: usize>(&self) -> Vec<LocalSigner<SigningKey>> {
-            let mut signers = Vec::with_capacity(N);
-
-            for _ in 0..N {
-                let signer = mock_signer();
-                self.transfer_funds("100", signer.address()).await;
-                signers.push(signer);
-            }
-            signers
-        }
-
-        pub async fn transfer_funds(&self, eth: &str, to: Address) {
-            let amount = parse_ether(eth).unwrap();
-            let tx = TransactionRequest::default()
-                .with_from(self.contracts.client.signer.address())
-                .with_to(to)
-                .with_value(amount);
-
-            self.contracts.client 
-                .provider
-                .send_transaction(tx)
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
         }
 
         pub async fn create_service(

@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 use wavs_types::IWavsServiceManager::{self, IWavsServiceManagerInstance};
 
-use crate::test_utils::address::rand_address_evm;
-
 pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.5";
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -111,29 +109,61 @@ pub struct ServiceManagerAddresses {
     pub stake_registry_impl_address: alloy_primitives::Address,
 }
 
+pub struct HexEncodedPrivateKey {
+    pub key: String,
+    pub address: alloy_primitives::Address,
+}
+
+impl HexEncodedPrivateKey {
+    pub fn new_anvil() -> Self {
+        let anvil_seed_phrase =
+                "test test test test test test test test test test test junk".to_string();
+        Self::new_seed_phrase(anvil_seed_phrase)
+    }
+    pub fn new_seed_phrase(seed_phrase: String) -> Self {
+        let signer = MnemonicBuilder::<English>::default()
+            .phrase(seed_phrase)
+            .index(0)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        Self::new_signer(signer)
+    }
+
+    pub fn new_random() -> Self {
+        let signer = MnemonicBuilder::<English>::default()
+            .word_count(24)
+            .build_random()
+            .unwrap();
+        Self::new_signer(signer)
+    }
+
+    pub fn new_signer(signer: LocalSigner<SigningKey>) -> Self {
+        let address = signer.address();
+        let key = signer.into_credential()
+            .to_bytes()
+            .to_vec();
+
+        Self {
+            key: const_hex::encode(key),
+            address
+        }
+    }
+
+}
+
 impl ServiceManager {
     pub async fn deploy(
         config: ServiceManagerConfig,
         rpc_url: String,
+        deployer_key: HexEncodedPrivateKey,
     ) -> anyhow::Result<ServiceManager> {
         let nodes_dir = TempDir::new().unwrap();
         let config_dir = TempDir::new().unwrap();
         let config_filepath = config_dir.path().join("wavs-mock-config.json");
 
         std::fs::write(&config_filepath, serde_json::to_string(&config).unwrap()).unwrap();
-
-        let seed_phrase = "test test test test test test test test test test test junk".to_string();
-
-        let deployer_key = MnemonicBuilder::<English>::default()
-            .phrase(seed_phrase)
-            .index(0)
-            .unwrap()
-            .build()
-            .unwrap()
-            .into_credential()
-            .to_bytes();
-
-        let deployer_key = const_hex::encode(deployer_key);
 
         let image = MIDDLEWARE_IMAGE.to_string();
 
@@ -158,7 +188,7 @@ impl ServiceManager {
                     .ok_or(anyhow::anyhow!("Failed to convert config_filepath to str"))?
             ),
             "-e",
-            &format!("MOCK_DEPLOYER_KEY={deployer_key}"),
+            &format!("MOCK_DEPLOYER_KEY={}", deployer_key.key),
             "-e",
             &format!("MOCK_RPC_URL={rpc_url}"),
             image.as_str(),

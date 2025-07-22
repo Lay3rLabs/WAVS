@@ -1,7 +1,7 @@
 use alloy_node_bindings::Anvil;
 use utils::{
     init_tracing_tests,
-    test_utils::deploy_service_manager::{ServiceManager, ServiceManagerConfig},
+    test_utils::deploy_service_manager::{HexEncodedPrivateKey, ServiceManager, ServiceManagerConfig},
 };
 
 #[tokio::test]
@@ -11,7 +11,7 @@ async fn service_manager_deployment() {
     let anvil = Anvil::new().spawn();
 
     let service_manager =
-        ServiceManager::deploy(ServiceManagerConfig::default(), anvil.endpoint())
+        ServiceManager::deploy(ServiceManagerConfig::default(), anvil.endpoint(), HexEncodedPrivateKey::new_anvil())
             .await
             .unwrap();
 
