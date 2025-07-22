@@ -125,9 +125,9 @@ impl ServiceManager {
                     .ok_or(anyhow::anyhow!("Failed to convert config_filepath to str"))?
             ),
             "-e",
-            &format!("MOCK_DEPLOYER_KEY={}", deployer_key),
+            &format!("MOCK_DEPLOYER_KEY={deployer_key}"),
             "-e",
-            &format!("MOCK_RPC_URL={}", rpc_url),
+            &format!("MOCK_RPC_URL={rpc_url}"),
             image.as_str(),
             "-m",
             "mock",
