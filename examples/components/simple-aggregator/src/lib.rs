@@ -2,7 +2,7 @@ mod world;
 
 use world::{
     wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction},
-    wavs::types::chain::{EvmAddress, TxHash},
+    wavs::types::chain::{AnyTxHash, EvmAddress},
     Guest,
 };
 
@@ -27,7 +27,7 @@ impl Guest for Component {
 
     fn handle_submit_callback(
         _packet: Packet,
-        tx_result: Result<TxHash, String>,
+        tx_result: Result<AnyTxHash, String>,
     ) -> Result<bool, String> {
         match tx_result {
             Ok(_) => Ok(true),
