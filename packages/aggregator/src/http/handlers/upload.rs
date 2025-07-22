@@ -38,7 +38,5 @@ async fn inner_handle_upload(
     let digest = engine.upload_component(bytes.to_vec()).await?;
     tracing::info!("Component uploaded successfully: {}", digest);
 
-    Ok(UploadComponentResponse {
-        digest: digest.into(),
-    })
+    Ok(UploadComponentResponse { digest })
 }

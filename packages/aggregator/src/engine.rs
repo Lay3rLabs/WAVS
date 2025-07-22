@@ -19,50 +19,11 @@ use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
-use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
-    Envelope as WitEnvelope, EnvelopeSignature as WitEnvelopeSignature, Packet as WitPacket,
-    Secp256k1Signature,
-};
 use wavs_engine::bindings::aggregator::world::AggregatorWorld;
 // TODO: Those should be from aggregator as well
 use wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel;
 
 use wavs_engine::bindings::aggregator::world::wavs as agg_world;
-use wavs_engine::bindings::worker::world::wavs as wavs_world;
-
-fn convert_service_to_aggregator(
-    wavs_service: wavs_world::types::service::Service,
-) -> agg_world::types::service::Service {
-    unsafe { std::mem::transmute(wavs_service) }
-}
-
-fn packet_to_wit_packet(packet: &Packet) -> Result<WitPacket> {
-    let wavs_service: wavs_world::types::service::Service = packet.service.clone().try_into()?;
-    let wit_service = convert_service_to_aggregator(wavs_service);
-
-    // Convert envelope
-    let wit_envelope = WitEnvelope {
-        event_id: packet.envelope.eventId.to_vec(),
-        ordering: packet.envelope.ordering.to_vec(),
-        payload: packet.envelope.payload.to_vec(),
-    };
-
-    // Convert signature
-    let wit_signature = match &packet.signature {
-        wavs_types::EnvelopeSignature::Secp256k1(sig) => {
-            WitEnvelopeSignature::Secp256k1(Secp256k1Signature {
-                signature_data: sig.as_bytes().to_vec(),
-            })
-        }
-    };
-
-    Ok(WitPacket {
-        service: wit_service,
-        workflow_id: packet.workflow_id.to_string(),
-        envelope: wit_envelope,
-        signature: wit_signature,
-    })
-}
 
 pub struct AggregatorEngine<S: CAStorage> {
     wasm_engine: WTEngine,
@@ -152,7 +113,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
         .build()?;
 
-        let wit_packet = packet_to_wit_packet(packet)?;
+        let wit_packet = packet.clone().into();
 
         let aggregator_world = AggregatorWorld::instantiate_async(
             &mut instance_deps.store,
@@ -228,7 +189,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
         .build()?;
 
-        let wit_packet = packet_to_wit_packet(packet)?;
+        let wit_packet = packet.clone().into();
 
         let aggregator_world = AggregatorWorld::instantiate_async(
             &mut instance_deps.store,
@@ -282,7 +243,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
         .build()?;
 
-        let wit_packet = packet_to_wit_packet(packet)?;
+        let wit_packet = packet.clone().into();
 
         let wit_tx_hash = tx_result
             .as_ref()
