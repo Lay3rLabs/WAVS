@@ -233,6 +233,17 @@ async fn deploy_workflow(
     let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
         .await
         .unwrap();
+
+    let SubmitDefinition::Aggregator { aggregators, .. } = &mut workflow_definition.submit;
+    for agg in aggregators {
+        if let AggregatorDefinition::ComponentBasedAggregator {
+            contract_address, ..
+        } = agg
+        {
+            *contract_address = format!("{:#x}", submission_contract);
+        }
+    }
+
     let submit = create_submit_from_config(
         &workflow_definition.submit,
         &submission_contract,
@@ -390,10 +401,19 @@ pub async fn create_submit_from_config(
                     }
                     AggregatorDefinition::ComponentBasedAggregator {
                         component: component_def,
-                        ..
+                        chain_name,
+                        contract_address,
                     } => {
                         if let Some(sources) = component_sources {
-                            component = Some(Box::new(deploy_component(sources, component_def)));
+                            let mut enhanced_component_def = component_def.clone();
+                            enhanced_component_def
+                                .config_vars
+                                .insert("chain_name".to_string(), chain_name.to_string());
+                            enhanced_component_def
+                                .config_vars
+                                .insert("contract_address".to_string(), contract_address.clone());
+                            component =
+                                Some(Box::new(deploy_component(sources, &enhanced_component_def)));
                         } else {
                             return Err(anyhow!(
                                 "ComponentBasedAggregator requires component_sources"

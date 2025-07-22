@@ -145,6 +145,7 @@ pub enum AggregatorDefinition {
     ComponentBasedAggregator {
         component: ComponentDefinition,
         chain_name: ChainName,
+        contract_address: String,
     },
 }
 

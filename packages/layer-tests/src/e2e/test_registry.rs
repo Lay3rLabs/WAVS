@@ -357,6 +357,9 @@ impl TestRegistry {
                             aggregators: vec![AggregatorDefinition::ComponentBasedAggregator {
                                 component: ComponentName::SimpleAggregator.into(),
                                 chain_name: chain.clone(),
+                                // placeholder; is replaced in deploy_workflow to actual submission manager
+                                contract_address: "0x0000000000000000000000000000000000000000"
+                                    .to_string(),
                             }],
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
