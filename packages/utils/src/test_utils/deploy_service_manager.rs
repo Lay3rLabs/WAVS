@@ -1,8 +1,13 @@
 use std::process::{Command, Stdio};
 
-use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
+use alloy_provider::DynProvider;
+use alloy_signer::k256::ecdsa::SigningKey;
+use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
+use wavs_types::IWavsServiceManager::{self, IWavsServiceManagerInstance};
+
+use crate::test_utils::address::rand_address_evm;
 
 pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.5";
 
@@ -17,6 +22,27 @@ pub struct ServiceManagerConfig {
     pub signing_key_addresses: Vec<alloy_primitives::Address>,
     pub threshold: u64,
     pub weights: Vec<u64>,
+}
+
+impl ServiceManagerConfig {
+    pub fn with_signers(signers:&[LocalSigner<SigningKey>], required_to_pass: u64) -> Self {
+        let mut operators = Vec::with_capacity(signers.len() as usize);
+        let mut weights = Vec::with_capacity(signers.len() as usize);
+
+        for signer in signers.iter() { 
+            operators.push(signer.address());
+            weights.push(10000); // Default weight
+        }
+
+        Self {
+            signing_key_addresses: operators.clone(), // Use the same addresses for signing keys
+            operators,
+            quorum_denominator: signers.len() as u64,
+            quorum_numerator: required_to_pass,
+            threshold: 1,
+            weights,
+        }
+    }
 }
 
 impl Default for ServiceManagerConfig {
@@ -66,6 +92,13 @@ impl Default for ServiceManagerConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ServiceManager {
+    pub config: ServiceManagerConfig,
+    pub address: alloy_primitives::Address,
+    pub all_addresses: ServiceManagerAddresses,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ServiceManagerAddresses {
     #[serde(rename = "WavsServiceManager")]
     pub address: alloy_primitives::Address,
     #[serde(rename = "proxyAdmin")]
@@ -80,14 +113,14 @@ pub struct ServiceManager {
 
 impl ServiceManager {
     pub async fn deploy(
-        config: &ServiceManagerConfig,
+        config: ServiceManagerConfig,
         rpc_url: String,
     ) -> anyhow::Result<ServiceManager> {
         let nodes_dir = TempDir::new().unwrap();
         let config_dir = TempDir::new().unwrap();
         let config_filepath = config_dir.path().join("wavs-mock-config.json");
 
-        std::fs::write(&config_filepath, serde_json::to_string(config).unwrap()).unwrap();
+        std::fs::write(&config_filepath, serde_json::to_string(&config).unwrap()).unwrap();
 
         let seed_phrase = "test test test test test test test test test test test junk".to_string();
 
@@ -153,12 +186,20 @@ impl ServiceManager {
 
         #[derive(Deserialize)]
         struct DeploymentJson {
-            addresses: ServiceManager,
+            addresses: ServiceManagerAddresses,
         }
 
         let deployment_json: DeploymentJson = serde_json::from_str(&deployment_json)
             .map_err(|e| anyhow::anyhow!("Failed to parse service manager JSON: {}", e))?;
 
-        Ok(deployment_json.addresses)
+        Ok(Self {
+            config,
+            address: deployment_json.addresses.address,
+            all_addresses: deployment_json.addresses,
+        })
+    }
+
+    pub fn instance(&self, provider: alloy_provider::DynProvider) -> IWavsServiceManagerInstance<DynProvider> {
+        IWavsServiceManager::new(self.address, provider)
     }
 }

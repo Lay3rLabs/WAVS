@@ -11,12 +11,12 @@ async fn service_manager_deployment() {
     let anvil = Anvil::new().spawn();
 
     let service_manager =
-        ServiceManager::deploy(&ServiceManagerConfig::default(), anvil.endpoint())
+        ServiceManager::deploy(ServiceManagerConfig::default(), anvil.endpoint())
             .await
             .unwrap();
 
     assert!(
-        !service_manager.impl_address.is_zero(),
+        !service_manager.address.is_zero(),
         "Service Manager implementation address should not be zero"
     );
 }

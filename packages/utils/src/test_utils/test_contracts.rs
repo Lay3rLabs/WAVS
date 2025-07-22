@@ -2,22 +2,9 @@ use alloy_node_bindings::{Anvil, AnvilInstance};
 use alloy_primitives::Address;
 use alloy_provider::DynProvider;
 use tempfile::TempDir;
-use wavs_types::ChainName;
+use wavs_types::{ChainName, IWavsServiceManager::{self, IWavsServiceManagerInstance}};
 
-use crate::evm_client::EvmSigningClient;
-
-pub mod service_manager {
-    use alloy_sol_types::sol;
-
-    sol!(
-        #[allow(missing_docs)]
-        #[sol(rpc)]
-        SimpleServiceManager,
-        "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
-    );
-
-    pub use SimpleServiceManager::*;
-}
+use crate::{evm_client::EvmSigningClient, test_utils::deploy_service_manager::{ServiceManager, ServiceManagerConfig}};
 
 pub mod service_handler {
     use alloy_sol_types::sol;
@@ -36,7 +23,6 @@ pub use service_handler::{
     ISimpleSubmit, SimpleSubmit as SimpleServiceHandler,
     SimpleSubmitInstance as SimpleServiceHandlerInstance,
 };
-pub use service_manager::{SimpleServiceManager, SimpleServiceManagerInstance};
 
 /// Test dependencies for EVM contract testing
 /// Provides a reusable setup for testing with simple service manager and handler contracts
@@ -74,9 +60,11 @@ impl TestContractDeps {
         }
     }
 
-    /// Deploy a simple service manager contract for testing
-    pub async fn deploy_simple_service_manager(&self) -> SimpleServiceManagerInstance<DynProvider> {
-        SimpleServiceManager::deploy(self.client.provider.clone())
+    pub async fn deploy_service_manager(
+        &self,
+        config: ServiceManagerConfig
+    ) -> ServiceManager {
+        ServiceManager::deploy(config, self._anvil.endpoint())
             .await
             .unwrap()
     }

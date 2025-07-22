@@ -31,7 +31,7 @@ use crate::{
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
-        example_service_manager::SimpleServiceManager, example_submit::ISimpleSubmit::SignedData,
+        example_submit::ISimpleSubmit::SignedData,
         example_trigger::SimpleTrigger, SimpleEvmSubmitClient, TriggerId,
     },
 };
