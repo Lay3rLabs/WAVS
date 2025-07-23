@@ -23,6 +23,8 @@ pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::
 };
 use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
 
+const MIN_LRU_SIZE: usize = 10;
+
 pub struct AggregatorEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     chain_configs: Arc<RwLock<ChainConfigs>>,
@@ -51,7 +53,8 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         config.epoch_interruption(true);
         let wasm_engine = WTEngine::new(&config)?;
 
-        let lru_size = NonZeroUsize::new(lru_size).unwrap_or(NonZeroUsize::new(10).unwrap());
+        let lru_size =
+            NonZeroUsize::new(lru_size).unwrap_or(NonZeroUsize::new(MIN_LRU_SIZE).unwrap());
         let app_data_dir = app_data_dir.into();
         if !app_data_dir.is_dir() {
             std::fs::create_dir_all(&app_data_dir)?;
@@ -89,6 +92,11 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         tracing::info!("Processing packet with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
+        let chain_configs = self
+            .chain_configs
+            .read()
+            .map_err(|e| anyhow::anyhow!("Chain configs lock poisoned: {}", e))?
+            .clone();
 
         let mut instance_deps = InstanceDepsBuilder {
             component: wasm_component,
@@ -97,7 +105,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             workflow_id: packet.workflow_id.clone(),
             engine: &self.wasm_engine,
             data_dir: &self.app_data_dir,
-            chain_configs: &self.chain_configs.read().unwrap(),
+            chain_configs: &chain_configs,
             log: |_service_id, _workflow_id, _digest, level, message| match level {
                 LogLevel::Error => tracing::error!("{}", message),
                 LogLevel::Warn => tracing::warn!("{}", message),
@@ -119,21 +127,28 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     fn load_component(&self, component: &Component) -> Result<WasmComponent> {
         let digest = component.source.digest().clone();
 
-        if let Some(cached_component) = self.memory_cache.write().unwrap().get(&digest) {
+        if let Some(cached_component) = self
+            .memory_cache
+            .write()
+            .map_err(|e| anyhow::anyhow!("Memory cache lock poisoned: {}", e))?
+            .get(&digest)
+        {
             return Ok(cached_component.clone());
         }
 
-        let bytes: [u8; 32] = digest
-            .as_ref()
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("Invalid digest length"))?;
+        let bytes: [u8; 32] = digest.as_ref().try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "Invalid digest length: expected 32 bytes, got {}",
+                digest.as_ref().len()
+            )
+        })?;
         let any_digest = AnyDigest::from(bytes);
         let component_bytes = self.storage.get_data(&any_digest)?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         self.memory_cache
             .write()
-            .unwrap()
+            .map_err(|e| anyhow::anyhow!("Memory cache lock poisoned: {}", e))?
             .put(digest, wasm_component.clone());
 
         Ok(wasm_component)
@@ -148,6 +163,11 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         tracing::info!("Handling timer callback with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
+        let chain_configs = self
+            .chain_configs
+            .read()
+            .map_err(|e| anyhow::anyhow!("Chain configs lock poisoned: {}", e))?
+            .clone();
 
         let mut instance_deps = InstanceDepsBuilder {
             component: wasm_component,
@@ -156,7 +176,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             workflow_id: packet.workflow_id.clone(),
             engine: &self.wasm_engine,
             data_dir: &self.app_data_dir,
-            chain_configs: &self.chain_configs.read().unwrap(),
+            chain_configs: &chain_configs,
             log: |_service_id, _workflow_id, _digest, level, message| match level {
                 LogLevel::Error => tracing::error!("{}", message),
                 LogLevel::Warn => tracing::warn!("{}", message),
@@ -202,6 +222,11 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         tracing::info!("Handling submit callback with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
+        let chain_configs = self
+            .chain_configs
+            .read()
+            .map_err(|e| anyhow::anyhow!("Chain configs lock poisoned: {}", e))?
+            .clone();
 
         let mut instance_deps = InstanceDepsBuilder {
             component: wasm_component,
@@ -210,7 +235,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             workflow_id: packet.workflow_id.clone(),
             engine: &self.wasm_engine,
             data_dir: &self.app_data_dir,
-            chain_configs: &self.chain_configs.read().unwrap(),
+            chain_configs: &chain_configs,
             log: |_service_id, _workflow_id, _digest, level, message| match level {
                 LogLevel::Error => tracing::error!("{}", message),
                 LogLevel::Warn => tracing::warn!("{}", message),
@@ -262,14 +287,16 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         // store original wasm
         let digest = self.storage.set_data(&component_bytes)?;
 
-        let bytes: [u8; 32] = digest
-            .as_ref()
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("Invalid digest length"))?;
+        let bytes: [u8; 32] = digest.as_ref().try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "Invalid digest length: expected 32 bytes, got {}",
+                digest.as_ref().len()
+            )
+        })?;
         let component_digest = ComponentDigest::from(bytes);
         self.memory_cache
             .write()
-            .unwrap()
+            .map_err(|e| anyhow::anyhow!("Memory cache lock poisoned: {}", e))?
             .put(component_digest.clone(), cm);
 
         Ok(component_digest)

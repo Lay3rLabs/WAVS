@@ -11,6 +11,7 @@ struct Component;
 
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
+        // returning hardcoded values so the component wouldn't crash in UT
         let chain_name = host::config_var("chain_name").unwrap_or_else(|| "31337".to_string());
         let contract_address_str = host::config_var("contract_address")
             .unwrap_or_else(|| "0x0000000000000000000000000000000000000000".to_string());
