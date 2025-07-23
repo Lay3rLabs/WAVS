@@ -72,20 +72,7 @@ impl TestMnemonics {
                     .unwrap()
                     .address();
 
-                let amount = parse_ether("100").unwrap();
-                let tx = TransactionRequest::default()
-                    .with_from(anvil_client.address())
-                    .with_to(dest_addr)
-                    .with_value(amount);
-
-                anvil_client
-                    .provider
-                    .send_transaction(tx)
-                    .await
-                    .unwrap()
-                    .watch()
-                    .await
-                    .unwrap();
+                anvil_client.transfer_funds(dest_addr, "100").await.unwrap();
             }
         }
     }

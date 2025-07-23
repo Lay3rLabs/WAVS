@@ -1,12 +1,13 @@
 pub mod contracts;
 pub mod signing;
 
-use alloy_network::{EthereumWallet, Network};
-use alloy_primitives::Address;
+use alloy_network::{EthereumWallet, Network, TransactionBuilder};
+use alloy_primitives::{utils::parse_ether, Address};
 use alloy_provider::{
     fillers::{BlobGasFiller, ChainIdFiller, GasFiller, NonceManager},
     DynProvider, Provider, ProviderBuilder, WsConnect,
 };
+use alloy_rpc_types_eth::TransactionRequest;
 use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::{TransportErrorKind, TransportResult};
 use anyhow::Result;
@@ -44,6 +45,15 @@ impl FromStr for EvmEndpoint {
             scheme => Err(EvmClientError::ParseEndpoint(format!(
                 "could not determine endpoint from scheme {scheme} (full url: {s})"
             ))),
+        }
+    }
+}
+
+impl std::fmt::Display for EvmEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EvmEndpoint::WebSocket(url) => write!(f, "{}", url),
+            EvmEndpoint::Http(url) => write!(f, "{}", url),
         }
     }
 }
@@ -119,6 +129,19 @@ pub struct EvmSigningClient {
     /// since the signer in `EthereumWallet` implements only `TxSigner`
     /// and there is not a direct way convert it into `Signer`
     pub signer: Arc<PrivateKeySigner>,
+    pub nonce_manager: AnyNonceManager,
+}
+
+impl EvmSigningClient {
+    pub async fn transfer_funds(&self, dest_addr: Address, amount_eth: &str) -> Result<()> {
+        let tx = TransactionRequest::default()
+            .with_from(self.address())
+            .with_to(dest_addr)
+            .with_value(parse_ether(amount_eth)?);
+
+        self.provider.send_transaction(tx).await?.watch().await?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +156,37 @@ pub struct EvmSigningClientConfig {
     /// The interval at which to poll the provider for new blocks
     /// if unset, will use the default of the provider (which may differ across networks)
     pub poll_interval: Option<Duration>,
+    pub nonce_manager_kind: NonceManagerKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NonceManagerKind {
+    Fast,
+    Safe,
+}
+
+#[derive(Debug, Clone)]
+pub enum AnyNonceManager {
+    Fast(FastNonceManager),
+    Safe(SafeNonceManager),
+}
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+impl NonceManager for AnyNonceManager {
+    async fn get_next_nonce<P, N>(&self, _provider: &P, address: Address) -> TransportResult<u64>
+    where
+        P: Provider<N>,
+        N: Network,
+    {
+        match self {
+            AnyNonceManager::Fast(nonce_manager) => {
+                nonce_manager.get_next_nonce(_provider, address).await
+            }
+            AnyNonceManager::Safe(nonce_manager) => {
+                nonce_manager.get_next_nonce(_provider, address).await
+            }
+        }
+    }
 }
 
 impl EvmSigningClientConfig {
@@ -143,6 +197,18 @@ impl EvmSigningClientConfig {
             hd_index: None,
             gas_estimate_multiplier: None,
             poll_interval: None,
+            nonce_manager_kind: NonceManagerKind::Fast,
+        }
+    }
+
+    pub fn new_anvil(endpoint_url: &str) -> Self {
+        Self {
+            endpoint: EvmEndpoint::from_str(&endpoint_url).expect("Failed to parse anvil endpoint"),
+            credential: "test test test test test test test test test test test junk".to_string(),
+            hd_index: None,
+            gas_estimate_multiplier: None,
+            poll_interval: None,
+            nonce_manager_kind: NonceManagerKind::Fast,
         }
     }
 
@@ -164,17 +230,22 @@ impl EvmSigningClient {
 
         let wallet: EthereumWallet = signer.clone().into();
 
-        let first_nonce = config
-            .endpoint
-            .to_provider()
-            .await?
-            .get_transaction_count(signer.address())
-            .await?;
-
-        let nonce_manager = FastNonceManager::new(Some(signer.address()), first_nonce);
+        let nonce_manager = match config.nonce_manager_kind {
+            NonceManagerKind::Fast => {
+                let nonce_manager = FastNonceManager::new(Some(signer.address()));
+                nonce_manager
+                    .set_current_nonce(&config.endpoint.to_provider().await?)
+                    .await?;
+                AnyNonceManager::Fast(nonce_manager)
+            }
+            NonceManagerKind::Safe => {
+                let nonce_manager = SafeNonceManager::new(Some(signer.address()));
+                AnyNonceManager::Safe(nonce_manager)
+            }
+        };
 
         let builder = ProviderBuilder::default()
-            .with_nonce_management(nonce_manager)
+            .with_nonce_management(nonce_manager.clone())
             .filler(GasFiller)
             .filler(BlobGasFiller)
             .filler(ChainIdFiller::new(None))
@@ -195,6 +266,7 @@ impl EvmSigningClient {
         Ok(Self {
             config,
             provider,
+            nonce_manager,
             wallet: Arc::new(wallet),
             signer: Arc::new(signer),
         })
@@ -204,6 +276,10 @@ impl EvmSigningClient {
         self.config
             .gas_estimate_multiplier
             .unwrap_or(Self::DEFAULT_GAS_ESTIMATE_MULTIPLIER)
+    }
+
+    pub async fn new_anvil(endpoint_url: &str) -> Result<Self> {
+        Self::new(EvmSigningClientConfig::new_anvil(endpoint_url)).await
     }
 }
 
@@ -242,10 +318,28 @@ pub struct FastNonceManager {
 }
 
 impl FastNonceManager {
-    pub fn new(address: Option<Address>, first_nonce: u64) -> Self {
+    pub fn new(address: Option<Address>) -> Self {
         Self {
             address,
-            counter: Arc::new(AtomicU64::new(first_nonce)),
+            counter: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    pub async fn set_current_nonce<P, N>(&self, provider: &P) -> anyhow::Result<u64>
+    where
+        P: Provider<N>,
+        N: Network,
+    {
+        match self.address {
+            Some(address) => {
+                let current_nonce = provider.get_transaction_count(address).await?;
+                self.counter
+                    .store(current_nonce, std::sync::atomic::Ordering::SeqCst);
+                Ok(current_nonce)
+            }
+            None => Err(anyhow::anyhow!(
+                "FastNonceManager address is not set, cannot set current nonce"
+            )),
         }
     }
 }
@@ -269,6 +363,37 @@ impl NonceManager for FastNonceManager {
         Ok(self
             .counter
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SafeNonceManager {
+    // If set, will check the address against this
+    address: Option<Address>,
+}
+
+impl SafeNonceManager {
+    pub fn new(address: Option<Address>) -> Self {
+        Self { address }
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+impl NonceManager for SafeNonceManager {
+    async fn get_next_nonce<P, N>(&self, provider: &P, address: Address) -> TransportResult<u64>
+    where
+        P: Provider<N>,
+        N: Network,
+    {
+        if let Some(check_address) = self.address {
+            if check_address != address {
+                return Err(TransportErrorKind::custom_str(&format!(
+                    "nonce manager address mismatch: expected {check_address}, got {address}"
+                )));
+            }
+        }
+        Ok(provider.get_transaction_count(address).await?)
     }
 }
 

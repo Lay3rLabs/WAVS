@@ -1,4 +1,4 @@
-use alloy_primitives::{Address, U256};
+use alloy_primitives::Address;
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
@@ -8,14 +8,19 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
+use utils::{
+    config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path, test_utils::{
+        middleware::{AvsOperator, MiddlewareServiceManagerConfig},
+        mock_service_manager::MockServiceManager,
+    }
+};
 use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
-    Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger,
-    Workflow,
+    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
+    IWavsServiceManager, Permissions, Service, ServiceID, ServiceManager, ServiceStatus,
+    SigningKeyResponse, Submit, Trigger, Workflow,
 };
 
 use crate::{
@@ -31,8 +36,8 @@ use crate::{
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
-        example_submit::ISimpleSubmit::SignedData,
-        example_trigger::SimpleTrigger, SimpleEvmSubmitClient, TriggerId,
+        example_submit::ISimpleSubmit::SignedData, example_trigger::SimpleTrigger,
+        SimpleEvmSubmitClient, TriggerId,
     },
 };
 
@@ -62,7 +67,7 @@ pub async fn deploy_service_for_test(
         test.name,
         test.service_manager_chain
     );
-    let service_manager_address = deploy_service_manager(clients, &test.service_manager_chain)
+    let mock_service_manager = deploy_service_manager(clients, &test.service_manager_chain)
         .await
         .unwrap();
 
@@ -70,7 +75,7 @@ pub async fn deploy_service_for_test(
         let workflow = deploy_workflow(
             &test.name,
             workflow_definition,
-            service_manager_address,
+            mock_service_manager.address,
             clients,
             component_sources,
             cosmos_trigger_code_map.clone(),
@@ -87,11 +92,9 @@ pub async fn deploy_service_for_test(
         status: ServiceStatus::Paused,
         manager: ServiceManager::Evm {
             chain_name: test.service_manager_chain.clone(),
-            address: service_manager_address,
+            address: mock_service_manager.address,
         },
     };
-
-    let submit_client = clients.get_evm_client(&test.service_manager_chain);
 
     tracing::info!("[{}] Deploying service: {}", test.name, service.id());
 
@@ -120,7 +123,7 @@ pub async fn deploy_service_for_test(
         DeployServiceArgs {
             service: service.clone(),
             set_service_url_args: Some(SetServiceUrlArgs {
-                provider: submit_client.provider.clone(),
+                provider: mock_service_manager.client.provider.clone(),
                 service_url: service_url.clone(),
             }),
         },
@@ -129,20 +132,22 @@ pub async fn deploy_service_for_test(
     .unwrap();
 
     // give signer address some weight in the service manager
-    let SigningKeyResponse::Secp256k1 { evm_address, .. } = clients
+    let SigningKeyResponse::Secp256k1 {
+        evm_address: avs_signer_address,
+        ..
+    } = clients
         .http_client
         .get_service_key(service.manager.clone())
         .await
         .unwrap();
 
-    let service_manager =
-        SimpleServiceManager::new(service_manager_address, submit_client.provider.clone());
-    service_manager
-        .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
-        .send()
-        .await
-        .unwrap()
-        .watch()
+    let operator_address = clients
+        .get_evm_client(&test.service_manager_chain)
+        .address();
+    let avs_operator = AvsOperator::new(operator_address, avs_signer_address.parse().unwrap());
+
+    mock_service_manager
+        .set_operator_details(avs_operator)
         .await
         .unwrap();
 
@@ -159,12 +164,8 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    service_manager
-        .setServiceURI(service_url)
-        .send()
-        .await
-        .unwrap()
-        .watch()
+    mock_service_manager
+        .set_service_uri(service_url)
         .await
         .unwrap();
 
@@ -442,40 +443,22 @@ pub async fn create_submit_from_config(
     }
 }
 
-/// Deploy service manager contract
+/// Deploy service manager contract with no operators
 pub async fn deploy_service_manager(
     clients: &Clients,
     chain_name: &ChainName,
-) -> Result<alloy_primitives::Address> {
+) -> Result<MockServiceManager> {
     let evm_client = clients.get_evm_client(chain_name);
 
-    tracing::info!("Deploying service manager on chain {}", chain_name);
+    let config = MiddlewareServiceManagerConfig::new(&[], 1);
 
-    let service_manager =
-        crate::example_evm_client::example_service_manager::SimpleServiceManager::deploy(
-            evm_client.provider.clone(),
-        )
-        .await
-        .context("Failed to deploy service manager contract")?;
+    let mock_service_manager = MockServiceManager::deploy_middleware(config, evm_client).await?;
+    tracing::info!(
+        "Service manager deployed at address: {}",
+        mock_service_manager.address
+    );
 
-    service_manager
-        .setLastCheckpointTotalWeight(U256::ONE)
-        .send()
-        .await?
-        .watch()
-        .await?;
-
-    service_manager
-        .setLastCheckpointThresholdWeight(U256::ONE)
-        .send()
-        .await?
-        .watch()
-        .await?;
-
-    let address = *service_manager.address();
-    tracing::info!("Service manager deployed at address: {}", address);
-
-    Ok(address)
+    Ok(mock_service_manager)
 }
 
 /// Deploy submit contract and return its address
@@ -657,11 +640,11 @@ pub async fn change_service_for_test(
         }
     }
 
-    let service_manager = match &old_service.manager {
+    let service_manager_instance = match &old_service.manager {
         ServiceManager::Evm {
             chain_name,
             address,
-        } => SimpleServiceManager::new(
+        } => IWavsServiceManager::new(
             *address,
             clients.get_evm_client(chain_name).provider.clone(),
         ),
@@ -671,7 +654,7 @@ pub async fn change_service_for_test(
         .await
         .unwrap();
 
-    service_manager
+    service_manager_instance
         .setServiceURI(url)
         .send()
         .await

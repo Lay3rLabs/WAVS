@@ -545,7 +545,10 @@ mod test {
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
         test_utils::{
-            deploy_service_manager::ServiceManagerConfig, test_contracts::TestContractDeps, test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service}
+            middleware::{AvsOperator, MiddlewareServiceManagerConfig},
+            mock_service_manager::MockServiceManager,
+            test_contracts::TestContractDeps,
+            test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
     use wavs_types::{ChainName, Service, WorkflowID};
@@ -601,13 +604,21 @@ mod test {
         let deps = TestDeps::new().await;
 
         const NUM_SIGNERS: usize = 3;
-        const NUM_THRESHOLD: usize  = 2;
+        const NUM_THRESHOLD: usize = 2;
 
-        let signers = (0..NUM_SIGNERS)
-            .map(|_| mock_signer())
+        let signers = (0..NUM_SIGNERS).map(|_| mock_signer()).collect::<Vec<_>>();
+
+        let avs_operators = signers
+            .iter()
+            .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
 
-        let service_manager = deps.contracts.deploy_service_manager(ServiceManagerConfig::with_signers(&signers, NUM_THRESHOLD as u64)).await;
+        let service_manager = MockServiceManager::deploy_middleware(
+            MiddlewareServiceManagerConfig::new(&avs_operators, NUM_THRESHOLD as u64),
+            deps.contracts.client.clone(),
+        )
+        .await
+        .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
 
@@ -771,14 +782,16 @@ mod test {
         let deps = TestDeps::new().await;
 
         // Configure the service with a threshold of 1 (first packet sends immediately)
-        let signers = deps.contracts.create_signers::<1>().await; 
+        let signer = mock_signer();
 
-        let service_manager = deps.contracts.deploy_service_manager(ServiceManagerConfig::with_signers(&signers, 1u64)).await;
+        let avs_operators = vec![AvsOperator::new(signer.address(), signer.address())];
 
-        let instance = service_manager.instance(deps.contracts.client.provider.clone());
-        println!("Service Manager Address: {:?}", instance.address());
-        println!("signer weight: {}", instance.getOperatorWeight(signers[0].address()).call().await.unwrap());
-
+        let service_manager = MockServiceManager::deploy_middleware(
+            MiddlewareServiceManagerConfig::new(&avs_operators, 1u64),
+            deps.contracts.client.clone(),
+        )
+        .await
+        .unwrap();
 
         let service_handler = deps
             .contracts
@@ -796,7 +809,7 @@ mod test {
         deps.state.register_service(&service.id()).unwrap();
 
         let packet = packet_from_service(
-            &signers[0],
+            &signer,
             &service,
             service.workflows.keys().next().unwrap(),
             &envelope,
@@ -824,11 +837,19 @@ mod test {
         const NUM_SIGNERS: usize = 20;
         const NUM_THRESHOLD: usize = NUM_SIGNERS / 2 + 1;
 
-        let signers = (0..NUM_SIGNERS)
-            .map(|_| mock_signer())
+        let signers = (0..NUM_SIGNERS).map(|_| mock_signer()).collect::<Vec<_>>();
+
+        let avs_operators = signers
+            .iter()
+            .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
 
-        let service_manager = deps.contracts.deploy_service_manager(ServiceManagerConfig::with_signers(&signers, NUM_THRESHOLD as u64)).await;
+        let service_manager = MockServiceManager::deploy_middleware(
+            MiddlewareServiceManagerConfig::new(&avs_operators, NUM_THRESHOLD as u64),
+            deps.contracts.client.clone(),
+        )
+        .await
+        .unwrap();
 
         let service_handler = deps
             .contracts
