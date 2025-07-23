@@ -3,15 +3,15 @@ log_level = ["info", "wavs=debug"]
 
 [layer-tests]
 # Run all tests
-# mode = "all"
+mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
 
 # Run a specific test
-mode = {"isolated" = [
-    {evm = "simple_aggregator"},
-]}
+# mode = {"isolated" = [
+#     {evm = "simple_aggregator"},
+# ]}
 
 # Run a few specific tests
 # mode = {"isolated" = [

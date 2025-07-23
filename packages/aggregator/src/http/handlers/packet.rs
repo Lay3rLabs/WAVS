@@ -65,16 +65,6 @@ async fn process_packet(
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
 
-    // Handle component-only workflows directly
-    if let wavs_types::Submit::Aggregator {
-        component: Some(_),
-        evm_contracts: None,
-        ..
-    } = &workflow.submit
-    {
-        return Ok(vec![AddPacketResponse::Aggregated { count: 1 }]);
-    }
-
     let aggregators = match &workflow.submit {
         wavs_types::Submit::Aggregator {
             evm_contracts: Some(contracts),
@@ -83,6 +73,21 @@ async fn process_packet(
             .iter()
             .map(|c| wavs_types::Aggregator::Evm(c.clone()))
             .collect::<Vec<_>>(),
+        wavs_types::Submit::Aggregator {
+            component: Some(_),
+            evm_contracts: None,
+            ..
+        } => {
+            // TODO: Refactor this
+            // Aggregator component is returning the actual submission data, this is never used
+            vec![wavs_types::Aggregator::Evm(
+                wavs_types::EvmContractSubmission {
+                    chain_name: "component-only".parse().unwrap(),
+                    address: alloy_primitives::Address::ZERO,
+                    max_gas: None,
+                },
+            )]
+        }
         _ => Vec::new(),
     };
 
@@ -195,7 +200,7 @@ impl AggregatorProcess<'_> {
                                     match engine.process_packet(component, packet).await {
                                         Ok(actions) => {
                                             let updated_queue = process_aggregator_actions(state, packet, queue, signer, actions).await?;
-                                            // If this is a component-only workflow (no evm_contracts), skip legacy processing
+                                            // If this is a component-only workflow, just batch the packet
                                             if evm_contracts.is_none() {
                                                 return Ok(AddPacketResponse::Aggregated { count: updated_queue.len() });
                                             }
@@ -426,9 +431,9 @@ async fn handle_custom_submit(
         - 1;
 
     let signatures: Vec<EnvelopeSignature> = queue
-            .iter()
-            .map(|queued| queued.packet.signature.clone())
-            .collect();
+        .iter()
+        .map(|queued| queued.packet.signature.clone())
+        .collect();
 
     let signature_data = packet
         .envelope
