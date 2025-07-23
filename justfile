@@ -119,7 +119,7 @@ cosmwasm-build-inner CONTRACT_PATH:
             -v "{{REPO_ROOT}}:/code" \
             --mount type=volume,source="layer_wavs_cache",target=/target \
             --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-            cosmwasm/optimizer:0.17.0  "{{CONTRACT_PATH}}"; \
+            cosmwasm/optimizer:0.17.0 "{{CONTRACT_PATH}}"; \
     fi;
 # on-chain integration test
 test-wavs-e2e:
