@@ -15,7 +15,10 @@ use wavs_engine::{
         wavs::types::{chain::AnyTxHash, core::LogLevel},
         AggregatorWorld,
     },
-    worlds::aggregator::instance::AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
+    worlds::aggregator::instance::{
+        AggregatorInstanceDeps as InstanceDeps,
+        AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
+    },
 };
 
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
@@ -83,22 +86,20 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
-    pub async fn process_packet(
+    #[instrument(level = "debug", skip(self, packet, wasm_component), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
+    fn create_instance_deps(
         &self,
         component: &Component,
         packet: &Packet,
-    ) -> Result<Vec<AggregatorAction>> {
-        tracing::info!("Processing packet with custom aggregator component");
-
-        let wasm_component = self.load_component(component)?;
+        wasm_component: WasmComponent,
+    ) -> Result<InstanceDeps> {
         let chain_configs = self
             .chain_configs
             .read()
             .map_err(|e| anyhow::anyhow!("Chain configs lock poisoned: {}", e))?
             .clone();
 
-        let mut instance_deps = InstanceDepsBuilder {
+        InstanceDepsBuilder {
             component: wasm_component,
             aggregator_component: component.clone(),
             service: packet.service.clone(),
@@ -117,7 +118,19 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
             keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id().to_string()),
         }
-        .build()?;
+        .build()
+        .map_err(Into::into)
+    }
+
+    pub async fn process_packet(
+        &self,
+        component: &Component,
+        packet: &Packet,
+    ) -> Result<Vec<AggregatorAction>> {
+        tracing::info!("Processing packet with custom aggregator component");
+
+        let wasm_component = self.load_component(component)?;
+        let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
         wavs_engine::worlds::aggregator::execute::execute(&mut instance_deps, packet)
             .await
@@ -163,32 +176,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         tracing::info!("Handling timer callback with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
-        let chain_configs = self
-            .chain_configs
-            .read()
-            .map_err(|e| anyhow::anyhow!("Chain configs lock poisoned: {}", e))?
-            .clone();
-
-        let mut instance_deps = InstanceDepsBuilder {
-            component: wasm_component,
-            aggregator_component: component.clone(),
-            service: packet.service.clone(),
-            workflow_id: packet.workflow_id.clone(),
-            engine: &self.wasm_engine,
-            data_dir: &self.app_data_dir,
-            chain_configs: &chain_configs,
-            log: |_service_id, _workflow_id, _digest, level, message| match level {
-                LogLevel::Error => tracing::error!("{}", message),
-                LogLevel::Warn => tracing::warn!("{}", message),
-                LogLevel::Info => tracing::info!("{}", message),
-                LogLevel::Debug => tracing::debug!("{}", message),
-                LogLevel::Trace => tracing::trace!("{}", message),
-            },
-            max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
-            max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id().to_string()),
-        }
-        .build()?;
+        let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
         let wit_packet = packet.clone().try_into()?;
 
@@ -222,32 +210,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         tracing::info!("Handling submit callback with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
-        let chain_configs = self
-            .chain_configs
-            .read()
-            .map_err(|e| anyhow::anyhow!("Chain configs lock poisoned: {}", e))?
-            .clone();
-
-        let mut instance_deps = InstanceDepsBuilder {
-            component: wasm_component,
-            aggregator_component: component.clone(),
-            service: packet.service.clone(),
-            workflow_id: packet.workflow_id.clone(),
-            engine: &self.wasm_engine,
-            data_dir: &self.app_data_dir,
-            chain_configs: &chain_configs,
-            log: |_service_id, _workflow_id, _digest, level, message| match level {
-                LogLevel::Error => tracing::error!("{}", message),
-                LogLevel::Warn => tracing::warn!("{}", message),
-                LogLevel::Info => tracing::info!("{}", message),
-                LogLevel::Debug => tracing::debug!("{}", message),
-                LogLevel::Trace => tracing::trace!("{}", message),
-            },
-            max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
-            max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id().to_string()),
-        }
-        .build()?;
+        let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
         let wit_packet = packet.clone().try_into()?;
 

@@ -65,67 +65,16 @@ async fn process_packet(
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
 
-    // engine execution in aggregator if component is specified
+    // Handle component-only workflows directly
     if let wavs_types::Submit::Aggregator {
-        component: Some(component),
+        component: Some(_),
+        evm_contracts: None,
         ..
     } = &workflow.submit
     {
-        if let Some(engine) = &state.aggregator_engine {
-            tracing::debug!(
-                "Using custom aggregation with component: {}",
-                component.source.digest()
-            );
-            let actions = engine
-                .process_packet(component, packet)
-                .await
-                .map_err(|e| AggregatorError::Engine(e.to_string()))?;
-
-            let mut responses = Vec::new();
-
-            if actions.is_empty() {
-                tracing::debug!("Component returned no actions");
-                responses.push(AddPacketResponse::Aggregated { count: 1 });
-            } else {
-                for action in actions {
-                    match action {
-                        AggregatorAction::Submit(submit_action) => {
-                            tracing::info!(
-                                "Executing submit action to chain: {}",
-                                submit_action.chain_name
-                            );
-
-                            match handle_custom_submit(&state, packet, &[], submit_action).await {
-                                Ok(tx_receipt) => {
-                                    responses.push(AddPacketResponse::Sent {
-                                        tx_receipt: Box::new(tx_receipt),
-                                        count: 1,
-                                    });
-                                }
-                                Err(e) => {
-                                    tracing::error!("Submit action failed: {}", e);
-                                    responses.push(AddPacketResponse::Error {
-                                        reason: format!("Submit failed: {}", e),
-                                    });
-                                }
-                            }
-                        }
-                        AggregatorAction::Timer { .. } => {
-                            tracing::info!("Timer action scheduled");
-                            responses.push(AddPacketResponse::Aggregated { count: 1 });
-                            todo!();
-                        }
-                    }
-                }
-            }
-
-            return Ok(responses);
-        } else {
-            tracing::warn!("Component specified but no aggregator engine available, falling back to legacy logic");
-        }
+        return Ok(vec![AddPacketResponse::Aggregated { count: 1 }]);
     }
 
-    // fall back to legacy evm_contracts aggregation
     let aggregators = match &workflow.submit {
         wavs_types::Submit::Aggregator {
             evm_contracts: Some(contracts),
@@ -240,11 +189,18 @@ impl AggregatorProcess<'_> {
                     .run(queue_id.clone(), move || async move {
                         let queue = match state.get_packet_queue(&queue_id)? {
                             PacketQueue::Alive(queue) => {
-                                if let (Some(engine), wavs_types::Submit::Aggregator { component: Some(component), .. }) =
+                                if let (Some(engine), wavs_types::Submit::Aggregator { component: Some(component), evm_contracts, .. }) =
                                     (&state.aggregator_engine, &packet.service.workflows[&packet.workflow_id].submit)
                                 {
                                     match engine.process_packet(component, packet).await {
-                                        Ok(actions) => process_aggregator_actions(state, packet, queue, signer, actions).await?,
+                                        Ok(actions) => {
+                                            let updated_queue = process_aggregator_actions(state, packet, queue, signer, actions).await?;
+                                            // If this is a component-only workflow (no evm_contracts), skip legacy processing
+                                            if evm_contracts.is_none() {
+                                                return Ok(AddPacketResponse::Aggregated { count: updated_queue.len() });
+                                            }
+                                            updated_queue
+                                        },
                                         Err(e) => {
                                             tracing::error!("Custom aggregator component failed: {}", e);
                                             return Err(AggregatorError::Engine(e.to_string()));
@@ -469,14 +425,10 @@ async fn handle_custom_submit(
         .map_err(|e| AggregatorError::BlockNumber(e.into()))?
         - 1;
 
-    let signatures: Vec<EnvelopeSignature> = if queue.is_empty() {
-        vec![packet.signature.clone()]
-    } else {
-        queue
+    let signatures: Vec<EnvelopeSignature> = queue
             .iter()
             .map(|queued| queued.packet.signature.clone())
-            .collect()
-    };
+            .collect();
 
     let signature_data = packet
         .envelope
