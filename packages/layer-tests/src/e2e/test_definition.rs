@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, ensure};
 use example_types::{
     CosmosQueryRequest, CosmosQueryResponse, KvStoreRequest, KvStoreResponse, PermissionsRequest,
     PermissionsResponse, SquareRequest, SquareResponse,
@@ -130,14 +130,13 @@ pub enum TriggerDefinition {
     /// Deploy a new Cosmos contract trigger for this test
     NewCosmosContract(CosmosTriggerDefinition),
     /// Special case for block interval tests that need runtime block height calculation.
-    /// Creates a block interval trigger with start_block=end_block=(current_height + delay)
-    /// to test precise start/stop timing with n_blocks=1
-    DeferredBlockIntervalTarget {
+    BlockInterval {
         chain_name: ChainName,
+        /// Set the start and stop to the same block height, effectively creating a one-shot trigger.
+        start_stop: bool,
     },
     /// Use a pre-existing trigger without additional setup.
     /// Useful for multi-trigger tests where multiple workflows share the same trigger,
-    /// or for standard triggers like cron/block intervals that don't need test-specific deployment
     Existing(Trigger),
 }
 
@@ -205,6 +204,7 @@ pub enum ExpectedOutput {
     /// String data
     Text(String),
     /// A regex match
+    #[allow(dead_code)]
     Regex(Regex),
     /// Square response
     Square(SquareResponse),
@@ -217,9 +217,6 @@ pub enum ExpectedOutput {
     StructureOnly(OutputStructure),
     /// For a dynamic callback that checks the output
     Callback(Arc<dyn ExpectedOutputCallback>),
-    /// Deferred value
-    /// Block interval start stop uses this to dynamically expect a value
-    Deferred,
 }
 
 pub trait ExpectedOutputCallback: Send + Sync + std::fmt::Debug + 'static {
@@ -449,9 +446,6 @@ impl ExpectedOutput {
             ExpectedOutput::Callback(callback) => {
                 callback.validate(test, clients, component_sources, actual)?;
                 return Ok(());
-            }
-            ExpectedOutput::Deferred => {
-                bail!("Invalid configuration: Deferred values must be set dynamically")
             }
         };
 

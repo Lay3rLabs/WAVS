@@ -3082,7 +3082,11 @@ dependencies = [
 name = "echo-block-interval"
 version = "0.5.2"
 dependencies = [
+ "anyhow",
  "example-helpers",
+ "example-types",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
