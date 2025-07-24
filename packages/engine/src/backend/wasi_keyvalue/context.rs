@@ -35,35 +35,23 @@ impl KeyValueCtx {
     where
         T: KeyValueCtxProvider + Send,
     {
-        store::add_to_linker::<T, KeyValueCtx>(linker, |state| {
-            let ctx = state.keyvalue_ctx();
-            let db = ctx.db.clone();
-            let namespace = ctx.namespace.clone();
-            let page_size = ctx.page_size;
-            let table = state.table();
-            KeyValueState::new(db, namespace, table, page_size)
-        })
-        .map_err(EngineError::AddToLinker)?;
+        macro_rules! add_kv_module {
+            ($module:ident) => {
+                $module::add_to_linker::<T, KeyValueCtx>(linker, |state| {
+                    let ctx = state.keyvalue_ctx();
+                    let db = ctx.db.clone();
+                    let namespace = ctx.namespace.clone();
+                    let page_size = ctx.page_size;
+                    let table = state.table();
+                    KeyValueState::new(db, namespace, table, page_size)
+                })
+                .map_err(EngineError::AddToLinker)?;
+            };
+        }
 
-        atomics::add_to_linker::<T, KeyValueCtx>(linker, |state| {
-            let ctx = state.keyvalue_ctx();
-            let db = ctx.db.clone();
-            let namespace = ctx.namespace.clone();
-            let page_size = ctx.page_size;
-            let table = state.table();
-            KeyValueState::new(db, namespace, table, page_size)
-        })
-        .map_err(EngineError::AddToLinker)?;
-
-        batch::add_to_linker::<T, KeyValueCtx>(linker, |state| {
-            let ctx = state.keyvalue_ctx();
-            let db = ctx.db.clone();
-            let namespace = ctx.namespace.clone();
-            let page_size = ctx.page_size;
-            let table = state.table();
-            KeyValueState::new(db, namespace, table, page_size)
-        })
-        .map_err(EngineError::AddToLinker)?;
+        add_kv_module!(store);
+        add_kv_module!(atomics);
+        add_kv_module!(batch);
 
         Ok(())
     }
