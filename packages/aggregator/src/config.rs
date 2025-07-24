@@ -54,6 +54,12 @@ pub struct Config {
 
     /// LRU cache size for WASM components
     pub wasm_lru_size: usize,
+
+    /// Maximum fuel for WASM execution (None for unlimited)
+    pub max_wasm_fuel: Option<u64>,
+
+    /// Maximum execution time in seconds for WASM components (None for unlimited)
+    pub max_execution_seconds: Option<u64>,
 }
 
 /// Default values for the config struct
@@ -75,6 +81,8 @@ impl Default for Config {
             },
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             wasm_lru_size: DEFAULT_WASM_LRU_SIZE,
+            max_wasm_fuel: None,
+            max_execution_seconds: None,
         }
     }
 }

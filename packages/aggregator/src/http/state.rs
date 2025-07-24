@@ -99,8 +99,8 @@ impl HttpState {
             config.data.join("wasm"),
             config.chains.clone(),
             config.wasm_lru_size,
-            None, // max_wasm_fuel
-            None, // max_execution_seconds
+            config.max_wasm_fuel,
+            config.max_execution_seconds,
             storage.clone(),
             ca_storage,
         )
