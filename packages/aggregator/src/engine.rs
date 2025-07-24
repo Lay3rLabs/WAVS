@@ -24,7 +24,7 @@ use wavs_engine::{
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
-use wavs_types::{AnyDigest, Component, ComponentDigest, Packet};
+use wavs_types::{Component, ComponentDigest, Packet};
 
 const MIN_LRU_SIZE: usize = 10;
 
@@ -144,12 +144,12 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             return Ok(cached_component.clone());
         }
 
-        let component_bytes = self.storage.get_data(&digest.into())?;
+        let component_bytes = self.storage.get_data(&digest.clone().into())?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         self.memory_cache
             .write()
-            .map_err(|e| anyhow::anyhow!("Memory cache lock poisoned: {}", e))?
+            .unwrap()
             .put(digest, wasm_component.clone());
 
         Ok(wasm_component)
@@ -236,12 +236,9 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let cm = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         // store original wasm
-        let digest: ComponentDigest = self.wasm_storage.set_data(component_bytes)?.inner().into();
-        self.memory_cache
-            .write()
-            .unwrap()
-            .put(component_digest.clone(), cm);
+        let digest = ComponentDigest::from(self.storage.set_data(&component_bytes)?.inner());
+        self.memory_cache.write().unwrap().put(digest.clone(), cm);
 
-        Ok(component_digest)
+        Ok(digest)
     }
 }
