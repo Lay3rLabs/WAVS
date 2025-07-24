@@ -1,3 +1,5 @@
+#![allow(clippy::uninlined_format_args)]
+
 pub mod alloy_helpers;
 pub mod async_transaction;
 pub mod config;

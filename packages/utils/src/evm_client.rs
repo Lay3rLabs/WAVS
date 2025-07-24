@@ -203,7 +203,7 @@ impl EvmSigningClientConfig {
 
     pub fn new_anvil(endpoint_url: &str) -> Self {
         Self {
-            endpoint: EvmEndpoint::from_str(&endpoint_url).expect("Failed to parse anvil endpoint"),
+            endpoint: EvmEndpoint::from_str(endpoint_url).expect("Failed to parse anvil endpoint"),
             credential: "test test test test test test test test test test test junk".to_string(),
             hd_index: None,
             gas_estimate_multiplier: None,

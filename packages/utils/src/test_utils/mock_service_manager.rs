@@ -32,7 +32,7 @@ impl MockServiceManager {
             .transfer_funds(deployer.address(), "1")
             .await?;
 
-        let deployer_key_hex = const_hex::encode(deployer.credential().to_bytes().to_vec());
+        let deployer_key_hex = const_hex::encode(deployer.credential().to_bytes());
         let rpc_url = wallet_client.config.endpoint.to_string();
 
         let all_addresses =
