@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -43,20 +43,34 @@ pub struct ComponentDefinition {
     /// The name of the component
     pub name: ComponentName,
 
-    /// Key-value pairs that are accessible in the components via host bindings.
-    pub config_vars: BTreeMap<String, String>,
+    pub configs_to_add: ComponentConfigsToAdd,
+    pub _env_vars_to_add: (), // TODO - use this?
+}
 
-    /// External env variable keys to be read from the system host on execute (i.e. API keys).
-    /// Must be prefixed with `WAVS_ENV_`.
-    pub env_vars: BTreeMap<String, String>,
+impl ComponentDefinition {
+    pub fn with_config_hardcoded(mut self, key: String, value: String) -> Self {
+        self.configs_to_add.hardcoded.insert(key, value);
+        self
+    }
+
+    pub fn with_config_contract_address(mut self) -> Self {
+        self.configs_to_add.contract_address = true;
+        self
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ComponentConfigsToAdd {
+    pub contract_address: bool,
+    pub hardcoded: HashMap<String, String>,
 }
 
 impl From<ComponentName> for ComponentDefinition {
     fn from(name: ComponentName) -> Self {
         ComponentDefinition {
             name,
-            config_vars: BTreeMap::new(),
-            env_vars: BTreeMap::new(),
+            configs_to_add: ComponentConfigsToAdd::default(),
+            _env_vars_to_add: (),
         }
     }
 }
@@ -90,7 +104,6 @@ pub enum AggregatorDefinition {
     ComponentBasedAggregator {
         component: ComponentDefinition,
         chain_name: ChainName,
-        contract_address: String,
     },
 }
 
