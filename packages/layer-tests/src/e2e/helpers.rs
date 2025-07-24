@@ -419,7 +419,7 @@ pub async fn create_submit_from_config(
 
                             component = Some(Box::new(deploy_component(
                                 sources,
-                                &component_def,
+                                component_def,
                                 config_vars,
                                 env_vars,
                             )));
