@@ -122,7 +122,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         .map_err(Into::into)
     }
 
-    pub async fn process_packet(
+    pub async fn execute_packet(
         &self,
         component: &Component,
         packet: &Packet,
@@ -143,20 +143,13 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         if let Some(cached_component) = self
             .memory_cache
             .write()
-            .map_err(|e| anyhow::anyhow!("Memory cache lock poisoned: {}", e))?
+            .unwrap()
             .get(&digest)
         {
             return Ok(cached_component.clone());
         }
 
-        let bytes: [u8; 32] = digest.as_ref().try_into().map_err(|_| {
-            anyhow::anyhow!(
-                "Invalid digest length: expected 32 bytes, got {}",
-                digest.as_ref().len()
-            )
-        })?;
-        let any_digest = AnyDigest::from(bytes);
-        let component_bytes = self.storage.get_data(&any_digest)?;
+        let component_bytes = self.storage.get_data(&digest.into())?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         self.memory_cache
@@ -168,7 +161,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
-    pub async fn handle_timer_callback(
+    pub async fn execute_timer_callback(
         &self,
         component: &Component,
         packet: &Packet,
@@ -201,7 +194,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
-    pub async fn handle_submit_callback(
+    pub async fn execute_submit_callback(
         &self,
         component: &Component,
         packet: &Packet,
@@ -248,18 +241,10 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let cm = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         // store original wasm
-        let digest = self.storage.set_data(&component_bytes)?;
-
-        let bytes: [u8; 32] = digest.as_ref().try_into().map_err(|_| {
-            anyhow::anyhow!(
-                "Invalid digest length: expected 32 bytes, got {}",
-                digest.as_ref().len()
-            )
-        })?;
-        let component_digest = ComponentDigest::from(bytes);
+                let digest: ComponentDigest = self.wasm_storage.set_data(component_bytes)?.inner().into();
         self.memory_cache
             .write()
-            .map_err(|e| anyhow::anyhow!("Memory cache lock poisoned: {}", e))?
+            .unwrap()
             .put(component_digest.clone(), cm);
 
         Ok(component_digest)
