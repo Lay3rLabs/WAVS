@@ -1,7 +1,7 @@
 mod cosmos;
 mod evm;
 
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::sync::Arc;
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -65,13 +65,13 @@ impl AppHandles {
         }
     }
 
-    pub fn join(self) {
-        self.wavs_handle.join().unwrap();
+    pub fn try_join(self) -> Vec<std::thread::Result<()>> {
+        let mut results = Vec::new();
+        results.push(self.wavs_handle.join());
         for handle in self.aggregator_handles {
-            handle.join().unwrap();
+            results.push(handle.join());
         }
 
-        // Add a small delay to let the aggregator finish processing with the chains
-        sleep(Duration::from_secs(1));
+        results
     }
 }

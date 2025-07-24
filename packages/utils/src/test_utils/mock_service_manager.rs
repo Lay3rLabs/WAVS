@@ -5,8 +5,7 @@ use anyhow::Result;
 use crate::{
     evm_client::EvmSigningClient,
     test_utils::middleware::{
-        MiddlewareServiceManagerAddresses, MiddlewareServiceManagerConfig,
-        MiddlewareSetServiceUri,
+        MiddlewareServiceManagerAddresses, MiddlewareServiceManagerConfig, MiddlewareSetServiceUri,
     },
 };
 
@@ -29,7 +28,9 @@ impl MockServiceManager {
             .word_count(24)
             .build_random()?;
 
-        wallet_client.transfer_funds(deployer.address(), "1").await?;
+        wallet_client
+            .transfer_funds(deployer.address(), "1")
+            .await?;
 
         let deployer_key_hex = const_hex::encode(deployer.credential().to_bytes().to_vec());
         let rpc_url = wallet_client.config.endpoint.to_string();
@@ -50,7 +51,7 @@ impl MockServiceManager {
         MiddlewareSetServiceUri {
             rpc_url: self.rpc_url.clone(),
             service_manager_address: self.address,
-            deployer_key_hex: self.deployer_key_hex.clone(), 
+            deployer_key_hex: self.deployer_key_hex.clone(),
             service_uri: uri,
         }
         .apply()
@@ -58,8 +59,8 @@ impl MockServiceManager {
     }
 
     pub async fn configure(&self, config: &MiddlewareServiceManagerConfig) -> anyhow::Result<()> {
-        config.apply(&self.rpc_url, &self.deployer_key_hex, &self.address)
-        .await
+        config
+            .apply(&self.rpc_url, &self.deployer_key_hex, &self.address)
+            .await
     }
-
 }

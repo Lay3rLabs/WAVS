@@ -107,7 +107,7 @@ async fn run_test(
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> anyhow::Result<()> {
     let aggregator_registered_service_ids = Arc::new(std::sync::Mutex::new(HashSet::new()));
-    let service = deploy_service_for_test(
+    let (service, mock_service_manager) = deploy_service_for_test(
         test,
         clients,
         component_sources,
@@ -122,6 +122,7 @@ async fn run_test(
             &service,
             clients,
             component_sources,
+            &mock_service_manager,
             cosmos_trigger_code_map,
         )
         .await;

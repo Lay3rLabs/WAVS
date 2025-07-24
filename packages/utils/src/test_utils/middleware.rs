@@ -21,10 +21,7 @@ pub struct MiddlewareServiceManagerAddresses {
     pub stake_registry_impl_address: alloy_primitives::Address,
 }
 impl MiddlewareServiceManagerAddresses {
-    pub async fn deploy(
-        rpc_url: &str,
-        deployer_key_hex: &str,
-    ) -> Result<Self> {
+    pub async fn deploy(rpc_url: &str, deployer_key_hex: &str) -> Result<Self> {
         let nodes_dir = TempDir::new().unwrap();
 
         // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
@@ -75,7 +72,6 @@ impl MiddlewareServiceManagerAddresses {
     }
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MiddlewareServiceManagerConfig {
     pub operators: Vec<alloy_primitives::Address>,
@@ -119,7 +115,12 @@ impl MiddlewareServiceManagerConfig {
         }
     }
 
-    pub async fn apply(&self, rpc_url: &str, deployer_key_hex: &str, service_manager_address: &Address) -> Result<()> {
+    pub async fn apply(
+        &self,
+        rpc_url: &str,
+        deployer_key_hex: &str,
+        service_manager_address: &Address,
+    ) -> Result<()> {
         let nodes_dir = TempDir::new().unwrap();
         let config_dir = TempDir::new().unwrap();
         let config_filepath = config_dir.path().join("wavs-mock-config.json");
@@ -143,9 +144,9 @@ impl MiddlewareServiceManagerConfig {
                 "-v",
                 &format!(
                     "{}:/wavs/contracts/deployments/wavs-mock-config.json",
-                    config_filepath
-                        .to_str()
-                        .ok_or(anyhow::anyhow!("Failed to convert config_filepath path to str"))?
+                    config_filepath.to_str().ok_or(anyhow::anyhow!(
+                        "Failed to convert config_filepath path to str"
+                    ))?
                 ),
                 "-e",
                 &format!("MOCK_DEPLOYER_KEY={}", deployer_key_hex),
@@ -170,7 +171,6 @@ impl MiddlewareServiceManagerConfig {
         Ok(())
     }
 }
-
 
 pub struct MiddlewareSetServiceUri {
     pub rpc_url: String,

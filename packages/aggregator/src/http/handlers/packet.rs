@@ -542,12 +542,14 @@ mod test {
     };
 
     use utils::{
-        config::{ConfigBuilder, EvmChainConfig}, filesystem::workspace_path, test_utils::{
+        config::{ConfigBuilder, EvmChainConfig},
+        filesystem::workspace_path,
+        test_utils::{
             middleware::{AvsOperator, MiddlewareServiceManagerConfig},
             mock_service_manager::MockServiceManager,
             test_contracts::TestContractDeps,
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
-        }
+        },
     };
     use wavs_types::{ChainName, Service, WorkflowID};
 
@@ -611,8 +613,16 @@ mod test {
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
 
-        let service_manager = MockServiceManager::new(deps.contracts.client.clone()).await.unwrap();
-        service_manager.configure(&MiddlewareServiceManagerConfig::new(&avs_operators, NUM_THRESHOLD as u64)).await.unwrap();
+        let service_manager = MockServiceManager::new(deps.contracts.client.clone())
+            .await
+            .unwrap();
+        service_manager
+            .configure(&MiddlewareServiceManagerConfig::new(
+                &avs_operators,
+                NUM_THRESHOLD as u64,
+            ))
+            .await
+            .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
 
@@ -780,8 +790,13 @@ mod test {
 
         let avs_operators = vec![AvsOperator::new(signer.address(), signer.address())];
 
-        let service_manager = MockServiceManager::new(deps.contracts.client.clone()).await.unwrap();
-        service_manager.configure(&MiddlewareServiceManagerConfig::new(&avs_operators, 1u64)).await.unwrap();
+        let service_manager = MockServiceManager::new(deps.contracts.client.clone())
+            .await
+            .unwrap();
+        service_manager
+            .configure(&MiddlewareServiceManagerConfig::new(&avs_operators, 1u64))
+            .await
+            .unwrap();
 
         let service_handler = deps
             .contracts
@@ -834,8 +849,16 @@ mod test {
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
 
-        let service_manager = MockServiceManager::new(deps.contracts.client.clone()).await.unwrap();
-        service_manager.configure(&MiddlewareServiceManagerConfig::new(&avs_operators, NUM_THRESHOLD as u64)).await.unwrap();
+        let service_manager = MockServiceManager::new(deps.contracts.client.clone())
+            .await
+            .unwrap();
+        service_manager
+            .configure(&MiddlewareServiceManagerConfig::new(
+                &avs_operators,
+                NUM_THRESHOLD as u64,
+            ))
+            .await
+            .unwrap();
 
         let service_handler = deps
             .contracts

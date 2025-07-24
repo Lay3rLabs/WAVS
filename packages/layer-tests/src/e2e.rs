@@ -97,8 +97,20 @@ pub fn run(args: TestArgs, ctx: AppContext) {
         .await;
     });
 
+    tracing::warn!("*************************************");
+    tracing::warn!("All tests completed, shutting down...");
+    tracing::warn!("*************************************");
+
     ctx.kill();
-    handles.join();
+    let join_results = handles.try_join();
+    for result in join_results {
+        if let Err(e) = result {
+            tracing::warn!(
+                "error shutting down after tests completed successfully: {:?}",
+                e
+            );
+        }
+    }
     if let Some(tracer) = tracer_provider {
         tracer
             .shutdown()

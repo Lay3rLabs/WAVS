@@ -9,18 +9,21 @@ use std::{
     time::Duration,
 };
 use utils::{
-    config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path, test_utils::{
+    config::WAVS_ENV_PREFIX,
+    evm_client::EvmSigningClient,
+    filesystem::workspace_path,
+    test_utils::{
         middleware::{AvsOperator, MiddlewareServiceManagerConfig},
         mock_service_manager::MockServiceManager,
-    }
+    },
 };
 use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
-    IWavsServiceManager, Permissions, Service, ServiceID, ServiceManager, ServiceStatus,
-    SigningKeyResponse, Submit, Trigger, Workflow,
+    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
+    Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger,
+    Workflow,
 };
 
 use crate::{
@@ -55,7 +58,7 @@ pub async fn deploy_service_for_test(
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
     aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<ServiceID>>>,
-) -> Service {
+) -> (Service, MockServiceManager) {
     tracing::info!("Deploying service for test: {}", test.name);
 
     // Create unique service ID
@@ -103,7 +106,10 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    mock_service_manager.set_service_uri(service_url).await.unwrap();
+    mock_service_manager
+        .set_service_uri(service_url)
+        .await
+        .unwrap();
 
     // First, register the service to the aggregator if needed
     for workflow in test.workflows.values() {
@@ -124,8 +130,8 @@ pub async fn deploy_service_for_test(
         &clients.cli_ctx,
         DeployServiceArgs {
             service: service.clone(),
-            set_service_url_args: None, 
-        }
+            set_service_url_args: None,
+        },
     )
     .await
     .unwrap();
@@ -145,7 +151,10 @@ pub async fn deploy_service_for_test(
         .address();
     let avs_operator = AvsOperator::new(operator_address, avs_signer_address.parse().unwrap());
 
-    mock_service_manager.configure(&MiddlewareServiceManagerConfig::new(&[avs_operator], 1)).await.unwrap();
+    mock_service_manager
+        .configure(&MiddlewareServiceManagerConfig::new(&[avs_operator], 1))
+        .await
+        .unwrap();
 
     // activate the service
     // requires:
@@ -172,7 +181,7 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    service
+    (service, mock_service_manager)
 }
 
 fn deploy_component(
@@ -590,6 +599,7 @@ pub async fn change_service_for_test(
     old_service: &Service,
     clients: &Clients,
     component_sources: &ComponentSources,
+    mock_service_manager: &MockServiceManager,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) {
     let mut new_service = old_service.clone();
@@ -635,28 +645,11 @@ pub async fn change_service_for_test(
         }
     }
 
-    let service_manager_instance = match &old_service.manager {
-        ServiceManager::Evm {
-            chain_name,
-            address,
-        } => IWavsServiceManager::new(
-            *address,
-            clients.get_evm_client(chain_name).provider.clone(),
-        ),
-    };
-
     let url = DeployService::save_service(&clients.cli_ctx, &new_service)
         .await
         .unwrap();
 
-    service_manager_instance
-        .setServiceURI(url)
-        .send()
-        .await
-        .unwrap()
-        .watch()
-        .await
-        .unwrap();
+    mock_service_manager.set_service_uri(url).await.unwrap();
 
     // wait until WAVS sees the new service
     clients
