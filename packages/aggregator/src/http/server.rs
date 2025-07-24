@@ -39,11 +39,8 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
 
 // this is called from main and tests
 pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
-    tracing::info!("Creating file storage at: {:?}", config.data);
-    let file_storage = utils::storage::fs::FileStorage::new(&config.data)?;
-    let ca_storage = std::sync::Arc::new(file_storage);
     tracing::info!("Creating HttpState with engine");
-    let state = HttpState::new_with_engine(config.clone(), ca_storage)?;
+    let state = HttpState::new_with_engine(config.clone())?;
     tracing::info!(
         "HttpState created successfully with engine: {}",
         state.aggregator_engine.is_some()

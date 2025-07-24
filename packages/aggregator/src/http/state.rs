@@ -86,8 +86,12 @@ impl HttpState {
         })
     }
 
-    #[instrument(level = "debug", skip(config, ca_storage))]
-    pub fn new_with_engine(config: Config, ca_storage: Arc<FileStorage>) -> AggregatorResult<Self> {
+    #[instrument(level = "debug", skip(config))]
+    pub fn new_with_engine(config: Config) -> AggregatorResult<Self> {
+        tracing::info!("Creating file storage at: {:?}", config.data);
+        let file_storage =
+            FileStorage::new(&config.data).map_err(|e| AggregatorError::Engine(e.to_string()))?;
+        let ca_storage = Arc::new(file_storage);
         let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
 
