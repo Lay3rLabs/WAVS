@@ -10,7 +10,7 @@ mode = "all"
 
 # Run a specific test
 # mode = {"isolated" = [
-#     {evm = "echo_data"},
+#     {evm = "simple_aggregator"},
 # ]}
 
 # Run a few specific tests

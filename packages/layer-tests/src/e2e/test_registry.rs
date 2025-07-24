@@ -24,7 +24,9 @@ use super::test_definition::{
 };
 use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
-use crate::e2e::test_definition::{ChangeServiceDefinition, ExpectedOutputCallback};
+use crate::e2e::test_definition::{
+    ChangeServiceDefinition, ComponentDefinition, ExpectedOutputCallback,
+};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
@@ -170,6 +172,9 @@ impl TestRegistry {
                 }
                 EvmService::EmptyToEchoData => {
                     registry.register_evm_empty_to_echo_data_test(chain, aggregator_endpoint);
+                }
+                EvmService::SimpleAggregator => {
+                    registry.register_evm_simple_aggregator_test(chain, aggregator_endpoint);
                 }
             }
         }
@@ -328,6 +333,43 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("The times".to_string()))
                         .build(),
                 })
+                .build(),
+        )
+    }
+
+    fn register_evm_simple_aggregator_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_simple_aggregator")
+                .with_description("Tests the SimpleAggregator component-based aggregation")
+                .add_workflow(
+                    WorkflowID::new("simple_aggregator").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_component(ComponentName::EchoData.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregators: vec![AggregatorDefinition::ComponentBasedAggregator {
+                                component: ComponentDefinition::from(
+                                    ComponentName::SimpleAggregator,
+                                )
+                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_contract_address(),
+                                // for deploying the submission contract that the aggregator will use
+                                chain_name: chain.clone(),
+                            }],
+                        })
+                        .with_input_data(InputData::Text("test packet".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
+                        .build(),
+                )
                 .build(),
         )
     }

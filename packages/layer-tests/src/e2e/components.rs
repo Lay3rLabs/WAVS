@@ -26,6 +26,7 @@ pub enum ComponentName {
     Square,
     EchoBlockInterval,
     EchoCronInterval,
+    SimpleAggregator,
 }
 
 impl ComponentName {
@@ -39,12 +40,17 @@ impl ComponentName {
             ComponentName::Square => "square",
             ComponentName::EchoBlockInterval => "echo_block_interval",
             ComponentName::EchoCronInterval => "echo_cron_interval",
+            ComponentName::SimpleAggregator => "simple_aggregator",
         }
     }
 }
 
 impl ComponentSources {
-    pub async fn new(configs: &Configs, http_client: &HttpClient) -> Self {
+    pub async fn new(
+        configs: &Configs,
+        http_client: &HttpClient,
+        aggregator_client: &HttpClient,
+    ) -> Self {
         let component_names: HashSet<ComponentName> = configs
             .matrix
             .evm
@@ -72,6 +78,7 @@ impl ComponentSources {
         for component_name in component_names {
             futures.push(get_component_source(
                 http_client,
+                aggregator_client,
                 component_name,
                 configs.registry,
             ));
@@ -89,6 +96,7 @@ impl ComponentSources {
 
 async fn get_component_source(
     http_client: &HttpClient,
+    aggregator_client: &HttpClient,
     name: ComponentName,
     registry: bool,
 ) -> (ComponentName, ComponentSource) {
@@ -105,10 +113,22 @@ async fn get_component_source(
 
         let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
 
-        let digest = http_client
-            .upload_component(wasm_bytes.to_vec())
-            .await
-            .unwrap();
+        let digest = match name {
+            ComponentName::SimpleAggregator => {
+                // Aggregator components go to aggregator server
+                aggregator_client
+                    .upload_component(wasm_bytes.to_vec())
+                    .await
+                    .unwrap()
+            }
+            _ => {
+                // Regular components go to WAVS server
+                http_client
+                    .upload_component(wasm_bytes.to_vec())
+                    .await
+                    .unwrap()
+            }
+        };
         (name, ComponentSource::Digest(digest))
     } else {
         // Adding a component from the registry requires calculating the digest ahead-of-time.

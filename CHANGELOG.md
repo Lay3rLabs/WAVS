@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning].
 
 ## [v0.5.1]
 
-### Fixed 
+### Added
+- WASM component engine in Aggregator
+
+### Fixed
 - All endpoints take ServiceManager instead of ServiceID
 
 ## [v0.5.0]
@@ -62,7 +65,7 @@ and this project adheres to [Semantic Versioning].
 - Multi-aggregator support for services (with retry and distinct responses)
 
 
-### Changed 
+### Changed
 
 - Service type: no more ComponentID indirection, Workflow contains all
 - Service type: moved settings like fuel limit on component
@@ -71,7 +74,7 @@ and this project adheres to [Semantic Versioning].
 - WIT: method to get config value from the service
 - WIT: refactor types (allow future ordering and optional return value)
 - WAVS config: moved to a single config file with sections for each process
-- WAVS config: evm polling interval is now a config option 
+- WAVS config: evm polling interval is now a config option
 - WAVS is Eigenlayer-agnostic (no more Eigenlayer-specific code, split out to middleware repo)
 - Payload sent to ServiceHandler is now an Envelope type containing EventId (and unused OrderId)
 - E2E tests now run concurrently

@@ -1,17 +1,19 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
+use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
+    Aggregator, ChainName, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,
 };
 
 use crate::{
+    engine::{AggregatorAction, SubmitAction},
     error::{AggregatorError, AggregatorResult, PacketValidationError},
     http::{
         error::AnyError,
@@ -62,6 +64,7 @@ async fn process_packet(
     );
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
+
     let aggregators = match &workflow.submit {
         wavs_types::Submit::Aggregator {
             evm_contracts: Some(contracts),
@@ -70,6 +73,21 @@ async fn process_packet(
             .iter()
             .map(|c| wavs_types::Aggregator::Evm(c.clone()))
             .collect::<Vec<_>>(),
+        wavs_types::Submit::Aggregator {
+            component: Some(_),
+            evm_contracts: None,
+            ..
+        } => {
+            // TODO: Refactor this
+            // Aggregator component is returning the actual submission data, this is never used
+            vec![wavs_types::Aggregator::Evm(
+                wavs_types::EvmContractSubmission {
+                    chain_name: "component-only".parse().unwrap(),
+                    address: alloy_primitives::Address::ZERO,
+                    max_gas: None,
+                },
+            )]
+        }
         _ => Vec::new(),
     };
 
@@ -101,7 +119,6 @@ async fn process_packet(
             .await
             .map_err(AggregatorError::OperatorKeyLookup)?
     };
-
     tracing::debug!("Packet signer address: {:?}", signer);
 
     let mut responses: Vec<AddPacketResponse> = Vec::new();
@@ -166,8 +183,8 @@ impl AggregatorProcess<'_> {
 
         match aggregator {
             Aggregator::Evm(EvmContractSubmission {
-                chain_name,
-                address,
+                chain_name: _,
+                address: _,
                 max_gas,
             }) => {
                 // execute the logic within a transaction, keyed by queue_id
@@ -177,15 +194,38 @@ impl AggregatorProcess<'_> {
                     .run(queue_id.clone(), move || async move {
                         let queue = match state.get_packet_queue(&queue_id)? {
                             PacketQueue::Alive(queue) => {
-                                // this will also locally validate the packet
-                                add_packet_to_queue(packet, queue, signer)?
+                                if let (Some(engine), wavs_types::Submit::Aggregator { component: Some(component), evm_contracts, .. }) =
+                                    (&state.aggregator_engine, &packet.service.workflows[&packet.workflow_id].submit)
+                                {
+                                    match engine.execute_packet(component, packet).await {
+                                        Ok(actions) => {
+                                            let updated_queue = process_aggregator_actions(state, packet, queue, signer, actions).await?;
+                                            // If this is a component-only workflow, just batch the packet
+                                            if evm_contracts.is_none() {
+                                                return Ok(AddPacketResponse::Aggregated { count: updated_queue.len() });
+                                            }
+                                            updated_queue
+                                        },
+                                        Err(e) => {
+                                            tracing::error!("Custom aggregator component failed: {}", e);
+                                            return Err(AggregatorError::Engine(e.to_string()));
+                                        }
+                                    }
+                                } else {
+                                    add_packet_to_queue(packet, queue, signer)?
+                                }
                             }
                             PacketQueue::Burned => {
                                 return Ok(AddPacketResponse::Burned);
                             }
                         };
 
-                        let service_manager = get_submission_service_manager(state, aggregator).await?;
+                        let (chain_name, address) = match aggregator {
+                            Aggregator::Evm(EvmContractSubmission { chain_name, address, .. }) => {
+                                (chain_name, address)
+                            }
+                        };
+                        let service_manager = get_submission_service_manager(state, chain_name, *address).await?;
 
                         // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
                         let block_height_minus_one = service_manager
@@ -274,33 +314,185 @@ impl AggregatorProcess<'_> {
 
 async fn get_submission_service_manager(
     state: &HttpState,
-    aggregator: &Aggregator,
+    chain_name: &ChainName,
+    service_handler_address: Address,
 ) -> AggregatorResult<IWavsServiceManagerInstance<DynProvider>> {
     // we need to get the service manager from the perspective of the service handler
     // which may be different than the service manager where the operator is staked
     // e.g. in the case of operator sets that are mirrored across multiple chains
-    match aggregator {
-        Aggregator::Evm(EvmContractSubmission {
-            chain_name,
-            address,
-            ..
-        }) => {
-            let service_handler_client = state.get_evm_client(chain_name).await?;
-            let service_handler =
-                IWavsServiceHandlerInstance::new(*address, service_handler_client.provider.clone());
+    let service_handler_client = state.get_evm_client(chain_name).await?;
+    let service_handler = IWavsServiceHandlerInstance::new(
+        service_handler_address,
+        service_handler_client.provider.clone(),
+    );
 
-            let service_manager_address = service_handler
-                .getServiceManager()
-                .call()
-                .await
-                .map_err(AggregatorError::ServiceManagerLookup)?;
+    let service_manager_address = service_handler
+        .getServiceManager()
+        .call()
+        .await
+        .map_err(AggregatorError::ServiceManagerLookup)?;
 
-            Ok(IWavsServiceManagerInstance::new(
-                service_manager_address,
-                service_handler_client.provider,
-            ))
+    Ok(IWavsServiceManagerInstance::new(
+        service_manager_address,
+        service_handler_client.provider,
+    ))
+}
+
+async fn process_aggregator_actions(
+    state: &HttpState,
+    packet: &Packet,
+    mut queue: Vec<QueuedPacket>,
+    signer: Address,
+    actions: Vec<AggregatorAction>,
+) -> AggregatorResult<Vec<QueuedPacket>> {
+    tracing::info!(
+        "Custom aggregator component returned {} actions",
+        actions.len()
+    );
+
+    for queued_packet in queue.iter_mut() {
+        // if the signer is the same as the one in the queue, we can just update it
+        // this effectively allows re-trying failed aggregation
+        if signer == queued_packet.signer {
+            *queued_packet = QueuedPacket {
+                packet: packet.clone(),
+                signer,
+            };
+            return Ok(queue);
         }
     }
+
+    queue.push(QueuedPacket {
+        packet: packet.clone(),
+        signer,
+    });
+
+    if actions.is_empty() {
+        tracing::debug!("Component returned no actions");
+    } else {
+        for action in actions {
+            match action {
+                AggregatorAction::Submit(submit_action) => {
+                    tracing::info!(
+                        "Component requested submit to chain: {}, contract: {:?}",
+                        submit_action.chain_name,
+                        submit_action.contract_address
+                    );
+
+                    match handle_custom_submit(state, packet, &queue, submit_action).await {
+                        Ok(_) => {
+                            tracing::info!("Custom submit completed successfully");
+                        }
+                        Err(e) => {
+                            tracing::error!("Custom submit failed: {}", e);
+                        }
+                    }
+                }
+                AggregatorAction::Timer(timer_action) => {
+                    tracing::info!(
+                        "Component requested timer callback in {} seconds",
+                        timer_action.delay
+                    );
+                    todo!("Implement timer scheduling system");
+                }
+            }
+        }
+    }
+
+    Ok(queue)
+}
+
+async fn handle_custom_submit(
+    state: &HttpState,
+    packet: &Packet,
+    queue: &[QueuedPacket],
+    submit_action: SubmitAction,
+) -> AggregatorResult<TransactionReceipt> {
+    let chain_name = ChainName::new(submit_action.chain_name)
+        .map_err(|e| AggregatorError::Engine(e.to_string()))?;
+    let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
+
+    let client = state.get_evm_client(&chain_name).await?;
+
+    let service_handler =
+        IWavsServiceHandlerInstance::new(contract_address, client.provider.clone());
+    let service_manager_address = service_handler
+        .getServiceManager()
+        .call()
+        .await
+        .map_err(AggregatorError::ServiceManagerLookup)?;
+
+    let service_manager =
+        IWavsServiceManagerInstance::new(service_manager_address, client.provider.clone());
+
+    let block_height_minus_one = service_manager
+        .provider()
+        .get_block_number()
+        .await
+        .map_err(|e| AggregatorError::BlockNumber(e.into()))?
+        - 1;
+
+    let signatures: Vec<EnvelopeSignature> = queue
+        .iter()
+        .map(|queued| queued.packet.signature.clone())
+        .collect();
+
+    let signature_data = packet
+        .envelope
+        .signature_data(signatures, block_height_minus_one)?;
+
+    let service_manager =
+        get_submission_service_manager(state, &chain_name, contract_address).await?;
+    let result = service_manager
+        .validate(
+            packet.envelope.clone().into(),
+            signature_data.clone().into(),
+        )
+        .call()
+        .await;
+
+    match result {
+        Ok(_) => {
+            tracing::info!("Service manager validation passed for custom submit");
+        }
+        Err(err) => {
+            match err.as_decoded_interface_error::<ServiceManagerError>() {
+                Some(ServiceManagerError::InsufficientQuorum(quorum_err)) => {
+                    // insufficient quorum - in custom submit this is an error, not "keep aggregating"
+                    return Err(AggregatorError::ServiceManagerValidateKnown(
+                        ServiceManagerError::InsufficientQuorum(quorum_err),
+                    ));
+                }
+                Some(err) => {
+                    return Err(AggregatorError::ServiceManagerValidateKnown(err));
+                }
+                None => match err.as_revert_data() {
+                    Some(raw) => {
+                        return Err(AggregatorError::ServiceManagerValidateAnyRevert(
+                            raw.to_string(),
+                        ))
+                    }
+                    None => return Err(AggregatorError::ServiceManagerValidateUnknown(err)),
+                },
+            }
+        }
+    }
+
+    let tx_receipt = client
+        .send_envelope_signatures(
+            packet.envelope.clone(),
+            signature_data,
+            contract_address,
+            None,
+        )
+        .await?;
+
+    tracing::info!(
+        "Custom submit transaction sent: {:?}",
+        tx_receipt.transaction_hash
+    );
+
+    Ok(tx_receipt)
 }
 
 fn add_packet_to_queue(

@@ -4,6 +4,7 @@ use wavs_types::{
     TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID,
 };
 
+#[allow(dead_code)]
 pub fn make_trigger_action(
     service: &Service,
     workflow_id: Option<WorkflowID>,

@@ -7,7 +7,9 @@ use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
 
 use super::{
-    handlers::{handle_config, handle_info, handle_not_found, handle_packet, ApiDoc},
+    handlers::{
+        handle_config, handle_info, handle_not_found, handle_packet, handle_upload, ApiDoc,
+    },
     state::HttpState,
 };
 
@@ -37,7 +39,12 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
 
 // this is called from main and tests
 pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone())?;
+    tracing::info!("Creating HttpState with engine");
+    let state = HttpState::new_with_engine(config.clone())?;
+    tracing::info!(
+        "HttpState created successfully with engine: {}",
+        state.aggregator_engine.is_some()
+    );
 
     // build our application with a single route
     let mut router = axum::Router::new()
@@ -47,6 +54,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         .route("/info", get(handle_info))
         .route("/packet", post(handle_packet))
         .route("/register-service", post(handle_register_service))
+        .route("/upload", post(handle_upload))
         .fallback(handle_not_found)
         .with_state(state);
 

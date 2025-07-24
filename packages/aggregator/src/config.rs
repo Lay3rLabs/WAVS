@@ -9,6 +9,9 @@ use utils::{
 };
 use utoipa::ToSchema;
 
+/// Default LRU cache size for compiled WASM components
+const DEFAULT_WASM_LRU_SIZE: usize = 20;
+
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
 ///
@@ -48,6 +51,15 @@ pub struct Config {
 
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
+
+    /// LRU cache size for WASM components
+    pub wasm_lru_size: usize,
+
+    /// Maximum fuel for WASM execution (None for unlimited)
+    pub max_wasm_fuel: Option<u64>,
+
+    /// Maximum execution time in seconds for WASM components (None for unlimited)
+    pub max_execution_seconds: Option<u64>,
 }
 
 /// Default values for the config struct
@@ -68,6 +80,9 @@ impl Default for Config {
                 evm: Default::default(),
             },
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
+            wasm_lru_size: DEFAULT_WASM_LRU_SIZE,
+            max_wasm_fuel: None,
+            max_execution_seconds: None,
         }
     }
 }

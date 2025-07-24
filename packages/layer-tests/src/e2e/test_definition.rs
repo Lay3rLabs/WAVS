@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +8,6 @@ use example_types::{
     PermissionsResponse, SquareRequest, SquareResponse,
 };
 use regex::Regex;
-use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{ChainName, Trigger, WorkflowID};
 
 use crate::e2e::components::{ComponentName, ComponentSources};
@@ -44,74 +43,34 @@ pub struct ComponentDefinition {
     /// The name of the component
     pub name: ComponentName,
 
-    /// Key-value pairs that are accessible in the components via host bindings.
-    pub config_vars: BTreeMap<String, String>,
+    pub configs_to_add: ComponentConfigsToAdd,
+    pub _env_vars_to_add: (), // TODO - use this?
+}
 
-    /// External env variable keys to be read from the system host on execute (i.e. API keys).
-    /// Must be prefixed with `WAVS_ENV_`.
-    pub env_vars: BTreeMap<String, String>,
+impl ComponentDefinition {
+    pub fn with_config_hardcoded(mut self, key: String, value: String) -> Self {
+        self.configs_to_add.hardcoded.insert(key, value);
+        self
+    }
+
+    pub fn with_config_contract_address(mut self) -> Self {
+        self.configs_to_add.contract_address = true;
+        self
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ComponentConfigsToAdd {
+    pub contract_address: bool,
+    pub hardcoded: HashMap<String, String>,
 }
 
 impl From<ComponentName> for ComponentDefinition {
     fn from(name: ComponentName) -> Self {
         ComponentDefinition {
             name,
-            config_vars: BTreeMap::new(),
-            env_vars: BTreeMap::new(),
-        }
-    }
-}
-
-impl ComponentName {
-    pub fn into_builder(self) -> ComponentBuilder {
-        ComponentBuilder::new(self)
-    }
-}
-
-pub struct ComponentBuilder {
-    name: ComponentName,
-    config_vars: BTreeMap<String, String>,
-    env_vars: BTreeMap<String, String>,
-}
-
-impl ComponentBuilder {
-    pub fn new(name: ComponentName) -> Self {
-        Self {
-            name,
-            config_vars: BTreeMap::new(),
-            env_vars: BTreeMap::new(),
-        }
-    }
-
-    pub fn with_config_var(mut self, key: String, value: String) -> Self {
-        if self.env_vars.contains_key(&key) {
-            panic!("Config var key '{}' is already defined", key);
-        }
-
-        self.config_vars.insert(key, value);
-        self
-    }
-
-    pub fn with_env_var(mut self, key: String, value: String) -> Self {
-        if !key.starts_with(WAVS_ENV_PREFIX) {
-            panic!(
-                "Env var key '{}' must be prefixed with '{WAVS_ENV_PREFIX}'",
-                key
-            );
-        }
-        if self.env_vars.contains_key(&key) {
-            panic!("Env var key '{}' is already defined", key);
-        }
-
-        self.env_vars.insert(key, value);
-        self
-    }
-
-    pub fn build(self) -> ComponentDefinition {
-        ComponentDefinition {
-            name: self.name,
-            config_vars: self.config_vars,
-            env_vars: self.env_vars,
+            configs_to_add: ComponentConfigsToAdd::default(),
+            _env_vars_to_add: (),
         }
     }
 }
@@ -139,7 +98,13 @@ pub struct WorkflowDefinition {
 
 #[derive(Clone, Debug)]
 pub enum AggregatorDefinition {
-    NewEvmAggregatorSubmit { chain_name: ChainName },
+    NewEvmAggregatorSubmit {
+        chain_name: ChainName,
+    },
+    ComponentBasedAggregator {
+        component: ComponentDefinition,
+        chain_name: ChainName,
+    },
 }
 
 #[derive(Clone, Debug)]
