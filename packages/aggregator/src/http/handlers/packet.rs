@@ -197,7 +197,7 @@ impl AggregatorProcess<'_> {
                                 if let (Some(engine), wavs_types::Submit::Aggregator { component: Some(component), evm_contracts, .. }) =
                                     (&state.aggregator_engine, &packet.service.workflows[&packet.workflow_id].submit)
                                 {
-                                    match engine.process_packet(component, packet).await {
+                                    match engine.execute_packet(component, packet).await {
                                         Ok(actions) => {
                                             let updated_queue = process_aggregator_actions(state, packet, queue, signer, actions).await?;
                                             // If this is a component-only workflow, just batch the packet
