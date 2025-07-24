@@ -193,7 +193,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         &self,
         component: &Component,
         packet: &Packet,
-        tx_result: Result<String, String>,
+        tx_result: Result<AnyTxHash, String>,
     ) -> Result<bool> {
         tracing::info!("Handling submit callback with custom aggregator component");
 
@@ -202,14 +202,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         let wit_packet = packet.clone().try_into()?;
 
-        let wit_tx_hash = tx_result
-            .as_ref()
-            .map(|s| match s.parse::<alloy_primitives::TxHash>() {
-                Ok(tx_hash) => AnyTxHash::Evm(tx_hash.to_vec()),
-                Err(_) => AnyTxHash::Cosmos(s.clone()),
-            });
-
-        let wit_tx_result = wit_tx_hash.as_ref().map_err(|e| e.as_str());
+        let wit_tx_result = tx_result.as_ref().map_err(|e| e.as_str());
 
         let aggregator_world = AggregatorWorld::instantiate_async(
             &mut instance_deps.store,
