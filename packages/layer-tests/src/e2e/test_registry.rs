@@ -355,11 +355,12 @@ impl TestRegistry {
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
                             aggregators: vec![AggregatorDefinition::ComponentBasedAggregator {
-                                component: ComponentName::SimpleAggregator.into(),
+                                component: ComponentDefinition::from(ComponentName::SimpleAggregator)
+                                    .with_chain_name()
+                                    .with_contract_address(),
+                                // for deploying the submission contract that the aggregator will use
                                 chain_name: chain.clone(),
-                                // placeholder; is replaced in deploy_workflow to actual submission manager
-                                contract_address: "0x0000000000000000000000000000000000000000"
-                                    .to_string(),
+                                
                             }],
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
