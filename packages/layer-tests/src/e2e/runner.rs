@@ -242,7 +242,7 @@ async fn run_test(
 
     tracing::warn!(
         "Service {} completed all workflows successfully, deleting...",
-        service.id
+        service.id()
     );
     clients
         .http_client
