@@ -240,5 +240,14 @@ async fn run_test(
         }
     }
 
+    tracing::warn!(
+        "Service {} completed all workflows successfully, deleting...",
+        service.id
+    );
+    clients
+        .http_client
+        .delete_service(vec![service.manager])
+        .await?;
+
     Ok(())
 }
