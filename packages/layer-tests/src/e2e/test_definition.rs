@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,15 +44,16 @@ pub struct ComponentDefinition {
     pub name: ComponentName,
 
     pub configs_to_add: ComponentConfigsToAdd,
+    pub _env_vars_to_add: (), // TODO - use this?
 }
 
 impl ComponentDefinition {
-    pub fn with_chain_name(mut self) -> Self {
-        self.configs_to_add.chain_name = true;
+    pub fn with_config_hardcoded(mut self, key: String, value: String) -> Self {
+        self.configs_to_add.hardcoded.insert(key, value);
         self
     }
 
-    pub fn with_contract_address(mut self) -> Self {
+    pub fn with_config_contract_address(mut self) -> Self {
         self.configs_to_add.contract_address = true;
         self
     }
@@ -60,8 +61,8 @@ impl ComponentDefinition {
 
 #[derive(Clone, Debug, Default)]
 pub struct ComponentConfigsToAdd {
-    pub chain_name: bool,
     pub contract_address: bool,
+    pub hardcoded: HashMap<String, String>,
 }
 
 impl From<ComponentName> for ComponentDefinition {
@@ -69,6 +70,7 @@ impl From<ComponentName> for ComponentDefinition {
         ComponentDefinition {
             name,
             configs_to_add: ComponentConfigsToAdd::default(),
+            _env_vars_to_add: (),
         }
     }
 }

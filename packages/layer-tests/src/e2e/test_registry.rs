@@ -24,7 +24,9 @@ use super::test_definition::{
 };
 use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
-use crate::e2e::test_definition::{ChangeServiceDefinition, ExpectedOutputCallback};
+use crate::e2e::test_definition::{
+    ChangeServiceDefinition, ComponentDefinition, ExpectedOutputCallback,
+};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
@@ -358,8 +360,8 @@ impl TestRegistry {
                                 component: ComponentDefinition::from(
                                     ComponentName::SimpleAggregator,
                                 )
-                                .with_chain_name()
-                                .with_contract_address(),
+                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_contract_address(),
                                 // for deploying the submission contract that the aggregator will use
                                 chain_name: chain.clone(),
                             }],

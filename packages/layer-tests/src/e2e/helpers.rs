@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
+use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
@@ -184,6 +184,7 @@ fn deploy_component(
     component_sources: &ComponentSources,
     component_definition: &ComponentDefinition,
     config_vars: BTreeMap<String, String>,
+    env_vars: BTreeMap<String, String>,
 ) -> Component {
     // Create components from test definition
     let component_source = component_sources
@@ -198,11 +199,11 @@ fn deploy_component(
         file_system: true,
     };
     component.config = config_vars;
-    component.env_keys = component_definition.env_vars.keys().cloned().collect();
+    component.env_keys = env_vars.keys().cloned().collect();
 
-    for (k, v) in component_definition.env_vars.iter() {
+    for (k, v) in env_vars.iter() {
         // NOTE: we should avoid collisions here
-        std::env::set_var(k, v);
+        std::env::set_var(format!("{}_{}", WAVS_ENV_PREFIX, k), v);
     }
 
     component
@@ -219,6 +220,7 @@ async fn deploy_workflow(
     let component = deploy_component(
         component_sources,
         &workflow_definition.component,
+        Default::default(),
         Default::default(),
     );
 
@@ -238,8 +240,6 @@ async fn deploy_workflow(
     let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
         .await
         .unwrap();
-
-    let SubmitDefinition::Aggregator { aggregators, .. } = &mut workflow_definition.submit;
 
     let submit = create_submit_from_config(
         &workflow_definition.submit,
@@ -398,14 +398,16 @@ pub async fn create_submit_from_config(
                     }
                     AggregatorDefinition::ComponentBasedAggregator {
                         component: component_def,
-                        chain_name,
+                        ..
                     } => {
                         if let Some(sources) = component_sources {
-                            let config_vars = BTreeMap::new();
+                            let mut config_vars = BTreeMap::new();
+                            let env_vars = BTreeMap::new();
 
-                            if component_def.configs_to_add.chain_name {
-                                config_vars
-                                    .insert("chain_name".to_string(), chain_name.to_string());
+                            for (hardcoded_key, hardcoded_value) in
+                                &component_def.configs_to_add.hardcoded
+                            {
+                                config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
                             }
 
                             if component_def.configs_to_add.contract_address {
@@ -419,6 +421,7 @@ pub async fn create_submit_from_config(
                                 sources,
                                 &component_def,
                                 config_vars,
+                                env_vars,
                             )));
                         } else {
                             return Err(anyhow!(
@@ -624,8 +627,12 @@ pub async fn change_service_for_test(
             workflow_id,
             component: component_definition,
         } => {
-            let component =
-                deploy_component(component_sources, component_definition, Default::default());
+            let component = deploy_component(
+                component_sources,
+                component_definition,
+                Default::default(),
+                Default::default(),
+            );
             let workflow = new_service
                 .workflows
                 .get_mut(workflow_id)
