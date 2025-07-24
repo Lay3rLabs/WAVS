@@ -456,8 +456,25 @@ async fn handle_custom_submit(
             tracing::info!("Service manager validation passed for custom submit");
         }
         Err(err) => {
-            tracing::error!("Service manager validation failed: {:?}", err);
-            return Err(AggregatorError::ServiceManagerValidateUnknown(err));
+            match err.as_decoded_interface_error::<ServiceManagerError>() {
+                Some(ServiceManagerError::InsufficientQuorum(quorum_err)) => {
+                    // insufficient quorum - in custom submit this is an error, not "keep aggregating"
+                    return Err(AggregatorError::ServiceManagerValidateKnown(
+                        ServiceManagerError::InsufficientQuorum(quorum_err),
+                    ));
+                }
+                Some(err) => {
+                    return Err(AggregatorError::ServiceManagerValidateKnown(err));
+                }
+                None => match err.as_revert_data() {
+                    Some(raw) => {
+                        return Err(AggregatorError::ServiceManagerValidateAnyRevert(
+                            raw.to_string(),
+                        ))
+                    }
+                    None => return Err(AggregatorError::ServiceManagerValidateUnknown(err)),
+                },
+            }
         }
     }
 
