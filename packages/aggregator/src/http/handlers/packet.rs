@@ -351,6 +351,8 @@ async fn process_aggregator_actions(
     );
 
     for queued_packet in queue.iter_mut() {
+        // if the signer is the same as the one in the queue, we can just update it
+        // this effectively allows re-trying failed aggregation
         if signer == queued_packet.signer {
             *queued_packet = QueuedPacket {
                 packet: packet.clone(),
