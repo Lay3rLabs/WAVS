@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 wit-bindgen = { workspace = true }
-const-hex = { workspace = true }
+alloy-primitives = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

@@ -34,7 +34,15 @@ pub async fn execute_aggregator_component(
         permissions: wavs_types::Permissions::default(),
         fuel_limit: Some(u64::MAX),
         time_limit_seconds: Some(10),
-        config: Default::default(),
+        config: [
+            ("chain_name".to_string(), "31337".to_string()),
+            (
+                "contract_address".to_string(),
+                "0x0000000000000000000000000000000000000000".to_string(),
+            ),
+        ]
+        .into_iter()
+        .collect(),
         env_keys: Default::default(),
     };
 

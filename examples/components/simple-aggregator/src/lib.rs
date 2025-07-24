@@ -11,29 +11,19 @@ struct Component;
 
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
-        // returning hardcoded values so the component wouldn't crash in UT
-        let chain_name = host::config_var("chain_name").unwrap_or_else(|| "31337".to_string());
+        let chain_name =
+            host::config_var("chain_name").ok_or("chain_name config variable is required")?;
         let contract_address_str = host::config_var("contract_address")
-            .unwrap_or_else(|| "0x0000000000000000000000000000000000000000".to_string());
+            .ok_or("contract_address config variable is required")?;
 
-        let contract_address_bytes = const_hex::decode(
-            contract_address_str
-                .strip_prefix("0x")
-                .unwrap_or(&contract_address_str),
-        )
-        .map_err(|e| format!("Failed to parse contract address: {e}"))?;
-
-        if contract_address_bytes.len() != 20 {
-            return Err(format!(
-                "Invalid contract address length: expected 20 bytes, got {}",
-                contract_address_bytes.len()
-            ));
-        }
+        let address: alloy_primitives::Address = contract_address_str
+            .parse()
+            .map_err(|e| format!("Failed to parse contract address: {e}"))?;
 
         let submit_action = SubmitAction {
             chain_name,
             contract_address: EvmAddress {
-                raw_bytes: contract_address_bytes,
+                raw_bytes: address.to_vec(),
             },
         };
 
