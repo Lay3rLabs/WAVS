@@ -140,12 +140,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     fn load_component(&self, component: &Component) -> Result<WasmComponent> {
         let digest = component.source.digest().clone();
 
-        if let Some(cached_component) = self
-            .memory_cache
-            .write()
-            .unwrap()
-            .get(&digest)
-        {
+        if let Some(cached_component) = self.memory_cache.write().unwrap().get(&digest) {
             return Ok(cached_component.clone());
         }
 
@@ -241,7 +236,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let cm = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         // store original wasm
-                let digest: ComponentDigest = self.wasm_storage.set_data(component_bytes)?.inner().into();
+        let digest: ComponentDigest = self.wasm_storage.set_data(component_bytes)?.inner().into();
         self.memory_cache
             .write()
             .unwrap()

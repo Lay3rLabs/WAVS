@@ -8,7 +8,6 @@ use example_types::{
     PermissionsResponse, SquareRequest, SquareResponse,
 };
 use regex::Regex;
-use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{ChainName, Trigger, WorkflowID};
 
 use crate::e2e::components::{ComponentName, ComponentSources};
@@ -58,60 +57,6 @@ impl From<ComponentName> for ComponentDefinition {
             name,
             config_vars: BTreeMap::new(),
             env_vars: BTreeMap::new(),
-        }
-    }
-}
-
-impl ComponentName {
-    pub fn into_builder(self) -> ComponentBuilder {
-        ComponentBuilder::new(self)
-    }
-}
-
-pub struct ComponentBuilder {
-    name: ComponentName,
-    config_vars: BTreeMap<String, String>,
-    env_vars: BTreeMap<String, String>,
-}
-
-impl ComponentBuilder {
-    pub fn new(name: ComponentName) -> Self {
-        Self {
-            name,
-            config_vars: BTreeMap::new(),
-            env_vars: BTreeMap::new(),
-        }
-    }
-
-    pub fn with_config_var(mut self, key: String, value: String) -> Self {
-        if self.env_vars.contains_key(&key) {
-            panic!("Config var key '{}' is already defined", key);
-        }
-
-        self.config_vars.insert(key, value);
-        self
-    }
-
-    pub fn with_env_var(mut self, key: String, value: String) -> Self {
-        if !key.starts_with(WAVS_ENV_PREFIX) {
-            panic!(
-                "Env var key '{}' must be prefixed with '{WAVS_ENV_PREFIX}'",
-                key
-            );
-        }
-        if self.env_vars.contains_key(&key) {
-            panic!("Env var key '{}' is already defined", key);
-        }
-
-        self.env_vars.insert(key, value);
-        self
-    }
-
-    pub fn build(self) -> ComponentDefinition {
-        ComponentDefinition {
-            name: self.name,
-            config_vars: self.config_vars,
-            env_vars: self.env_vars,
         }
     }
 }
