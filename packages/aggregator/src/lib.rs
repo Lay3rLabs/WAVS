@@ -8,14 +8,12 @@ pub mod error;
 pub mod http;
 
 use tracing::instrument;
-use utils::{context::AppContext, storage::fs::FileStorage};
+use utils::context::AppContext;
 
 /// Entry point to start up the server
 /// Called from main
 #[instrument(level = "info", skip(ctx, config))]
 pub fn run_server(ctx: AppContext, config: config::Config) {
-    // Make sure we have file storage first
-    let _file_storage = FileStorage::new(&config.data).unwrap();
     tracing::info!(
         "Aggregator server initializing with data path: {:?}",
         config.data
