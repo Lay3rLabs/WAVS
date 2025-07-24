@@ -43,7 +43,7 @@ pub struct ComponentDefinition {
     /// The name of the component
     pub name: ComponentName,
 
-    pub configs_to_add: ComponentConfigsToAdd
+    pub configs_to_add: ComponentConfigsToAdd,
 }
 
 impl ComponentDefinition {

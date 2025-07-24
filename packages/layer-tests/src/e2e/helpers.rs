@@ -216,7 +216,11 @@ async fn deploy_workflow(
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> Workflow {
-    let component = deploy_component(component_sources, &workflow_definition.component, Default::default());
+    let component = deploy_component(
+        component_sources,
+        &workflow_definition.component,
+        Default::default(),
+    );
 
     tracing::info!("[{}] Creating submit from config", test_name);
 
@@ -227,8 +231,8 @@ async fn deploy_workflow(
             panic!("Expected at least one aggregator, but found none");
         };
         match first_agg {
-            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => Some(chain_name),
-            AggregatorDefinition::ComponentBasedAggregator { chain_name, ..} => chain_name,
+            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => chain_name,
+            AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } => chain_name,
         }
     };
     let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
@@ -400,7 +404,8 @@ pub async fn create_submit_from_config(
                             let config_vars = BTreeMap::new();
 
                             if component_def.configs_to_add.chain_name {
-                                config_vars.insert("chain_name".to_string(), chain_name.to_string());
+                                config_vars
+                                    .insert("chain_name".to_string(), chain_name.to_string());
                             }
 
                             if component_def.configs_to_add.contract_address {
@@ -410,8 +415,11 @@ pub async fn create_submit_from_config(
                                 );
                             }
 
-                            component =
-                                Some(Box::new(deploy_component(sources, &component_def, config_vars)));
+                            component = Some(Box::new(deploy_component(
+                                sources,
+                                &component_def,
+                                config_vars,
+                            )));
                         } else {
                             return Err(anyhow!(
                                 "ComponentBasedAggregator requires component_sources"
@@ -616,7 +624,8 @@ pub async fn change_service_for_test(
             workflow_id,
             component: component_definition,
         } => {
-            let component = deploy_component(component_sources, component_definition, Default::default());
+            let component =
+                deploy_component(component_sources, component_definition, Default::default());
             let workflow = new_service
                 .workflows
                 .get_mut(workflow_id)
