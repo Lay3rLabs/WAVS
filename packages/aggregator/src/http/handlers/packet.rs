@@ -183,8 +183,8 @@ impl AggregatorProcess<'_> {
 
         match aggregator {
             Aggregator::Evm(EvmContractSubmission {
-                chain_name,
-                address,
+                chain_name: _,
+                address: _,
                 max_gas,
             }) => {
                 // execute the logic within a transaction, keyed by queue_id
@@ -220,7 +220,12 @@ impl AggregatorProcess<'_> {
                             }
                         };
 
-                        let service_manager = get_submission_service_manager(state, aggregator).await?;
+                        let (chain_name, address) = match aggregator {
+                            Aggregator::Evm(EvmContractSubmission { chain_name, address, .. }) => {
+                                (chain_name, address)
+                            }
+                        };
+                        let service_manager = get_submission_service_manager(state, chain_name, *address).await?;
 
                         // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
                         let block_height_minus_one = service_manager
@@ -309,33 +314,28 @@ impl AggregatorProcess<'_> {
 
 async fn get_submission_service_manager(
     state: &HttpState,
-    aggregator: &Aggregator,
+    chain_name: &ChainName,
+    service_handler_address: Address,
 ) -> AggregatorResult<IWavsServiceManagerInstance<DynProvider>> {
     // we need to get the service manager from the perspective of the service handler
     // which may be different than the service manager where the operator is staked
     // e.g. in the case of operator sets that are mirrored across multiple chains
-    match aggregator {
-        Aggregator::Evm(EvmContractSubmission {
-            chain_name,
-            address,
-            ..
-        }) => {
-            let service_handler_client = state.get_evm_client(chain_name).await?;
-            let service_handler =
-                IWavsServiceHandlerInstance::new(*address, service_handler_client.provider.clone());
+    let service_handler_client = state.get_evm_client(chain_name).await?;
+    let service_handler = IWavsServiceHandlerInstance::new(
+        service_handler_address,
+        service_handler_client.provider.clone(),
+    );
 
-            let service_manager_address = service_handler
-                .getServiceManager()
-                .call()
-                .await
-                .map_err(AggregatorError::ServiceManagerLookup)?;
+    let service_manager_address = service_handler
+        .getServiceManager()
+        .call()
+        .await
+        .map_err(AggregatorError::ServiceManagerLookup)?;
 
-            Ok(IWavsServiceManagerInstance::new(
-                service_manager_address,
-                service_handler_client.provider,
-            ))
-        }
-    }
+    Ok(IWavsServiceManagerInstance::new(
+        service_manager_address,
+        service_handler_client.provider,
+    ))
 }
 
 async fn process_aggregator_actions(
@@ -441,12 +441,8 @@ async fn handle_custom_submit(
         .envelope
         .signature_data(signatures, block_height_minus_one)?;
 
-    let custom_aggregator = Aggregator::Evm(EvmContractSubmission {
-        chain_name: chain_name.clone(),
-        address: contract_address,
-        max_gas: None,
-    });
-    let service_manager = get_submission_service_manager(state, &custom_aggregator).await?;
+    let service_manager =
+        get_submission_service_manager(state, &chain_name, contract_address).await?;
     let result = service_manager
         .validate(
             packet.envelope.clone().into(),
