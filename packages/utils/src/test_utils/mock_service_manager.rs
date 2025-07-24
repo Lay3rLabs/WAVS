@@ -1,104 +1,65 @@
-use alloy_sol_types::sol;
+use alloy_signer::k256::ecdsa::SigningKey;
+use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use anyhow::Result;
-use bip39::Mnemonic;
 
 use crate::{
-    evm_client::{EvmSigningClient, NonceManagerKind},
+    evm_client::EvmSigningClient,
     test_utils::middleware::{
-        AvsOperator, MiddlewareServiceManagerAddresses, MiddlewareServiceManagerConfig,
+        MiddlewareServiceManagerAddresses, MiddlewareServiceManagerConfig,
         MiddlewareSetServiceUri,
     },
 };
 
 #[derive(Debug)]
 pub struct MockServiceManager {
-    pub client: EvmSigningClient,
-    pub config: MiddlewareServiceManagerConfig,
+    pub deployer: LocalSigner<SigningKey>,
+    pub deployer_key_hex: String,
     pub address: alloy_primitives::Address,
     pub all_addresses: MiddlewareServiceManagerAddresses,
-}
-
-// because the client will be used with the docker image
-// and we can't control or even know how the nonce gets used
-// we need to:
-// 1. generate a random wallet and fund it from the wallet
-// 2. use the safe nonce manager to avoid nonce errors
-async fn generate_client(wallet_client: &EvmSigningClient) -> Result<EvmSigningClient> {
-    let mut chain_config = wallet_client.config.clone();
-    chain_config.credential = Mnemonic::generate(24).unwrap().to_string();
-    chain_config.nonce_manager_kind = NonceManagerKind::Safe;
-
-    let client = EvmSigningClient::new(chain_config).await?;
-    wallet_client.transfer_funds(client.address(), "1").await?;
-
-    Ok(client)
+    pub rpc_url: String,
 }
 
 impl MockServiceManager {
-    pub async fn deploy_middleware(
-        config: MiddlewareServiceManagerConfig,
-        wallet_client: EvmSigningClient,
-    ) -> Result<Self> {
-        let client = generate_client(&wallet_client).await?;
+    // because the client will be used with the docker image
+    // and we can't control or even know how the nonce gets used
+    // we need to generate a random key and fund it from the wallet
+    // otherwise we may try to run transactions in parallel with the same nonce
+    pub async fn new(wallet_client: EvmSigningClient) -> Result<Self> {
+        let deployer = MnemonicBuilder::<English>::default()
+            .word_count(24)
+            .build_random()?;
 
-        let private_key_hex = const_hex::encode(client.signer.credential().to_bytes().to_vec());
-        let rpc_url = client.config.endpoint.to_string();
+        wallet_client.transfer_funds(deployer.address(), "1").await?;
+
+        let deployer_key_hex = const_hex::encode(deployer.credential().to_bytes().to_vec());
+        let rpc_url = wallet_client.config.endpoint.to_string();
 
         let all_addresses =
-            MiddlewareServiceManagerAddresses::deploy(&config, &rpc_url, &private_key_hex).await?;
+            MiddlewareServiceManagerAddresses::deploy(&rpc_url, &deployer_key_hex).await?;
 
         Ok(Self {
-            client,
-            config,
+            deployer,
+            rpc_url,
             address: all_addresses.address,
             all_addresses,
+            deployer_key_hex,
         })
     }
 
     pub async fn set_service_uri(&self, uri: String) -> anyhow::Result<()> {
         MiddlewareSetServiceUri {
-            rpc_url: self.client.config.endpoint.to_string(),
+            rpc_url: self.rpc_url.clone(),
             service_manager_address: self.address,
-            deployer_key_hex: const_hex::encode(
-                self.client.signer.credential().to_bytes().to_vec(),
-            ),
+            deployer_key_hex: self.deployer_key_hex.clone(), 
             service_uri: uri,
         }
-        .run()
+        .apply()
         .await
     }
 
-    pub async fn set_operator_details(
-        &self,
-        AvsOperator {
-            operator,
-            signer,
-            weight,
-        }: AvsOperator,
-    ) -> anyhow::Result<()> {
-        sol! {
-            #[sol(rpc)]
-            interface StakeRegistry {
-                function setOperatorDetails(
-                    address operator,
-                    address signingKeyAddress,
-                    uint256 weight
-                ) external;
-            }
-        }
-
-        let instance = StakeRegistry::new(
-            self.all_addresses.stake_registry_address,
-            self.client.provider.clone(),
-        );
-
-        instance
-            .setOperatorDetails(operator, signer, weight.try_into()?)
-            .send()
-            .await?
-            .watch()
-            .await?;
-
-        Ok(())
+    pub async fn configure(&self, config: &MiddlewareServiceManagerConfig) -> anyhow::Result<()> {
+        config.apply(&self.rpc_url, &self.deployer_key_hex, &self.address)
+        .await
     }
+
 }

@@ -19,10 +19,16 @@ async fn service_manager_deployment() {
         .await
         .unwrap();
 
+
+    let service_manager = MockServiceManager::new(client)
+        .await
+        .unwrap();
+
     let avs_operator = AvsOperator::new(rand_address_evm(), rand_address_evm());
     let config = MiddlewareServiceManagerConfig::new(&[avs_operator], 1);
-
-    let service_manager = MockServiceManager::deploy_middleware(config, client)
+    service_manager.configure(&config).await.unwrap();
+    service_manager
+        .set_service_uri("http://example.com".to_string())
         .await
         .unwrap();
 

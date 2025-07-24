@@ -16,7 +16,7 @@ use utils::{
 };
 use uuid::Uuid;
 
-use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
+use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission,
     IWavsServiceManager, Permissions, Service, ServiceID, ServiceManager, ServiceStatus,
@@ -103,6 +103,8 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
+    mock_service_manager.set_service_uri(service_url).await.unwrap();
+
     // First, register the service to the aggregator if needed
     for workflow in test.workflows.values() {
         if aggregator_registered_service_ids
@@ -122,11 +124,8 @@ pub async fn deploy_service_for_test(
         &clients.cli_ctx,
         DeployServiceArgs {
             service: service.clone(),
-            set_service_url_args: Some(SetServiceUrlArgs {
-                provider: mock_service_manager.client.provider.clone(),
-                service_url: service_url.clone(),
-            }),
-        },
+            set_service_url_args: None, 
+        }
     )
     .await
     .unwrap();
@@ -146,10 +145,7 @@ pub async fn deploy_service_for_test(
         .address();
     let avs_operator = AvsOperator::new(operator_address, avs_signer_address.parse().unwrap());
 
-    mock_service_manager
-        .set_operator_details(avs_operator)
-        .await
-        .unwrap();
+    mock_service_manager.configure(&MiddlewareServiceManagerConfig::new(&[avs_operator], 1)).await.unwrap();
 
     // activate the service
     // requires:
@@ -448,11 +444,10 @@ pub async fn deploy_service_manager(
     clients: &Clients,
     chain_name: &ChainName,
 ) -> Result<MockServiceManager> {
-    let evm_client = clients.get_evm_client(chain_name);
+    let wallet_client = clients.get_evm_client(chain_name);
 
-    let config = MiddlewareServiceManagerConfig::new(&[], 1);
+    let mock_service_manager = MockServiceManager::new(wallet_client).await?;
 
-    let mock_service_manager = MockServiceManager::deploy_middleware(config, evm_client).await?;
     tracing::info!(
         "Service manager deployed at address: {}",
         mock_service_manager.address

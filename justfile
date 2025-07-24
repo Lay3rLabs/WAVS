@@ -175,6 +175,7 @@ download-wit branch="main":
 
     # Fetch deps
     cd wit-definitions/worker && wkg wit fetch
+    cd wit-definitions/aggregator && wkg wit fetch
     cd wit-definitions/types && wkg wit fetch
 
     # Clean up

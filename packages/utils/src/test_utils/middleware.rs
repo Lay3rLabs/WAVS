@@ -5,7 +5,76 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 
-pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.5";
+pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.7";
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MiddlewareServiceManagerAddresses {
+    #[serde(rename = "WavsServiceManager")]
+    pub address: alloy_primitives::Address,
+    #[serde(rename = "proxyAdmin")]
+    pub proxy_admin: alloy_primitives::Address,
+    #[serde(rename = "WavsServiceManagerImpl")]
+    pub impl_address: alloy_primitives::Address,
+    #[serde(rename = "stakeRegistry")]
+    pub stake_registry_address: alloy_primitives::Address,
+    #[serde(rename = "stakeRegistryImpl")]
+    pub stake_registry_impl_address: alloy_primitives::Address,
+}
+impl MiddlewareServiceManagerAddresses {
+    pub async fn deploy(
+        rpc_url: &str,
+        deployer_key_hex: &str,
+    ) -> Result<Self> {
+        let nodes_dir = TempDir::new().unwrap();
+
+        // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
+        let res = Command::new("docker")
+            .args([
+                "run",
+                "--rm",
+                "--network",
+                "host",
+                "-v",
+                &format!(
+                    "{}:/root/.nodes",
+                    nodes_dir
+                        .path()
+                        .to_str()
+                        .ok_or(anyhow::anyhow!("Failed to convert nodes_dir path to str"))?
+                ),
+                "-e",
+                &format!("MOCK_DEPLOYER_KEY={}", deployer_key_hex),
+                "-e",
+                &format!("MOCK_RPC_URL={rpc_url}"),
+                MIDDLEWARE_IMAGE,
+                "-m",
+                "mock",
+                "deploy",
+            ])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()?
+            .wait()?;
+
+        if !res.success() {
+            bail!("Failed to deploy service manager");
+        }
+
+        let deployment_json = std::fs::read_to_string(nodes_dir.path().join("mock.json"))
+            .map_err(|e| anyhow::anyhow!("Failed to read service manager JSON: {}", e))?;
+
+        #[derive(Deserialize)]
+        struct DeploymentJson {
+            addresses: MiddlewareServiceManagerAddresses,
+        }
+
+        let deployment_json: DeploymentJson = serde_json::from_str(&deployment_json)
+            .map_err(|e| anyhow::anyhow!("Failed to parse service manager JSON: {}", e))?;
+
+        Ok(deployment_json.addresses)
+    }
+}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MiddlewareServiceManagerConfig {
@@ -49,32 +118,13 @@ impl MiddlewareServiceManagerConfig {
             weights: operators.iter().map(|op| op.weight).collect(),
         }
     }
-}
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MiddlewareServiceManagerAddresses {
-    #[serde(rename = "WavsServiceManager")]
-    pub address: alloy_primitives::Address,
-    #[serde(rename = "proxyAdmin")]
-    pub proxy_admin: alloy_primitives::Address,
-    #[serde(rename = "WavsServiceManagerImpl")]
-    pub impl_address: alloy_primitives::Address,
-    #[serde(rename = "stakeRegistry")]
-    pub stake_registry_address: alloy_primitives::Address,
-    #[serde(rename = "stakeRegistryImpl")]
-    pub stake_registry_impl_address: alloy_primitives::Address,
-}
-impl MiddlewareServiceManagerAddresses {
-    pub async fn deploy(
-        config: &MiddlewareServiceManagerConfig,
-        rpc_url: &str,
-        deployer_key_hex: &str,
-    ) -> Result<Self> {
+    pub async fn apply(&self, rpc_url: &str, deployer_key_hex: &str, service_manager_address: &Address) -> Result<()> {
         let nodes_dir = TempDir::new().unwrap();
         let config_dir = TempDir::new().unwrap();
         let config_filepath = config_dir.path().join("wavs-mock-config.json");
 
-        std::fs::write(&config_filepath, serde_json::to_string(config).unwrap()).unwrap();
+        std::fs::write(&config_filepath, serde_json::to_string(self).unwrap()).unwrap();
 
         let res = Command::new("docker")
             .args([
@@ -95,16 +145,18 @@ impl MiddlewareServiceManagerAddresses {
                     "{}:/wavs/contracts/deployments/wavs-mock-config.json",
                     config_filepath
                         .to_str()
-                        .ok_or(anyhow::anyhow!("Failed to convert config_filepath to str"))?
+                        .ok_or(anyhow::anyhow!("Failed to convert config_filepath path to str"))?
                 ),
                 "-e",
                 &format!("MOCK_DEPLOYER_KEY={}", deployer_key_hex),
                 "-e",
                 &format!("MOCK_RPC_URL={rpc_url}"),
+                "-e",
+                &format!("MOCK_SERVICE_MANAGER_ADDRESS={service_manager_address}"),
                 MIDDLEWARE_IMAGE,
                 "-m",
                 "mock",
-                "deploy",
+                "configure",
             ])
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -115,20 +167,10 @@ impl MiddlewareServiceManagerAddresses {
             bail!("Failed to deploy service manager");
         }
 
-        let deployment_json = std::fs::read_to_string(nodes_dir.path().join("mock.json"))
-            .map_err(|e| anyhow::anyhow!("Failed to read service manager JSON: {}", e))?;
-
-        #[derive(Deserialize)]
-        struct DeploymentJson {
-            addresses: MiddlewareServiceManagerAddresses,
-        }
-
-        let deployment_json: DeploymentJson = serde_json::from_str(&deployment_json)
-            .map_err(|e| anyhow::anyhow!("Failed to parse service manager JSON: {}", e))?;
-
-        Ok(deployment_json.addresses)
+        Ok(())
     }
 }
+
 
 pub struct MiddlewareSetServiceUri {
     pub rpc_url: String,
@@ -138,7 +180,7 @@ pub struct MiddlewareSetServiceUri {
 }
 
 impl MiddlewareSetServiceUri {
-    pub async fn run(self) -> Result<()> {
+    pub async fn apply(self) -> Result<()> {
         let Self {
             rpc_url,
             service_manager_address,
@@ -152,7 +194,7 @@ impl MiddlewareSetServiceUri {
                 "--network",
                 "host",
                 "-e",
-                &format!("LOCAL_ETHEREUM_RPC_URL={}", rpc_url),
+                &format!("RPC_URL={}", rpc_url),
                 "-e",
                 &format!("WAVS_SERVICE_MANAGER_ADDRESS={service_manager_address}"),
                 "-e",

@@ -1,9 +1,5 @@
 use std::num::NonZeroU32;
 
-use alloy_network::TransactionBuilder;
-use alloy_primitives::utils::parse_ether;
-use alloy_provider::Provider;
-use alloy_rpc_types_eth::TransactionRequest;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
     config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},

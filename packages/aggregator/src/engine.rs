@@ -222,7 +222,6 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         match result {
             Ok(_) => Ok(()),
             Err(error) => {
-                tracing::error!("Submit callback execution failed: {}", error);
                 Err(AggregatorError::ComponentExecution(format!(
                     "Submit callback execution failed: {}",
                     error
