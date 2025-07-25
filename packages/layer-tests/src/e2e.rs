@@ -5,6 +5,7 @@ mod config;
 mod handles;
 mod helpers;
 mod matrix;
+mod report;
 mod runner;
 mod test_definition;
 mod test_registry;
@@ -22,7 +23,11 @@ use utils::{
     telemetry::{setup_metrics, setup_tracing, Metrics},
 };
 
-use crate::{args::TestArgs, config::TestConfig, e2e::test_registry::CosmosTriggerCodeMap};
+use crate::{
+    args::TestArgs,
+    config::TestConfig,
+    e2e::{report::TestReport, test_registry::CosmosTriggerCodeMap},
+};
 
 pub fn run(args: TestArgs, ctx: AppContext) {
     let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
@@ -69,6 +74,8 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let handles = AppHandles::start(&ctx, &configs, metrics);
 
+    let report = TestReport::new();
+
     ctx.rt.block_on(async {
         let clients = clients::Clients::new(&configs).await;
 
@@ -92,14 +99,15 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             registry,
             component_sources,
             cosmos_trigger_code_map,
+            report.clone(),
         )
         .run_tests()
         .await;
     });
 
-    tracing::warn!("*************************************");
-    tracing::warn!("All tests completed, shutting down...");
-    tracing::warn!("*************************************");
+    report.print();
+
+    tracing::warn!("shutting down...");
 
     ctx.kill();
     let join_results = handles.try_join();

@@ -172,3 +172,82 @@ pub enum ServicesError {
     #[error("Database error: {0}")]
     DBError(#[from] DBError),
 }
+
+#[macro_export]
+macro_rules! tracing_service_info {
+    ($services:expr, $service_id:expr, $($msg:tt)*) => {
+        if tracing::enabled!(tracing::Level::INFO) {
+            match $services.get(&$service_id).ok() {
+                Some(service) => {
+                    tracing::info!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                },
+                None => {
+                    tracing::info!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                }
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! tracing_service_debug {
+    ($services:expr, $service_id:expr, $($msg:tt)*) => {
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            match $services.get(&$service_id).ok() {
+                Some(service) => {
+                    tracing::debug!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                },
+                None => {
+                    tracing::debug!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                }
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! tracing_service_trace {
+    ($services:expr, $service_id:expr, $($msg:tt)*) => {
+        if tracing::enabled!(tracing::Level::TRACE) {
+            match $services.get(&$service_id).ok() {
+                Some(service) => {
+                    tracing::trace!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                },
+                None => {
+                    tracing::trace!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                }
+            }
+        }
+    };
+}
+#[macro_export]
+macro_rules! tracing_service_warn {
+    ($services:expr, $service_id:expr, $($msg:tt)*) => {
+        if tracing::enabled!(tracing::Level::WARN) {
+            match $services.get(&$service_id).ok() {
+                Some(service) => {
+                    tracing::warn!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                },
+                None => {
+                    tracing::warn!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                }
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! tracing_service_error {
+    ($services:expr, $service_id:expr, $($msg:tt)*) => {
+        if tracing::enabled!(tracing::Level::ERROR) {
+            match $services.get(&$service_id).ok() {
+                Some(service) => {
+                    tracing::error!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                },
+                None => {
+                    tracing::error!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                }
+            }
+        }
+    };
+}

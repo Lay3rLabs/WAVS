@@ -6,10 +6,10 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
+use crate::e2e::report::TestReport;
 use crate::e2e::test_registry::CosmosTriggerCodeMap;
 use crate::{
     e2e::{
@@ -29,6 +29,7 @@ pub struct Runner {
     registry: Arc<TestRegistry>,
     component_sources: Arc<ComponentSources>,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    report: TestReport,
 }
 
 impl Runner {
@@ -37,12 +38,14 @@ impl Runner {
         registry: TestRegistry,
         component_sources: ComponentSources,
         cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        report: TestReport,
     ) -> Self {
         Self {
             clients: Arc::new(clients),
             registry: Arc::new(registry),
             component_sources: Arc::new(component_sources),
             cosmos_trigger_code_map,
+            report,
         }
     }
 
@@ -59,12 +62,14 @@ impl Runner {
                 let component_sources = self.component_sources.clone();
                 let mut test = test.clone();
                 let cosmos_trigger_code_map = self.cosmos_trigger_code_map.clone();
+                let report = self.report.clone();
                 futures.push(async move {
                     self.execute_test(
                         &mut test,
                         clients,
                         component_sources,
                         cosmos_trigger_code_map,
+                        report,
                     )
                     .await
                 });
@@ -81,21 +86,16 @@ impl Runner {
         clients: Arc<Clients>,
         component_sources: Arc<ComponentSources>,
         cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        report: TestReport,
     ) {
-        let test_name = test.name.clone();
-        let start_time = Instant::now();
+        report.start_test(test.name.clone());
 
         run_test(test, &clients, &component_sources, cosmos_trigger_code_map)
             .await
             .context(test.name.clone())
             .unwrap();
-        let duration = start_time.elapsed();
-        // This is a rough metric for debugging, since it can be interrupted by other async tasks
-        tracing::info!(
-            "Test {} passed (ran for {}ms)",
-            test_name,
-            duration.as_millis()
-        );
+
+        report.end_test(test.name.clone());
     }
 }
 
@@ -240,10 +240,6 @@ async fn run_test(
         }
     }
 
-    tracing::warn!(
-        "Service {} completed all workflows successfully, deleting...",
-        service.id()
-    );
     clients
         .http_client
         .delete_service(vec![service.manager])
