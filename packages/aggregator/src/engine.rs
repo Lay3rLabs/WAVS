@@ -194,7 +194,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         component: &Component,
         packet: &Packet,
         tx_result: Result<AnyTxHash, String>,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         tracing::info!("Handling submit callback with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
@@ -216,7 +216,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             .await?;
 
         match result {
-            Ok(success) => Ok(success),
+            Ok(_) => Ok(()),
             Err(error) => {
                 tracing::error!("Submit callback execution failed: {}", error);
                 anyhow::bail!("Submit callback execution failed: {}", error);

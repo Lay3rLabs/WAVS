@@ -1,8 +1,8 @@
-package wavs:worker@0.6.0-alpha.2;
+package wavs:worker@0.6.0-alpha.4;
 
-use wavs:types/core@0.6.0-alpha.2 as core-types;
-use wavs:types/service@0.6.0-alpha.2 as service-types;
-use wavs:types/chain@0.6.0-alpha.2 as chain-types;
+use wavs:types/core@0.6.0-alpha.4 as core-types;
+use wavs:types/service@0.6.0-alpha.4 as service-types;
+use wavs:types/chain@0.6.0-alpha.4 as chain-types;
 
 interface input {
     use core-types.{timestamp};
