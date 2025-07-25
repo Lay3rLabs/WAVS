@@ -194,16 +194,12 @@ impl AggregatorProcess<'_> {
                     .run(queue_id.clone(), move || async move {
                         let queue = match state.get_packet_queue(&queue_id)? {
                             PacketQueue::Alive(queue) => {
-                                if let (Some(engine), wavs_types::Submit::Aggregator { component: Some(component), evm_contracts, .. }) =
+                                if let (Some(engine), wavs_types::Submit::Aggregator { component, .. }) =
                                     (&state.aggregator_engine, &packet.service.workflows[&packet.workflow_id].submit)
                                 {
-                                    match engine.execute_packet(component, packet).await {
+                                    match engine.execute_packet(&component, packet).await {
                                         Ok(actions) => {
                                             let updated_queue = process_aggregator_actions(state, packet, queue, signer, actions).await?;
-                                            // If this is a component-only workflow, just batch the packet
-                                            if evm_contracts.is_none() {
-                                                return Ok(AddPacketResponse::Aggregated { count: updated_queue.len() });
-                                            }
                                             updated_queue
                                         },
                                         Err(e) => {

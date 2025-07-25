@@ -178,12 +178,9 @@ impl From<wavs_types::Submit> for aggregator_service::Submit {
             wavs_types::Submit::Aggregator {
                 url,
                 component,
-                evm_contracts,
             } => aggregator_service::Submit::Aggregator(aggregator_service::AggregatorSubmit {
                 url,
-                component: component.map(|c| (*c).into()),
-                evm_contracts: evm_contracts
-                    .map(|contracts| contracts.into_iter().map(|c| c.into()).collect()),
+                component: component.into(),
             }),
         }
     }
