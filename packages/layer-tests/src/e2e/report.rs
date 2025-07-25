@@ -55,12 +55,12 @@ impl TestTimings {
         );
         tracing::warn!("*************************************");
 
-        let count = self.completed_count.entry(test_name.clone()).or_insert(1);
+        let count = self.completed_count.entry(test_name.clone()).or_insert(0);
         *count += 1;
 
         if *count > 1 {
             // we only want to update durations for the first run
-            tracing::warn!("This test has been run {} times in total.", count);
+            tracing::warn!("{} test been run {} times in total.", test_name, count);
             return;
         }
         self.per_test_duration.insert(test_name.clone(), duration);
@@ -102,16 +102,19 @@ impl TestReport {
     }
 
     pub fn print(&self) {
-        tracing::warn!("*************************************");
-        tracing::warn!("All tests completed!");
         let timings = self.timings.lock().unwrap();
         tracing::warn!("*************************************");
+        tracing::warn!("All tests completed!");
+        for (test_name, duration) in &timings.per_test_duration {
+            tracing::warn!("{} Duration: {:?}", test_name, duration);
+        }
         tracing::warn!("Total duration: {:?}", timings.total_duration);
         if let Some((test_name, duration)) = &timings.longest_test {
-            tracing::warn!("Longest test: {}, Duration: {:?}", test_name, duration);
+            tracing::warn!("Longest: {}, Duration: {:?}", test_name, duration);
         }
         if let Some((test_name, duration)) = &timings.shortest_test {
-            tracing::warn!("Shortest test: {}, Duration: {:?}", test_name, duration);
+            tracing::warn!("Shortest: {}, Duration: {:?}", test_name, duration);
         }
+        tracing::warn!("*************************************");
     }
 }
