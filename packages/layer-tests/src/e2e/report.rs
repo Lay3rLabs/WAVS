@@ -36,7 +36,11 @@ impl TestTimings {
         tracing::warn!("Starting test: {}", test_name);
         tracing::warn!("*************************************");
         let start_time = Instant::now();
-        if self.per_test_start.insert(test_name.clone(), start_time).is_some() {
+        if self
+            .per_test_start
+            .insert(test_name.clone(), start_time)
+            .is_some()
+        {
             panic!("Test {} was already started!", test_name);
         }
     }

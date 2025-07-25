@@ -1,9 +1,11 @@
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use alloy_primitives::Address;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
+use tokio::fs;
+use tokio::process::Command;
 
 pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.7";
 
@@ -22,7 +24,7 @@ pub struct MiddlewareServiceManagerAddresses {
 }
 impl MiddlewareServiceManagerAddresses {
     pub async fn deploy(rpc_url: &str, deployer_key_hex: &str) -> Result<Self> {
-        let nodes_dir = TempDir::new().unwrap();
+        let nodes_dir = TempDir::new()?;
 
         // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
         let res = Command::new("docker")
@@ -51,13 +53,15 @@ impl MiddlewareServiceManagerAddresses {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?
-            .wait()?;
+            .wait()
+            .await?;
 
         if !res.success() {
             bail!("Failed to deploy service manager");
         }
 
-        let deployment_json = std::fs::read_to_string(nodes_dir.path().join("mock.json"))
+        let deployment_json = fs::read_to_string(nodes_dir.path().join("mock.json"))
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to read service manager JSON: {}", e))?;
 
         #[derive(Deserialize)]
@@ -121,11 +125,11 @@ impl MiddlewareServiceManagerConfig {
         deployer_key_hex: &str,
         service_manager_address: &Address,
     ) -> Result<()> {
-        let nodes_dir = TempDir::new().unwrap();
-        let config_dir = TempDir::new().unwrap();
+        let nodes_dir = TempDir::new()?;
+        let config_dir = TempDir::new()?;
         let config_filepath = config_dir.path().join("wavs-mock-config.json");
 
-        std::fs::write(&config_filepath, serde_json::to_string(self).unwrap()).unwrap();
+        fs::write(&config_filepath, serde_json::to_string(self)?).await?;
 
         let res = Command::new("docker")
             .args([
@@ -162,7 +166,8 @@ impl MiddlewareServiceManagerConfig {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?
-            .wait()?;
+            .wait()
+            .await?;
 
         if !res.success() {
             bail!("Failed to deploy service manager");
@@ -207,7 +212,8 @@ impl MiddlewareSetServiceUri {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?
-            .wait()?;
+            .wait()
+            .await?;
 
         if !res.success() {
             bail!("Failed to set service URI");
