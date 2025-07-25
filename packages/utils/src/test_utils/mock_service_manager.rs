@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use alloy_signer::k256::ecdsa::SigningKey;
 use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use anyhow::Result;
@@ -19,6 +21,9 @@ pub struct MockServiceManager {
 }
 
 impl MockServiceManager {
+    pub const DEPLOY_TIMEOUT: Duration = Duration::from_secs(30);
+    pub const SET_SERVICE_TIMEOUT: Duration = Duration::from_secs(30);
+    pub const CONFIGURE_TIMEOUT: Duration = Duration::from_secs(30);
     // because the client will be used with the docker image
     // and we can't control or even know how the nonce gets used
     // we need to generate a random key and fund it from the wallet
@@ -35,8 +40,12 @@ impl MockServiceManager {
         let deployer_key_hex = const_hex::encode(deployer.credential().to_bytes());
         let rpc_url = wallet_client.config.endpoint.to_string();
 
-        let all_addresses =
-            MiddlewareServiceManagerAddresses::deploy(&rpc_url, &deployer_key_hex).await?;
+        let all_addresses = MiddlewareServiceManagerAddresses::deploy(
+            &rpc_url,
+            &deployer_key_hex,
+            Self::DEPLOY_TIMEOUT,
+        )
+        .await?;
 
         Ok(Self {
             deployer,
@@ -54,13 +63,18 @@ impl MockServiceManager {
             deployer_key_hex: self.deployer_key_hex.clone(),
             service_uri: uri,
         }
-        .apply()
+        .apply(Self::SET_SERVICE_TIMEOUT)
         .await
     }
 
     pub async fn configure(&self, config: &MiddlewareServiceManagerConfig) -> anyhow::Result<()> {
         config
-            .apply(&self.rpc_url, &self.deployer_key_hex, &self.address)
+            .apply(
+                &self.rpc_url,
+                &self.deployer_key_hex,
+                &self.address,
+                Self::CONFIGURE_TIMEOUT,
+            )
             .await
     }
 }

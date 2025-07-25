@@ -1,4 +1,5 @@
 use std::process::Stdio;
+use std::time::Duration;
 
 use alloy_primitives::Address;
 use anyhow::{bail, Result};
@@ -23,38 +24,47 @@ pub struct MiddlewareServiceManagerAddresses {
     pub stake_registry_impl_address: alloy_primitives::Address,
 }
 impl MiddlewareServiceManagerAddresses {
-    pub async fn deploy(rpc_url: &str, deployer_key_hex: &str) -> Result<Self> {
+    pub async fn deploy(rpc_url: &str, deployer_key_hex: &str, timeout: Duration) -> Result<Self> {
         let nodes_dir = TempDir::new()?;
 
         // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
-        let res = Command::new("docker")
-            .args([
-                "run",
-                "--rm",
-                "--network",
-                "host",
-                "-v",
-                &format!(
-                    "{}:/root/.nodes",
-                    nodes_dir
-                        .path()
-                        .to_str()
-                        .ok_or(anyhow::anyhow!("Failed to convert nodes_dir path to str"))?
-                ),
-                "-e",
-                &format!("MOCK_DEPLOYER_KEY={}", deployer_key_hex),
-                "-e",
-                &format!("MOCK_RPC_URL={rpc_url}"),
-                MIDDLEWARE_IMAGE,
-                "-m",
-                "mock",
-                "deploy",
-            ])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()?
-            .wait()
-            .await?;
+        let res = tokio::time::timeout(
+            timeout,
+            Command::new("docker")
+                .args([
+                    "run",
+                    "--rm",
+                    "--network",
+                    "host",
+                    "-v",
+                    &format!(
+                        "{}:/root/.nodes",
+                        nodes_dir
+                            .path()
+                            .to_str()
+                            .ok_or(anyhow::anyhow!("Failed to convert nodes_dir path to str"))?
+                    ),
+                    "-e",
+                    &format!("MOCK_DEPLOYER_KEY={}", deployer_key_hex),
+                    "-e",
+                    &format!("MOCK_RPC_URL={rpc_url}"),
+                    MIDDLEWARE_IMAGE,
+                    "-m",
+                    "mock",
+                    "deploy",
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()?
+                .wait(),
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Middleware `mock deploy` command timed out after {} seconds",
+                timeout.as_secs()
+            )
+        })??;
 
         if !res.success() {
             bail!("Failed to deploy service manager");
@@ -124,6 +134,7 @@ impl MiddlewareServiceManagerConfig {
         rpc_url: &str,
         deployer_key_hex: &str,
         service_manager_address: &Address,
+        timeout: Duration,
     ) -> Result<()> {
         let nodes_dir = TempDir::new()?;
         let config_dir = TempDir::new()?;
@@ -131,43 +142,52 @@ impl MiddlewareServiceManagerConfig {
 
         fs::write(&config_filepath, serde_json::to_string(self)?).await?;
 
-        let res = Command::new("docker")
-            .args([
-                "run",
-                "--rm",
-                "--network",
-                "host",
-                "-v",
-                &format!(
-                    "{}:/root/.nodes",
-                    nodes_dir
-                        .path()
-                        .to_str()
-                        .ok_or(anyhow::anyhow!("Failed to convert nodes_dir path to str"))?
-                ),
-                "-v",
-                &format!(
-                    "{}:/wavs/contracts/deployments/wavs-mock-config.json",
-                    config_filepath.to_str().ok_or(anyhow::anyhow!(
-                        "Failed to convert config_filepath path to str"
-                    ))?
-                ),
-                "-e",
-                &format!("MOCK_DEPLOYER_KEY={}", deployer_key_hex),
-                "-e",
-                &format!("MOCK_RPC_URL={rpc_url}"),
-                "-e",
-                &format!("MOCK_SERVICE_MANAGER_ADDRESS={service_manager_address}"),
-                MIDDLEWARE_IMAGE,
-                "-m",
-                "mock",
-                "configure",
-            ])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()?
-            .wait()
-            .await?;
+        let res = tokio::time::timeout(
+            timeout,
+            Command::new("docker")
+                .args([
+                    "run",
+                    "--rm",
+                    "--network",
+                    "host",
+                    "-v",
+                    &format!(
+                        "{}:/root/.nodes",
+                        nodes_dir
+                            .path()
+                            .to_str()
+                            .ok_or(anyhow::anyhow!("Failed to convert nodes_dir path to str"))?
+                    ),
+                    "-v",
+                    &format!(
+                        "{}:/wavs/contracts/deployments/wavs-mock-config.json",
+                        config_filepath.to_str().ok_or(anyhow::anyhow!(
+                            "Failed to convert config_filepath path to str"
+                        ))?
+                    ),
+                    "-e",
+                    &format!("MOCK_DEPLOYER_KEY={}", deployer_key_hex),
+                    "-e",
+                    &format!("MOCK_RPC_URL={rpc_url}"),
+                    "-e",
+                    &format!("MOCK_SERVICE_MANAGER_ADDRESS={service_manager_address}"),
+                    MIDDLEWARE_IMAGE,
+                    "-m",
+                    "mock",
+                    "configure",
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()?
+                .wait(),
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Middleware `mock configure` command timed out after {} seconds",
+                timeout.as_secs()
+            )
+        })??;
 
         if !res.success() {
             bail!("Failed to deploy service manager");
@@ -185,35 +205,44 @@ pub struct MiddlewareSetServiceUri {
 }
 
 impl MiddlewareSetServiceUri {
-    pub async fn apply(self) -> Result<()> {
+    pub async fn apply(self, timeout: Duration) -> Result<()> {
         let Self {
             rpc_url,
             service_manager_address,
             deployer_key_hex,
             service_uri,
         } = self;
-        let res = Command::new("docker")
-            .args([
-                "run",
-                "--rm",
-                "--network",
-                "host",
-                "-e",
-                &format!("RPC_URL={}", rpc_url),
-                "-e",
-                &format!("WAVS_SERVICE_MANAGER_ADDRESS={service_manager_address}"),
-                "-e",
-                &format!("FUNDED_KEY={deployer_key_hex}"),
-                "-e",
-                &format!("SERVICE_URI={service_uri}"),
-                MIDDLEWARE_IMAGE,
-                "set_service_uri",
-            ])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()?
-            .wait()
-            .await?;
+        let res = tokio::time::timeout(
+            timeout,
+            Command::new("docker")
+                .args([
+                    "run",
+                    "--rm",
+                    "--network",
+                    "host",
+                    "-e",
+                    &format!("RPC_URL={}", rpc_url),
+                    "-e",
+                    &format!("WAVS_SERVICE_MANAGER_ADDRESS={service_manager_address}"),
+                    "-e",
+                    &format!("FUNDED_KEY={deployer_key_hex}"),
+                    "-e",
+                    &format!("SERVICE_URI={service_uri}"),
+                    MIDDLEWARE_IMAGE,
+                    "set_service_uri",
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()?
+                .wait(),
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Middleware `set_service_uri` command timed out after {} seconds",
+                timeout.as_secs()
+            )
+        })??;
 
         if !res.success() {
             bail!("Failed to set service URI");
