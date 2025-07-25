@@ -22,6 +22,7 @@ use crate::{
     e2e::{
         clients::Clients,
         components::ComponentSources,
+        config::BLOCK_INTERVAL,
         test_definition::{
             AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
             TestDefinition, TriggerDefinition,
@@ -36,10 +37,7 @@ use crate::{
 };
 
 use super::{
-    config::BLOCK_INTERVAL_DATA_PREFIX,
-    test_definition::{
-        CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, WorkflowDefinition,
-    },
+    test_definition::{CosmosTriggerDefinition, EvmTriggerDefinition, WorkflowDefinition},
     test_registry::CosmosTriggerCodeMap,
 };
 
@@ -272,7 +270,7 @@ pub async fn create_trigger_from_config(
     trigger_definition: TriggerDefinition,
     clients: &Clients,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-    workflow_definition: Option<&mut WorkflowDefinition>,
+    _workflow_definition: Option<&mut WorkflowDefinition>,
 ) -> Trigger {
     match trigger_definition {
         TriggerDefinition::NewEvmContract(evm_trigger_definition) => match evm_trigger_definition {
@@ -340,38 +338,37 @@ pub async fn create_trigger_from_config(
                 }
             }
         }
-        TriggerDefinition::DeferredBlockIntervalTarget { chain_name } => {
-            let workflow = workflow_definition
-                .expect("Workflow not provided when using deferred block interval targets");
-
-            let (current_block, block_delay) = if clients.evm_clients.contains_key(&chain_name) {
-                let client = clients.get_evm_client(&chain_name);
-                let current_block = client.provider.get_block_number().await.unwrap();
-                let block_delay = 5;
-                (current_block, block_delay)
-            } else if clients.cosmos_client_pools.contains_key(&chain_name) {
-                let client = clients.get_cosmos_client(&chain_name).await;
-                let current_block = client.querier.block_height().await.unwrap();
-                let block_delay = 12;
-                (current_block, block_delay)
-            } else {
-                panic!("Chain is not configured: {}", chain_name)
-            };
-            let target_block = NonZero::new(current_block + block_delay).unwrap();
-
-            workflow.expected_output = ExpectedOutput::Text(format!(
-                "{}{}",
-                BLOCK_INTERVAL_DATA_PREFIX,
-                target_block.get()
-            ));
-
-            Trigger::BlockInterval {
+        TriggerDefinition::BlockInterval {
+            chain_name,
+            start_stop,
+        } => match start_stop {
+            false => Trigger::BlockInterval {
                 chain_name,
-                n_blocks: NonZero::new(1u32).unwrap(),
-                start_block: Some(target_block),
-                end_block: Some(target_block),
+                n_blocks: BLOCK_INTERVAL,
+                start_block: None,
+                end_block: None,
+            },
+            true => {
+                let current_block = if clients.evm_clients.contains_key(&chain_name) {
+                    let client = clients.get_evm_client(&chain_name);
+                    client.provider.get_block_number().await.unwrap()
+                } else if clients.cosmos_client_pools.contains_key(&chain_name) {
+                    let client = clients.get_cosmos_client(&chain_name).await;
+                    client.querier.block_height().await.unwrap()
+                } else {
+                    panic!("Chain is not configured: {}", chain_name)
+                };
+
+                let current_block = NonZero::new(current_block).unwrap();
+
+                Trigger::BlockInterval {
+                    chain_name,
+                    n_blocks: BLOCK_INTERVAL,
+                    start_block: Some(current_block),
+                    end_block: Some(current_block),
+                }
             }
-        }
+        },
         TriggerDefinition::Existing(trigger) => trigger.clone(),
     }
 }

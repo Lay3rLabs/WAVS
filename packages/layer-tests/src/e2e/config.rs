@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use alloy_network::TransactionBuilder;
 use alloy_primitives::utils::parse_ether;
 use alloy_provider::Provider;
@@ -15,8 +17,10 @@ use crate::config::TestConfig;
 use super::matrix::TestMatrix;
 
 pub const DEFAULT_CHAIN_ID: u64 = 31337;
-pub const BLOCK_INTERVAL_DATA_PREFIX: &str = "block-interval-data-";
 pub const CRON_INTERVAL_DATA: &str = "cron-interval data";
+// we can go down to 1 for small groups of tests, but it currently causes a long wait in the test runner
+// might be a good candidate to use this a a benchmark for increasing throughput
+pub static BLOCK_INTERVAL: NonZeroU32 = NonZeroU32::new(10).unwrap();
 
 #[derive(Clone, Debug)]
 pub struct Configs {

@@ -37,10 +37,10 @@ impl Guest for Component {
     fn handle_submit_callback(
         _packet: Packet,
         tx_result: Result<AnyTxHash, String>,
-    ) -> Result<bool, String> {
+    ) -> Result<(), String> {
         match tx_result {
-            Ok(_) => Ok(true),
-            Err(_) => Ok(false),
+            Ok(_) => Ok(()),
+            Err(_) => Ok(()),
         }
     }
 }
