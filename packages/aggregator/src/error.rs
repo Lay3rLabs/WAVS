@@ -1,7 +1,11 @@
 use thiserror::Error;
-use utils::{error::EvmClientError, storage::db::DBError};
+use utils::{
+    error::EvmClientError,
+    storage::{db::DBError, CAStorageError},
+};
+use wavs_engine::utils::error::EngineError;
 use wavs_types::{
-    ChainConfigError, ChainName, EnvelopeError, ServiceID, ServiceManagerError, WorkflowID,
+    ChainConfigError, ChainName, EnvelopeError, IDError, ServiceID, ServiceManagerError, WorkflowID,
 };
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
@@ -77,8 +81,26 @@ pub enum AggregatorError {
     #[error("No such service registered: {0}")]
     MissingService(ServiceID),
 
-    #[error("Aggregator engine error: {0}")]
-    Engine(String),
+    #[error("WASM component compilation failed: {0}")]
+    WasmCompilation(#[from] wasmtime::Error),
+
+    #[error("Component execution failed: {0}")]
+    ComponentExecution(String),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Engine initialization failed: {0}")]
+    EngineInitialization(String),
+
+    #[error("WASM engine error: {0}")]
+    WasmEngine(#[from] EngineError),
+
+    #[error("Storage error: {0}")]
+    Storage(#[from] CAStorageError),
+
+    #[error("Invalid ID: {0}")]
+    InvalidId(#[from] IDError),
 }
 
 #[derive(Error, Debug)]
