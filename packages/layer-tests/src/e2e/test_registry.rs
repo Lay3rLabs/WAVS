@@ -1,11 +1,9 @@
 use dashmap::DashMap;
 use example_types::{
-    CosmosQueryRequest, KvStoreRequest, KvStoreResponse, PermissionsRequest, PermissionsResponse,
-    SquareRequest, SquareResponse,
+    BlockIntervalResponse, CosmosQueryRequest, KvStoreRequest, KvStoreResponse, PermissionsRequest,
+    PermissionsResponse, SquareRequest, SquareResponse,
 };
-use regex::Regex;
 use std::collections::BTreeMap;
-use std::num::NonZeroU32;
 use std::sync::Arc;
 use wavs_types::aggregator::RegisterServiceRequest;
 
@@ -15,7 +13,7 @@ use wavs_types::{ChainName, Service, Trigger, WorkflowID};
 use super::chain_names::ChainNames;
 use super::clients::Clients;
 use super::components::ComponentName;
-use super::config::{BLOCK_INTERVAL_DATA_PREFIX, CRON_INTERVAL_DATA};
+use super::config::CRON_INTERVAL_DATA;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
     AggregatorDefinition, CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, InputData,
@@ -477,45 +475,6 @@ impl TestRegistry {
         chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
-        #[derive(Debug)]
-        struct PermissionsCallback {}
-
-        impl PermissionsCallback {
-            pub fn new() -> Arc<Self> {
-                Arc::new(PermissionsCallback {})
-            }
-        }
-
-        impl ExpectedOutputCallback for PermissionsCallback {
-            fn validate(
-                &self,
-                _test: &TestDefinition,
-                _clients: &super::clients::Clients,
-                component_sources: &ComponentSources,
-                actual: &[u8],
-            ) -> anyhow::Result<()> {
-                let response: PermissionsResponse =
-                    serde_json::from_slice(actual).map_err(|e| {
-                        anyhow::anyhow!("Failed to deserialize permissions response: {}", e)
-                    })?;
-
-                let digest = component_sources
-                    .lookup
-                    .get(&ComponentName::Permissions)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("Failed to get digest for Permissions component")
-                    })?
-                    .digest()
-                    .to_string();
-
-                anyhow::ensure!(
-                    response.digest == digest,
-                    "Unexpected digest in permissions response"
-                );
-                Ok(())
-            }
-        }
-
         self.register(
             TestBuilder::new("evm_permissions")
                 .with_description("Tests permissions for HTTP and file system access on EVM chain")
@@ -753,12 +712,10 @@ impl TestRegistry {
                     WorkflowID::new("block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
-                        .with_trigger(TriggerDefinition::Existing(Trigger::BlockInterval {
+                        .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: chain.clone(),
-                            n_blocks: NonZeroU32::new(10).unwrap(),
-                            start_block: None,
-                            end_block: None,
-                        }))
+                            start_stop: false,
+                        })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
                             aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
@@ -766,10 +723,9 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::None)
-                        .with_expected_output(ExpectedOutput::Regex(
-                            Regex::new(&format!("^{}", regex::escape(BLOCK_INTERVAL_DATA_PREFIX)))
-                                .unwrap(),
-                        ))
+                        .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
+                            false,
+                        )))
                         .build(),
                 )
                 .with_group(2)
@@ -791,8 +747,9 @@ impl TestRegistry {
                     WorkflowID::new("evm_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
-                        .with_trigger(TriggerDefinition::DeferredBlockIntervalTarget {
+                        .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: chain.clone(),
+                            start_stop: true,
                         })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
@@ -801,7 +758,9 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::None)
-                        .with_expected_output(ExpectedOutput::Deferred)
+                        .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
+                            true,
+                        )))
                         .build(),
                 )
                 .with_group(1)
@@ -1024,12 +983,10 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
-                        .with_trigger(TriggerDefinition::Existing(Trigger::BlockInterval {
+                        .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: cosmos_chain.clone(),
-                            n_blocks: NonZeroU32::new(10).unwrap(),
-                            start_block: None,
-                            end_block: None,
-                        }))
+                            start_stop: false,
+                        })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
                             aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
@@ -1037,10 +994,9 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::None)
-                        .with_expected_output(ExpectedOutput::Regex(
-                            Regex::new(&format!("^{}", regex::escape(BLOCK_INTERVAL_DATA_PREFIX)))
-                                .unwrap(),
-                        ))
+                        .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
+                            false,
+                        )))
                         .build(),
                 )
                 .with_group(2)
@@ -1063,8 +1019,9 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
-                        .with_trigger(TriggerDefinition::DeferredBlockIntervalTarget {
+                        .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: cosmos_chain.clone(),
+                            start_stop: true,
                         })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
@@ -1073,7 +1030,9 @@ impl TestRegistry {
                             }],
                         })
                         .with_input_data(InputData::None)
-                        .with_expected_output(ExpectedOutput::Deferred)
+                        .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
+                            true,
+                        )))
                         .build(),
                 )
                 .with_group(1)
@@ -1161,5 +1120,108 @@ fn create_permissions_request() -> PermissionsRequest {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
+    }
+}
+
+#[derive(Clone, Debug)]
+struct BlockIntervalCallback {
+    pub start_stop: bool,
+}
+
+impl BlockIntervalCallback {
+    pub fn new(start_stop: bool) -> Arc<Self> {
+        Arc::new(BlockIntervalCallback { start_stop })
+    }
+}
+
+impl ExpectedOutputCallback for BlockIntervalCallback {
+    fn validate(
+        &self,
+        test: &TestDefinition,
+        _clients: &super::clients::Clients,
+        _component_sources: &ComponentSources,
+        actual: &[u8],
+    ) -> anyhow::Result<()> {
+        let response: BlockIntervalResponse = serde_json::from_slice(actual)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize block interval response: {}", e))?;
+
+        if let Some(start) = response.trigger_config_start {
+            tracing::info!(
+                "[{}] count: {}, triggered at: {}, configured start at: {}",
+                test.name,
+                response.count,
+                response.trigger_data_block_height,
+                start
+            );
+            anyhow::ensure!(
+                start <= response.trigger_data_block_height,
+                "Start block must be less than or equal to trigger data block height"
+            );
+        } else {
+            tracing::info!(
+                "[{}] count: {}, triggered at: {}",
+                test.name,
+                response.count,
+                response.trigger_data_block_height
+            );
+        }
+
+        if self.start_stop {
+            match (response.trigger_config_start, response.trigger_config_end) {
+                (Some(start), Some(end)) => {
+                    // Ensure the start and end are set correctly
+                    anyhow::ensure!(
+                        start == end,
+                        "Start block must be exactly equal to end block"
+                    );
+                    anyhow::ensure!(
+                        response.count == 1,
+                        "Trigger should only be called exactly once for start/stop"
+                    );
+                }
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Expected both trigger_config_start and trigger_config_end to be set"
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct PermissionsCallback {}
+
+impl PermissionsCallback {
+    pub fn new() -> Arc<Self> {
+        Arc::new(PermissionsCallback {})
+    }
+}
+
+impl ExpectedOutputCallback for PermissionsCallback {
+    fn validate(
+        &self,
+        _test: &TestDefinition,
+        _clients: &super::clients::Clients,
+        component_sources: &ComponentSources,
+        actual: &[u8],
+    ) -> anyhow::Result<()> {
+        let response: PermissionsResponse = serde_json::from_slice(actual)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize permissions response: {}", e))?;
+
+        let digest = component_sources
+            .lookup
+            .get(&ComponentName::Permissions)
+            .ok_or_else(|| anyhow::anyhow!("Failed to get digest for Permissions component"))?
+            .digest()
+            .to_string();
+
+        anyhow::ensure!(
+            response.digest == digest,
+            "Unexpected digest in permissions response"
+        );
+        Ok(())
     }
 }

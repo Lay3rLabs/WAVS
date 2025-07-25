@@ -226,3 +226,13 @@ impl SquareResponse {
         SquareResponse { y }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct BlockIntervalResponse {
+    pub trigger_config_start: Option<u64>,
+    pub trigger_config_end: Option<u64>,
+    pub trigger_config_interval: u32,
+    pub trigger_data_block_height: u64,
+    pub count: u64,
+}
