@@ -16,6 +16,7 @@ struct TestTimings {
     total_duration: Duration,
     longest_test: Option<(String, Duration)>,
     shortest_test: Option<(String, Duration)>,
+    completed_count: HashMap<String, usize>,
 }
 
 impl TestTimings {
@@ -26,6 +27,7 @@ impl TestTimings {
             total_duration: Duration::ZERO,
             longest_test: None,
             shortest_test: None,
+            completed_count: HashMap::new(),
         }
     }
 
@@ -34,18 +36,29 @@ impl TestTimings {
         tracing::warn!("Starting test: {}", test_name);
         tracing::warn!("*************************************");
         let start_time = Instant::now();
-        self.per_test_start.insert(test_name.clone(), start_time);
+        if self.per_test_start.insert(test_name.clone(), start_time).is_some() {
+            panic!("Test {} was already started!", test_name);
+        }
     }
 
     pub fn end(&mut self, test_name: String) {
         let duration = self.per_test_start.get(&test_name).unwrap().elapsed();
+
         tracing::warn!("*************************************");
         tracing::warn!(
-            "Test {} completed ({}ms start to finish)",
-            test_name,
+            "Test {test_name} completed ({}ms start to finish)",
             duration.as_millis()
         );
         tracing::warn!("*************************************");
+
+        let count = self.completed_count.entry(test_name.clone()).or_insert(1);
+        *count += 1;
+
+        if *count > 1 {
+            // we only want to update durations for the first run
+            tracing::warn!("This test has been run {} times in total.", count);
+            return;
+        }
         self.per_test_duration.insert(test_name.clone(), duration);
         self.total_duration += duration;
 
