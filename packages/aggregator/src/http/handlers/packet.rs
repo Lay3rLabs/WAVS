@@ -208,7 +208,7 @@ impl AggregatorProcess<'_> {
                                         },
                                         Err(e) => {
                                             tracing::error!("Custom aggregator component failed: {}", e);
-                                            return Err(AggregatorError::Engine(e.to_string()));
+                                            return Err(AggregatorError::ComponentExecution(e.to_string()));
                                         }
                                     }
                                 } else {
@@ -408,8 +408,7 @@ async fn handle_custom_submit(
     queue: &[QueuedPacket],
     submit_action: SubmitAction,
 ) -> AggregatorResult<TransactionReceipt> {
-    let chain_name = ChainName::new(submit_action.chain_name)
-        .map_err(|e| AggregatorError::Engine(e.to_string()))?;
+    let chain_name = ChainName::new(submit_action.chain_name)?;
     let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
 
     let client = state.get_evm_client(&chain_name).await?;

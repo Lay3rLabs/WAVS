@@ -1,3 +1,4 @@
+use crate::error::{AggregatorError, AggregatorResult};
 use anyhow::Result;
 use lru::LruCache;
 use std::num::NonZeroUsize;
@@ -48,7 +49,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         max_execution_seconds: Option<u64>,
         db: RedbStorage,
         storage: Arc<S>,
-    ) -> Result<Self> {
+    ) -> AggregatorResult<Self> {
         let mut config = WTConfig::new();
         config.wasm_component_model(true);
         config.async_support(true);
@@ -75,7 +76,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         })
     }
 
-    pub fn start(&self) -> Result<()> {
+    pub fn start(&self) -> AggregatorResult<()> {
         let engine = self.wasm_engine.clone();
 
         std::thread::spawn(move || loop {
@@ -92,7 +93,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         component: &Component,
         packet: &Packet,
         wasm_component: WasmComponent,
-    ) -> Result<InstanceDeps> {
+    ) -> AggregatorResult<InstanceDeps> {
         let chain_configs = self
             .chain_configs
             .read()
@@ -126,7 +127,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         &self,
         component: &Component,
         packet: &Packet,
-    ) -> Result<Vec<AggregatorAction>> {
+    ) -> AggregatorResult<Vec<AggregatorAction>> {
         tracing::info!("Processing packet with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
@@ -137,7 +138,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             .map_err(Into::into)
     }
 
-    fn load_component(&self, component: &Component) -> Result<WasmComponent> {
+    fn load_component(&self, component: &Component) -> AggregatorResult<WasmComponent> {
         let digest = component.source.digest().clone();
 
         if let Some(cached_component) = self.memory_cache.write().unwrap().get(&digest) {
@@ -160,7 +161,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         &self,
         component: &Component,
         packet: &Packet,
-    ) -> Result<Vec<AggregatorAction>> {
+    ) -> AggregatorResult<Vec<AggregatorAction>> {
         tracing::info!("Handling timer callback with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
@@ -183,7 +184,10 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             Ok(actions) => Ok(actions),
             Err(error) => {
                 tracing::error!("Timer callback execution failed: {}", error);
-                anyhow::bail!("Timer callback execution failed: {}", error);
+                Err(AggregatorError::ComponentExecution(format!(
+                    "Timer callback execution failed: {}",
+                    error
+                )))
             }
         }
     }
@@ -194,7 +198,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         component: &Component,
         packet: &Packet,
         tx_result: Result<AnyTxHash, String>,
-    ) -> Result<()> {
+    ) -> AggregatorResult<()> {
         tracing::info!("Handling submit callback with custom aggregator component");
 
         let wasm_component = self.load_component(component)?;
@@ -219,12 +223,18 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             Ok(_) => Ok(()),
             Err(error) => {
                 tracing::error!("Submit callback execution failed: {}", error);
-                anyhow::bail!("Submit callback execution failed: {}", error);
+                Err(AggregatorError::ComponentExecution(format!(
+                    "Submit callback execution failed: {}",
+                    error
+                )))
             }
         }
     }
 
-    pub async fn upload_component(&self, component_bytes: Vec<u8>) -> Result<ComponentDigest> {
+    pub async fn upload_component(
+        &self,
+        component_bytes: Vec<u8>,
+    ) -> AggregatorResult<ComponentDigest> {
         // compile component (validate it is proper wasm)
         let cm = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
