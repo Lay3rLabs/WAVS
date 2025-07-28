@@ -1,5 +1,5 @@
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
-FROM rust:1.85-bookworm AS planner
+FROM rust:1.86-bookworm AS planner
 WORKDIR /myapp
 # We only pay the installation cost once,
 # it will be cached from the second build onwards
@@ -7,14 +7,14 @@ RUN cargo install cargo-chef
 COPY . .
 RUN cargo chef prepare  --recipe-path recipe.json
 
-FROM rust:1.85-bookworm AS cacher
+FROM rust:1.86-bookworm AS cacher
 WORKDIR /myapp
 RUN cargo install cargo-chef
 COPY --from=planner /myapp/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 # This build step should just compile the local code and be faster
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.86-bookworm AS builder
 WORKDIR /myapp
 COPY . .
 # Copy over the cached dependencies
